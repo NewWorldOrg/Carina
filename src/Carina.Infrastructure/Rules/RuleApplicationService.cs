@@ -172,10 +172,11 @@ public sealed class RuleApplicationService(
 
         WithdrawalGuard guard = await GuardAsync(cancellationToken);
         IReadOnlyList<Reservation> held = await reservations.ListForRuleAsync(draft.Id, cancellationToken);
+        HashSet<ProgrammeKey> standing = StandingFor(taken, held);
         Reservation[] withdrawing =
         [
             .. held
-                .Where(reservation => !taken.Contains(Naming(reservation)))
+                .Where(reservation => !standing.Contains(Naming(reservation)))
                 .Where(reservation => guard.Lets(reservation, RuleWithdrawal.WhileTheRuleStands, at)),
         ];
         Reservation[] sweeping =
@@ -346,11 +347,12 @@ public sealed class RuleApplicationService(
         WithdrawalGuard guard = await GuardAsync(cancellationToken);
         var faulted = run.Faulted.Select(fault => fault.Rule.Id).ToHashSet();
         var standing = enabled.Where(rule => rule.Enabled).Select(rule => rule.Id).ToHashSet();
-        var kept = run.Matches.Select(match => Naming(match.Programme)).ToHashSet();
+        IReadOnlyList<Reservation> pending = await reservations.ListPendingAsync(Everything(at), cancellationToken);
+        HashSet<ProgrammeKey> kept = StandingFor(run.Matches.Select(match => Naming(match.Programme)), pending);
         var seen = read.Select(Naming).ToHashSet();
         var leaving = new List<Reservation>();
 
-        foreach (Reservation reservation in await reservations.ListPendingAsync(Everything(at), cancellationToken))
+        foreach (Reservation reservation in pending)
         {
             RuleId? ruleId = reservation.RuleId;
 
@@ -501,6 +503,32 @@ public sealed class RuleApplicationService(
             reservation.EventId.Value,
             reservation.ProgrammeStartsAt);
 
+    /// <summary>
+    /// Names the reservations that stand for the programmes taken: the one naming a programme's start,
+    /// or, when none does, those of the same broadcast that the guide will move to it.
+    /// </summary>
+    private static HashSet<ProgrammeKey> StandingFor(IEnumerable<ProgrammeKey> taken, IEnumerable<Reservation> held)
+    {
+        ILookup<BroadcastKey, ProgrammeKey> holding = held.Select(Naming).Distinct().ToLookup(key => key.Broadcast);
+        HashSet<ProgrammeKey> standing = [];
+
+        foreach (ProgrammeKey programme in taken)
+        {
+            IEnumerable<ProgrammeKey> ofTheBroadcast = holding[programme.Broadcast];
+
+            if (ofTheBroadcast.Contains(programme))
+            {
+                standing.Add(programme);
+
+                continue;
+            }
+
+            standing.UnionWith(ofTheBroadcast);
+        }
+
+        return standing;
+    }
+
     private DateTime Moment() => clock.GetUtcNow().UtcDateTime;
 
     private readonly record struct Making(
@@ -508,7 +536,12 @@ public sealed class RuleApplicationService(
         IReadOnlyList<Reservation> Refused,
         IReadOnlyList<Reservation> Revived);
 
-    private readonly record struct ProgrammeKey(int NetworkId, int ServiceId, int EventId, DateTime StartsAt);
+    private readonly record struct ProgrammeKey(int NetworkId, int ServiceId, int EventId, DateTime StartsAt)
+    {
+        public BroadcastKey Broadcast => new(NetworkId, ServiceId, EventId);
+    }
+
+    private readonly record struct BroadcastKey(int NetworkId, int ServiceId, int EventId);
 
     private readonly record struct ServiceKey(int NetworkId, int Carried);
 

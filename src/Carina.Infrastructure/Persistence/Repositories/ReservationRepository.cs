@@ -121,12 +121,17 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
         ArgumentNullException.ThrowIfNull(programme);
 
         return await context.Set<Reservation>()
-            .FirstOrDefaultAsync(
-                reservation => reservation.NetworkId == programme.NetworkId
-                               && reservation.ServiceId == programme.ServiceId
-                               && reservation.EventId == programme.EventId
-                               && reservation.ProgrammeStartsAt == programme.StartsAt,
-                cancellationToken);
+            .Where(reservation => reservation.NetworkId == programme.NetworkId
+                                  && reservation.ServiceId == programme.ServiceId
+                                  && reservation.EventId == programme.EventId)
+            .Where(reservation => reservation.ProgrammeStartsAt == programme.StartsAt
+                                  || (reservation.StartedAt == null
+                                      && reservation.RecordingOutcome == null
+                                      && (reservation.State == ReservationState.Scheduled
+                                          || reservation.State == ReservationState.Conflict)))
+            .OrderBy(reservation => reservation.ProgrammeStartsAt == programme.StartsAt ? 0 : 1)
+            .ThenBy(reservation => reservation.ProgrammeStartsAt)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Reservation>> ListPendingAsync(

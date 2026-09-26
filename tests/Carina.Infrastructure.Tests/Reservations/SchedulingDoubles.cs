@@ -165,7 +165,13 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
         => Task.FromResult(held.FirstOrDefault(reservation => reservation.Id.Equals(id)));
 
     public Task<Reservation?> FindByProgrammeAsync(ProgrammeRef programme, CancellationToken cancellationToken)
-        => Task.FromResult(held.FirstOrDefault(reservation => reservation.Programme.Equals(programme)));
+        => Task.FromResult(
+            held.FirstOrDefault(reservation => reservation.Programme.Equals(programme))
+            ?? held.FirstOrDefault(reservation => reservation.Programme.Id.Equals(programme.Id)
+                                                  && reservation.StartedAt is null
+                                                  && reservation.RecordingOutcome is null
+                                                  && reservation.State
+                                                      is ReservationState.Scheduled or ReservationState.Conflict));
 
     public Task<IReadOnlyList<Reservation>> ListPendingAsync(
         ReservationWindow window,

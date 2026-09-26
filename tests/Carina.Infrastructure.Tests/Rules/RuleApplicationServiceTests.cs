@@ -133,17 +133,19 @@ public sealed class RuleApplicationServiceTests
     }
 
     [Fact]
-    public async Task AnEventNumberUsedAgainAWeekLaterGetsItsOwnReservation()
+    public async Task AnEventNumberUsedAgainAfterItsBroadcastWasRecordedGetsItsOwnReservation()
     {
         World world = World.Of();
-        world.Rules.Rules.Add(Written("keyword=hill"));
-        world.Guide(
-            Broadcast(Listed, 7, "hill walking", startsAt: Now.AddHours(2)),
-            Broadcast(Listed, 7, "hillside", startsAt: Now.AddDays(7)));
+        Rule rule = Written("keyword=hill");
+        world.Rules.Rules.Add(rule);
+        Programme recorded = Broadcast(Listed, 7, "hill walking", startsAt: Now.AddMinutes(-30));
+        world.Reservations.Standing(
+            Standing(recorded, ReservationState.Scheduled, rule.Id, startedAt: recorded.StartsAt));
+        world.Guide(Broadcast(Listed, 7, "hillside", startsAt: Now.AddDays(7)));
 
         RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
 
-        Assert.Equal(2, run.Made.Count);
+        Assert.Equal(["hillside"], [.. run.Made.Select(reservation => reservation.SnapshotName)]);
         Assert.Equal(["hill walking", "hillside"], Named(world));
     }
 

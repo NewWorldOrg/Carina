@@ -12,6 +12,8 @@ using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Tests.Reservations;
 using Carina.TestSupport;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace Carina.Infrastructure.Tests.Rules;
 
 [Collection(RepositoryDatabaseCollection.Name)]
@@ -124,6 +126,37 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
         Assert.Null(await repository.FindAsync(rule.Id, Cancel));
     }
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(30)]
+    public async Task AProgrammeWhoseStartMovedKeepsTheOneReservationTheRuleMadeForIt(int minutes)
+    {
+        int carried = 9500 + minutes;
+        Rule rule = Written(0x55 + minutes, $"keyword=woodland{minutes}");
+        Reservation standing = Standing(Sown(carried, $"a woodland{minutes} walk"), rule.Id);
+        await SownAsync(carried, $"a woodland{minutes} walk", Ahead.AddMinutes(minutes));
+        await VisitedAsync(VisitOutcome.Complete);
+        await AddAsync(rule);
+        await AddAsync(standing);
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            RuleApplicationRun run = await ApplyingOver(context).EverythingAsync(Cancel);
+
+            Assert.Empty(run.Made);
+            Assert.DoesNotContain(run.Withdrawn, gone => gone.Id.Equals(standing.Id));
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        EventId eventId = new(carried);
+        List<ReservationId> held = await reading.Set<Reservation>()
+            .Where(reservation => reservation.EventId == eventId)
+            .Select(reservation => reservation.Id)
+            .ToListAsync(Cancel);
+
+        Assert.Equal([standing.Id], held);
+    }
+
     private RuleApplicationService ApplyingOver(CarinaDbContext context)
     {
         var streams = new HeldStreams([Terrestrial()]);
@@ -154,9 +187,9 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
             new FixedClock(Now));
     }
 
-    private async Task<Programme> SownAsync(int carried, string name)
+    private async Task<Programme> SownAsync(int carried, string name, DateTime? startsAt = null)
     {
-        Programme programme = Sown(carried, name, revision: 0);
+        Programme programme = Sown(carried, name, revision: 0, startsAt: startsAt);
 
         await using CarinaDbContext context = database.Open();
         await new ProgrammeRepository(context).AddAsync(programme, Cancel);
@@ -164,12 +197,12 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
         return programme;
     }
 
-    private static Programme Sown(int carried, string name, long revision = 1)
+    private static Programme Sown(int carried, string name, long revision = 1, DateTime? startsAt = null)
         => Programme.Rehydrate(
             new ProgrammeId(new NetworkId(Network), new ServiceId(Listed), new EventId(carried)),
             new TransportStreamId(Carried),
-            Ahead,
-            Ahead.AddHours(1),
+            startsAt ?? Ahead,
+            (startsAt ?? Ahead).AddHours(1),
             name,
             "what it is about",
             false,
