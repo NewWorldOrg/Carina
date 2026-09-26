@@ -2,10 +2,8 @@ using System.Security.Claims;
 
 using Carina.Api.Authentication;
 
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 
 namespace Carina.Api.Tests.Unit;
 
@@ -98,16 +96,6 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
         Assert.False(context.Response.Headers.ContainsKey("Location"));
     }
 
-    [Fact]
-    public async Task NothingIsRefusedWhileNoSchemeCanSatisfyTheRefusal()
-    {
-        DefaultHttpContext context = Asking("GET", "/api/tuners");
-
-        bool reached = await RunAsync(context, schemes: WithoutASchemeRegistered());
-
-        Assert.True(reached);
-    }
-
     private static DefaultHttpContext Asking(string method, string path, string accept = "application/json")
     {
         var context = new DefaultHttpContext();
@@ -138,10 +126,7 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
         return context;
     }
 
-    private static async Task<bool> RunAsync(
-        HttpContext context,
-        Action<HttpContext>? behind = null,
-        IAuthenticationSchemeProvider? schemes = null)
+    private static async Task<bool> RunAsync(HttpContext context, Action<HttpContext>? behind = null)
     {
         bool reached = false;
         var middleware = new DefaultDenyAuthenticationMiddleware(
@@ -154,23 +139,8 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
             },
             new StubEnvironment(Environments.Production));
 
-        await middleware.InvokeAsync(context, schemes ?? WithASchemeRegistered());
+        await middleware.InvokeAsync(context);
 
         return reached;
     }
-
-    private static IAuthenticationSchemeProvider WithASchemeRegistered()
-    {
-        AuthenticationSchemeProvider schemes = WithoutASchemeRegistered();
-
-        schemes.AddScheme(new AuthenticationScheme(
-            "Test",
-            "Test",
-            typeof(StubAuthenticationHandler)));
-
-        return schemes;
-    }
-
-    private static AuthenticationSchemeProvider WithoutASchemeRegistered()
-        => new(Options.Create(new AuthenticationOptions()));
 }
