@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 
 using Carina.Contracts;
@@ -581,6 +582,27 @@ public sealed class TunerLedgerEndpointTests
         (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Null(feature.Driver.LastReplacedLedger);
+    }
+
+    [Theory]
+    [InlineData("kind")]
+    [InlineData("types")]
+    [InlineData("devicePath")]
+    public async Task ALedgerThatTriesToSayWhatATunerIsOrWhereItSitsIsRefusedRatherThanSavedWithoutIt(string field)
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
+
+        using var sent = new StringContent(
+            $$"""{"tuners":[{"deviceId":"adapter0","disabled":false,"lnbPower":false,"{{field}}":"bs"}]}""",
+            Encoding.UTF8,
+            "application/json");
+        using HttpResponseMessage response = await feature.Client.PutAsync(Tuners, sent);
+
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.False(body.GetProperty("status").GetBoolean());
         Assert.Null(feature.Driver.LastReplacedLedger);
     }
 
