@@ -42,6 +42,7 @@ public sealed class TunerSessionManager(
         DvbTunerSettings.Default.BytePatience + TimeSpan.FromSeconds(3);
 
     private readonly ConcurrentDictionary<SessionId, TunerSession> sessions = [];
+    private readonly ConcurrentDictionary<SessionId, TaskCompletionSource> starting = [];
     private readonly TunerPool pool = new(timeProvider, tunerGrace);
     private readonly ConcurrentDictionary<string, string> faultedDevices = new(
         StringComparer.Ordinal
@@ -305,6 +306,31 @@ public sealed class TunerSessionManager(
             );
         }
 
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        if (!starting.TryAdd(request.SessionId, started))
+        {
+            return SessionStart.Refused(
+                SessionRefusal.DuplicateSession,
+                $"The session '{request.SessionId}' is already starting."
+            );
+        }
+
+        try
+        {
+            return BeginAlone(request, now);
+        }
+        finally
+        {
+            starting.TryRemove(
+                new KeyValuePair<SessionId, TaskCompletionSource>(request.SessionId, started)
+            );
+            started.TrySetResult();
+        }
+    }
+
+    private SessionStart BeginAlone(StartSessionRequest request, DateTimeOffset now)
+    {
         if (sessions.ContainsKey(request.SessionId))
         {
             return SessionStart.Refused(
@@ -559,7 +585,12 @@ public sealed class TunerSessionManager(
 
     private bool HandOver(PoolGrant grant)
     {
-        var losers = new List<TunerSession>();
+        if (!grant.Outgoing.IsUnset && !FinishedStarting(grant.Outgoing))
+        {
+            return false;
+        }
+
+        List<TunerSession> losers = [];
 
         foreach (SessionId displaced in grant.Displaced)
         {
@@ -590,6 +621,25 @@ public sealed class TunerSessionManager(
         }
 
         return true;
+    }
+
+    private bool FinishedStarting(SessionId sessionId)
+    {
+        if (!starting.TryGetValue(sessionId, out TaskCompletionSource? start))
+        {
+            return true;
+        }
+
+        try
+        {
+            start.Task.WaitAsync(handOver, timeProvider).GetAwaiter().GetResult();
+
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
     }
 
     private bool TryTune(
@@ -631,14 +681,24 @@ public sealed class TunerSessionManager(
         try
         {
             ITunerDevice opened = deviceFactory.Create(settings, request.Tuning, request.Tune);
-            pool.Tuned(deviceId, opened);
+
+            if (!pool.Tuned(deviceId, request.SessionId, opened))
+            {
+                refusal = SessionStart.Refused(
+                    SessionRefusal.DeviceBusy,
+                    $"The device '{deviceId}' was taken from '{request.SessionId}' while it was being tuned."
+                );
+
+                return false;
+            }
+
             tuner = new LeasedTunerDevice(opened);
 
             return true;
         }
         catch (Exception error)
         {
-            pool.TuningFailed(deviceId, error);
+            pool.TuningFailed(deviceId, request.SessionId, error);
 
             if (
                 error is DvbDeviceException
@@ -948,7 +1008,7 @@ public sealed class TunerSessionManager(
 
         if (holds)
         {
-            pool.Ready(deviceId);
+            pool.Ready(deviceId, sessionId);
         }
 
         if (tuned)
