@@ -91,16 +91,28 @@ public sealed class LocalPlaybackFileStore(
             .Concat(encodes.OutputRoots)
             .FirstOrDefault(candidate => candidate.Root.Equals(root));
 
-        if (mounted is not null)
+        if (mounted is null)
         {
-            return Path.Combine(mounted.Path, fileName.Value);
+            logger.LogWarning(
+                "Output root {Root} is named by the ledger and nothing tells this process where it is mounted, "
+                + "so the file {File} under it cannot be played.",
+                root.Value,
+                fileName.Value);
+
+            return null;
+        }
+
+        string path = Path.Combine(mounted.Path, fileName.Value);
+
+        if (RecordingFilePlace.LiesDirectlyUnder(mounted.Path, path))
+        {
+            return path;
         }
 
         logger.LogWarning(
-            "Output root {Root} is named by the ledger and nothing tells this process where it is mounted, "
-            + "so the file {File} under it cannot be played.",
-            root.Value,
-            fileName.Value);
+            "The file {File} does not lie directly under output root {Root}, so it is not played.",
+            fileName.Value,
+            root.Value);
 
         return null;
     }
