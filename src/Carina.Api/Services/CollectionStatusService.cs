@@ -87,7 +87,7 @@ public sealed class CollectionStatusService(
             covered.Add(new ServiceCoverageStatus(
                 service,
                 until,
-                until is { } reach && reach - now >= settings.WantedCoverage));
+                GuideCoverage.IsMet(until, now, settings.WantedCoverage)));
         }
 
         return covered;
