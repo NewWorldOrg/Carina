@@ -72,6 +72,27 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             throw new ArgumentException("One visit names the same programme twice; bundle them first.", nameof(broadcasts));
         }
 
+        if (context.Database.CurrentTransaction is not null)
+        {
+            return await WriteInTurnAsync(broadcasts, heardWhole, at, cancellationToken);
+        }
+
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        ProgrammesAbsorbed absorbed = await WriteInTurnAsync(broadcasts, heardWhole, at, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return absorbed;
+    }
+
+    private async Task<ProgrammesAbsorbed> WriteInTurnAsync(
+        IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        IReadOnlyList<ProgrammeService> heardWhole,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        await context.Database.ExecuteSqlRawAsync(ProgrammeRevisions.TakeTurnSql, cancellationToken);
+
         await using DbCommand command = context.Database.GetDbConnection().CreateCommand();
 
         command.CommandText = ProgrammeAbsorption.Sql;
@@ -119,7 +140,8 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         DateTime at,
         CancellationToken cancellationToken)
     {
-        var whole = heardWhole.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+        HashSet<(int NetworkId, int ServiceId)> whole =
+            heardWhole.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
         ProgrammeId[] named =
         [
             .. broadcasts
@@ -153,15 +175,29 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
+    public async Task<IReadOnlyList<EndedProgramme>> ListEndedBeforeAsync(
         DateTime at,
         int rows,
         CancellationToken cancellationToken)
-        => await context.Set<Programme>()
-            .Where(programme => programme.EndsAt != null && programme.EndsAt < at)
-            .OrderBy(programme => programme.EndsAt)
+    {
+        IQueryable<Programme> held = context.Set<Programme>();
+
+        return await held
+            .Select(programme => new
+            {
+                Programme = programme,
+                EndedAt = programme.EndsAt ?? held
+                    .Where(next => next.NetworkId == programme.NetworkId
+                        && next.ServiceId == programme.ServiceId
+                        && next.StartsAt > programme.StartsAt)
+                    .Min(next => (DateTime?)next.StartsAt),
+            })
+            .Where(ended => ended.EndedAt < at)
+            .OrderBy(ended => ended.EndedAt)
             .Take(rows)
+            .Select(ended => new EndedProgramme(ended.Programme, ended.EndedAt!.Value))
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<int> ForgetAsync(IReadOnlyList<Programme> programmes, CancellationToken cancellationToken)
     {
@@ -201,7 +237,8 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             .OrderBy(programme => programme.StartsAt)
             .ThenBy(programme => programme.EventId)
             .ToListAsync(cancellationToken);
-        var wanted = services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+        HashSet<(int NetworkId, int ServiceId)> wanted =
+            services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
 
         return [.. found.Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))];
     }

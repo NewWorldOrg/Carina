@@ -82,12 +82,6 @@ public sealed class TunerLedgerService(
             return Failed<TunerLedgerView, TunerLedgerDto>(replaced);
         }
 
-        // Which tuners exist, and of which kind, is what decides whether a
-        // candidate can still be received at all. Saving the ledger is the one
-        // operation that changes that, so every candidate's last measurement
-        // now predates the configuration it was taken under and has to be
-        // proven again. Enabling and disabling a tuner is a running flag rather
-        // than a configuration change, and does not come through here.
         await candidates.RequireRevalidationAsync(cancellationToken);
 
         notices.Nudge(RecalculationTrigger.TunerConfigurationChanged);
@@ -134,8 +128,9 @@ public sealed class TunerLedgerService(
         TunerLedgerDto document,
         IReadOnlyList<TunerSnapshot> observed)
     {
-        var known = detected.ToDictionary(device => device.DeviceId, StringComparer.Ordinal);
-        var kept = document.Tuners.Select(entry => entry.DeviceId).ToHashSet(StringComparer.Ordinal);
+        Dictionary<string, DetectedDeviceDto> known =
+            detected.ToDictionary(device => device.DeviceId, StringComparer.Ordinal);
+        HashSet<string> kept = document.Tuners.Select(entry => entry.DeviceId).ToHashSet(StringComparer.Ordinal);
 
         return new DetectedTunersView(
             detected,

@@ -8,7 +8,7 @@ public sealed class EncodeProfileTests
 {
     private static readonly DateTime At = new(2026, 9, 4, 3, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-EV-004: the slot the card reads takes a quantiser, and the processor's takes a rate factor")]
+    [Fact(DisplayName = "the slot the card reads takes a quantiser, and the processor's takes a rate factor")]
     public void EachEncoderHasASlotOfItsOwnAndTheTypeSaysWhichRateControlGoesInIt()
     {
         Assert.Equal(
@@ -91,7 +91,7 @@ public sealed class EncodeProfileTests
         Assert.Equal(At, profile.DefinedAt);
     }
 
-    [Fact(DisplayName = "BR-EV-006: a change replaces every field the definition was made of")]
+    [Fact(DisplayName = "a change replaces every field the definition was made of")]
     public void AChangeReplacesEveryFieldTheDefinitionWasMadeOf()
     {
         EncodeProfile profile = Standard();
@@ -113,7 +113,7 @@ public sealed class EncodeProfileTests
         Assert.Equal(At, profile.DefinedAt);
     }
 
-    [Fact(DisplayName = "BR-EV-006: a change to a codec nobody offers leaves the profile as it stood")]
+    [Fact(DisplayName = "a change to a codec nobody offers leaves the profile as it stood")]
     public void AChangeToACodecNobodyOffersLeavesTheProfileAsItStood()
     {
         EncodeProfile profile = Standard();
@@ -131,7 +131,7 @@ public sealed class EncodeProfileTests
         Assert.Equal(EncodeResolution.AsSource, profile.Resolution);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a profile that has not been retired says so, and says when once it has")]
+    [Fact(DisplayName = "a profile that has not been retired says so, and says when once it has")]
     public void AProfileSaysWhenItWasRetired()
     {
         EncodeProfile profile = Standard();
@@ -145,7 +145,7 @@ public sealed class EncodeProfileTests
         Assert.Equal(At.AddDays(1), profile.RetiredAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a retired profile is neither changed nor retired a second time")]
+    [Fact(DisplayName = "a retired profile is neither changed nor retired a second time")]
     public void ARetiredProfileIsNeitherChangedNorRetiredASecondTime()
     {
         EncodeProfile profile = Standard();

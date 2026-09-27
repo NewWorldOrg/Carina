@@ -38,6 +38,21 @@ public sealed class RideAlongHarvesterTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task HowManyEventsRidingAlongThrewAwayIsSaidInTheLog()
+    {
+        int network = NextNetwork();
+        ScriptedDriverClient driver = Recording(network, out _, carried: [0, 1]);
+        var log = new HeardLog();
+
+        await using ServiceProvider provider = Provider(driver, log: log);
+        await RunAsync(provider, async () => await ProgrammeAsync(network) is not null);
+
+        Assert.Contains(log.Entries, entry =>
+            entry.TryGetValue("Discarded", out object? discarded) && discarded is 1
+            && entry.TryGetValue("Clamped", out object? clamped) && clamped is 0);
+    }
+
+    [Fact]
     public async Task OurOwnCollectionSessionsAreNotRiddenAlongWith()
     {
         int network = NextNetwork();
@@ -117,12 +132,13 @@ public sealed class RideAlongHarvesterTests(RepositoryDatabase database)
     private static ScriptedDriverClient Recording(
         int network,
         out SessionId sessionId,
-        SessionPurpose purpose = SessionPurpose.Recording)
+        SessionPurpose purpose = SessionPurpose.Recording,
+        int[]? carried = null)
     {
         var driver = new ScriptedDriverClient();
         TuningParameters tuning = TuningParameters.Terrestrial(22);
 
-        driver.Script(tuning, new ChannelScript { Bytes = Schedule(network) });
+        driver.Script(tuning, new ChannelScript { Bytes = Schedule(network, carried ?? [1]) });
         sessionId = SessionId.Parse("recording-1");
         driver.Hold(sessionId, tuning);
         driver.Open.Add(new SessionSnapshot(
@@ -135,11 +151,20 @@ public sealed class RideAlongHarvesterTests(RepositoryDatabase database)
         return driver;
     }
 
-    private ServiceProvider Provider(ScriptedDriverClient driver, CollectionSettings? settings = null)
+    private ServiceProvider Provider(
+        ScriptedDriverClient driver,
+        CollectionSettings? settings = null,
+        HeardLog? log = null)
     {
         var services = new ServiceCollection();
 
         services.AddLogging();
+
+        if (log is not null)
+        {
+            services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvider>(log);
+        }
+
         services.AddScoped(_ => database.Open());
         services.AddScoped<IProgrammeRepository>(scope =>
             new ProgrammeRepository(scope.GetRequiredService<CarinaDbContext>()));
@@ -169,9 +194,18 @@ public sealed class RideAlongHarvesterTests(RepositoryDatabase database)
             Cancel);
     }
 
+    private static byte[] ScheduledEvent(int carried)
+        =>
+        [
+            (byte)(carried >> 8), (byte)(carried & 0xFF),
+            0xEF, 0x55, 0x22, 0x57, 0x00,
+            0x00, 0x03, 0x00,
+            0x00, 0x00,
+        ];
+
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 
-    private static byte[] Schedule(int network)
+    private static byte[] Schedule(int network, int[] carried)
         => [.. new TransportStreamWriter(EventInformationTable.Pid)
             .Sections(new SectionWriter
             {
@@ -183,10 +217,7 @@ public sealed class RideAlongHarvesterTests(RepositoryDatabase database)
                     0x00, 0x01,
                     (byte)(network >> 8), (byte)(network & 0xFF),
                     0x00, EventInformationTable.FirstScheduleActualTableId,
-                    0x00, 0x01,
-                    0xEF, 0x55, 0x22, 0x57, 0x00,
-                    0x00, 0x03, 0x00,
-                    0x00, 0x00,
+                    .. carried.SelectMany(ScheduledEvent),
                 ],
             }.ToBytes())
             .Packets

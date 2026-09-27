@@ -27,10 +27,10 @@ namespace Carina.Db.Migrations
 
             modelBuilder.Entity("Carina.Domain.Auth.AuthSession", b =>
                 {
-                    b.Property<string>("Id")
+                    b.Property<string>("Handle")
                         .HasMaxLength(43)
                         .HasColumnType("character varying(43)")
-                        .HasColumnName("id");
+                        .HasColumnName("handle");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -68,7 +68,7 @@ namespace Carina.Db.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("subject");
 
-                    b.HasKey("Id")
+                    b.HasKey("Handle")
                         .HasName("pk_auth_session");
 
                     b.HasIndex("LastUsedAt")

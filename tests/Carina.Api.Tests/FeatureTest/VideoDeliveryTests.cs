@@ -16,7 +16,6 @@ internal sealed class VanishingPlaybackFiles(long bytes, PlaybackFileAbsence the
     public StreamSource? SourceOf(PlaybackFile file) => null;
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class VideoDeliveryTests
 {
     private const int Size = 4_000;

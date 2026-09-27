@@ -13,9 +13,8 @@ public enum RetryResult
 
 /// <summary>
 /// What came of one attempt to start a recording again, in the classes the ledger already holds. A
-/// refusal that named a class carries that class; one that named none carries nothing rather than a
-/// class it was not given; and an attempt nothing answered is kept apart from both, because "the
-/// driver said no" and "nobody said anything" are different facts.
+/// refusal that named a class carries it, one that named none carries nothing, and an attempt
+/// nothing answered is kept apart from both.
 /// </summary>
 public sealed record RetryAttempt
 {

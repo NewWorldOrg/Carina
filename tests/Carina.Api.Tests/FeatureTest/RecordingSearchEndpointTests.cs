@@ -5,7 +5,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class RecordingSearchEndpointTests
 {
     [Fact]

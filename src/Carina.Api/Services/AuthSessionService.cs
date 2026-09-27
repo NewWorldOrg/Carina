@@ -12,7 +12,7 @@ public sealed class AuthSessionService(
     public const string NoSuchSession = "There is no such session.";
 
     public async Task<ServiceResult<IReadOnlyList<SessionView>>> ListAsync(
-        SessionId current,
+        SessionHandle current,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(current);
@@ -32,8 +32,7 @@ public sealed class AuthSessionService(
     {
         ArgumentNullException.ThrowIfNull(target);
 
-        IReadOnlyList<AuthSession> all = await sessions.ListAllAsync(cancellationToken);
-        AuthSession? held = all.FirstOrDefault(session => SessionHandle.Of(session.Id).Equals(target));
+        AuthSession? held = await sessions.FindAsync(target, cancellationToken);
 
         if (held is null)
         {
@@ -52,7 +51,7 @@ public sealed class AuthSessionService(
 
     public async Task<ServiceResult> LogOutAsync(
         Subject subject,
-        SessionId current,
+        SessionHandle current,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(subject);

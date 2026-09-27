@@ -26,7 +26,7 @@ public sealed class SessionAuthenticationHandler(
         }
 
         AuthSession? session = Named(carried) is { } id
-            ? await sessions.FindAsync(id, Context.RequestAborted)
+            ? await sessions.FindAsync(SessionHandle.Of(id), Context.RequestAborted)
             : null;
 
         DateTime now = clock.GetUtcNow().UtcDateTime;

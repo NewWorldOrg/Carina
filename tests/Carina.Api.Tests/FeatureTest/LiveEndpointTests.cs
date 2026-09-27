@@ -195,7 +195,6 @@ internal sealed class HeldPlaybackTickets : IPlaybackTicketStore
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LiveEndpointTests
 {
     [Theory]

@@ -81,12 +81,8 @@ public sealed class RecordingRound(
     }
 
     /// <summary>
-    /// Following comes before stopping and starting. A broadcaster announces that a programme runs
-    /// long at about the moment it was due to end, so the tick that reads that announcement is
-    /// often the same tick on which the recording's window closes: following first is what saves
-    /// that recording, and following after the stop would cut it at the end the guide has just
-    /// withdrawn. Following is guarded per recording instead, so one recording that cannot be
-    /// followed no longer keeps the stops and starts of this tick from happening.
+    /// Runs one tick: following comes before stopping and starting, and each recording is followed
+    /// inside its own guard.
     /// </summary>
     public async Task<RecordingRun> RunAsync(CancellationToken cancellationToken)
     {
@@ -225,9 +221,9 @@ public sealed class RecordingRound(
     }
 
     /// <summary>
-    /// A reservation whose start failed in a class is weighed before it is claimed, so a reservation
-    /// that is waiting out its pause or has been given up on never takes the claim. One that is to be
-    /// tried again then goes on exactly as a first start does.
+    /// Weighs a reservation whose start failed in a class before it is claimed. One that is waiting out
+    /// its pause or has been given up on does not take the claim; one to be tried again goes on as a
+    /// first start does.
     /// </summary>
     private async Task<bool> TryingAgainAsync(
         RecordingTick due,
@@ -268,7 +264,7 @@ public sealed class RecordingRound(
         DateTime now,
         CancellationToken cancellationToken)
     {
-        var id = RecordingId.New();
+        RecordingId id = RecordingId.New();
         SessionId? issued = null;
 
         try
@@ -465,9 +461,9 @@ public sealed class RecordingRound(
     }
 
     /// <summary>
-    /// What came of an attempt is read off what the start itself wrote down: a recording it began, or
-    /// the refusal it added. A refusal the driver gave carries whatever class it named; one where the
-    /// driver could not be reached, or the start was abandoned, is an attempt nothing answered.
+    /// What came of an attempt, read off what the start wrote down: a recording it began, or the refusal
+    /// it added. A driver refusal carries whatever class it named; a driver that could not be reached,
+    /// or an abandoned start, is an attempt nothing answered.
     /// </summary>
     private static RetryAttempt WhatCameOf(Starting starting, int startedBefore, int refusedBefore)
     {

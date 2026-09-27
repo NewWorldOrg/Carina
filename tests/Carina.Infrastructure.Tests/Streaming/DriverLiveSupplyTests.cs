@@ -508,7 +508,8 @@ public sealed class DriverLiveSupplyTests
             Supply(),
             new HeldTranscoders(budget),
             new HandTurnedClock(),
-            new SilentEvents());
+            new SilentEvents(),
+            NullLogger<LiveSessionManager>.Instance);
         LiveSessionKey key = new(Network, Service, LiveProfile.Hd30);
 
         LiveJoin[] joined = await Task.WhenAll(

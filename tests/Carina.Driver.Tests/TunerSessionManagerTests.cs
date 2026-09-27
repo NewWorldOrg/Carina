@@ -1159,7 +1159,7 @@ public sealed class TunerSessionManagerTests : IDisposable
         var signalled = new List<string>();
         while (!signalled.Contains(DriverEvents.SessionTuned, StringComparer.Ordinal))
         {
-            signalled.AddRange(await listener.Take(deadline.Token));
+            signalled.AddRange(await listener.TakeAsync(deadline.Token));
         }
 
         listener.Dispose();
@@ -1188,7 +1188,7 @@ public sealed class TunerSessionManagerTests : IDisposable
         var signalled = new List<string>();
         while (!signalled.Contains(DriverEvents.Sessions, StringComparer.Ordinal))
         {
-            signalled.AddRange(await listener.Take(deadline.Token));
+            signalled.AddRange(await listener.TakeAsync(deadline.Token));
         }
 
         Assert.DoesNotContain(DriverEvents.SessionTuned, signalled);
@@ -1217,7 +1217,7 @@ public sealed class TunerSessionManagerTests : IDisposable
         var signalled = new List<string>();
         while (!signalled.Contains(DriverEvents.SessionLockLost, StringComparer.Ordinal))
         {
-            signalled.AddRange(await listener.Take(deadline.Token));
+            signalled.AddRange(await listener.TakeAsync(deadline.Token));
         }
 
         Assert.Equal(1, session.LockLosses);
@@ -1414,7 +1414,7 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         manager.EnterDraining();
 
-        Assert.Equal([DriverEvents.Draining], await listener!.Take(deadline.Token));
+        Assert.Equal([DriverEvents.Draining], await listener!.TakeAsync(deadline.Token));
 
         manager.EnterDraining();
         Assert.True(manager.TryEnterDrainingUnlessRecording(out _));
@@ -1422,7 +1422,7 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         hub.CloseAll();
 
-        await Assert.ThrowsAsync<ChannelClosedException>(() => listener.Take(deadline.Token));
+        await Assert.ThrowsAsync<ChannelClosedException>(() => listener.TakeAsync(deadline.Token));
     }
 
     [Fact]

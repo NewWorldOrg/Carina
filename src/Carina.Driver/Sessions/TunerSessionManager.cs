@@ -165,7 +165,7 @@ public sealed class TunerSessionManager(
     {
         lock (drainGate)
         {
-            drain ??= Drain(cancellationToken);
+            drain ??= DrainOnceAsync(cancellationToken);
 
             return drain;
         }
@@ -173,11 +173,11 @@ public sealed class TunerSessionManager(
 
     public Task StopAsync(CancellationToken cancellationToken) => DrainAsync(cancellationToken);
 
-    private async Task Drain(CancellationToken cancellationToken)
+    private async Task DrainOnceAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await DrainEverySession(cancellationToken);
+            await DrainEverySessionAsync(cancellationToken);
         }
         finally
         {
@@ -186,7 +186,7 @@ public sealed class TunerSessionManager(
         }
     }
 
-    private async Task DrainEverySession(CancellationToken cancellationToken)
+    private async Task DrainEverySessionAsync(CancellationToken cancellationToken)
     {
         TunerSession[] running;
 
@@ -212,7 +212,7 @@ public sealed class TunerSessionManager(
             session.Stop();
         }
 
-        var everyone = Task.WhenAll(running.Select(session => session.Completion));
+        Task everyone = Task.WhenAll(running.Select(session => session.Completion));
 
         if (recordings.Length > 0)
         {
@@ -222,11 +222,11 @@ public sealed class TunerSessionManager(
                 drainCap
             );
 
-            var theRecordings = Task.WhenAll(recordings.Select(session => session.Completion));
+            Task theRecordings = Task.WhenAll(recordings.Select(session => session.Completion));
 
-            if (await Settles(theRecordings, drainCap, cancellationToken))
+            if (await SettlesAsync(theRecordings, drainCap, cancellationToken))
             {
-                if (!await Settles(everyone, hardStop, CancellationToken.None))
+                if (!await SettlesAsync(everyone, hardStop, CancellationToken.None))
                 {
                     GiveUpOn(running);
                 }
@@ -249,7 +249,7 @@ public sealed class TunerSessionManager(
             }
         }
 
-        if (!await Settles(everyone, hardStop, CancellationToken.None))
+        if (!await SettlesAsync(everyone, hardStop, CancellationToken.None))
         {
             GiveUpOn(running);
         }
@@ -270,7 +270,7 @@ public sealed class TunerSessionManager(
         }
     }
 
-    private async Task<bool> Settles(
+    private async Task<bool> SettlesAsync(
         Task everyone,
         TimeSpan limit,
         CancellationToken cancellationToken
@@ -1117,19 +1117,15 @@ public sealed class TunerSessionManager(
     }
 
     /// <summary>
-    /// The last session of that name this driver saw end. A recording carried on into the file it
-    /// already has comes back under the name it already has, so one name can have ended more than
-    /// once, and what a caller asks about is the run that ended last.
+    /// The last session of that name this driver saw end. One name can have ended more than once, and
+    /// this is the run that ended last.
     /// </summary>
     private TunerSession? WhatEndedUnder(SessionId sessionId) =>
         ended.LastOrDefault(candidate => candidate.SessionId == sessionId);
 
     /// <summary>
-    /// The driver keeps a session after it ends so that a caller asking about one is told it ended
-    /// rather than that it never was. A recording's session carries the recording's own name, so
-    /// the side that puts a recording back on a stream asks under exactly that name: whether an
-    /// append is a resumption or an accident is the ledger's to decide and not this side's, so the
-    /// name is given back to the recording the ended session was writing, and to nothing else.
+    /// Whether a recording start names the recording an ended session of the same name was writing,
+    /// which lets it take that name again.
     /// </summary>
     private static bool CarriesOn(TunerSession ended, StartSessionRequest request) =>
         request.Purpose is SessionPurpose.Recording
@@ -1199,9 +1195,8 @@ public sealed class TunerSessionManager(
     }
 
     /// <summary>
-    /// A viewing is held open for as long as the app keeps asking, but never further ahead than the
-    /// window its purpose is given, so a session nobody is asking for any more is let go of within
-    /// one window rather than for as long as the last request happened to name.
+    /// How far a viewing is held open: as far as the app asks, but never further ahead than the window
+    /// its purpose is given.
     /// </summary>
     private DateTimeOffset HeldNoFurtherThan(
         TunerSession session,

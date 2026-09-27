@@ -55,10 +55,9 @@ public static partial class ReservationRules
            || ReservationNamespaces.Any(space => file.Source.Contains(space, StringComparison.Ordinal));
 
     /// <summary>
-    /// The SQL forms name the table's own columns, so they are read everywhere. The typed form
-    /// names a property, and more than one table has a <c>StartedAt</c>: a typed write of it counts
-    /// only where the reservation is named, because a typed write over the reservation table
-    /// cannot be spelt without naming it. The outcome has no namesake and counts everywhere.
+    /// Whether a file writes a column the recording ledger owns. The SQL forms count everywhere; a typed
+    /// write of <c>StartedAt</c> counts only where the reservation is named, and the outcome counts
+    /// everywhere.
     /// </summary>
     private static bool WritesARecordingOwnedColumn(SourceFile file)
         => UpdatesTheClaim().IsMatch(file.Source)

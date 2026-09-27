@@ -28,11 +28,9 @@ public enum ReservationOutcomeKind
 }
 
 /// <summary>
-/// A line in the ledger either settles the reservation, saying what became of the recording, or
-/// notes something that happened on the way to one. Only a settling line takes a reservation out of
-/// the run that judges what became of it: a broadcast that slipped by a few minutes is most of
-/// them, and a reservation held back by that line would never be written down as missed. Every
-/// classification is named in one list or the other, and a test holds that.
+/// Sorts ledger classifications into lines that settle the reservation, saying what became of the
+/// recording, and lines that note something that happened on the way to one. Only a settling line
+/// takes a reservation out of the run that judges what became of it.
 /// </summary>
 public static class ReservationOutcomeKinds
 {

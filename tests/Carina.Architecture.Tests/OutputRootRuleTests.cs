@@ -8,7 +8,7 @@ public sealed class OutputRootRuleTests
 
     private const string Held = "Encodings__OutputRoots";
 
-    [Fact(DisplayName = "A-エンコード-024: the roots the sweep walks and the roots artefacts are written into share no name")]
+    [Fact(DisplayName = "the roots the sweep walks and the roots artefacts are written into share no name")]
     public void TheRootsTheSweepWalksAndTheRootsArtefactsAreWrittenIntoShareNoName()
     {
         Assert.Empty(NamedByBothSettings(File.ReadAllText(ComposeFile(RepositoryLayout.Root))));

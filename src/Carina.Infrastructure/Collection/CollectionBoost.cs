@@ -39,7 +39,7 @@ public sealed class CollectionBoost(
     {
         ArgumentNullException.ThrowIfNull(wanted);
 
-        var boostId = Guid.NewGuid();
+        Guid boostId = Guid.NewGuid();
 
         lock (gate)
         {
@@ -66,7 +66,7 @@ public sealed class CollectionBoost(
                 return new BoostStarted(boostId, 0);
             }
 
-            var deadline = new CancellationTokenSource(settings.LongestBoost);
+            CancellationTokenSource deadline = new(settings.LongestBoost, clock);
 
             walking = deadline;
             walk = Task.Run(() => WalkAsync(boostId, asked, deadline), CancellationToken.None);

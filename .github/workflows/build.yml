@@ -15,9 +15,12 @@ env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   UNIT_FILTER: 'FullyQualifiedName~Unit|(FullyQualifiedName!~FeatureTest&FullyQualifiedName!~DbIntegration&Category!=DbIntegration&Category!=Scale&Category!=Material)'
   FEATURE_FILTER: 'FullyQualifiedName~FeatureTest'
+  FEATURE_PROJECT: tests/Carina.Api.Tests/Carina.Api.Tests.csproj
+  FEATURE_SHARDS: 6
   DB_INTEGRATION_FILTER: 'FullyQualifiedName~DbIntegration|Category=DbIntegration'
   SCALE_FILTER: 'Category=Scale'
   MATERIAL_FILTER: 'Category=Material'
+  MATERIAL_PROJECT: tests/Carina.Infrastructure.Tests/Carina.Infrastructure.Tests.csproj
 
 jobs:
   checks:
@@ -32,6 +35,15 @@ jobs:
           dotnet-version: '10.0.x'
       - run: dotnet restore
       - run: dotnet build --no-restore -warnaserror
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
       - run: dotnet format --no-restore --verify-no-changes
 
   every-test-is-selected-by-a-job:
@@ -72,18 +84,29 @@ jobs:
 
   feature-test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - run: dotnet restore
+      - name: The matrix runs every shard the feature tests are split into
+        run: |
+          if [ "${{ strategy.job-total }}" -ne "${FEATURE_SHARDS}" ]; then
+            echo "the matrix runs ${{ strategy.job-total }} shards but the feature tests are split into ${FEATURE_SHARDS}" >&2
+            exit 1
+          fi
+      - run: dotnet restore "${FEATURE_PROJECT}"
       - name: Room to watch a file for every application these tests start
         run: sudo sysctl -w fs.inotify.max_user_instances=8192
-      - name: The tests that drive the application through its HTTP surface
+      - name: The tests that drive the application through its HTTP surface, one shard of their classes
         run: |
           set -o pipefail
-          dotnet test --no-restore --filter "${FEATURE_FILTER}" --logger trx --results-directory results | tee feature.log
+          filter="$(.github/feature-shard.sh "${{ matrix.shard }}" "${FEATURE_SHARDS}")"
+          dotnet test "${FEATURE_PROJECT}" --no-restore --filter "${filter}" --logger trx --results-directory results | tee feature.log
       - name: The tests that failed, named from the result files rather than the interleaved output
         if: failure()
         run: .github/failed-tests.sh results
@@ -94,7 +117,7 @@ jobs:
             echo "the filter ran ${passed} tests: dotnet test exits 0 when a filter matches nothing, so this job would be green having verified nothing" >&2
             exit 1
           fi
-          echo "${passed} feature tests ran."
+          echo "${passed} feature tests ran in shard ${{ matrix.shard }} of ${FEATURE_SHARDS}."
 
   db-integration-test:
     runs-on: ubuntu-latest
@@ -153,7 +176,7 @@ jobs:
         run: |
           set -o pipefail
           docker run --rm -v "${PWD}:/code" -w /code -e DOTNET_NOLOGO -e DOTNET_SKIP_FIRST_TIME_EXPERIENCE carina:develop \
-            dotnet test --filter "${MATERIAL_FILTER}" --logger trx --results-directory results | tee material.log
+            dotnet test "${MATERIAL_PROJECT}" --filter "${MATERIAL_FILTER}" --logger trx --results-directory results | tee material.log
       - name: The tests that failed, named from the result files rather than the interleaved output
         if: failure()
         run: .github/failed-tests.sh results

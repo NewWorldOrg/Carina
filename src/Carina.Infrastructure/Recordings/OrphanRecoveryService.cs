@@ -21,16 +21,14 @@ public sealed record OrphanRecovered(int Found, int Readopted, int Resumed, int 
 
 /// <summary>
 /// Takes back the recordings the ledger still calls running when the driver greets this side as an
-/// instance other than the one those recordings were left on — which is every start of this
-/// application, and every restart of the driver under it. The rows it starts from are the ones with
-/// no outcome, and what it holds them against is the session list that same greeting was followed
-/// by. A connection that merely dropped never gets here.
-///
-/// It asks the driver to start a session again under the recording's own name and output root,
-/// which is how a recording carries on into the file it already has. What it will never do is call
-/// one of them complete: completing is what this side asks for, and every row this service touches
-/// is one nobody asked to stop. A recording it gives up on keeps its file.
+/// instance other than the one those recordings were left on, holding the rows with no outcome
+/// against the session list that greeting was followed by.
 /// </summary>
+/// <remarks>
+/// It asks the driver to start a session again under the recording's own name and output root, so
+/// the recording carries on into the file it already has. It never marks a recording complete, and
+/// a recording it gives up on keeps its file.
+/// </remarks>
 public sealed class OrphanRecoveryService(
     IServiceScopeFactory scopes,
     IDriverClient driver,
@@ -124,6 +122,11 @@ public sealed class OrphanRecoveryService(
 
                 break;
 
+            case OrphanTreatment.MarkWhatWasLeftBehind when ReachedTheEndItWasOpenedWith(named):
+                LeaveForTheWatch(recording);
+
+                break;
+
             default:
                 await MarkAsync(recording, another, now, tally, cancellationToken);
 
@@ -209,12 +212,9 @@ public sealed class OrphanRecoveryService(
     }
 
     /// <summary>
-    /// A driver that refuses because a session of this recording's name, or a writer on this
-    /// recording, is already there is not a driver that turned the recording away: the pass that
-    /// watches the stream opens the same session, and one that landed between the list this side
-    /// was handed and this request reads exactly like a refusal. The break stays open either way
-    /// and the next pass closes it on whatever is running, so that reading is said rather than the
-    /// one that would have the recording stopped.
+    /// Reports why a session was not opened again. A refusal because a session of this recording's name,
+    /// or a writer on this recording, is already there is reported as the stream watcher having opened
+    /// it; the break stays open either way for the next pass to close.
     /// </summary>
     private void WhyItWasNotOpened(Recording recording, DriverCall<SessionSnapshot> answer)
     {
@@ -238,6 +238,19 @@ public sealed class OrphanRecoveryService(
             answer.Outcome,
             answer.Problem?.Title);
     }
+
+    /// <summary>
+    /// Leaves a recording whose session the driver ended at the end it was opened with to the pass
+    /// that watches the stream.
+    /// </summary>
+    private void LeaveForTheWatch(Recording recording)
+        => logger.LogInformation(
+            "Recording {Recording} was stopped by the driver at the end it was opened with, so it is left for "
+            + "the pass that watches the stream to judge rather than marked for what was left of it.",
+            recording.Id.Wire);
+
+    private static bool ReachedTheEndItWasOpenedWith(SessionSnapshot? session)
+        => session is { StopReason: SessionStopReason.EndTimeReached };
 
     private async Task MarkAsync(
         Recording recording,
@@ -284,12 +297,8 @@ public sealed class OrphanRecoveryService(
     }
 
     /// <summary>
-    /// A recording the driver stopped writing because the disk it was on had no room left is not
-    /// put back on a stream: the disk is the same one, and a second attempt writes nothing. It ends
-    /// here naming the full disk and keeps the file it has. This is the reading the pass that
-    /// watches a running recording already makes, and recovery has to make it too — a driver that
-    /// is replaced, or an application that is restarted, would otherwise walk past the reason and
-    /// open the recording again on a disk that is still full.
+    /// Ends a recording the driver stopped writing because its disk had no room left, naming the full
+    /// disk, without putting it back on a stream. The file is kept.
     /// </summary>
     private async Task FailOnAFullDiskAsync(
         Recording recording,
@@ -303,7 +312,11 @@ public sealed class OrphanRecoveryService(
             recording.Id,
             loaded =>
             {
-                loaded.Note(new OutcomeDetail(RecordingFault.DiskExhausted, null, string.Empty, now));
+                foreach (RecordingFault fault in RecordingFaults.OfAFullDisk(weighed))
+                {
+                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
+                }
+
                 loaded.Settle(RecordingOutcome.Failed, weighed ?? 0, now);
 
                 return true;
@@ -425,9 +438,8 @@ public sealed class OrphanRecoveryService(
     }
 
     /// <summary>
-    /// One read, one change, one write. Something else writing the same row while this runs is the
-    /// pass that watches the stream, and it is holding the same facts this is: the change is
-    /// dropped rather than put on top, and the next pass finds the row as it is.
+    /// Reads the recording, applies one change and writes it. When the row was written by something else
+    /// meanwhile, the change is dropped.
     /// </summary>
     private async Task<bool> ApplyAsync(
         RecordingId id,

@@ -1,9 +1,8 @@
 namespace Carina.Domain.Reservations;
 
 /// <summary>
-/// Why a reservation was taken out of the running. A person who cancels means it, and nothing else
-/// puts it back; a reservation the guide stopped announcing was taken out on the guide's word, and
-/// the guide is allowed to change its mind again.
+/// Why a reservation was taken out of the running: by a person, which nothing else undoes, or
+/// because the guide stopped announcing it, which the guide may undo.
 /// </summary>
 public enum ReservationCancellation
 {

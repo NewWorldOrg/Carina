@@ -319,7 +319,6 @@ internal sealed class PlayFeature : IAsyncDisposable
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class PlayDeliveryTests
 {
     [Theory]
@@ -473,7 +472,7 @@ public sealed class PlayDeliveryTests
         Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded takes one of the few pictures this machine transcodes at once, and is refused when they are all taken")]
+    [Fact(DisplayName = "a recording asked for as it was recorded takes one of the few pictures this machine transcodes at once, and is refused when they are all taken")]
     public async Task ARecordingAskedForAsItWasRecordedIsRefusedWhenAsManyAreBeingTranscodedAsThisMachineAllows()
     {
         await using var feature = new PlayFeature();
@@ -513,6 +512,37 @@ public sealed class PlayDeliveryTests
         Assert.Equal(
             ["main"],
             read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
+    }
+
+    [Fact]
+    public async Task ThePlanOfARecordingWhoseSoundsCouldNotBeReadNamesTheMainSoundItPlaysRatherThanNone()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.SoundsCannotBeRead = "the programme was still reading the stream";
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal(
+            ["main"],
+            read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
+    }
+
+    [Fact]
+    public async Task ThePlanOfASecondSoundThatCouldNotBeReadIsRefusedAsThePictureOfItIs()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.SoundsCannotBeRead = "the programme was still reading the stream";
+
+        using HttpResponseMessage plan = await feature.PlanAsync(recording, "?sound=secondary");
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?sound=secondary");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, plan.StatusCode);
+        Assert.Equal(picture.StatusCode, plan.StatusCode);
+        Assert.Equal(
+            (await PlayFeature.PlanOfAsync(picture)).GetProperty("message").GetString(),
+            (await PlayFeature.PlanOfAsync(plan)).GetProperty("message").GetString());
     }
 
     [Fact]

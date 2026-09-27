@@ -6,13 +6,10 @@ using Carina.Domain.Machines;
 namespace Carina.Infrastructure.Machines;
 
 /// <summary>
-/// Stops a programme an earlier process wrote down and did not live to stop. The id is looked up
-/// and the programme found under it is the one written down only if it began when that one began,
-/// within <see cref="Drift"/>: the start time is read from the kernel's own record of the process,
-/// so a later programme that was handed the same id began later and is left alone. A programme
-/// that is gone, or is gone by the time it is looked at, is reported as such rather than as
-/// stopped. The wait after the kill reads the kernel's record too, because a programme whose
-/// parent died with the last process is reaped by nobody this process knows.
+/// Stops a programme an earlier process wrote down and did not live to stop. The programme under the
+/// recorded id is stopped only if, by the kernel's own record, it began when the recorded one began,
+/// within <see cref="Drift"/>. A programme that is gone, or is gone by the time it is looked at, is
+/// reported as such. The wait after the kill reads the kernel's record.
 /// </summary>
 public sealed class StrayProgrammes(TimeSpan drift, TimeSpan patience) : IStrayProgrammes
 {
@@ -80,7 +77,7 @@ public sealed class StrayProgrammes(TimeSpan drift, TimeSpan patience) : IStrayP
 
     private bool WaitedOut(int processId)
     {
-        var waited = Stopwatch.StartNew();
+        Stopwatch waited = Stopwatch.StartNew();
 
         while (!IsGone(processId))
         {
@@ -96,8 +93,8 @@ public sealed class StrayProgrammes(TimeSpan drift, TimeSpan patience) : IStrayP
     }
 
     /// <summary>
-    /// Gone as the kernel sees it: no record under the id, or a record of a process that has
-    /// exited and waits only to be reaped by a parent this process is not.
+    /// Whether the process is gone as the kernel sees it: no record under the id, or a record of a
+    /// process that has exited and waits to be reaped.
     /// </summary>
     internal static bool IsGone(int processId)
     {

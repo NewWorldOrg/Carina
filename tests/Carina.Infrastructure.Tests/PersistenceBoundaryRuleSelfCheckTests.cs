@@ -108,7 +108,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
-    [Fact(DisplayName = "BR-QD-013: detects a quality table that holds a foreign key into the recording ledger")]
+    [Fact(DisplayName = "detects a quality table that holds a foreign key into the recording ledger")]
     public void DetectsAQualityTableThatHoldsAForeignKeyIntoTheRecordingLedger()
     {
         using ViolatingDbContext context = Violating();
@@ -118,7 +118,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
-    [Fact(DisplayName = "BR-D-004: detects an encode job that holds a foreign key to the recording ledger")]
+    [Fact(DisplayName = "detects an encode job that holds a foreign key to the recording ledger")]
     public void DetectsAnEncodeJobThatHoldsAForeignKeyToTheRecordingLedger()
     {
         using ViolatingDbContext context = Violating();

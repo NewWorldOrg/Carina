@@ -10,13 +10,11 @@ using Carina.Infrastructure.Tests.Integrity;
 namespace Carina.Infrastructure.Tests.Encodings;
 
 /// <summary>
-/// Runs the detector against broadcasts synthesised with the ffmpeg the application itself runs, so
-/// that the watch for a station's watermark is measured rather than believed: that a mark drawn in a
-/// corner is learned from one recording, and that in the next recording of the same service — one
-/// whose clock starts seventeen hours into the day — the pictures it is watched in land on the
-/// artefact where they were shown. The next recording carries two pods that the sound and the dark
-/// alone both take for breaks; the station took its mark off for one of them and left it on through
-/// the other, so only the first is still a break once the mark learned ahead is watched for.
+/// Runs the detector against broadcasts synthesised with the ffmpeg the application runs: a mark
+/// drawn in a corner is learned from one recording, and the next recording of the same service,
+/// whose clock starts seventeen hours into the day, carries two pods that the sound and the dark
+/// both take for breaks. The mark is off through one and on through the other, so only the first
+/// is still a break once the mark learned ahead is watched for.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
@@ -38,7 +36,7 @@ public sealed class WatermarkMaterialTests : IDisposable
 
     public void Dispose() => tree.Dispose();
 
-    [Fact(DisplayName = "BR-ED2-007: a watermark learned from one recording takes away, in the next recording of the service, the pod it stayed on screen through, and leaves the pod it was taken off for")]
+    [Fact(DisplayName = "a watermark learned from one recording takes away, in the next recording of the service, the pod it stayed on screen through, and leaves the pod it was taken off for")]
     public async Task AWatermarkLearnedFromOneRecordingJudgesTheNext()
     {
         string taught = await WritingAsync("taught", new SyntheticBroadcast

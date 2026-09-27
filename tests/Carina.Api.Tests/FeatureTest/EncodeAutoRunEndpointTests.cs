@@ -7,7 +7,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class EncodeAutoRunEndpointTests
 {
     [Fact(DisplayName = "a machine nobody has settled answers what it was deployed with, and says nobody settled it")]
@@ -26,7 +25,7 @@ public sealed class EncodeAutoRunEndpointTests
         Assert.Equal(JsonValueKind.Null, data.GetProperty("updatedAt").ValueKind);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: what the auto-run takes is stated, and it is what ended with a file")]
+    [Fact(DisplayName = "what the auto-run takes is stated, and it is what ended with a file")]
     public async Task WhatTheAutoRunTakesIsStated()
     {
         await using var feature = new EncodingFeature();
@@ -36,6 +35,33 @@ public sealed class EncodeAutoRunEndpointTests
         Assert.Equal(
             ["complete", "truncated"],
             body.GetProperty("data").GetProperty("subject").EnumerateArray().Select(each => each.GetString()));
+    }
+
+    [Fact(DisplayName = "a machine offering more than one destination says the auto-run cannot settle where an artefact goes")]
+    public async Task AMachineOfferingMoreThanOneDestinationSaysTheAutoRunCannotSettleWhereAnArtefactGoes()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        feature.Placed(profile);
+        feature.Placed(profile, new OutputRoot("elsewhere"));
+
+        (_, JsonElement body) = await feature.GetAsync("/api/encoding/settings");
+
+        Assert.Equal("moreThanOneIsOffered", body.GetProperty("data").GetProperty("whereArtefactsGo").GetString());
+    }
+
+    [Fact(DisplayName = "one destination settles where an artefact goes, and a machine with none says nothing is defined")]
+    public async Task OneDestinationSettlesWhereAnArtefactGoesAndNoneSaysNothingIsDefined()
+    {
+        await using var nothing = new EncodingFeature();
+        await using var one = new EncodingFeature();
+        one.Placed(one.Defined());
+
+        (_, JsonElement undefined) = await nothing.GetAsync("/api/encoding/settings");
+        (_, JsonElement settled) = await one.PutAsync("/api/encoding/settings", new { automatically = true, mostCores = 2 });
+
+        Assert.Equal("nothingIsDefined", undefined.GetProperty("data").GetProperty("whereArtefactsGo").GetString());
+        Assert.Equal("settled", settled.GetProperty("data").GetProperty("whereArtefactsGo").GetString());
     }
 
     [Fact(DisplayName = "settling the auto-run writes one row, answers it as settled, and signals")]
@@ -59,7 +85,7 @@ public sealed class EncodeAutoRunEndpointTests
         Assert.Contains(AppEventName.EncodeJobs, feature.Events.Signalled);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: turning the auto-run off stops making jobs, and leaves the one already running alone")]
+    [Fact(DisplayName = "turning the auto-run off stops making jobs, and leaves the one already running alone")]
     public async Task TurningTheAutoRunOffLeavesTheJobAlreadyRunningAlone()
     {
         await using var feature = new EncodingFeature();

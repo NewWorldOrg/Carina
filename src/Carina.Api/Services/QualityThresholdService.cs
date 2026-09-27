@@ -1,5 +1,6 @@
 using Carina.Api.Common;
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Events;
 using Carina.Domain.Quality;
 
@@ -8,6 +9,7 @@ namespace Carina.Api.Services;
 public sealed class QualityThresholdService(
     IQualityThresholdRepository thresholds,
     IQualityThresholdChangeRepository changes,
+    IAtomicWrite writes,
     IAppEventPublisher events,
     TimeProvider clock)
 {
@@ -54,8 +56,6 @@ public sealed class QualityThresholdService(
             Threshold.Of(standing.Setting.Default, value, standing.Setting.Provisional, standing.Setting.Observations, at),
             standing.UpdatedBy);
 
-        await thresholds.SaveAsync(revised, cancellationToken);
-
         QualityThresholdChange recorded = QualityThresholdChange.Record(
             QualityThresholdChangeId.New(),
             key,
@@ -64,7 +64,15 @@ public sealed class QualityThresholdService(
             at,
             null);
 
-        await changes.AddAsync(recorded, cancellationToken);
+        await writes.AllOrNothingAsync(
+            async token =>
+            {
+                await thresholds.SaveAsync(revised, token);
+                await changes.AddAsync(recorded, token);
+
+                return recorded;
+            },
+            cancellationToken);
 
         events.Signal(AppEventName.Quality);
 

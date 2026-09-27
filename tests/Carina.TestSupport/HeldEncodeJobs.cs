@@ -5,8 +5,7 @@ using Carina.Domain.Recordings;
 namespace Carina.TestSupport;
 
 /// <summary>
-/// The encode job ledger held in memory, with the one rule the real one gets from its index: one
-/// owner per artefact name under an output root.
+/// The encode job ledger held in memory, holding one owner per artefact name under an output root.
 /// </summary>
 public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 {
@@ -17,6 +16,8 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
     public Action<EncodeJob, EncodeFileName>? WhenClaiming { get; set; }
 
     public Action<EncodeJob>? WhenSaving { get; set; }
+
+    public Func<EncodeJob, bool>? WhenWritingTheEnding { get; set; }
 
     public Task<EncodeJob?> FindAsync(EncodeJobId id, CancellationToken cancellationToken)
         => Task.FromResult(Jobs.FirstOrDefault(job => job.Id.Equals(id)));
@@ -40,6 +41,20 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
         WhenSaving?.Invoke(job);
 
         return Task.CompletedTask;
+    }
+
+    public Task<bool> WriteTheEndingAsync(EncodeJob job, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+
+        bool landed = WhenWritingTheEnding?.Invoke(job) ?? true;
+
+        if (landed)
+        {
+            Moves.Add($"wrote the ending {job.Id.Wire} {job.Status}");
+        }
+
+        return Task.FromResult(landed);
     }
 
     public Task<PaginatedList<EncodeJob>> ListAsync(EncodeJobQuery query, CancellationToken cancellationToken)
@@ -79,20 +94,6 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
         IReadOnlyList<EncodeJob> listed = [.. Jobs.Where(job => job.RecordingId.Equals(recordingId)).OrderBy(job => job.QueuedAt)];
 
         return Task.FromResult(listed);
-    }
-
-    public Task<IReadOnlySet<RecordingId>> WithAJobAsync(
-        IReadOnlyCollection<RecordingId> recordings,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(recordings);
-
-        IReadOnlySet<RecordingId> held = Jobs
-            .Select(job => job.RecordingId)
-            .Where(recordings.Contains)
-            .ToHashSet();
-
-        return Task.FromResult(held);
     }
 
     public Task<EncodeClaim> ClaimNextAsync(DateTime at, CancellationToken cancellationToken)

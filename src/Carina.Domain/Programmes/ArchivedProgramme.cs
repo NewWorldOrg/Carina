@@ -31,14 +31,18 @@ public sealed class ArchivedProgramme
 
     public DateTime ArchivedAt { get; private set; }
 
-    public static ArchivedProgramme? Of(Programme programme, DateTime at)
+    public static ArchivedProgramme? Of(EndedProgramme ended, DateTime at)
     {
-        ArgumentNullException.ThrowIfNull(programme);
+        ArgumentNullException.ThrowIfNull(ended);
 
-        if (programme.IsShadow || programme.EndsAt is not { } endsAt)
+        Programme programme = ended.Programme;
+
+        if (programme.IsShadow)
         {
             return null;
         }
+
+        DateTime endsAt = programme.EndsAt ?? ended.EndedAt;
 
         return Rehydrate(
             programme.NetworkId,

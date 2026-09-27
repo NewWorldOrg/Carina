@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 using Carina.Contracts;
 
 namespace Carina.Api.Requests;
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record TunerEntryRequest
 {
     public string? DeviceId { get; init; }
@@ -18,6 +21,7 @@ public sealed record TunerEntryRequest
     };
 }
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record TunerLedgerRequest
 {
     public IReadOnlyList<TunerEntryRequest>? Tuners { get; init; }

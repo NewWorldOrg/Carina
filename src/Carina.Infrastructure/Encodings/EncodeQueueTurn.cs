@@ -5,11 +5,9 @@ using Carina.Domain.Streaming;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// Asks the one question the encode queue and the screens both need answered the same way: whether
-/// the card is being used for someone watching right now, so a job bound for it waits. The three
-/// things it is worked out from — what this machine was asked to encode on, whether the card can be
-/// used at all, and how many transcoders are up — are read here and nowhere else, so the queue and
-/// the list of jobs can never say different things about the same moment.
+/// Answers, for both the encode queue and the job list, whether the card is being used for someone
+/// watching right now, from what this machine was asked to encode on, whether the card is usable,
+/// and how many transcoders are up.
 /// </summary>
 public sealed class EncodeQueueTurn(
     EncodeSettings settings,

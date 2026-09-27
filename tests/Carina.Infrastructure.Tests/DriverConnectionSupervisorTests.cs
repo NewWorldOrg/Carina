@@ -320,11 +320,7 @@ public sealed class DriverConnectionSupervisorTests
     }
 
     /// <summary>
-    /// Whether the driver ever sends a given name is the driver's own business
-    /// and is held there; what this side owes is that none of the names the
-    /// contract fixes is dropped on the way to a subscriber. Reading the set
-    /// from the contract rather than listing it here is what keeps a name added
-    /// later from going unrelayed and unnoticed.
+    /// Every event name the contract fixes reaches a subscriber. The set is read from the contract.
     /// </summary>
     [Fact]
     public async Task EveryNameTheContractFixesReachesSubscribers()

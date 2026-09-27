@@ -5,7 +5,6 @@ using Carina.Domain.Auth;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DeviceRevocationTests
 {
     private static readonly Uri Me = new("/api/auth/me", UriKind.Relative);
@@ -19,7 +18,7 @@ public sealed class DeviceRevocationTests
 
         using HttpClient there = await probe.RelayingAsync();
         using HttpClient here = await probe.RelayingAsync();
-        SessionHandle ended = SessionHandle.Of(probe.Sessions.Sessions[0].Id);
+        SessionHandle ended = probe.Sessions.Sessions[0].Handle;
 
         using var asking = new HttpRequestMessage(
             HttpMethod.Delete,

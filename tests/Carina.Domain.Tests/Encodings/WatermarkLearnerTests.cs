@@ -4,7 +4,7 @@ namespace Carina.Domain.Tests.Encodings;
 
 public sealed class WatermarkLearnerTests
 {
-    [Fact(DisplayName = "BR-ED2-007: a mark that stays put in a corner while the picture moves is learned, and what moved is not")]
+    [Fact(DisplayName = "a mark that stays put in a corner while the picture moves is learned, and what moved is not")]
     public void AMarkThatStaysPutWhileThePictureMovesIsLearned()
     {
         WatermarkMask? learned = LearnedFrom(WatermarkLearner.FewestFrames, step => WatermarkPictures.Moving(step, marked: true));
@@ -19,7 +19,7 @@ public sealed class WatermarkLearnerTests
             x => Assert.False(learned.Covers(x, 5)));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a mark that stays put in the middle of the picture is not taken for a station's watermark")]
+    [Fact(DisplayName = "a mark that stays put in the middle of the picture is not taken for a station's watermark")]
     public void AMarkInTheMiddleOfThePictureIsNotAWatermark()
     {
         WatermarkMask? learned = LearnedFrom(
@@ -29,14 +29,14 @@ public sealed class WatermarkLearnerTests
         Assert.Null(learned);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: fewer pictures than a learning needs teach nothing")]
+    [Fact(DisplayName = "fewer pictures than a learning needs teach nothing")]
     public void TooFewPicturesTeachNothing()
     {
         Assert.Null(LearnedFrom(WatermarkLearner.FewestFrames - 1, step => WatermarkPictures.Moving(step, marked: true)));
         Assert.NotNull(LearnedFrom(WatermarkLearner.FewestFrames, step => WatermarkPictures.Moving(step, marked: true)));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a mark on screen for less than half of the pictures is not learned, and one on screen for half of them is")]
+    [Fact(DisplayName = "a mark on screen for less than half of the pictures is not learned, and one on screen for half of them is")]
     public void AMarkOnScreenForLessThanHalfThePicturesIsNotLearned()
     {
         int frames = WatermarkLearner.FewestFrames;
@@ -45,13 +45,13 @@ public sealed class WatermarkLearnerTests
         Assert.NotNull(LearnedFrom(frames, step => WatermarkPictures.Moving(step, marked: step < frames / 2)));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: corners full of detail that never moves are not a watermark, because a station's mark is a small part of them")]
+    [Fact(DisplayName = "corners full of detail that never moves are not a watermark, because a station's mark is a small part of them")]
     public void CornersFullOfDetailThatNeverMovesAreNotAWatermark()
     {
         Assert.Null(LearnedFrom(WatermarkLearner.FewestFrames, _ => Checkered()));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a picture of any other size than the one looked in is refused")]
+    [Fact(DisplayName = "a picture of any other size than the one looked in is refused")]
     public void APictureOfAnyOtherSizeIsRefused()
     {
         var learner = new WatermarkLearner();

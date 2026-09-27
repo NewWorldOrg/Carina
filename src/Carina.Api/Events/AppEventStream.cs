@@ -48,11 +48,11 @@ public static class AppEventStream
                 await context.Response.StartAsync(context.RequestAborted);
                 await context.Response.Body.FlushAsync(context.RequestAborted);
 
-                Task<IReadOnlyList<AppEventName>> waiting = listener.Take(context.RequestAborted);
+                Task<IReadOnlyList<AppEventName>> waiting = listener.TakeAsync(context.RequestAborted);
 
                 while (true)
                 {
-                    if (!await SignalledWithin(waiting, quiet, context.RequestAborted))
+                    if (!await SignalledWithinAsync(waiting, quiet, context.RequestAborted))
                     {
                         await WriteAsync(context, Keepalive, patience);
 
@@ -60,7 +60,7 @@ public static class AppEventStream
                     }
 
                     IReadOnlyList<AppEventName> names = await waiting;
-                    waiting = listener.Take(context.RequestAborted);
+                    waiting = listener.TakeAsync(context.RequestAborted);
 
                     await WriteAsync(context, Frames(names), patience);
                 }
@@ -82,12 +82,12 @@ public static class AppEventStream
     private static string Frames(IReadOnlyList<AppEventName> names)
         => string.Concat(names.Select(name => Frame(name.Value)));
 
-    private static async Task<bool> SignalledWithin(
+    private static async Task<bool> SignalledWithinAsync(
         Task<IReadOnlyList<AppEventName>> waiting,
         TimeSpan quiet,
         CancellationToken cancellationToken)
     {
-        using var tick = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using CancellationTokenSource tick = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         Task quiets = Task.Delay(quiet, tick.Token);
         bool signalled = await Task.WhenAny(waiting, quiets) != quiets;
@@ -99,7 +99,8 @@ public static class AppEventStream
 
     private static async Task WriteAsync(HttpContext context, string payload, TimeSpan patience)
     {
-        using var leash = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        using CancellationTokenSource leash =
+            CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
         leash.CancelAfter(patience);
 
         await context.Response.WriteAsync(payload, leash.Token);

@@ -11,17 +11,15 @@ namespace Carina.Infrastructure.Encodings;
 public sealed record EncodeLook(EncodeClaimStanding Standing, EncodeJobId? Job, EncodeJobStatus? Ended);
 
 /// <summary>
-/// The one loop that runs encode jobs. It first puts back what was running when the last process
-/// stopped, then looks at the queue: a claim is a conditional update in the ledger, one job is run
-/// to its end, and the queue is looked at again at once, or after a pause when nothing was waiting.
-/// Two of these looking at the same ledger cannot both start a job, because the ledger holds one
-/// running job and refuses the second claim (BR-ED2-005).
-/// <para>
-/// Before it asks the ledger for anything, a look gives way to someone watching: while the card is
-/// making a picture for a viewer, a job bound for the card is left where it is and the next look
-/// takes it. A job already running is left to finish, watched or not.
-/// </para>
+/// The loop that runs encode jobs.
 /// </summary>
+/// <remarks>
+/// It first puts back what was running when the last process stopped, then looks at the queue: a
+/// claim is a conditional update in the ledger, one job is run to its end, and the queue is looked
+/// at again at once, or after a pause when nothing was waiting. While the card is making a picture
+/// for a viewer, a job bound for the card is left for the next look. A job already running is left
+/// to finish.
+/// </remarks>
 public sealed class EncodeDispatch(
     IServiceScopeFactory scopes,
     EncodeSettings settings,
@@ -30,6 +28,12 @@ public sealed class EncodeDispatch(
     TimeProvider clock,
     ILogger<EncodeDispatch> logger) : BackgroundService
 {
+    public const int MostTriesAtAnEnding = 3;
+
+    private EncodeJob? unwritten;
+
+    private int triesAtTheEnding;
+
     public async Task<EncodeRestartReport> RecoverAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
@@ -60,6 +64,12 @@ public sealed class EncodeDispatch(
 
     private async Task<EncodeLook> LookedAsync(CancellationToken cancellationToken)
     {
+        if (unwritten is not null)
+        {
+            await WriteTheEndingAsync(cancellationToken);
+            events.Signal(AppEventName.EncodeJobs);
+        }
+
         if (await turn.YieldsToAViewerAsync(cancellationToken))
         {
             return new EncodeLook(EncodeClaimStanding.AViewerHoldsTheCard, null, null);
@@ -104,7 +114,9 @@ public sealed class EncodeDispatch(
 
             if (job.Status is not EncodeJobStatus.Running)
             {
-                return new EncodeLook(claim.Standing, job.Id, job.Status);
+                unwritten = job;
+
+                return new EncodeLook(claim.Standing, job.Id, await WriteTheEndingAsync(cancellationToken));
             }
 
             EncodeRecovery recovery = job.Recover(settings.MostAttempts, clock.GetUtcNow().UtcDateTime);
@@ -122,9 +134,67 @@ public sealed class EncodeDispatch(
     }
 
     /// <summary>
-    /// Reads the job again, as the other hand left it, and sweeps what it still owes a removal for if
-    /// it has ended. The scope that ran it holds a copy that no longer describes the job, so a fresh
-    /// one is opened.
+    /// Writes the ending a run reached before it threw. A write that fails throws and is made again at
+    /// the next look, before anything else is claimed; after <see cref="MostTriesAtAnEnding"/> failed
+    /// writes the ending is dropped and the row is left as it is. A row that has moved on meanwhile is
+    /// read again and left as it is.
+    /// </summary>
+    private async Task<EncodeJobStatus?> WriteTheEndingAsync(CancellationToken cancellationToken)
+    {
+        EncodeJob job = unwritten ?? throw new InvalidOperationException("There is no ending waiting to be written.");
+        bool written;
+
+        try
+        {
+            await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+            written = await scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>().WriteTheEndingAsync(job, cancellationToken);
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            triesAtTheEnding++;
+
+            if (triesAtTheEnding < MostTriesAtAnEnding)
+            {
+                throw;
+            }
+
+            logger.LogError(
+                failure,
+                "Job {Job} ended {Status} on attempt {Attempt} and the ledger refused its ending {Tries} times; it is dropped, and the next start recovers the row.",
+                job.Id.Wire,
+                job.Status,
+                job.Attempt,
+                triesAtTheEnding);
+
+            unwritten = null;
+            triesAtTheEnding = 0;
+
+            return null;
+        }
+
+        triesAtTheEnding = 0;
+        unwritten = null;
+
+        if (!written)
+        {
+            return await SweptAsync(job.Id, cancellationToken);
+        }
+
+        logger.LogWarning(
+            "Job {Job} ended {Status} on attempt {Attempt} and the ledger had not taken it; it is written now.",
+            job.Id.Wire,
+            job.Status,
+            job.Attempt);
+
+        await using AsyncServiceScope sweeping = scopes.CreateAsyncScope();
+        await sweeping.ServiceProvider.GetRequiredService<EncodeScratchCleaner>().ClearAsync(job, cancellationToken);
+
+        return job.Status;
+    }
+
+    /// <summary>
+    /// Reads the job again in a fresh scope, and sweeps what it still owes a removal for if it has
+    /// ended.
     /// </summary>
     private async Task<EncodeJobStatus?> SweptAsync(EncodeJobId id, CancellationToken cancellationToken)
     {

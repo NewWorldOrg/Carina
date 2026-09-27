@@ -2,8 +2,7 @@ namespace Carina.Domain.Recordings;
 
 /// <summary>
 /// How many times, and how far apart, a start that failed in a passing way is tried again while its
-/// programme is still on the air. No attempts at all is a policy it can hold: that is the recorder
-/// that never tries again.
+/// programme is still on the air. Zero attempts means never trying again.
 /// </summary>
 public sealed record RetryPolicy
 {

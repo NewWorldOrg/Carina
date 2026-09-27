@@ -6,7 +6,7 @@ public sealed class ChapterGridWatermarkTests
 {
     private static readonly TimeSpan HalfAnHour = TimeSpan.FromMinutes(30);
 
-    [Fact(DisplayName = "BR-ED2-007: a pod the watermark learned ahead stayed on screen through is programme, and a pod it was off through is still a break")]
+    [Fact(DisplayName = "a pod the watermark learned ahead stayed on screen through is programme, and a pod it was off through is still a break")]
     public void APodTheWatermarkStayedOnScreenThroughIsProgramme()
     {
         ChapterEvidence seen = TwoPods() with
@@ -23,7 +23,7 @@ public sealed class ChapterGridWatermarkTests
         Assert.Contains("1 of the 2 candidate breaks were taken away", read.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: with no watermark learned ahead every pod stands as it did, and nothing is said about a watermark")]
+    [Fact(DisplayName = "with no watermark learned ahead every pod stands as it did, and nothing is said about a watermark")]
     public void WithNoWatermarkLearnedAheadEveryPodStands()
     {
         ChapterDetection read = ChapterGrid.Mark(TwoPods(), HalfAnHour, new ChapterSettings());
@@ -33,7 +33,7 @@ public sealed class ChapterGridWatermarkTests
         Assert.Equal(string.Empty, read.Note);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a watermark on screen in nearly every picture tells programme from break nowhere, so it takes nothing away and says why")]
+    [Fact(DisplayName = "a watermark on screen in nearly every picture tells programme from break nowhere, so it takes nothing away and says why")]
     public void AWatermarkOnScreenInNearlyEveryPictureIsNotUsed()
     {
         ChapterEvidence seen = TwoPods() with { Sightings = EverySecond(at => !Between(at, 1750, 1800)) };
@@ -44,7 +44,7 @@ public sealed class ChapterGridWatermarkTests
         Assert.Contains("was not used", read.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a pod with too few pictures looked at inside it is not taken away on their word")]
+    [Fact(DisplayName = "a pod with too few pictures looked at inside it is not taken away on their word")]
     public void APodWithTooFewPicturesInsideIsNotTakenAway()
     {
         ChapterEvidence seen = Observed(At(300), At(360)) with
@@ -62,7 +62,7 @@ public sealed class ChapterGridWatermarkTests
         Assert.Equal(1, read.Breaks);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: the pictures at the very edges of a pod are not counted, because the watermark comes and goes around the boundary itself")]
+    [Fact(DisplayName = "the pictures at the very edges of a pod are not counted, because the watermark comes and goes around the boundary itself")]
     public void ThePicturesAtTheEdgesOfAPodAreNotCounted()
     {
         ChapterEvidence seen = Observed(At(300), At(360)) with
@@ -84,7 +84,7 @@ public sealed class ChapterGridWatermarkTests
         Assert.Equal(1, read.Breaks);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: when the watermark takes every pod away the reading found nothing, and says why")]
+    [Fact(DisplayName = "when the watermark takes every pod away the reading found nothing, and says why")]
     public void WhenTheWatermarkTakesEveryPodAwayTheReadingFoundNothing()
     {
         ChapterEvidence seen = TwoPods() with { Sightings = EverySecond(at => !Between(at, 1500, 1800)) };

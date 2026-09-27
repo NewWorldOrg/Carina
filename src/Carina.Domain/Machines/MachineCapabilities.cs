@@ -3,8 +3,8 @@ using Carina.Domain.Base;
 namespace Carina.Domain.Machines;
 
 /// <summary>
-/// What this machine turned out to be able to do, asked once and answered the same way for
-/// everyone: the live path and the encode path both read this instead of each working it out.
+/// What this machine turned out to be able to do, asked once and read by both the live path and the
+/// encode path.
 /// </summary>
 public sealed record MachineCapabilities
 {

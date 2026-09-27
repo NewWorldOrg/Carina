@@ -86,6 +86,7 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
         await using CarinaDbContext context = Context();
         PaginatedList<Recording> found = await new RecordingDirectory(context).ListAsync(
             OnlyThisOne(written),
+            AsShipped,
             CancellationToken.None);
 
         JsonElement wire = Wire(RecordingListResponder.Of(
@@ -139,7 +140,7 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
         Assert.Equal(7, positions.GetProperty("buckets")[0].GetProperty("continuity").GetInt64());
     }
 
-    [Fact(DisplayName = "BR-ES-002: where a recording stands with the encoder reaches the wire beside its outcome")]
+    [Fact(DisplayName = "where a recording stands with the encoder reaches the wire beside its outcome")]
     public async Task WhereARecordingStandsWithTheEncoderReachesTheWireBesideItsOutcome()
     {
         Recording encoded = await WrittenAsync(4);

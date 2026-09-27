@@ -3,6 +3,8 @@ using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Streaming;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Streaming;
 
 public sealed class LiveSessionManager(
@@ -12,7 +14,8 @@ public sealed class LiveSessionManager(
     ILiveSupply supply,
     ILiveTranscoderFactory transcoders,
     TimeProvider clock,
-    IAppEventPublisher events) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
+    IAppEventPublisher events,
+    ILogger<LiveSessionManager> logger) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
 {
     public const int Attempts = 2;
 
@@ -176,30 +179,33 @@ public sealed class LiveSessionManager(
     /// way out.
     /// </summary>
     /// <remarks>
-    /// A session leaves the ledger the moment it is closed, but the tuner behind it is let go of at
-    /// the end of its teardown, by the reading rather than by the session. Between those two points
-    /// the ledger holds nothing to give up and the tuner is not free yet, which is where a viewer
-    /// changing channel on a machine with one tuner was told there was none.
+    /// A session leaves the ledger the moment it is closed, and the tuner behind it is let go of at the
+    /// end of its teardown, by the reading.
     /// </remarks>
     private async Task<bool> LetGoOfWhatNobodyIsWatchingAsync(
         LiveSessionKey asked,
         CancellationToken cancellationToken)
     {
-        List<LiveSession> given;
+        List<LiveSession> candidates;
         List<LiveSession> going;
 
         lock (gate)
         {
-            given =
+            candidates =
             [
                 .. sessions.Values.Where(session => !session.Key.Equals(asked) && session.NobodyIsWatching),
             ];
             going = [.. StillLettingGo().Where(session => !session.Key.Equals(asked))];
         }
 
-        foreach (LiveSession session in given)
+        List<LiveSession> given = [];
+
+        foreach (LiveSession session in candidates)
         {
-            session.Close();
+            if (session.CloseIfNobodyIsWatching())
+            {
+                given.Add(session);
+            }
         }
 
         List<LiveSession> letting = [.. given, .. going];
@@ -208,13 +214,11 @@ public sealed class LiveSessionManager(
     }
 
     /// <summary>
-    /// Waits for what is being let go of to reach the driver, and for no longer than one wait: a
-    /// teardown that will not end is a tuner that never comes free, and the refusal stands.
+    /// Waits for what is being let go of to reach the driver, for no longer than one wait; when the
+    /// wait runs out, the refusal stands.
     /// </summary>
     /// <remarks>
-    /// The deadline is held here so that it is let go of with the wait. A timeout handed to
-    /// <c>WaitAsync</c> is disposed of only once the waiter has been let go, which is after the
-    /// viewer has been answered, so the timer it set outlives the wait it was set for.
+    /// Holds its own deadline, disposed of with the wait.
     /// </remarks>
     private async Task<bool> LetGoOfTheTunerAsync(
         IReadOnlyList<LiveSession> letting,
@@ -238,19 +242,16 @@ public sealed class LiveSessionManager(
 
     private static async Task EndedAsync(IReadOnlyList<LiveSession> letting)
     {
-        await Task.WhenAll(letting.Select(session => Quietly(session.Life)));
+        await Task.WhenAll(letting.Select(session => QuietlyAsync(session.Life)));
 
-        // The tuner is let go of by the reading, not by the session, so the asking viewer waits
-        // for the reading to finish rather than being refused by a tuner on its way out.
         await Task.WhenAll(
-            letting.Select(session => session.Reception).Distinct().Select(reading => Quietly(reading.Life)));
+            letting.Select(session => session.Reception).Distinct().Select(reading => QuietlyAsync(reading.Life)));
     }
 
     /// <summary>
-    /// How a teardown ended is that session's own business: what is waited for here is that it is
-    /// over, and the viewer asking for a tuner is not the one to be handed its failure.
+    /// Waits for a teardown to be over, however it ended.
     /// </summary>
-    private static async Task Quietly(Task ending)
+    private static async Task QuietlyAsync(Task ending)
     {
         try
         {
@@ -293,6 +294,7 @@ public sealed class LiveSessionManager(
                 Receiving(key.Network, key.Service),
                 transcoders,
                 clock,
+                logger,
                 Forget);
 
             sessions[key] = raised;

@@ -129,8 +129,9 @@ public sealed class OidcLoginService(
             return Refused<OidcArrival>(allowed);
         }
 
+        SessionId cookie = SessionId.Issue();
         AuthSession session = AuthSession.Start(
-            SessionId.Issue(),
+            cookie,
             new Subject(claims.Subject),
             claims.DisplayName,
             AuthMethod.Oidc,
@@ -140,7 +141,7 @@ public sealed class OidcLoginService(
         await sessions.SaveAsync(session, cancellationToken);
 
         return ServiceResult<OidcArrival, OidcRefusal>.Success(
-            new OidcArrival(session, pending.ReturnPath, sessionPolicy.AbsoluteLifetime));
+            new OidcArrival(cookie, session, pending.ReturnPath, sessionPolicy.AbsoluteLifetime));
     }
 
     private static Uri AuthorizeUri(

@@ -231,25 +231,25 @@ public sealed class EncodeSettingRuleTests
     private static IEnumerable<string> AsItStandsToday
         => EncodeSettingRules.WhatASettingKeeps(RepositoryLayout.SourceDirectory, Settings);
 
-    [Fact(DisplayName = "BR-EV-001: everything a profile or a destination keeps is written down here")]
+    [Fact(DisplayName = "everything a profile or a destination keeps is written down here")]
     public void EverythingTheEncodeDomainKeepsIsWrittenDownHere()
     {
         Assert.Equal(Kept, EncodeSettingRules.WhatASettingKeeps(RepositoryLayout.SourceDirectory, Settings));
     }
 
-    [Fact(DisplayName = "BR-EV-001: everything the encode domain works out from what it keeps is written down here")]
+    [Fact(DisplayName = "everything the encode domain works out from what it keeps is written down here")]
     public void EverythingTheEncodeDomainWorksOutIsWrittenDownHere()
     {
         Assert.Equal(WorkedOut, EncodeSettingRules.WhatASettingWorksOut(RepositoryLayout.SourceDirectory, Settings));
     }
 
-    [Fact(DisplayName = "BR-EV-001: neither a profile nor a destination keeps a piece of free text")]
+    [Fact(DisplayName = "neither a profile nor a destination keeps a piece of free text")]
     public void NeitherAProfileNorADestinationKeepsAPieceOfFreeText()
     {
         Assert.DoesNotContain(AsItStandsToday.Where(Settled), EncodeSettingRules.IsFreeText);
     }
 
-    [Fact(DisplayName = "BR-EV-001: a profile and a destination are made of nothing but the kinds named here")]
+    [Fact(DisplayName = "a profile and a destination are made of nothing but the kinds named here")]
     public void AProfileAndADestinationAreMadeOfNothingButTheKindsNamedHere()
     {
         Assert.Equal(
@@ -269,13 +269,13 @@ public sealed class EncodeSettingRuleTests
             AsItStandsToday.Where(Settled).Select(EncodeSettingRules.Kind).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-EV-001: the only free text the encode domain takes in at all is written down here")]
+    [Fact(DisplayName = "the only free text the encode domain takes in at all is written down here")]
     public void TheOnlyFreeTextTheEncodeDomainTakesInAtAllIsWrittenDownHere()
     {
         Assert.Equal(TheOnlyFreeTextTakenIn, AsItStandsToday.Where(EncodeSettingRules.IsFreeText).ToArray());
     }
 
-    [Fact(DisplayName = "BR-EV-001: the free text a draft carries is turned into something else before it is kept")]
+    [Fact(DisplayName = "the free text a draft carries is turned into something else before it is kept")]
     public void TheFreeTextADraftCarriesIsTurnedIntoSomethingElseBeforeItIsKept()
     {
         string[] typedIn =
@@ -292,7 +292,7 @@ public sealed class EncodeSettingRuleTests
             kept => Assert.False(EncodeSettingRules.IsFreeText(kept), kept));
     }
 
-    [Fact(DisplayName = "BR-EV-001: nothing a person types reaches the place the command line is built")]
+    [Fact(DisplayName = "nothing a person types reaches the place the command line is built")]
     public void NothingAPersonTypesReachesThePlaceTheCommandLineIsBuilt()
     {
         string builder = File.ReadAllText(Path.Combine(
@@ -305,7 +305,7 @@ public sealed class EncodeSettingRuleTests
         Assert.DoesNotContain("Draft", builder, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-EV-001: the one piece of free text a setting keeps is where work files go, and no draft carries it")]
+    [Fact(DisplayName = "the one piece of free text a setting keeps is where work files go, and no draft carries it")]
     public void TheOnePieceOfFreeTextASettingKeepsIsWhereWorkFilesGo()
     {
         Assert.Equal(
@@ -315,7 +315,7 @@ public sealed class EncodeSettingRuleTests
         Assert.DoesNotContain(TheOnlyFreeTextTakenIn, entry => entry.Contains("Draft.WorkedIn", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-EV-004: nothing in the encode domain is named for a bitrate, so no card can be handed one")]
+    [Fact(DisplayName = "nothing in the encode domain is named for a bitrate, so no card can be handed one")]
     public void NothingInTheEncodeDomainIsNamedForABitrate()
     {
         Assert.Empty(EncodeSettingRules.WhatIsNamedForABitrate(Settings));

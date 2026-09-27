@@ -11,14 +11,14 @@ public sealed class WhetherAnEncodeWasAskedForTests
 {
     private static readonly DateTime Noon = new(2026, 9, 17, 3, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-ED2-004: a rule that says nothing about encoding asks for one, which is what every rule did before one could say otherwise")]
+    [Fact(DisplayName = "a rule that says nothing about encoding asks for one, which is what every rule did before one could say otherwise")]
     public void ARuleThatSaysNothingAsksForAnEncode() => Assert.True(Drafted().EncodeWhenRecorded);
 
-    [Fact(DisplayName = "BR-ED2-004: a rule can be drafted asking for no encode")]
+    [Fact(DisplayName = "a rule can be drafted asking for no encode")]
     public void ARuleCanBeDraftedAskingForNoEncode()
         => Assert.False(Drafted(encodeWhenRecorded: false).EncodeWhenRecorded);
 
-    [Fact(DisplayName = "BR-ED2-004: rewriting a rule keeps whatever the rewrite asked for rather than the priority or the margins deciding it")]
+    [Fact(DisplayName = "rewriting a rule keeps whatever the rewrite asked for rather than the priority or the margins deciding it")]
     public void RewritingARuleKeepsWhatTheRewriteAskedFor()
     {
         Rule rule = Drafted();
@@ -32,14 +32,14 @@ public sealed class WhetherAnEncodeWasAskedForTests
         Assert.True(rule.EncodeWhenRecorded);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a reservation that says nothing about encoding asks for one")]
+    [Fact(DisplayName = "a reservation that says nothing about encoding asks for one")]
     public void AReservationThatSaysNothingAsksForAnEncode() => Assert.True(Planned().EncodeWhenRecorded);
 
-    [Fact(DisplayName = "BR-ED2-004: a reservation can be planned asking for no encode")]
+    [Fact(DisplayName = "a reservation can be planned asking for no encode")]
     public void AReservationCanBePlannedAskingForNoEncode()
         => Assert.False(Planned(encodeWhenRecorded: false).EncodeWhenRecorded);
 
-    [Fact(DisplayName = "BR-ED2-004: what a reservation asks for is changed without touching anything else about it")]
+    [Fact(DisplayName = "what a reservation asks for is changed without touching anything else about it")]
     public void WhatAReservationAsksForIsChangedOnItsOwn()
     {
         Reservation reservation = Planned();
@@ -56,10 +56,10 @@ public sealed class WhetherAnEncodeWasAskedForTests
         Assert.True(reservation.EncodeWhenRecorded);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording that says nothing about encoding asks for one")]
+    [Fact(DisplayName = "a recording that says nothing about encoding asks for one")]
     public void ARecordingThatSaysNothingAsksForAnEncode() => Assert.True(Begun().EncodeWhenRecorded);
 
-    [Fact(DisplayName = "BR-ED2-004: a recording carries what the reservation it was started for asked, because nothing ties the two rows together afterwards")]
+    [Fact(DisplayName = "a recording carries what the reservation it was started for asked, because nothing ties the two rows together afterwards")]
     public void ARecordingCarriesWhatItWasStartedWith()
         => Assert.False(Begun(encodeWhenRecorded: false).EncodeWhenRecorded);
 

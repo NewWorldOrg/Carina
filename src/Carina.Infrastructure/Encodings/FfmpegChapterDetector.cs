@@ -7,57 +7,31 @@ using Carina.Domain.Machines;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// Looks for the breaks in one source with the ffmpeg this image already carries, in three passes.
-/// The first listens to the whole of the sound and writes down every stretch that went quiet,
-/// decoding no picture at all; the second looks at six seconds of picture around each quiet stretch
-/// and writes down where it went black and by how much it changed; the third watches the whole of
-/// the picture for the station's watermark, decoding only the pictures that stand on their own and
-/// one a second of those. That is what makes this affordable: the whole length is heard, only a few
-/// seconds either side of a candidate are seen whole, and the watermark is watched at one picture a
-/// second. What the passes observed is handed to <see cref="ChapterGrid"/>, which decides — nothing
-/// is decided here.
-/// <para>
-/// The watermark only ever takes candidates away, so it is watched last and only in what is left of
-/// <see cref="Patience"/>: a watch that would outlast it never costs the looks their time, and when
-/// nothing is left it is not started at all.
-/// </para>
-/// <para>
-/// The watermark is learned from this source and handed back beside the reading, for the recordings
-/// of the same service read after it; this source is judged only by a watermark learned ahead of it,
-/// from another recording, and with none when there is none (BR-ED2-007). A machine told not to
-/// watch for the watermark runs no second pass at all.
-/// </para>
-/// <para>
-/// This answers, it does not fail. A programme that is not on this machine, one that refused while
-/// listening, one that outlived <see cref="Patience"/> before a word of the sound was read, and a
-/// source measured against some other clock all come back as a reading that could not be made, so
-/// an encode that would have run without anyone looking is not failed by the looking. What is
-/// written down beside such a reading is built here out of the exit code and the reason: not one
-/// word of what the programme said is kept, because what it says carries the source it was
-/// reading.
-/// </para>
-/// <para>
-/// Only the sound is read whole; watching for the watermark and looking at the picture are what can
-/// fall short. A watch that refused, ran out of time or found no time left leaves the reading made
-/// without a watermark and learns nothing. Looking at the picture has a ceiling on it, at
-/// <see cref="MostLooksPerMark"/> looks for every mark the reading is allowed, taking the longest
-/// quiet stretches first. Nothing that happens to one of those looks throws the reading away: one
-/// that refused leaves its own stretch uncorroborated, and running out of time stops the looking
-/// where it stands. Either way what has been gathered by then is still handed to
-/// <see cref="ChapterGrid"/> — a reading of part of the evidence is the reading that part gives —
-/// and the answer says on its face that it was made that way.
-/// </para>
-/// <para>
-/// How much of the machine the passes may take is handed in rather than read here, so that the
-/// looking and the encode that follows it are bounded by the one cap the operator holds
-/// (BR-ED2-005).
-/// </para>
-/// <para>
-/// Every programme any pass starts is handed to the caller before it is read from, on the same
-/// terms the encode's own run is written down on, so that a process killed mid-look does not leave
-/// an ffmpeg nobody has a record of (BR-ED2-011).
-/// </para>
+/// Looks for the breaks in one source with ffmpeg, in three passes, and hands what they observed to
+/// <see cref="ChapterGrid"/>.
 /// </summary>
+/// <remarks>
+/// The first pass listens to the whole of the sound for quiet stretches; the second looks at six
+/// seconds of picture around each quiet stretch, longest first and at most
+/// <see cref="MostLooksPerMark"/> for each mark allowed, for where it went black and how much it
+/// changed; the third watches key frames, one a second, for the station's watermark, only in what
+/// is left of <see cref="Patience"/>, and only when told to.
+/// <para>
+/// The watermark learned from this source is handed back beside the reading; this source is judged
+/// only by a watermark learned ahead of it.
+/// </para>
+/// <para>
+/// It answers rather than fails. A missing programme, a refusal while listening, running out of
+/// <see cref="Patience"/> before any sound was read, and a source on some other clock come back as
+/// a reading that could not be made, noted from the exit code and the reason only. A picture look
+/// or watermark watch that falls short leaves the reading made from what was gathered, and the
+/// reading says so.
+/// </para>
+/// <para>
+/// How much of the machine the passes may take is handed in, and every programme a pass starts is
+/// handed to the caller before it is read from.
+/// </para>
+/// </remarks>
 public sealed class FfmpegChapterDetector(
     MachineSettings machine,
     EncodeSettings settings,
@@ -65,14 +39,8 @@ public sealed class FfmpegChapterDetector(
     TimeSpan patience) : IChapterDetector
 {
     /// <summary>
-    /// How many quiet stretches are worth looking at the picture around, as a multiple of the
-    /// marks a reading is allowed to put in. Two corroborated boundaries make one pod, so a
-    /// reading allowed so many marks can use about twice that many boundaries and the rest of this
-    /// is slack for the ones that corroborate nothing. Without a ceiling the number of looks is
-    /// whatever the sound happened to do: a two-hour recording of people talking reports hundreds
-    /// of quiet stretches, and starting one programme after another for all of them spends the
-    /// whole of <see cref="Patience"/> on a machine that is recording and then comes back having
-    /// read nothing at all.
+    /// How many quiet stretches the picture is looked at around, as a multiple of the marks a reading is
+    /// allowed to put in.
     /// </summary>
     public const int MostLooksPerMark = 4;
 
@@ -238,10 +206,7 @@ public sealed class FfmpegChapterDetector(
     }
 
     /// <summary>
-    /// The order the quiet stretches are worth looking at the picture around in: the longest
-    /// first, because a stretch of silence long enough to be an advertisement break is the one
-    /// most likely to be one, and then the earliest, so that the order is the same twice over the
-    /// same reading.
+    /// The order the quiet stretches are looked at in: the longest first, then the earliest.
     /// </summary>
     private static IEnumerable<ChapterSpan> Ranked(List<ChapterSpan> silences)
         => silences

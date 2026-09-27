@@ -18,7 +18,7 @@ public sealed class QualityTrendReadTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-QV-001: two days of hourly windows come back as one row a day, not one an hour")]
+    [Fact(DisplayName = "two days of hourly windows come back as one row a day, not one an hour")]
     public async Task TwoDaysOfHourlyWindowsComeBackAsOneRowADay()
     {
         await ClearAsync();
@@ -32,7 +32,7 @@ public sealed class QualityTrendReadTests(RepositoryDatabase database)
         Assert.Equal(30_000 - 47, folded[1].CarrierToNoiseLowest);
     }
 
-    [Fact(DisplayName = "BR-QD-009: the fold keeps the worst of each layer apart, and names the last window that carried a value")]
+    [Fact(DisplayName = "the fold keeps the worst of each layer apart, and names the last window that carried a value")]
     public async Task TheFoldKeepsTheWorstOfEachLayerApart()
     {
         await ClearAsync();
@@ -70,7 +70,7 @@ public sealed class QualityTrendReadTests(RepositoryDatabase database)
             folded.Single(window => window.Tuner.Value == "adapter0" && window.Service.Value == 102).Samples);
     }
 
-    [Fact(DisplayName = "BR-QS-003: the reader takes raw samples only past the last hour rolled up, so none is counted twice")]
+    [Fact(DisplayName = "the reader takes raw samples only past the last hour rolled up, so none is counted twice")]
     public async Task TheReaderTakesRawSamplesOnlyPastTheLastHourRolledUp()
     {
         DateTime rolledThrough = DayOne.AddDays(1);

@@ -4,9 +4,7 @@ using Carina.Infrastructure.Encodings;
 namespace Carina.Infrastructure.Tests.Encodings;
 
 /// <summary>
-/// The lines here are written the way ffmpeg 6.1 writes them, down to the space one filter leaves
-/// after its colon and the next one does not. The times in them are made up; that the shapes are
-/// the real tool's is held by the material test that runs it.
+/// Reads lines written the way ffmpeg 6.1 writes them, with made-up times.
 /// </summary>
 public sealed class ChapterLogParsingTests
 {

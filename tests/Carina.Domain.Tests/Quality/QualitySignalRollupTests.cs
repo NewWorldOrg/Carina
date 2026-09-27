@@ -8,7 +8,7 @@ public sealed class QualitySignalRollupTests
 {
     private static readonly DateTime WindowStart = new(2026, 8, 8, 3, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-QS-003: a window keeps how often the tuner locked after its samples are gone")]
+    [Fact(DisplayName = "a window keeps how often the tuner locked after its samples are gone")]
     public void AWindowKeepsHowOftenTheTunerLockedAfterItsSamplesAreGone()
     {
         QualitySignalRollup rollup = Rollup(samples: 360, locked: 90);
@@ -17,7 +17,7 @@ public sealed class QualitySignalRollupTests
         Assert.Equal(QualityWindow.Minute, rollup.Granularity);
     }
 
-    [Fact(DisplayName = "BR-QD-001: a window counts what was not measured beside what was")]
+    [Fact(DisplayName = "a window counts what was not measured beside what was")]
     public void AWindowCountsWhatWasNotMeasuredBesideWhatWas()
     {
         QualitySignalRollup rollup = QualitySignalRollup.Rehydrate(
@@ -82,7 +82,7 @@ public sealed class QualitySignalRollupTests
             34000,
             null));
 
-    [Fact(DisplayName = "BR-QD-009: a window rolls each broadcast layer up on its own")]
+    [Fact(DisplayName = "a window rolls each broadcast layer up on its own")]
     public void AWindowRollsEachBroadcastLayerUpOnItsOwn()
     {
         QualitySignalRollup rollup = QualitySignalRollup.Rehydrate(
@@ -103,7 +103,7 @@ public sealed class QualitySignalRollupTests
         Assert.Equal([0, 1], rollup.BitErrors.Select(rate => rate.Layer));
     }
 
-    [Fact(DisplayName = "BR-QD-009: two rolled up rates for one layer would lose which layer failed")]
+    [Fact(DisplayName = "two rolled up rates for one layer would lose which layer failed")]
     public void TwoRolledUpRatesForOneLayerWouldLoseWhichLayerFailed()
         => Assert.Throws<ArgumentException>(() => QualitySignalRollup.Rehydrate(
             QualityWindow.Minute,

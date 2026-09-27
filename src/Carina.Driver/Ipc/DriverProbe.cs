@@ -36,7 +36,7 @@ public static class DriverProbe
             return new ProbeVerdict(false, "the driver declares no tuner.");
         }
 
-        var enabled = tuners
+        List<TunerSnapshot> enabled = tuners
             .Where(tuner => tuner.State is not (TunerState.Disabled or TunerState.Draining))
             .ToList();
 
@@ -45,7 +45,7 @@ public static class DriverProbe
             return new ProbeVerdict(false, $"all {tuners.Count} tuners are disabled.");
         }
 
-        var faulted = enabled.Where(tuner => tuner.State is TunerState.Faulted).ToList();
+        List<TunerSnapshot> faulted = enabled.Where(tuner => tuner.State is TunerState.Faulted).ToList();
 
         if (faulted.Count == enabled.Count)
         {

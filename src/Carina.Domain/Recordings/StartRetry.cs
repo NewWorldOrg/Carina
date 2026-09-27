@@ -15,8 +15,8 @@ public enum RetryMove
 
 /// <summary>
 /// What is known about one reservation whose start failed, at the moment the recorder comes back to
-/// it. The classes are every one of the four its starts have failed in so far; the attempts are the
-/// ones already made after the first failure, not counting it.
+/// it: every class its starts have failed in so far, and the attempts made after the first failure,
+/// not counting it.
 /// </summary>
 public readonly record struct RetrySighting(
     IReadOnlyList<TuneFailureKind> FailureClasses,
@@ -65,20 +65,15 @@ public sealed record RetryHistory(
     bool GivenUp);
 
 /// <summary>
-/// Whether a recording whose start failed is started again, and it is only ever the start. A recording
-/// that began and lost its stream carries on into the file it has, which is the stream watch's to do;
-/// a recording that has ended keeps the outcome it ended with; and a reservation holds one recording,
-/// so trying again never makes a second one beside a first.
-///
-/// Only the two failures that pass are tried again — the tuner that did not lock and the lock that
-/// brought no data — and only while the programme is still on the air. A stream that is not the one
-/// expected, a disk the precheck found no room on, and a channel already set aside as needing
-/// attention are given up on at once, because trying again gives the same answer and only adds to
-/// what has to be read. The reasons are asked in that order, so the one written down is the most
-/// lasting of those that hold. What remains is the count, then the pause since the last attempt, and
-/// a channel that is backing off is waited for however short the pause is: its rotation is not
-/// something this pulls forward.
+/// Whether a recording whose start failed is started again. Only the start is ever tried again.
 /// </summary>
+/// <remarks>
+/// Only the two passing failures, a tuner that did not lock and a lock that brought no data, are
+/// tried again. The reasons to give up are asked in this order: a failure of any other class, a disk
+/// the precheck found no room on, a channel set aside as needing attention, a programme no longer on
+/// the air, and the attempts spent. Otherwise the next attempt waits out the pause since the last
+/// one, or the channel's backing off when that ends later.
+/// </remarks>
 public static class StartRetry
 {
     public static readonly IReadOnlyList<TuneFailureKind> Transient =
@@ -167,9 +162,7 @@ public static class StartRetry
     }
 
     /// <summary>
-    /// A reservation has a history only once one of its starts failed in a class, which is the line the
-    /// recorder writes when it does; without that line there is nothing to try again, and a start is
-    /// just a start.
+    /// The retry history of a reservation, or null when none of its starts has failed in a class yet.
     /// </summary>
     public static RetryHistory? HistoryOf(IReadOnlyList<ReservationOutcome> lines)
     {

@@ -18,7 +18,7 @@ public sealed class AppEventListener : IDisposable
 
     internal AppEventListener(Action<AppEventListener> release) => this.release = release;
 
-    public async Task<IReadOnlyList<AppEventName>> Take(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AppEventName>> TakeAsync(CancellationToken cancellationToken)
     {
         await doorbell.Reader.ReadAsync(cancellationToken);
 

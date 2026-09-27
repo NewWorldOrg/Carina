@@ -4,7 +4,7 @@ namespace Carina.Domain.Base;
 
 /// <summary>
 /// What another programme said, kept for a person to read: the paths on this machine are taken
-/// out first, and only then is the tail kept, because the tail is where the failure is.
+/// out first, and then only the tail is kept.
 /// </summary>
 public static class ProgrammeNote
 {

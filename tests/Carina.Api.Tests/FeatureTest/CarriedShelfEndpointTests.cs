@@ -11,7 +11,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class CarriedShelfEndpointTests
 {
     private const int Shelf = 53;
@@ -22,7 +21,7 @@ public sealed class CarriedShelfEndpointTests
 
     private static readonly string?[] Metrics = ["packetsLost", "packetsLeftScrambled", "overflows"];
 
-    [Theory(DisplayName = "BR-LD-007: every page of a carried shelf reads unmeasured in either order, with no count standing in for one")]
+    [Theory(DisplayName = "every page of a carried shelf reads unmeasured in either order, with no count standing in for one")]
     [InlineData("startedAt", false)]
     [InlineData("startedAt", true)]
     [InlineData("programmeStartsAt", false)]
@@ -49,7 +48,7 @@ public sealed class CarriedShelfEndpointTests
         Assert.All(seen, item => SaysNothingWasCounted(item.GetProperty("drops")));
     }
 
-    [Fact(DisplayName = "BR-LD-007: the detail of every carried recording says nothing was counted, as the list did")]
+    [Fact(DisplayName = "the detail of every carried recording says nothing was counted, as the list did")]
     public async Task TheDetailOfEveryCarriedRecordingSaysNothingWasCounted()
     {
         await using var feature = new RecordingFeature();
@@ -65,7 +64,7 @@ public sealed class CarriedShelfEndpointTests
         }
     }
 
-    [Fact(DisplayName = "BR-LD-007: the drop reading finds the whole carried shelf unmeasured and none of it clean or dropped")]
+    [Fact(DisplayName = "the drop reading finds the whole carried shelf unmeasured and none of it clean or dropped")]
     public async Task TheDropReadingFindsTheWholeCarriedShelfUnmeasured()
     {
         await using var feature = new RecordingFeature();
@@ -76,7 +75,7 @@ public sealed class CarriedShelfEndpointTests
         Assert.Equal(0, await TotalAsync(feature, "/api/recordings?drops=dropped&perPage=200"));
     }
 
-    [Fact(DisplayName = "BR-QD-001: a carried shelf reads unmeasured on the summary, the channels, the tuners and the recordings list")]
+    [Fact(DisplayName = "a carried shelf reads unmeasured on the summary, the channels, the tuners and the recordings list")]
     public async Task ACarriedShelfReadsUnmeasuredOnEveryQualitySurface()
     {
         await using var feature = new QualityFeature();

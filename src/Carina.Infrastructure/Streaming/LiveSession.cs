@@ -4,6 +4,8 @@ using System.Threading.Channels;
 using Carina.Contracts;
 using Carina.Domain.Streaming;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Streaming;
 
 internal sealed class LiveSession
@@ -21,6 +23,8 @@ internal sealed class LiveSession
     private readonly ILiveTranscoderFactory transcoders;
 
     private readonly TimeProvider clock;
+
+    private readonly ILogger logger;
 
     private readonly Action<LiveSession> forget;
 
@@ -56,6 +60,7 @@ internal sealed class LiveSession
         LiveReception reception,
         ILiveTranscoderFactory transcoders,
         TimeProvider clock,
+        ILogger logger,
         Action<LiveSession> forget)
     {
         Key = key;
@@ -66,6 +71,7 @@ internal sealed class LiveSession
         this.reception = reception;
         this.transcoders = transcoders;
         this.clock = clock;
+        this.logger = logger;
         this.forget = forget;
     }
 
@@ -148,9 +154,7 @@ internal sealed class LiveSession
     }
 
     /// <remarks>
-    /// The deadline is held here so that it is let go of with the wait. A timeout handed to
-    /// <c>WaitAsync</c> is disposed of only once the waiter has been let go, which is after the
-    /// viewer has been answered, so the timer it set outlives the wait it was set for.
+    /// Holds its own deadline, disposed of with the wait.
     /// </remarks>
     private async Task<LiveJoin?> RaisedAsync(CancellationToken cancellationToken)
     {
@@ -183,11 +187,42 @@ internal sealed class LiveSession
     {
         lock (gate)
         {
-            closed = true;
-            linger?.Dispose();
-            linger = null;
+            Closing();
         }
 
+        LetGo();
+    }
+
+    /// <summary>
+    /// Closes the session if no viewer is expected on it, and says whether it did. Whether anybody is
+    /// expected is read under the same lock that marks the session closed.
+    /// </summary>
+    internal bool CloseIfNobodyIsWatching()
+    {
+        lock (gate)
+        {
+            if (expected > 0 || closed)
+            {
+                return false;
+            }
+
+            Closing();
+        }
+
+        LetGo();
+
+        return true;
+    }
+
+    private void Closing()
+    {
+        closed = true;
+        linger?.Dispose();
+        linger = null;
+    }
+
+    private void LetGo()
+    {
         forget(this);
         stopping.Cancel();
     }
@@ -207,7 +242,7 @@ internal sealed class LiveSession
         }
     }
 
-    private static async Task Quietly(Task task)
+    private static async Task QuietlyAsync(Task task)
     {
         try
         {
@@ -235,18 +270,7 @@ internal sealed class LiveSession
         }
     }
 
-    private void LingerOver()
-    {
-        lock (gate)
-        {
-            if (expected > 0 || closed)
-            {
-                return;
-            }
-        }
-
-        Close();
-    }
+    private void LingerOver() => CloseIfNobodyIsWatching();
 
     private async Task LiveAsync()
     {
@@ -325,9 +349,9 @@ internal sealed class LiveSession
     }
 
     /// <summary>
-    /// A service without a caption stream makes ffmpeg refuse the whole command, picture included,
-    /// so a transcoder that ends before writing anything for that reason is started again without
-    /// captions, and the reading remembers so that the next profile of this channel does not try.
+    /// The transcoder's output, starting the transcoder again without captions when it ended before
+    /// writing anything because the service carries no caption stream. The reading remembers this for
+    /// the next profile of the channel.
     /// </summary>
     private async Task<Stream?> OutputOrRestartAsync(CancellationToken cancellationToken)
     {
@@ -401,12 +425,45 @@ internal sealed class LiveSession
 
         if (given is not null)
         {
-            reception.Drop(given);
+            await LeftTheReadingAsync(given);
         }
 
         if (running is not null)
         {
             await running.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    /// Takes the seat out of the reading and waits for the write going into the transcoder to end,
+    /// for no longer than the stop grace. However the write ends, a failure is logged, whether it
+    /// ends within the grace or after it has been given up on.
+    /// </summary>
+    private async Task LeftTheReadingAsync(LiveSeat given)
+    {
+        Task ended = reception.Drop(given).ContinueWith(
+            LogFailure,
+            logger,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        using CancellationTokenSource deadline = new(transcoding.StopGrace, clock);
+
+        try
+        {
+            await ended.WaitAsync(deadline.Token);
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
+            return;
+        }
+    }
+
+    private static void LogFailure(Task writing, object? state)
+    {
+        if (writing.Exception is { } failure)
+        {
+            ((ILogger)state!).LogWarning(failure.GetBaseException(), "Writing into a live transcoder being taken down failed.");
         }
     }
 
@@ -481,10 +538,9 @@ internal sealed class LiveSession
             seat = null;
         }
 
-        // Out of the reading first, so nothing is written into a transcoder being taken down.
         if (given is not null)
         {
-            reception.Drop(given);
+            await LeftTheReadingAsync(given);
         }
 
         try
@@ -510,12 +566,12 @@ internal sealed class LiveSession
 
         if (carried is not null)
         {
-            await Quietly(carried);
+            await QuietlyAsync(carried);
         }
 
         if (captioned is not null)
         {
-            await Quietly(captioned);
+            await QuietlyAsync(captioned);
         }
 
         await DrainAsync(output, transcoding.StopGrace, clock);

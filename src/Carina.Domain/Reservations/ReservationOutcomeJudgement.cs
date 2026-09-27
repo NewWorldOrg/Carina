@@ -24,9 +24,6 @@ public static class ReservationOutcomeJudgement
             return null;
         }
 
-        // A claim with a recording behind it is that recording's to settle, and it settles it by
-        // writing the outcome above. A claim with no recording behind it has nothing that will ever
-        // do so, which is the one case a claimed reservation is judged here.
         if (reservation.IsPinned && recorded)
         {
             return null;

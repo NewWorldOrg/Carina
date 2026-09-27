@@ -58,16 +58,8 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
     private static readonly TimeSpan BetweenReads = TimeSpan.FromMilliseconds(25);
 
-    private static readonly string[] SettingsThatWouldBindAPort =
-    [
-        .. TcpBindingGate.Variables,
-        "DOTNET_URLS",
-        "URLS",
-    ];
-
     private readonly string root;
     private readonly string ledger;
-    private readonly IReadOnlyList<string?> inherited;
     private readonly Action<IServiceCollection>? reshape;
 
     private DriverConfiguration configuration;
@@ -79,14 +71,12 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         string root,
         string ledger,
         DriverConfiguration configuration,
-        IReadOnlyList<string?> inherited,
         Action<IServiceCollection>? reshape)
     {
         this.host = host;
         this.root = root;
         this.ledger = ledger;
         this.configuration = configuration;
-        this.inherited = inherited;
         this.reshape = reshape;
     }
 
@@ -100,13 +90,6 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
     public static async Task<SyntheticDriverHost> StartAsync(Action<IServiceCollection>? reshape = null)
     {
-        string?[] inherited = [.. SettingsThatWouldBindAPort.Select(Environment.GetEnvironmentVariable)];
-
-        foreach (string name in SettingsThatWouldBindAPort)
-        {
-            Environment.SetEnvironmentVariable(name, null);
-        }
-
         string root = Directory.CreateTempSubdirectory("carina-app-swap-").FullName;
         string recordings = Path.Combine(root, "recordings");
 
@@ -125,7 +108,7 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
         IHost host = await RaisedAsync(configuration, ledger, reshape);
 
-        return new SyntheticDriverHost(host, root, ledger, configuration, inherited, reshape);
+        return new SyntheticDriverHost(host, root, ledger, configuration, reshape);
     }
 
     public string Beside(string name) => Path.Combine(root, name);
@@ -134,9 +117,8 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         => File.WriteAllText(ledger, DriverConfigurationWriter.Serialize(written));
 
     /// <summary>
-    /// Puts the driver down and raises another one on the same socket and the same output root. The
-    /// new process greets with an instance of its own and holds none of the sessions the one before
-    /// it did, which is the whole of what a recording left running has to be recovered from.
+    /// Puts the driver down and raises another one on the same socket and the same output root. The new
+    /// process greets with an instance of its own and holds none of the earlier sessions.
     /// </summary>
     public async Task RaiseAnotherDriverAsync()
     {
@@ -146,9 +128,8 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Asks the driver to stop the way its host is asked when the process receives SIGTERM, and hands
-    /// back the stop while it is still under way. Delivering the signal to a separate process is not
-    /// part of it: the driver here shares the test process.
+    /// Asks the driver to stop the way its host is asked on SIGTERM, and hands back the stop while it
+    /// is still under way. No signal is delivered.
     /// </summary>
     public Task BeginStop()
     {
@@ -179,10 +160,10 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Puts the driver down and starts it again from what the ledger on disk says, the way the
-    /// entry point does: the file is read, the filesystem it names is checked, and a finding stops
-    /// the start with the exit code and the report the process would give. The shape rules that
-    /// want the socket under /run are the one step left out, because a test cannot bind there.
+    /// Puts the driver down and starts it again from what the ledger on disk says, the way the entry
+    /// point does: the file is read, the filesystem it names is checked, and a finding stops the start
+    /// with the exit code and the report the process would give. The rules on where the socket lives
+    /// are not applied.
     /// </summary>
     public async Task<int> RaiseFromTheLedgerAsync(TextWriter error)
     {
@@ -270,13 +251,6 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         }
         finally
         {
-            for (int index = 0; index < SettingsThatWouldBindAPort.Length; index++)
-            {
-                Environment.SetEnvironmentVariable(
-                    SettingsThatWouldBindAPort[index],
-                    inherited[index]);
-            }
-
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, recursive: true);

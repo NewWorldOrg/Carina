@@ -50,6 +50,33 @@ public sealed class ServiceTuningDirectoryTests
         Assert.Equal(expected is TuningRefusal.None, canTune);
     }
 
+    [Theory]
+    [InlineData(TuningRefusal.NoTunerForSystem)]
+    [InlineData(TuningRefusal.CapacityUnknown)]
+    [InlineData(TuningRefusal.LedgerUnreadable)]
+    public async Task ARefusalAfterTheChannelWasFoundStillSaysWhereTheChannelTunes(TuningRefusal expected)
+    {
+        (Fixture fixture, ServiceId asked) = Arranged(expected);
+
+        TuningResolution resolved = await fixture.Directory.ResolveTuningAsync(Network, asked, Cancel);
+
+        Assert.Equal(expected, resolved.Refusal);
+        Assert.Equal(TuningParameters.Terrestrial(27), resolved.ChannelTuning);
+    }
+
+    [Theory]
+    [InlineData(TuningRefusal.NoSuchService)]
+    [InlineData(TuningRefusal.NoSelectedChannel)]
+    public async Task ARefusalBeforeAnyChannelWasFoundSaysNothingOfWhereItTunes(TuningRefusal expected)
+    {
+        (Fixture fixture, ServiceId asked) = Arranged(expected);
+
+        TuningResolution resolved = await fixture.Directory.ResolveTuningAsync(Network, asked, Cancel);
+
+        Assert.Equal(expected, resolved.Refusal);
+        Assert.Null(resolved.ChannelTuning);
+    }
+
     [Fact]
     public async Task ALedgerTunerTheDriverHasNotLoadedLeavesTheAnswerUnknownRatherThanRefusedForever()
     {

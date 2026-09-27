@@ -36,7 +36,7 @@ public sealed class QualityAggregatorRankingTests
         Assert.Equal(["adapter2", "adapter1", "adapter0"], ranked.Select(group => group.Key.Tuner!.Value));
     }
 
-    [Fact(DisplayName = "BR-QD-001: only what was measured is put in an order")]
+    [Fact(DisplayName = "only what was measured is put in an order")]
     public void OnlyWhatWasMeasuredIsPutInAnOrder()
     {
         IReadOnlyList<QualityGrouping> ranked = QualityAggregator.Rank(
@@ -154,7 +154,7 @@ public sealed class QualityAggregatorRankingTests
             (ThresholdSense)0,
             take: 1));
 
-    [Fact(DisplayName = "BR-QD-001: a period nothing was counted in has nothing to put in an order")]
+    [Fact(DisplayName = "a period nothing was counted in has nothing to put in an order")]
     public void APeriodNothingWasCountedInHasNothingToPutInAnOrder()
         => Assert.Empty(QualityAggregator.Rank(
             [.. Enumerable.Range(0, 3_514).Select(_ => QualityFactory.Unmeasured())],

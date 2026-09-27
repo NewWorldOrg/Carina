@@ -10,7 +10,6 @@ using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class IntegrityEndpointTests
 {
     private static readonly RecordingFileName Name = new("one.m2ts");

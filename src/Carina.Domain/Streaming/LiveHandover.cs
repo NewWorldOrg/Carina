@@ -4,12 +4,8 @@ namespace Carina.Domain.Streaming;
 /// One reader of a channel as it is received, taking neither a transcoder nor a transcoding seat.
 /// </summary>
 /// <remarks>
-/// A reader that stops taking bytes is not waited for. What it cannot hold is dropped oldest first,
-/// the way the driver drops for a viewer that has fallen behind, because the reading it sits on is
-/// the one every other viewer of that channel is fed from and one external player must not be able
-/// to put back pressure on it. What was dropped is counted here rather than against a session,
-/// because a reader of the channel as it is asks for no profile and so has no
-/// <see cref="LiveSessionKey"/> to be listed under on the running sessions.
+/// A reader that stops taking bytes is not waited for: what it cannot hold is dropped oldest first,
+/// and what was dropped is counted here rather than against a session.
 /// </remarks>
 public interface ILiveHandedOver : IAsyncDisposable
 {
@@ -18,8 +14,7 @@ public interface ILiveHandedOver : IAsyncDisposable
     long ChunksDroppedSinceTheSupplyOpened { get; }
 
     /// <summary>
-    /// Waits for the first mouthful of the channel to arrive, so that nothing is answered 200 on a
-    /// reading that turns out to have nothing behind it.
+    /// Waits for the first bytes of the channel to arrive.
     /// </summary>
     ValueTask<bool> ReachedAsync(CancellationToken cancellationToken);
 }

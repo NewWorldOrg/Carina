@@ -138,7 +138,7 @@ public sealed class ReservationOutcomeListingTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task WhatTheLedgerHoldsComesBackAsItWasWrittenDown_BR_RD_012()
+    public async Task WhatTheLedgerHoldsComesBackAsItWasWrittenDown()
     {
         const int Service = 1311;
         Guid[] instead = [Guid.NewGuid(), Guid.NewGuid()];

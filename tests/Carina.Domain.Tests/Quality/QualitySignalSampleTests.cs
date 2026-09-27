@@ -9,7 +9,7 @@ public sealed class QualitySignalSampleTests
 {
     private static readonly DateTime Taken = new(2026, 8, 8, 3, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-QV-003: a stored sample names the session and the driver instance it came from")]
+    [Fact(DisplayName = "a stored sample names the session and the driver instance it came from")]
     public void AStoredSampleNamesTheSessionAndTheDriverInstanceItCameFrom()
     {
         QualitySignalSample sample = Sample(SignalSample.WithoutLock(Taken));
@@ -19,7 +19,7 @@ public sealed class QualitySignalSampleTests
         Assert.Equal(SessionPurpose.Survey, sample.Purpose);
     }
 
-    [Fact(DisplayName = "BR-QD-005: a sample with no session could be differenced across a boundary")]
+    [Fact(DisplayName = "a sample with no session could be differenced across a boundary")]
     public void ASampleWithNoSessionCouldBeDifferencedAcrossABoundary()
         => Assert.Throws<ArgumentException>(() => QualitySignalSample.Rehydrate(
             "driver-7",
@@ -43,7 +43,7 @@ public sealed class QualitySignalSampleTests
             new ServiceId(1024),
             SignalSample.WithoutLock(Taken)));
 
-    [Fact(DisplayName = "BR-QD-013: a sample reaches the channel it was taken on by value")]
+    [Fact(DisplayName = "a sample reaches the channel it was taken on by value")]
     public void ASampleReachesTheChannelItWasTakenOnByValue()
     {
         QualitySignalSample sample = Sample(SignalSample.WithoutLock(Taken));

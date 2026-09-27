@@ -196,7 +196,8 @@ nothing.
   tracker, writes SQL, changes a file on disk, or names the writers of the ledger,
   the tuners or the guide. Reading any of them is allowed and a test says so. Over
   the HTTP surface, nothing under `/api/live` or `/api/videos` deletes or declares
-  itself destructive, and the only thing there that changes state issues a ticket.
+  itself destructive; the only things there that change state are a ticket being
+  issued and a played position being kept.
   **Trip wires, not proof:** a stride written `4 + 180 + 4`, a seat asked for as a
   literal, a write behind a verb the rule does not know or a delegate handed in
   from the composition root, and a count done inside ffmpeg all walk past, and the
@@ -297,13 +298,20 @@ nothing.
   store as one `INSERT ... ON CONFLICT DO UPDATE ... WHERE (...) IS DISTINCT FROM (...)`,
   and the `CASE` expressions in it are `Programme.Absorb` written out in SQL: an
   empty name or summary keeps the one held, an end that is not after the start is no
-  end and keeps the one held, an empty set keeps the one held, and a row whose
+  end and keeps the one held, an empty set keeps the one held, a row read from the
+  detailed schedule alone keeps the subtitles and the source held, and a row whose
   answer would be the same takes no new revision. `Programme.Absorb` is what the
   in-memory stand-in runs, so the two are held equal the way the search's two arms
   are — `ProgrammeAbsorbArmsTests` pushes the same visits through both and compares
   every column and whether the revision moved. Measured on a copy of the running
   guide (8,727 rows), re-ingesting the same visit fell from about 3 s row by row to
   0.4 s, and a visit that changed every row from 80 s to about 1.2 s.
+
+  Before that statement every visit takes one transaction-scoped advisory lock, so
+  two visits never hold revisions at the same time. Revisions are drawn from a
+  sequence inside the writing transaction, and without the lock a visit that drew
+  lower numbers could commit after one that drew higher ones; a reader following
+  `revision > cursor` would already have moved past it.
 
 - **Which rule takes a programme is decided by weight, never by age or identifier
   alone.** Rules are read in falling priority, then oldest first, then by identifier

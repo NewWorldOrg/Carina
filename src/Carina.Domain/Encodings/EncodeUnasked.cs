@@ -13,10 +13,8 @@ public enum EncodeUnaskedStanding
 
 /// <summary>
 /// Where an artefact goes and what shape it takes when nobody said. A machine with one destination
-/// still offered has no choice to make, and that destination already names the profile it encodes
-/// with unless another is asked for; a machine with several has a choice nothing here is entitled
-/// to make for a person, so it makes none and says why. The standing is what a caller shows or
-/// logs, so a run that queues nothing is never silent about what is missing (BR-ED2-004).
+/// offered uses it, with the profile it names unless another is asked for; a machine with several
+/// makes no choice and says why. The standing says what is missing when nothing is queued.
 /// </summary>
 public sealed record EncodeUnasked
 {

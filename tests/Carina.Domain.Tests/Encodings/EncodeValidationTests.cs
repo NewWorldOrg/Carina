@@ -21,7 +21,7 @@ public sealed class EncodeValidationTests
     private static EncodeProfileDraft Sound()
         => new("Standard", EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryFrame, 22, 24);
 
-    [Fact(DisplayName = "BR-EV-001: a save is refused a root the driver never declared")]
+    [Fact(DisplayName = "a save is refused a root the driver never declared")]
     public void ASaveIsRefusedARootTheDriverNeverDeclared()
     {
         EncodeProfileId known = EncodeProfileId.New();
@@ -35,7 +35,7 @@ public sealed class EncodeValidationTests
                 [known]));
     }
 
-    [Fact(DisplayName = "BR-EV-001: membership is by the exact name, not a near one")]
+    [Fact(DisplayName = "membership is by the exact name, not a near one")]
     public void MembershipIsByTheExactNameNotANearOne()
     {
         EncodeProfileId known = EncodeProfileId.New();
@@ -52,7 +52,7 @@ public sealed class EncodeValidationTests
         }
     }
 
-    [Fact(DisplayName = "BR-EV-001: a destination naming a declared root and a known profile is let through")]
+    [Fact(DisplayName = "a destination naming a declared root and a known profile is let through")]
     public void ADestinationNamingADeclaredRootAndAKnownProfileIsLetThrough()
     {
         EncodeProfileId known = EncodeProfileId.New();
@@ -64,7 +64,7 @@ public sealed class EncodeValidationTests
             [known]));
     }
 
-    [Fact(DisplayName = "BR-EV-001: a declared root this process only reads from is refused, because an artefact is never placed in it")]
+    [Fact(DisplayName = "a declared root this process only reads from is refused, because an artefact is never placed in it")]
     public void ADeclaredRootThisProcessOnlyReadsFromIsRefused()
     {
         EncodeProfileId known = EncodeProfileId.New();
@@ -78,7 +78,7 @@ public sealed class EncodeValidationTests
                 [known]));
     }
 
-    [Fact(DisplayName = "BR-EV-001: a root this process holds but nobody declared is refused as undeclared, not as unheld")]
+    [Fact(DisplayName = "a root this process holds but nobody declared is refused as undeclared, not as unheld")]
     public void ARootThisProcessHoldsButNobodyDeclaredIsRefusedAsUndeclared()
     {
         EncodeProfileId known = EncodeProfileId.New();
@@ -92,7 +92,7 @@ public sealed class EncodeValidationTests
                 [known]));
     }
 
-    [Fact(DisplayName = "BR-EV-001: a destination pointing at a profile nobody defined is refused")]
+    [Fact(DisplayName = "a destination pointing at a profile nobody defined is refused")]
     public void ADestinationPointingAtAProfileNobodyDefinedIsRefused()
     {
         Assert.Equal(
@@ -104,7 +104,7 @@ public sealed class EncodeValidationTests
                 [EncodeProfileId.New()]));
     }
 
-    [Fact(DisplayName = "BR-EV-001: nothing is let through when the driver declares nothing")]
+    [Fact(DisplayName = "nothing is let through when the driver declares nothing")]
     public void NothingIsLetThroughWhenTheDriverDeclaresNothing()
     {
         EncodeProfileId known = EncodeProfileId.New();
@@ -118,11 +118,11 @@ public sealed class EncodeValidationTests
                 [known]));
     }
 
-    [Fact(DisplayName = "BR-EV-004: a sound profile is refused nothing")]
+    [Fact(DisplayName = "a sound profile is refused nothing")]
     public void ASoundProfileIsRefusedNothing()
         => Assert.Empty(EncodeValidation.WhatRefusesTheProfile(Sound()));
 
-    [Fact(DisplayName = "BR-EV-004: a value cast in from outside the list is refused")]
+    [Fact(DisplayName = "a value cast in from outside the list is refused")]
     public void AValueCastInFromOutsideTheListIsRefused()
     {
         Assert.Equal(
@@ -154,7 +154,7 @@ public sealed class EncodeValidationTests
             [EncodeRefusal.QuantiserOutOfRange],
             EncodeValidation.WhatRefusesTheProfile(Sound() with { Quantiser = quantiser }));
 
-    [Fact(DisplayName = "BR-EV-004: every refusal a save can be given is written down here")]
+    [Fact(DisplayName = "every refusal a save can be given is written down here")]
     public void EveryRefusalASaveCanBeGivenIsWrittenDownHere()
         => Assert.Equal(
             [
@@ -171,7 +171,7 @@ public sealed class EncodeValidationTests
             ],
             Enum.GetValues<EncodeRefusal>());
 
-    [Fact(DisplayName = "BR-EV-004: no refusal names what the machine can or cannot do")]
+    [Fact(DisplayName = "no refusal names what the machine can or cannot do")]
     public void NoRefusalNamesWhatTheMachineCanOrCannotDo()
     {
         string[] capability = ["Vaapi", "RenderNode", "Ffmpeg", "Build", "Capability", "Device", "Driver"];
@@ -183,7 +183,7 @@ public sealed class EncodeValidationTests
                 word => refusal.Contains(word, StringComparison.Ordinal)));
     }
 
-    [Fact(DisplayName = "BR-EV-004: a save cannot be told what the machine can do, so it cannot refuse on it")]
+    [Fact(DisplayName = "a save cannot be told what the machine can do, so it cannot refuse on it")]
     public void ASaveCannotBeToldWhatTheMachineCanDoSoItCannotRefuseOnIt()
     {
         Type[] handedIn =
@@ -205,7 +205,7 @@ public sealed class EncodeValidationTests
             handedIn.Distinct().OrderBy(type => type.ToString(), StringComparer.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-EV-004: an encoder the machine has no card for still makes a profile that saves")]
+    [Fact(DisplayName = "an encoder the machine has no card for still makes a profile that saves")]
     public void AnEncoderTheMachineHasNoCardForStillMakesAProfileThatSaves()
     {
         Assert.Empty(EncodeValidation.WhatRefusesTheProfile(Sound()));

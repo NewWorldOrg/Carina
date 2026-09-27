@@ -5,7 +5,6 @@ using Carina.Api.Events;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class EventStreamRefusalTests
 {
     private static readonly Uri Events = new(AppEventStream.Path, UriKind.Relative);

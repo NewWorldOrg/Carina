@@ -9,6 +9,8 @@ public sealed class StreamHarvestTests
 {
     private const int SomeService = 1024;
 
+    private const int SomeStream = 0x7FE3;
+
     private const int FirstBasic = EventInformationTable.FirstScheduleActualTableId;
 
     private const int LastBasic = FirstBasic + 1;
@@ -149,6 +151,52 @@ public sealed class StreamHarvestTests
         Assert.Empty(again.HeardWhole);
     }
 
+    [Fact]
+    public void AServiceDescriptionHeardOverAndOverIsKeptOnce()
+    {
+        var harvest = new StreamHarvest(Midnight());
+        var writer = new TransportStreamWriter(ServiceDescriptionTable.Pid);
+
+        for (int heard = 0; heard < 40; heard++)
+        {
+            writer.Sections(Described(ServiceDescriptionTable.ActualStreamTableId, SomeStream, SomeService));
+        }
+
+        harvest.Push(writer.Bytes);
+
+        ServiceDescriptionTable kept = Assert.Single(harvest.Conclude(interrupted: false, anyBytes: true).Descriptions);
+
+        Assert.Equal(SomeStream, kept.TransportStreamId);
+    }
+
+    [Fact]
+    public void TheNewestOfOneServiceDescriptionIsTheOneKept()
+    {
+        var harvest = new StreamHarvest(Midnight());
+        var writer = new TransportStreamWriter(ServiceDescriptionTable.Pid);
+
+        writer.Sections(Described(ServiceDescriptionTable.ActualStreamTableId, SomeStream, SomeService));
+        writer.Sections(Described(ServiceDescriptionTable.ActualStreamTableId, SomeStream, SomeService + 1, version: 1));
+        harvest.Push(writer.Bytes);
+
+        ServiceDescriptionTable kept = Assert.Single(harvest.Conclude(interrupted: false, anyBytes: true).Descriptions);
+
+        Assert.Equal(SomeService + 1, Assert.Single(kept.Services).ServiceId);
+    }
+
+    [Fact]
+    public void ServiceDescriptionsOfDifferentStreamsAreEachKept()
+    {
+        var harvest = new StreamHarvest(Midnight());
+        var writer = new TransportStreamWriter(ServiceDescriptionTable.Pid);
+
+        writer.Sections(Described(ServiceDescriptionTable.ActualStreamTableId, SomeStream, SomeService));
+        writer.Sections(Described(ServiceDescriptionTable.OtherStreamTableId, SomeStream + 1, SomeService + 1));
+        harvest.Push(writer.Bytes);
+
+        Assert.Equal(2, harvest.Conclude(interrupted: false, anyBytes: true).Descriptions.Count);
+    }
+
     private static HeldClock Midnight() => HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0);
 
     private static void Gather(StreamHarvest harvest, int tableId, int lastTableId, int segments = 4)
@@ -160,6 +208,19 @@ public sealed class StreamHarvestTests
             harvest.Push(Packets(tableId, lastTableId, section, section));
         }
     }
+
+    private static byte[] Described(int tableId, int stream, int service, int version = 0)
+        => new SectionWriter
+        {
+            TableId = tableId,
+            TableIdExtension = stream,
+            VersionNumber = version,
+            Body = new SdtWriter
+            {
+                OriginalNetworkId = 0x7FE3,
+                Services = [SdtWriter.Service(service, [])],
+            }.ToBody(),
+        }.ToBytes();
 
     private static byte[] Packets(int tableId, int lastTableId, int section, int segmentLast)
         => [.. new TransportStreamWriter(EventInformationTable.Pid)

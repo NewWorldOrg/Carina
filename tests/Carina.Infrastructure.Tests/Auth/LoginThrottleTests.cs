@@ -15,50 +15,81 @@ public sealed class LoginThrottleTests
     [Fact]
     public void ACallerThatHasNeverTriedIsNotHeldOff()
     {
-        Assert.Null(Throttle().RefusesUntil(Caller));
+        Assert.Null(Throttle().TakeTry(Caller));
     }
 
     [Fact]
-    public void OneFewerWrongTryThanThePolicyAllowsStillGetsAnotherTry()
+    public void TheLastTryThePolicyAllowsStillGoesAhead()
     {
         LoginThrottle throttle = Throttle();
 
         for (int attempt = 0; attempt < Policy.FailuresBeforeRefusing - 1; attempt++)
         {
-            throttle.Failed(Caller);
+            throttle.TakeTry(Caller);
         }
 
-        Assert.Null(throttle.RefusesUntil(Caller));
+        Assert.Null(throttle.TakeTry(Caller));
     }
 
     [Fact]
-    public void TheWrongTryThatReachesThePolicyHoldsTheCallerOffUntilTheWindowHasPassed()
+    public void ATryPastThePolicyIsHeldOffUntilTheWindowHasPassed()
     {
         LoginThrottle throttle = Throttle();
         DateTime first = clock.GetUtcNow().UtcDateTime;
 
         for (int attempt = 0; attempt < Policy.FailuresBeforeRefusing; attempt++)
         {
-            throttle.Failed(Caller);
+            throttle.TakeTry(Caller);
             clock.MoveOn(TimeSpan.FromSeconds(1));
         }
 
-        Assert.Equal(first + Policy.Window, throttle.RefusesUntil(Caller));
+        Assert.Equal(first + Policy.Window, throttle.TakeTry(Caller));
     }
 
     [Fact]
-    public void TheHoldOffLiftsOnceTheOldestWrongTryHasFallenOutOfTheWindow()
+    public void TriesWhoseAnswerIsNotInYetAlreadyCountAgainstTheCaller()
+    {
+        LoginThrottle throttle = Throttle();
+
+        DateTime?[] answered =
+        [
+            .. Enumerable.Range(0, Policy.FailuresBeforeRefusing + 3).Select(_ => throttle.TakeTry(Caller)),
+        ];
+
+        Assert.Equal(Policy.FailuresBeforeRefusing, answered.Count(until => until is null));
+    }
+
+    [Fact]
+    public void ATryThatIsHeldOffDoesNotPushTheHoldOffFurtherOut()
+    {
+        LoginThrottle throttle = Throttle();
+        DateTime first = clock.GetUtcNow().UtcDateTime;
+
+        for (int attempt = 0; attempt < Policy.FailuresBeforeRefusing; attempt++)
+        {
+            throttle.TakeTry(Caller);
+        }
+
+        clock.MoveOn(TimeSpan.FromMinutes(1));
+        throttle.TakeTry(Caller);
+        clock.MoveOn(TimeSpan.FromMinutes(1));
+
+        Assert.Equal(first + Policy.Window, throttle.TakeTry(Caller));
+    }
+
+    [Fact]
+    public void TheHoldOffLiftsOnceTheOldestTryHasFallenOutOfTheWindow()
     {
         LoginThrottle throttle = Throttle();
 
         for (int attempt = 0; attempt < Policy.FailuresBeforeRefusing; attempt++)
         {
-            throttle.Failed(Caller);
+            throttle.TakeTry(Caller);
         }
 
         clock.MoveOn(Policy.Window);
 
-        Assert.Null(throttle.RefusesUntil(Caller));
+        Assert.Null(throttle.TakeTry(Caller));
     }
 
     [Fact]
@@ -66,15 +97,14 @@ public sealed class LoginThrottleTests
     {
         LoginThrottle throttle = Throttle();
 
-        for (int attempt = 0; attempt < Policy.FailuresBeforeRefusing - 1; attempt++)
+        for (int attempt = 0; attempt < Policy.FailuresBeforeRefusing; attempt++)
         {
-            throttle.Failed(Caller);
+            throttle.TakeTry(Caller);
         }
 
         throttle.Passed(Caller);
-        throttle.Failed(Caller);
 
-        Assert.Null(throttle.RefusesUntil(Caller));
+        Assert.Null(throttle.TakeTry(Caller));
     }
 
     [Fact]
@@ -84,11 +114,11 @@ public sealed class LoginThrottleTests
 
         for (int attempt = 0; attempt < Policy.FailuresBeforeRefusing; attempt++)
         {
-            throttle.Failed(Caller);
+            throttle.TakeTry(Caller);
         }
 
-        Assert.NotNull(throttle.RefusesUntil(Caller));
-        Assert.Null(throttle.RefusesUntil("10.0.0.10"));
+        Assert.NotNull(throttle.TakeTry(Caller));
+        Assert.Null(throttle.TakeTry("10.0.0.10"));
     }
 
     private LoginThrottle Throttle() => new(Policy, clock);

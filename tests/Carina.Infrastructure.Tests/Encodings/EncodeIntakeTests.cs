@@ -20,13 +20,13 @@ public sealed class EncodeIntakeTests
 
     private static readonly DateTime Now = new(2026, 9, 4, 5, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-ED2-004: a recording that has ended is put in the queue without anyone asking")]
+    [Fact(DisplayName = "a recording that has ended is put in the queue without anyone asking")]
     public async Task ARecordingThatHasEndedIsPutInTheQueueWithoutAnyoneAsking()
     {
         var machine = new Machine();
         Recording ended = machine.Recorded(RecordingOutcome.Complete);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(1, took.Queued);
         Assert.Equal(EncodeUnaskedStanding.Settled, took.Standing);
@@ -39,105 +39,118 @@ public sealed class EncodeIntakeTests
         Assert.Equal(Now, queued.QueuedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: with the auto-run turned off in the ledger, a recording that ended is left where it is")]
+    [Fact(DisplayName = "with the auto-run turned off in the ledger, a recording that ended is left where it is")]
     public async Task WithTheAutoRunTurnedOffARecordingThatEndedIsLeftWhereItIs()
     {
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Complete);
         machine.AutoRun.Standing = new EncodeAutoRunStanding(false, 2, true, Now);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.False(took.Automatically);
         Assert.Equal(0, took.Queued);
-        Assert.Equal(0, took.Looked);
+        Assert.Equal(0, took.Waiting);
         Assert.Empty(machine.Jobs.Jobs);
         Assert.Empty(machine.Events.Signalled);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: turning the auto-run back on takes hold at the next look, without a restart")]
+    [Fact(DisplayName = "turning the auto-run back on takes hold at the next look, without a restart")]
     public async Task TurningTheAutoRunBackOnTakesHoldAtTheNextLook()
     {
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Complete);
         machine.AutoRun.Standing = new EncodeAutoRunStanding(false, 2, true, Now);
-        await machine.Round().TakeAsync(1, Cancel);
+        await machine.Round().TakeAsync(Cancel);
 
         machine.AutoRun.Standing = new EncodeAutoRunStanding(true, 2, true, Now);
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.True(took.Automatically);
         Assert.Equal(1, took.Queued);
         Assert.Single(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording whose reservation asked for no encode is never queued, though it ended with a file like any other")]
+    [Fact(DisplayName = "a recording whose reservation asked for no encode is never queued, though it ended with a file like any other")]
     public async Task ARecordingThatAskedForNoEncodeIsNeverQueued()
     {
         var machine = new Machine();
         Recording unasked = machine.Recorded(RecordingOutcome.Complete, encode: false);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
-        Assert.Equal(1, took.Looked);
+        Assert.Equal(0, took.Waiting);
         Assert.Equal(EncodeUnaskedStanding.Settled, took.Standing);
         Assert.Equal(RecordingOutcome.Complete, unasked.Outcome);
         Assert.Empty(machine.Jobs.Jobs);
         Assert.Empty(machine.Events.Signalled);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: one recording asking for no encode leaves the ones beside it queued")]
+    [Fact(DisplayName = "one recording asking for no encode leaves the ones beside it queued")]
     public async Task ARecordingThatAskedForNoEncodeLeavesTheOnesBesideItQueued()
     {
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Complete, encode: false);
         Recording asked = machine.Recorded(RecordingOutcome.Complete, Began.AddMinutes(1));
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(1, took.Queued);
         Assert.Equal(asked.Id, Assert.Single(machine.Jobs.Jobs).RecordingId);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording that failed has nothing to encode and is never queued")]
-    public async Task ARecordingThatFailedIsNeverQueued()
+    [Fact]
+    public async Task ARecordingWhoseDeletionLeftFilesBehindIsNeverQueued()
     {
         var machine = new Machine();
-        machine.Recorded(RecordingOutcome.Failed);
+        Recording halfGone = machine.Recorded(RecordingOutcome.Complete);
+        halfGone.Erased(RecordingErasure.Refused(ErasureFault.FileLeftBehind, "the file could not be removed", 1), Now);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Empty(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording cut short is queued like any other, and what says it was cut short is the recording")]
+    [Fact(DisplayName = "a recording that failed has nothing to encode and is never queued")]
+    public async Task ARecordingThatFailedIsNeverQueued()
+    {
+        var machine = new Machine();
+        machine.Recorded(RecordingOutcome.Failed);
+
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
+
+        Assert.Equal(0, took.Queued);
+        Assert.Empty(machine.Jobs.Jobs);
+    }
+
+    [Fact(DisplayName = "a recording cut short is queued like any other, and what says it was cut short is the recording")]
     public async Task ARecordingCutShortIsQueuedLikeAnyOther()
     {
         var machine = new Machine();
         Recording cutShort = machine.Recorded(RecordingOutcome.Truncated);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(1, took.Queued);
         Assert.Equal(cutShort.Id, Assert.Single(machine.Jobs.Jobs).RecordingId);
         Assert.Equal(RecordingOutcome.Truncated, cutShort.Outcome);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording still being written is not queued until it has ended")]
+    [Fact(DisplayName = "a recording still being written is not queued until it has ended")]
     public async Task ARecordingStillBeingWrittenIsNotQueued()
     {
         var machine = new Machine();
         machine.StillWriting();
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Empty(machine.Jobs.Jobs);
     }
 
-    [Theory(DisplayName = "BR-ED2-004: a recording the ledger already holds a job for is not queued a second time, whatever became of that job")]
+    [Theory(DisplayName = "a recording the ledger already holds a job for is not queued a second time, whatever became of that job")]
     [InlineData(EncodeJobStatus.Queued)]
     [InlineData(EncodeJobStatus.Running)]
     [InlineData(EncodeJobStatus.Completed)]
@@ -149,42 +162,42 @@ public sealed class EncodeIntakeTests
         Recording ended = machine.Recorded(RecordingOutcome.Complete);
         machine.Jobs.Jobs.Add(Job(ended.Id, machine.Profile.Id, machine.Destination, status));
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Single(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a second look over a queue this one filled adds nothing")]
+    [Fact(DisplayName = "a second look over a queue this one filled adds nothing")]
     public async Task ASecondLookOverAQueueThisOneFilledAddsNothing()
     {
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Complete);
         machine.Recorded(RecordingOutcome.Complete);
 
-        EncodeIntake first = await machine.Round().TakeAsync(1, Cancel);
-        EncodeIntake second = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake first = await machine.Round().TakeAsync(Cancel);
+        EncodeIntake second = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(2, first.Queued);
         Assert.Equal(0, second.Queued);
         Assert.Equal(2, machine.Jobs.Jobs.Count);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a machine that cannot settle where an artefact goes queues nothing and says what is missing")]
+    [Fact(DisplayName = "a machine that cannot settle where an artefact goes queues nothing and says what is missing")]
     public async Task AMachineThatCannotSettleWhereAnArtefactGoesQueuesNothing()
     {
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Complete);
         machine.Destinations.Destinations.Clear();
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Equal(EncodeUnaskedStanding.NothingIsDefined, took.Standing);
         Assert.Empty(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a machine offering more than one destination queues nothing and says so")]
+    [Fact(DisplayName = "a machine offering more than one destination queues nothing and says so")]
     public async Task AMachineOfferingMoreThanOneDestinationQueuesNothing()
     {
         var machine = new Machine();
@@ -196,14 +209,14 @@ public sealed class EncodeIntakeTests
             machine.Profile.Id,
             Began));
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Equal(EncodeUnaskedStanding.MoreThanOneIsOffered, took.Standing);
         Assert.Empty(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a machine that could not settle a destination queues what it passed over once it can")]
+    [Fact(DisplayName = "a machine that could not settle a destination queues what it passed over once it can")]
     public async Task AMachineThatCouldNotSettleADestinationQueuesWhatItPassedOverOnceItCan()
     {
         var machine = new Machine();
@@ -211,16 +224,16 @@ public sealed class EncodeIntakeTests
         EncodeDestination shelf = machine.Destination;
         machine.Destinations.Destinations.Clear();
 
-        EncodeIntake passed = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake passed = await machine.Round().TakeAsync(Cancel);
         machine.Destinations.Destinations.Add(shelf);
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, passed.Queued);
         Assert.Equal(1, took.Queued);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: more recordings than one look reads are queued a page at a time, and every one of them ends up in the queue")]
-    public async Task MoreRecordingsThanOneLookReadsAreQueuedAPageAtATime()
+    [Fact(DisplayName = "more recordings than one look reads are queued a look at a time, and every one of them ends up in the queue")]
+    public async Task MoreRecordingsThanOneLookReadsAreQueuedALookAtATime()
     {
         var machine = new Machine();
 
@@ -229,13 +242,13 @@ public sealed class EncodeIntakeTests
             machine.Recorded(RecordingOutcome.Complete, Began.AddMinutes(made));
         }
 
-        EncodeIntake first = await machine.Round().TakeAsync(1, Cancel);
-        EncodeIntake second = await machine.Round().TakeAsync(first.Page + 1, Cancel);
+        EncodeIntake first = await machine.Round().TakeAsync(Cancel);
+        EncodeIntake second = await machine.Round().TakeAsync(Cancel);
+        EncodeIntake third = await machine.Round().TakeAsync(Cancel);
 
-        Assert.True(first.MorePages);
         Assert.Equal(EncodeIntakeRound.PerLook, first.Queued);
-        Assert.False(second.MorePages);
         Assert.Equal(7, second.Queued);
+        Assert.Equal(0, third.Queued);
         Assert.Equal(EncodeIntakeRound.PerLook + 7, machine.Jobs.Jobs.Count);
         Assert.Equal(machine.Jobs.Jobs.Count, machine.Jobs.Jobs.Select(job => job.RecordingId).Distinct().Count());
     }
@@ -246,7 +259,7 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Complete);
 
-        await machine.Round().TakeAsync(1, Cancel);
+        await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal([AppEventName.EncodeJobs], machine.Events.Signalled);
     }
@@ -257,7 +270,7 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Failed);
 
-        await machine.Round().TakeAsync(1, Cancel);
+        await machine.Round().TakeAsync(Cancel);
 
         Assert.Empty(machine.Events.Signalled);
     }
@@ -329,7 +342,7 @@ public sealed class EncodeIntakeTests
 
         public EncodeIntakeRound Round()
             => new(
-                Recordings,
+                new HeldEncodeIntake(Recordings, Jobs),
                 Jobs,
                 Destinations,
                 Profiles,

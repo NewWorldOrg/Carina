@@ -105,7 +105,7 @@ public sealed class DriverHostTests : IDisposable
         {
             manager.Begin(DriverUnderTest.Live("hub-signal"));
 
-            IReadOnlyList<string> taken = await listener.Take(
+            IReadOnlyList<string> taken = await listener.TakeAsync(
                 new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token
             );
 

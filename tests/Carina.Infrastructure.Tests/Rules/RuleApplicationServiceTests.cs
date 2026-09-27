@@ -680,7 +680,7 @@ public sealed class RuleApplicationServiceTests
             Now.AddDays(-30),
             encodeWhenRecorded);
 
-    [Fact(DisplayName = "BR-ED2-004: a reservation a rule made carries what that rule asked about encoding")]
+    [Fact(DisplayName = "a reservation a rule made carries what that rule asked about encoding")]
     public async Task AReservationARuleMadeCarriesWhatTheRuleAskedAboutEncoding()
     {
         World world = World.Of();
@@ -692,7 +692,7 @@ public sealed class RuleApplicationServiceTests
         Assert.False(Assert.Single(run.Made).EncodeWhenRecorded);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a rule that says nothing about encoding leaves what it makes asking for one")]
+    [Fact(DisplayName = "a rule that says nothing about encoding leaves what it makes asking for one")]
     public async Task ARuleThatSaysNothingLeavesWhatItMakesAskingForAnEncode()
     {
         World world = World.Of();

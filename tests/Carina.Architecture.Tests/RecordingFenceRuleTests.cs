@@ -2,14 +2,14 @@ namespace Carina.Architecture.Tests;
 
 public sealed class RecordingFenceRuleTests
 {
-    [Fact(DisplayName = "BR-RS-002 / BR-KS-010: nothing outside recording and the carriage writes the claim or the outcome sideways")]
+    [Fact(DisplayName = "nothing outside recording and the carriage writes the claim or the outcome sideways")]
     public void NothingOutsideRecordingAndTheCarriageWritesTheClaimOrTheOutcomeSideways()
     {
         Assert.Empty(RecordingFenceRules.WritersOfWhatRecordingOwnsThroughThePropertyBag(
             RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-KS-010: the two allowed to write them are recording and the carriage that rehydrates old rows")]
+    [Fact(DisplayName = "the two allowed to write them are recording and the carriage that rehydrates old rows")]
     public void TheTwoAllowedToWriteThemAreRecordingAndTheCarriageThatRehydratesOldRows()
     {
         Assert.Equal(
@@ -23,20 +23,20 @@ public sealed class RecordingFenceRuleTests
         Assert.Equal(["started_at", "recording_outcome"], ReservationRules.RecordingOwnedColumns);
     }
 
-    [Fact(DisplayName = "BR-ED-001 / BR-KD-013: the recording feature reads no broadcast table of its own")]
+    [Fact(DisplayName = "the recording feature reads no broadcast table of its own")]
     public void TheRecordingFeatureReadsNoBroadcastTableOfItsOwn()
     {
         Assert.Empty(RecordingFenceRules.BroadcastTableReadersInsideTheRecordingFeature(
             RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED-001: the port the recording round holds carries no way to write the guide")]
+    [Fact(DisplayName = "the port the recording round holds carries no way to write the guide")]
     public void ThePortTheRecordingRoundHoldsCarriesNoWayToWriteTheGuide()
     {
         Assert.Empty(RecordingFenceRules.WriteMembersOnThePortTheRoundHolds(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED-001: those write members are still on the port collection holds, for the rule to have missed them")]
+    [Fact(DisplayName = "those write members are still on the port collection holds, for the rule to have missed them")]
     public void ThoseWriteMembersAreStillOnThePortCollectionHolds()
     {
         Assert.Equal(
@@ -44,7 +44,7 @@ public sealed class RecordingFenceRuleTests
             RecordingFenceRules.WriteMembersOnThePortCollectionHolds(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED-001: every place in recording that reaches the guide holds the read-only port")]
+    [Fact(DisplayName = "every place in recording that reaches the guide holds the read-only port")]
     public void EveryPlaceInRecordingThatReachesTheGuideHoldsTheReadOnlyPort()
     {
         Assert.Equal(
@@ -57,17 +57,17 @@ public sealed class RecordingFenceRuleTests
             RecordingFenceRules.HoldersOfTheReadOnlyGuidePort(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED-001: and nothing in the recording feature names the port that can write it")]
+    [Fact(DisplayName = "and nothing in the recording feature names the port that can write it")]
     public void NothingInTheRecordingFeatureNamesThePortThatCanWriteTheGuide()
         => Assert.Empty(RecordingFenceRules.NamersOfTheWritingGuidePort(RepositoryLayout.SourceDirectory));
 
-    [Fact(DisplayName = "BR-KA-001: the recording feature offers no deletion beside the one route the library owns")]
+    [Fact(DisplayName = "the recording feature offers no deletion beside the one route the library owns")]
     public void TheRecordingFeatureOffersNoDeletionBesideTheOneRouteTheLibraryOwns()
     {
         Assert.Empty(RecordingFenceRules.DeletionsOfferedByTheRecordingFeature(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-LA-003: one route throws a recording away, and it is the one the canon was corrected to")]
+    [Fact(DisplayName = "one route throws a recording away, and it is the one the canon was corrected to")]
     public void OneRouteThrowsARecordingAway()
     {
         Assert.Equal(
@@ -75,7 +75,7 @@ public sealed class RecordingFenceRuleTests
             RecordingFenceRules.RoutesThatThrowARecordingAway(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-LA-003: that route cannot reach the ledger without the mount checks first")]
+    [Fact(DisplayName = "that route cannot reach the ledger without the mount checks first")]
     public void ThatRouteCannotReachTheLedgerWithoutTheMountChecksFirst()
     {
         string action = File.ReadAllText(Path.Combine(
@@ -98,7 +98,7 @@ public sealed class RecordingFenceRuleTests
             < service.IndexOf("recordings.DiscardAsync(id", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-KA-001: one place can erase a ledger row, and it is the one the guarded route reaches")]
+    [Fact(DisplayName = "one place can erase a ledger row, and it is the one the guarded route reaches")]
     public void OnePlaceCanEraseALedgerRowAndItIsTheOneTheGuardedRouteReaches()
     {
         Assert.Equal(

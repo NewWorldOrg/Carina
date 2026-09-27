@@ -5,7 +5,6 @@ using System.Text.Json;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class RebuildEpgEndpointTests
 {
     [Fact]

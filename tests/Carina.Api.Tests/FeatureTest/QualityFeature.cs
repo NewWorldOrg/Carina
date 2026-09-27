@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Quality;
@@ -35,6 +36,7 @@ internal sealed class QualityFeature : IAsyncDisposable
                 services.AddSingleton<IAppEventPublisher>(Events);
                 services.AddSingleton<IQualityThresholdRepository>(Thresholds);
                 services.AddSingleton<IQualityThresholdChangeRepository>(Changes);
+                services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.AddSingleton<IQualitySignalReader>(Signals);
                 services.AddSingleton<IQualityIncidentRepository>(Incidents);
                 services.AddSingleton<ISupplyStandingBoard>(Board);

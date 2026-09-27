@@ -18,7 +18,7 @@ public static class ProgrammeSearchMatching
         ArgumentNullException.ThrowIfNull(archived);
 
         ProgrammeMatch[] carried = [.. held.Select(ProgrammeMatch.Of)];
-        var already = carried.Select(Key).ToHashSet();
+        HashSet<(int, int, int, DateTime)> already = carried.Select(Key).ToHashSet();
 
         return
         [

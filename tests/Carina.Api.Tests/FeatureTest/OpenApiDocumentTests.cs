@@ -7,7 +7,6 @@ using Carina.Api.Common;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
@@ -19,6 +18,16 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             DeclaredVersion.Of(typeof(DeclaredVersion).Assembly),
             document["info"]!["version"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("TunerLedgerRequest")]
+    [InlineData("TunerEntryRequest")]
+    public async Task TheTunerLedgerSaysItTakesNothingBeyondWhatItNames(string schema)
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+
+        Assert.False(document["components"]!["schemas"]![schema]!["additionalProperties"]!.GetValue<bool>());
     }
 
     [Fact]
@@ -485,7 +494,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             schemas["PlaybackChapterResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
-    [Fact(DisplayName = "A-配信-074: the plan says which of the two files it plays and which other one it could be asked for")]
+    [Fact(DisplayName = "the plan says which of the two files it plays and which other one it could be asked for")]
     public async Task ThePlanNamesWhatItPlaysAndTheOtherOneItCouldBeAskedFor()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
@@ -513,7 +522,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Contains(otherOne, said => said.EndsWith("/PlaybackSource", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "A-配信-074: the two things a recording can be played from are spelled in the document the way the plan spells them")]
+    [Fact(DisplayName = "the two things a recording can be played from are spelled in the document the way the plan spells them")]
     public async Task TheTwoThingsARecordingCanBePlayedFromAreSpelledInTheDocumentTheWayThePlanSpellsThem()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
@@ -536,7 +545,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             kind["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
-    [Fact(DisplayName = "A-エンコード-069: what queues a job names the recording, the profile and the destination, and says whether the artefact is to be made again")]
+    [Fact(DisplayName = "what queues a job names the recording, the profile and the destination, and says whether the artefact is to be made again")]
     public async Task WhatQueuesAJobSaysWhetherTheArtefactIsToBeMadeAgain()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);

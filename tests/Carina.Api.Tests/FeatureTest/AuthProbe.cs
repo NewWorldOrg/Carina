@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text;
 
+using Carina.Api.Authentication;
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Programmes;
@@ -77,17 +78,17 @@ internal sealed class AuthProbe : IAsyncDisposable
 
     public AuthSession Sitting(string device)
     {
-        AuthSession session = AuthSession.Start(
-            SessionId.Issue(),
-            new Subject(FirstCredentials.Username),
-            FirstCredentials.Username,
-            AuthMethod.Local,
-            device,
-            DateTime.UtcNow);
+        SessionId cookie = SessionId.Issue();
 
-        Sessions.Sessions.Add(session);
-
-        return session;
+        return Sessions.Seat(
+            cookie,
+            AuthSession.Start(
+                cookie,
+                new Subject(FirstCredentials.Username),
+                FirstCredentials.Username,
+                AuthMethod.Local,
+                device,
+                DateTime.UtcNow));
     }
 
     public Task<HttpResponseMessage> LogInAsync(string username, string password)
@@ -130,6 +131,11 @@ internal sealed class AuthProbe : IAsyncDisposable
         using HttpResponseMessage response = await LogInAsync(FirstCredentials.Username, Password);
 
         response.EnsureSuccessStatusCode();
+
+        string handed = response.Headers.GetValues(HeaderNames.SetCookie).Single();
+        string carried = handed[$"{SessionCookie.Name}=".Length..handed.IndexOf(';', StringComparison.Ordinal)];
+
+        Sessions.Remember(new SessionId(carried));
 
         return Sessions.Sessions[^1];
     }

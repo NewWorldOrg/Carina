@@ -51,6 +51,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs File.Delete",
         "/Carina.Infrastructure/Programmes/ProgrammeSearchQuery.cs .Replace(",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
+        "/Carina.Infrastructure/Scanning/TableHarvest.cs .CopyTo(",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
         "/Carina.Infrastructure/Streaming/LiveHandedOverReading.cs .CopyTo(",
@@ -194,7 +195,7 @@ public sealed class FileSystemRuleTests
             Inventory.Where(entry => entry.Contains("/Thumbnails/", StringComparison.Ordinal)).ToArray());
     }
 
-    [Fact(DisplayName = "BR-ED2-009/010: the encode feature moves a work file once, deletes only by the ledger, and probes a rename with an empty directory")]
+    [Fact(DisplayName = "the encode feature moves a work file once, deletes only by the ledger, and probes a rename with an empty directory")]
     public void TheEncodeFeatureMovesOnceDeletesByTheLedgerAndProbesARenameWithAnEmptyDirectory()
     {
         Assert.Equal(

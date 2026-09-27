@@ -31,6 +31,58 @@ public sealed class QualitySignalWindowReadTests
     }
 
     [Fact]
+    public async Task APeriodThatBeginsInsideAnHourReadsThatHoursRemainderFromTheSamples()
+    {
+        HeldQualitySignalSamples samples = new();
+        HeldQualitySignalRollups rollups = new();
+        await rollups.SaveAsync([Rollup(Noon.AddHours(-2)), Rollup(Noon.AddHours(-1))], Cancel);
+        samples.Samples.Add(Sample(Noon.AddMinutes(-105)));
+        samples.Samples.Add(Sample(Noon.AddMinutes(-75)));
+        QualityPeriod period = QualityPeriod.Of(Noon.AddMinutes(-90), Noon, Noon)!;
+
+        IReadOnlyList<QualitySignalWindow> windows = await new QualitySignalReader(rollups, samples)
+            .WindowsAsync(period, Cancel);
+
+        Assert.Equal([Noon.AddMinutes(-75), Noon.AddHours(-1)], windows.Select(window => window.Start));
+    }
+
+    [Fact]
+    public async Task APeriodThatEndsInsideAnHourReadsThatHoursBeginningFromTheSamples()
+    {
+        HeldQualitySignalSamples samples = new();
+        HeldQualitySignalRollups rollups = new();
+        await rollups.SaveAsync(
+            [Rollup(Noon.AddHours(-4)), Rollup(Noon.AddHours(-3)), Rollup(Noon.AddHours(-2))],
+            Cancel);
+        samples.Samples.Add(Sample(Noon.AddMinutes(-105)));
+        samples.Samples.Add(Sample(Noon.AddMinutes(-75)));
+        QualityPeriod period = QualityPeriod.Of(Noon.AddHours(-4), Noon.AddMinutes(-90), Noon)!;
+
+        IReadOnlyList<QualitySignalWindow> windows = await new QualitySignalReader(rollups, samples)
+            .WindowsAsync(period, Cancel);
+
+        Assert.Equal(
+            [Noon.AddHours(-4), Noon.AddHours(-3), Noon.AddMinutes(-105)],
+            windows.Select(window => window.Start));
+    }
+
+    [Fact]
+    public async Task APeriodInsideOneHourIsReadWhollyFromTheSamples()
+    {
+        HeldQualitySignalSamples samples = new();
+        HeldQualitySignalRollups rollups = new();
+        await rollups.SaveAsync([Rollup(Noon.AddHours(-2))], Cancel);
+        samples.Samples.Add(Sample(Noon.AddMinutes(-110)));
+        samples.Samples.Add(Sample(Noon.AddMinutes(-100)));
+        QualityPeriod period = QualityPeriod.Of(Noon.AddMinutes(-105), Noon.AddMinutes(-95), Noon)!;
+
+        IReadOnlyList<QualitySignalWindow> windows = await new QualitySignalReader(rollups, samples)
+            .WindowsAsync(period, Cancel);
+
+        Assert.Equal([Noon.AddMinutes(-100)], windows.Select(window => window.Start));
+    }
+
+    [Fact]
     public async Task TheFiguresOfAPeriodAreItsWindowsFolded()
     {
         HeldQualitySignalSamples samples = new();

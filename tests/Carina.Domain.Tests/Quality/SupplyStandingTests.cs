@@ -9,7 +9,7 @@ public sealed class SupplyStandingTests
     private static readonly Threshold Applied =
         QualityThresholdShapes.AsShipped(QualityThresholdKey.SupplySilence, Noon);
 
-    [Fact(DisplayName = "BR-QD-008: a pass says one thing about each supply rather than one thing about all four")]
+    [Fact(DisplayName = "a pass says one thing about each supply rather than one thing about all four")]
     public void APassSaysOneThingAboutEachSupply()
         => Assert.Throws<ArgumentException>(() => SupplyStanding.Of(
             Noon,

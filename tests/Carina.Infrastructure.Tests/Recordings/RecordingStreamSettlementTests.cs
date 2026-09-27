@@ -300,8 +300,58 @@ public sealed class RecordingStreamSettlementTests
         Assert.Equal($"{recording.OutputRoot.Value}/{recording.FileName.Value}", Assert.Single(files.Read));
     }
 
+    [Theory]
+    [InlineData(TuningRefusal.NoSuchService)]
+    [InlineData(TuningRefusal.NoSelectedChannel)]
+    public async Task ARecordingOnAServiceNothingCanTuneAnyMoreIsWeighedAgainstTheRangeEveryKindFallsIn(
+        TuningRefusal refusal)
+    {
+        Recording read = await Judged(
+            TimeSpan.FromMinutes(30),
+            2_400_000_000,
+            asked: true,
+            tuning: TuningResolution.Refused(refusal));
+
+        Assert.Equal(RecordingOutcome.Complete, read.Outcome);
+        Assert.Empty(read.OutcomeDetail);
+        Assert.Equal(2_400_000_000, read.FileSizeObserved);
+    }
+
     [Fact]
-    public async Task ARecordingOnAServiceTheCatalogueLostIsLeftInFlightRatherThanWeighedAgainstNothing()
+    public async Task AFileTooLightForEveryKindIsStillCutShortWhenTheServiceCannotBeTunedAnyMore()
+    {
+        Recording read = await Judged(
+            TimeSpan.FromMinutes(30),
+            2_000_000_000,
+            asked: true,
+            tuning: TuningResolution.Refused(TuningRefusal.NoSelectedChannel));
+
+        Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
+        Assert.Equal(RecordingFault.LighterThanTheStream, Assert.Single(read.OutcomeDetail).Fault);
+    }
+
+    [Theory]
+    [InlineData(TuningRefusal.NoTunerForSystem)]
+    [InlineData(TuningRefusal.CapacityUnknown)]
+    [InlineData(TuningRefusal.LedgerUnreadable)]
+    public async Task ARecordingWhoseTunerIsUnavailableIsStillWeighedAgainstTheKindItsChannelIsCarriedOn(
+        TuningRefusal refusal)
+    {
+        TuningResolution unavailable = TuningResolution.Refused(refusal, TuningParameters.Terrestrial(27));
+
+        Recording light = await Judged(TimeSpan.FromMinutes(30), 2_480_000_000, asked: true, tuning: unavailable);
+        Recording right = await Judged(TimeSpan.FromMinutes(30), 3_400_000_000, asked: true, tuning: unavailable);
+
+        Assert.Equal(RecordingOutcome.Truncated, light.Outcome);
+        Assert.Equal(RecordingFault.LighterThanTheStream, Assert.Single(light.OutcomeDetail).Fault);
+        Assert.Equal(RecordingOutcome.Complete, right.Outcome);
+    }
+
+    [Theory]
+    [InlineData(TuningRefusal.NoTunerForSystem)]
+    [InlineData(TuningRefusal.CapacityUnknown)]
+    [InlineData(TuningRefusal.LedgerUnreadable)]
+    public async Task ARecordingWhoseServiceCannotBeAnsweredForYetIsLeftInFlightForTheNextPass(TuningRefusal refusal)
     {
         Recording recording = Ready(TimeSpan.FromMinutes(30), asked: true);
         var ledger = new StreamLedger();
@@ -312,7 +362,7 @@ public sealed class RecordingStreamSettlementTests
                 Concluded(recording),
                 new WatchClock(Ended),
                 new WeighedFiles { Weighs = 3_400_000_000 },
-                tuning: TuningResolution.Refused(TuningRefusal.NoSuchService))
+                tuning: TuningResolution.Refused(refusal))
             .WatchAsync(Cancel);
 
         Assert.Equal(0, watch.Settled);

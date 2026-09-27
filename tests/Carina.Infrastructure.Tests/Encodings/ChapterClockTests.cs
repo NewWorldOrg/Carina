@@ -88,7 +88,7 @@ public sealed class ChapterClockTests
     public void MoreThanAQuarterOutsideIsAClockNobodyCanName(int outOfReach, int reported, bool thrownAway)
         => Assert.Equal(thrownAway, ChapterClock.TooMuchOutOfReach(outOfReach, reported));
 
-    [Fact(DisplayName = "A-エンコード-057: a moment goes into the metadata file with the head skip added back on, and comes back off it where it was on the artefact")]
+    [Fact(DisplayName = "a moment goes into the metadata file with the head skip added back on, and comes back off it where it was on the artefact")]
     public void AMomentGoesIntoTheMetadataFileWithTheHeadSkipAddedBackOn()
     {
         Assert.Equal(HeadSkip, ChapterClock.InTheMetadata(TimeSpan.Zero, HeadSkip));
@@ -96,7 +96,7 @@ public sealed class ChapterClockTests
         Assert.Equal(TimeSpan.FromSeconds(30), ChapterClock.InTheMetadata(TimeSpan.FromSeconds(30), TimeSpan.Zero));
     }
 
-    [Fact(DisplayName = "A-エンコード-057: where the source's own clock began never reaches the metadata file, because the seek that moves the chapters is not measured against it")]
+    [Fact(DisplayName = "where the source's own clock began never reaches the metadata file, because the seek that moves the chapters is not measured against it")]
     public void WhereTheSourcesOwnClockBeganNeverReachesTheMetadataFile()
     {
         TimeSpan onTheArtefact = TimeSpan.FromSeconds(30);

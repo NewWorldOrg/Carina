@@ -11,7 +11,6 @@ using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class SyntheticEpgCollectionTests
 {
     private const int Network = 4;

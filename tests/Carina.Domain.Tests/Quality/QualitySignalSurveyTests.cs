@@ -14,7 +14,7 @@ public sealed class QualitySignalSurveyTests
     private static readonly IReadOnlyList<QualityThresholdStanding> Levels =
         QualityThresholdStanding.Over([], Noon);
 
-    [Fact(DisplayName = "BR-QD-001: a tuner nothing has sampled reads as unmeasured, never as good")]
+    [Fact(DisplayName = "a tuner nothing has sampled reads as unmeasured, never as good")]
     public void ATunerNothingHasSampledReadsAsUnmeasuredNeverAsGood()
     {
         IReadOnlyList<QualitySignalRead> read = QualitySignalSurvey.Read([], [Tuner], Levels);
@@ -38,7 +38,7 @@ public sealed class QualitySignalSurveyTests
         Assert.All(read, one => Assert.Equal(QualityState.NothingToMeasure, QualityStates.Of(one.Reading)));
     }
 
-    [Fact(DisplayName = "BR-QD-004: a tuner that has been sampled reads as measured, with the moment it was")]
+    [Fact(DisplayName = "a tuner that has been sampled reads as measured, with the moment it was")]
     public void ATunerThatHasBeenSampledReadsAsMeasuredWithTheMomentItWas()
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
@@ -60,7 +60,7 @@ public sealed class QualitySignalSurveyTests
         Assert.Equal(Noon, read[0].LastTakenAt);
     }
 
-    [Fact(DisplayName = "BR-QD-004: a frontend that never locked drags its lock rate under the level")]
+    [Fact(DisplayName = "a frontend that never locked drags its lock rate under the level")]
     public void AFrontendThatNeverLockedDragsItsLockRateUnderTheLevel()
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
@@ -73,7 +73,7 @@ public sealed class QualitySignalSurveyTests
         Assert.Equal(1, lockRate.Reading.BeyondThreshold);
     }
 
-    [Fact(DisplayName = "BR-QD-009: a statistic the tuner does not keep reads as unsupported, not as unmeasured")]
+    [Fact(DisplayName = "a statistic the tuner does not keep reads as unsupported, not as unmeasured")]
     public void AStatisticTheTunerDoesNotKeepReadsAsUnsupportedNotAsUnmeasured()
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
@@ -85,7 +85,7 @@ public sealed class QualitySignalSurveyTests
             QualityStates.Of(Read(QualityThresholdKey.CarrierToNoiseFloor, figures).Reading));
     }
 
-    [Fact(DisplayName = "BR-QD-007: a supply nothing at all could be taken from is the one that reads as unreachable")]
+    [Fact(DisplayName = "a supply nothing at all could be taken from is the one that reads as unreachable")]
     public void ASupplyNothingAtAllCouldBeTakenFromIsTheOneThatReadsAsUnreachable()
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
@@ -103,7 +103,7 @@ public sealed class QualitySignalSurveyTests
         }
     }
 
-    [Fact(DisplayName = "BR-QD-007: a supply that kept answering is not called unreachable for the samples it missed")]
+    [Fact(DisplayName = "a supply that kept answering is not called unreachable for the samples it missed")]
     public void ASupplyThatKeptAnsweringIsNotCalledUnreachableForTheSamplesItMissed()
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
@@ -120,7 +120,7 @@ public sealed class QualitySignalSurveyTests
         Assert.Equal(0, read.Reading.BeyondThreshold);
     }
 
-    [Fact(DisplayName = "BR-QD-014: a silent supply beside a measured one still says how much was measured and how much went beyond")]
+    [Fact(DisplayName = "a silent supply beside a measured one still says how much was measured and how much went beyond")]
     public void ASilentSupplyBesideAMeasuredOneStillSaysHowMuchWasMeasuredAndHowMuchWentBeyond()
     {
         TunerDeviceId silent = new("adapter3.frontend1");
@@ -142,7 +142,7 @@ public sealed class QualitySignalSurveyTests
         Assert.Equal(1, read.Reading.BeyondThreshold);
     }
 
-    [Fact(DisplayName = "BR-QD-004: a sample that could not be taken is left out of the lock rate's denominator")]
+    [Fact(DisplayName = "a sample that could not be taken is left out of the lock rate's denominator")]
     public void ASampleThatCouldNotBeTakenIsLeftOutOfTheLockRatesDenominator()
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
@@ -155,7 +155,7 @@ public sealed class QualitySignalSurveyTests
         Assert.Equal(1, Assert.Single(figures).LockRate);
     }
 
-    [Fact(DisplayName = "BR-QS-003: a window answers for the samples it outlived")]
+    [Fact(DisplayName = "a window answers for the samples it outlived")]
     public void AWindowAnswersForTheSamplesItOutlived()
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(

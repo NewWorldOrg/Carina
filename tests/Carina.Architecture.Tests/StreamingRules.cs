@@ -171,10 +171,8 @@ public static partial class StreamingRules
     }
 
     /// <summary>
-    /// A timeout handed to <c>WaitAsync</c> sets a timer that is disposed of only once the waiter
-    /// has been let go, which is after the caller has been answered, so the alarm outlives the wait
-    /// it was set for and a test counting what the clock is holding reads one too many. A deadline
-    /// held in a <c>using CancellationTokenSource</c> is let go of with the wait instead.
+    /// The places in the feature that hand <c>WaitAsync</c> a timeout rather than holding the deadline
+    /// in a <c>using CancellationTokenSource</c>.
     /// </summary>
     public static IReadOnlyList<string> WhatHandsAWaitADeadlineItCannotLetGoOfInsideTheFeature(string directory)
         => Feature(directory)

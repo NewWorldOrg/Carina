@@ -3,18 +3,15 @@ using Carina.Domain.Encodings;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// The one place a moment another programme reported is put on the artefact's own clock. A run
-/// that looks for the breaks reads the source as it lies, keeping the source's own clock, so what
-/// comes back is measured from where the container begins — which for a broadcast is the hour of
-/// the day the recorder happened to be started in, not zero. That beginning comes off whatever the
-/// moment is, because every run that reports one keeps the source's clock: a moment below the
-/// beginning is on no clock this source is on, and falls out as being outside the artefact rather
-/// than being read as a second measurement counted from zero. Then the head the encode skips comes
-/// off, because the artefact begins where the first picture that could be decoded was. A moment
-/// that lands outside the artefact after all that is not placed at all: it is thrown away rather
-/// than clamped, and <see cref="TooMuchOutOfReach"/> says when so many were thrown away that the
-/// reading was against some other clock and none of it can be believed.
+/// Puts a moment another programme reported onto the artefact's own clock.
 /// </summary>
+/// <remarks>
+/// A reported moment is on the source's own clock, measured from where the container begins. That
+/// beginning is taken off first, and a moment below it falls outside the artefact. Then the head the
+/// encode skips is taken off. A moment that lands outside the artefact is thrown away rather than
+/// clamped, and <see cref="TooMuchOutOfReach"/> says when so many were thrown away that none of the
+/// reading can be believed.
+/// </remarks>
 public static class ChapterClock
 {
     public const double MostOutOfReach = 0.25;
@@ -47,18 +44,9 @@ public static class ChapterClock
     }
 
     /// <summary>
-    /// The other way round: a moment on the artefact's clock put onto the clock the metadata file
-    /// handed to the encode has to be written on. ffmpeg moves every chapter it copies back by the
-    /// output seek and throws away what that puts outside the output, so a moment written on the
-    /// artefact's own clock would arrive at the artefact a head skip early. The head skip is added
-    /// back here so that it is taken off again there and the chapter lands where it was meant to.
-    /// Measured, not assumed: <c>ChapterEmbeddingMaterialTests</c> encodes a broadcast with a head
-    /// to skip and reads the chapters back off the artefact.
-    /// <para>
-    /// Only the output seek comes back into it. Where the source's own clock began does not,
-    /// because the seek and the timestamps it is measured against are both counted from the first
-    /// moment of the source rather than from the hour of the day the recorder was started in.
-    /// </para>
+    /// Puts a moment on the artefact's clock onto the clock the metadata file handed to the encode is
+    /// written on, by adding back the head skip that ffmpeg takes off every chapter it copies. Where
+    /// the source's own clock began does not come into it.
     /// </summary>
     public static TimeSpan InTheMetadata(TimeSpan onTheArtefact, TimeSpan headSkip)
     {

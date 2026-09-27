@@ -11,7 +11,7 @@ public sealed class EncodeFileNameTests
 
     private static readonly EncodeProfileId Profile = new(Guid.Parse("0a1b2c3d-4e5f-4061-8283-8485868788a9"));
 
-    [Fact(DisplayName = "BR-ED2-009: a work file is named for the recording, the job and the attempt")]
+    [Fact(DisplayName = "a work file is named for the recording, the job and the attempt")]
     public void AWorkFileIsNamedForTheRecordingTheJobAndTheAttempt()
     {
         EncodeFileName working = EncodeFileName.Working(Recording, Job, 3);
@@ -23,7 +23,7 @@ public sealed class EncodeFileNameTests
         Assert.True(working.Names(Job));
     }
 
-    [Fact(DisplayName = "BR-ED2-009: two attempts of one job, and two jobs on one recording, never share a work file")]
+    [Fact(DisplayName = "two attempts of one job, and two jobs on one recording, never share a work file")]
     public void TwoAttemptsOfOneJobAndTwoJobsOnOneRecordingNeverShareAWorkFile()
     {
         EncodeFileName first = EncodeFileName.Working(Recording, Job, 1);
@@ -64,11 +64,11 @@ public sealed class EncodeFileNameTests
     public void AnAttemptBeforeTheFirstNamesNoChapters()
         => Assert.Throws<ArgumentOutOfRangeException>(() => EncodeFileName.Chapters(Recording, Job, 0));
 
-    [Fact(DisplayName = "BR-ED2-009: an attempt before the first names no work file")]
+    [Fact(DisplayName = "an attempt before the first names no work file")]
     public void AnAttemptBeforeTheFirstNamesNoWorkFile()
         => Assert.Throws<ArgumentOutOfRangeException>(() => EncodeFileName.Working(Recording, Job, 0));
 
-    [Fact(DisplayName = "BR-ED2-009: the artefact is named from the recording and the profile, and from nothing a broadcaster wrote")]
+    [Fact(DisplayName = "the artefact is named from the recording and the profile, and from nothing a broadcaster wrote")]
     public void TheArtefactIsNamedFromTheRecordingAndTheProfileAndNothingElse()
     {
         EncodeFileName artefact = EncodeFileName.Artefact(Recording, Profile);
@@ -79,7 +79,7 @@ public sealed class EncodeFileNameTests
         Assert.False(artefact.Names(Job));
     }
 
-    [Fact(DisplayName = "BR-ED2-009: two jobs on one recording with one profile name the same artefact, which is what makes the second a collision")]
+    [Fact(DisplayName = "two jobs on one recording with one profile name the same artefact, which is what makes the second a collision")]
     public void TwoJobsOnOneRecordingWithOneProfileNameTheSameArtefact()
         => Assert.Equal(EncodeFileName.Artefact(Recording, Profile), EncodeFileName.Artefact(Recording, Profile));
 

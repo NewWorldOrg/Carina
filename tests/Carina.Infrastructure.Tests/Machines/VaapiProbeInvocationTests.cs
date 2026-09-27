@@ -41,7 +41,7 @@ public sealed class VaapiProbeInvocationTests
         Assert.True(arguments.IndexOf("-vaapi_device") < arguments.IndexOf("-i"));
     }
 
-    [Fact(DisplayName = "BR-EV-004: asking about H.265 on the card is the same picture through hevc_vaapi, and nothing else changes")]
+    [Fact(DisplayName = "asking about H.265 on the card is the same picture through hevc_vaapi, and nothing else changes")]
     public void AskingAboutH265OnTheCardIsTheSamePictureThroughHevcVaapi()
     {
         string[] h264 = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode)];

@@ -19,7 +19,7 @@ public sealed class FailuresThatReadTheSameKeepTheirClassTests
 
     private static readonly IReadOnlyList<string> TheTwoStreams = ["broadcast-satellite", "communications-satellite"];
 
-    [Fact(DisplayName = "BR-QD-008: thousands of failures that read the same keep the four classes they were refused in")]
+    [Fact(DisplayName = "thousands of failures that read the same keep the four classes they were refused in")]
     public async Task ThousandsOfFailuresThatReadTheSameKeepTheFourClassesTheyWereRefusedIn()
     {
         await using QualityFeature feature = new();
@@ -38,7 +38,7 @@ public sealed class FailuresThatReadTheSameKeepTheirClassTests
                 classes.Count(held => string.Equals(held, kind.ToString(), StringComparison.Ordinal))));
     }
 
-    [Fact(DisplayName = "BR-QD-008: the streams those failures were refused on stay tellable apart from one another")]
+    [Fact(DisplayName = "the streams those failures were refused on stay tellable apart from one another")]
     public async Task TheStreamsThoseFailuresWereRefusedOnStayTellableApartFromOneAnother()
     {
         await using QualityFeature feature = new();
@@ -53,7 +53,7 @@ public sealed class FailuresThatReadTheSameKeepTheirClassTests
                 refused.Count(held => held == pair)));
     }
 
-    [Fact(DisplayName = "BR-QD-002: none of those failures is counted among this domain's own")]
+    [Fact(DisplayName = "none of those failures is counted among this domain's own")]
     public async Task NoneOfThoseFailuresIsCountedAmongThisDomainsOwn()
     {
         await using QualityFeature feature = new();

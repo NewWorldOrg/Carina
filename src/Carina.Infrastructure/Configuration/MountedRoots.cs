@@ -5,8 +5,7 @@ namespace Carina.Infrastructure.Configuration;
 
 /// <summary>
 /// Reads a setting of the form <c>name=/path;name=/path</c> into the roots and the paths they are
-/// mounted at. The same shape names the roots this process reads recordings from and the roots it
-/// writes artefacts into, so it is read in one place.
+/// mounted at, for both the roots recordings are read from and the roots artefacts are written into.
 /// </summary>
 internal static class MountedRoots
 {

@@ -30,7 +30,8 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddControllers(options => options.Filters.Add(new ProducesAttribute("application/json")))
-    .AddJsonOptions(options => WireJson.Configure(options.JsonSerializerOptions));
+    .AddJsonOptions(options => WireJson.Configure(options.JsonSerializerOptions))
+    .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = UnreadableInputRefusal.Answer);
 builder.Services.ConfigureHttpJsonOptions(options => WireJson.Configure(options.SerializerOptions));
 builder.Services.AddApplicationServices();
 builder.Services.AddTrustedProxies(builder.Configuration);

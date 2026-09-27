@@ -9,12 +9,8 @@ namespace Carina.Infrastructure.Streaming;
 /// too slow to take them cannot hold rather than making the reading wait.
 /// </summary>
 /// <remarks>
-/// The queue is bounded in mouthfuls rather than in bytes because that is what the feed hands over,
-/// and holds as many as the driver's own viewer subscription does — a couple of seconds of a
-/// terrestrial multiplex, and about four megabytes at the mouthful the reading reads with. Writing
-/// into it never blocks, so the patience the seat is given can never be spent; it is set well
-/// inside the driver's own headroom all the same, so that a queue which somehow did block would
-/// cost this reader its seat rather than cost every viewer of the channel their bytes.
+/// The queue is bounded in mouthfuls, as many as the driver's own viewer subscription holds.
+/// Writing into it never blocks.
 /// </remarks>
 internal sealed class LiveHandedOverReading : ILiveHandedOver
 {
@@ -85,7 +81,7 @@ internal sealed class LiveHandedOverReading : ILiveHandedOver
         }
 
         letGo = true;
-        reading.Drop(seat);
+        await reading.Drop(seat);
 
         await written.DisposeAsync();
         await Bytes.DisposeAsync();
@@ -195,7 +191,7 @@ internal sealed class LiveHandedOverReading : ILiveHandedOver
                     break;
                 }
 
-                if (!await Waiting(cancellationToken))
+                if (!await WaitingAsync(cancellationToken))
                 {
                     return 0;
                 }
@@ -215,7 +211,7 @@ internal sealed class LiveHandedOverReading : ILiveHandedOver
 
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
-        private async ValueTask<bool> Waiting(CancellationToken cancellationToken)
+        private async ValueTask<bool> WaitingAsync(CancellationToken cancellationToken)
         {
             try
             {

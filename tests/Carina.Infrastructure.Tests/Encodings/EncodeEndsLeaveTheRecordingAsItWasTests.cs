@@ -13,10 +13,9 @@ using Npgsql;
 namespace Carina.Infrastructure.Tests.Encodings;
 
 /// <summary>
-/// Encoding is downstream of recording: however a job ends, the recording it read keeps the
-/// result, the reasons, the size and the time that size was read exactly as they were. The row is
-/// read back whole, with the version the store keeps for it, so a write that changed nothing is
-/// caught as surely as one that changed something.
+/// However a job ends, the recording it read keeps its result, reasons, size and the time that size
+/// was read exactly as they were. The row is read back whole, with the version the store keeps for
+/// it.
 /// </summary>
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -30,7 +29,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
 
     public Task DisposeAsync() => ClearAsync();
 
-    [Fact(DisplayName = "BR-ED2-012: a job whose programme fails leaves the recording's row exactly as it was")]
+    [Fact(DisplayName = "a job whose programme fails leaves the recording's row exactly as it was")]
     public async Task AJobWhoseProgrammeFailsLeavesTheRecordingRowAsItWas()
     {
         using var harness = new EncodeHarness();
@@ -50,7 +49,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
         Assert.Equal(before, await RowAsync(recording.Id));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a job refused before its programme starts leaves the recording's row exactly as it was")]
+    [Fact(DisplayName = "a job refused before its programme starts leaves the recording's row exactly as it was")]
     public async Task AJobRefusedBeforeItsProgrammeStartsLeavesTheRecordingRowAsItWas()
     {
         using var harness = new EncodeHarness();
@@ -69,7 +68,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
         Assert.Equal(before, await RowAsync(recording.Id));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a job called off while it runs leaves the recording's row exactly as it was")]
+    [Fact(DisplayName = "a job called off while it runs leaves the recording's row exactly as it was")]
     public async Task AJobCalledOffWhileItRunsLeavesTheRecordingRowAsItWas()
     {
         using var harness = new EncodeHarness();
@@ -99,7 +98,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
             (await new EncodeJobRepository(reading).FindAsync(written.Id, Cancel))!.Status);
     }
 
-    [Theory(DisplayName = "BR-ED2-011: a job whose process died, put back or given up, leaves the recording's row exactly as it was")]
+    [Theory(DisplayName = "a job whose process died, put back or given up, leaves the recording's row exactly as it was")]
     [InlineData(EncodeJob.FirstAttempt, EncodeJobStatus.Queued)]
     [InlineData(3, EncodeJobStatus.Failed)]
     public async Task AJobWhoseProcessDiedLeavesTheRecordingRowAsItWas(int attempt, EncodeJobStatus becomes)

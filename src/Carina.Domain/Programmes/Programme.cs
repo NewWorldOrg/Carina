@@ -81,6 +81,13 @@ public sealed class Programme
             broadcast.Source);
     }
 
+    public static bool Clamps(ProgrammeBroadcast broadcast)
+    {
+        ArgumentNullException.ThrowIfNull(broadcast);
+
+        return broadcast.Name.Length > NameMaxLength || broadcast.Summary.Length > SummaryMaxLength;
+    }
+
     public static Programme Rehydrate(
         ProgrammeId id,
         TransportStreamId transportStreamId,
@@ -135,11 +142,7 @@ public sealed class Programme
 
     /// <summary>
     /// Writes down that this programme was named again by a reading that heard the whole of its
-    /// service's announced schedule. It is the one mark that separates "still announced" from "no
-    /// longer announced": the row itself never goes away on its own, and <c>UpdatedAt</c> stands
-    /// still while nothing about the programme changes, so neither of them can tell the two apart.
-    /// No mark at all means no whole reading has ever named this programme, which says nothing
-    /// either way.
+    /// service's announced schedule. No mark means no whole reading has ever named it.
     /// </summary>
     public void Heard(DateTime at)
     {
@@ -175,6 +178,9 @@ public sealed class Programme
         int sounds = Kept(Sounds, broadcast.Sounds);
         VideoMode video = Kept(Video, broadcast.Video);
         AspectRatio aspect = Kept(Aspect, broadcast.Aspect);
+        bool detailOnly = broadcast.Source is ProgrammeSource.ScheduleExtended;
+        bool hasSubtitles = detailOnly ? HasSubtitles : broadcast.HasSubtitles;
+        ProgrammeSource source = detailOnly ? Source : broadcast.Source;
 
         if (TransportStreamId.Equals(broadcast.TransportStreamId)
             && StartsAt == startsAt
@@ -182,12 +188,12 @@ public sealed class Programme
             && Name == name
             && Summary == summary
             && IsShadow == broadcast.IsShadow
-            && HasSubtitles == broadcast.HasSubtitles
+            && HasSubtitles == hasSubtitles
             && Audio == audio
             && Sounds == sounds
             && Video == video
             && Aspect == aspect
-            && Source == broadcast.Source
+            && Source == source
             && Genres.SequenceEqual(genres)
             && Items.SequenceEqual(items)
             && Related.SequenceEqual(related))
@@ -204,12 +210,12 @@ public sealed class Programme
         Genres = genres;
         Items = items;
         Related = related;
-        HasSubtitles = broadcast.HasSubtitles;
+        HasSubtitles = hasSubtitles;
         Audio = audio;
         Sounds = sounds;
         Video = video;
         Aspect = aspect;
-        Source = broadcast.Source;
+        Source = source;
         UpdatedAt = at;
 
         return true;

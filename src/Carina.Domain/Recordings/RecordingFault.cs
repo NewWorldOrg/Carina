@@ -80,8 +80,7 @@ public static class RecordingFaults
 
     /// <summary>
     /// Reasons that say how long the recording was promised rather than how it ran or how it ended.
-    /// They are written while it is still running, by whatever set the window, and they are still
-    /// there afterwards to explain a window nobody could have read off the guide.
+    /// They are written while it is still running, by whatever set the window.
     /// </summary>
     public static readonly IReadOnlyList<RecordingFault> ThatExplainTheWindow =
     [
@@ -95,6 +94,17 @@ public static class RecordingFaults
         RecordingFault.TunerContended,
         RecordingFault.ScramblingUnresolved,
     ];
+
+    public static IReadOnlyList<RecordingFault> OfTheFileAsWeighed(long? fileSizeBytes)
+        => fileSizeBytes switch
+        {
+            null => [RecordingFault.SizeUnobserved],
+            0 => [RecordingFault.NothingLanded],
+            _ => [],
+        };
+
+    public static IReadOnlyList<RecordingFault> OfAFullDisk(long? fileSizeBytes)
+        => [RecordingFault.DiskExhausted, .. OfTheFileAsWeighed(fileSizeBytes)];
 
     public static IReadOnlyList<RecordingFault> OfWhatWasLeftScrambled(QualityLevel leftScrambled)
         => leftScrambled is QualityLevel.Warning or QualityLevel.MayNotBeWatchable

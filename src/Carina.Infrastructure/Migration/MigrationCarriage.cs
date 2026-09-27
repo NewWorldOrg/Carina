@@ -114,6 +114,17 @@ public sealed class MigrationCarriage(
             settled.Add(await CarriedAsync(verdict, known, named, queueing, pass, cancellationToken));
         }
 
+        SourceRule[] rulesCarried =
+        [
+            .. settled
+                .Where(verdict => verdict.Carried && verdict.Population is MigrationPopulation.Rules)
+                .Select(verdict => asked[verdict.Subject]),
+        ];
+
+        IEnumerable<string> recordingsCarried = settled
+            .Where(verdict => verdict.Carried && verdict.Population is MigrationPopulation.Recordings)
+            .Select(verdict => known[verdict.Subject].Name);
+
         return new MigrationCarried(
             MigrationRoll.Of(
                 intended.Populations.ToDictionary(population => population, intended.OfferedIn),
@@ -124,8 +135,9 @@ public sealed class MigrationCarriage(
                     ledger.ChannelDefinitions,
                     RescannedService.NamedBy(rescanned)),
                 meant,
-                ledger.Rules.Count,
-                MigrationTextLoss.RowsPastRestoring(ledger),
+                rulesCarried.Length,
+                MigrationTextLoss.RowsPastRestoring(
+                    recordingsCarried.Concat(rulesCarried.Select(rule => rule.Name))),
                 MigrationRuleConversion.RulesNarrowedByDay(ledger, inReach)),
             standing,
             queueing.Standing,

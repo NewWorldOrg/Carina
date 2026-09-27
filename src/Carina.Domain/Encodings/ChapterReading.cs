@@ -3,9 +3,7 @@ using Carina.Domain.Base;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// Which reader of a source answered where the breaks in it are. It is one of these and never the
-/// name of a class, so that renaming a class cannot rewrite what the ledger holds, and a machine
-/// told not to look still says who it was that did not look.
+/// Which reader of a source answered where the breaks in it are, as the ledger keeps it.
 /// </summary>
 public enum ChapterDetectorName
 {
@@ -15,13 +13,9 @@ public enum ChapterDetectorName
 }
 
 /// <summary>
-/// What one job's run made of the question of where the breaks in its recording are: who was
-/// asked, what they answered, how much of the length that answer took for breaks, and when it was
-/// answered. It is kept whatever the answer, so that a job nobody looked at is told apart from one
-/// looked at and found to carry nothing, and both from a job that ran before anything looked at
-/// all — which carries none of this. <see cref="BreakShare"/> is kept even when the reading was
-/// thrown away, because a run that tripped the safety valve is then found by asking the ledger
-/// rather than by reading logs.
+/// What one job's run answered about where the breaks in its recording are: who was asked, what
+/// they answered, how much of the length the answer took for breaks, and when. It is kept whatever
+/// the answer; <see cref="BreakShare"/> is kept even when the reading was thrown away.
 /// </summary>
 public sealed record ChapterReading
 {

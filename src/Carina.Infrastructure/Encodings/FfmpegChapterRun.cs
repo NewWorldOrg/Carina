@@ -18,28 +18,17 @@ public sealed record ChapterRunOutcome(int? ExitCode, ChapterRunFault? Fault, st
 }
 
 /// <summary>
-/// One run of the programme that looks for the breaks. Both of its streams are read as they come
-/// and handed on one piece at a time and never two at once — a line of words, or a whole picture
-/// when the run was asked to hand pictures over — because a run that is asked to talk says
-/// thousands of lines and holding them to read at the end would keep a megabyte of another
-/// programme's words in memory and fill the pipe it is writing into while it waited. Nothing is kept
-/// from either stream: the caller is handed each piece and this keeps only how the run ended, so no
-/// word of the source's own can end up written down. What is left at the end of the pictures that
-/// makes less than a whole one is not handed on.
-/// <para>
-/// The programme is started yielding, at the lowest priority the machine has, because the machine
-/// this runs on is recording. A run that outlives what it was allowed is stopped, children and
-/// all, and said to have taken too long rather than throwing; a stop the caller asked for is
-/// thrown, so the caller knows nothing was read.
-/// </para>
-/// <para>
-/// Who the programme is — its id and when it began — is handed to the caller before either stream
-/// is read, so that a process which dies mid-look leaves behind a programme the next one can find
-/// and stop; a caller that cannot write it down stops the programme rather than run it unrecorded
-/// (BR-ED2-011). One already gone by then is not handed over, there being nothing left of it to
-/// stop.
-/// </para>
+/// One run of the programme that looks for the breaks.
 /// </summary>
+/// <remarks>
+/// Both of its streams are read as they come and handed on one piece at a time, a line of words or,
+/// when asked for, a whole picture; nothing is kept from either stream but how the run ended, and a
+/// trailing part of a picture is not handed on. The programme is started yielding. A run that
+/// outlives what it was allowed is stopped with its children and reported as having taken too long;
+/// a stop the caller asked for is thrown. The programme's id and start are handed to the caller
+/// before either stream is read, and a caller that cannot write them down stops the programme; one
+/// already gone by then is not handed over.
+/// </remarks>
 public static class FfmpegChapterRun
 {
     public static Task<ChapterRunOutcome> RunAsync(
@@ -113,7 +102,7 @@ public static class FfmpegChapterRun
         }
 
         using Process running = start.Process;
-        using var late = new CancellationTokenSource(longest, clock);
+        using CancellationTokenSource late = new(longest, clock);
         using CancellationTokenRegistration stopWhenLate =
             late.Token.UnsafeRegister(_ => AnotherProgramme.GiveUpOn(running), null);
         using CancellationTokenRegistration stopWhenCancelled =

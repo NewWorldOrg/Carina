@@ -3,10 +3,8 @@ using Carina.Domain.Encodings;
 namespace Carina.Api.Responder.Encoding;
 
 /// <summary>
-/// How long the jobs that finished took. <c>averageSeconds</c> is unsaid until
-/// <c>fewestToAverage</c> jobs have finished, because an average of one job is not an average; the
-/// count and the window are answered either way, so a caller can say how far off an answer is
-/// rather than reading a nought as an instant encode.
+/// How long the jobs that finished took. <c>averageSeconds</c> is null until
+/// <c>fewestToAverage</c> jobs have finished; the count and the window are answered either way.
 /// </summary>
 public sealed record EncodeDurationsResponder(
     int Jobs,

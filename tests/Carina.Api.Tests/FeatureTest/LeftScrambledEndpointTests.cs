@@ -6,7 +6,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LeftScrambledEndpointTests
 {
     private static readonly DateTime Ended = RecordingFeature.Noon.AddHours(1);

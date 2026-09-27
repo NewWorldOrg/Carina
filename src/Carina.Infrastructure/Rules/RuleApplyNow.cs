@@ -41,7 +41,7 @@ public sealed class RuleApplyNow(
 
     public async Task<RuleApplyOutcome> StartAsync(CancellationToken cancellationToken)
     {
-        var applyId = Guid.NewGuid();
+        Guid applyId = Guid.NewGuid();
 
         lock (gate)
         {

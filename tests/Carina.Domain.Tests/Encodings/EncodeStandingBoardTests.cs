@@ -41,7 +41,7 @@ public sealed class EncodeStandingBoardTests
         EncodeJobStatus[] held)
         => Assert.Equal(expected, EncodeStandings.Over(held));
 
-    [Fact(DisplayName = "BR-ES-002: an artefact already made is what a recording stands at, whatever is running beside it")]
+    [Fact(DisplayName = "an artefact already made is what a recording stands at, whatever is running beside it")]
     public void AnArtefactAlreadyMadeOutweighsWorkStillGoingOn()
     {
         Assert.Equal(
@@ -53,7 +53,7 @@ public sealed class EncodeStandingBoardTests
             EncodeStandings.Over([EncodeJobStatus.Running, EncodeJobStatus.Cancelled, EncodeJobStatus.Failed]));
     }
 
-    [Fact(DisplayName = "BR-ES-002: work in the queue speaks over a failure that is already history")]
+    [Fact(DisplayName = "work in the queue speaks over a failure that is already history")]
     public void WorkInTheQueueSpeaksOverAFailureThatIsAlreadyHistory()
         => Assert.Equal(
             EncodeStanding.Queued,
@@ -63,7 +63,7 @@ public sealed class EncodeStandingBoardTests
     public void AStatusTheLedgerCouldNotHoldIsRefusedRatherThanReadAsUnencoded()
         => Assert.Throws<ArgumentOutOfRangeException>(() => EncodeStandings.Over([(EncodeJobStatus)9]));
 
-    [Fact(DisplayName = "BR-ES-002: a board answers for a recording it was never told about")]
+    [Fact(DisplayName = "a board answers for a recording it was never told about")]
     public void ABoardAnswersForARecordingItWasNeverToldAbout()
     {
         EncodeStandingBoard board = EncodeStandingBoard.Of([(Asked, EncodeJobStatus.Running)]);
