@@ -260,6 +260,34 @@ public sealed class VideoDeliveryTests
     }
 
     [Fact]
+    public async Task ARecordingWithNoArtefactAskedForAsItWasRecordedIsHandedOverAsItIs()
+    {
+        await using var feature = new PlaybackFeature();
+        byte[] written = PlaybackFeature.Bytes(Size);
+        Recording recording = feature.Ended(RecordingOutcome.Complete, written);
+
+        using HttpResponseMessage answer = await feature.GetFromAsync(recording, "recording");
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal("video/mp2t", answer.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(written, await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Theory]
+    [InlineData("proxy")]
+    [InlineData("Recording ")]
+    public async Task AFileThatIsNeitherOfTheTwoIsRefusedBeforeAnythingIsHandedOver(string source)
+    {
+        await using var feature = new PlaybackFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, PlaybackFeature.Bytes(Size));
+
+        using HttpResponseMessage answer = await feature.GetFromAsync(recording, source);
+
+        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Empty(await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
     public async Task SomethingThatIsNotARecordingIdIsRefusedBeforeAnythingIsLookedFor()
     {
         await using var feature = new PlaybackFeature();
