@@ -133,4 +133,24 @@ public sealed class LockWatchTests
         Assert.Empty(plan.ToOpen);
         Assert.Empty(plan.ToResolve);
     }
+
+    [Fact(DisplayName = "BR-QD-017: only the tuners an unsettled incident says cannot lock are named as unable to lock")]
+    public void OnlyTheTunersAnUnsettledIncidentSaysCannotLockAreNamedAsUnableToLock()
+    {
+        QualityIncident standing = LockWatch.Restate(QualityIncidentId.New(), Adapter0, Noon, Applied);
+        QualityIncident settled = LockWatch.Restate(QualityIncidentId.New(), Adapter2, Noon, Applied);
+        QualityIncident noData = QualityIncident.Detect(
+            QualityIncidentId.New(),
+            Noon,
+            QualityThresholdKey.LockRate,
+            QualitySubject.Of(QualitySubjectKind.Tuner, "adapter3"),
+            0,
+            Applied,
+            QualityIncidentOwner.Tuner,
+            nameof(TuneFailureKind.NoData));
+
+        settled.Resolve(Noon.AddHours(1));
+
+        Assert.Equal(["adapter0"], LockWatch.CannotLock([standing, settled, noData]));
+    }
 }

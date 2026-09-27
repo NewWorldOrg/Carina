@@ -1,6 +1,8 @@
 using Carina.Api.Common;
+using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Driver;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 
@@ -11,6 +13,8 @@ public sealed class QualityService(
     IQualityThresholdRepository thresholds,
     IQualityThresholdChangeRepository changes,
     IQualitySignalReader signals,
+    IQualityIncidentRepository incidents,
+    IDriverClient driver,
     IBroadcastStreamDirectory streams,
     TimeProvider clock)
 {
@@ -123,19 +127,30 @@ public sealed class QualityService(
         IReadOnlyList<SignalFigures> figures = await signals.FiguresAsync(query.Period, cancellationToken);
 
         IReadOnlyList<QualityGroupReading> grouped = QualityBoard.Grouped(rows, QualityAxis.Tuner, query.Metrics, bands);
+        IReadOnlySet<string> cannotLock = LockWatch.CannotLock(await incidents.ListUnsettledAsync(cancellationToken));
+
+        IReadOnlyList<TunerDeviceId> known =
+        [
+            .. await EnabledTunersAsync(cancellationToken),
+            .. figures.Select(figure => figure.Tuner),
+            .. cannotLock.Select(tuner => new TunerDeviceId(tuner)),
+        ];
 
         IReadOnlyList<QualityTunerReading> readings =
         [
             .. QualityBoard
                 .Sorted(
-                    [.. grouped, .. OnlySampled(grouped, figures, query.Metrics)],
+                    [.. grouped, .. Unrecorded(grouped, known, query.Metrics)],
                     query.Sort,
                     query.Primary,
                     Sense(query.Primary))
-                .Select(group => new QualityTunerReading(
-                    group,
-                    QualitySignal.Over(QualitySignalSurvey.Read(figures, Named(group), standings)))),
+                .Select(group => Tuner(group, figures, standings, cannotLock)),
         ];
+
+        if (query.Sort is QualityGroupSort.Worst)
+        {
+            readings = [.. readings.OrderByDescending(reading => TunerStandings.Severity(reading.Standing))];
+        }
 
         return ServiceResult<QualityTunerPage>.Success(new QualityTunerPage(
             query.Period,
@@ -209,9 +224,27 @@ public sealed class QualityService(
         return [.. named.Select(name => new TunerDeviceId(name))];
     }
 
-    private static IReadOnlyList<QualityGroupReading> OnlySampled(
-        IReadOnlyList<QualityGroupReading> grouped,
+    private static QualityTunerReading Tuner(
+        QualityGroupReading group,
         IReadOnlyList<SignalFigures> figures,
+        IReadOnlyList<QualityThresholdStanding> standings,
+        IReadOnlySet<string> cannotLock)
+    {
+        IReadOnlyList<QualitySignalStanding> signal =
+            QualitySignal.Over(QualitySignalSurvey.Read(figures, Named(group), standings));
+
+        return new QualityTunerReading(
+            group,
+            signal,
+            TunerStandings.Of(
+                [.. group.Measures.Select(measure => measure.Tally)],
+                [.. signal.Select(standing => standing.Reading)],
+                group.Key.Tuner is { } tuner && cannotLock.Contains(tuner.Value)));
+    }
+
+    private static IReadOnlyList<QualityGroupReading> Unrecorded(
+        IReadOnlyList<QualityGroupReading> grouped,
+        IReadOnlyList<TunerDeviceId> known,
         IReadOnlyList<QualityMetric> metrics)
     {
         HashSet<string> held =
@@ -221,14 +254,19 @@ public sealed class QualityService(
                 .OfType<string>(),
         ];
 
-        return
-        [
-            .. figures
-                .Where(figure => !held.Contains(figure.Tuner.Value))
-                .Select(figure => new QualityGroupReading(
-                    QualityGroupKey.ForTuner(figure.Tuner),
-                    [.. metrics.Select(metric => new QualityMeasure(metric, QualityAggregator.Tally([])))])),
-        ];
+        List<QualityGroupReading> added = [];
+
+        foreach (TunerDeviceId tuner in known)
+        {
+            if (held.Add(tuner.Value))
+            {
+                added.Add(new QualityGroupReading(
+                    QualityGroupKey.ForTuner(tuner),
+                    [.. metrics.Select(metric => new QualityMeasure(metric, QualityAggregator.Tally([])))]));
+            }
+        }
+
+        return added;
     }
 
     private static IReadOnlyList<QualityGroupReading> Grouped(
@@ -241,6 +279,20 @@ public sealed class QualityService(
             query.Sort,
             query.Primary,
             Sense(query.Primary));
+
+    private async Task<IReadOnlyList<TunerDeviceId>> EnabledTunersAsync(CancellationToken cancellationToken)
+    {
+        DriverCall<IReadOnlyList<TunerSnapshot>> asked = await driver.GetTunersAsync(cancellationToken);
+
+        return asked.TryGetValue(out IReadOnlyList<TunerSnapshot>? tuners)
+            ?
+            [
+                .. tuners
+                    .Where(tuner => tuner.State is not TunerState.Disabled && !string.IsNullOrWhiteSpace(tuner.DeviceId))
+                    .Select(tuner => new TunerDeviceId(tuner.DeviceId)),
+            ]
+            : [];
+    }
 
     private static PaginatedList<T> Paged<T>(IReadOnlyList<T> found, int page, int perPage)
         => new([.. found.Skip((page - 1) * perPage).Take(perPage)], found.Count, page, perPage);

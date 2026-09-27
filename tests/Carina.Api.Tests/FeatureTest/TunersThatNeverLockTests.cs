@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Contracts;
+
 namespace Carina.Api.Tests.FeatureTest;
 
 public sealed class TunersThatNeverLockTests
@@ -70,6 +72,95 @@ public sealed class TunersThatNeverLockTests
         Assert.Equal(3, lockRate.GetProperty("measured").GetInt32());
         Assert.Equal(2, lockRate.GetProperty("beyondThreshold").GetInt32());
     }
+
+    [Fact(DisplayName = "BR-QD-017: an enabled tuner with no samples and no recordings still has a row, and it reads as unmeasured")]
+    public async Task AnEnabledTunerWithNoSamplesStillHasARowThatReadsAsUnmeasured()
+    {
+        await using QualityFeature feature = new();
+        feature.Driver.Tuners =
+        [
+            new TunerSnapshot(FirstSatellite, TunerKind.Satellite, TunerState.Idle),
+            new TunerSnapshot(SecondSatellite, TunerKind.Satellite, TunerState.Disabled),
+            new TunerSnapshot(Terrestrial, TunerKind.Terrestrial, TunerState.Idle),
+        ];
+        feature.Sampled(tuner: Terrestrial, samples: FifteenHoursOfSamples, locked: FifteenHoursOfSamples);
+
+        JsonElement items = await TunersAsync(feature);
+
+        Assert.Equal([Terrestrial, FirstSatellite], DeviceIds(items));
+        Assert.Equal("good", Tuner(items, Terrestrial).GetProperty("standing").GetString());
+
+        JsonElement unmeasured = Tuner(items, FirstSatellite);
+
+        Assert.Equal("unmeasured", unmeasured.GetProperty("standing").GetString());
+        Assert.False(unmeasured.GetProperty("cannotLock").GetBoolean());
+        Assert.Equal("unmeasured", State(Signal(unmeasured, "lockRate")));
+    }
+
+    [Fact(DisplayName = "BR-QD-017: a tuner an unsettled incident says cannot lock heads the list as unable to lock, samples or not")]
+    public async Task ATunerAnIncidentSaysCannotLockHeadsTheListAsUnableToLock()
+    {
+        await using QualityFeature feature = new();
+        feature.Driver.Tuners =
+        [
+            new TunerSnapshot(FirstSatellite, TunerKind.Satellite, TunerState.Faulted),
+            new TunerSnapshot(Terrestrial, TunerKind.Terrestrial, TunerState.Idle),
+        ];
+        feature.Sampled(tuner: Terrestrial, samples: FifteenHoursOfSamples, locked: FifteenHoursOfSamples);
+        feature.Recorded(tuner: Terrestrial);
+        feature.CannotLock(FirstSatellite);
+        feature.CannotLock(SecondSatellite);
+
+        JsonElement items = await TunersAsync(feature);
+
+        Assert.Equal([FirstSatellite, SecondSatellite, Terrestrial], DeviceIds(items));
+
+        foreach (string satellite in new[] { FirstSatellite, SecondSatellite })
+        {
+            JsonElement cannotLock = Tuner(items, satellite);
+
+            Assert.Equal("mayNotBeWatchable", cannotLock.GetProperty("standing").GetString());
+            Assert.True(cannotLock.GetProperty("cannotLock").GetBoolean());
+        }
+
+        Assert.False(Tuner(items, Terrestrial).GetProperty("cannotLock").GetBoolean());
+    }
+
+    [Fact(DisplayName = "BR-QD-017: a bit error rate beyond its level puts the row beyond the level while nothing was recorded")]
+    public async Task ABitErrorRateBeyondItsLevelPutsTheRowBeyondTheLevelWhileNothingWasRecorded()
+    {
+        await using QualityFeature feature = new();
+        feature.Driver.Tuners = [new TunerSnapshot(Terrestrial, TunerKind.Terrestrial, TunerState.Idle)];
+        feature.Sampled(tuner: Terrestrial, bitErrorRate: 0.01);
+
+        JsonElement row = Tuner(await TunersAsync(feature), Terrestrial);
+
+        Assert.Equal("nothingToMeasure", row.GetProperty("measures")[0].GetProperty("reading").GetProperty("state").GetString());
+        Assert.Equal("atOrAboveWarning", State(Signal(row, "bitErrorRateCeiling")));
+        Assert.Equal("warning", row.GetProperty("standing").GetString());
+    }
+
+    [Fact(DisplayName = "BR-QD-017: a driver that cannot be asked still leaves the sampled tuners and the ones that cannot lock on the list")]
+    public async Task ADriverThatCannotBeAskedStillLeavesTheSampledTunersOnTheList()
+    {
+        await using QualityFeature feature = new();
+        feature.Driver.Unreachable = "the driver socket is gone";
+        feature.Sampled(tuner: Terrestrial, samples: FifteenHoursOfSamples, locked: FifteenHoursOfSamples);
+        feature.CannotLock(FirstSatellite);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/quality/tuners");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal([FirstSatellite, Terrestrial], DeviceIds(body.GetProperty("data").GetProperty("items")));
+    }
+
+    private static async Task<JsonElement> TunersAsync(QualityFeature feature)
+        => (await feature.GetAsync("/api/quality/tuners")).Body
+            .GetProperty("data")
+            .GetProperty("items");
+
+    private static string[] DeviceIds(JsonElement items)
+        => [.. items.EnumerateArray().Select(item => item.GetProperty("deviceId").GetString() ?? string.Empty)];
 
     private static void NeverLocked(QualityFeature feature, string tuner)
         => feature.Sampled(

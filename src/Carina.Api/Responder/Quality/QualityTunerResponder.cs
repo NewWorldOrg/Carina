@@ -7,7 +7,9 @@ namespace Carina.Api.Responder.Quality;
 public sealed record QualityTunerResponder(
     string? DeviceId,
     IReadOnlyList<QualityMeasureResponder> Measures,
-    IReadOnlyList<QualitySignalResponder> Signal)
+    IReadOnlyList<QualitySignalResponder> Signal,
+    QualityStanding Standing,
+    bool CannotLock)
 {
     public static QualityTunerResponder Of(QualityTunerReading reading)
     {
@@ -16,7 +18,9 @@ public sealed record QualityTunerResponder(
         return new QualityTunerResponder(
             reading.Group.Key.Tuner?.Value,
             QualityMeasureResponder.Over(reading.Group.Measures),
-            QualitySignalResponder.Over(reading.Signal));
+            QualitySignalResponder.Over(reading.Signal),
+            reading.Standing.Standing,
+            reading.Standing.CannotLock);
     }
 }
 

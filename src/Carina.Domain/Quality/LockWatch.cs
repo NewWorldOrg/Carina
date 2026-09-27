@@ -34,6 +34,19 @@ public static class LockWatch
         return new LockWatchPlan(opening, resolving);
     }
 
+    /// <summary>
+    /// Names the tuners that an unsettled incident says cannot lock.
+    /// </summary>
+    public static IReadOnlySet<string> CannotLock(IReadOnlyList<QualityIncident> standing)
+    {
+        ArgumentNullException.ThrowIfNull(standing);
+
+        return standing
+            .Where(Watched)
+            .Select(incident => incident.Subject.Key)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
     public static QualityIncident Restate(QualityIncidentId id, TunerFault fault, DateTime at, Threshold applied)
     {
         ArgumentNullException.ThrowIfNull(fault);
