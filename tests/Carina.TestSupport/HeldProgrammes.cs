@@ -143,7 +143,7 @@ public sealed class HeldProgrammes : IProgrammeRepository
             .Where(programme => programme.NetworkId.Value == networkId
                 && programme.ServiceId.Value == serviceId
                 && !programme.IsShadow)
-            .Max(programme => (DateTime?)programme.StartsAt));
+            .Max(programme => (DateTime?)(programme.EndsAt ?? programme.StartsAt)));
 
     public Task<IReadOnlyList<Programme>> ListAfterAsync(
         long revision,

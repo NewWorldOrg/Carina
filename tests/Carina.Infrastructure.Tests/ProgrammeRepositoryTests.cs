@@ -365,7 +365,45 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext reading = database.Open();
 
         Assert.Equal(
-            At.AddHours(20),
+            At.AddHours(21),
+            await new ProgrammeRepository(reading).CoveredUntilAsync(network, 1049, Cancel));
+    }
+
+    [Fact]
+    public async Task HowFarAServiceIsCoveredIsWhereItsLatestProgrammeEndsNotWhereTheLastOneStarts()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(
+            Programme.Discover(Broadcast(network, 1, At.AddHours(20)) with { EndsAt = At.AddHours(26) }, At),
+            Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 2, At.AddHours(22)), At), Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Equal(
+            At.AddHours(26),
+            await new ProgrammeRepository(reading).CoveredUntilAsync(network, 1049, Cancel));
+    }
+
+    [Fact]
+    public async Task AProgrammeWhoseEndIsUndecidedCoversAsFarAsItsStart()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 1, At.AddHours(20)), At), Cancel);
+        await programmes.AddAsync(
+            Programme.Discover(Broadcast(network, 2, At.AddHours(30)) with { EndsAt = null }, At),
+            Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Equal(
+            At.AddHours(30),
             await new ProgrammeRepository(reading).CoveredUntilAsync(network, 1049, Cancel));
     }
 

@@ -169,7 +169,7 @@ public sealed class CollectionStatusEndpointTests
         Assert.Equal([1049, 1050], coverage.Select(service => service.GetProperty("serviceId").GetInt32()));
         Assert.Equal([true, false], coverage.Select(service => service.GetProperty("meetsWantedCoverage").GetBoolean()));
         Assert.Equal(
-            At.AddDays(8),
+            At.AddDays(8).AddHours(1),
             coverage[0].GetProperty("coveredUntil").GetDateTimeOffset().UtcDateTime);
     }
 

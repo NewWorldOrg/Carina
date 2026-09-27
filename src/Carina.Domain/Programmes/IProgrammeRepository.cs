@@ -50,6 +50,10 @@ public interface IProgrammeRepository : IAnnouncedProgrammes
 
     Task<int> ForgetAsync(IReadOnlyList<Programme> programmes, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Returns the latest time the service's programmes reach, placeholders aside: the latest end,
+    /// or the start of a programme whose end is not yet decided.
+    /// </summary>
     Task<DateTime?> CoveredUntilAsync(int networkId, int serviceId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Programme>> ListAfterAsync(
