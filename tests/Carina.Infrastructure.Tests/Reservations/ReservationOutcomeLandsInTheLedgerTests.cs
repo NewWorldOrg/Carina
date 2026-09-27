@@ -137,6 +137,103 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
     }
 
     [Fact]
+    public async Task ARecordingThatCameOutWholeButScrambledLandsAsAFailureOfTheRecording()
+    {
+        DateTime opens = LongBefore.AddHours(24);
+        Reservation scrambled = await LaidDownAsync(
+            ReservationState.Scheduled,
+            opens,
+            opens.AddHours(1),
+            claimedAt: opens);
+        await EndedWholeAsync(scrambled, opens, RecordingFault.ScramblingUnresolved);
+
+        Assert.Contains(
+            new ReservationOutcomeRecord(scrambled.Id, ReservationOutcomeKind.RecordingFailure),
+            (await RecordingAsync(opens.AddHours(2))).Recorded);
+
+        ReservationOutcome held = Assert.Single(await ForAsync(scrambled.Id));
+
+        Assert.Equal(ReservationOutcomeKind.RecordingFailure, held.Kind);
+        Assert.Equal(RecordingOutcome.Complete, held.RecordingOutcome);
+        Assert.Equal([RecordingFault.ScramblingUnresolved], held.Faults);
+        Assert.True(held.LeftScrambled);
+        Assert.Equal(ReservationState.Scheduled, await StateOfAsync(scrambled.Id));
+        Assert.Empty((await RecordingAsync(opens.AddHours(3))).Recorded);
+        Assert.Single(await ForAsync(scrambled.Id));
+    }
+
+    [Fact]
+    public async Task ARecordingThatCameOutWholeAndClearIsNotWrittenDown()
+    {
+        DateTime opens = LongBefore.AddHours(28);
+        Reservation clear = await LaidDownAsync(
+            ReservationState.Scheduled,
+            opens,
+            opens.AddHours(1),
+            claimedAt: opens);
+        await EndedWholeAsync(clear, opens, RecordingFault.HeavierThanTheStream);
+
+        Assert.DoesNotContain(
+            (await RecordingAsync(opens.AddHours(2))).Recorded,
+            recorded => recorded.Reservation.Equals(clear.Id));
+        Assert.Empty(await ForAsync(clear.Id));
+    }
+
+    [Fact]
+    public async Task ARecordingAlreadyDescrambledIsNotWrittenDown()
+    {
+        DateTime opens = LongBefore.AddHours(32);
+        Reservation descrambled = await LaidDownAsync(
+            ReservationState.Scheduled,
+            opens,
+            opens.AddHours(1),
+            claimedAt: opens);
+        Recording recording = await EndedWholeAsync(descrambled, opens, RecordingFault.ScramblingUnresolved);
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            var recordings = new RecordingRepository(context);
+            Recording found = (await recordings.FindAsync(recording.Id, Cancel))!;
+            found.Descrambled(opens.AddHours(1).AddMinutes(30));
+            await recordings.SaveAsync(found, Cancel);
+        }
+
+        Assert.DoesNotContain(
+            (await RecordingAsync(opens.AddHours(2))).Recorded,
+            recorded => recorded.Reservation.Equals(descrambled.Id));
+        Assert.Empty(await ForAsync(descrambled.Id));
+    }
+
+    [Fact]
+    public async Task ALineLeftScrambledIsDescrambledAndReadBackThatWay()
+    {
+        DateTime opens = LongBefore.AddHours(36);
+        Reservation scrambled = await LaidDownAsync(
+            ReservationState.Scheduled,
+            opens,
+            opens.AddHours(1),
+            claimedAt: opens);
+        await EndedWholeAsync(scrambled, opens, RecordingFault.ScramblingUnresolved);
+        await RecordingAsync(opens.AddHours(2));
+        ReservationOutcome line = Assert.Single(await ForAsync(scrambled.Id));
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            ReservationOutcome held = await context.Set<ReservationOutcome>().SingleAsync(
+                outcome => outcome.Id == line.Id,
+                Cancel);
+            held.Descrambled(opens.AddDays(1));
+            await context.SaveChangesAsync(Cancel);
+        }
+
+        ReservationOutcome again = Assert.Single(await ForAsync(scrambled.Id));
+
+        Assert.Equal(opens.AddDays(1), again.DescrambledAt);
+        Assert.False(again.LeftScrambled);
+        Assert.Equal([RecordingFault.ScramblingUnresolved], again.Faults);
+    }
+
+    [Fact]
     public async Task AReservationStillInsideItsWindowIsNotOfferedUntilItCloses()
     {
         DateTime opens = LongBefore.AddHours(100);
@@ -381,6 +478,30 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
                 from,
                 new TunerDeviceId("adapter0")),
             Cancel);
+    }
+
+    private async Task<Recording> EndedWholeAsync(
+        Reservation reservation,
+        DateTime from,
+        params RecordingFault[] faults)
+    {
+        await WritingAsync(reservation, from);
+
+        await using CarinaDbContext context = database.Open();
+
+        var recordings = new RecordingRepository(context);
+        Recording recording = Assert.Single(await recordings.ListForReservationAsync(reservation.Id, Cancel));
+
+        foreach (RecordingFault fault in faults)
+        {
+            recording.Note(new OutcomeDetail(fault, null, string.Empty, reservation.EffectiveEndAt));
+        }
+
+        recording.Abort(reservation.EffectiveEndAt);
+        recording.Settle(RecordingOutcome.Complete, 1_200_000, reservation.EffectiveEndAt);
+        await recordings.SaveAsync(recording, Cancel);
+
+        return recording;
     }
 
     private async Task<Reservation> LaidDownAsync(

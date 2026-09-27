@@ -7,12 +7,14 @@ public static class ReservationOutcomeJudgement
     public static ReservationOutcomeKind? Of(
         Reservation reservation,
         bool recorded,
+        bool leftScrambled,
         TimeSpan grace,
         DateTime at)
     {
         ArgumentNullException.ThrowIfNull(reservation);
 
-        if (reservation.RecordingOutcome is RecordingOutcome.Failed or RecordingOutcome.Truncated)
+        if (reservation.RecordingOutcome is RecordingOutcome.Failed or RecordingOutcome.Truncated
+            || (reservation.RecordingOutcome is RecordingOutcome.Complete && leftScrambled))
         {
             return ReservationOutcomeKind.RecordingFailure;
         }
