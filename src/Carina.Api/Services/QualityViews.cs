@@ -43,7 +43,10 @@ public sealed record QualityGroupPage(
     PaginatedList<QualityGroupReading> Found,
     bool Provisional);
 
-public sealed record QualityTunerReading(QualityGroupReading Group, IReadOnlyList<QualitySignalStanding> Signal);
+public sealed record QualityTunerReading(
+    QualityGroupReading Group,
+    IReadOnlyList<QualitySignalStanding> Signal,
+    TunerStanding Standing);
 
 public sealed record QualityTunerPage(
     QualityPeriod Period,

@@ -6,6 +6,7 @@ using System.Text.Json;
 using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Driver;
 using Carina.Domain.Events;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
@@ -42,6 +43,7 @@ internal sealed class QualityFeature : IAsyncDisposable
                 services.AddSingleton<ISupplyStandingBoard>(Board);
                 services.AddSingleton<IBroadcastStreamDirectory>(Streams);
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
+                services.AddSingleton<IDriverClient>(Driver);
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -68,6 +70,8 @@ internal sealed class QualityFeature : IAsyncDisposable
     public StandingHeld Board { get; } = new();
 
     public HeldCandidates Candidates { get; } = new();
+
+    public TunerHoldingDriverClient Driver { get; } = new() { Tuners = [] };
 
     public CandidateChannel Candidate(int service, int channel)
     {
@@ -105,13 +109,15 @@ internal sealed class QualityFeature : IAsyncDisposable
         return opened;
     }
 
-    public QualityIncident Restated()
+    public QualityIncident Restated() => CannotLock("adapter3.frontend0");
+
+    public QualityIncident CannotLock(string tuner)
     {
         QualityIncident elsewhere = QualityIncident.Detect(
             QualityIncidentId.New(),
             Noon.AddMinutes(-20),
             QualityThresholdKey.LockRate,
-            QualitySubject.Of(QualitySubjectKind.Tuner, "adapter3.frontend0"),
+            QualitySubject.Of(QualitySubjectKind.Tuner, tuner),
             0.4,
             QualityThresholdShapes.AsShipped(QualityThresholdKey.LockRate, Noon.AddMinutes(-20)),
             QualityIncidentOwner.Tuner,
