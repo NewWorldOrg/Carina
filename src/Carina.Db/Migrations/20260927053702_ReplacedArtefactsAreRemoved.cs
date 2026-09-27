@@ -67,6 +67,8 @@ public partial class ReplacedArtefactsAreRemoved : Migration
             name: "replaced_at",
             table: "encode_job");
 
+        migrationBuilder.Sql("DELETE FROM encode_scratch_file WHERE kind = 'ReplacedArtefact'");
+
         migrationBuilder.CreateIndex(
             name: "ux_encode_scratch_file_name",
             table: "encode_scratch_file",
