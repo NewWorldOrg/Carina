@@ -258,6 +258,34 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal("ck_encode_job_name_given_up", refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "a job is written down as replaced only once it completed, named what it made, and ended no later than it was replaced")]
+    public async Task AJobIsReplacedOnlyOnceItCompleted()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var recording = Guid.NewGuid();
+        var made = Guid.NewGuid();
+        var waiting = Guid.NewGuid();
+        await JobAsync(connection, made, recording, "'Completed'", Started, Ended, "NULL, NULL, NULL", $"'{recording:N}.{ProfileWire}.mp4'");
+        await JobAsync(connection, waiting, Guid.NewGuid(), "'Queued'", "NULL", "NULL", "NULL, NULL, NULL", "NULL");
+
+        PostgresException notCompleted = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"UPDATE encode_job SET replaced_at = {Ended} WHERE id = '{waiting}'",
+            connection).ExecuteNonQueryAsync());
+        PostgresException beforeItEnded = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"UPDATE encode_job SET replaced_at = {Started} WHERE id = '{made}'",
+            connection).ExecuteNonQueryAsync());
+
+        await using var replacing = new NpgsqlCommand(
+            $"UPDATE encode_job SET replaced_at = {Ended} WHERE id = '{made}'",
+            connection);
+
+        Assert.Equal("ck_encode_job_replaced", notCompleted.ConstraintName);
+        Assert.Equal("ck_encode_job_replaced", beforeItEnded.ConstraintName);
+        Assert.Equal(1, await replacing.ExecuteNonQueryAsync());
+    }
+
     [Fact(DisplayName = "the ledger holds one running job, and a second is refused by the index")]
     public async Task TheLedgerHoldsOneRunningJob()
     {
@@ -321,7 +349,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal("ck_encode_scratch_file_removal", backwards.ConstraintName);
     }
 
-    [Fact(DisplayName = "what is still owed a removal is read off the ledger by job, not off the disk")]
+    [Fact(DisplayName = "what is still owed a removal is read off the ledger by job, not off the disk, and a replaced artefact's removal may be owed at a name owed before")]
     public async Task WhatIsStillOwedARemovalIsReadOffTheLedgerByJob()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -331,7 +359,8 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             + "WHERE (removed_at IS NULL)",
             await IndexDefinition(connection, EncodeScratchFileConfiguration.OwedIndexName));
         Assert.Equal(
-            "CREATE UNIQUE INDEX ux_encode_scratch_file_name ON public.encode_scratch_file USING btree (output_root, file_name)",
+            "CREATE UNIQUE INDEX ux_encode_scratch_file_name ON public.encode_scratch_file USING btree (output_root, file_name) "
+            + "WHERE ((kind)::text <> 'ReplacedArtefact'::text)",
             await IndexDefinition(connection, EncodeScratchFileConfiguration.NameIndexName));
     }
 
@@ -482,6 +511,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 "ck_encode_job_name_given_up",
                 "ck_encode_job_output_root",
                 "ck_encode_job_programme",
+                "ck_encode_job_replaced",
                 "ck_encode_job_route",
                 "ck_encode_job_status",
                 "ck_encode_job_timeline",
