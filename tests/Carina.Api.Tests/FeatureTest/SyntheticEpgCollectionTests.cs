@@ -27,6 +27,8 @@ public sealed class SyntheticEpgCollectionTests
 
     private static readonly DateTimeOffset Airs = new(2026, 9, 1, 21, 0, 0, TimeSpan.FromHours(9));
 
+    private static readonly DateTimeOffset ScheduleStarts = new(2026, 9, 1, 0, 0, 0, TimeSpan.FromHours(9));
+
     private static readonly TuningParameters Channel = TuningParameters.Terrestrial(22);
 
     [Fact]
@@ -394,33 +396,76 @@ public sealed class SyntheticEpgCollectionTests
     public async Task AGuideGatheredOverEightDaysIsStillReadableOnItsEighthDay()
     {
         var driver = new ScriptedDriverClient();
-        DateTimeOffset opens = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(9));
+        var clock = new WoundClock(Airs);
 
-        driver.Script(Channel, ChannelScript.Carrying(OverEightDays(opens.AddHours(2)).ToBytes()));
+        driver.Script(Channel, ChannelScript.Carrying(OverEightDays(ScheduleStarts).ToBytes()));
 
-        await using var feature = new EpgFeature([OnlyTheOneService()], driver);
+        await using var feature = new EpgFeature([OnlyTheOneService()], driver, clock: clock);
 
         feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
 
         await CollectAsync(feature);
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
-            $"/api/programs?type=isdbT&from={Stamp(opens.AddDays(8))}&to={Stamp(opens.AddDays(9))}");
+            $"/api/programs?type=isdbT&from={Stamp(ScheduleStarts.AddDays(7))}&to={Stamp(ScheduleStarts.AddDays(8))}");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
-            [$"{Network}-{Television}-9"],
+            [$"{Network}-{Television}-8"],
             body.GetProperty("data").GetProperty("programmes").EnumerateArray()
                 .Select(programme => programme.GetProperty("id").GetString()));
 
-        (_, JsonElement ledger) = await feature.GetAsync("/api/epg/collection-status");
-        JsonElement reported = ledger.GetProperty("data");
-        JsonElement coverage = Assert.Single(
-            Assert.Single(reported.GetProperty("streams").EnumerateArray())
-                .GetProperty("coverage").EnumerateArray());
+        JsonElement reported = await CollectionStatusAsync(feature);
 
         Assert.Equal(192, reported.GetProperty("wantedCoverageHours").GetInt32());
-        Assert.True(coverage.GetProperty("meetsWantedCoverage").GetBoolean());
+        Assert.True(OnlyCoverage(reported).GetProperty("meetsWantedCoverage").GetBoolean());
+        Assert.Equal(
+            ScheduleStarts.AddDays(8).UtcDateTime,
+            OnlyCoverage(reported).GetProperty("coveredUntil").GetDateTimeOffset().UtcDateTime);
+    }
+
+    [Fact]
+    public async Task AGuideOfEightDaysStaysEnoughPastMidnightAndFallsShortOnceVisitsStop()
+    {
+        var driver = new ScriptedDriverClient();
+        var clock = new WoundClock(Airs);
+        CollectionSettings settings = new();
+
+        driver.Script(Channel, ChannelScript.Carrying(OverEightDays(ScheduleStarts).ToBytes()));
+
+        await using var feature = new EpgFeature([OnlyTheOneService()], driver, clock: clock);
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+
+        await CollectAsync(feature);
+
+        clock.Wind(ScheduleStarts.AddDays(1).AddMinutes(30) - Airs);
+
+        Assert.True(OnlyCoverage(await CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
+
+        clock.Wind(Airs + settings.BetweenVisits + settings.BetweenVisits - clock.GetUtcNow());
+
+        Assert.True(OnlyCoverage(await CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
+
+        clock.Wind(TimeSpan.FromSeconds(1));
+
+        Assert.False(OnlyCoverage(await CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AGuideStoppingADayShortOfTheScheduleFallsShort()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, ChannelScript.Carrying(OverEightDays(ScheduleStarts, days: 7).ToBytes()));
+
+        await using var feature = new EpgFeature([OnlyTheOneService()], driver, clock: new WoundClock(Airs));
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+
+        await CollectAsync(feature);
+
+        Assert.False(OnlyCoverage(await CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
     }
 
     [Fact]
@@ -613,7 +658,21 @@ public sealed class SyntheticEpgCollectionTests
             category,
             DateTime.UtcNow);
 
-    private static SyntheticGuide OverEightDays(DateTimeOffset opens)
+    private static async Task<JsonElement> CollectionStatusAsync(EpgFeature feature)
+    {
+        (HttpStatusCode status, JsonElement ledger) = await feature.GetAsync("/api/epg/collection-status");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        return ledger.GetProperty("data");
+    }
+
+    private static JsonElement OnlyCoverage(JsonElement reported)
+        => Assert.Single(
+            Assert.Single(reported.GetProperty("streams").EnumerateArray())
+                .GetProperty("coverage").EnumerateArray());
+
+    private static SyntheticGuide OverEightDays(DateTimeOffset scheduleStarts, int days = 8)
         => new()
         {
             NetworkId = Network,
@@ -624,9 +683,9 @@ public sealed class SyntheticEpgCollectionTests
                 {
                     Programmes =
                     [
-                        .. Enumerable.Range(0, 9).Select(day => new SyntheticProgramme(
+                        .. Enumerable.Range(0, days).Select(day => new SyntheticProgramme(
                             day + 1,
-                            opens.AddDays(day),
+                            scheduleStarts.AddDays(day).AddHours(23),
                             TimeSpan.FromHours(1))
                         {
                             Name = $"Day {day} Bulletin",

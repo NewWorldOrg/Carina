@@ -62,7 +62,7 @@ public sealed class CollectionStatusService(
                 visit?.LastDurationMilliseconds ?? 0,
                 visit is null ? null : CollectionBackOff.NotBefore(visit, settings),
                 stream.Services,
-                await CoverageAsync(stream, now, cancellationToken),
+                await CoverageAsync(stream, GuideCoverage.MeasuredFrom(visit, now, settings), cancellationToken),
                 visit?.Tally ?? []));
         }
 
@@ -72,7 +72,7 @@ public sealed class CollectionStatusService(
 
     private async Task<IReadOnlyList<ServiceCoverageStatus>> CoverageAsync(
         IntendedStream stream,
-        DateTime now,
+        DateTime measuredFrom,
         CancellationToken cancellationToken)
     {
         var covered = new List<ServiceCoverageStatus>(stream.Services.Count);
@@ -87,7 +87,7 @@ public sealed class CollectionStatusService(
             covered.Add(new ServiceCoverageStatus(
                 service,
                 until,
-                until is { } reach && reach - now >= settings.WantedCoverage));
+                GuideCoverage.IsMet(until, measuredFrom, settings.WantedCoverage)));
         }
 
         return covered;

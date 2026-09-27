@@ -11,6 +11,10 @@ public sealed class CollectionStatusEndpointTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 6, 0, 0, DateTimeKind.Utc);
 
+    private static readonly DateTime ScheduleStarts = new(2026, 8, 17, 15, 0, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime ScheduleEnds = ScheduleStarts.AddDays(8);
+
     [Fact]
     public async Task AStreamNeverVisitedIsListedWithNothingRecordedAgainstIt()
     {
@@ -169,7 +173,7 @@ public sealed class CollectionStatusEndpointTests
         Assert.Equal([1049, 1050], coverage.Select(service => service.GetProperty("serviceId").GetInt32()));
         Assert.Equal([true, false], coverage.Select(service => service.GetProperty("meetsWantedCoverage").GetBoolean()));
         Assert.Equal(
-            At.AddDays(8),
+            At.AddDays(8).AddHours(1),
             coverage[0].GetProperty("coveredUntil").GetDateTimeOffset().UtcDateTime);
     }
 
@@ -251,19 +255,65 @@ public sealed class CollectionStatusEndpointTests
 
     [Fact]
     public async Task AServiceCoveredExactlyAsFarAsTheGoalIsThickEnough()
+        => Assert.True(await MeetsTheGoalAsync(ScheduleEnds.AddHours(-3), At));
+
+    [Fact]
+    public async Task AServiceStoppingAMinuteShortOfTheGoalIsNotThickEnough()
+        => Assert.False(await MeetsTheGoalAsync(ScheduleEnds.AddHours(-3).AddMinutes(-1), At));
+
+    [Fact]
+    public async Task AServiceCoveringTheWholeScheduleIsThickEnoughThoughItIsShortOfEightDaysFromNow()
+    {
+        Assert.True(ScheduleEnds - At < TimeSpan.FromDays(8));
+        Assert.True(await MeetsTheGoalAsync(ScheduleEnds, At));
+    }
+
+    [Fact]
+    public async Task TheWholeScheduleIsStillThickEnoughOnTheLastSecondBeforeMidnight()
+        => Assert.True(await MeetsTheGoalAsync(ScheduleEnds, ScheduleStarts.AddDays(1).AddSeconds(-1)));
+
+    [Fact]
+    public async Task PastMidnightAScheduleHeardOnTheEveningVisitIsStillThickEnough()
+        => Assert.True(await MeetsTheGoalAsync(
+            ScheduleEnds,
+            ScheduleStarts.AddDays(1).AddMinutes(30),
+            visited: ScheduleStarts.AddHours(22)));
+
+    [Fact]
+    public async Task OnceVisitsStopTheScheduleHeardTheDayBeforeFallsShort()
+        => Assert.False(await MeetsTheGoalAsync(
+            ScheduleEnds,
+            ScheduleStarts.AddDays(1).AddHours(22),
+            visited: ScheduleStarts.AddHours(22)));
+
+    private static async Task<bool> MeetsTheGoalAsync(DateTime lastEnd, DateTime now, DateTime? visited = null)
     {
         await using var feature = new EpgFeature(
             [Stream(4, 32_736, [1049])],
             collection: Aiming,
-            clock: new FixedTimeProvider(At));
+            clock: new FixedTimeProvider(now));
 
-        feature.Programmes.Programmes.Add(ProgrammeStartingAt(4, 1049, At.AddDays(8)));
+        feature.Programmes.Programmes.Add(ProgrammeStartingAt(4, 1049, lastEnd.AddHours(-1)));
+
+        if (visited is { } at)
+        {
+            await feature.Visits.SaveAsync(
+                StreamVisit.Record(
+                    new NetworkId(4),
+                    new TransportStreamId(32_736),
+                    VisitOutcome.Complete,
+                    at,
+                    TimeSpan.FromSeconds(182)),
+                CancellationToken.None);
+        }
 
         (_, JsonElement body) = await feature.GetAsync("/api/epg/collection-status");
         JsonElement only = Assert.Single(body.GetProperty("data").GetProperty("streams").EnumerateArray());
         JsonElement coverage = Assert.Single(only.GetProperty("coverage").EnumerateArray());
 
-        Assert.True(coverage.GetProperty("meetsWantedCoverage").GetBoolean());
+        Assert.Equal(lastEnd, coverage.GetProperty("coveredUntil").GetDateTimeOffset().UtcDateTime);
+
+        return coverage.GetProperty("meetsWantedCoverage").GetBoolean();
     }
 
     private static readonly CollectionSettings Wanting = new() { WantedCoverage = TimeSpan.FromDays(3) };
