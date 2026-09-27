@@ -11,6 +11,8 @@ public static class VideoDelivery
 {
     public const string Path = "/api/videos/{id}";
 
+    public const string Source = "source";
+
     public static readonly string[] Methods = [HttpMethods.Get, HttpMethods.Head];
 
     public static Task Invoke(HttpContext context, string id, PlaybackService playback)
@@ -27,7 +29,7 @@ public static class VideoDelivery
             return Task.CompletedTask;
         }
 
-        AskedSource source = AskedSource.Read(context.Request.Query[PlayDelivery.Source]);
+        AskedSource source = AskedSource.Read(context.Request.Query[Source]);
 
         if (source.Answer is SourceAnswer.NotOneOfThese)
         {

@@ -11,6 +11,7 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
     [
         "/api/programs/bulk cursor",
         "/api/programs/bulk rows",
+        "/api/videos/{id} source",
     ];
 
     [Fact]
