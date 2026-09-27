@@ -178,5 +178,7 @@ public sealed class LiveWireSocketSilenceTests
     }
 
     private static Task WaitingOutTheQuiet(HandTurnedClock clock)
-        => Eventually.Happens(() => clock.Pending is 1, "the wire is waiting out the quiet");
+        => Eventually.Happens(
+            () => clock.Waiting.SequenceEqual([Gateway.BetweenPings]),
+            "the wire is waiting out the quiet");
 }

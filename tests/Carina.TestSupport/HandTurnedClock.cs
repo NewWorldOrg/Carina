@@ -24,6 +24,17 @@ public sealed class HandTurnedClock(DateTimeOffset from) : TimeProvider
         }
     }
 
+    public IReadOnlyList<TimeSpan> Waiting
+    {
+        get
+        {
+            lock (gate)
+            {
+                return [.. alarms.Select(alarm => alarm.Due - now)];
+            }
+        }
+    }
+
     public override DateTimeOffset GetUtcNow()
     {
         lock (gate)
