@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ScreenRequestTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

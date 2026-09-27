@@ -49,6 +49,27 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task HowManyEventsAVisitThrewAwayIsSaidInTheLog()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+        var log = new HeardLog();
+
+        driver.Script(
+            TuningParameters.Terrestrial(22),
+            new ChannelScript { Bytes = Schedule(network, 1, carried: [0, 1]) });
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context, logger: log.For<CollectionRound>())
+            .WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        Assert.Contains(log.Entries, entry =>
+            entry.TryGetValue("Discarded", out object? discarded) && discarded is 1
+            && entry.TryGetValue("Clamped", out object? clamped) && clamped is 0);
+    }
+
+    [Fact]
     public async Task AStreamThatCameBackShortIsCountedAndItsLedgerSaysSo()
     {
         int network = NextNetwork();
@@ -343,7 +364,8 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         CollectionSettings? settings = null,
         TimeProvider? clock = null,
         RescanNoticeBoard? board = null,
-        RememberedTuneReports? reports = null)
+        RememberedTuneReports? reports = null,
+        Microsoft.Extensions.Logging.ILogger<CollectionRound>? logger = null)
     {
         var programmes = new ProgrammeRepository(context);
         CollectionSettings carried = settings ?? new CollectionSettings();
@@ -366,7 +388,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
             new SilentEvents(),
             carried,
             clock ?? TimeProvider.System,
-            NullLogger<CollectionRound>.Instance);
+            logger ?? NullLogger<CollectionRound>.Instance);
     }
 
     [Fact]
@@ -496,7 +518,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     private static ChannelScript Carrying(int network, int stream)
         => new() { Bytes = Schedule(network, stream) };
 
-    private static byte[] Schedule(int network, int stream)
+    private static byte[] Schedule(int network, int stream, int[]? carried = null)
         => [.. new TransportStreamWriter(EventInformationTable.Pid)
             .Sections(new SectionWriter
             {
@@ -508,14 +530,20 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
                     (byte)(stream >> 8), (byte)(stream & 0xFF),
                     (byte)(network >> 8), (byte)(network & 0xFF),
                     0x00, EventInformationTable.FirstScheduleActualTableId,
-                    0x00, 0x01,
-                    0xEF, 0x55, 0x22, 0x57, 0x00,
-                    0x00, 0x03, 0x00,
-                    0x00, 0x00,
+                    .. (carried ?? [1]).SelectMany(ScheduledEvent),
                 ],
             }.ToBytes())
             .Packets
             .SelectMany(packet => packet.ToArray())];
+
+    private static byte[] ScheduledEvent(int carried)
+        =>
+        [
+            (byte)(carried >> 8), (byte)(carried & 0xFF),
+            0xEF, 0x55, 0x22, 0x57, 0x00,
+            0x00, 0x03, 0x00,
+            0x00, 0x00,
+        ];
 
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 }

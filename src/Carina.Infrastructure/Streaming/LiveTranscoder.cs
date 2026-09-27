@@ -128,7 +128,7 @@ public sealed class LiveTranscoder : ILiveTranscoder
         catch (OperationCanceledException)
         {
             await GiveUpAsync();
-            await Quietly(drawing);
+            await QuietlyAsync(drawing);
 
             return TranscoderExit.CalledOff(Complaint);
         }
@@ -139,10 +139,8 @@ public sealed class LiveTranscoder : ILiveTranscoder
     }
 
     /// <summary>
-    /// The pipe's write end is inheritable for the moment between opening it and starting the
-    /// programme, so a process started on another thread in that moment holds a copy and the pipe
-    /// does not end when the programme does. What the programme wrote is readable at once after
-    /// it exits, so the reader is given the stop grace and then called off.
+    /// Waits for the programme's output to be read to its end after the programme exits, for no longer
+    /// than the stop grace.
     /// </summary>
     private async Task DrawnToTheEndAsync()
     {
@@ -155,11 +153,11 @@ public sealed class LiveTranscoder : ILiveTranscoder
         catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
         {
             await stopping.CancelAsync();
-            await Quietly(drawing);
+            await QuietlyAsync(drawing);
         }
     }
 
-    private static async Task Quietly(Task task)
+    private static async Task QuietlyAsync(Task task)
     {
         try
         {
@@ -174,19 +172,19 @@ public sealed class LiveTranscoder : ILiveTranscoder
     {
         Hush();
 
-        if (await WaitedOut(stopGrace))
+        if (await WaitedOutAsync(stopGrace))
         {
             return;
         }
 
         Kill();
 
-        await WaitedOut(stopGrace);
+        await WaitedOutAsync(stopGrace);
     }
 
-    private async Task<bool> WaitedOut(TimeSpan grace)
+    private async Task<bool> WaitedOutAsync(TimeSpan grace)
     {
-        using var patience = new CancellationTokenSource(grace, clock);
+        using CancellationTokenSource patience = new(grace, clock);
 
         try
         {

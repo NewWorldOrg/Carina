@@ -29,11 +29,11 @@ public sealed class AuthSessionConfiguration : IEntityTypeConfiguration<AuthSess
                     "display_name <> ''");
             });
 
-        builder.HasKey(session => session.Id);
+        builder.HasKey(session => session.Handle);
 
-        builder.Property(session => session.Id)
-            .HasConversion(id => id.Value, value => new SessionId(value))
-            .HasMaxLength(SessionId.Length);
+        builder.Property(session => session.Handle)
+            .HasConversion(handle => handle.Value, value => new SessionHandle(value))
+            .HasMaxLength(SessionHandle.Length);
 
         builder.Property(session => session.Subject)
             .HasConversion(subject => subject.Value, value => new Subject(value))

@@ -70,6 +70,20 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
                      OR (gave_up_because = '{RetryGiveUp.NotTransient}') = (tune_failure IS NOT NULL))
                 """);
             table.HasCheckConstraint("ck_reservation_outcome_window", "effective_end_at > effective_start_at");
+            table.HasCheckConstraint(
+                "ck_reservation_outcome_whole_but_scrambled",
+                $"""
+                kind <> '{ReservationOutcomeKind.RecordingFailure}'
+                OR recording_outcome <> '{RecordingOutcome.Complete}'
+                OR faults @> '["{RecordingFault.ScramblingUnresolved}"]'::jsonb
+                """);
+            table.HasCheckConstraint(
+                "ck_reservation_outcome_descrambled",
+                $"""
+                descrambled_at IS NULL
+                OR (faults @> '["{RecordingFault.ScramblingUnresolved}"]'::jsonb
+                    AND descrambled_at >= occurred_at)
+                """);
         });
 
         builder.HasKey(outcome => outcome.Id);
@@ -154,6 +168,8 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
             .IsRequired();
 
         builder.Property(outcome => outcome.OccurredAt).IsRequired();
+
+        builder.Property(outcome => outcome.DescrambledAt);
 
         builder.HasIndex(outcome => outcome.OccurredAt).HasDatabaseName(OccurrenceIndexName);
         builder.HasIndex(outcome => new { outcome.ReservationId, outcome.Kind })

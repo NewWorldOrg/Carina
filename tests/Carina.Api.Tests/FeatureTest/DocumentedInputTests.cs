@@ -4,7 +4,6 @@ using Carina.Api.Playback;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
@@ -99,7 +98,7 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
         Assert.Equal("main", sound["schema"]!["default"]!.GetValue<string>());
     }
 
-    [Fact(DisplayName = "A-配信-074: the playing says which of the two files it can be played from and that naming none plays the artefact")]
+    [Fact(DisplayName = "the playing says which of the two files it can be played from and that naming none plays the artefact")]
     public async Task ThePlayingSaysWhichOfTheTwoFilesItPlaysAndThatNamingNonePlaysTheArtefact()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
@@ -117,7 +116,7 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
             StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "A-配信-074: the scan that keeps every query in the document sees the one that chooses which of the two files is played")]
+    [Fact(DisplayName = "the scan that keeps every query in the document sees the one that chooses which of the two files is played")]
     public void TheScanSeesTheQueryThatChoosesWhichOfTheTwoFilesIsPlayed()
     {
         Assert.Contains(

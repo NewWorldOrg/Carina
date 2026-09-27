@@ -344,9 +344,8 @@ public sealed class ReservationGuideServiceTests
         }
 
         /// <summary>
-        /// Another broadcast on the same service, named by a reading later than anything the
-        /// reserved one carries. That is what a whole reading looks like from the outside: every
-        /// broadcast still announced comes away with the same fresh mark.
+        /// Another broadcast on the same service, named by a reading later than anything the reserved one
+        /// carries.
         /// </summary>
         public void AnnounceBeside(bool heardWhole)
             => Programmes.Programmes.Add(Programme.Rehydrate(

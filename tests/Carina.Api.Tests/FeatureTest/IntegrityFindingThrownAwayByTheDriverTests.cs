@@ -18,7 +18,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Carina.Api.Tests.FeatureTest;
 
 [SupportedOSPlatform("linux")]
-[Collection(FeatureTestCollection.Name)]
 public sealed class IntegrityFindingThrownAwayByTheDriverTests
 {
     [Fact]

@@ -76,10 +76,8 @@ public static class EncodeValidation
     }
 
     /// <summary>
-    /// A destination names a root out of the declared set (BR-EV-001), and out of that set one this
-    /// process holds for writing: the roots the recordings are read from are declared too, but an
-    /// artefact is never placed in one of them, so naming one is refused when it is saved rather
-    /// than failing every job afterwards.
+    /// What refuses a destination draft: its label, an output root outside the declared set or not held
+    /// by this process for writing, and a default profile that is not defined.
     /// </summary>
     public static IReadOnlyList<EncodeRefusal> WhatRefusesTheDestination(
         EncodeDestinationDraft draft,

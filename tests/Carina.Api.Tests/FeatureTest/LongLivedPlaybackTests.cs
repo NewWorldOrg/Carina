@@ -150,7 +150,6 @@ internal sealed class GatedOnTheFlyPlayer(byte[] bytes) : IOnTheFlyPlayer
         => Task.FromResult(CarriedSounds.Counted(1));
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LongLivedPlaybackTests
 {
     private const int Size = 256 * 1024;

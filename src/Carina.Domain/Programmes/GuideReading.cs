@@ -10,11 +10,10 @@ public enum GuideStanding
 }
 
 /// <summary>
-/// What the guide says about one broadcast, read the only way there is to read it: the row the EPG
-/// keeps, held against the mark a whole reading of that service leaves on the programmes it named.
-/// A row that is missing while no reading has ever heard the service whole says nothing at all, and
-/// nothing is what may be done about it; a row that is missing, or that carries a mark older than
-/// the service's newest whole reading, was offered for reading and was not there.
+/// What the guide says about one broadcast: the row the EPG keeps, held against the mark a whole
+/// reading of that service leaves on the programmes it named. A missing row says nothing while no
+/// reading has ever heard the service whole; a missing row, or one with a mark older than the
+/// service's newest whole reading, means the broadcast is no longer announced.
 /// </summary>
 public static class GuideReading
 {

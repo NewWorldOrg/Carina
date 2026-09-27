@@ -131,6 +131,24 @@ public sealed class ExpectedBitrateTests
         => Assert.Equal(ExpectedBitrate.Satellite, ExpectedBitrate.Of(TunerKind.Satellite));
 
     [Fact]
+    public void ARecordingWhoseKindCannotBeNamedIsWeighedAgainstTheRangeEveryKindFallsIn()
+    {
+        Assert.Equal(11_100_000L, ExpectedBitrate.OfAnyKind.LeastBitsPerSecond);
+        Assert.Equal(16_500_000L, ExpectedBitrate.OfAnyKind.MostBitsPerSecond);
+    }
+
+    [Theory]
+    [InlineData(TunerKind.Terrestrial)]
+    [InlineData(TunerKind.Satellite)]
+    public void TheRangeEveryKindFallsInHoldsTheRangeOfEachKind(TunerKind kind)
+    {
+        ExpectedBitrate each = ExpectedBitrate.Of(kind);
+
+        Assert.True(ExpectedBitrate.OfAnyKind.LeastBitsPerSecond <= each.LeastBitsPerSecond);
+        Assert.True(ExpectedBitrate.OfAnyKind.MostBitsPerSecond >= each.MostBitsPerSecond);
+    }
+
+    [Fact]
     public void ATunerOfNoNamedKindHasNoMeasuredRate()
     {
         ArgumentOutOfRangeException refusal =

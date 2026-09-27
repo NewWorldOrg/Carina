@@ -23,11 +23,41 @@ public sealed class TableHarvest
 
     public bool IsComplete => Network is not null && Description is not null;
 
+    private readonly byte[] carry = new byte[TransportPacket.Size];
+
+    private int carried;
+
     public void Push(ReadOnlySpan<byte> bytes)
     {
         Bytes += bytes.Length;
 
-        foreach (SectionRead read in reader.Push(bytes))
+        if (carried > 0)
+        {
+            int take = Math.Min(TransportPacket.Size - carried, bytes.Length);
+
+            bytes[..take].CopyTo(carry.AsSpan(carried));
+            carried += take;
+            bytes = bytes[take..];
+
+            if (carried < TransportPacket.Size)
+            {
+                return;
+            }
+
+            Read(carry);
+            carried = 0;
+        }
+
+        int whole = bytes.Length - (bytes.Length % TransportPacket.Size);
+
+        Read(bytes[..whole]);
+        bytes[whole..].CopyTo(carry);
+        carried = bytes.Length - whole;
+    }
+
+    private void Read(ReadOnlySpan<byte> packets)
+    {
+        foreach (SectionRead read in reader.Push(packets))
         {
             switch (read)
             {

@@ -73,7 +73,7 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
         CancellationToken cancellationToken
     )
     {
-        var frontend = DvbFrontend.Open(calls, paths.Frontend, DvbAccess.Control);
+        DvbFrontend frontend = DvbFrontend.Open(calls, paths.Frontend, DvbAccess.Control);
         int demux = -1;
         int dvr = -1;
 

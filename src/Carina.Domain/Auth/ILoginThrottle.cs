@@ -2,9 +2,7 @@ namespace Carina.Domain.Auth;
 
 public interface ILoginThrottle
 {
-    DateTime? RefusesUntil(string key);
-
-    void Failed(string key);
+    DateTime? TakeTry(string key);
 
     void Passed(string key);
 }

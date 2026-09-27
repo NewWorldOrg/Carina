@@ -42,8 +42,6 @@ public sealed class DriverLiveSupply(
         TuneParams tune = tuning.Typed();
         SessionId sessionId = LiveSessions.Fresh();
 
-        // Taken before the driver is told the id, so a session it holds is never a stray merely
-        // because this call has not come back yet.
         leases.Take(sessionId);
 
         DriverCall<SessionSnapshot> started;
@@ -69,7 +67,6 @@ public sealed class DriverLiveSupply(
 
         if (!started.TryGetValue(out SessionSnapshot? session))
         {
-            // A refusal the driver spelled out started nothing; a call that never arrived may have.
             if (started.Outcome is DriverCallOutcome.Unreachable)
             {
                 await LetGoAsync(sessionId, NeverAnsweredBecause);

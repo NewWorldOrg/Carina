@@ -5,7 +5,7 @@ namespace Carina.Domain.Tests.Quality;
 
 public sealed class QualityAggregatorTests
 {
-    [Fact(DisplayName = "BR-QD-001: what nothing counted stays out of the denominator and is counted on its own")]
+    [Fact(DisplayName = "what nothing counted stays out of the denominator and is counted on its own")]
     public void WhatNothingCountedStaysOutOfTheDenominatorAndIsCountedOnItsOwn()
     {
         QualityTally tally = QualityAggregator.Tally(
@@ -21,7 +21,7 @@ public sealed class QualityAggregatorTests
         Assert.Equal(0.00004, tally.Average!.Value, 12);
     }
 
-    [Fact(DisplayName = "BR-QD-001: a period in which nothing was counted reads as unmeasured rather than as none lost")]
+    [Fact(DisplayName = "a period in which nothing was counted reads as unmeasured rather than as none lost")]
     public void APeriodInWhichNothingWasCountedReadsAsUnmeasuredRatherThanAsNoneLost()
     {
         QualityTally tally = QualityAggregator.Tally([.. Enumerable.Range(0, 3_514).Select(_ => QualityFactory.Unmeasured())]);
@@ -44,7 +44,7 @@ public sealed class QualityAggregatorTests
         Assert.Null(tally.Average);
     }
 
-    [Fact(DisplayName = "BR-QD-009: subjects whose tuner keeps no such statistic read as unsupported")]
+    [Fact(DisplayName = "subjects whose tuner keeps no such statistic read as unsupported")]
     public void SubjectsWhoseTunerKeepsNoSuchStatisticReadAsUnsupported()
     {
         QualityTally tally = QualityAggregator.Tally([QualityFactory.Unsupported(), QualityFactory.Unsupported()]);
@@ -54,7 +54,7 @@ public sealed class QualityAggregatorTests
         Assert.Equal(0, tally.Unmeasured);
     }
 
-    [Fact(DisplayName = "BR-QD-007: a subject whose supply has stopped is unreachable even beside subjects that were measured")]
+    [Fact(DisplayName = "a subject whose supply has stopped is unreachable even beside subjects that were measured")]
     public void ASubjectWhoseSupplyHasStoppedIsUnreachableEvenBesideSubjectsThatWereMeasured()
     {
         QualityTally tally = QualityAggregator.Tally([QualityFactory.Measured(0.00004), QualityFactory.Unreachable()]);
@@ -264,7 +264,7 @@ public sealed class QualityAggregatorTests
         => Assert.Throws<ArgumentOutOfRangeException>(
             () => QualityAggregator.GroupBy([QualityFactory.Measured(0.00004)], (QualityAxis)64));
 
-    [Fact(DisplayName = "BR-QD-001: a channel nothing counted is not a channel that lost nothing")]
+    [Fact(DisplayName = "a channel nothing counted is not a channel that lost nothing")]
     public void AChannelNothingCountedIsNotAChannelThatLostNothing()
     {
         IReadOnlyList<QualityGrouping> groups = QualityAggregator.GroupBy(

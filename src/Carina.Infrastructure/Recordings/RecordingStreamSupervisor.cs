@@ -31,15 +31,13 @@ public sealed record RecordingWatch(
            || OutOfTouch > 0;
 
     /// <summary>
-    /// The counts raised only on the pass a recording moves. LeftOpen and OutOfTouch say it is still
-    /// where the last pass left it, so they come back every pass and say nothing new.
+    /// Whether any recording broke, resumed or settled on this pass.
     /// </summary>
     public bool AnythingMoved => Broken > 0 || Resumed > 0 || Settled > 0;
 
     /// <summary>
-    /// Raised when a recording still being written wrote more, or counted or placed its losses
-    /// differently, on this pass. A recording that runs well raises it on nearly every pass, so what
-    /// it tells the screens is paced rather than told each time.
+    /// Whether a recording still being written wrote more, or counted or placed its losses differently,
+    /// on this pass.
     /// </summary>
     public bool CountsMoved => Advanced > 0;
 }
@@ -180,7 +178,11 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                loaded.Note(new OutcomeDetail(RecordingFault.DiskExhausted, null, string.Empty, now));
+                foreach (RecordingFault fault in RecordingFaults.OfAFullDisk(weighed))
+                {
+                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
+                }
+
                 loaded.Settle(RecordingOutcome.Failed, weighed ?? 0, now);
 
                 return true;
@@ -455,11 +457,8 @@ public sealed class RecordingStreamSupervisor(
     }
 
     /// <summary>
-    /// A recording that is over and whose session the driver does not know is one nobody concluded:
-    /// there is no session to have ended it, so there is nothing to judge it against and no reading
-    /// of the file that could make it complete. It is marked the way recovery marks what it finds,
-    /// so that the two sides that may reach this row — this pass and the hook that runs on the
-    /// driver's greeting — cannot disagree over which of them got there first.
+    /// Marks a recording that is over and whose session the driver does not know, the same way
+    /// recovery marks what it finds.
     /// </summary>
     private async Task MarkWhatWasLeftBehindAsync(
         Recording recording,
@@ -517,12 +516,11 @@ public sealed class RecordingStreamSupervisor(
         Tally tally,
         CancellationToken cancellationToken)
     {
-        if (await TuneOfAsync(recording, cancellationToken) is not { } tune)
+        if (await RateOfAsync(recording, cancellationToken) is not { } bitrate)
         {
             return;
         }
 
-        ExpectedBitrate bitrate = ExpectedBitrate.Of(tune.Kind);
         long? weighed = await weigher.WeighAsync(recording.OutputRoot, recording.FileName, cancellationToken);
         QualityBands bands = await BandsAsync(now, cancellationToken);
         RecordingOutcome outcome = RecordingOutcome.Failed;
@@ -580,19 +578,15 @@ public sealed class RecordingStreamSupervisor(
     }
 
     /// <summary>
-    /// A session the driver ended because it reached the end it was opened with ended where this
-    /// side asked it to: that end was named in the request that opened the session, and the driver
-    /// arriving there first is the same ending as the stop this side asks for once the window has
-    /// closed. Which of the two got there first is a race, so the reading is taken off the reason
-    /// rather than off who moved first.
-    ///
-    /// The moment written down is the end the driver was holding — the one the request named, or
-    /// the later one an extension moved it to — so a recording judged long afterwards is not said
-    /// to have been stopped at the moment somebody looked. An end this side already wrote down
-    /// stands, a session that names no end of its own is read at the moment of the judgement, and
-    /// one that names an end this recording cannot have reached is left as an end nobody asked
-    /// for. Every other reason a session ends is one nobody asked for and goes on reading that way.
+    /// The end this side asked for, when the driver ended the session because it reached the end it was
+    /// opened with; otherwise null.
     /// </summary>
+    /// <remarks>
+    /// The moment is the end the driver was holding, as the request named it or as an extension moved
+    /// it. An end this side already wrote down stands, a session that names no end of its own is read at
+    /// <paramref name="now"/>, and one that names an end this recording cannot have reached is left as
+    /// an end nobody asked for.
+    /// </remarks>
     private static DateTime? TheEndItWasToldAbout(SessionSnapshot session, Recording recording, DateTime now)
     {
         if (session.StopReason is not SessionStopReason.EndTimeReached || recording.AbortedAt is not null)
@@ -618,16 +612,13 @@ public sealed class RecordingStreamSupervisor(
 
     private async Task<TuneParams?> TuneOfAsync(Recording recording, CancellationToken cancellationToken)
     {
-        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
-        TuningResolution resolution = await scope.ServiceProvider
-            .GetRequiredService<IServiceTuningDirectory>()
-            .ResolveTuningAsync(recording.NetworkId, recording.ServiceId, cancellationToken);
+        TuningResolution resolution = await ResolveAsync(recording, cancellationToken);
 
         if (resolution.Tuning is not { } tuning)
         {
             logger.LogWarning(
-                "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so neither "
-                + "its stream nor the rate its weight is judged against can be named.",
+                "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so there is "
+                + "no stream to put it back on.",
                 recording.Id.Wire,
                 resolution.Refusal);
 
@@ -635,6 +626,49 @@ public sealed class RecordingStreamSupervisor(
         }
 
         return tuning.Typed();
+    }
+
+    /// <summary>
+    /// Names the rate a recording's weight is judged against: the one measured off the kind its
+    /// selected channel is carried on, or the range every kind falls in when the service or its
+    /// selected channel is gone. Nothing is named for any other refusal that names no channel.
+    /// </summary>
+    private async Task<ExpectedBitrate?> RateOfAsync(Recording recording, CancellationToken cancellationToken)
+    {
+        TuningResolution resolution = await ResolveAsync(recording, cancellationToken);
+
+        if (resolution.ChannelTuning is { } tuning)
+        {
+            return ExpectedBitrate.Of(tuning.Typed().Kind);
+        }
+
+        if (resolution.Refusal is not (TuningRefusal.NoSuchService or TuningRefusal.NoSelectedChannel))
+        {
+            logger.LogWarning(
+                "Recording {Recording} is over and the catalogue named no channel for its service ({Refusal}), "
+                + "so it is judged on a later pass.",
+                recording.Id.Wire,
+                resolution.Refusal);
+
+            return null;
+        }
+
+        logger.LogWarning(
+            "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so its weight is "
+            + "judged against the range every kind of broadcast falls in.",
+            recording.Id.Wire,
+            resolution.Refusal);
+
+        return ExpectedBitrate.OfAnyKind;
+    }
+
+    private async Task<TuningResolution> ResolveAsync(Recording recording, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+
+        return await scope.ServiceProvider
+            .GetRequiredService<IServiceTuningDirectory>()
+            .ResolveTuningAsync(recording.NetworkId, recording.ServiceId, cancellationToken);
     }
 
     private async Task<bool> ApplyAsync(

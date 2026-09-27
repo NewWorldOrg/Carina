@@ -13,7 +13,7 @@ public sealed class SignalSampleIntakeTests
 
     private static readonly DateTimeOffset Measured = new(2026, 9, 8, 0, 13, 43, TimeSpan.Zero);
 
-    [Fact(DisplayName = "BR-QV-003: what the hardware reported is taken as it was reported")]
+    [Fact(DisplayName = "what the hardware reported is taken as it was reported")]
     public void WhatTheHardwareReportedIsTakenAsItWasReported()
     {
         SignalSample read = SignalSampleIntake.Read(
@@ -39,7 +39,7 @@ public sealed class SignalSampleIntakeTests
         Assert.Equal([0, 1], read.BitErrors.Select(counts => counts.Layer));
     }
 
-    [Fact(DisplayName = "BR-QD-004: a frontend that never locked hands over no figure to store")]
+    [Fact(DisplayName = "a frontend that never locked hands over no figure to store")]
     public void AFrontendThatNeverLockedHandsOverNoFigureToStore()
     {
         SignalSample read = SignalSampleIntake.Read(
@@ -57,7 +57,7 @@ public sealed class SignalSampleIntakeTests
         Assert.Null(read.CarrierToNoiseMilliDecibels);
     }
 
-    [Fact(DisplayName = "BR-QV-003: a tuner the driver said nothing about is kept as a reading that could not be taken")]
+    [Fact(DisplayName = "a tuner the driver said nothing about is kept as a reading that could not be taken")]
     public void ATunerTheDriverSaidNothingAboutIsKeptAsAReadingThatCouldNotBeTaken()
     {
         SignalSample read = SignalSampleIntake.Read(null, Asked);
@@ -66,7 +66,7 @@ public sealed class SignalSampleIntakeTests
         Assert.Equal(Asked, read.LockReadAt);
     }
 
-    [Fact(DisplayName = "BR-QV-003: a reading with no time on it cannot be told from a frozen one, so it is not taken")]
+    [Fact(DisplayName = "a reading with no time on it cannot be told from a frozen one, so it is not taken")]
     public void AReadingWithNoTimeOnItCannotBeToldFromAFrozenOneSoItIsNotTaken()
     {
         SignalSample read = SignalSampleIntake.Read(
@@ -76,7 +76,7 @@ public sealed class SignalSampleIntakeTests
         Assert.Equal(SignalNotTaken.NoTimeGiven, read.NotTakenBecause);
     }
 
-    [Fact(DisplayName = "BR-QV-003: a figure that arrived without the moment it was measured is not taken either")]
+    [Fact(DisplayName = "a figure that arrived without the moment it was measured is not taken either")]
     public void AFigureThatArrivedWithoutTheMomentItWasMeasuredIsNotTakenEither()
     {
         SignalSample read = SignalSampleIntake.Read(
@@ -86,7 +86,7 @@ public sealed class SignalSampleIntakeTests
         Assert.Equal(SignalNotTaken.NoTimeGiven, read.NotTakenBecause);
     }
 
-    [Fact(DisplayName = "BR-QD-009: two counts under one layer would lose which layer failed, so nothing is taken")]
+    [Fact(DisplayName = "two counts under one layer would lose which layer failed, so nothing is taken")]
     public void TwoCountsUnderOneLayerWouldLoseWhichLayerFailedSoNothingIsTaken()
     {
         SignalSample read = SignalSampleIntake.Read(
@@ -102,7 +102,7 @@ public sealed class SignalSampleIntakeTests
         Assert.Equal(SignalNotTaken.FiguresRefused, read.NotTakenBecause);
     }
 
-    [Fact(DisplayName = "BR-QD-009: a statistic the tuner does not keep is named on the sample")]
+    [Fact(DisplayName = "a statistic the tuner does not keep is named on the sample")]
     public void AStatisticTheTunerDoesNotKeepIsNamedOnTheSample()
     {
         SignalSample read = SignalSampleIntake.Read(
@@ -121,7 +121,7 @@ public sealed class SignalSampleIntakeTests
             read.MetricsNotRead.Order(StringComparer.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-QD-005: a sample is filed under the session it was taken during")]
+    [Fact(DisplayName = "a sample is filed under the session it was taken during")]
     public void ASampleIsFiledUnderTheSessionItWasTakenDuring()
     {
         QualitySignalSample sample = SignalSampleIntake.Take(

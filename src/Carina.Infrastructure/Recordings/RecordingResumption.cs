@@ -4,10 +4,9 @@ using Carina.Domain.Recordings;
 namespace Carina.Infrastructure.Recordings;
 
 /// <summary>
-/// The few moves that put a recording back on a stream, shared by the pass that watches a running
-/// recording and by the recovery that finds one nobody was watching. A resumed recording is asked
-/// for under its own session name and its own output root, so the driver opens the file it already
-/// has and writes on the end of it rather than starting a second one.
+/// The moves that put a recording back on a stream, shared by the stream watcher and by recovery.
+/// A resumed recording is asked for under its own session name and output root, so the driver
+/// appends to the file it already has.
 /// </summary>
 internal static class RecordingResumption
 {

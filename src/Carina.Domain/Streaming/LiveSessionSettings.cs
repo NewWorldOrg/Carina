@@ -8,7 +8,8 @@ public sealed record LiveSessionSettings
         TimeSpan? heldAhead = null,
         TimeSpan? betweenHolds = null,
         TimeSpan? longestWaitToBeFed = null,
-        TimeSpan? longestWaitForATunerToComeFree = null)
+        TimeSpan? longestWaitForATunerToComeFree = null,
+        long? mostBytesWaitingToBeFed = null)
     {
         TimeSpan outliving = linger ?? TimeSpan.FromSeconds(5);
         TimeSpan raise = longestRaise ?? TimeSpan.FromSeconds(30);
@@ -16,6 +17,7 @@ public sealed record LiveSessionSettings
         TimeSpan holds = betweenHolds ?? TimeSpan.FromMinutes(1);
         TimeSpan mouthful = longestWaitToBeFed ?? TimeSpan.FromSeconds(10);
         TimeSpan coming = longestWaitForATunerToComeFree ?? TimeSpan.FromSeconds(5);
+        long held = mostBytesWaitingToBeFed ?? 32L * 1024 * 1024;
 
         if (outliving <= TimeSpan.Zero)
         {
@@ -65,6 +67,14 @@ public sealed record LiveSessionSettings
                 "A viewer waits some time for a tuner on its way out, not none, or a channel change lands in the gap.");
         }
 
+        if (held <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(mostBytesWaitingToBeFed),
+                held,
+                "A transcoder is held some bytes it has not taken yet, not none, or the first mouthful is cut.");
+        }
+
         if (holds >= ahead)
         {
             throw new ArgumentOutOfRangeException(
@@ -79,6 +89,7 @@ public sealed record LiveSessionSettings
         BetweenHolds = holds;
         LongestWaitToBeFed = mouthful;
         LongestWaitForATunerToComeFree = coming;
+        MostBytesWaitingToBeFed = held;
     }
 
     public TimeSpan Linger { get; }
@@ -86,12 +97,9 @@ public sealed record LiveSessionSettings
     public TimeSpan LongestRaise { get; }
 
     /// <summary>
-    /// How far ahead of now the supply is asked to be held open while it is being watched.
+    /// How far ahead of now the supply is asked to be held open while it is being watched. The driver
+    /// lets go of a supply this long after it was last asked to hold on to it.
     /// </summary>
-    /// <remarks>
-    /// This is what a viewing that is still there is worth once nothing more is heard from it: the
-    /// driver lets go of a supply this long after the last time it was asked to hold on to it.
-    /// </remarks>
     public TimeSpan HeldAhead { get; }
 
     /// <summary>
@@ -100,23 +108,19 @@ public sealed record LiveSessionSettings
     public TimeSpan BetweenHolds { get; }
 
     /// <summary>
-    /// How long one transcoder may keep the reading of the channel waiting before it is cut loose.
+    /// How long the oldest bytes a transcoder has not taken yet may wait before the transcoder is cut
+    /// loose.
     /// </summary>
-    /// <remarks>
-    /// Bytes into a transcoder cannot be dropped the way frames to a viewer can, so a transcoder
-    /// that has stopped reading is let go of rather than waited for: the others are watching the
-    /// same channel through the same reading.
-    /// </remarks>
     public TimeSpan LongestWaitToBeFed { get; }
 
     /// <summary>
-    /// How long a viewer refused for want of a tuner waits for one that is already being let go of.
+    /// How many bytes a transcoder may have not taken yet before it is cut loose.
     /// </summary>
-    /// <remarks>
-    /// A session leaves the ledger when it is closed and lets the tuner go at the end of its
-    /// teardown, so a viewer arriving between the two finds nothing to give up and a tuner that is
-    /// not free yet. It waits that teardown out rather than being refused, and no longer than this:
-    /// a teardown that will not end is a tuner that never comes free, and the refusal stands.
-    /// </remarks>
+    public long MostBytesWaitingToBeFed { get; }
+
+    /// <summary>
+    /// How long a viewer refused for want of a tuner waits for one that is already being let go of.
+    /// When the wait runs out, the refusal stands.
+    /// </summary>
     public TimeSpan LongestWaitForATunerToComeFree { get; }
 }

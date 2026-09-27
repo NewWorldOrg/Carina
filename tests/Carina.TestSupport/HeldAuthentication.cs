@@ -29,15 +29,47 @@ public sealed class QuickPasswordHasher : IPasswordHasher
 
 public sealed class HeldAuthSessions : IAuthSessionRepository
 {
+    private readonly Dictionary<SessionHandle, SessionId> carried = [];
+
     public List<AuthSession> Sessions { get; } = [];
 
     public int Deletions { get; private set; }
 
-    public Task<AuthSession?> FindAsync(SessionId id, CancellationToken cancellationToken)
+    public AuthSession Seat(SessionId cookie, AuthSession session)
     {
-        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(cookie);
+        ArgumentNullException.ThrowIfNull(session);
 
-        return Task.FromResult(Sessions.FirstOrDefault(session => session.Id.Equals(id)));
+        if (!SessionHandle.Of(cookie).Equals(session.Handle))
+        {
+            throw new ArgumentException("A seated session is the one its cookie hashes to.", nameof(session));
+        }
+
+        Remember(cookie);
+        Sessions.Add(session);
+
+        return session;
+    }
+
+    public void Remember(SessionId cookie)
+    {
+        ArgumentNullException.ThrowIfNull(cookie);
+
+        carried[SessionHandle.Of(cookie)] = cookie;
+    }
+
+    public SessionId CookieOf(AuthSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        return carried[session.Handle];
+    }
+
+    public Task<AuthSession?> FindAsync(SessionHandle handle, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+
+        return Task.FromResult(Sessions.FirstOrDefault(session => session.Handle.Equals(handle)));
     }
 
     public Task<IReadOnlyList<AuthSession>> ListAsync(Subject subject, CancellationToken cancellationToken)
@@ -55,7 +87,7 @@ public sealed class HeldAuthSessions : IAuthSessionRepository
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        if (!Sessions.Any(held => held.Id.Equals(session.Id)))
+        if (!Sessions.Any(held => held.Handle.Equals(session.Handle)))
         {
             Sessions.Add(session);
         }
@@ -69,7 +101,7 @@ public sealed class HeldAuthSessions : IAuthSessionRepository
 
         foreach (AuthSession session in sessions)
         {
-            if (!Sessions.Any(held => held.Id.Equals(session.Id)))
+            if (!Sessions.Any(held => held.Handle.Equals(session.Handle)))
             {
                 Sessions.Add(session);
             }
@@ -78,11 +110,11 @@ public sealed class HeldAuthSessions : IAuthSessionRepository
         return Task.CompletedTask;
     }
 
-    public Task DeleteAsync(SessionId id, CancellationToken cancellationToken)
+    public Task DeleteAsync(SessionHandle handle, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(handle);
 
-        Deletions += Sessions.RemoveAll(session => session.Id.Equals(id));
+        Deletions += Sessions.RemoveAll(session => session.Handle.Equals(handle));
 
         return Task.CompletedTask;
     }
@@ -95,7 +127,7 @@ public sealed class HeldAuthSessions : IAuthSessionRepository
 
         foreach (AuthSession session in sessions)
         {
-            forgotten += Sessions.RemoveAll(held => held.Id.Equals(session.Id));
+            forgotten += Sessions.RemoveAll(held => held.Handle.Equals(session.Handle));
         }
 
         return Task.FromResult(forgotten);

@@ -29,7 +29,7 @@ public sealed class StreamHarvest(TimeProvider clock)
 
     private ScheduleProgress sinceTaken = new(clock);
 
-    private readonly List<ServiceDescriptionTable> descriptions = [];
+    private readonly Dictionary<(bool Actual, int Network, int Stream, int Section), ServiceDescriptionTable> descriptions = [];
 
     private int rejectedSections;
 
@@ -87,7 +87,9 @@ public sealed class StreamHarvest(TimeProvider clock)
                 if (ServiceDescriptionTable.Read(assembled.Section)
                     is TableRead<ServiceDescriptionTable>.Parsed described)
                 {
-                    descriptions.Add(described.Table);
+                    ServiceDescriptionTable table = described.Table;
+
+                    descriptions[(table.IsActualStream, table.OriginalNetworkId, table.TransportStreamId, table.SectionNumber)] = table;
                 }
 
                 continue;
@@ -148,6 +150,6 @@ public sealed class StreamHarvest(TimeProvider clock)
     private HarvestedStream Harvested(VisitOutcome outcome)
         => new(outcome, progress, [.. tables], reader.UnreadablePackets, rejectedSections, rejectedTables)
         {
-            Descriptions = [.. descriptions],
+            Descriptions = [.. descriptions.Values],
         };
 }

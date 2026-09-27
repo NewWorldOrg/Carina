@@ -94,6 +94,17 @@ public sealed class CollectionRound(
                 cameBackShort++;
             }
 
+            if (visit.Written.Discarded > 0 || visit.Written.Clamped > 0)
+            {
+                logger.LogInformation(
+                    "Visiting {NetworkId}-{TransportStreamId} threw away {Discarded} event(s) that could not be taken "
+                    + "and cut {Clamped} programme(s) to the length kept.",
+                    stream.NetworkId.Value,
+                    stream.TransportStreamId.Value,
+                    visit.Written.Discarded,
+                    visit.Written.Clamped);
+            }
+
             NoticeWhatTheStreamDeclared(stream, visit);
 
             await TellTheTunerWhatHappenedAsync(stream, visit.Outcome, abort);

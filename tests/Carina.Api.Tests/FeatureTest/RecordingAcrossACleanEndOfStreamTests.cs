@@ -15,8 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Carina.Api.Tests.FeatureTest;
 
 /// <summary>
-/// A device that hands over some bytes and then returns none at all, which is how a stream ending
-/// cleanly reaches this side: nothing failed, nothing was thrown, the bytes simply stopped.
+/// A device that hands over some bytes and then returns none at all: a stream ending cleanly.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class EndsCleanlyAfter(ITunerDevice carrying, long after) : ITunerDevice
@@ -45,9 +44,8 @@ internal sealed class EndsCleanlyAfter(ITunerDevice carrying, long after) : ITun
 }
 
 /// <summary>
-/// The first device handed out ends its stream on its own once it has given what it was told to.
-/// Every device after it streams on, so nothing about the tuner stands in the way of the stream
-/// being opened again and what the test reads is what this side made of the end.
+/// Hands out a first device that ends its stream on its own once it has given what it was told to;
+/// every device after it streams on.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class StreamThatEndsItselfOnce(long after) : ITunerDeviceFactory
@@ -69,14 +67,11 @@ internal sealed class StreamThatEndsItselfOnce(long after) : ITunerDeviceFactory
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 [SupportedOSPlatform("linux")]
 public sealed class RecordingAcrossACleanEndOfStreamTests
 {
     /// <summary>
-    /// The watch reaches for the stream once and waits no time at all between attempts. The pause
-    /// the default keeps is served by the hand-turned clock, which rings only when a test turns it,
-    /// so a test that let the watch reach one would wait for a pause that never ends.
+    /// The watch reaches for the stream once and waits no time at all between attempts.
     /// </summary>
     private static readonly RecordingWatchSettings AtOnce = new(
         TimeSpan.FromMilliseconds(20),
@@ -86,11 +81,9 @@ public sealed class RecordingAcrossACleanEndOfStreamTests
         3);
 
     /// <summary>
-    /// Acceptance bar 1: a stream that ends itself is never a recording that finished. The driver
-    /// ends the session as a failure rather than as the end time being reached; the ledger keeps the
-    /// recording in flight with no outcome at all and writes the break down with the reason it was;
-    /// and this side reaches for the stream again rather than letting the recording stand as done.
-    /// The file the recording already has is kept and no second one is opened beside it.
+    /// A stream that ends itself is never a recording that finished. The driver ends the session as a
+    /// failure; the ledger keeps the recording in flight with no outcome and writes the break down with
+    /// its reason; this side reaches for the stream again; and the recording keeps its one file.
     /// </summary>
     [Fact]
     public async Task AStreamThatEndsItselfIsNeverCountedAsARecordingThatFinished()

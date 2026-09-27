@@ -18,18 +18,15 @@ public enum EncodePlacementOutcome
 }
 
 /// <summary>
-/// Turns a finished work file into the artefact, in the order BR-ED2-009 fixes: the name is worked
-/// out now and written into the ledger, and only then is the file looked at and moved. Whatever is
-/// already at that name is this job's own earlier success if the ledger said so before this
-/// attempt, and a collision otherwise — and a collision is a failure, never an overwrite.
-/// <para>
-/// A job a person asked to make the artefact again is the one exception, and it is still the ledger
-/// that decides: the earlier job gives the name up first, this job claims it, and only then is the
-/// artefact written over — by a single rename, so that whoever is watching the old one at that
-/// moment reads the file they opened through to its end while everyone after them gets the new one.
-/// Nothing before the rename touches the artefact, so a run that fails leaves what was there.
-/// </para>
+/// Turns a finished work file into the artefact.
 /// </summary>
+/// <remarks>
+/// The name is worked out and written into the ledger first, and only then is the file looked at and
+/// moved. A file already at that name is this job's own earlier success if the ledger said so before
+/// this attempt, and a collision, which fails the job, otherwise. For a job asked to make the
+/// artefact again, the earlier job gives the name up, this job claims it, and the artefact is then
+/// replaced by a single rename; nothing before the rename touches the existing artefact.
+/// </remarks>
 public sealed class EncodeArtefactPlacer(
     IEncodeJobRepository jobs,
     IEncodeScratchLedger ledger,

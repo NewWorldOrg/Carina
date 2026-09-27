@@ -31,7 +31,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
 
     public static TheoryData<string> Kinds => Named(Enum.GetNames<ChapterKind>());
 
-    [Fact(DisplayName = "BR-D-004: no encode table holds a foreign key into another domain's table")]
+    [Fact(DisplayName = "no encode table holds a foreign key into another domain's table")]
     public async Task NoEncodeTableHoldsAForeignKeyIntoAnotherDomainsTable()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -66,7 +66,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             pointing);
     }
 
-    [Fact(DisplayName = "BR-D-004: an encode job names its recording by value, so the ledger can never drag one away")]
+    [Fact(DisplayName = "an encode job names its recording by value, so the ledger can never drag one away")]
     public async Task AnEncodeJobNamesARecordingNoLedgerRowKnows()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -95,7 +95,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             status is "Completed" ? $"'{recording:N}.{ProfileWire}.mp4'" : "NULL");
     }
 
-    [Fact(DisplayName = "BR-ES-002: a sixth place to stand is refused")]
+    [Fact(DisplayName = "a sixth place to stand is refused")]
     public async Task ASixthPlaceToStandIsRefused()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -161,7 +161,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal("ck_encode_job_timeline", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a completed job names what it made")]
+    [Fact(DisplayName = "a completed job names what it made")]
     public async Task ACompletedJobNamesWhatItMade()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -192,7 +192,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal("ck_encode_job_artefact", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: one name under one root has one owner, and the second claimant is refused by the index")]
+    [Fact(DisplayName = "one name under one root has one owner, and the second claimant is refused by the index")]
     public async Task OneNameUnderOneRootHasOneOwner()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -210,7 +210,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(EncodeJobConfiguration.ArtefactIndexName, refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "A-エンコード-069: the job making the artefact again holds the name once the earlier one has given it up, and not a moment before")]
+    [Fact(DisplayName = "the job making the artefact again holds the name once the earlier one has given it up, and not a moment before")]
     public async Task TheJobMakingItAgainHoldsTheNameOnceTheEarlierOneHasGivenItUp()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -242,7 +242,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(2L, await counting.ExecuteScalarAsync());
     }
 
-    [Fact(DisplayName = "A-エンコード-069: a job that named nothing cannot be written down as having given a name up")]
+    [Fact(DisplayName = "a job that named nothing cannot be written down as having given a name up")]
     public async Task AJobThatNamedNothingCannotHaveGivenANameUp()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -258,7 +258,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal("ck_encode_job_name_given_up", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: the ledger holds one running job, and a second is refused by the index")]
+    [Fact(DisplayName = "the ledger holds one running job, and a second is refused by the index")]
     public async Task TheLedgerHoldsOneRunningJob()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -296,7 +296,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             await IndexDefinition(connection, EncodeJobConfiguration.RecordingIndexName));
     }
 
-    [Fact(DisplayName = "BR-ED2-010: a scratch file is settled with a fate and a time together, and by one of the named fates")]
+    [Fact(DisplayName = "a scratch file is settled with a fate and a time together, and by one of the named fates")]
     public async Task AScratchFileIsSettledWithAFateAndATimeTogether()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -321,7 +321,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal("ck_encode_scratch_file_removal", backwards.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-ED2-010: what is still owed a removal is read off the ledger by job, not off the disk")]
+    [Fact(DisplayName = "what is still owed a removal is read off the ledger by job, not off the disk")]
     public async Task WhatIsStillOwedARemovalIsReadOffTheLedgerByJob()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -335,7 +335,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             await IndexDefinition(connection, EncodeScratchFileConfiguration.NameIndexName));
     }
 
-    [Theory(DisplayName = "BR-ED2-011: a programme is an id and a start together, on a running job only, begun no earlier than the job started")]
+    [Theory(DisplayName = "a programme is an id and a start together, on a running job only, begun no earlier than the job started")]
     [InlineData("'Running'", Started, "4242, " + Started, null)]
     [InlineData("'Running'", Started, "NULL, NULL", null)]
     [InlineData("'Running'", Started, "4242, NULL", "ck_encode_job_programme")]
@@ -362,7 +362,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(refusedBy, refusal.ConstraintName);
     }
 
-    [Theory(DisplayName = "BR-ED2-014: headway is a portion between none and all, what is left, and when — together or not at all, and never on a job that has not run")]
+    [Theory(DisplayName = "headway is a portion between none and all, what is left, and when — together or not at all, and never on a job that has not run")]
     [InlineData("'Running'", Started, "0.5, interval '00:07:00', " + Ended, null)]
     [InlineData("'Running'", Started, "NULL, NULL, " + Ended, null)]
     [InlineData("'Completed'", Started, "1, interval '0', " + Ended, null)]
@@ -390,7 +390,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(refusedBy, refusal.ConstraintName);
     }
 
-    [Theory(DisplayName = "BR-EV-004: where a run went is the encoder asked and the encoder run, together, with a swerve exactly when they differ, and only on a job that ran")]
+    [Theory(DisplayName = "where a run went is the encoder asked and the encoder run, together, with a swerve exactly when they differ, and only on a job that ran")]
     [InlineData("'Running'", Started, "'Software', 'Software', NULL", null)]
     [InlineData("'Failed'", Started, "'Vaapi', 'Software', 'TheCardIsOutOfReach'", null)]
     [InlineData("'Running'", Started, "'Software', 'Vaapi', 'TheProcessorCannotDoThisCodec'", null)]
@@ -419,7 +419,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(refusedBy, refusal.ConstraintName);
     }
 
-    [Theory(DisplayName = "BR-ED2-006: where the artefact's clock stands is a start and a head skip together, the skip between nothing and five seconds, lengths only beside them, and only on a job that ran")]
+    [Theory(DisplayName = "where the artefact's clock stands is a start and a head skip together, the skip between nothing and five seconds, lengths only beside them, and only on a job that ran")]
     [InlineData("'Running'", Started, "interval '08:28:19.474078', interval '00:00:00.5072', interval '00:34:57.502489', NULL", null)]
     [InlineData("'Completed'", Started, "interval '08:28:19.474078', interval '00:00:00.5072', interval '00:34:57.502489', interval '00:34:56.7947'", null)]
     [InlineData("'Running'", Started, "interval '0', interval '0', NULL, NULL", null)]
@@ -562,7 +562,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(refusedBy, refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: the database refuses to drop a profile a job points at, which is why a used one is retired instead")]
+    [Fact(DisplayName = "the database refuses to drop a profile a job points at, which is why a used one is retired instead")]
     public async Task TheDatabaseRefusesToDropAProfileAJobPointsAt()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -591,7 +591,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(1, await retiring.ExecuteNonQueryAsync());
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a definition nothing points at is dropped, and both tables leave the retirement hour empty until it comes")]
+    [Fact(DisplayName = "a definition nothing points at is dropped, and both tables leave the retirement hour empty until it comes")]
     public async Task ADefinitionNothingPointsAtIsDropped()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -618,7 +618,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(1, await dropping.ExecuteNonQueryAsync());
     }
 
-    [Theory(DisplayName = "A-エンコード-057: what a run made of the breaks is a reader, a verdict, a share and a time together or none of them, and only on a job that ran")]
+    [Theory(DisplayName = "what a run made of the breaks is a reader, a verdict, a share and a time together or none of them, and only on a job that ran")]
     [InlineData("'Running'", Started, "'Ffmpeg', 'Marked', 0.31, " + Ended, null)]
     [InlineData("'Running'", Started, "'Nobody', 'NotAsked', 0, " + Ended, null)]
     [InlineData("'Completed'", Started, "'Ffmpeg', 'Discarded', 1, " + Ended, null)]
@@ -694,7 +694,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             $"'{detector}', 'NotAsked', 0, {Ended}");
     }
 
-    [Theory(DisplayName = "A-エンコード-057: a chapter belongs to a job, ends after it starts, starts no earlier than the artefact does, and is one of the kinds named")]
+    [Theory(DisplayName = "a chapter belongs to a job, ends after it starts, starts no earlier than the artefact does, and is one of the kinds named")]
     [InlineData(0, "interval '0'", "interval '00:00:30'", "'Programme'", null)]
     [InlineData(1, "interval '00:00:30'", "interval '00:01:30'", "'Break'", null)]
     [InlineData(0, "interval '00:00:30'", "interval '00:00:30'", "'Programme'", "ck_encode_chapter_span")]
@@ -741,7 +741,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         await ChapterAsync(connection, job, 0, "interval '0'", "interval '00:00:30'", $"'{kind}'");
     }
 
-    [Fact(DisplayName = "A-エンコード-057: one job holds one chapter at each place in the order, and the second claimant is refused by the index")]
+    [Fact(DisplayName = "one job holds one chapter at each place in the order, and the second claimant is refused by the index")]
     public async Task OneJobHoldsOneChapterAtEachPlaceInTheOrder()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -762,7 +762,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(EncodeChapterConfiguration.OrdinalIndexName, refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "A-エンコード-057: the database refuses to drop a job whose chapters are still held, so a reading is never left pointing at nothing")]
+    [Fact(DisplayName = "the database refuses to drop a job whose chapters are still held, so a reading is never left pointing at nothing")]
     public async Task TheDatabaseRefusesToDropAJobWhoseChaptersAreStillHeld()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();

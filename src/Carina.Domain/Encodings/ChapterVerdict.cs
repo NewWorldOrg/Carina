@@ -1,9 +1,7 @@
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// How a run answered the question of where the breaks in a recording are. "Nobody looked" and
-/// "somebody looked and there was nothing to mark" are different answers, and so are "the reading
-/// was thrown away because it could not be believed" and "the source could not be read at all".
+/// How a run answered where the breaks in a recording are.
 /// </summary>
 public enum ChapterVerdict
 {

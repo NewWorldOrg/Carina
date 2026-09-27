@@ -22,7 +22,7 @@ public sealed class AuthUpkeepJobTests
         using AuthUpkeepJob job = Upkeep(At + SessionPolicy.Default.IdleTimeout - TimeSpan.FromHours(1));
 
         Assert.Equal(0, await job.ForgetEndedSessionsAsync(held, Cancel));
-        Assert.Equal(asking.Id, Assert.Single(held.Sessions).Id);
+        Assert.Equal(asking.Handle, Assert.Single(held.Sessions).Handle);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class AuthUpkeepJobTests
         using AuthUpkeepJob job = Upkeep(At + SessionPolicy.Default.IdleTimeout);
 
         Assert.Equal(1, await job.ForgetEndedSessionsAsync(held, Cancel));
-        Assert.Equal(asking.Id, Assert.Single(held.Sessions).Id);
+        Assert.Equal(asking.Handle, Assert.Single(held.Sessions).Handle);
     }
 
     [Fact]

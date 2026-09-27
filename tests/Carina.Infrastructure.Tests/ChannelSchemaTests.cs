@@ -39,7 +39,7 @@ public sealed class ChannelSchemaTests
             .. type.GetComplexProperties().SelectMany(property => EveryProperty(property.ComplexType)),
         ];
 
-    [Fact(DisplayName = "BR-QD-012: a candidate keeps its latest score as one reading, not a history of them")]
+    [Fact(DisplayName = "a candidate keeps its latest score as one reading, not a history of them")]
     public void ACandidateKeepsItsLatestScoreAsOneReading()
     {
         using CarinaDbContext context = Carina();

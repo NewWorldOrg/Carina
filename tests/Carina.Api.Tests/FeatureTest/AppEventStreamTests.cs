@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class AppEventStreamTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

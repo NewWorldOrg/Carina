@@ -6,7 +6,7 @@ public sealed class ChapterDetectionLearningTests
 {
     private static readonly TimeSpan Whole = TimeSpan.FromMinutes(10);
 
-    [Fact(DisplayName = "BR-ED2-007: a reading carries nothing learned until a watermark is handed to it")]
+    [Fact(DisplayName = "a reading carries nothing learned until a watermark is handed to it")]
     public void AReadingCarriesNothingLearnedUntilAWatermarkIsHandedToIt()
     {
         Assert.Null(ChapterDetection.NotAsked.Learned);
@@ -16,7 +16,7 @@ public sealed class ChapterDetectionLearningTests
         Assert.Null(Marked().Learned);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: what was learned rides beside the reading and changes nothing that was read, before or after a note")]
+    [Fact(DisplayName = "what was learned rides beside the reading and changes nothing that was read, before or after a note")]
     public void WhatWasLearnedRidesBesideTheReading()
     {
         WatermarkMask mask = WatermarkPictures.Learned();
@@ -33,7 +33,7 @@ public sealed class ChapterDetectionLearningTests
         Assert.Equal(noted.Note, learnedAfter.Note);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a reading that could not be made still keeps what the look learned")]
+    [Fact(DisplayName = "a reading that could not be made still keeps what the look learned")]
     public void AReadingThatCouldNotBeMadeStillKeepsWhatWasLearned()
     {
         WatermarkMask mask = WatermarkPictures.Learned();
@@ -44,7 +44,7 @@ public sealed class ChapterDetectionLearningTests
         Assert.Same(mask, read.Learned);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: nobody having looked, nothing can have been learned")]
+    [Fact(DisplayName = "nobody having looked, nothing can have been learned")]
     public void NobodyHavingLookedNothingCanHaveBeenLearned()
     {
         Assert.Throws<InvalidOperationException>(() => ChapterDetection.NotAsked.Learning(WatermarkPictures.Learned()));

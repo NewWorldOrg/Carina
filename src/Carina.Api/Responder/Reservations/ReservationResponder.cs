@@ -57,11 +57,8 @@ public sealed record ReservationReceptionResponder(bool Unavailable, DateTime? S
 public sealed record ReservationBroadcastGroupResponder(string? Key, BroadcastGroupRole Role);
 
 /// <summary>
-/// One reservation says one thing about itself. <c>Standing</c> is that thing: the state the domain
-/// decided, with what the recording ledger wrote read over the top of it. The ledger's own columns
-/// travel beside it because they say more than the standing can — when the claim was taken, and
-/// which outcome the recording ended on — but the raw scheduling column does not, because a
-/// reservation a recording came of never leaves it and would answer "scheduled" for ever.
+/// One reservation. <c>Standing</c> is the state the domain decided, with what the recording ledger
+/// wrote read over the top of it; the ledger's claim time and recording outcome travel beside it.
 /// </summary>
 public sealed record ReservationResponder(
     Guid Id,

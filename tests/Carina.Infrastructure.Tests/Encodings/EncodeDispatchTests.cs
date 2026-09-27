@@ -27,7 +27,7 @@ public sealed class EncodeDispatchTests
 
     private static readonly EncodeSettings OnTheCard = new() { Prefer = EncodeEncoder.Vaapi, MostAttempts = 3 };
 
-    [Fact(DisplayName = "BR-ED2-011: when the process comes up, every job the ledger holds as running goes back to the queue or is given up, and nothing else is touched")]
+    [Fact(DisplayName = "when the process comes up, every job the ledger holds as running goes back to the queue or is given up, and nothing else is touched")]
     public async Task WhenTheProcessComesUpEveryRunningJobIsPutBackOrGivenUp()
     {
         var held = new HeldEncodeJobs();
@@ -53,7 +53,7 @@ public sealed class EncodeDispatchTests
             held.Moves);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a look at an empty queue starts nothing and says so")]
+    [Fact(DisplayName = "a look at an empty queue starts nothing and says so")]
     public async Task ALookAtAnEmptyQueueStartsNothing()
     {
         var held = new HeldEncodeJobs();
@@ -65,7 +65,7 @@ public sealed class EncodeDispatchTests
         Assert.Null(look.Ended);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: while the ledger holds a running job, a look starts nothing and says another is running")]
+    [Fact(DisplayName = "while the ledger holds a running job, a look starts nothing and says another is running")]
     public async Task WhileTheLedgerHoldsARunningJobALookStartsNothing()
     {
         var held = new HeldEncodeJobs();
@@ -77,7 +77,7 @@ public sealed class EncodeDispatchTests
         Assert.Single(held.Jobs, job => job.Status is EncodeJobStatus.Running);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a job whose run throws is put back in the queue with its attempt counted, so it never sits as running with nobody running it")]
+    [Fact(DisplayName = "a job whose run throws is put back in the queue with its attempt counted, so it never sits as running with nobody running it")]
     public async Task AJobWhoseRunThrowsIsPutBackInTheQueue()
     {
         var held = new HeldEncodeJobs();
@@ -93,7 +93,7 @@ public sealed class EncodeDispatchTests
         Assert.Equal(2, waiting.Attempt);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a job whose run throws on its last attempt is given up as timed out")]
+    [Fact(DisplayName = "a job whose run throws on its last attempt is given up as timed out")]
     public async Task AJobWhoseRunThrowsOnItsLastAttemptIsGivenUp()
     {
         var held = new HeldEncodeJobs();
@@ -166,7 +166,7 @@ public sealed class EncodeDispatchTests
         Assert.True(owed.IsOwedARemoval);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a job called off while it ran is left as the ledger says, and what it still owes a removal for is swept")]
+    [Fact(DisplayName = "a job called off while it ran is left as the ledger says, and what it still owes a removal for is swept")]
     public async Task AJobCalledOffWhileItRanIsLeftAsTheLedgerSays()
     {
         var held = new HeldEncodeJobs();
@@ -201,6 +201,105 @@ public sealed class EncodeDispatchTests
         Assert.Equal(1, waiting.Attempt);
         Assert.Equal(EncodeScratchFate.AlreadyGone, owed.Fate);
         Assert.DoesNotContain(held.Moves, move => move.StartsWith("saved", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AJobThatEndedAndThenThrewHasItsEndingWrittenRatherThanLeftRunningInTheLedger()
+    {
+        var held = new HeldEncodeJobs();
+        EncodeJob waiting = Waiting();
+        held.Jobs.Add(waiting);
+        var scratch = new HeldEncodeScratch();
+        EncodeScratchFile owed = EncodeScratchFile.Record(
+            EncodeScratchFileId.New(),
+            waiting.Id,
+            EncodeScratchKind.WorkFile,
+            EncodeHarness.Primary,
+            EncodeFileName.Working(waiting.RecordingId, waiting.Id, 1),
+            Now);
+        scratch.Files.Add(owed);
+
+        EncodeLook look = await Dispatch(
+                held,
+                new EncodeSettings { MostAttempts = 3, OutputRoots = [new StorageRootPath(EncodeHarness.Primary, Path.GetTempPath())] },
+                scratch,
+                whenRun: claimed => claimed.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Now))
+            .LookAsync(Cancel);
+
+        Assert.Equal(EncodeJobStatus.Failed, look.Ended);
+        Assert.Equal(1, waiting.Attempt);
+        Assert.Contains($"wrote the ending {waiting.Id.Wire} Failed", held.Moves);
+        Assert.False(owed.IsOwedARemoval, "the work file of a job whose ending was written is still owed a removal");
+    }
+
+    [Fact]
+    public async Task AnEndingTheLedgerCouldNotTakeIsWrittenAtTheNextLookBeforeAnotherJobIsClaimed()
+    {
+        var held = new HeldEncodeJobs();
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        bool ledgerIsAway = true;
+        held.WhenWritingTheEnding = _ => ledgerIsAway ? throw new TimeoutException("the ledger did not answer") : true;
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3 },
+            whenRun: claimed =>
+            {
+                if (claimed.Id.Equals(first.Id))
+                {
+                    claimed.Name(EncodeFileName.Artefact(claimed.RecordingId, claimed.ProfileId));
+                    claimed.Complete(Now);
+                }
+            });
+
+        await Assert.ThrowsAsync<TimeoutException>(() => dispatch.LookAsync(Cancel));
+        ledgerIsAway = false;
+        held.Jobs.Add(Waiting());
+        await dispatch.LookAsync(Cancel);
+
+        int written = held.Moves.IndexOf($"wrote the ending {first.Id.Wire} Completed");
+        int claimedNext = held.Moves.FindLastIndex(move => move.StartsWith("claimed", StringComparison.Ordinal));
+        Assert.True(written >= 0, "the ending of the job that completed was never written");
+        Assert.True(written < claimedNext, "another job was claimed before the ending of the last one was written");
+    }
+
+    [Fact]
+    public async Task AnEndingTheLedgerNeverTakesIsGivenUpAfterAFewLooksAndTheNextJobIsClaimed()
+    {
+        var held = new HeldEncodeJobs();
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3 },
+            whenRun: claimed =>
+            {
+                if (claimed.Id.Equals(first.Id))
+                {
+                    claimed.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Now);
+                }
+            });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => dispatch.LookAsync(Cancel));
+        EncodeJob next = Waiting();
+        held.Jobs.Add(next);
+        EncodeLook? claimedNext = null;
+
+        for (int look = 1; look < EncodeDispatch.MostTriesAtAnEnding && claimedNext is null; look++)
+        {
+            try
+            {
+                EncodeLook answered = await dispatch.LookAsync(Cancel);
+                claimedNext = answered.Standing is EncodeClaimStanding.Claimed ? answered : null;
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        Assert.NotNull(claimedNext);
+        Assert.Equal(next.Id, claimedNext.Job);
     }
 
     [Fact(DisplayName = "While the card is making a picture for someone watching, a look bound for the card asks the ledger nothing and says why")]
@@ -319,8 +418,7 @@ public sealed class EncodeDispatchTests
             null);
 
     /// <summary>
-    /// A dispatch over the held ledger. The runner is built from nothing, so a claimed job's run
-    /// throws at once: what these tests look at is what the dispatch does around a run, not the run.
+    /// A look that claims a job tells the screens the jobs moved.
     /// </summary>
     [Fact]
     public async Task ALookThatStartedAJobTellsTheScreensTheJobsMoved()

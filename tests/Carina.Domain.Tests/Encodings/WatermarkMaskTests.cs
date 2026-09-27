@@ -4,7 +4,7 @@ namespace Carina.Domain.Tests.Encodings;
 
 public sealed class WatermarkMaskTests
 {
-    [Fact(DisplayName = "BR-ED2-007: a learned mark is seen in a picture that carries it over something else moving, and not in one without it")]
+    [Fact(DisplayName = "a learned mark is seen in a picture that carries it over something else moving, and not in one without it")]
     public void ALearnedMarkIsSeenWhereItIsOnScreenAndNotWhereItIsNot()
     {
         WatermarkMask learned = WatermarkPictures.Learned();
@@ -14,7 +14,7 @@ public sealed class WatermarkMaskTests
         Assert.False(learned.SeenIn(WatermarkPictures.Plain()));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a mark with less than half of its outline showing is not seen")]
+    [Fact(DisplayName = "a mark with less than half of its outline showing is not seen")]
     public void AMarkWithLessThanHalfOfItsOutlineShowingIsNotSeen()
     {
         WatermarkMask learned = WatermarkPictures.Learned();
@@ -28,7 +28,7 @@ public sealed class WatermarkMaskTests
         Assert.False(learned.SeenIn(corner));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a mark written down is read back as the same mark")]
+    [Fact(DisplayName = "a mark written down is read back as the same mark")]
     public void AMarkWrittenDownIsReadBackAsTheSameMark()
     {
         WatermarkMask learned = WatermarkPictures.Learned();
@@ -42,7 +42,7 @@ public sealed class WatermarkMaskTests
         Assert.True(read.Covers(WatermarkPictures.MarkLeft - 1, 20));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: what is handed out is a copy, so nothing outside can change the mark")]
+    [Fact(DisplayName = "what is handed out is a copy, so nothing outside can change the mark")]
     public void WhatIsHandedOutIsACopy()
     {
         WatermarkMask learned = WatermarkPictures.Learned();
@@ -53,14 +53,14 @@ public sealed class WatermarkMaskTests
         Assert.NotEqual(handed, learned.Packed());
     }
 
-    [Fact(DisplayName = "BR-ED2-007: bytes of any other length than a mark takes are refused")]
+    [Fact(DisplayName = "bytes of any other length than a mark takes are refused")]
     public void BytesOfAnyOtherLengthAreRefused()
     {
         Assert.Throws<ArgumentException>(() => WatermarkMask.Unpacked(new byte[WatermarkMask.PackedBytes - 1]));
         Assert.Throws<ArgumentException>(() => WatermarkMask.Unpacked(new byte[WatermarkMask.PackedBytes + 1]));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a mark reaching outside the corners is refused, so nothing but a corner is ever looked at")]
+    [Fact(DisplayName = "a mark reaching outside the corners is refused, so nothing but a corner is ever looked at")]
     public void AMarkReachingOutsideTheCornersIsRefused()
     {
         byte[] packed = WatermarkPictures.Learned().Packed();
@@ -71,7 +71,7 @@ public sealed class WatermarkMaskTests
         Assert.Throws<ArgumentException>(() => WatermarkMask.Covering([middle]));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a mark covering nothing is refused, because it would be seen nowhere and everywhere at once")]
+    [Fact(DisplayName = "a mark covering nothing is refused, because it would be seen nowhere and everywhere at once")]
     public void AMarkCoveringNothingIsRefused()
     {
         Assert.Throws<ArgumentException>(() => WatermarkMask.Unpacked(new byte[WatermarkMask.PackedBytes]));

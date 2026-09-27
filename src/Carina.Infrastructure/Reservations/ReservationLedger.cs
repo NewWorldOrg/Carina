@@ -3,10 +3,7 @@ using Carina.Domain.Reservations;
 namespace Carina.Infrastructure.Reservations;
 
 /// <summary>
-/// One line per reservation per classification, and no more. A broadcast that slips again and again
-/// is one broadcast that moved, and one that goes away and comes back and goes away again is one
-/// broadcast that went: the reservation itself carries where it stands now, so a second line would
-/// say nothing the first does not and would bury the ledger under a schedule that shifts most days.
+/// Writes at most one line per reservation per classification.
 /// </summary>
 internal static class ReservationLedger
 {

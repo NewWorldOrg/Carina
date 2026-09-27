@@ -9,7 +9,7 @@ public sealed class QualitySessionMeasurementTests
 {
     private static readonly DateTime Started = new(2026, 8, 8, 3, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "決定4: what a session that is not a recording measured has a home of its own")]
+    [Fact(DisplayName = "what a session that is not a recording measured has a home of its own")]
     public void WhatASessionThatIsNotARecordingMeasuredHasAHomeOfItsOwn()
     {
         QualitySessionMeasurement measurement = Open(SessionPurpose.Survey);
@@ -22,11 +22,11 @@ public sealed class QualitySessionMeasurementTests
         Assert.False(measurement.HasEnded);
     }
 
-    [Fact(DisplayName = "決定4: what a recording session measured belongs to the recording ledger")]
+    [Fact(DisplayName = "what a recording session measured belongs to the recording ledger")]
     public void WhatARecordingSessionMeasuredBelongsToTheRecordingLedger()
         => Assert.Throws<ArgumentException>(() => Open(SessionPurpose.Recording));
 
-    [Fact(DisplayName = "BR-QD-005: a measurement is kept under the session and the driver it came from")]
+    [Fact(DisplayName = "a measurement is kept under the session and the driver it came from")]
     public void AMeasurementIsKeptUnderTheSessionAndTheDriverItCameFrom()
     {
         QualitySessionMeasurement measurement = Open(SessionPurpose.Scan);
@@ -35,7 +35,7 @@ public sealed class QualitySessionMeasurementTests
         Assert.Equal("survey-1", measurement.Session.Value);
     }
 
-    [Fact(DisplayName = "BR-QD-005: a session nobody named cannot be told from the one before it")]
+    [Fact(DisplayName = "a session nobody named cannot be told from the one before it")]
     public void ASessionNobodyNamedCannotBeToldFromTheOneBeforeIt()
         => Assert.Throws<ArgumentException>(() => QualitySessionMeasurement.Open(
             "driver-7",
@@ -46,7 +46,7 @@ public sealed class QualitySessionMeasurementTests
             new ServiceId(1024),
             Started));
 
-    [Fact(DisplayName = "BR-QD-001: an unmeasured session carries no counts to be read as zero")]
+    [Fact(DisplayName = "an unmeasured session carries no counts to be read as zero")]
     public void AnUnmeasuredSessionCarriesNoCountsToBeReadAsZero()
         => Assert.Throws<ArgumentException>(() => QualitySessionMeasurement.Rehydrate(
             "driver-7",

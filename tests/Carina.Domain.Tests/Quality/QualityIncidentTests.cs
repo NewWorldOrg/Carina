@@ -11,7 +11,7 @@ public sealed class QualityIncidentTests
 
     private static readonly Threshold Applied = Threshold.Provisionally(0.0002, observations: 0, Detected);
 
-    [Fact(DisplayName = "BR-QV-002: the threshold an incident was judged against is kept as it stood then")]
+    [Fact(DisplayName = "the threshold an incident was judged against is kept as it stood then")]
     public void TheThresholdAnIncidentWasJudgedAgainstIsKeptAsItStoodThen()
     {
         QualityIncident incident = Detect();
@@ -22,7 +22,7 @@ public sealed class QualityIncidentTests
         Assert.False(incident.Restated);
     }
 
-    [Fact(DisplayName = "BR-QS-002: an incident is told about once and then stands until its condition clears")]
+    [Fact(DisplayName = "an incident is told about once and then stands until its condition clears")]
     public void AnIncidentIsToldAboutOnceAndThenStandsUntilItsConditionClears()
     {
         QualityIncident incident = Detect();
@@ -34,13 +34,13 @@ public sealed class QualityIncidentTests
         Assert.Throws<InvalidOperationException>(() => incident.Notify(Later.AddMinutes(1)));
     }
 
-    [Fact(DisplayName = "BR-QS-002: an incident only ever stands detected, told about, or resolved")]
+    [Fact(DisplayName = "an incident only ever stands detected, told about, or resolved")]
     public void AnIncidentOnlyEverStandsDetectedToldAboutOrResolved()
         => Assert.Equal(
             [nameof(QualityIncidentState.Detected), nameof(QualityIncidentState.Notified), nameof(QualityIncidentState.Resolved)],
             Enum.GetNames<QualityIncidentState>());
 
-    [Fact(DisplayName = "BR-QS-002: a resolved incident stays resolved and cannot be told about again")]
+    [Fact(DisplayName = "a resolved incident stays resolved and cannot be told about again")]
     public void AResolvedIncidentStaysResolvedAndCannotBeToldAboutAgain()
     {
         QualityIncident incident = Detect();
@@ -72,7 +72,7 @@ public sealed class QualityIncidentTests
         Assert.Null(incident.NotifiedAt);
     }
 
-    [Fact(DisplayName = "BR-QD-002: an anomaly another domain owns is kept under that domain's own classification")]
+    [Fact(DisplayName = "an anomaly another domain owns is kept under that domain's own classification")]
     public void AnAnomalyAnotherDomainOwnsIsKeptUnderThatDomainsOwnClassification()
     {
         QualityIncident restated = QualityIncident.Detect(
@@ -89,7 +89,7 @@ public sealed class QualityIncidentTests
         Assert.Equal(nameof(TuneFailureKind.NoLock), restated.Classification);
     }
 
-    [Fact(DisplayName = "BR-QD-002: this domain's own anomaly borrows no other domain's classification")]
+    [Fact(DisplayName = "this domain's own anomaly borrows no other domain's classification")]
     public void ThisDomainsOwnAnomalyBorrowsNoOtherDomainsClassification()
         => Assert.Throws<ArgumentException>(() => QualityIncident.Detect(
             QualityIncidentId.New(),
@@ -101,7 +101,7 @@ public sealed class QualityIncidentTests
             QualityIncidentOwner.Quality,
             nameof(TuneFailureKind.NoLock)));
 
-    [Fact(DisplayName = "BR-QD-008: an anomaly another domain owns says which classification it kept")]
+    [Fact(DisplayName = "an anomaly another domain owns says which classification it kept")]
     public void AnAnomalyAnotherDomainOwnsSaysWhichClassificationItKept()
         => Assert.Throws<ArgumentException>(() => QualityIncident.Detect(
             QualityIncidentId.New(),
@@ -165,7 +165,7 @@ public sealed class QualityIncidentTests
             0.004,
             Applied);
 
-    [Fact(DisplayName = "BR-QD-008: a supply that went quiet says which of the four supplies it was")]
+    [Fact(DisplayName = "a supply that went quiet says which of the four supplies it was")]
     public void ASupplyThatWentQuietSaysWhichOfTheFourSuppliesItWas()
         => Assert.Throws<ArgumentException>(() => QualityIncident.Detect(
             QualityIncidentId.New(),
@@ -175,7 +175,7 @@ public sealed class QualityIncidentTests
             300,
             Applied));
 
-    [Fact(DisplayName = "BR-QD-008: nothing but a supply going quiet carries one of the four")]
+    [Fact(DisplayName = "nothing but a supply going quiet carries one of the four")]
     public void NothingButASupplyGoingQuietCarriesOneOfTheFour()
         => Assert.Throws<ArgumentException>(() => QualityIncident.Detect(
             QualityIncidentId.New(),
@@ -186,7 +186,7 @@ public sealed class QualityIncidentTests
             Applied,
             silence: SupplySilence.SignalSamples));
 
-    [Fact(DisplayName = "BR-QD-008: a supply going quiet under a name this domain does not know is refused")]
+    [Fact(DisplayName = "a supply going quiet under a name this domain does not know is refused")]
     public void ASupplyGoingQuietUnderANameThisDomainDoesNotKnowIsRefused()
         => Assert.Throws<ArgumentOutOfRangeException>(() => QualityIncident.Detect(
             QualityIncidentId.New(),

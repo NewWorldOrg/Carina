@@ -7,12 +7,14 @@ public static class ReservationOutcomeJudgement
     public static ReservationOutcomeKind? Of(
         Reservation reservation,
         bool recorded,
+        bool leftScrambled,
         TimeSpan grace,
         DateTime at)
     {
         ArgumentNullException.ThrowIfNull(reservation);
 
-        if (reservation.RecordingOutcome is RecordingOutcome.Failed or RecordingOutcome.Truncated)
+        if (reservation.RecordingOutcome is RecordingOutcome.Failed or RecordingOutcome.Truncated
+            || (reservation.RecordingOutcome is RecordingOutcome.Complete && leftScrambled))
         {
             return ReservationOutcomeKind.RecordingFailure;
         }
@@ -22,9 +24,6 @@ public static class ReservationOutcomeJudgement
             return null;
         }
 
-        // A claim with a recording behind it is that recording's to settle, and it settles it by
-        // writing the outcome above. A claim with no recording behind it has nothing that will ever
-        // do so, which is the one case a claimed reservation is judged here.
         if (reservation.IsPinned && recorded)
         {
             return null;

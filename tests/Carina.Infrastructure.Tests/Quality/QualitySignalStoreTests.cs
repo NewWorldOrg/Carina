@@ -18,7 +18,7 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-QD-004: a sample comes back with every time and every layer it went in with")]
+    [Fact(DisplayName = "a sample comes back with every time and every layer it went in with")]
     public async Task ASampleComesBackWithEveryTimeAndEveryLayerItWentInWith()
     {
         await ClearAsync();
@@ -48,7 +48,7 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
         Assert.True(held.Signal.WasTaken);
     }
 
-    [Fact(DisplayName = "BR-QV-003: a reading that could not be taken comes back saying which way it could not be")]
+    [Fact(DisplayName = "a reading that could not be taken comes back saying which way it could not be")]
     public async Task AReadingThatCouldNotBeTakenComesBackSayingWhichWayItCouldNotBe()
     {
         await ClearAsync();
@@ -65,7 +65,7 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
         Assert.Equal(SignalNotTaken.NoTimeGiven, held.Signal.NotTakenBecause);
     }
 
-    [Fact(DisplayName = "BR-QS-003: a sweep lets go only of the samples taken before its cutoff")]
+    [Fact(DisplayName = "a sweep lets go only of the samples taken before its cutoff")]
     public async Task ASweepLetsGoOnlyOfTheSamplesTakenBeforeItsCutoff()
     {
         await ClearAsync();
@@ -84,7 +84,7 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
         Assert.Single(await repository.ListTakenBetweenAsync(Noon.AddDays(-30), Noon.AddDays(1), Cancel));
     }
 
-    [Fact(DisplayName = "BR-QD-006: a window saved twice keeps one row and the latest counts")]
+    [Fact(DisplayName = "a window saved twice keeps one row and the latest counts")]
     public async Task AWindowSavedTwiceKeepsOneRowAndTheLatestCounts()
     {
         await ClearAsync();
@@ -105,7 +105,7 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
         Assert.Null(await repository.LatestWindowStartAsync(QualityWindow.Minute, Cancel));
     }
 
-    [Fact(DisplayName = "BR-QD-006: the windows of one layer are swept without touching the other's")]
+    [Fact(DisplayName = "the windows of one layer are swept without touching the other's")]
     public async Task TheWindowsOfOneLayerAreSweptWithoutTouchingTheOthers()
     {
         await ClearAsync();
@@ -126,7 +126,7 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
             await repository.LatestWindowStartAsync(QualityWindow.Hour, Cancel));
     }
 
-    [Fact(DisplayName = "BR-QS-003: what the reader answers with is the windows first and the samples they have not reached")]
+    [Fact(DisplayName = "what the reader answers with is the windows first and the samples they have not reached")]
     public async Task WhatTheReaderAnswersWithIsTheWindowsFirstAndTheSamplesTheyHaveNotReached()
     {
         await ClearAsync();

@@ -14,9 +14,8 @@ public enum SourceLengthFault
 }
 
 /// <summary>
-/// How long the source is, which is the whole a job's progress is measured against. It is a
-/// reading and not a number, because a source that cannot be measured must leave the job running
-/// with no percentage rather than with a wrong one (BR-ED2-013).
+/// How long the source is, which a job's progress is measured against. A source that cannot be
+/// measured leaves the job running with no percentage.
 /// </summary>
 public sealed record SourceLengthReading
 {

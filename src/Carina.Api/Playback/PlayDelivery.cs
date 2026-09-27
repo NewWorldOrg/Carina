@@ -159,12 +159,21 @@ public static class PlayDelivery
 
         if (AsksForThePlan(context.Request))
         {
+            SoundsOffered offering = await OfferedAsync(plan, handover, service, announced, player, context.RequestAborted);
+
+            if (offering.Unread is { } unread && sound.Track is not SoundTrack.Main)
+            {
+                await RefuseUnreadAsync(context, unread);
+
+                return;
+            }
+
             await TellAsync(
                 context,
                 plan,
                 handover,
                 leftOffAt,
-                await OfferedAsync(plan, handover, service, announced, player, context.RequestAborted),
+                offering.Tracks,
                 await MarkedAsync(offered.Data!, chapters, context.RequestAborted));
 
             return;
@@ -194,10 +203,7 @@ public static class PlayDelivery
 
         if (chosen.Unreadable is { } unreadable)
         {
-            await RefuseAsync(
-                context,
-                StatusCodes.Status503ServiceUnavailable,
-                $"{TheSoundsCouldNotBeRead}: {unreadable.Note}");
+            await RefuseUnreadAsync(context, unreadable);
 
             return;
         }
@@ -320,7 +326,11 @@ public static class PlayDelivery
         return [.. (await chapters.ListForJobAsync(made, cancellationToken)).Select(PlaybackChapterResponder.Of)];
     }
 
-    private static async Task<IReadOnlyList<SoundTrack>> OfferedAsync(
+    /// <summary>
+    /// The sounds a plan names. A transcoded recording whose sounds cannot be read is named as
+    /// carrying the main sound, and what could not be read is handed back beside it.
+    /// </summary>
+    private static async Task<SoundsOffered> OfferedAsync(
         PlaybackPlan plan,
         PlaybackFile handover,
         ServiceId service,
@@ -330,13 +340,26 @@ public static class PlayDelivery
     {
         if (!announced.SaidNothing)
         {
-            return SoundArrangement.Of(announced).Tracks;
+            return new SoundsOffered(SoundArrangement.Of(announced).Tracks, null);
         }
 
-        return plan.Transcodes
-            ? SoundArrangement.Of(await player.SoundsAsync(handover, service, cancellationToken)).Tracks
-            : [];
+        if (!plan.Transcodes)
+        {
+            return new SoundsOffered([], null);
+        }
+
+        CarriedSounds carried = await player.SoundsAsync(handover, service, cancellationToken);
+
+        return carried.Known
+            ? new SoundsOffered(SoundArrangement.Of(carried).Tracks, null)
+            : new SoundsOffered(TheMainSoundAlone, carried);
     }
+
+    private static Task RefuseUnreadAsync(HttpContext context, CarriedSounds unread)
+        => RefuseAsync(
+            context,
+            StatusCodes.Status503ServiceUnavailable,
+            $"{TheSoundsCouldNotBeRead}: {unread.Note}");
 
     private static async Task StraightAsync(HttpContext context, PlaybackFile file, PlaybackService playback)
     {
@@ -484,4 +507,6 @@ public static class PlayDelivery
 
         public static SoundChoice Unread(CarriedSounds read) => new(null, read);
     }
+
+    private readonly record struct SoundsOffered(IReadOnlyList<SoundTrack> Tracks, CarriedSounds? Unread);
 }

@@ -8,15 +8,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 [SupportedOSPlatform("linux")]
 public sealed class RecordingCountsOutliveTheAppTests
 {
     /// <summary>
-    /// Acceptance bar 7: the counts a recording had reached are on the ledger while it is still
-    /// being written, and the app going away and coming back does not put them back to nothing.
-    /// The regression this holds off is the one the current system has, where a recording that died
-    /// part way through is indistinguishable from a perfect one because both say zero.
+    /// The counts a recording has reached are on the ledger while it is still being written, and the
+    /// app going away and coming back does not reset them.
     /// </summary>
     [Fact]
     public async Task TheCountsARecordingReachedAreStillOnItAfterTheAppWentAndCameBack()

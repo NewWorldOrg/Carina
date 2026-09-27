@@ -8,7 +8,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class StateChangeGuardSweepTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

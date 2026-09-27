@@ -3,8 +3,8 @@ using Carina.Domain.Base;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// How long one job that finished took, and when it finished. Both come off the ledger's own two
-/// marks, so nothing here is measured against a clock this process happens to be holding.
+/// How long one job that finished took, and when it finished, both taken from the ledger's own
+/// marks.
 /// </summary>
 public sealed record EncodeSpell
 {
@@ -28,15 +28,9 @@ public sealed record EncodeSpell
 }
 
 /// <summary>
-/// What the jobs that finished say about how long an encode takes on this machine. An average of
-/// one job is not an average, so nothing is averaged until <see cref="FewestToAverage"/> of them
-/// have finished: until then the answer says how many there are and leaves the average unsaid,
-/// rather than answering zero as though an encode here were instant.
-/// <para>
-/// The window is the two ends of what was counted, so a reader can tell an average made this week
-/// from one made in the spring. Nothing is split by profile: the spread that matters here is which
-/// encoder ran, and a machine that swerved to the processor is the same machine an hour later.
-/// </para>
+/// What the jobs that finished say about how long an encode takes on this machine. The average is
+/// null until <see cref="FewestToAverage"/> of them have finished; the count and the window, the two
+/// ends of what was counted, are answered either way. Nothing is split by profile.
 /// </summary>
 public sealed record EncodeSpells(int Counted, TimeSpan? Average, DateTime? Oldest, DateTime? Newest)
 {

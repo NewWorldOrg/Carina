@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class AddressAdmissionTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

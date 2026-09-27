@@ -53,7 +53,7 @@ public sealed class ReservationSchedulingService(
 
         IReadOnlyList<Reservation> standing = await reservations.ListPendingAsync(Reaching(at), cancellationToken);
         Reservation[] considered = [.. standing, .. proposed];
-        IReadOnlyDictionary<ReservationId, DateTime> held = await HeldUntilAsync(cancellationToken);
+        IReadOnlyDictionary<ReservationId, RecordingHold> held = await HeldAsync(cancellationToken);
 
         return await ResolveAsync(considered, cancellationToken) is { } selections
             ? Weigh(considered, selections, capacity, at, held)
@@ -74,7 +74,7 @@ public sealed class ReservationSchedulingService(
         }
 
         IReadOnlyList<Reservation> looked = await reservations.ListPendingAsync(Reaching(at), cancellationToken);
-        IReadOnlyDictionary<ReservationId, DateTime> held = await HeldUntilAsync(cancellationToken);
+        IReadOnlyDictionary<ReservationId, RecordingHold> held = await HeldAsync(cancellationToken);
 
         if (await ResolveAsync(Foreseen(looked, joining, revised), cancellationToken) is not { } selections)
         {
@@ -266,7 +266,7 @@ public sealed class ReservationSchedulingService(
         IReadOnlyDictionary<ServiceKey, TuningResolution> selections,
         TunerCapacity capacity,
         DateTime at,
-        IReadOnlyDictionary<ReservationId, DateTime> held)
+        IReadOnlyDictionary<ReservationId, RecordingHold> held)
     {
         List<AllocationCandidate> candidates =
         [
@@ -274,7 +274,8 @@ public sealed class ReservationSchedulingService(
                 AllocationCandidate.Of(
                     reservation,
                     selections[Naming(reservation)].Tuning,
-                    held.TryGetValue(reservation.Id, out DateTime until) ? until : null)),
+                    held.GetValueOrDefault(reservation.Id)?.Until,
+                    held.GetValueOrDefault(reservation.Id)?.Tuner)),
         ];
 
         return SchedulingRun.Of(
@@ -283,16 +284,13 @@ public sealed class ReservationSchedulingService(
     }
 
     /// <summary>
-    /// How far the recordings that are already running are actually promised, read against the
-    /// reservation each of them belongs to. A recording that followed its programme past the end
-    /// its reservation still names holds its tuner until the window it was granted, and the
-    /// reservation row says nothing about that: without this the plan would seat the next
-    /// reservation on a tuner that is not free yet.
+    /// How far the recordings that are already running are actually promised, and the tuner each
+    /// is running on, read against the reservation each of them belongs to.
     /// </summary>
-    private async Task<IReadOnlyDictionary<ReservationId, DateTime>> HeldUntilAsync(
+    private async Task<IReadOnlyDictionary<ReservationId, RecordingHold>> HeldAsync(
         CancellationToken cancellationToken)
     {
-        Dictionary<ReservationId, DateTime> held = [];
+        Dictionary<ReservationId, RecordingHold> held = [];
 
         foreach (Recording recording in await recordings.ListInFlightAsync(cancellationToken))
         {
@@ -301,10 +299,12 @@ public sealed class ReservationSchedulingService(
                 continue;
             }
 
-            if (!held.TryGetValue(reservation, out DateTime standing)
-                || recording.ExpectedWindowEnd > standing)
+            if (!held.TryGetValue(reservation, out RecordingHold? standing)
+                || recording.ExpectedWindowEnd > standing.Until)
             {
-                held[reservation] = recording.ExpectedWindowEnd;
+                held[reservation] = new RecordingHold(
+                    recording.ExpectedWindowEnd,
+                    recording.TunerDeviceId ?? standing?.Tuner);
             }
         }
 
@@ -320,4 +320,6 @@ public sealed class ReservationSchedulingService(
     private DateTime Moment() => clock.GetUtcNow().UtcDateTime;
 
     private readonly record struct ServiceKey(int NetworkId, int ServiceId);
+
+    private sealed record RecordingHold(DateTime Until, TunerDeviceId? Tuner);
 }

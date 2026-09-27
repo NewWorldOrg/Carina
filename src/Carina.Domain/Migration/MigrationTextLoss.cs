@@ -28,33 +28,11 @@ public static class MigrationTextLoss
         return false;
     }
 
-    public static int RowsPastRestoring(SourceLedger ledger)
+    public static int RowsPastRestoring(IEnumerable<string> carried)
     {
-        ArgumentNullException.ThrowIfNull(ledger);
+        ArgumentNullException.ThrowIfNull(carried);
 
-        int found = 0;
-
-        foreach (SourceRecording recording in ledger.Recordings)
-        {
-            found += PastRestoring(recording.Name) ? 1 : 0;
-        }
-
-        foreach (SourceRule rule in ledger.Rules)
-        {
-            found += PastRestoring(rule.Name) ? 1 : 0;
-        }
-
-        foreach (SourceReservation reservation in ledger.Reservations)
-        {
-            found += PastRestoring(reservation.ProgrammeName) ? 1 : 0;
-        }
-
-        foreach (SourceChannelDefinition definition in ledger.ChannelDefinitions)
-        {
-            found += PastRestoring(definition.Name) ? 1 : 0;
-        }
-
-        return found;
+        return carried.Count(PastRestoring);
     }
 
     private static IReadOnlyList<string> Written()

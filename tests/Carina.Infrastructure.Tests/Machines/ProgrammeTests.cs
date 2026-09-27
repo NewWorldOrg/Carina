@@ -14,7 +14,7 @@ public sealed class ProgrammeTests : IDisposable
 
     public void Dispose() => standIns.Dispose();
 
-    [Fact(DisplayName = "BR-EV-002: a command is handed over as an array and never as one piece of text")]
+    [Fact(DisplayName = "a command is handed over as an array and never as one piece of text")]
     public void ACommandIsHandedOverAsAnArrayAndNeverAsOnePieceOfText()
     {
         ProcessStartInfo start = AnotherProgramme.Describe("ffmpeg", ["-i", "/srv/a b; rm -rf /.ts", "-vf", "scale=1280:720"]);
@@ -24,7 +24,7 @@ public sealed class ProgrammeTests : IDisposable
         Assert.False(start.UseShellExecute);
     }
 
-    [Fact(DisplayName = "BR-EV-003: nothing this process was given is handed on to the one it starts")]
+    [Fact(DisplayName = "nothing this process was given is handed on to the one it starts")]
     public void NothingThisProcessWasGivenIsHandedOnToTheOneItStarts()
     {
         string? held = Environment.GetEnvironmentVariable("CARINA_DB_CONNECTION");
@@ -43,7 +43,7 @@ public sealed class ProgrammeTests : IDisposable
         }
     }
 
-    [Fact(DisplayName = "BR-EV-003: the search path a started programme gets is written down, not inherited")]
+    [Fact(DisplayName = "the search path a started programme gets is written down, not inherited")]
     public void TheSearchPathAStartedProgrammeGetsIsWrittenDownNotInherited()
     {
         string? searched = Environment.GetEnvironmentVariable("PATH");

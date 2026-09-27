@@ -7,17 +7,14 @@ public sealed record WindowMove(DateTime EndsAt, bool EndUndecided);
 
 /// <summary>
 /// Whether a recording already under way has to hold its tuner longer than it was promised, and
-/// until when. A programme that runs later than it said takes the recording with it; a programme
-/// that says it will finish sooner does not, because a recording that has already been promised a
-/// window is never cut short by the guide changing its mind. A guide that has gone quiet moves
-/// nothing either way: the window that was last promised stands, and it is the window that stops
-/// the recording.
-///
-/// A programme that announces no end at all is followed on a horizon of the app's own, renewed
-/// while it is still announced. The horizon is renewed once half of it has been spent, so a
-/// recording whose end is never announced asks the driver for more time twice a horizon rather
-/// than on every tick, and never holds less than half a horizon in hand.
+/// until when.
 /// </summary>
+/// <remarks>
+/// A programme that runs later takes the recording with it; one that says it will finish sooner does
+/// not cut the window short, and a guide that has gone quiet moves nothing. A programme that
+/// announces no end is followed on a horizon of the app's own, renewed once half of it has been
+/// spent while the programme is still announced.
+/// </remarks>
 public static class ProgrammeFollowing
 {
     public static WindowMove? Next(

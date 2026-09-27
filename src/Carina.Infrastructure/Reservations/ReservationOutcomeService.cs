@@ -46,10 +46,6 @@ public sealed class ReservationOutcomeService(
                 {
                     bool settling = kind is ReservationOutcomeKind.Missed or ReservationOutcomeKind.Competing;
 
-                    // A claim is written in columns the recording ledger owns, so letting go of one
-                    // goes through the same statement a refused start uses. Its own condition holds
-                    // it back if a recording landed under the claim between the reading and here,
-                    // and that recording is then what settles this reservation after all.
                     if (settling
                         && reservation.StartedAt is { } claimedAt
                         && !await claims.ReleaseAsync(reservation.Id, claimedAt, token))
@@ -126,7 +122,12 @@ public sealed class ReservationOutcomeService(
             .. awaiting
                 .Select(one => (
                     one.Reservation,
-                    Kind: ReservationOutcomeJudgement.Of(one.Reservation, one.Recorded, settings.Grace, at)))
+                    Kind: ReservationOutcomeJudgement.Of(
+                        one.Reservation,
+                        one.Recorded,
+                        one.LeftScrambled,
+                        settings.Grace,
+                        at)))
                 .Where(pair => pair.Kind is not null)
                 .Select(pair => new Judged(pair.Reservation, pair.Kind!.Value))
                 .OrderBy(judged => judged.Reservation.EffectiveStartAt)

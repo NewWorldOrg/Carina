@@ -94,7 +94,7 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         Assert.Null(stored?.Score);
     }
 
-    [Fact(DisplayName = "BR-QD-012: writing a score back leaves a selection made meanwhile as it was made")]
+    [Fact(DisplayName = "writing a score back leaves a selection made meanwhile as it was made")]
     public async Task WritingAScoreBackLeavesASelectionMadeMeanwhileAsItWasMade()
     {
         int network = NextNetwork();

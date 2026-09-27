@@ -17,7 +17,7 @@ public sealed class QualitySessionMeasurementStoreTests(RepositoryDatabase datab
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "決定4: a session measured again keeps one row and its latest counts")]
+    [Fact(DisplayName = "a session measured again keeps one row and its latest counts")]
     public async Task ASessionMeasuredAgainKeepsOneRowAndItsLatestCounts()
     {
         await ClearAsync();
@@ -55,7 +55,7 @@ public sealed class QualitySessionMeasurementStoreTests(RepositoryDatabase datab
         Assert.Equal(Noon.AddSeconds(20), kept.MeasuredUpdatedAt);
     }
 
-    [Fact(DisplayName = "BR-QD-005: only the sessions not yet closed are listed as open")]
+    [Fact(DisplayName = "only the sessions not yet closed are listed as open")]
     public async Task OnlyTheSessionsNotYetClosedAreListedAsOpen()
     {
         await ClearAsync();

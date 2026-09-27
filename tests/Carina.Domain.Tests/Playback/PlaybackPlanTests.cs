@@ -290,7 +290,7 @@ public sealed class PlaybackPlanTests
             PlaybackPlan.For(subject));
     }
 
-    [Fact(DisplayName = "BR-PD-008: the main sound of a recording that has been encoded is still handed over as the artefact")]
+    [Fact(DisplayName = "the main sound of a recording that has been encoded is still handed over as the artefact")]
     public void TheMainSoundIsHandedOverAsTheArtefactEvenWhereTheBroadcastCarriedTwo()
     {
         PlaybackFile encoded = Encoded("encoded.mp4", 1_000_000);
@@ -304,7 +304,7 @@ public sealed class PlaybackPlanTests
         Assert.Equal(encoded, plan.Handover);
     }
 
-    [Fact(DisplayName = "BR-PD-008: a secondary sound the broadcast announced is transcoded from the recording, because the artefact was baked with the main one")]
+    [Fact(DisplayName = "a secondary sound the broadcast announced is transcoded from the recording, because the artefact was baked with the main one")]
     public void ASecondSoundTheBroadcastAnnouncedIsTakenFromTheRecordingRatherThanTheArtefact()
     {
         PlaybackPlan plan = PlaybackPlan.For(
@@ -367,7 +367,7 @@ public sealed class PlaybackPlanTests
             null!));
     }
 
-    [Fact(DisplayName = "A-配信-074: asking for no source in particular prefers the artefact, as it always did")]
+    [Fact(DisplayName = "asking for no source in particular prefers the artefact, as it always did")]
     public void AskingForNoSourceInParticularIsAskingForTheArtefact()
     {
         PlaybackSubject subject = Both(1_000_000, 4_000_000);
@@ -377,7 +377,7 @@ public sealed class PlaybackPlanTests
             PlaybackPlan.For(subject, SoundTrack.Main, SoundArrangement.TheMainSoundAlone));
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded is transcoded from the recording itself even where an artefact was made of it")]
+    [Fact(DisplayName = "a recording asked for as it was recorded is transcoded from the recording itself even where an artefact was made of it")]
     public void ARecordingAskedForAsItWasRecordedIsTakenFromTheRecordingRatherThanFromTheArtefact()
     {
         PlaybackPlan plan = AskedFor(Both(1_000_000, 4_000_000), PlaybackSource.Recording);
@@ -389,7 +389,7 @@ public sealed class PlaybackPlanTests
         Assert.Null(plan.FellBack);
     }
 
-    [Fact(DisplayName = "A-配信-074: the plan of an artefact names the recording itself as the other thing it could be asked for")]
+    [Fact(DisplayName = "the plan of an artefact names the recording itself as the other thing it could be asked for")]
     public void ThePlanOfAnArtefactOffersTheRecordingItselfAsTheOtherOne()
     {
         PlaybackPlan plan = AskedFor(Both(1_000_000, 4_000_000), PlaybackSource.Artefact);
@@ -399,7 +399,7 @@ public sealed class PlaybackPlanTests
         Assert.Equal(PlaybackSource.Recording, plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: the plan of a recording asked for as it was recorded names the artefact as the other thing it could be asked for")]
+    [Fact(DisplayName = "the plan of a recording asked for as it was recorded names the artefact as the other thing it could be asked for")]
     public void ThePlanOfTheRecordingItselfOffersTheArtefactAsTheOtherOne()
     {
         PlaybackPlan plan = AskedFor(Both(1_000_000, 4_000_000), PlaybackSource.Recording);
@@ -408,7 +408,7 @@ public sealed class PlaybackPlanTests
         Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording nothing has encoded has no other thing it could be asked for")]
+    [Fact(DisplayName = "a recording nothing has encoded has no other thing it could be asked for")]
     public void ARecordingNothingHasEncodedOffersNoOtherOne()
     {
         PlaybackPlan plan = AskedFor(
@@ -419,7 +419,7 @@ public sealed class PlaybackPlanTests
         Assert.Null(plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: an artefact the ledger names and the disk has not is not offered as the other thing it could be asked for")]
+    [Fact(DisplayName = "an artefact the ledger names and the disk has not is not offered as the other thing it could be asked for")]
     public void AnArtefactThatIsGoneIsNotOfferedAsTheOtherOne()
     {
         PlaybackPlan plan = AskedFor(
@@ -431,7 +431,7 @@ public sealed class PlaybackPlanTests
         Assert.Null(plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: an artefact holding nothing is not offered as the other thing it could be asked for")]
+    [Fact(DisplayName = "an artefact holding nothing is not offered as the other thing it could be asked for")]
     public void AnArtefactHoldingNothingIsNotOfferedAsTheOtherOne()
     {
         PlaybackPlan plan = AskedFor(
@@ -446,7 +446,7 @@ public sealed class PlaybackPlanTests
         Assert.Null(plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: an artefact out of reach is not offered as the other thing it could be asked for")]
+    [Fact(DisplayName = "an artefact out of reach is not offered as the other thing it could be asked for")]
     public void AnArtefactOutOfReachIsNotOfferedAsTheOtherOne()
     {
         PlaybackPlan plan = AskedFor(
@@ -457,7 +457,7 @@ public sealed class PlaybackPlanTests
         Assert.Null(plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: an artefact whose file is gone was never asked for where the recording itself was, so nothing says the plan fell back to it")]
+    [Fact(DisplayName = "an artefact whose file is gone was never asked for where the recording itself was, so nothing says the plan fell back to it")]
     public void AskingForTheRecordingItselfNeverFallsBackFromAnArtefactItDidNotAskFor()
     {
         PlaybackPlan plan = AskedFor(
@@ -469,7 +469,7 @@ public sealed class PlaybackPlanTests
         Assert.Null(plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and no longer on the disk is refused rather than quietly handed the artefact")]
+    [Fact(DisplayName = "a recording asked for as it was recorded and no longer on the disk is refused rather than quietly handed the artefact")]
     public void TheRecordingItselfBeingGoneIsRefusedRatherThanHandingOverTheArtefactInstead()
     {
         PlaybackPlan plan = AskedFor(
@@ -483,7 +483,7 @@ public sealed class PlaybackPlanTests
         Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and out of reach is told apart from one that is gone")]
+    [Fact(DisplayName = "a recording asked for as it was recorded and out of reach is told apart from one that is gone")]
     public void TheRecordingItselfBeingOutOfReachIsToldApartFromOneThatIsGone()
     {
         PlaybackPlan plan = AskedFor(
@@ -497,7 +497,7 @@ public sealed class PlaybackPlanTests
         Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and holding no bytes is refused rather than quietly handed the artefact")]
+    [Fact(DisplayName = "a recording asked for as it was recorded and holding no bytes is refused rather than quietly handed the artefact")]
     public void TheRecordingItselfHoldingNothingIsRefusedRatherThanHandingOverTheArtefactInstead()
     {
         PlaybackPlan plan = AskedFor(Both(1_000_000, 0), PlaybackSource.Recording);
@@ -507,7 +507,7 @@ public sealed class PlaybackPlanTests
         Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: an artefact handed over while the recording it was made of is gone has no other thing it could be asked for")]
+    [Fact(DisplayName = "an artefact handed over while the recording it was made of is gone has no other thing it could be asked for")]
     public void AnArtefactWhoseRecordingIsGoneOffersNoOtherOne()
     {
         PlaybackPlan plan = AskedFor(
@@ -519,7 +519,7 @@ public sealed class PlaybackPlanTests
         Assert.Null(plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: an artefact handed over while the recording it was made of holds no bytes has no other thing it could be asked for")]
+    [Fact(DisplayName = "an artefact handed over while the recording it was made of holds no bytes has no other thing it could be asked for")]
     public void AnArtefactWhoseRecordingHoldsNothingOffersNoOtherOne()
     {
         PlaybackPlan plan = AskedFor(Both(1_000_000, 0), PlaybackSource.Artefact);
@@ -528,7 +528,7 @@ public sealed class PlaybackPlanTests
         Assert.Null(plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: a second sound sends playback to the recording itself, and the artefact it passed over is still the other thing it could be asked for")]
+    [Fact(DisplayName = "a second sound sends playback to the recording itself, and the artefact it passed over is still the other thing it could be asked for")]
     public void ASecondSoundLeavesTheArtefactAsTheOtherOneItCouldBeAskedFor()
     {
         PlaybackPlan plan = PlaybackPlan.For(
@@ -542,7 +542,7 @@ public sealed class PlaybackPlanTests
         Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording still being written says nothing about which of the two files it would play")]
+    [Fact(DisplayName = "a recording still being written says nothing about which of the two files it would play")]
     public void ARecordingStillBeingWrittenNamesNeitherSourceNorTheOtherOne()
     {
         PlaybackPlan plan = AskedFor(

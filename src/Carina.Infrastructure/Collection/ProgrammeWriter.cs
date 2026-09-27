@@ -9,7 +9,7 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Infrastructure.Collection;
 
-public sealed record ProgrammesWritten(int Added, int Updated, int Discarded);
+public sealed record ProgrammesWritten(int Added, int Updated, int Discarded, int Clamped = 0);
 
 public sealed class ProgrammeWriter(
     IProgrammeRepository programmes,
@@ -60,7 +60,11 @@ public sealed class ProgrammeWriter(
                     at,
                     token);
 
-                return new ProgrammesWritten(absorbed.Added, absorbed.Updated, discarded);
+                return new ProgrammesWritten(
+                    absorbed.Added,
+                    absorbed.Updated,
+                    discarded,
+                    gathered.Values.Count(Programme.Clamps));
             },
             cancellationToken);
 

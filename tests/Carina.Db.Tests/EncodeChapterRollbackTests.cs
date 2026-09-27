@@ -21,7 +21,7 @@ public sealed class EncodeChapterRollbackTests
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "A-エンコード-057: chapters already marked do not stop the ledger going back to before anything looked for them")]
+    [Fact(DisplayName = "chapters already marked do not stop the ledger going back to before anything looked for them")]
     public async Task ChaptersAlreadyMarkedDoNotStopTheLedgerGoingBack()
     {
         await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());

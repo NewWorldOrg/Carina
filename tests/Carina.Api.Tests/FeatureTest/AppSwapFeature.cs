@@ -245,15 +245,14 @@ internal sealed class AppSwapFeature : IAsyncDisposable
     private RunningApp? running;
 
     /// <summary>
-    /// Where this side may read the disk the driver writes to, for the tests that turn on weighing
-    /// what a recording actually left behind. Left unset, nothing tells the app where the output
-    /// root is mounted and a file can only be reported as one that could not be weighed.
+    /// Where this side may read the disk the driver writes to, for the tests that weigh what a recording
+    /// actually left behind. Left unset, a file is reported as one that could not be weighed.
     /// </summary>
     private IntegritySettings? weighing;
 
     /// <summary>
-    /// The pace the watch keeps, for the tests that cannot afford the pauses the default keeps: a
-    /// pause is served by the hand-turned clock, which only rings when a test turns it.
+    /// The pace the watch keeps, for the tests that cannot wait out the default pauses on the
+    /// hand-turned clock.
     /// </summary>
     private RecordingWatchSettings? watching;
 
@@ -378,12 +377,8 @@ internal sealed class AppSwapFeature : IAsyncDisposable
     }
 
     /// <summary>
-    /// The supervisor's own retry cadence keeps the real clock, while everything the application
-    /// reasons about time with is hand turned. Its pauses are a retry interval rather than
-    /// something a test means to hold still: parked on a clock nothing turns, the app gets one
-    /// look at a driver that went away, and a driver that answered that one look with a refusal
-    /// rather than with silence — which is what a server part way through stopping answers — is
-    /// reported as connected for the rest of the test.
+    /// The driver connection supervisor, keeping its retry cadence on the real clock while everything
+    /// else the application reads time from is hand turned.
     /// </summary>
     private static IHostedService WatchingTheDriver(IServiceProvider provider)
         => ActivatorUtilities.CreateInstance<DriverConnectionSupervisor>(provider, TimeProvider.System);
@@ -427,8 +422,8 @@ internal sealed class AppSwapFeature : IAsyncDisposable
     }
 
     /// <summary>
-    /// The programme airs from the moment it is added, on a clock brought up to the real one first,
-    /// because the driver ends a recording on its own clock at the end it was started with.
+    /// A tick for a programme that airs from the moment it is added, on a clock brought up to the real
+    /// one first.
     /// </summary>
     private RecordingTick DueFromNow(TimeSpan window)
     {

@@ -96,7 +96,7 @@ public sealed class FfmpegChapterInvocationTests
             After(FfmpegChapterInvocation.Peeking(Source, Service, Cores, TimeSpan.FromSeconds(1.5), AsItStands), "-ss"));
     }
 
-    [Theory(DisplayName = "BR-EV-002: each of the numbers the look is made of is written into the filter it is for the same way whatever language the machine is set to")]
+    [Theory(DisplayName = "each of the numbers the look is made of is written into the filter it is for the same way whatever language the machine is set to")]
     [MemberData(nameof(EveryWayOfLooking))]
     public void EachNumberIsWrittenIntoTheFilterItIsFor(int noise, int silence, double scene, string heard, string seen)
     {
@@ -108,7 +108,7 @@ public sealed class FfmpegChapterInvocationTests
             After(FfmpegChapterInvocation.Peeking(Source, Service, Cores, TimeSpan.FromSeconds(300.25), settings), "-vf"));
     }
 
-    [Fact(DisplayName = "BR-ED2-005: neither run reaches for the card, so the one this machine has stays between the encode and whoever is watching")]
+    [Fact(DisplayName = "neither run reaches for the card, so the one this machine has stays between the encode and whoever is watching")]
     public void NeitherRunReachesForTheCard()
         => Assert.All(
             Both(AsItStands),
@@ -118,7 +118,7 @@ public sealed class FfmpegChapterInvocationTests
                 Assert.DoesNotContain("/dev/dri", argument, StringComparison.Ordinal);
             });
 
-    [Fact(DisplayName = "BR-ED2-005: neither run is allowed more of the machine than an encode is")]
+    [Fact(DisplayName = "neither run is allowed more of the machine than an encode is")]
     public void NeitherRunIsAllowedMoreOfTheMachineThanAnEncodeIs()
     {
         Assert.Equal("3", After(FfmpegChapterInvocation.Listening(Source, Service, 3, AsItStands), "-threads"));
@@ -167,7 +167,7 @@ public sealed class FfmpegChapterInvocationTests
             After(FfmpegChapterInvocation.Peeking(Source, Service, Cores, TimeSpan.FromSeconds(100), AsItStands), "-loglevel"));
     }
 
-    [Theory(DisplayName = "BR-EV-002: nothing that reaches an argument was written by anyone but this repository")]
+    [Theory(DisplayName = "nothing that reaches an argument was written by anyone but this repository")]
     [MemberData(nameof(EveryWayOfLooking))]
     public void EveryArgumentIsAnOptionNameAConstantOrThePathItWasHandedIn(
         int noise,
@@ -212,7 +212,7 @@ public sealed class FfmpegChapterInvocationTests
         Assert.All(Both(settings), argument => Assert.Contains(argument, known, StringComparer.Ordinal));
     }
 
-    [Theory(DisplayName = "BR-EV-002: an argument is never one piece of text carrying another")]
+    [Theory(DisplayName = "an argument is never one piece of text carrying another")]
     [MemberData(nameof(EveryWayOfLooking))]
     public void AnArgumentIsNeverOnePieceOfTextCarryingAnother(
         int noise,
@@ -234,7 +234,7 @@ public sealed class FfmpegChapterInvocationTests
                 mark => argument.Contains(mark, StringComparison.Ordinal)));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: the run that watches for the watermark decodes only the pictures that stand on their own, keeps one a second, and hands them over in grey, asking for exactly these")]
+    [Fact(DisplayName = "the run that watches for the watermark decodes only the pictures that stand on their own, keeps one a second, and hands them over in grey, asking for exactly these")]
     public void TheArgumentsForWatchingForTheWatermarkAreExactlyThese()
         => Assert.Equal(
             [
@@ -265,7 +265,7 @@ public sealed class FfmpegChapterInvocationTests
             ],
             FfmpegChapterInvocation.Watching(Source, Service, Cores));
 
-    [Fact(DisplayName = "BR-ED2-007: the pictures the watch hands over are the size a watermark is looked for in, one byte a pixel")]
+    [Fact(DisplayName = "the pictures the watch hands over are the size a watermark is looked for in, one byte a pixel")]
     public void ThePicturesTheWatchHandsOverAreTheSizeAWatermarkIsLookedForIn()
     {
         Assert.Contains(
@@ -275,7 +275,7 @@ public sealed class FfmpegChapterInvocationTests
         Assert.Contains("format=gray", FfmpegChapterInvocation.Shrunk, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: the watch neither reaches for the card nor is allowed more of the machine than an encode is, and it keeps the source's own clock")]
+    [Fact(DisplayName = "the watch neither reaches for the card nor is allowed more of the machine than an encode is, and it keeps the source's own clock")]
     public void TheWatchStaysWithinWhatTheLookIsAllowed()
     {
         IReadOnlyList<string> watching = FfmpegChapterInvocation.Watching(Source, Service, 3);
@@ -293,7 +293,7 @@ public sealed class FfmpegChapterInvocationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegChapterInvocation.Watching(Source, Service, 0));
     }
 
-    [Fact(DisplayName = "BR-EV-002: no argument of the watch is one piece of text carrying another")]
+    [Fact(DisplayName = "no argument of the watch is one piece of text carrying another")]
     public void NoArgumentOfTheWatchCarriesAnother()
     {
         string[] whatAShellWouldReadAgain = [" ", ";", "|", "&", "`", "$(", "\n"];

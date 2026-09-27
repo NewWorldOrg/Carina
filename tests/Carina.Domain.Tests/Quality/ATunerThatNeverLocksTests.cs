@@ -18,7 +18,7 @@ public sealed class ATunerThatNeverLocksTests
     private static readonly IReadOnlyList<QualityThresholdStanding> Levels =
         QualityThresholdStanding.Over([], Noon);
 
-    [Fact(DisplayName = "BR-QD-004: a tuner that answered for fifteen hours without once locking reads as beyond the level, never as unmeasured")]
+    [Fact(DisplayName = "a tuner that answered for fifteen hours without once locking reads as beyond the level, never as unmeasured")]
     public void ATunerThatAnsweredForFifteenHoursWithoutOnceLockingReadsAsBeyondTheLevel()
     {
         QualitySignalRead read = Read(QualityThresholdKey.LockRate, QualitySignalSurvey.Figures(Hours(), []));
@@ -28,7 +28,7 @@ public sealed class ATunerThatNeverLocksTests
         Assert.Equal(1, read.Reading.BeyondThreshold);
     }
 
-    [Fact(DisplayName = "BR-QD-001: the carrier to noise of a tuner that never locked reads as unmeasured rather than as a cold figure it never had")]
+    [Fact(DisplayName = "the carrier to noise of a tuner that never locked reads as unmeasured rather than as a cold figure it never had")]
     public void TheCarrierToNoiseOfATunerThatNeverLockedReadsAsUnmeasured()
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures([], Unlocked());
@@ -48,7 +48,7 @@ public sealed class ATunerThatNeverLocksTests
             QualityStates.Of(Read(QualityThresholdKey.LockRate, figures).Reading));
     }
 
-    [Fact(DisplayName = "BR-QD-007: a tuner that keeps answering while it never locks is not a supply that went quiet")]
+    [Fact(DisplayName = "a tuner that keeps answering while it never locks is not a supply that went quiet")]
     public void ATunerThatKeepsAnsweringWhileItNeverLocksIsNotASupplyThatWentQuiet()
     {
         TimeSpan longest = TimeSpan.FromSeconds(QualityThresholdShapes.Of(QualityThresholdKey.SupplySilence).Shipped);

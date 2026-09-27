@@ -156,7 +156,6 @@ internal sealed class MarkedRecordingFeature : IAsyncDisposable
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DropPositionsArePlayablePositionsTests
 {
     [Fact]

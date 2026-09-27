@@ -25,8 +25,8 @@ public sealed class RecordingIsFrozenOnceItEndsTests
 
         Assert.Equal(
             [
-                "Abort", "Acquire", "Erased", "Extend", "Illustrate", "Interrupt", "Measure", "Note", "Resume",
-                "Settle", "Wrote",
+                "Abort", "Acquire", "Descrambled", "Erased", "Extend", "Illustrate", "Interrupt", "Measure", "Note",
+                "Resume", "Settle", "Wrote",
             ],
             offered);
         Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Length);
@@ -60,7 +60,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
             .Where(method => !method.IsSpecialName)];
 
     [Fact]
-    public void EveryOneOfThemButThePictureAndTheErasureRefusesOnceTheRecordingHasEnded()
+    public void EveryOneOfThemButThePictureTheErasureAndTheDescramblingRefusesOnceTheRecordingHasEnded()
     {
         Recording recording = Settled();
 
@@ -83,9 +83,30 @@ public sealed class RecordingIsFrozenOnceItEndsTests
 
         recording.Illustrate(ThumbnailState.Ready);
         recording.Erased(RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1), Later);
+        recording.Descrambled(Later);
 
         Assert.Equal(ThumbnailState.Ready, recording.ThumbnailState);
         Assert.Equal(Later, recording.LeftBehindAt);
+        Assert.Equal(Later, recording.DescrambledAt);
+    }
+
+    [Fact]
+    public void DescramblingMovesTheColumnThatSaysSoAndNoOthers()
+    {
+        Recording recording = Settled();
+        IReadOnlyDictionary<string, string> before = Read(recording);
+
+        recording.Descrambled(Later);
+
+        IReadOnlyDictionary<string, string> after = Read(recording);
+        string[] moved =
+        [
+            .. before.Where(held => !string.Equals(after[held.Key], held.Value, StringComparison.Ordinal))
+                .Select(held => held.Key)
+                .Order(StringComparer.Ordinal),
+        ];
+
+        Assert.Equal([nameof(Recording.DescrambledAt)], moved);
     }
 
     [Fact]
@@ -132,13 +153,14 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Empty(moved.Except(
             [nameof(Recording.ThumbnailState), nameof(Recording.ThumbnailFault)],
             StringComparer.Ordinal));
-        Assert.Equal(47, before.Count);
+        Assert.Equal(48, before.Count);
     }
 
     private static Recording Settled()
     {
         Recording recording = RecordingFactory.Started();
         recording.Note(RecordingFactory.Fault());
+        recording.Note(RecordingFactory.Fault(RecordingFault.ScramblingUnresolved));
         recording.Settle(RecordingOutcome.Truncated, 1_200_000, Later);
 
         return recording;
@@ -147,7 +169,8 @@ public sealed class RecordingIsFrozenOnceItEndsTests
     private static IReadOnlyDictionary<string, string> Read(Recording recording)
         => typeof(Recording)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(property => property.Name != nameof(Recording.ThumbnailShowsAnUnfinishedRecording))
+            .Where(property => property.Name != nameof(Recording.ThumbnailShowsAnUnfinishedRecording)
+                               && property.Name != nameof(Recording.LeftScrambled))
             .ToDictionary(
                 property => property.Name,
                 property => Rendered(property.GetValue(recording)),

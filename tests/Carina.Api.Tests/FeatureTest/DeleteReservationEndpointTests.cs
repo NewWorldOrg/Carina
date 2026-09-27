@@ -11,7 +11,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DeleteReservationEndpointTests
 {
     private const string ReservationIdTextDescription =

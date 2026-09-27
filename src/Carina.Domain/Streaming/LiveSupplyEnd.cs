@@ -17,6 +17,8 @@ public enum LiveSupplyEnd
     DriverLost = 7,
 
     WentQuiet = 8,
+
+    TranscoderFellBehind = 9,
 }
 
 public sealed record LiveSupplyEnding

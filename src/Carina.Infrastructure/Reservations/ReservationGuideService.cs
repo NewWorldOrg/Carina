@@ -11,20 +11,14 @@ public sealed record GuideRun(
     IReadOnlyList<ReservationId> Cancelled);
 
 /// <summary>
-/// Holds every reservation still ahead against what the guide says now. A broadcast stays the same
-/// broadcast because the guide names it — network, service and event — so a renamed programme at a
-/// different hour is still the one that was reserved, and the reservation follows it there. A
-/// broadcast the guide no longer announces takes its reservation out of the running.
-///
-/// Nothing here reads "the guide does not hold it" as "it is not broadcast". A programme row is
-/// never taken away while the broadcast is still ahead, and the row's own timestamp stands still
-/// for as long as nothing about the programme changes, so neither of them separates a broadcast
-/// that was dropped from one the guide was simply never read far enough to carry. What separates
-/// them is the mark a reading leaves on the programmes it named: a reading that heard the whole of
-/// a service's announced schedule marks every programme it named, so a programme of that service
-/// carrying an older mark than the service's newest one was offered for reading and was not there.
-/// A service no reading has ever heard whole says nothing, and nothing is what is done about it.
+/// Holds every reservation still ahead against what the guide says now.
 /// </summary>
+/// <remarks>
+/// A broadcast is identified by the guide's network, service and event, so a reservation follows a
+/// renamed or moved programme. A broadcast the guide no longer announces takes its reservation out
+/// of the running. A broadcast is no longer announced when its programme carries an older mark than
+/// its service's newest whole reading; a service no reading has ever heard whole is left alone.
+/// </remarks>
 public sealed class ReservationGuideService(
     IReservationRepository reservations,
     IReservationOutcomeRepository outcomes,
@@ -147,10 +141,9 @@ public sealed class ReservationGuideService(
     }
 
     /// <summary>
-    /// Taking a reservation out of the running is the allocation's move to make, so it is made
-    /// there — the same call the person pressing cancel goes through — and what is left over is
-    /// only the mark saying why and the line in the ledger. An allocation that could not be settled
-    /// leaves the reservation exactly as it was, and the next pass reads the guide again.
+    /// Takes reservations out of the running through the allocation, the same call a person's cancel
+    /// goes through, then marks why and writes the ledger line. An allocation that could not be settled
+    /// leaves the reservation as it was.
     /// </summary>
     private async Task<IReadOnlyList<ReservationId>> CancelAsync(
         IReadOnlyList<Reservation> gone,

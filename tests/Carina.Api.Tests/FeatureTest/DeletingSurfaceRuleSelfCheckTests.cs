@@ -8,7 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DeletingSurfaceRuleSelfCheckTests
 {
     public const string LongWayRound = "DELETE /api/recordings/{id}/fixture-only";

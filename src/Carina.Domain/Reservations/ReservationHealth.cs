@@ -3,10 +3,10 @@ using Carina.Domain.Base;
 namespace Carina.Domain.Reservations;
 
 /// <summary>
-/// What stands in the way of the reservations still ahead, counted at one moment: the ones that will
-/// not be recorded because they lost a contest, the ones with nowhere to tune, and the ones whose
-/// programme moved or vanished from the guide and nobody has looked at yet. A reservation whose
-/// window has closed is history and belongs to the outcome ledger, not here.
+/// What stands in the way of the reservations still ahead, counted at one moment: the ones that
+/// lost a contest, the ones with nowhere to tune, and the ones whose programme moved or vanished
+/// from the guide and nobody has looked at yet. Reservations whose window has closed are not
+/// counted.
 /// </summary>
 public sealed record ReservationHealth(
     DateTime AsOf,

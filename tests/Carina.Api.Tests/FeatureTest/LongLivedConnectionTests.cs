@@ -9,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LongLivedConnectionTests
 {
     private static readonly Uri Events = new(AppEventStream.Path, UriKind.Relative);

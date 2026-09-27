@@ -45,7 +45,7 @@ public sealed class EpgCollector(
 
     private async Task SweepAsync(CancellationToken stoppingToken)
     {
-        using var interruption = new CancellationTokenSource();
+        using CancellationTokenSource interruption = new();
         using IDisposable subscription = signals.Subscribe(name =>
         {
             if (string.Equals(name, DriverClientSignals.InstanceChanged, StringComparison.Ordinal))

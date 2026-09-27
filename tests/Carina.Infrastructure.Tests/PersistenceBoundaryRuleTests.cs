@@ -72,7 +72,7 @@ public sealed class PersistenceBoundaryRuleTests
         Assert.Equal(["integrity_check"], pointing);
     }
 
-    [Fact(DisplayName = "BR-D-004: the encode ledger is seven tables, and its foreign keys never leave it")]
+    [Fact(DisplayName = "the encode ledger is seven tables, and its foreign keys never leave it")]
     public void TheEncodeLedgerIsSevenTablesAndItsForeignKeysNeverLeaveIt()
     {
         using CarinaDbContext context = Carina();
@@ -99,7 +99,7 @@ public sealed class PersistenceBoundaryRuleTests
             pointing);
     }
 
-    [Fact(DisplayName = "BR-D-004: an encode job reaches the recording it encodes by value, not by key")]
+    [Fact(DisplayName = "an encode job reaches the recording it encodes by value, not by key")]
     public void AnEncodeJobReachesTheRecordingItEncodesByValue()
     {
         using CarinaDbContext context = Carina();
@@ -145,7 +145,7 @@ public sealed class PersistenceBoundaryRuleTests
         Assert.Contains("programme_start_at", columns, StringComparer.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-QD-013: the quality tables are six, and none of them holds a key into another domain")]
+    [Fact(DisplayName = "the quality tables are six, and none of them holds a key into another domain")]
     public void TheQualityTablesAreSixAndNoneOfThemHoldsAKeyIntoAnotherDomain()
     {
         using CarinaDbContext context = Carina();
@@ -167,7 +167,7 @@ public sealed class PersistenceBoundaryRuleTests
             .SelectMany(entityType => entityType.GetForeignKeys()));
     }
 
-    [Fact(DisplayName = "BR-QD-013: what quality watches it reaches by value, so dropping its tables drags nothing away")]
+    [Fact(DisplayName = "what quality watches it reaches by value, so dropping its tables drags nothing away")]
     public void WhatQualityWatchesItReachesByValue()
     {
         using CarinaDbContext context = Carina();
@@ -222,7 +222,7 @@ public sealed class PersistenceBoundaryRuleTests
             pointing);
     }
 
-    [Fact(DisplayName = "BR-KD-013: where the watching got to reaches the recording by value, holding no key into the ledger")]
+    [Fact(DisplayName = "where the watching got to reaches the recording by value, holding no key into the ledger")]
     public void WhereTheWatchingGotToReachesTheRecordingByValue()
     {
         using CarinaDbContext context = Carina();

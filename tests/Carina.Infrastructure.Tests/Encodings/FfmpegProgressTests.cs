@@ -8,10 +8,8 @@ public sealed class FfmpegProgressTests
     private static readonly EncodeSound AsItStands = EncodeSound.EveryStreamAsItStands;
 
     /// <summary>
-    /// What ffmpeg 6.1.6 actually writes to <c>-progress pipe:1</c>, read off the container on
-    /// 2026-09-05: the first block before anything has been written carries N/A throughout, and
-    /// out_time_ms holds microseconds — the same number as out_time_us — which is why nothing
-    /// here reads out_time_ms.
+    /// What ffmpeg 6.1.6 writes to <c>-progress pipe:1</c>: the first block carries N/A throughout, and
+    /// <c>out_time_ms</c> holds the same number as <c>out_time_us</c>.
     /// </summary>
     private const string AsFfmpegWritesIt = """
         frame=0
@@ -43,7 +41,7 @@ public sealed class FfmpegProgressTests
 
     private static readonly TimeSpan Whole = TimeSpan.FromSeconds(2097.502489);
 
-    [Fact(DisplayName = "BR-ED2-013: how far along is read by key and never by position")]
+    [Fact(DisplayName = "how far along is read by key and never by position")]
     public void HowFarAlongIsReadByKeyAndNeverByPosition()
     {
         var reading = new FfmpegProgressReading(Whole);
@@ -152,7 +150,7 @@ public sealed class FfmpegProgressTests
         Assert.Null(reading.Read("progress=continue"));
     }
 
-    [Fact(DisplayName = "BR-ED2-013: the job asks ffmpeg for the block form of progress and not for its status line")]
+    [Fact(DisplayName = "the job asks ffmpeg for the block form of progress and not for its status line")]
     public void TheJobAsksFfmpegForTheBlockFormOfProgressAndNotForItsStatusLine()
     {
         string[] arguments = [.. FfmpegEncodeInvocation.Arguments(

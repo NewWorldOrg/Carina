@@ -96,8 +96,6 @@ public sealed class DriverTransportStream : ILiveTransportStream
             return HeldUntil >= until;
         }
 
-        // A driver that spelled out a refusal spells out the same one every time from here; one that
-        // could not be reached may answer when it is next asked.
         if (held.Outcome is not DriverCallOutcome.Unreachable)
         {
             Volatile.Write(ref wontHold, 1);
@@ -148,8 +146,6 @@ public sealed class DriverTransportStream : ILiveTransportStream
             }
             finally
             {
-                // Let go last and whatever happened above: a stop that did not land leaves the
-                // session for the sweep, and holding the lease would hide it from that sweep.
                 leases.LetGo(session);
             }
         }

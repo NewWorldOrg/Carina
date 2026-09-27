@@ -10,7 +10,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DeleteIntegrityFindingEndpointTests
 {
     private const string IdDescription =

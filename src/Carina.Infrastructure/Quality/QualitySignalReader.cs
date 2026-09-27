@@ -17,15 +17,22 @@ public sealed class QualitySignalReader(
     {
         ArgumentNullException.ThrowIfNull(period);
 
-        DateTime boundary = await RolledThroughAsync(period, cancellationToken);
+        if (await RolledWithinAsync(period, cancellationToken) is not { } rolled)
+        {
+            return [.. (await RawAsync(period.From, period.Until, cancellationToken)).Select(QualitySignalWindow.Of)];
+        }
 
-        IReadOnlyList<QualitySignalRollup> rolled = boundary > period.From
-            ? await rollups.ListAsync(QualityWindow.Hour, period.From, boundary, cancellationToken)
-            : [];
+        IReadOnlyList<QualitySignalSample> head = await RawAsync(period.From, rolled.From, cancellationToken);
+        IReadOnlyList<QualitySignalRollup> windows =
+            await rollups.ListAsync(QualityWindow.Hour, rolled.From, rolled.Until, cancellationToken);
+        IReadOnlyList<QualitySignalSample> tail = await RawAsync(rolled.Until, period.Until, cancellationToken);
 
-        IReadOnlyList<QualitySignalSample> raw = await TailAsync(period, boundary, cancellationToken);
-
-        return [.. rolled.Select(QualitySignalWindow.Of), .. raw.Select(QualitySignalWindow.Of)];
+        return
+        [
+            .. head.Select(QualitySignalWindow.Of),
+            .. windows.Select(QualitySignalWindow.Of),
+            .. tail.Select(QualitySignalWindow.Of),
+        ];
     }
 
     public async Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(
@@ -35,41 +42,52 @@ public sealed class QualitySignalReader(
         ArgumentNullException.ThrowIfNull(frame);
 
         QualityPeriod period = frame.Period;
-        DateTime boundary = await RolledThroughAsync(period, cancellationToken);
 
-        IReadOnlyList<QualitySignalWindow> rolled = boundary > period.From
-            ? await rollups.ListFoldedAsync(
-                QualityWindow.Hour,
-                period.From,
-                boundary,
-                frame.Length,
-                QualityTrendFrame.Grid,
-                cancellationToken)
-            : [];
+        if (await RolledWithinAsync(period, cancellationToken) is not { } rolled)
+        {
+            return [.. (await RawAsync(period.From, period.Until, cancellationToken)).Select(QualitySignalWindow.Of)];
+        }
 
-        IReadOnlyList<QualitySignalSample> raw = await TailAsync(period, boundary, cancellationToken);
+        IReadOnlyList<QualitySignalSample> head = await RawAsync(period.From, rolled.From, cancellationToken);
+        IReadOnlyList<QualitySignalWindow> windows = await rollups.ListFoldedAsync(
+            QualityWindow.Hour,
+            rolled.From,
+            rolled.Until,
+            frame.Length,
+            QualityTrendFrame.Grid,
+            cancellationToken);
+        IReadOnlyList<QualitySignalSample> tail = await RawAsync(rolled.Until, period.Until, cancellationToken);
 
-        return [.. rolled, .. raw.Select(QualitySignalWindow.Of)];
+        return [.. head.Select(QualitySignalWindow.Of), .. windows, .. tail.Select(QualitySignalWindow.Of)];
     }
 
-    private async Task<DateTime> RolledThroughAsync(QualityPeriod period, CancellationToken cancellationToken)
+    private static DateTime FirstWholeHourFrom(DateTime at)
     {
-        DateTime? latest = await rollups.LatestWindowStartAsync(QualityWindow.Hour, cancellationToken);
+        DateTime start = QualityWindows.StartOf(at, QualityWindow.Hour);
 
-        DateTime rolledThrough = latest is { } window
-            ? QualityWindows.EndOf(window, QualityWindow.Hour)
-            : period.From;
-
-        return rolledThrough < period.From
-            ? period.From
-            : rolledThrough > period.Until ? period.Until : rolledThrough;
+        return start == at ? start : QualityWindows.EndOf(start, QualityWindow.Hour);
     }
 
-    private async Task<IReadOnlyList<QualitySignalSample>> TailAsync(
-        QualityPeriod period,
-        DateTime boundary,
+    private async Task<QualityRollupSpan?> RolledWithinAsync(QualityPeriod period, CancellationToken cancellationToken)
+    {
+        if (await rollups.LatestWindowStartAsync(QualityWindow.Hour, cancellationToken) is not { } latest)
+        {
+            return null;
+        }
+
+        DateTime from = FirstWholeHourFrom(period.From);
+        DateTime rolledThrough = QualityWindows.EndOf(latest, QualityWindow.Hour);
+        DateTime lastWholeHourEnds = QualityWindows.StartOf(period.Until, QualityWindow.Hour);
+        DateTime until = rolledThrough < lastWholeHourEnds ? rolledThrough : lastWholeHourEnds;
+
+        return from < until ? new QualityRollupSpan(from, until) : null;
+    }
+
+    private async Task<IReadOnlyList<QualitySignalSample>> RawAsync(
+        DateTime from,
+        DateTime until,
         CancellationToken cancellationToken)
-        => boundary < period.Until
-            ? await samples.ListTakenBetweenAsync(boundary, period.Until, cancellationToken)
+        => from < until
+            ? await samples.ListTakenBetweenAsync(from, until, cancellationToken)
             : [];
 }

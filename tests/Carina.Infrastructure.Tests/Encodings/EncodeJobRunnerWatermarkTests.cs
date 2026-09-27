@@ -9,7 +9,7 @@ public sealed class EncodeJobRunnerWatermarkTests
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-ED2-007: the first recording of a service is looked at with no watermark, and a recording is never looked at with the one learned from itself")]
+    [Fact(DisplayName = "the first recording of a service is looked at with no watermark, and a recording is never looked at with the one learned from itself")]
     public async Task TheFirstRecordingIsLookedAtWithNoneAndNoneLearnedFromItself()
     {
         using var harness = new EncodeHarness();
@@ -34,7 +34,7 @@ public sealed class EncodeJobRunnerWatermarkTests
         Assert.Equal([recording.Id, recording.Id], harness.Watermarks.Asked);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a recording is looked at with the watermark learned ahead from another recording of its service")]
+    [Fact(DisplayName = "a recording is looked at with the watermark learned ahead from another recording of its service")]
     public async Task ARecordingIsLookedAtWithTheWatermarkLearnedAhead()
     {
         using var harness = new EncodeHarness();
@@ -57,7 +57,7 @@ public sealed class EncodeJobRunnerWatermarkTests
         Assert.Equal(Covering(7).Packed(), handed.Packed());
     }
 
-    [Fact(DisplayName = "BR-ED2-007: what the look learned is kept against the recording it was learned from, once the reading is in the ledger")]
+    [Fact(DisplayName = "what the look learned is kept against the recording it was learned from, once the reading is in the ledger")]
     public async Task WhatTheLookLearnedIsKeptAgainstTheRecordingItWasLearnedFrom()
     {
         using var harness = new EncodeHarness();
@@ -79,7 +79,7 @@ public sealed class EncodeJobRunnerWatermarkTests
         Assert.Equal(ChapterVerdict.NothingFound, judgedWhenKept);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a reading that learned nothing keeps nothing")]
+    [Fact(DisplayName = "a reading that learned nothing keeps nothing")]
     public async Task AReadingThatLearnedNothingKeepsNothing()
     {
         using var harness = new EncodeHarness();
@@ -91,7 +91,7 @@ public sealed class EncodeJobRunnerWatermarkTests
         Assert.Empty(harness.Watermarks.Kept);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: watermarks that can be neither read nor kept fail nothing, and the job is looked at without one")]
+    [Fact(DisplayName = "watermarks that can be neither read nor kept fail nothing, and the job is looked at without one")]
     public async Task WatermarksThatCanBeNeitherReadNorKeptFailNothing()
     {
         using var harness = new EncodeHarness();
@@ -106,7 +106,7 @@ public sealed class EncodeJobRunnerWatermarkTests
         Assert.Null(Assert.Single(looked.LearnedAhead));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a machine told not to watch for the watermark asks for none and hands the look none")]
+    [Fact(DisplayName = "a machine told not to watch for the watermark asks for none and hands the look none")]
     public async Task AMachineToldNotToWatchAsksForNone()
     {
         using var harness = new EncodeHarness();
@@ -128,7 +128,7 @@ public sealed class EncodeJobRunnerWatermarkTests
         Assert.Empty(harness.Watermarks.Asked);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a machine told not to look for the breaks asks for no watermark either")]
+    [Fact(DisplayName = "a machine told not to look for the breaks asks for no watermark either")]
     public async Task AMachineToldNotToLookAsksForNoWatermark()
     {
         using var harness = new EncodeHarness();

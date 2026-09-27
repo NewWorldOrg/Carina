@@ -6,7 +6,7 @@ public sealed class EncodeProgressTests
 {
     private static readonly TimeSpan Whole = TimeSpan.FromSeconds(2097.502489);
 
-    [Fact(DisplayName = "BR-ED2-013: how far along a job is comes from a whole read off the source")]
+    [Fact(DisplayName = "how far along a job is comes from a whole read off the source")]
     public void HowFarAlongAJobIsComesFromAWholeReadOffTheSource()
     {
         EncodeProgress progress = EncodeProgress.Of(TimeSpan.FromSeconds(1048.75), Whole, speed: 2, ended: false);
@@ -15,7 +15,7 @@ public sealed class EncodeProgressTests
         Assert.Equal(524.376, progress.Left!.Value.TotalSeconds, 3);
     }
 
-    [Fact(DisplayName = "BR-ED2-014: a job whose whole is unknown says how far it has got and not how far along")]
+    [Fact(DisplayName = "a job whose whole is unknown says how far it has got and not how far along")]
     public void AJobWhoseWholeIsUnknownSaysHowFarItHasGotAndNotHowFarAlong()
     {
         EncodeProgress progress = EncodeProgress.Of(TimeSpan.FromSeconds(60), null, speed: 2, ended: false);

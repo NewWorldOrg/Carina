@@ -8,7 +8,6 @@ using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ProgrammeSearchEndpointTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);

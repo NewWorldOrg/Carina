@@ -4,9 +4,8 @@ using Carina.Domain.Streaming;
 namespace Carina.Infrastructure.Streaming;
 
 /// <summary>
-/// Which encoder the live path uses. Whether the card can be reached at all is a fact about the
-/// machine, not about live viewing, so it is read from <see cref="IMachineCapabilityReader"/>;
-/// what is left here is only what live asked for.
+/// Which encoder the live path uses, from what live asked for and whether
+/// <see cref="IMachineCapabilityReader"/> says the card can be reached.
 /// </summary>
 public sealed class LiveEncoderSelection(LiveTranscodeSettings settings, IMachineCapabilityReader machine)
     : ILiveEncoderSelector

@@ -210,6 +210,23 @@ public sealed class ProgrammeTests
     [Theory]
     [InlineData("name")]
     [InlineData("summary")]
+    public void TextLongerThanThisSystemKeepsIsToldApartBeforeItIsCut(string field)
+    {
+        int most = field == "name" ? Programme.NameMaxLength : Programme.SummaryMaxLength;
+        string overlong = new string('あ', most + 1);
+
+        Assert.True(Programme.Clamps(field == "name" ? Broadcast(name: overlong) : Broadcast(summary: overlong)));
+    }
+
+    [Fact]
+    public void TextThatFitsIsNotToldApartAsCut()
+        => Assert.False(Programme.Clamps(Broadcast(
+            name: new string('あ', Programme.NameMaxLength),
+            summary: new string('あ', Programme.SummaryMaxLength))));
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("summary")]
     public void TextAlreadyCutIsNotSeenAsChangingWhenItArrivesAgain(string field)
     {
         int most = field == "name" ? Programme.NameMaxLength : Programme.SummaryMaxLength;
@@ -339,6 +356,34 @@ public sealed class ProgrammeTests
     }
 
     [Fact]
+    public void ADetailedTableSaysNothingOfSubtitlesOrOfWhereTheProgrammeWasDescribed()
+    {
+        var programme = Programme.Discover(Broadcast() with { HasSubtitles = true }, At);
+
+        programme.Absorb(
+            Broadcast(name: string.Empty, summary: string.Empty) with
+            {
+                Items = [new ProgrammeItem("Heading", "Body")],
+                Source = ProgrammeSource.ScheduleExtended,
+            },
+            At.AddHours(1));
+
+        Assert.True(programme.HasSubtitles);
+        Assert.Equal(ProgrammeSource.ScheduleBasic, programme.Source);
+        Assert.Equal(new ProgrammeItem("Heading", "Body"), Assert.Single(programme.Items));
+    }
+
+    [Fact]
+    public void ABasicTableThatNoLongerCarriesSubtitlesIsBelieved()
+    {
+        var programme = Programme.Discover(Broadcast() with { HasSubtitles = true }, At);
+
+        programme.Absorb(Broadcast(), At.AddHours(1));
+
+        Assert.False(programme.HasSubtitles);
+    }
+
+    [Fact]
     public void AProgrammeThatIsOnlyAPlaceholderIsKeptAndMarkedAsOne()
     {
         var programme = Programme.Discover(Broadcast(name: string.Empty, isShadow: true), At);
@@ -366,7 +411,7 @@ public sealed class ProgrammeTests
             "video" => Broadcast() with { Video = VideoMode.Interlaced1080 },
             "aspect" => Broadcast() with { Aspect = AspectRatio.SixteenByNine },
             "sounds" => Broadcast() with { Sounds = 2 },
-            "source" => Broadcast() with { Source = ProgrammeSource.ScheduleExtended },
+            "source" => Broadcast() with { Source = ProgrammeSource.PresentFollowing },
             _ => Broadcast(endsAt: At.AddHours(24)),
         };
 

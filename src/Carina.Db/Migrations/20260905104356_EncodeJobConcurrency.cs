@@ -7,8 +7,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Carina.Db.Migrations;
 
 /// <summary>
-/// The encode job row's concurrency token is PostgreSQL's own <c>xmin</c>, which every row already
-/// carries, so the model changes and the schema does not.
+/// Makes PostgreSQL's own <c>xmin</c> the encode job row's concurrency token. The model changes and
+/// the schema does not.
 /// </summary>
 public partial class EncodeJobConcurrency : Migration
 {

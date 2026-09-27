@@ -38,15 +38,15 @@ if (args is ["--probe"])
 DriverStartup.Announce(configuration, Console.Out);
 
 var stopRequest = new DriverStopRequest();
-using var sigterm = PosixSignalRegistration.Create(
+using PosixSignalRegistration sigterm = PosixSignalRegistration.Create(
     PosixSignal.SIGTERM,
     _ => stopRequest.Record()
 );
-using var sigint = PosixSignalRegistration.Create(
+using PosixSignalRegistration sigint = PosixSignalRegistration.Create(
     PosixSignal.SIGINT,
     _ => stopRequest.Record()
 );
-using var sigquit = PosixSignalRegistration.Create(
+using PosixSignalRegistration sigquit = PosixSignalRegistration.Create(
     PosixSignal.SIGQUIT,
     _ => stopRequest.Record()
 );

@@ -12,9 +12,7 @@ public sealed class EncodeAutoRunRepository(CarinaDbContext context) : IEncodeAu
             .FirstOrDefaultAsync(row => row.Id == EncodeAutoRun.TheOnlyRow, cancellationToken);
 
     /// <summary>
-    /// One statement, because looking first and then writing is two: on a table that holds no row
-    /// yet, two hands that both look before either writes both decide to insert, and the slower one
-    /// is refused by the primary key.
+    /// Inserts or updates the one row in a single statement.
     /// </summary>
     public async Task SaveAsync(EncodeAutoRun autoRun, CancellationToken cancellationToken)
     {

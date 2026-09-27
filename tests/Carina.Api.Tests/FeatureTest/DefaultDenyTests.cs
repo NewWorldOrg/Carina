@@ -79,7 +79,6 @@ internal sealed class SeamProbe : IAsyncDisposable
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

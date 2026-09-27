@@ -13,7 +13,7 @@ public sealed class TunersThatNeverLockTests
 
     private const long FifteenHoursOfSamples = 5_400;
 
-    [Fact(DisplayName = "BR-QS-001: a tuner that answered for fifteen hours without once locking reads as beyond the level beside one that locked")]
+    [Fact(DisplayName = "a tuner that answered for fifteen hours without once locking reads as beyond the level beside one that locked")]
     public async Task ATunerThatAnsweredForFifteenHoursWithoutOnceLockingReadsAsBeyondTheLevel()
     {
         await using QualityFeature feature = new();
@@ -32,7 +32,7 @@ public sealed class TunersThatNeverLockTests
         Assert.Equal("good", State(Signal(Tuner(items, Terrestrial), "lockRate")));
     }
 
-    [Fact(DisplayName = "BR-QD-004: the carrier to noise of a tuner that never locked is no figure on the tuners list")]
+    [Fact(DisplayName = "the carrier to noise of a tuner that never locked is no figure on the tuners list")]
     public async Task TheCarrierToNoiseOfATunerThatNeverLockedIsNoFigureOnTheTunersList()
     {
         await using QualityFeature feature = new();
@@ -50,7 +50,7 @@ public sealed class TunersThatNeverLockTests
         Assert.Equal("good", State(Signal(Tuner(items, Terrestrial), "carrierToNoiseFloor")));
     }
 
-    [Fact(DisplayName = "BR-QD-014: two tuners that never locked leave the summary beyond the level while the one that locked is still counted")]
+    [Fact(DisplayName = "two tuners that never locked leave the summary beyond the level while the one that locked is still counted")]
     public async Task TwoTunersThatNeverLockedLeaveTheSummaryBeyondTheLevel()
     {
         await using QualityFeature feature = new();

@@ -45,9 +45,8 @@ public sealed class Reservation
     public Margin MarginAfter { get; private set; } = null!;
 
     /// <summary>
-    /// Whether the recording this reservation turns into is encoded once it ends. A reservation a
-    /// rule made carries what that rule asked for; one made by hand says yes unless told otherwise,
-    /// because until a reservation could say otherwise every recording that ended was queued.
+    /// Whether the recording this reservation turns into is encoded once it ends. A reservation a rule
+    /// made carries what that rule asked for; one made by hand defaults to true.
     /// </summary>
     public bool EncodeWhenRecorded { get; private set; }
 
@@ -365,9 +364,8 @@ public sealed class Reservation
     }
 
     /// <summary>
-    /// Lets go of a claim that came to nothing: the window has closed, no recording was ever written
-    /// down under it, and so nothing else will ever say what became of this reservation. The claim
-    /// itself lives in the recording ledger's columns, so the caller releases it there as well.
+    /// Lets go of a claim that came to nothing: the window has closed and no recording was ever written
+    /// down under it. The caller releases the claim in the recording ledger's columns as well.
     /// </summary>
     public void Abandon()
     {
@@ -414,11 +412,8 @@ public sealed class Reservation
     }
 
     /// <summary>
-    /// Moves this reservation onto the broadcast the guide now announces, and says what moved. The
-    /// broadcast is the same one throughout — it is named by the guide's own identifier, so a
-    /// renamed programme is still this programme — and only the times and the snapshot follow it.
-    /// A reservation that is already holding a tuner does not move, because the recording under it
-    /// is already writing to the window it was given.
+    /// Moves this reservation onto the times and snapshot the guide now announces for the same
+    /// broadcast, and says what moved. A reservation already holding a tuner does not move.
     /// </summary>
     public void Follow(
         DateTime programmeStartsAt,

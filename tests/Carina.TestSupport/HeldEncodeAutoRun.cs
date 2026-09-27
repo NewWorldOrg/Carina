@@ -3,8 +3,7 @@ using Carina.Domain.Encodings;
 namespace Carina.TestSupport;
 
 /// <summary>
-/// The one row that says how the queue runs, held in memory. Absent until something settles it,
-/// which is what a machine nobody has touched looks like.
+/// The one row that says how the queue runs, held in memory. Absent until something settles it.
 /// </summary>
 public sealed class HeldEncodeAutoRun : IEncodeAutoRunRepository
 {

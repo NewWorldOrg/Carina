@@ -11,12 +11,10 @@ using Carina.Infrastructure.Machines;
 namespace Carina.Infrastructure.Tests.Encodings;
 
 /// <summary>
-/// Encodes a synthetic broadcast with the ffmpeg the application runs and measures that its captions
-/// keep their time. A caption is drawn from the source and the picture is played from the artefact,
-/// so a caption lands on its picture only while the source's clock less the job's caption shift is the
-/// artefact's clock. The broadcast here has a clock that begins hours into the day, sound that runs
-/// ahead of its first picture, and a caption shown at the moment the picture goes dark, so that one
-/// moment can be found on both clocks.
+/// Encodes a synthetic broadcast with the ffmpeg the application runs and checks that its captions
+/// keep their time: the source's clock less the job's caption shift is the artefact's clock. The
+/// broadcast has a clock that begins hours into the day, sound that runs ahead of its first
+/// picture, and a caption shown at the moment the picture goes dark.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]

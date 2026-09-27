@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Carina.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// The escape is what keeps a title's own <c>%</c> or <c>_</c> from being read as a wildcard.
+/// Narrows rows to those whose searchable text contains every one of the words, with one
+/// <c>ILIKE</c> per word. Each word is made a pattern by <see cref="RecordingSearchPattern.Containing"/>,
+/// which escapes its <c>%</c> and <c>_</c>.
 /// </summary>
 internal static class SearchableText
 {

@@ -5,18 +5,13 @@ using Carina.Domain.Encodings;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// What the two runs said, read line by line as it comes. The quiet and the dark are written on
-/// the error stream because that is where the filters that find them talk, and the score for how
-/// much the picture changed is written on the output stream because that is where the filter that
-/// prints it was told to write; the two are kept apart here for that reason and no other.
-/// <para>
-/// The words are ffmpeg's own and are no interface it promised to keep, so this is held to the
-/// tool by a test that runs the real one rather than by reading its source. Every moment is kept
-/// exactly as reported, on whatever clock it was reported on: putting it somewhere is
-/// <see cref="ChapterClock"/>'s to do, not this. A quiet stretch the run never said the end of —
-/// the source having stopped in the middle of it — is not one, and is left out.
-/// </para>
+/// Reads what the two runs said, line by line as it comes: the quiet and the dark from the error
+/// stream, and the score for how much the picture changed from the output stream.
 /// </summary>
+/// <remarks>
+/// Every moment is kept exactly as reported, on whatever clock it was reported on. A quiet stretch
+/// whose end the run never reported is left out.
+/// </remarks>
 public sealed class ChapterLog
 {
     public const string QuietFrom = "silence_start:";

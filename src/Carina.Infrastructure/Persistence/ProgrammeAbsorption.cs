@@ -41,6 +41,12 @@ public static class ProgrammeAbsorption
     private const string Aspect =
         "CASE WHEN excluded.aspect = 'Undetermined' THEN programme.aspect ELSE excluded.aspect END";
 
+    private const string HasSubtitles =
+        $"CASE WHEN excluded.source = '{nameof(ProgrammeSource.ScheduleExtended)}' THEN programme.has_subtitles ELSE excluded.has_subtitles END";
+
+    private const string Source =
+        $"CASE WHEN excluded.source = '{nameof(ProgrammeSource.ScheduleExtended)}' THEN programme.source ELSE excluded.source END";
+
     public static readonly string Sql = $"""
         WITH written AS (
             INSERT INTO programme (
@@ -81,12 +87,12 @@ public static class ProgrammeAbsorption
                 genres = {Genres},
                 items = {Items},
                 related = {Related},
-                has_subtitles = excluded.has_subtitles,
+                has_subtitles = {HasSubtitles},
                 audio = {Audio},
                 sounds = {Sounds},
                 video = {Video},
                 aspect = {Aspect},
-                source = excluded.source,
+                source = {Source},
                 updated_at = excluded.updated_at,
                 revision = nextval('{ProgrammeRevisions.Sequence}')
             WHERE (
@@ -95,17 +101,15 @@ public static class ProgrammeAbsorption
                 programme.audio, programme.sounds, programme.video, programme.aspect, programme.source)
             IS DISTINCT FROM (
                 excluded.transport_stream_id, excluded.start_at, {End}, {Name}, {Summary},
-                excluded.is_shadow, {Genres}, {Items}, {Related}, excluded.has_subtitles,
-                {Audio}, {Sounds}, {Video}, {Aspect}, excluded.source)
+                excluded.is_shadow, {Genres}, {Items}, {Related}, {HasSubtitles},
+                {Audio}, {Sounds}, {Video}, {Aspect}, {Source})
             RETURNING (xmax = 0) AS added)
         SELECT count(*) FILTER (WHERE added), count(*) FILTER (WHERE NOT added) FROM written
         """;
 
     /// <summary>
-    /// Marks the programmes a reading named, and only for the services whose whole announced
-    /// schedule that reading heard. It is a statement of its own rather than a column on the
-    /// upsert above, because the upsert deliberately stands still when nothing about a programme
-    /// changed, and this mark has to move every time the programme is heard.
+    /// Marks the programmes a reading named, only for the services whose whole announced schedule that
+    /// reading heard. It runs on its own, apart from the upsert, and moves the mark every time.
     /// </summary>
     public static readonly string HeardSql = $"""
         UPDATE programme SET last_heard_at = @{HeardAtParameter}

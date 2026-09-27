@@ -117,8 +117,7 @@ public sealed class PipedTransportStream : ILiveTransportStream
     public bool RefusingToBeHeldOpen { get; set; }
 
     /// <summary>
-    /// Held here, a stream is one the driver has not let go of yet, which is what a reading being
-    /// torn down looks like to a viewer asking for the one tuner.
+    /// Set, the stream is one the driver has not let go of yet, until it is completed.
     /// </summary>
     public TaskCompletionSource? HeldFromBeingLetGo { get; set; }
 

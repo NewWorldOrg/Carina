@@ -75,10 +75,13 @@ public sealed class OidcSignInTests
         Assert.Equal(AuthMethod.Oidc, started.Method);
         Assert.Equal("owner-from-the-provider", started.Subject.Value);
         Assert.Equal("owner@example.test", started.DisplayName);
-        Assert.Contains(
+        string handed = Assert.Single(
             arrived.Headers.GetValues(HeaderNames.SetCookie),
-            cookie => cookie.StartsWith($"{SessionCookie.Name}={started.Id.Value}", StringComparison.Ordinal)
-                      && cookie.Contains("httponly", StringComparison.OrdinalIgnoreCase));
+            cookie => cookie.StartsWith($"{SessionCookie.Name}=", StringComparison.Ordinal));
+        string carried = handed[$"{SessionCookie.Name}=".Length..handed.IndexOf(';', StringComparison.Ordinal)];
+
+        Assert.Equal(started.Handle, SessionHandle.Of(new SessionId(carried)));
+        Assert.Contains("httponly", handed, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

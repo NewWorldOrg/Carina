@@ -8,8 +8,7 @@ using Carina.Domain.Rules;
 namespace Carina.Infrastructure.Tests.Reservations;
 
 /// <summary>
-/// The claim columns the recording ledger owns. Only the release is exercised here: what settles a
-/// reservation whose claim came to nothing has to let go of that claim as well as move the state.
+/// The claim columns the recording ledger owns. Only the release is exercised.
 /// </summary>
 internal sealed class HeldClaims : IReservationRecordingContract
 {
@@ -35,6 +34,52 @@ internal sealed class HeldClaims : IReservationRecordingContract
 
         return Task.FromResult(true);
     }
+}
+
+/// <summary>
+/// A recording ledger holding the recordings a test says are running, each begun for its
+/// reservation on the tuner it names.
+/// </summary>
+internal sealed class RunningRecordings : IRecordingRepository
+{
+    private readonly List<Recording> running = [];
+
+    public void Running(Reservation reservation, string tuner, DateTime until)
+    {
+        RecordingId id = RecordingId.New();
+
+        running.Add(Recording.Begin(
+            id,
+            reservation.Id,
+            reservation.Programme,
+            new OutputRoot("bulk"),
+            RecordingFileName.For(id, ".m2ts"),
+            reservation.EffectiveStartAt,
+            until,
+            ReservationFixtures.Snapshot(),
+            null,
+            BroadcastGroupRole.Standalone,
+            reservation.EffectiveStartAt,
+            new TunerDeviceId(tuner)));
+    }
+
+    public Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
+        => Task.FromResult(running.FirstOrDefault(recording => recording.Id.Equals(id)));
+
+    public Task<IReadOnlyList<Recording>> ListInFlightAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Recording>>([.. running]);
+
+    public Task<IReadOnlyList<Recording>> ListForReservationAsync(
+        ReservationId reservationId,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Recording>>(
+            [.. running.Where(recording => reservationId.Equals(recording.ReservationId))]);
+
+    public Task AddAsync(Recording recording, CancellationToken cancellationToken)
+        => throw new NotSupportedException("A scheduling run does not start recordings.");
+
+    public Task SaveAsync(Recording recording, CancellationToken cancellationToken)
+        => throw new NotSupportedException("A scheduling run does not write recordings.");
 }
 
 internal sealed class FixedClock(DateTime now) : TimeProvider
@@ -214,6 +259,8 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
                                           && ReservationOutcomeKinds.Settling.Contains(outcome.Kind)))
                 .Where(reservation => reservation.RecordingOutcome
                                           is RecordingOutcome.Failed or RecordingOutcome.Truncated
+                                      || (reservation.RecordingOutcome is RecordingOutcome.Complete
+                                          && LeftScrambledAgainst.Contains(reservation.Id))
                                       || (reservation.RecordingOutcome is null
                                           && reservation.State
                                               is ReservationState.Scheduled or ReservationState.Conflict
@@ -222,11 +269,15 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
                 .ThenBy(reservation => reservation.Id.Value)
                 .Select(reservation => new ReservationAwaitingOutcome(
                     reservation,
-                    RecordedAgainst.Contains(reservation.Id))),
+                    RecordedAgainst.Contains(reservation.Id),
+                    LeftScrambledAgainst.Contains(reservation.Id))),
         ]);
 
     /// <summary>Which reservations a recording is written down against.</summary>
     public HashSet<ReservationId> RecordedAgainst { get; } = [];
+
+    /// <summary>Which reservations a recording that is left scrambled is written down against.</summary>
+    public HashSet<ReservationId> LeftScrambledAgainst { get; } = [];
 
     public Task<IReadOnlyList<Reservation>> ListClaimedOverAsync(
         ReservationWindow window,

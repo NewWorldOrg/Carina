@@ -873,7 +873,7 @@ public sealed class DriverApiTests
 
             Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
 
-            IReadOnlyList<string> taken = await listener.Take(
+            IReadOnlyList<string> taken = await listener.TakeAsync(
                 new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token
             );
 
@@ -1190,9 +1190,8 @@ public sealed class DriverApiTests
     }
 
     /// <summary>
-    /// Reads event names off an open feed until the awaited one arrives, and
-    /// answers with what did arrive when it never does, so a feed that has gone
-    /// quiet fails on the names it carried rather than on the deadline.
+    /// Reads event names off an open feed until the awaited one arrives, and answers with what did
+    /// arrive when it never does.
     /// </summary>
     private static async Task<IReadOnlyList<string>> NamesUntil(StreamReader reader, string awaited)
     {

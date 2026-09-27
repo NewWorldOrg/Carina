@@ -1,8 +1,8 @@
 namespace Carina.Domain.Machines;
 
 /// <summary>
-/// Something this machine can be asked to do. What the ffmpeg build was compiled with and what
-/// the card will actually accept are separate questions, so each pairing is named on its own.
+/// Something this machine can be asked to do. What the ffmpeg build was compiled with and what the
+/// card will actually accept are named separately.
 /// </summary>
 public enum Faculty
 {

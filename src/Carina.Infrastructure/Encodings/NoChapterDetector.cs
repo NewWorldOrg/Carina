@@ -5,8 +5,7 @@ using Carina.Domain.Machines;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// The detector for a machine that was told not to look. It reads nothing and answers that nobody
-/// asked, which is a different answer from having looked and found nothing to mark.
+/// The detector for a machine told not to look. It reads nothing and answers that nobody asked.
 /// </summary>
 public sealed class NoChapterDetector : IChapterDetector
 {

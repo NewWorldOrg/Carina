@@ -27,10 +27,10 @@ namespace Carina.Db.Migrations
 
             modelBuilder.Entity("Carina.Domain.Auth.AuthSession", b =>
                 {
-                    b.Property<string>("Id")
+                    b.Property<string>("Handle")
                         .HasMaxLength(43)
                         .HasColumnType("character varying(43)")
-                        .HasColumnName("id");
+                        .HasColumnName("handle");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -68,7 +68,7 @@ namespace Carina.Db.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("subject");
 
-                    b.HasKey("Id")
+                    b.HasKey("Handle")
                         .HasName("pk_auth_session");
 
                     b.HasIndex("LastUsedAt")
@@ -2485,6 +2485,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("cc_total_packets");
 
+                    b.Property<DateTime?>("DescrambledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("descrambled_at");
+
                     b.Property<bool>("EncodeWhenRecorded")
                         .HasColumnType("boolean")
                         .HasColumnName("encode_when_recorded");
@@ -2716,6 +2720,8 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_recording_complete_was_asked_for", "recording_outcome IS DISTINCT FROM 'Complete' OR aborted_at IS NOT NULL");
 
                             t.HasCheckConstraint("ck_recording_counts", "written_duration_ms >= 0\nAND resume_count >= 0\nAND eovf_count >= 0\nAND (file_size_observed IS NULL OR file_size_observed >= 0)\nAND (scrambled_packets IS NULL OR scrambled_packets >= 0)");
+
+                            t.HasCheckConstraint("ck_recording_descrambled", "descrambled_at IS NULL\nOR (recording_outcome IS NOT NULL\n    AND recording_reasons_name_any(outcome_detail, ARRAY['ScramblingUnresolved']::text[])\n    AND descrambled_at >= stopped_at_actual)");
 
                             t.HasCheckConstraint("ck_recording_drop_positions", "(pcr_anchor IS NOT NULL\n    OR (recording_json_count(drop_positions) = 0 AND recording_json_count(pcr_reanchors) = 0))\nAND (pcr_anchor IS NULL OR cc_measured)\nAND (pcr_anchor IS NULL OR pcr_anchor BETWEEN 0 AND 8589934591)");
 
@@ -2975,6 +2981,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTime?>("DescrambledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("descrambled_at");
+
                     b.Property<DateTime>("EffectiveEndAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("effective_end_at");
@@ -3070,6 +3080,8 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("reservation_outcome", null, t =>
                         {
+                            t.HasCheckConstraint("ck_reservation_outcome_descrambled", "descrambled_at IS NULL\nOR (faults @> '[\"ScramblingUnresolved\"]'::jsonb\n    AND descrambled_at >= occurred_at)");
+
                             t.HasCheckConstraint("ck_reservation_outcome_faults", "faults <@ '[\"TuneFailed\", \"RefusedByDiskPrecheck\", \"DiskExhausted\", \"DriverLost\", \"DrainGraceExpired\", \"StoppedByHand\", \"TunerContended\", \"ScramblingUnresolved\", \"ShortOfTheWindow\", \"NothingLanded\", \"SizeUnobserved\", \"StoppedUnasked\", \"LighterThanTheStream\", \"HeavierThanTheStream\", \"EndStillUndecided\", \"LeftRunningUnwatched\", \"DriverReplaced\"]'::jsonb\nAND (kind <> 'TuneFailure' OR faults @> '[\"TuneFailed\"]'::jsonb)");
 
                             t.HasCheckConstraint("ck_reservation_outcome_gave_up", "(gave_up_because IS NULL OR gave_up_because IN ('NotTransient', 'PrecheckFailed', 'CandidateNeedsAttention', 'BroadcastOver', 'AttemptsSpent'))\nAND (kind = 'GaveUpRetrying') = (gave_up_because IS NOT NULL)\nAND (kind <> 'GaveUpRetrying'\n     OR (gave_up_because = 'NotTransient') = (tune_failure IS NOT NULL))");
@@ -3083,6 +3095,8 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_reservation_outcome_retry", "(retry_result IS NULL OR retry_result IN ('Started', 'RefusedAgain', 'NoAnswer'))\nAND (kind = 'Retried') = (retry_result IS NOT NULL)\nAND (retry_result IS DISTINCT FROM 'Started'\n     OR (tune_failure IS NULL AND jsonb_array_length(faults) = 0))");
 
                             t.HasCheckConstraint("ck_reservation_outcome_tune_failure", "(tune_failure IS NULL\n OR tune_failure IN ('NoLock', 'NoData', 'IncompletePsi', 'StreamMismatch'))\nAND (kind <> 'TuneFailure' OR tune_failure IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_reservation_outcome_whole_but_scrambled", "kind <> 'RecordingFailure'\nOR recording_outcome <> 'Complete'\nOR faults @> '[\"ScramblingUnresolved\"]'::jsonb");
 
                             t.HasCheckConstraint("ck_reservation_outcome_window", "effective_end_at > effective_start_at");
                         });

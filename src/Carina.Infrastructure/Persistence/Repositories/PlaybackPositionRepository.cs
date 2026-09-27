@@ -24,9 +24,7 @@ public sealed class PlaybackPositionRepository(CarinaDbContext context) : IPlayb
     }
 
     /// <remarks>
-    /// One statement, so that a player sending where it has got to every few seconds cannot read a
-    /// row, be overtaken, and write back over what overtook it, and so that a place is not kept for
-    /// a recording that was thrown away while the writing was on its way.
+    /// Written in one statement, which keeps nothing for a recording that no longer exists.
     /// </remarks>
     public async Task<PlaybackPositionKeep> KeepAsync(
         PlaybackPosition reached,

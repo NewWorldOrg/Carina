@@ -4,11 +4,9 @@ using System.Text.Json;
 namespace Carina.Api.Tests.FeatureTest;
 
 /// <summary>
-/// Asking for a reservation settles it. There is no word of confirmation to send afterwards and
-/// nothing waits in between for one: the answer to the asking already says which broadcast is
-/// recorded and which one lost, and reading the reservation back afterwards says the same thing.
+/// Asking for a reservation settles it: the answer says which broadcast is recorded and which one
+/// lost, and reading the reservation back says the same.
 /// </summary>
-[Collection(FeatureTestCollection.Name)]
 public sealed class ReservationSettlesInOneAskingTests
 {
     [Fact]

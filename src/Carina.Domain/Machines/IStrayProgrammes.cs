@@ -12,9 +12,8 @@ public enum StrayFate
 }
 
 /// <summary>
-/// Stops a programme an earlier process started and never got to stop. The programme is the one
-/// written down only if what runs under its id now began when it began; anything else under
-/// that id is somebody else's and is left alone.
+/// Stops a programme an earlier process started and never got to stop. Only a process under the
+/// recorded id that began when the recorded one began is stopped; anything else is left alone.
 /// </summary>
 public interface IStrayProgrammes
 {

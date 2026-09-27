@@ -80,7 +80,7 @@ public sealed class RecordingProgressSignalTests : IDisposable
         var signalled = new List<string>();
         while (!signalled.Contains(DriverEvents.RecordingProgress, StringComparer.Ordinal))
         {
-            signalled.AddRange(await listener.Take(deadline.Token));
+            signalled.AddRange(await listener.TakeAsync(deadline.Token));
         }
 
         listener.Dispose();
@@ -108,7 +108,7 @@ public sealed class RecordingProgressSignalTests : IDisposable
 
         try
         {
-            signalled.AddRange(await listener.Take(quiet.Token));
+            signalled.AddRange(await listener.TakeAsync(quiet.Token));
         }
         catch (OperationCanceledException)
         {

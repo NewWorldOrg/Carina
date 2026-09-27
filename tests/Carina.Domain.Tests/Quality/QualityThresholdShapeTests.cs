@@ -30,7 +30,7 @@ public sealed class QualityThresholdShapeTests
             QualityThresholdShapes.Consulted.Select(shape => shape.Key).Order());
     }
 
-    [Fact(DisplayName = "BR-QD-003: the level a supply watch holds silence against is one the screen can move")]
+    [Fact(DisplayName = "the level a supply watch holds silence against is one the screen can move")]
     public void TheLevelASupplyWatchHoldsSilenceAgainstIsOneTheScreenCanMove()
     {
         Assert.Contains(
@@ -82,7 +82,7 @@ public sealed class QualityThresholdShapeTests
         Assert.Equal(QualityThresholdKey.PacketsLostUnwatchable, QualityThresholdShapes.Unwatchable(QualityMetric.PacketsLost));
     }
 
-    [Fact(DisplayName = "BR-QD-003: the level scrambling makes a recording unwatchable at is one the screen can move")]
+    [Fact(DisplayName = "the level scrambling makes a recording unwatchable at is one the screen can move")]
     public void TheLevelsAScrambledShareIsHeldAgainstAreTheWarningAndTheUnwatchableOne()
     {
         Assert.Equal(QualityThresholdKey.PacketsLeftScrambled, QualityThresholdShapes.Warning(QualityMetric.PacketsLeftScrambled));

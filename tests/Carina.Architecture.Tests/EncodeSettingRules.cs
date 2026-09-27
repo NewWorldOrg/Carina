@@ -3,8 +3,7 @@ using System.Text.RegularExpressions;
 namespace Carina.Architecture.Tests;
 
 /// <summary>
-/// Reads the encode settings out of their source rather than out of the assembly: this project
-/// deliberately references no production project, so the rule is a source scan like the others here.
+/// Reads the encode settings out of their source.
 /// </summary>
 public static class EncodeSettingRules
 {

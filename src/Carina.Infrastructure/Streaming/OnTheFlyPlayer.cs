@@ -132,14 +132,14 @@ public sealed class OnTheFlyPlayer(
         }
         catch (OperationCanceledException)
         {
-            await AwayWith(transcoder, mouthful);
+            await AwayWithAsync(transcoder, mouthful);
 
             throw;
         }
 
         if (first is not { } read)
         {
-            await AwayWith(transcoder, mouthful);
+            await AwayWithAsync(transcoder, mouthful);
 
             return OnTheFlyStart.Refused(
                 OnTheFlyRefusal.TookTooLong,
@@ -169,9 +169,7 @@ public sealed class OnTheFlyPlayer(
     }
 
     /// <remarks>
-    /// The deadline is held here so that it is let go of with the wait. A timeout handed to
-    /// <c>WaitAsync</c> is disposed of only once the waiter has been let go, which is after the
-    /// viewer has been answered, so the timer it set outlives the wait it was set for.
+    /// Holds its own deadline, disposed of with the wait.
     /// </remarks>
     private async Task<int?> FirstMouthfulAsync(Task<int> mouthful, CancellationToken cancellationToken)
     {
@@ -194,7 +192,7 @@ public sealed class OnTheFlyPlayer(
             ? "the transcoder ended without writing a picture."
             : ended.Note;
 
-    private static async Task AwayWith(ILiveTranscoder transcoder, Task<int> mouthful)
+    private static async Task AwayWithAsync(ILiveTranscoder transcoder, Task<int> mouthful)
     {
         await transcoder.DisposeAsync();
 

@@ -33,7 +33,7 @@ public sealed class LocalAccountService(
     {
         ArgumentNullException.ThrowIfNull(attempt);
 
-        if (throttle.RefusesUntil(attempt.Caller) is { } until)
+        if (throttle.TakeTry(attempt.Caller) is { } until)
         {
             return ServiceResult<LoginOutcome>.Success(
                 LoginOutcome.HeldOff(until, sessionPolicy.AbsoluteLifetime));
@@ -43,15 +43,14 @@ public sealed class LocalAccountService(
 
         if (!Admits(account, attempt.Username, attempt.Password))
         {
-            throttle.Failed(attempt.Caller);
-
             return ServiceResult<LoginOutcome>.Success(LoginOutcome.Refused(sessionPolicy.AbsoluteLifetime));
         }
 
         throttle.Passed(attempt.Caller);
 
+        SessionId cookie = SessionId.Issue();
         AuthSession session = AuthSession.Start(
-            SessionId.Issue(),
+            cookie,
             new Subject(account!.Username),
             account.Username,
             AuthMethod.Local,
@@ -63,7 +62,7 @@ public sealed class LocalAccountService(
         await RemakeTheStoredHashIfItIsWeakerThanThePolicyAsync(account, attempt.Password, cancellationToken);
 
         return ServiceResult<LoginOutcome>.Success(
-            LoginOutcome.Started(session, sessionPolicy.AbsoluteLifetime));
+            LoginOutcome.Started(cookie, session, sessionPolicy.AbsoluteLifetime));
     }
 
     public async Task<ServiceResult<int, PasswordRefusal>> ChangePasswordAsync(
@@ -134,7 +133,7 @@ public sealed class LocalAccountService(
 
         foreach (AuthSession session in held)
         {
-            if (!session.Id.Equals(change.Keep) && session.Revoke(at))
+            if (!session.Handle.Equals(change.Keep) && session.Revoke(at))
             {
                 ended.Add(session);
             }

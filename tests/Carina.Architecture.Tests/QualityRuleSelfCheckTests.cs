@@ -63,7 +63,7 @@ public sealed class QualityRuleSelfCheckTests
         Assert.Contains($"/{InTheFeature} {reported}", found);
     }
 
-    [Fact(DisplayName = "BR-QD-012: the candidate channel score is the one thing quality writes outside itself")]
+    [Fact(DisplayName = "the candidate channel score is the one thing quality writes outside itself")]
     public void TheCandidateChannelScoreIsTheOneThingQualityWritesOutsideItself()
     {
         using var tree = new SourceTree();
@@ -95,7 +95,7 @@ public sealed class QualityRuleSelfCheckTests
         Assert.Contains($"/{InTheFeature} {reported}", QualityRules.WhatWritesWhatItMeasuredToAFile(tree.Root));
     }
 
-    [Fact(DisplayName = "BR-QD-011: keeping what was measured in the store walks straight past these marks")]
+    [Fact(DisplayName = "keeping what was measured in the store walks straight past these marks")]
     public void KeepingWhatWasMeasuredInTheStoreWalksStraightPastTheseMarks()
     {
         using var tree = new SourceTree();
@@ -114,7 +114,7 @@ public sealed class QualityRuleSelfCheckTests
         Assert.Equal([$"/{InTheFeature} {reported}"], QualityRules.WhatOffersAWayToDeleteSomething(tree.Root));
     }
 
-    [Fact(DisplayName = "BR-QA-001: sweeping raw samples off by their age is a batch, not an endpoint")]
+    [Fact(DisplayName = "sweeping raw samples off by their age is a batch, not an endpoint")]
     public void SweepingRawSamplesOffByTheirAgeIsABatchNotAnEndpoint()
     {
         using var tree = new SourceTree();
@@ -135,7 +135,7 @@ public sealed class QualityRuleSelfCheckTests
         Assert.Contains($"/{InTheFeature} {reported}", QualityRules.WhatTakesATunerOfItsOwn(tree.Root));
     }
 
-    [Fact(DisplayName = "BR-QD-004: reading what the driver already holds takes no tuner")]
+    [Fact(DisplayName = "reading what the driver already holds takes no tuner")]
     public void ReadingWhatTheDriverAlreadyHoldsTakesNoTuner()
     {
         using var tree = new SourceTree();
@@ -157,7 +157,7 @@ public sealed class QualityRuleSelfCheckTests
         Assert.Contains($"/{InTheFeature} {reported}", QualityRules.WhatDecidesAnAnomalyItDoesNotOwn(tree.Root));
     }
 
-    [Fact(DisplayName = "BR-QD-002: an anomaly kept as the owner's own code walks straight past these marks")]
+    [Fact(DisplayName = "an anomaly kept as the owner's own code walks straight past these marks")]
     public void AnAnomalyKeptAsTheOwnersOwnCodeWalksStraightPastTheseMarks()
     {
         using var tree = new SourceTree();

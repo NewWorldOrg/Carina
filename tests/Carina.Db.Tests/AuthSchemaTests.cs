@@ -162,7 +162,7 @@ public sealed class AuthSchemaTests(MigratedScratchDatabase database)
 
     private static Task Session(
         NpgsqlConnection connection,
-        string id,
+        string handle,
         string subject,
         string deviceLabel,
         string method = "Local",
@@ -171,8 +171,8 @@ public sealed class AuthSchemaTests(MigratedScratchDatabase database)
         string? displayName = null)
         => Execute(
             connection,
-            "INSERT INTO auth_session (id, subject, display_name, method, created_at, last_used_at, device_label, revoked_at) "
-            + $"VALUES ('{id}', '{subject}', '{displayName ?? subject}', '{method}', {Created}, {lastUsed ?? Created}, '{deviceLabel}', {revoked ?? "NULL"})");
+            "INSERT INTO auth_session (handle, subject, display_name, method, created_at, last_used_at, device_label, revoked_at) "
+            + $"VALUES ('{handle}', '{subject}', '{displayName ?? subject}', '{method}', {Created}, {lastUsed ?? Created}, '{deviceLabel}', {revoked ?? "NULL"})");
 
     private static Task Account(
         NpgsqlConnection connection,

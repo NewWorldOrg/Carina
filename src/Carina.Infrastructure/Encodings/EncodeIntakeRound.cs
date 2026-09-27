@@ -1,5 +1,4 @@
 using Carina.Contracts;
-using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Recordings;
@@ -9,33 +8,23 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Encodings;
 
 public sealed record EncodeIntake(
-    int Page,
-    int LastPage,
-    int Looked,
+    int Waiting,
     int Queued,
     EncodeUnaskedStanding Standing,
-    bool Automatically)
-{
-    public bool MorePages => Page < LastPage;
-}
+    bool Automatically);
 
 /// <summary>
-/// One look at the recording ledger for what has ended and has never been offered to the queue.
-/// The ledger is read a page at a time and nothing else is asked for, so this asks for no new
-/// event contract and cannot be starved by a run that takes half an hour (BR-ED2-004).
-/// <para>
-/// A machine whose auto-run is turned off looks at nothing at all, and the answer says so, because
-/// the setting is read on every look rather than at a start: turning it back on is in force at the
-/// next one. A recording that failed has nothing to encode and is left out by the question itself; one cut
-/// short has a file and is queued like any other, and what says it was cut short is the recording,
-/// not the job. A recording the ledger already holds any job for is passed over, whatever became
-/// of that job. Where the artefact goes and what shape it takes is what the machine settles when
-/// nobody asked, and a machine that cannot settle it queues nothing and says which of the three
-/// things is missing.
-/// </para>
+/// One look at the recording ledger for recordings that have ended and have never been offered to
+/// the queue, at most a look's worth at a time.
 /// </summary>
+/// <remarks>
+/// With the auto-run turned off, nothing is looked at and the answer says so; the setting is read on
+/// every look. A recording that failed is left out, and one the ledger already holds any job for is
+/// passed over. When the machine cannot settle where the artefact goes and what shape it takes,
+/// nothing is queued and the answer says what is missing.
+/// </remarks>
 public sealed class EncodeIntakeRound(
-    IRecordingDirectory recordings,
+    IEncodeIntakeReader intake,
     IEncodeJobRepository jobs,
     IEncodeDestinationRepository destinations,
     IEncodeProfileRepository profiles,
@@ -46,40 +35,18 @@ public sealed class EncodeIntakeRound(
 {
     public const int PerLook = 100;
 
-    public async Task<EncodeIntake> TakeAsync(int page, CancellationToken cancellationToken)
+    public async Task<EncodeIntake> TakeAsync(CancellationToken cancellationToken)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
-
         if (!(await autoRun.ReadAsync(cancellationToken)).Automatically)
         {
-            return new EncodeIntake(page, page, 0, 0, EncodeUnaskedStanding.Settled, Automatically: false);
+            return new EncodeIntake(0, 0, EncodeUnaskedStanding.Settled, Automatically: false);
         }
 
-        RecordingQuery query = RecordingQuery.For(
-                null,
-                null,
-                RecordingSort.StartedAt,
-                descending: false,
-                page,
-                PerLook,
-                new RecordingConditions { Outcomes = [.. EncodeAutoRun.Subject] })
-            ?? throw new InvalidOperationException($"Page {page} of the recordings that have ended cannot be asked for.");
+        IReadOnlyList<RecordingId> waiting = await intake.NeverQueuedAsync(PerLook, cancellationToken);
 
-        PaginatedList<Recording> ended = await recordings.ListAsync(query, cancellationToken);
-        IReadOnlySet<RecordingId> already = await jobs.WithAJobAsync(
-            [.. ended.Items.Select(recording => recording.Id)],
-            cancellationToken);
-
-        Recording[] waiting =
-        [
-            .. ended.Items
-                .Where(recording => recording.EncodeWhenRecorded)
-                .Where(recording => !already.Contains(recording.Id)),
-        ];
-
-        if (waiting.Length is 0)
+        if (waiting.Count is 0)
         {
-            return new EncodeIntake(page, ended.LastPage, ended.Items.Count, 0, EncodeUnaskedStanding.Settled, Automatically: true);
+            return new EncodeIntake(0, 0, EncodeUnaskedStanding.Settled, Automatically: true);
         }
 
         EncodeUnasked unasked = EncodeUnasked.Of(
@@ -91,20 +58,20 @@ public sealed class EncodeIntakeRound(
             logger.LogWarning(
                 "{Waiting} recording(s) that have ended have never been offered to the encode queue, and this machine "
                 + "cannot settle where an artefact goes without being asked: {Standing}.",
-                waiting.Length,
+                waiting.Count,
                 unasked.Standing);
 
-            return new EncodeIntake(page, ended.LastPage, ended.Items.Count, 0, unasked.Standing, Automatically: true);
+            return new EncodeIntake(waiting.Count, 0, unasked.Standing, Automatically: true);
         }
 
-        foreach (Recording recording in waiting)
+        foreach (RecordingId recording in waiting)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             await jobs.AddAsync(
                 EncodeJob.Queue(
                     EncodeJobId.New(),
-                    recording.Id,
+                    recording,
                     profile.Id,
                     destination.Id,
                     destination.OutputRoot,
@@ -116,8 +83,8 @@ public sealed class EncodeIntakeRound(
 
         logger.LogInformation(
             "{Queued} recording(s) that had ended were put in the encode queue without being asked for.",
-            waiting.Length);
+            waiting.Count);
 
-        return new EncodeIntake(page, ended.LastPage, ended.Items.Count, waiting.Length, EncodeUnaskedStanding.Settled, Automatically: true);
+        return new EncodeIntake(waiting.Count, waiting.Count, EncodeUnaskedStanding.Settled, Automatically: true);
     }
 }

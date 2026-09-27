@@ -290,7 +290,7 @@ public sealed class QualityEndpointTests
         => data.GetProperty(under).EnumerateArray()
             .Single(read => read.GetProperty("metric").GetString() == metric)
             .GetProperty("reading");
-    [Fact(DisplayName = "BR-QD-004: a tuner the samples reached reads measured, with the moment it was")]
+    [Fact(DisplayName = "a tuner the samples reached reads measured, with the moment it was")]
     public async Task ATunerTheSamplesReachedReadsMeasured()
     {
         await using var feature = new QualityFeature();
@@ -310,7 +310,7 @@ public sealed class QualityEndpointTests
         });
     }
 
-    [Fact(DisplayName = "BR-QD-009: a statistic the tuner does not keep reads unsupported beside the ones it does")]
+    [Fact(DisplayName = "a statistic the tuner does not keep reads unsupported beside the ones it does")]
     public async Task AStatisticTheTunerDoesNotKeepReadsUnsupported()
     {
         await using var feature = new QualityFeature();
@@ -326,7 +326,7 @@ public sealed class QualityEndpointTests
             signal.EnumerateArray().Select(facet => facet.GetProperty("reading").GetProperty("state").GetString()));
     }
 
-    [Fact(DisplayName = "BR-QD-014: a supply that went silent still says how much of it was measured")]
+    [Fact(DisplayName = "a supply that went silent still says how much of it was measured")]
     public async Task ASupplyThatWentSilentStillSaysHowMuchOfItWasMeasured()
     {
         await using var feature = new QualityFeature();
@@ -353,7 +353,7 @@ public sealed class QualityEndpointTests
         Assert.Equal(1, reading.GetProperty("beyondThreshold").GetInt32());
     }
 
-    [Fact(DisplayName = "BR-QD-007: samples the driver could not answer do not turn a live supply into an unreachable one")]
+    [Fact(DisplayName = "samples the driver could not answer do not turn a live supply into an unreachable one")]
     public async Task SamplesTheDriverCouldNotAnswerDoNotTurnALiveSupplyIntoAnUnreachableOne()
     {
         await using var feature = new QualityFeature();

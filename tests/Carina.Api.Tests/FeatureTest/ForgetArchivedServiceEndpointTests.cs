@@ -6,7 +6,6 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ForgetArchivedServiceEndpointTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);

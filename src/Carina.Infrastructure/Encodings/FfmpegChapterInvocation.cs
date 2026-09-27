@@ -6,39 +6,22 @@ using Carina.Domain.Encodings;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// The arguments for the two runs that look for the breaks in one source. The first listens to the
-/// whole of it and decodes no picture at all, which is what makes looking affordable on a machine
-/// that is also recording; the second decodes six seconds of picture around one moment the first
-/// found, and there are only ever as many of those as there were quiet stretches. Neither asks for
-/// the card: the encode itself has it, and a third user of one render node is not something the
-/// promise to give the card up to a viewer covers.
-/// <para>
-/// Both runs keep the source's own clock. What ffmpeg takes off a reported moment otherwise
-/// depends on where a seek happened to land, so a reading measured against it moves with the file;
-/// keeping the clock makes every moment mean the same thing, and <see cref="ChapterClock"/> is
-/// then the only place that converts one.
-/// </para>
-/// <para>
-/// Keeping it costs a tenth of a second of resolution, and what is asked for is set above that
-/// cost. A moment is printed to six figures, so a broadcast recorded seventeen hours into the
-/// day — five figures before the point — is reported in steps of 0.1 s. Anything the filters are
-/// asked to find that lasts less than one of those steps can be printed as a single moment,
-/// beginning and ending at once, and a stretch that begins where it ends is no stretch: it would
-/// be dropped rather than found. That is what <see cref="Blackness"/>'s duration is set against.
-/// </para>
-/// <para>
-/// Every argument is an option name, a constant written here, or a number this repository holds
-/// rendered the same way whatever language the machine is set to, beside the path of the source
-/// (BR-EV-002). Nothing a broadcaster wrote reaches one, and there is no setting a filter could be
-/// written in: the filter chains below are built from the numbers and from nothing else.
-/// </para>
+/// The arguments for the three runs that look for the breaks in one source:
+/// <see cref="Listening"/> hears the whole of the sound and decodes no picture,
+/// <see cref="Peeking"/> decodes <see cref="Window"/> of picture from <see cref="Before"/> ahead of
+/// one moment the first found, and <see cref="Watching"/> watches the key frames for the station's
+/// watermark. None of them asks for the card.
 /// </summary>
+/// <remarks>
+/// All three keep the source's own clock, which <see cref="ChapterClock"/> converts. Every argument
+/// is an option name, a constant written here, or a number rendered the same way in any culture,
+/// beside the path of the source.
+/// </remarks>
 public static class FfmpegChapterInvocation
 {
     /// <summary>
-    /// A stretch of dark is worth reporting once it lasts longer than the tenth of a second that
-    /// keeping the source's clock costs to print, so that a marginal one is reported as a stretch
-    /// rather than as one moment nothing can be made of.
+    /// The dark detector: a stretch of at least 0.15 seconds (<c>d</c>) in which the picture is black,
+    /// a pixel counting as black at or below 0.10 of full brightness (<c>pix_th</c>).
     /// </summary>
     public const string Blackness = "blackdetect=d=0.15:pix_th=0.10";
 
@@ -111,11 +94,10 @@ public static class FfmpegChapterInvocation
     }
 
     /// <summary>
-    /// The run that watches the whole of the picture for the station's watermark. It decodes only
-    /// the pictures that stand on their own, keeps one a second, shrinks it to the size a watermark
-    /// is looked for in and hands it over in grey on the output, and says on the error stream the
-    /// moment each one was shown at. Pictures are handed over exactly as they come out of the
-    /// filters, one for each line said about them, so the n-th picture is the n-th moment.
+    /// The run that watches the whole of the picture for the station's watermark. It decodes only key
+    /// frames, keeps one a second, shrinks it to the size a watermark is looked for in and hands it
+    /// over in grey on the output, one picture for each line on the error stream giving the moment it
+    /// was shown at.
     /// </summary>
     public static IReadOnlyList<string> Watching(string source, ServiceId service, int cores)
     {

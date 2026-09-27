@@ -310,11 +310,9 @@ public sealed class RuleApplicationService(
     }
 
     /// <summary>
-    /// A broadcaster that drops a programme from the guide and puts it back at the same hour leaves
-    /// a cancelled reservation sitting on the one key that names that broadcast, and a rule taking
-    /// the programme again cannot write a second row on top of it. So the row that is already there
-    /// is the one brought back. Only a reservation a rule made and the guide took out comes back
-    /// this way: a person who cancels means it, and nothing here overrules that.
+    /// Brings back the cancelled reservation already standing on the key of a broadcast a rule takes
+    /// again. Only a reservation a rule made and the guide took out comes back; one a person cancelled
+    /// does not.
     /// </summary>
     private async Task<bool> RevivedAsync(
         Reservation already,
@@ -366,12 +364,12 @@ public sealed class RuleApplicationService(
         CancellationToken cancellationToken)
     {
         WithdrawalGuard guard = await GuardAsync(cancellationToken);
-        var faulted = run.Faulted.Select(fault => fault.Rule.Id).ToHashSet();
-        var standing = enabled.Where(rule => rule.Enabled).Select(rule => rule.Id).ToHashSet();
+        HashSet<RuleId> faulted = run.Faulted.Select(fault => fault.Rule.Id).ToHashSet();
+        HashSet<RuleId> standing = enabled.Where(rule => rule.Enabled).Select(rule => rule.Id).ToHashSet();
         IReadOnlyList<Reservation> pending = await reservations.ListPendingAsync(Everything(at), cancellationToken);
         HashSet<ProgrammeKey> kept = StandingFor(run.Matches.Select(match => Naming(match.Programme)), pending);
-        var seen = read.Select(Naming).ToHashSet();
-        var leaving = new List<Reservation>();
+        HashSet<ProgrammeKey> seen = read.Select(Naming).ToHashSet();
+        List<Reservation> leaving = [];
 
         foreach (Reservation reservation in pending)
         {

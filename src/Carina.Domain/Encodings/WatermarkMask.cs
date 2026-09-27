@@ -3,9 +3,8 @@ namespace Carina.Domain.Encodings;
 /// <summary>
 /// Where in the corners a station's watermark draws its outline: the pixels that were an edge in
 /// most of the pictures it was learned from. A picture carries the mark when at least
-/// <see cref="SeenShare"/> of those pixels are an edge in it. It covers something and nothing
-/// outside the corners, so a mark read back from the ledger is refused rather than believed when
-/// either is not so.
+/// <see cref="SeenShare"/> of those pixels are an edge in it. A mask that covers nothing, or
+/// anything outside the corners, is refused.
 /// </summary>
 public sealed class WatermarkMask
 {

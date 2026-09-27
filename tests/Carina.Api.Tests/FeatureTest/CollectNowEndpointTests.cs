@@ -10,7 +10,6 @@ using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class CollectNowEndpointTests
 {
     [Fact]

@@ -3,9 +3,12 @@ set -eu
 
 : "${UNIT_FILTER:?}"
 : "${FEATURE_FILTER:?}"
+: "${FEATURE_PROJECT:?}"
+: "${FEATURE_SHARDS:?}"
 : "${DB_INTEGRATION_FILTER:?}"
 : "${SCALE_FILTER:?}"
 : "${MATERIAL_FILTER:?}"
+: "${MATERIAL_PROJECT:?}"
 
 held="$(mktemp -d)"
 trap 'rm -rf "${held}"' EXIT
@@ -57,10 +60,42 @@ for project in ${projects}; do
   fi
 
   listed "${project}" --filter "${UNIT_FILTER}" >> "${held}/selected-by-a-job"
-  listed "${project}" --filter "${FEATURE_FILTER}" >> "${held}/selected-by-a-job"
+
+  if [ "${project}" = "${FEATURE_PROJECT}" ]; then
+    shard=1
+    : > "${held}/sharded"
+
+    while [ "${shard}" -le "${FEATURE_SHARDS}" ]; do
+      filter="$(.github/feature-shard.sh "${shard}" "${FEATURE_SHARDS}")"
+      listed "${project}" --filter "${filter}" >> "${held}/sharded"
+      shard=$((shard + 1))
+    done
+
+    listed "${project}" --filter "${FEATURE_FILTER}" > "${held}/feature"
+
+    if [ ! -s "${held}/feature" ]; then
+      echo "the feature filter selected nothing in ${FEATURE_PROJECT}, so there was nothing to shard" >&2
+      exit 1
+    fi
+
+    LC_ALL=C sort -o "${held}/feature" "${held}/feature"
+    LC_ALL=C sort -o "${held}/sharded" "${held}/sharded"
+
+    if ! cmp -s "${held}/feature" "${held}/sharded"; then
+      echo "the ${FEATURE_SHARDS} feature test shards do not select the feature tests exactly once each:" >&2
+      diff "${held}/feature" "${held}/sharded" >&2 || true
+      exit 1
+    fi
+
+    cat "${held}/sharded" >> "${held}/selected-by-a-job"
+  fi
+
   listed "${project}" --filter "${DB_INTEGRATION_FILTER}" >> "${held}/selected-by-a-job"
   listed "${project}" --filter "${SCALE_FILTER}" >> "${held}/selected-by-a-job"
-  listed "${project}" --filter "${MATERIAL_FILTER}" >> "${held}/selected-by-a-job"
+
+  if [ "${project}" = "${MATERIAL_PROJECT}" ]; then
+    listed "${project}" --filter "${MATERIAL_FILTER}" >> "${held}/selected-by-a-job"
+  fi
 done
 
 LC_ALL=C sort -u -o "${held}/every-test" "${held}/every-test"

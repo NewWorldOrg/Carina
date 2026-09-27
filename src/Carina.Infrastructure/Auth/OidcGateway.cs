@@ -41,7 +41,7 @@ public sealed class OidcGateway(HttpClient client) : IOidcGateway
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentNullException.ThrowIfNull(exchange);
 
-        using var body = new FormUrlEncodedContent(
+        using FormUrlEncodedContent body = new(
         [
             new KeyValuePair<string, string>("grant_type", GrantType),
             new KeyValuePair<string, string>("code", exchange.Code),
