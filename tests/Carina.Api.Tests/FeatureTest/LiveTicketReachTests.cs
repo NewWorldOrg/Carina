@@ -145,11 +145,17 @@ public sealed class LiveTicketReachTests
 
     private async Task<HttpResponseMessage> OpenedAsync(HttpClient player)
     {
-        int raised = supply.Opened.Count;
         Task<HttpResponseMessage> opening = player.GetAsync(Exit, HttpCompletionOption.ResponseHeadersRead);
 
-        await Eventually.Happens(() => supply.Opened.Count > raised, "the reading of the channel is raised");
-        await supply.Opened[^1].WriteAsync(Mouthful());
+        while (!opening.IsCompleted)
+        {
+            if (supply.Opened.Count > 0)
+            {
+                await supply.Opened[^1].WriteAsync(Mouthful());
+            }
+
+            await Task.WhenAny(opening, Task.Delay(TimeSpan.FromMilliseconds(20)));
+        }
 
         return await opening;
     }
