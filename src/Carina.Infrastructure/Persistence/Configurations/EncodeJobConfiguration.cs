@@ -107,6 +107,9 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
             table.HasCheckConstraint(
                 "ck_encode_job_name_given_up",
                 "name_given_up_at IS NULL OR artefact_name IS NOT NULL");
+            table.HasCheckConstraint(
+                "ck_encode_job_replaced",
+                "replaced_at IS NULL OR (status = 'Completed' AND artefact_name IS NOT NULL AND replaced_at >= ended_at)");
         });
 
         builder.Property<uint>(ConcurrencyToken)
@@ -168,6 +171,7 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
 
         builder.Property(job => job.MakesItAgain).IsRequired();
         builder.Property(job => job.NameGivenUpAt);
+        builder.Property(job => job.ReplacedAt);
 
         builder.ComplexProperty(job => job.Route, route =>
         {
@@ -234,6 +238,7 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
         });
 
         builder.Ignore(job => job.HasEnded);
+        builder.Ignore(job => job.StandsAsTheArtefact);
         builder.Ignore(job => job.Standing);
         builder.Ignore(job => job.WorkFileName);
         builder.Ignore(job => job.ChaptersFileName);

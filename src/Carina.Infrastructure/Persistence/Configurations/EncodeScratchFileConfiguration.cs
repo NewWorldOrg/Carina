@@ -66,6 +66,7 @@ public sealed class EncodeScratchFileConfiguration : IEntityTypeConfiguration<En
 
         builder.HasIndex(scratch => new { scratch.OutputRoot, scratch.FileName })
             .IsUnique()
+            .HasFilter($"kind <> '{nameof(EncodeScratchKind.ReplacedArtefact)}'")
             .HasDatabaseName(NameIndexName);
 
         builder.HasIndex(scratch => scratch.JobId)

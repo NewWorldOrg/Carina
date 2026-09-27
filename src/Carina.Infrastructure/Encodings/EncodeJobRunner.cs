@@ -24,7 +24,8 @@ namespace Carina.Infrastructure.Encodings;
 /// handed to the encode as a metadata file recorded as a scratch file. The look is handed the
 /// station watermark learned ahead from another recording of the same service, and the watermark it
 /// learns from this recording is kept once the reading is in the ledger; failing to read or keep a
-/// watermark does not fail the job.
+/// watermark does not fail the job. Once a job has completed, what earlier jobs of the recording
+/// made is replaced; a failure there leaves the job completed and is settled at the next start.
 /// </remarks>
 public sealed class EncodeJobRunner(
     IEncodeJobRepository jobs,
@@ -33,6 +34,7 @@ public sealed class EncodeJobRunner(
     EncodePlaces places,
     EncodeScratchFiles scratch,
     EncodeArtefactPlacer placer,
+    EncodeArtefactSuccession succession,
     EncodeScratchCleaner cleaner,
     IMachineCapabilityReader machine,
     ISourceLengthReader lengths,
@@ -272,7 +274,30 @@ public sealed class EncodeJobRunner(
 
         logger.LogInformation("Job {Job} ends {Status}; its artefact was {Placed}.", job.Id.Wire, job.Status, placed);
 
-        return await SweptAsync(job, cancellationToken);
+        EncodeJobStatus ended = await SweptAsync(job, cancellationToken);
+
+        if (ended is EncodeJobStatus.Completed)
+        {
+            await SucceedAsync(job, cancellationToken);
+        }
+
+        return ended;
+    }
+
+    private async Task SucceedAsync(EncodeJob job, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await succession.SettleAsync(job.RecordingId, cancellationToken);
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            logger.LogError(
+                failure,
+                "Job {Job} completed, and what earlier jobs of recording {Recording} made could not be replaced; it is settled at the next start.",
+                job.Id.Wire,
+                job.RecordingId.Wire);
+        }
     }
 
     private static EncodeFailure WhatAnUnreadHeadIsCalled(SourceHeadReading head)

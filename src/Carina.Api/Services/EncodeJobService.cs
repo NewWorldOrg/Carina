@@ -29,7 +29,8 @@ public sealed record EncodeJobView(EncodeJob Job, TimeSpan? QuietFor, bool Stall
 /// A recording still being written, or one that failed, is refused. A recording with a job already
 /// waiting or running is not queued twice, and a recording with any completed job, whatever its
 /// profile, is refused unless the caller asks for the artefact to be made again: a recording has one
-/// artefact at most. A job made again replaces the artefact at its name once it is made. Calling a
+/// artefact at most. A job made again replaces every earlier artefact of the recording once it is
+/// made, whatever their profile or destination. Calling a
 /// job off writes the ledger first, then stops the programme running for it, then sweeps the files
 /// the job owes a removal for.
 /// </remarks>

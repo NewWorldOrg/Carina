@@ -119,6 +119,7 @@ public sealed class EncodeRestartTests
             harness.Jobs,
             new ScriptedStrays(),
             harness.Cleaner,
+            harness.Succession,
             new EncodeSettings { MostAttempts = mostAttempts },
             new HandTurnedClock(new DateTimeOffset(Now)),
             NullLogger<EncodeRestart>.Instance);
@@ -144,17 +145,30 @@ public sealed class EncodeRestartTests
             null);
 
     private static EncodeRestart Restart(HeldEncodeJobs held, ScriptedStrays strays, int mostAttempts = 3)
-        => new(
+    {
+        HeldEncodeScratch scratch = new();
+        HandTurnedClock clock = new(new DateTimeOffset(Now));
+        EncodeScratchCleaner cleaner = new(
+            scratch,
+            new EncodePlaces(new IntegritySettings(), new EncodeSettings()),
+            clock,
+            NullLogger<EncodeScratchCleaner>.Instance);
+
+        return new EncodeRestart(
             held,
             strays,
-            new EncodeScratchCleaner(
-                new HeldEncodeScratch(),
-                new EncodePlaces(new IntegritySettings(), new EncodeSettings()),
-                new HandTurnedClock(new DateTimeOffset(Now)),
-                NullLogger<EncodeScratchCleaner>.Instance),
+            cleaner,
+            new EncodeArtefactSuccession(
+                held,
+                scratch,
+                new UnguardedWrites(),
+                cleaner,
+                clock,
+                NullLogger<EncodeArtefactSuccession>.Instance),
             new EncodeSettings { MostAttempts = mostAttempts },
-            new HandTurnedClock(new DateTimeOffset(Now)),
+            clock,
             NullLogger<EncodeRestart>.Instance);
+    }
 }
 
 internal sealed class ScriptedStrays : IStrayProgrammes

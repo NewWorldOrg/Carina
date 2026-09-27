@@ -486,6 +486,13 @@ public sealed class EncodeDispatchTests
             held,
             new ScriptedStrays(),
             provider.GetRequiredService<EncodeScratchCleaner>(),
+            new EncodeArtefactSuccession(
+                held,
+                scratch ?? new HeldEncodeScratch(),
+                new UnguardedWrites(),
+                provider.GetRequiredService<EncodeScratchCleaner>(),
+                clock,
+                NullLogger<EncodeArtefactSuccession>.Instance),
             settings,
             clock,
             NullLogger<EncodeRestart>.Instance));

@@ -189,6 +189,20 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
             && name.Equals(other.ArtefactName)
             && other.NameGivenUpAt is null;
 
+    public Task<IReadOnlyList<RecordingId>> ListRecordingsMadeMoreThanOnceAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<RecordingId> made =
+        [
+            .. Jobs
+                .Where(job => job.Status is EncodeJobStatus.Completed)
+                .GroupBy(job => job.RecordingId)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key),
+        ];
+
+        return Task.FromResult(made);
+    }
+
     public Task<IReadOnlyList<EncodeSpell>> RecentSpellsAsync(int most, CancellationToken cancellationToken)
     {
         IReadOnlyList<EncodeSpell> spells =

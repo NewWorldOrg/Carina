@@ -48,6 +48,12 @@ public sealed class EncodeJob
     /// </summary>
     public DateTime? NameGivenUpAt { get; private set; }
 
+    /// <summary>
+    /// When a newer artefact of the same recording was made and this job's artefact stopped being the
+    /// recording's one. Nothing while this job's artefact is the recording's one, or when it made none.
+    /// </summary>
+    public DateTime? ReplacedAt { get; private set; }
+
     public EncodeRoute? Route { get; private set; }
 
     public RunningProgramme? Programme { get; private set; }
@@ -59,6 +65,11 @@ public sealed class EncodeJob
     public ChapterReading? Chapters { get; private set; }
 
     public bool HasEnded => EncodeStandings.IsTerminal(Status);
+
+    /// <summary>
+    /// Whether this job completed and what it made has not been replaced by a newer artefact.
+    /// </summary>
+    public bool StandsAsTheArtefact => Status is EncodeJobStatus.Completed && ArtefactName is not null && ReplacedAt is null;
 
     public EncodeStanding Standing => EncodeStandings.Of(Status);
 
@@ -135,7 +146,8 @@ public sealed class EncodeJob
         EncodeTimeline? timeline,
         ChapterReading? chapters,
         bool makesItAgain = false,
-        DateTime? nameGivenUpAt = null)
+        DateTime? nameGivenUpAt = null,
+        DateTime? replacedAt = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(recordingId);
@@ -161,6 +173,11 @@ public sealed class EncodeJob
         if (nameGivenUpAt is not null && artefactName is null)
         {
             throw new ArgumentException("A job gives up the name it holds, and this one names nothing.", nameof(nameGivenUpAt));
+        }
+
+        if (replacedAt is not null && (status is not EncodeJobStatus.Completed || artefactName is null))
+        {
+            throw new ArgumentException("Only a job that completed and named what it made is replaced.", nameof(replacedAt));
         }
 
         if (programme is not null && status is not EncodeJobStatus.Running)
@@ -190,6 +207,7 @@ public sealed class EncodeJob
             ArtefactName = artefactName,
             MakesItAgain = makesItAgain,
             NameGivenUpAt = UtcTimes.Optional(nameGivenUpAt, nameof(nameGivenUpAt)),
+            ReplacedAt = UtcTimes.Optional(replacedAt, nameof(replacedAt)),
             Route = route,
             Programme = programme,
             Headway = headway,
@@ -317,6 +335,48 @@ public sealed class EncodeJob
         }
 
         NameGivenUpAt = UtcTimes.Required(at, nameof(at));
+    }
+
+    /// <summary>
+    /// Whether this job's artefact and <paramref name="other"/>'s are the same file: the same name under
+    /// the same output root.
+    /// </summary>
+    public bool SharesTheArtefactWith(EncodeJob other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return ArtefactName is { } name && name.Equals(other.ArtefactName) && OutputRoot.Equals(other.OutputRoot);
+    }
+
+    /// <summary>
+    /// Marks what this job made as replaced by <paramref name="newer"/>, a later completed job of the
+    /// same recording.
+    /// </summary>
+    public void Replaced(EncodeJob newer, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(newer);
+
+        if (!StandsAsTheArtefact)
+        {
+            throw new InvalidOperationException(
+                "Only a job that completed, named what it made and has not been replaced yet is replaced.");
+        }
+
+        if (newer.Id.Equals(Id) || !newer.RecordingId.Equals(RecordingId) || !newer.StandsAsTheArtefact)
+        {
+            throw new ArgumentException(
+                "An artefact is replaced by another completed job of the same recording whose artefact stands.",
+                nameof(newer));
+        }
+
+        DateTime when = UtcTimes.Required(at, nameof(at));
+
+        if (when < EndedAt)
+        {
+            throw new ArgumentOutOfRangeException(nameof(at), at, "An artefact is replaced after it was made, not before.");
+        }
+
+        ReplacedAt = when;
     }
 
     public void Complete(DateTime at)

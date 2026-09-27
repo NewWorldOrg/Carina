@@ -8,6 +8,8 @@ public enum EncodeScratchKind
     WorkFile = 1,
 
     Chapters = 2,
+
+    ReplacedArtefact = 3,
 }
 
 public enum EncodeScratchFate
@@ -35,8 +37,9 @@ public static class EncodeScratchShapes
 }
 
 /// <summary>
-/// A file a job writes on the way and owes a removal for. It is written into the ledger before it
-/// exists on disk, and once the job has ended the ledger says what there is to remove.
+/// A file a job owes a removal for: one it writes on the way, written into the ledger before it
+/// exists on disk, or the artefact it made once a newer one replaced it, written into the ledger
+/// before it is removed. Once the job has ended the ledger says what there is to remove.
 /// </summary>
 public sealed class EncodeScratchFile
 {

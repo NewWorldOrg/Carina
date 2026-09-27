@@ -100,11 +100,15 @@ internal sealed class EncodeHarness : IDisposable
 
     public HeardOf<EncodeJobRunner> RunnerLog { get; } = new();
 
+    public HeardOf<EncodeArtefactSuccession> SuccessionLog { get; } = new();
+
     public string WorkDirectory => (Workshop ?? Shelf).Root;
 
     public EncodeArtefactPlacer Placer => new(Jobs, Scratch, Places, Probe, Clock, PlacerLog);
 
     public EncodeScratchCleaner Cleaner => new(Scratch, Places, Clock, CleanerLog);
+
+    public EncodeArtefactSuccession Succession => new(Jobs, Scratch, new UnguardedWrites(), Cleaner, Clock, SuccessionLog);
 
     public EncodeScratchFiles ScratchFiles => new(Scratch, Places, Clock);
 
@@ -115,6 +119,7 @@ internal sealed class EncodeHarness : IDisposable
         Places,
         ScratchFiles,
         Placer,
+        Succession,
         Cleaner,
         MachineReader,
         LengthReader,

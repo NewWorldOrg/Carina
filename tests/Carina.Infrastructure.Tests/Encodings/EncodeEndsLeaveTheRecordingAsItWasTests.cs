@@ -109,14 +109,23 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
 
         await using (CarinaDbContext restarting = database.Open())
         {
+            EncodeScratchCleaner cleaner = new(
+                new EncodeScratchLedger(restarting),
+                harness.Places,
+                harness.Clock,
+                NullLogger<EncodeScratchCleaner>.Instance);
+
             await new EncodeRestart(
                     new EncodeJobRepository(restarting),
                     new ScriptedStrays(),
-                    new EncodeScratchCleaner(
+                    cleaner,
+                    new EncodeArtefactSuccession(
+                        new EncodeJobRepository(restarting),
                         new EncodeScratchLedger(restarting),
-                        harness.Places,
+                        new DatabaseAtomicWrite(restarting),
+                        cleaner,
                         harness.Clock,
-                        NullLogger<EncodeScratchCleaner>.Instance),
+                        NullLogger<EncodeArtefactSuccession>.Instance),
                     new EncodeSettings { MostAttempts = 3 },
                     harness.Clock,
                     NullLogger<EncodeRestart>.Instance)
@@ -178,6 +187,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
             harness.Places,
             harness.ScratchFiles,
             harness.Placer,
+            harness.Succession,
             harness.Cleaner,
             harness.MachineReader,
             harness.LengthReader,

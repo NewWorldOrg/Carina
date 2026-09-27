@@ -104,7 +104,7 @@ public sealed class PlaybackService(
         EncodeJob[] made =
         [
             .. (await jobs.ListForRecordingAsync(id, cancellationToken))
-                .Where(job => job.Status is EncodeJobStatus.Completed && job.ArtefactName is not null)
+                .Where(job => job.StandsAsTheArtefact)
                 .OrderByDescending(job => job.EndedAt)
                 .ThenByDescending(job => job.QueuedAt),
         ];
