@@ -114,6 +114,26 @@ public sealed class EncodeRestartTests
         Assert.True(Assert.Single(harness.Scratch.Files).IsOwedARemoval);
     }
 
+    [Fact(DisplayName = "at the start a recording made again whose earlier artefact was never replaced is left with the last one only, before anything is claimed")]
+    public async Task AtTheStartARecordingMadeAgainIsLeftWithTheLastArtefactOnly()
+    {
+        using EncodeHarness harness = new();
+        Recording recording = harness.Recorded();
+        EncodeJob earlier = harness.Made(recording.Id, EncodeProfileId.New());
+        File.WriteAllText(harness.ArtefactPathOf(earlier), "the first picture");
+        EncodeJob again = harness.RunningAgain(recording.Id, EncodeProfileId.New());
+        again.Name(EncodeFileName.Artefact(recording.Id, again.ProfileId));
+        again.Complete(EncodeHarness.Started.AddMinutes(30));
+        File.WriteAllText(harness.ArtefactPathOf(again), "the second picture");
+
+        await Restart(harness, mostAttempts: 3).RecoverAsync(Cancel);
+
+        Assert.NotNull(earlier.ReplacedAt);
+        Assert.False(File.Exists(harness.ArtefactPathOf(earlier)));
+        Assert.Equal("the second picture", File.ReadAllText(harness.ArtefactPathOf(again)));
+        Assert.Equal(EncodeHarness.Broadcast, File.ReadAllText(harness.SourcePathOf(recording)));
+    }
+
     private static EncodeRestart Restart(EncodeHarness harness, int mostAttempts)
         => new(
             harness.Jobs,

@@ -55,6 +55,48 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal([(harness.SourcePathOf(recording), recording.ServiceId)], harness.Heads.Asked);
     }
 
+    [Fact(DisplayName = "a job asked to make it again under another profile removes what the earlier job made once its own artefact is placed, and the recording is left as it was")]
+    public async Task AJobMadeAgainRemovesWhatTheEarlierJobMadeOnceItsOwnIsPlaced()
+    {
+        using EncodeHarness harness = new();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        Recording recording = harness.Recorded();
+        EncodeJob earlier = harness.Made(recording.Id, harness.Defined().Id);
+        File.WriteAllText(harness.ArtefactPathOf(earlier), "the first picture");
+        EncodeJob again = harness.RunningAgain(recording.Id, harness.Defined().Id);
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(again, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Completed, ended);
+        Assert.Equal("the picture", File.ReadAllText(harness.ArtefactPathOf(again)));
+        Assert.False(File.Exists(harness.ArtefactPathOf(earlier)));
+        Assert.Equal(EncodeHarness.Broadcast, File.ReadAllText(harness.SourcePathOf(recording)));
+        Assert.NotNull(earlier.ReplacedAt);
+        Assert.True(again.StandsAsTheArtefact);
+    }
+
+    [Fact(DisplayName = "a job asked to make it again that fails leaves what the earlier job made exactly where it was, still the recording's artefact")]
+    public async Task AJobMadeAgainThatFailsLeavesTheEarlierArtefactAsItWas()
+    {
+        using EncodeHarness harness = new();
+        harness.Standing("""
+            printf 'garbage' > "$destination"
+            exit 187
+            """);
+        Recording recording = harness.Recorded();
+        EncodeJob earlier = harness.Made(recording.Id, harness.Defined().Id);
+        File.WriteAllText(harness.ArtefactPathOf(earlier), "the first picture");
+        EncodeJob again = harness.RunningAgain(recording.Id, harness.Defined().Id);
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(again, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Failed, ended);
+        Assert.Equal("the first picture", File.ReadAllText(harness.ArtefactPathOf(earlier)));
+        Assert.Null(earlier.ReplacedAt);
+        Assert.True(earlier.StandsAsTheArtefact);
+        Assert.DoesNotContain(harness.Scratch.Files, scratch => scratch.Kind is EncodeScratchKind.ReplacedArtefact);
+    }
+
     [Fact(DisplayName = "the head skip read off the source is the one -ss the programme is handed, after the input, and the job keeps it beside the source's start as the shift a caption takes")]
     public async Task TheHeadSkipReadOffTheSourceIsTheOneSsTheProgrammeIsHanded()
     {
