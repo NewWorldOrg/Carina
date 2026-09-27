@@ -80,8 +80,8 @@ public static class TunerStandings
 
     private static int Weight(QualityStanding standing) => standing switch
     {
-        QualityStanding.Good => 0,
-        QualityStanding.Unmeasured => 1,
+        QualityStanding.Unmeasured => 0,
+        QualityStanding.Good => 1,
         QualityStanding.Unreachable => 2,
         QualityStanding.Warning => 3,
         QualityStanding.MayNotBeWatchable => 4,

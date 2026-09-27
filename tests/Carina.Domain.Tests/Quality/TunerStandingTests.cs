@@ -67,18 +67,29 @@ public sealed class TunerStandingTests
             TunerStandings.Of([RecordedBeyondWarning], [SignalGood], cannotLock: false).Standing);
     }
 
-    [Fact(DisplayName = "BR-QD-017: a reading beyond its level outweighs a supply that went quiet, which outweighs one not measured")]
-    public void AReadingBeyondItsLevelOutweighsAQuietSupplyWhichOutweighsOneNotMeasured()
+    [Fact(DisplayName = "BR-QD-017: a reading beyond its level outweighs a supply that went quiet, which outweighs what was measured well")]
+    public void AReadingBeyondItsLevelOutweighsAQuietSupplyWhichOutweighsWhatWasMeasuredWell()
     {
         Assert.Equal(
             QualityStanding.Warning,
             TunerStandings.Of([RecordedUnmeasured], [SignalNotSupplied, SignalBeyond], cannotLock: false).Standing);
         Assert.Equal(
             QualityStanding.Unreachable,
-            TunerStandings.Of([RecordedUnmeasured], [SignalNotSupplied, SignalGood], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedWell], [SignalNotSupplied, SignalGood], cannotLock: false).Standing);
+    }
+
+    [Fact(DisplayName = "BR-QD-017: a tuner is unmeasured only when nothing on it was measured")]
+    public void ATunerIsUnmeasuredOnlyWhenNothingOnItWasMeasured()
+    {
+        Assert.Equal(
+            QualityStanding.Good,
+            TunerStandings.Of([RecordedUnmeasured], [SignalGood, SignalUnmeasured], cannotLock: false).Standing);
+        Assert.Equal(
+            QualityStanding.Good,
+            TunerStandings.Of([RecordedWell], [SignalUnmeasured], cannotLock: false).Standing);
         Assert.Equal(
             QualityStanding.Unmeasured,
-            TunerStandings.Of([RecordedUnmeasured], [SignalGood], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedUnmeasured], [SignalUnmeasured, SignalUnsupported], cannotLock: false).Standing);
     }
 
     [Fact(DisplayName = "BR-QD-017: nothing to measure and a reading it cannot take leave a healthy tuner healthy")]
