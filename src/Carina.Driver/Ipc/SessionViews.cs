@@ -149,6 +149,7 @@ public static class SessionViews
             LnbPowered = device.Kind is DeviceKind.Satellite && device.LnbPower,
             Detail = fault,
             ChangedAt = manager.HealthChangedAt(deviceId),
+            FaultTitle = manager.FaultTitleOf(deviceId),
         };
 
     private static TunerSnapshot Of(

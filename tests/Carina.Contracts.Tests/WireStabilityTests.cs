@@ -488,7 +488,7 @@ public sealed class WireStabilityTests
     public void ATunerHealthKeepsExactlyTheFieldsItWasGiven()
     {
         Assert.Equal(
-            ["level", "disablePending", "lnbPowered", "detail", "changedAt"],
+            ["level", "disablePending", "lnbPowered", "detail", "changedAt", "faultTitle"],
             FieldsOf(DriverJson.Serialize(new TunerHealthDto()))
         );
     }
