@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Tests.Programmes;
@@ -11,6 +12,22 @@ public sealed class GuideCoverageTests
     private static readonly DateTime NoonInJapan = MidnightInJapan.AddHours(12);
 
     private static readonly DateTime WholeSchedule = MidnightInJapan + EightDays;
+
+    private static readonly DateTime LateEvening = MidnightInJapan.AddHours(22);
+
+    private static readonly DateTime NextMidnight = MidnightInJapan.AddDays(1);
+
+    private static readonly CollectionSettings Settings = new();
+
+    private static StreamVisit Visited(VisitOutcome outcome, DateTime attempted, DateTime? completed)
+        => StreamVisit.Rehydrate(
+            new NetworkId(4),
+            new TransportStreamId(32_736),
+            attempted,
+            completed,
+            outcome,
+            outcome is VisitOutcome.Complete or VisitOutcome.BasicOnly ? 0 : 1,
+            180_000);
 
     [Fact]
     public void TheScheduleStartsAtMidnightJapanTime()
@@ -26,7 +43,7 @@ public sealed class GuideCoverageTests
 
     [Fact]
     public void TheWantedReachIsTheWholeScheduleLessItsLastSegment()
-        => Assert.Equal(WholeSchedule.AddHours(-3), GuideCoverage.WantedReachAt(NoonInJapan, EightDays));
+        => Assert.Equal(WholeSchedule.AddHours(-3), GuideCoverage.WantedReachFrom(NoonInJapan, EightDays));
 
     [Fact]
     public void AGuideReachingTheEndOfTheScheduleMeetsTheGoalEvenThoughItIsShortOfEightDaysFromNow()
@@ -44,19 +61,65 @@ public sealed class GuideCoverageTests
         => Assert.False(GuideCoverage.IsMet(WholeSchedule.AddHours(-3).AddMinutes(-1), NoonInJapan, EightDays));
 
     [Fact]
-    public void AWholeScheduleStillMeetsTheGoalOnTheLastSecondBeforeMidnight()
-        => Assert.True(GuideCoverage.IsMet(WholeSchedule, MidnightInJapan.AddDays(1).AddSeconds(-1), EightDays));
+    public void AServiceWithNothingGatheredDoesNotMeetTheGoal()
+        => Assert.False(GuideCoverage.IsMet(null, NoonInJapan, EightDays));
 
     [Fact]
-    public void AtMidnightTheSameGuideFallsShortUntilTheNewDayIsGathered()
+    public void AStreamNeverVisitedIsMeasuredFromNow()
+        => Assert.Equal(NoonInJapan, GuideCoverage.MeasuredFrom(null, NoonInJapan, Settings));
+
+    [Fact]
+    public void AfterMidnightAStreamVisitedOnScheduleIsStillMeasuredFromTheDayItWasHeard()
     {
-        Assert.False(GuideCoverage.IsMet(WholeSchedule, MidnightInJapan.AddDays(1), EightDays));
-        Assert.True(GuideCoverage.IsMet(WholeSchedule.AddDays(1), MidnightInJapan.AddDays(1), EightDays));
+        StreamVisit visit = Visited(VisitOutcome.Complete, LateEvening, LateEvening);
+        DateTime measuredFrom = GuideCoverage.MeasuredFrom(visit, NextMidnight.AddMinutes(30), Settings);
+
+        Assert.Equal(LateEvening, measuredFrom);
+        Assert.True(GuideCoverage.IsMet(WholeSchedule, measuredFrom, EightDays));
     }
 
     [Fact]
-    public void AServiceWithNothingGatheredDoesNotMeetTheGoal()
-        => Assert.False(GuideCoverage.IsMet(null, NoonInJapan, EightDays));
+    public void AVisitThatHeardTheGuideWithoutSettlingItStillMovesTheStartForward()
+        => Assert.Equal(
+            LateEvening,
+            GuideCoverage.MeasuredFrom(Visited(VisitOutcome.Incomplete, LateEvening, NoonInJapan), LateEvening, Settings));
+
+    [Fact]
+    public void AVisitThatHeardNothingLeavesTheStartWhereTheGuideWasLastSettled()
+        => Assert.Equal(
+            NoonInJapan,
+            GuideCoverage.MeasuredFrom(
+                Visited(VisitOutcome.NoLock, NextMidnight.AddHours(1), NoonInJapan),
+                NextMidnight.AddHours(1),
+                Settings));
+
+    [Fact]
+    public void AStreamThatHasNeverBroughtTheGuideInIsMeasuredFromNow()
+        => Assert.Equal(
+            NextMidnight.AddHours(1),
+            GuideCoverage.MeasuredFrom(
+                Visited(VisitOutcome.NoBytes, NextMidnight.AddHours(1), null),
+                NextMidnight.AddHours(1),
+                Settings));
+
+    [Fact]
+    public void AStreamIsMeasuredFromItsLastVisitUntilTheNextIsAWholeGapOverdue()
+    {
+        StreamVisit visit = Visited(VisitOutcome.Complete, LateEvening, LateEvening);
+        DateTime overdue = LateEvening + Settings.BetweenVisits + Settings.BetweenVisits;
+
+        Assert.Equal(LateEvening, GuideCoverage.MeasuredFrom(visit, overdue, Settings));
+        Assert.Equal(overdue.AddSeconds(1), GuideCoverage.MeasuredFrom(visit, overdue.AddSeconds(1), Settings));
+    }
+
+    [Fact]
+    public void OnceVisitsStopTheGuideGatheredTheDayBeforeFallsShort()
+    {
+        StreamVisit visit = Visited(VisitOutcome.Complete, LateEvening, LateEvening);
+        DateTime stopped = LateEvening + TimeSpan.FromDays(1);
+
+        Assert.False(GuideCoverage.IsMet(WholeSchedule, GuideCoverage.MeasuredFrom(visit, stopped, Settings), EightDays));
+    }
 
     [Fact]
     public void ATimeNotKeptInUtcIsRefused()

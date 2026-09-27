@@ -425,10 +425,11 @@ public sealed class SyntheticEpgCollectionTests
     }
 
     [Fact]
-    public async Task AGuideOfEightDaysFallsShortOnlyOnceTheNextDayBegins()
+    public async Task AGuideOfEightDaysStaysEnoughPastMidnightAndFallsShortOnceVisitsStop()
     {
         var driver = new ScriptedDriverClient();
         var clock = new WoundClock(Airs);
+        CollectionSettings settings = new();
 
         driver.Script(Channel, ChannelScript.Carrying(OverEightDays(ScheduleStarts).ToBytes()));
 
@@ -438,7 +439,11 @@ public sealed class SyntheticEpgCollectionTests
 
         await CollectAsync(feature);
 
-        clock.Wind(ScheduleStarts.AddDays(1).AddSeconds(-1) - Airs);
+        clock.Wind(ScheduleStarts.AddDays(1).AddMinutes(30) - Airs);
+
+        Assert.True(OnlyCoverage(await CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
+
+        clock.Wind(Airs + settings.BetweenVisits + settings.BetweenVisits - clock.GetUtcNow());
 
         Assert.True(OnlyCoverage(await CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
 

@@ -273,10 +273,20 @@ public sealed class CollectionStatusEndpointTests
         => Assert.True(await MeetsTheGoalAsync(ScheduleEnds, ScheduleStarts.AddDays(1).AddSeconds(-1)));
 
     [Fact]
-    public async Task AtMidnightTheSameScheduleFallsShortUntilTheNewDayIsGathered()
-        => Assert.False(await MeetsTheGoalAsync(ScheduleEnds, ScheduleStarts.AddDays(1)));
+    public async Task PastMidnightAScheduleHeardOnTheEveningVisitIsStillThickEnough()
+        => Assert.True(await MeetsTheGoalAsync(
+            ScheduleEnds,
+            ScheduleStarts.AddDays(1).AddMinutes(30),
+            visited: ScheduleStarts.AddHours(22)));
 
-    private static async Task<bool> MeetsTheGoalAsync(DateTime lastEnd, DateTime now)
+    [Fact]
+    public async Task OnceVisitsStopTheScheduleHeardTheDayBeforeFallsShort()
+        => Assert.False(await MeetsTheGoalAsync(
+            ScheduleEnds,
+            ScheduleStarts.AddDays(1).AddHours(22),
+            visited: ScheduleStarts.AddHours(22)));
+
+    private static async Task<bool> MeetsTheGoalAsync(DateTime lastEnd, DateTime now, DateTime? visited = null)
     {
         await using var feature = new EpgFeature(
             [Stream(4, 32_736, [1049])],
@@ -284,6 +294,18 @@ public sealed class CollectionStatusEndpointTests
             clock: new FixedTimeProvider(now));
 
         feature.Programmes.Programmes.Add(ProgrammeStartingAt(4, 1049, lastEnd.AddHours(-1)));
+
+        if (visited is { } at)
+        {
+            await feature.Visits.SaveAsync(
+                StreamVisit.Record(
+                    new NetworkId(4),
+                    new TransportStreamId(32_736),
+                    VisitOutcome.Complete,
+                    at,
+                    TimeSpan.FromSeconds(182)),
+                CancellationToken.None);
+        }
 
         (_, JsonElement body) = await feature.GetAsync("/api/epg/collection-status");
         JsonElement only = Assert.Single(body.GetProperty("data").GetProperty("streams").EnumerateArray());
