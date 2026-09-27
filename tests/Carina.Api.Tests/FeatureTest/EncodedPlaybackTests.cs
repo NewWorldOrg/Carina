@@ -212,6 +212,22 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(later, await picture.Content.ReadAsByteArrayAsync());
     }
 
+    [Fact(DisplayName = "an artefact a newer one replaced is never played, even while its file is still on the disk, so a newer one a browser cannot decode as it is leaves the recording to the transcoder")]
+    public async Task AnArtefactANewerOneReplacedIsNeverPlayed()
+    {
+        await using PlayFeature feature = new();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, bytes: 700);
+        feature.Encoded(recording, EncodeCodec.H265, minutesLater: 90);
+        feature.Jobs.Jobs[0].Replaced(feature.Jobs.Jobs[1], RecordingFeature.Noon.AddHours(3));
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording);
+
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+        Assert.Equal("onTheFly", Header(picture, PlaybackHeaders.Route));
+        Assert.Equal(recording.FileName, Assert.Single(feature.Player.Opened).Name);
+    }
+
     [Fact]
     public async Task AnArtefactTheLedgerNamesAndTheDiskHasNotIsTranscodedInsteadAndSaidToHaveBeen()
     {
