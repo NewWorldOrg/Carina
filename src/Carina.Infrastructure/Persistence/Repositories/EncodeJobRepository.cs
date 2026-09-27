@@ -268,6 +268,15 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
                 cancellationToken);
     }
 
+    public async Task<IReadOnlyList<RecordingId>> ListRecordingsMadeMoreThanOnceAsync(CancellationToken cancellationToken)
+        => await context.Set<EncodeJob>()
+            .AsNoTracking()
+            .Where(row => row.Status == EncodeJobStatus.Completed)
+            .GroupBy(row => row.RecordingId)
+            .Where(made => made.Count() > 1)
+            .Select(made => made.Key)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<EncodeSpell>> RecentSpellsAsync(int most, CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(most, 1);

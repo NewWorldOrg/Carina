@@ -42,8 +42,9 @@ public sealed record EncodeTimelineResponder(
 
 /// <summary>
 /// One job as the ledger holds it, read at a moment: its standing, how long it has gone without
-/// making headway and whether that counts as stalled, and, for a waiting job, whether it is held
-/// back by the card being used for someone watching.
+/// making headway and whether that counts as stalled, for a waiting job, whether it is held back
+/// by the card being used for someone watching, and, for a completed one, when a newer artefact of
+/// the recording replaced what it made.
 /// </summary>
 public sealed record EncodeJobResponder(
     Guid Id,
@@ -63,6 +64,7 @@ public sealed record EncodeJobResponder(
     bool WaitingForAViewer,
     EncodeFailureResponder? Failure,
     string? ArtefactName,
+    DateTime? ReplacedAt,
     EncodeTimelineResponder? Timeline)
 {
     public static EncodeJobResponder Of(EncodeJobView seen)
@@ -89,6 +91,7 @@ public sealed record EncodeJobResponder(
             seen.WaitingForAViewer,
             job.Failure is { } failure ? new EncodeFailureResponder(failure.Failure, failure.Note, failure.NoticedAt) : null,
             job.ArtefactName?.Value,
+            job.ReplacedAt,
             job.Timeline is { } timeline ? EncodeTimelineResponder.Of(timeline) : null);
     }
 

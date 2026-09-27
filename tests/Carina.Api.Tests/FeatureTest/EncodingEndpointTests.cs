@@ -321,6 +321,30 @@ public sealed class EncodingEndpointTests
         Assert.Null(made.NameGivenUpAt);
     }
 
+    [Fact(DisplayName = "the list says when a job's artefact was replaced by a newer one, and says nothing of it for the one that stands")]
+    public async Task TheListSaysWhenAJobsArtefactWasReplaced()
+    {
+        await using EncodingFeature feature = new();
+        EncodeProfile first = feature.Defined();
+        EncodeProfile second = feature.Defined();
+        EncodeDestination destination = feature.Placed(first);
+        Recording recording = feature.Recorded();
+        EncodeJob replaced = feature.Completed(recording, first, destination);
+        EncodeJob standing = feature.Completed(recording, second, destination);
+        DateTime replacedAt = EncodingFeature.Noon.AddMinutes(5);
+        replaced.Replaced(standing, replacedAt);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/encoding/jobs?recordingId={recording.Id.Wire}");
+        JsonElement[] items = [.. body.GetProperty("data").GetProperty("items").EnumerateArray()];
+        JsonElement readReplaced = items.Single(item => item.GetProperty("id").GetGuid() == replaced.Id.Value);
+        JsonElement readStanding = items.Single(item => item.GetProperty("id").GetGuid() == standing.Id.Value);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(replacedAt, readReplaced.GetProperty("replacedAt").GetDateTime().ToUniversalTime());
+        Assert.Equal(replaced.ArtefactName!.Value, readReplaced.GetProperty("artefactName").GetString());
+        Assert.Equal(JsonValueKind.Null, readStanding.GetProperty("replacedAt").ValueKind);
+    }
+
     [Fact(DisplayName = "saying outright not to make it again is answered exactly as saying nothing is, so the refusal is what it always was")]
     public async Task SayingNotToMakeItAgainIsRefusedJustAsSayingNothingIs()
     {

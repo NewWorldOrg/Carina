@@ -113,6 +113,12 @@ public interface IEncodeJobRepository
     Task<int> TakeTheNameOverAsync(EncodeJob job, EncodeFileName name, DateTime at, CancellationToken cancellationToken);
 
     /// <summary>
+    /// The recordings that more than one job completed for, whether or not the earlier artefacts have
+    /// been replaced yet.
+    /// </summary>
+    Task<IReadOnlyList<RecordingId>> ListRecordingsMadeMoreThanOnceAsync(CancellationToken cancellationToken);
+
+    /// <summary>
     /// How long the last jobs that completed took, at most <paramref name="most"/> of them, newest
     /// first. Jobs that failed or were called off are not counted.
     /// </summary>

@@ -181,6 +181,54 @@ public sealed class RecordingEncodesTests
         Assert.Equal(EncodeFileName.Artefact(recording, made.ProfileId), Assert.Single(erasure.Left));
     }
 
+    [Fact(DisplayName = "throwing a recording away removes the replaced artefact whose removal is still owed, and does not count the replaced one as an artefact of its own")]
+    public async Task ThrowingARecordingAwayRemovesAReplacedArtefactStillOwed()
+    {
+        using EncodeHarness harness = new();
+        RecordingId recording = RecordingId.New();
+        EncodeProfileId first = EncodeProfileId.New();
+        EncodeJob replaced = EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            recording,
+            first,
+            EncodeDestinationId.New(),
+            EncodeHarness.Encodes,
+            EncodeJobStatus.Completed,
+            EncodeJob.FirstAttempt,
+            EncodeHarness.Queued,
+            EncodeHarness.Started,
+            Ended,
+            null,
+            EncodeFileName.Artefact(recording, first),
+            null,
+            null,
+            null,
+            null,
+            null,
+            replacedAt: Ended.AddMinutes(1));
+        harness.Jobs.Jobs.Add(replaced);
+        EncodeScratchFile owed = EncodeScratchFile.Record(
+            EncodeScratchFileId.New(),
+            replaced.Id,
+            EncodeScratchKind.ReplacedArtefact,
+            EncodeHarness.Encodes,
+            replaced.ArtefactName!,
+            Ended.AddMinutes(1));
+        owed.Settle(EncodeScratchFate.CouldNotBeRemoved, Ended.AddMinutes(1));
+        harness.Scratch.Files.Add(owed);
+        string leftBehind = Holding(harness, replaced);
+        EncodeJob standing = harness.Made(recording, EncodeProfileId.New());
+        string artefact = Holding(harness, standing);
+
+        EncodesErased erasure = await Encodes(harness).EraseAsync(recording, Cancel);
+
+        Assert.True(erasure.EverythingIsGone);
+        Assert.Equal(2, erasure.FilesRemoved);
+        Assert.False(File.Exists(leftBehind));
+        Assert.False(File.Exists(artefact));
+        Assert.Equal(EncodeScratchFate.Removed, owed.Fate);
+    }
+
     private static string Holding(EncodeHarness harness, EncodeJob job)
     {
         string path = harness.ArtefactPathOf(job);

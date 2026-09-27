@@ -114,11 +114,32 @@ public sealed class EncodeRestartTests
         Assert.True(Assert.Single(harness.Scratch.Files).IsOwedARemoval);
     }
 
+    [Fact(DisplayName = "at the start a recording made again whose earlier artefact was never replaced is left with the last one only, before anything is claimed")]
+    public async Task AtTheStartARecordingMadeAgainIsLeftWithTheLastArtefactOnly()
+    {
+        using EncodeHarness harness = new();
+        Recording recording = harness.Recorded();
+        EncodeJob earlier = harness.Made(recording.Id, EncodeProfileId.New());
+        File.WriteAllText(harness.ArtefactPathOf(earlier), "the first picture");
+        EncodeJob again = harness.RunningAgain(recording.Id, EncodeProfileId.New());
+        again.Name(EncodeFileName.Artefact(recording.Id, again.ProfileId));
+        again.Complete(EncodeHarness.Started.AddMinutes(30));
+        File.WriteAllText(harness.ArtefactPathOf(again), "the second picture");
+
+        await Restart(harness, mostAttempts: 3).RecoverAsync(Cancel);
+
+        Assert.NotNull(earlier.ReplacedAt);
+        Assert.False(File.Exists(harness.ArtefactPathOf(earlier)));
+        Assert.Equal("the second picture", File.ReadAllText(harness.ArtefactPathOf(again)));
+        Assert.Equal(EncodeHarness.Broadcast, File.ReadAllText(harness.SourcePathOf(recording)));
+    }
+
     private static EncodeRestart Restart(EncodeHarness harness, int mostAttempts)
         => new(
             harness.Jobs,
             new ScriptedStrays(),
             harness.Cleaner,
+            harness.Succession,
             new EncodeSettings { MostAttempts = mostAttempts },
             new HandTurnedClock(new DateTimeOffset(Now)),
             NullLogger<EncodeRestart>.Instance);
@@ -144,17 +165,30 @@ public sealed class EncodeRestartTests
             null);
 
     private static EncodeRestart Restart(HeldEncodeJobs held, ScriptedStrays strays, int mostAttempts = 3)
-        => new(
+    {
+        HeldEncodeScratch scratch = new();
+        HandTurnedClock clock = new(new DateTimeOffset(Now));
+        EncodeScratchCleaner cleaner = new(
+            scratch,
+            new EncodePlaces(new IntegritySettings(), new EncodeSettings()),
+            clock,
+            NullLogger<EncodeScratchCleaner>.Instance);
+
+        return new EncodeRestart(
             held,
             strays,
-            new EncodeScratchCleaner(
-                new HeldEncodeScratch(),
-                new EncodePlaces(new IntegritySettings(), new EncodeSettings()),
-                new HandTurnedClock(new DateTimeOffset(Now)),
-                NullLogger<EncodeScratchCleaner>.Instance),
+            cleaner,
+            new EncodeArtefactSuccession(
+                held,
+                scratch,
+                new UnguardedWrites(),
+                cleaner,
+                clock,
+                NullLogger<EncodeArtefactSuccession>.Instance),
             new EncodeSettings { MostAttempts = mostAttempts },
-            new HandTurnedClock(new DateTimeOffset(Now)),
+            clock,
             NullLogger<EncodeRestart>.Instance);
+    }
 }
 
 internal sealed class ScriptedStrays : IStrayProgrammes

@@ -7,8 +7,9 @@ namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
 /// Removes what a job that has ended still owes a removal for, and the artefact a completed job
-/// made. What is removed is read off the ledger. A file that is not there any more is settled as
-/// already gone.
+/// made. What is removed is read off the ledger: scratch from where the work goes, a replaced
+/// artefact from where the artefact went. A file that is not there any more is settled as already
+/// gone.
 /// </summary>
 public sealed class EncodeScratchCleaner(
     IEncodeScratchLedger ledger,
@@ -30,7 +31,7 @@ public sealed class EncodeScratchCleaner(
 
         foreach (EncodeScratchFile scratch in owed)
         {
-            EncodeScratchFate fate = places.WhereTheWorkGoes(scratch.OutputRoot) is { } room
+            EncodeScratchFate fate = RoomOf(scratch) is { } room
                 ? Remove(room, scratch.FileName, scratch.JobId, scratch.OutputRoot)
                 : Unplaceable(scratch.FileName, scratch.JobId, scratch.OutputRoot);
 
@@ -60,6 +61,11 @@ public sealed class EncodeScratchCleaner(
             ? Remove(room, artefact, job.Id, job.OutputRoot)
             : Unplaceable(artefact, job.Id, job.OutputRoot);
     }
+
+    private string? RoomOf(EncodeScratchFile scratch)
+        => scratch.Kind is EncodeScratchKind.ReplacedArtefact
+            ? places.WhereTheArtefactGoes(scratch.OutputRoot)
+            : places.WhereTheWorkGoes(scratch.OutputRoot);
 
     private EncodeScratchFate Unplaceable(EncodeFileName file, EncodeJobId job, OutputRoot root)
     {

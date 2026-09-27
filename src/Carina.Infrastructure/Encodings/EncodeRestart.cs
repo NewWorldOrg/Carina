@@ -1,5 +1,6 @@
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
+using Carina.Domain.Recordings;
 
 using Microsoft.Extensions.Logging;
 
@@ -15,12 +16,14 @@ public sealed record EncodeRestartReport(int PutBack, int GivenUp, int Stopped, 
 /// written down against a job is stopped first when what runs under its id began at the time
 /// written down, and left alone otherwise. Each job then goes back to the queue with its work files
 /// left in place, or is given up when its attempts are spent, with what it still owes a removal for
-/// swept.
+/// swept. Every recording made more than once is then left with the artefact of its last completed
+/// job as its only one, and the removals its replaced artefacts still owe are made again.
 /// </summary>
 public sealed class EncodeRestart(
     IEncodeJobRepository jobs,
     IStrayProgrammes strays,
     EncodeScratchCleaner cleaner,
+    EncodeArtefactSuccession succession,
     EncodeSettings settings,
     TimeProvider clock,
     ILogger<EncodeRestart> logger)
@@ -69,7 +72,27 @@ public sealed class EncodeRestart(
             }
         }
 
+        await SettleTheMadeAgainAsync(cancellationToken);
+
         return new EncodeRestartReport(putBack, givenUp, stopped, spared);
+    }
+
+    private async Task SettleTheMadeAgainAsync(CancellationToken cancellationToken)
+    {
+        foreach (RecordingId recording in await jobs.ListRecordingsMadeMoreThanOnceAsync(cancellationToken))
+        {
+            try
+            {
+                await succession.SettleAsync(recording, cancellationToken);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                logger.LogError(
+                    failure,
+                    "What earlier jobs of recording {Recording} made could not be settled; it is tried again at the next start.",
+                    recording.Wire);
+            }
+        }
     }
 
     private void Told(EncodeJob job, RunningProgramme left, StrayFate fate)
