@@ -267,6 +267,65 @@ public sealed class EncodedPlaybackTests
     }
 
     [Fact]
+    public async Task TheFileOfAnEncodedRecordingAskedForAsItWasRecordedIsTheRecordingHandedOverAsATransportStream()
+    {
+        await using var feature = new PlaybackFeature();
+        byte[] written = PlaybackFeature.Bytes(4_000);
+        Recording recording = feature.Ended(RecordingOutcome.Complete, written);
+        feature.Encoded(recording);
+
+        using HttpResponseMessage answer = await feature.GetFromAsync(recording, "recording");
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal("video/mp2t", answer.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(written, await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task TheRecordingItselfIsMovedAboutByARangeAndAskedForItsSizeAloneLikeTheArtefact()
+    {
+        await using var feature = new PlaybackFeature();
+        byte[] written = PlaybackFeature.Bytes(4_000);
+        Recording recording = feature.Ended(RecordingOutcome.Complete, written);
+        feature.Encoded(recording);
+
+        using HttpResponseMessage part = await feature.GetFromAsync(recording, "recording", "bytes=100-199");
+        using HttpResponseMessage head = await feature.HeadFromAsync(recording, "recording");
+
+        Assert.Equal(HttpStatusCode.PartialContent, part.StatusCode);
+        Assert.Equal(written[100..200], await part.Content.ReadAsByteArrayAsync());
+        Assert.Equal(HttpStatusCode.OK, head.StatusCode);
+        Assert.Equal(written.Length, head.Content.Headers.ContentLength);
+    }
+
+    [Fact]
+    public async Task TheFileOfAnEncodedRecordingAskedForAsTheArtefactByNameIsTheArtefact()
+    {
+        await using var feature = new PlaybackFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, PlaybackFeature.Bytes(4_000));
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage answer = await feature.GetFromAsync(recording, "artefact");
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal("video/mp4", answer.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(artefact, await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task TheRecordingItselfAskedForWhenItIsGoneIsRefusedRatherThanQuietlyHandedTheArtefact()
+    {
+        await using var feature = new PlaybackFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, PlaybackFeature.Bytes(4_000), onDisk: false);
+        feature.Encoded(recording);
+
+        using HttpResponseMessage answer = await feature.GetFromAsync(recording, "recording");
+
+        Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
+        Assert.Empty(await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
     public async Task TheChaptersAJobMarkedComeBackWithThePlanOfTheArtefactItMade()
     {
         await using var feature = new PlayFeature();
@@ -539,20 +598,6 @@ public sealed class EncodedPlaybackTests
 
         Assert.Equal("recording", read.GetProperty("source").GetString());
         Assert.Empty(read.GetProperty("chapters").EnumerateArray());
-    }
-
-    [Fact(DisplayName = "the file of a recording handed to an outside player is the artefact, whatever the browser asked the plan for")]
-    public async Task TheFileHandedToAnOutsidePlayerIsStillTheArtefact()
-    {
-        await using var feature = new PlaybackFeature();
-        Recording recording = feature.Ended(RecordingOutcome.Complete, PlaybackFeature.Bytes(4_000));
-        byte[] artefact = feature.Encoded(recording);
-
-        using HttpResponseMessage answer = await feature.Client.GetAsync(
-            new Uri($"/api/videos/{recording.Id.Wire}?source=recording", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
-        Assert.Equal(artefact, await answer.Content.ReadAsByteArrayAsync());
     }
 
     private static string? Header(HttpResponseMessage answer, string named)

@@ -125,10 +125,16 @@ internal sealed class PlaybackFeature : IAsyncDisposable
     }
 
     public Task<HttpResponseMessage> GetAsync(Recording recording, string? range = null)
-        => SendAsync(HttpMethod.Get, recording, range);
+        => SendAsync(HttpMethod.Get, recording, range, null);
 
     public Task<HttpResponseMessage> HeadAsync(Recording recording, string? range = null)
-        => SendAsync(HttpMethod.Head, recording, range);
+        => SendAsync(HttpMethod.Head, recording, range, null);
+
+    public Task<HttpResponseMessage> GetFromAsync(Recording recording, string source, string? range = null)
+        => SendAsync(HttpMethod.Get, recording, range, source);
+
+    public Task<HttpResponseMessage> HeadFromAsync(Recording recording, string source)
+        => SendAsync(HttpMethod.Head, recording, null, source);
 
     public async ValueTask DisposeAsync()
     {
@@ -147,13 +153,19 @@ internal sealed class PlaybackFeature : IAsyncDisposable
         }
     }
 
-    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, Recording recording, string? range)
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpMethod method,
+        Recording recording,
+        string? range,
+        string? source)
     {
         ArgumentNullException.ThrowIfNull(recording);
 
+        string asked = source is null ? string.Empty : $"?source={Uri.EscapeDataString(source)}";
+
         using var asking = new HttpRequestMessage(
             method,
-            new Uri($"/api/videos/{recording.Id.Wire}", UriKind.Relative));
+            new Uri($"/api/videos/{recording.Id.Wire}{asked}", UriKind.Relative));
 
         if (range is not null)
         {

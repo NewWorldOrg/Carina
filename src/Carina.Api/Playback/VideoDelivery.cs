@@ -11,6 +11,8 @@ public static class VideoDelivery
 {
     public const string Path = "/api/videos/{id}";
 
+    public const string Source = "source";
+
     public static readonly string[] Methods = [HttpMethods.Get, HttpMethods.Head];
 
     public static Task Invoke(HttpContext context, string id, PlaybackService playback)
@@ -27,9 +29,18 @@ public static class VideoDelivery
             return Task.CompletedTask;
         }
 
+        AskedSource source = AskedSource.Read(context.Request.Query[Source]);
+
+        if (source.Answer is SourceAnswer.NotOneOfThese)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+
+            return Task.CompletedTask;
+        }
+
         if (context.User.Identity?.IsAuthenticated is true)
         {
-            return ServeAsync(context, recordingId, playback);
+            return ServeAsync(context, recordingId, source.Source, playback);
         }
 
         return context.RequestServices
@@ -37,13 +48,17 @@ public static class VideoDelivery
             .AdmitForAsLongAsTheGrantLastsAsync(
             context,
             PlaybackTicketService.TargetOf(recordingId),
-            (_, _) => ServeAsync(context, recordingId, playback));
+            (_, _) => ServeAsync(context, recordingId, source.Source, playback));
     }
 
-    private static async Task ServeAsync(HttpContext context, RecordingId recordingId, PlaybackService playback)
+    private static async Task ServeAsync(
+        HttpContext context,
+        RecordingId recordingId,
+        PlaybackSource from,
+        PlaybackService playback)
     {
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
-            await playback.OfferAsync(recordingId, SoundTrack.Main, PlaybackSource.Artefact, context.RequestAborted);
+            await playback.OfferAsync(recordingId, SoundTrack.Main, from, context.RequestAborted);
 
         if (!offered.IsSuccess)
         {
