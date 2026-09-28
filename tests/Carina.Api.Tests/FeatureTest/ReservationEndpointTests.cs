@@ -452,6 +452,74 @@ public sealed class ReservationEndpointTests
     }
 
     [Fact]
+    public async Task BrRv001AListingAMovedBroadcastSuppressesIsRefusedAndThePrimaryIsNamed()
+    {
+        await using var feature = new ReservationFeature(seats: 2);
+        feature.Announced(4001, related: [new RelatedProgramme(ReservationFeature.Network, 1032, 5001, RelationKind.Moved)]);
+        feature.Announced(5001, serviceId: 1032, running: ProgrammeRunning.Running);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/reservations", Asking(4001));
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains($"{ReservationFeature.Network}-1032-5001", body.GetProperty("message").GetString()!, StringComparison.Ordinal);
+        Assert.Empty(feature.Reservations.Held);
+    }
+
+    [Fact]
+    public async Task BrRd010ThePrimaryListingOfAMovedBroadcastIsReservedAsTheBroadcastsPrimary()
+    {
+        await using var feature = new ReservationFeature(seats: 2);
+        feature.Announced(4001, related: [new RelatedProgramme(ReservationFeature.Network, 1032, 5001, RelationKind.Moved)]);
+        feature.Announced(5001, serviceId: 1032, running: ProgrammeRunning.Running);
+
+        (HttpStatusCode status, JsonElement body) =
+            await feature.PostAsync("/api/reservations", Asking(5001, serviceId: 1032));
+        JsonElement group = body.GetProperty("data").GetProperty("reservation").GetProperty("broadcastGroup");
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal("movementPrimary", group.GetProperty("role").GetString());
+        Assert.Equal($"movement:{ReservationFeature.Network}-1024-4001", group.GetProperty("key").GetString());
+    }
+
+    [Fact]
+    public async Task BrRd010ReservingOneSegmentOfARelayReservesTheSegmentsAfterItUnderOneKey()
+    {
+        await using var feature = new ReservationFeature(seats: 2);
+        feature.Announced(4001, related: [new RelatedProgramme(ReservationFeature.Network, 1032, 5001, RelationKind.Relayed)]);
+        feature.Announced(5001, serviceId: 1032, startsAt: Noon.AddHours(3));
+
+        (HttpStatusCode status, JsonElement body) =
+            await feature.PostAsync("/api/reservations", Asking(4001, priority: 30));
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal(2, feature.Reservations.Held.Count);
+        Assert.All(feature.Reservations.Held, reservation =>
+        {
+            Assert.Equal(BroadcastGroupRole.RelaySegment, reservation.BroadcastGroupRole);
+            Assert.Equal($"relay:{ReservationFeature.Network}-1024-4001", reservation.BroadcastGroupKey?.Value);
+            Assert.Equal(30, reservation.Priority.Value);
+            Assert.False(reservation.IsRuleBorn);
+        });
+        Assert.Equal(
+            "relaySegment",
+            body.GetProperty("data").GetProperty("reservation").GetProperty("broadcastGroup").GetProperty("role").GetString());
+    }
+
+    [Fact]
+    public async Task BrRd010ASegmentAlreadyReservedIsNotReservedAgainWhenAnotherSegmentIsAskedFor()
+    {
+        await using var feature = new ReservationFeature(seats: 2);
+        feature.Announced(4001, related: [new RelatedProgramme(ReservationFeature.Network, 1032, 5001, RelationKind.Relayed)]);
+        feature.Announced(5001, serviceId: 1032, startsAt: Noon.AddHours(3));
+        feature.Booked(5001, serviceId: 1032, startsAt: Noon.AddHours(3), state: ReservationState.Cancelled);
+
+        (HttpStatusCode status, _) = await feature.PostAsync("/api/reservations", Asking(4001));
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal(2, feature.Reservations.Held.Count);
+    }
+
+    [Fact]
     public async Task ABroadcastThatIsAlreadyReservedIsNotReservedTwice()
     {
         await using var feature = new ReservationFeature();
