@@ -317,6 +317,70 @@ public sealed class ServiceCatalogEndpointTests
     }
 
     [Fact]
+    public async Task ASatelliteServiceIsSaidToBeOutOfReceptionOnceItsOnlyTunerIsTurnedOffAndIsKept()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Driver.Tuners =
+        [
+            new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle),
+            new TunerSnapshot("adapter1", TunerKind.Satellite, TunerState.Disabled),
+        ];
+        feature.Seed(101, "Ground", TuningParameters.Terrestrial(Terrestrial));
+        feature.Seed(102, "Sky", TuningParameters.Bs(SatelliteSlot, new TransportStreamId(SatelliteStream)));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement listed = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["receivable", "noTunerInService"], Receptions(listed));
+        Assert.Equal(2, feature.Services.Services.Count);
+        Assert.Equal(2, feature.Candidates.Candidates.Count);
+    }
+
+    [Fact]
+    public async Task TurningTheSatelliteTunerBackOnMakesTheSameServiceReceivableAgain()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Driver.Tuners =
+        [
+            new TunerSnapshot("adapter1", TunerKind.Satellite, TunerState.Disabled),
+        ];
+        feature.Seed(102, "Sky", TuningParameters.Bs(SatelliteSlot, new TransportStreamId(SatelliteStream)));
+
+        Assert.Equal(["noTunerInService"], Receptions((await feature.GetAsync("/api/services")).Body.GetProperty("data")));
+
+        feature.Driver.Tuners = [new TunerSnapshot("adapter1", TunerKind.Satellite, TunerState.Idle)];
+
+        Assert.Equal(["receivable"], Receptions((await feature.GetAsync("/api/services")).Body.GetProperty("data")));
+    }
+
+    [Fact]
+    public async Task TheDetailOfAServiceNoTunerReceivesSaysSoToo()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Driver.Tuners = [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)];
+        feature.Seed(101, "Sky", TuningParameters.Bs(SatelliteSlot, new TransportStreamId(SatelliteStream)));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(OneService);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("noTunerInService", body.GetProperty("data").GetProperty("reception").GetString());
+    }
+
+    [Fact]
+    public async Task TunersThatCannotBeAskedAboutLeaveReceptionUnknownRatherThanOut()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Driver.Unreachable = "no socket";
+        feature.Seed(101, "Ground", TuningParameters.Terrestrial(Terrestrial));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/services");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["unknown"], Receptions(body.GetProperty("data")));
+    }
+
+    [Fact]
     public async Task AChannelIsNotSavedWhileTheTunersItNeedsCannotBeAskedAbout()
     {
         await using var feature = new CatalogFeature();
@@ -693,4 +757,7 @@ public sealed class ServiceCatalogEndpointTests
             36,
             [0x89, 0x50, 0x4E, 0x47],
             new DateTime(2026, 9, 5, 0, 0, 0, DateTimeKind.Utc));
+
+    private static IReadOnlyList<string?> Receptions(JsonElement listed)
+        => [.. listed.EnumerateArray().Select(service => service.GetProperty("reception").GetString())];
 }

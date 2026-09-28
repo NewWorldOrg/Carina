@@ -77,6 +77,7 @@ public sealed record BroadcastServiceResponder(
     int CandidateCount,
     ScanTargetResponder? SelectedChannel,
     ScanTargetResponder? BetterChannel,
+    ServiceReception Reception,
     IReadOnlyList<CandidateChannelResponder> Candidates,
     StationLogoDeclaration LogoDeclaration,
     StationLogoResponder? Logo)
@@ -101,6 +102,7 @@ public sealed record BroadcastServiceResponder(
             held.Candidates.Count,
             selected is null ? null : ScanTargetResponder.Of(selected.Tuning),
             better is null ? null : ScanTargetResponder.Of(better.Tuning),
+            held.Reception,
             [.. held.Candidates.Select(CandidateChannelResponder.Of)],
             service.LogoDeclaration,
             StationLogoResponder.Of(service, held.Logo));
