@@ -127,13 +127,14 @@ public sealed class QualityService(
         IReadOnlyList<SignalFigures> figures = await signals.FiguresAsync(query.Period, cancellationToken);
 
         IReadOnlyList<QualityGroupReading> grouped = QualityBoard.Grouped(rows, QualityAxis.Tuner, query.Metrics, bands);
-        IReadOnlySet<string> cannotLock = LockWatch.CannotLock(await incidents.ListUnsettledAsync(cancellationToken));
+        IReadOnlyDictionary<string, TunerTroubleKind> troubled =
+            TunerTroubleWatch.Troubled(await incidents.ListUnsettledAsync(cancellationToken));
 
         IReadOnlyList<TunerDeviceId> known =
         [
             .. await EnabledTunersAsync(cancellationToken),
             .. figures.Select(figure => figure.Tuner),
-            .. cannotLock.Select(tuner => new TunerDeviceId(tuner)),
+            .. troubled.Keys.Order(StringComparer.Ordinal).Select(tuner => new TunerDeviceId(tuner)),
         ];
 
         IReadOnlyList<QualityTunerReading> readings =
@@ -144,7 +145,7 @@ public sealed class QualityService(
                     query.Sort,
                     query.Primary,
                     Sense(query.Primary))
-                .Select(group => Tuner(group, figures, standings, cannotLock)),
+                .Select(group => Tuner(group, figures, standings, troubled)),
         ];
 
         if (query.Sort is QualityGroupSort.Worst)
@@ -228,7 +229,7 @@ public sealed class QualityService(
         QualityGroupReading group,
         IReadOnlyList<SignalFigures> figures,
         IReadOnlyList<QualityThresholdStanding> standings,
-        IReadOnlySet<string> cannotLock)
+        IReadOnlyDictionary<string, TunerTroubleKind> troubled)
     {
         IReadOnlyList<QualitySignalStanding> signal =
             QualitySignal.Over(QualitySignalSurvey.Read(figures, Named(group), standings));
@@ -239,7 +240,9 @@ public sealed class QualityService(
             TunerStandings.Of(
                 [.. group.Measures.Select(measure => measure.Tally)],
                 [.. signal.Select(standing => standing.Reading)],
-                group.Key.Tuner is { } tuner && cannotLock.Contains(tuner.Value)));
+                group.Key.Tuner is { } tuner && troubled.TryGetValue(tuner.Value, out TunerTroubleKind trouble)
+                    ? trouble
+                    : null));
     }
 
     private static IReadOnlyList<QualityGroupReading> Unrecorded(

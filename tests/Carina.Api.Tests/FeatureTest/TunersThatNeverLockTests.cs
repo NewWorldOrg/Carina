@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Contracts;
+using Carina.Domain.Channels;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -124,6 +125,52 @@ public sealed class TunersThatNeverLockTests
         }
 
         Assert.False(Tuner(items, Terrestrial).GetProperty("cannotLock").GetBoolean());
+    }
+
+    [Fact(DisplayName = "BR-QD-018: tuners the driver says are failing to tune stand at the warning with that trouble, not as unmeasured")]
+    public async Task TunersTheDriverSaysAreFailingToTuneStandAtTheWarningWithThatTrouble()
+    {
+        await using QualityFeature feature = new();
+        feature.Driver.Tuners =
+        [
+            new TunerSnapshot(FirstSatellite, TunerKind.Satellite, TunerState.Idle),
+            new TunerSnapshot(SecondSatellite, TunerKind.Satellite, TunerState.Faulted),
+            new TunerSnapshot(Terrestrial, TunerKind.Terrestrial, TunerState.Idle),
+        ];
+        feature.Sampled(tuner: Terrestrial, samples: FifteenHoursOfSamples, locked: FifteenHoursOfSamples);
+        feature.Troubled(FirstSatellite, TunerTroubleKind.TuneFailing);
+        feature.Troubled(SecondSatellite, TunerTroubleKind.DeviceFailed);
+
+        JsonElement items = await TunersAsync(feature);
+
+        Assert.Equal([SecondSatellite, FirstSatellite, Terrestrial], DeviceIds(items));
+
+        JsonElement failing = Tuner(items, FirstSatellite);
+
+        Assert.Equal("warning", failing.GetProperty("standing").GetString());
+        Assert.Equal("tuneFailing", failing.GetProperty("trouble").GetString());
+        Assert.False(failing.GetProperty("cannotLock").GetBoolean());
+
+        JsonElement failed = Tuner(items, SecondSatellite);
+
+        Assert.Equal("mayNotBeWatchable", failed.GetProperty("standing").GetString());
+        Assert.Equal("deviceFailed", failed.GetProperty("trouble").GetString());
+
+        Assert.Equal(JsonValueKind.Null, Tuner(items, Terrestrial).GetProperty("trouble").ValueKind);
+    }
+
+    [Fact(DisplayName = "BR-QD-018: the incidents list restates a tuner that is failing to tune under that classification")]
+    public async Task TheIncidentsListRestatesATunerThatIsFailingToTune()
+    {
+        await using QualityFeature feature = new();
+        feature.Troubled(FirstSatellite, TunerTroubleKind.TuneFailing);
+
+        JsonElement item = Assert.Single(
+            (await feature.GetAsync("/api/quality/incidents")).Body.GetProperty("data").GetProperty("items").EnumerateArray());
+
+        Assert.Equal("TuneFailing", item.GetProperty("classification").GetString());
+        Assert.True(item.GetProperty("restated").GetBoolean());
+        Assert.Equal(FirstSatellite, item.GetProperty("subjectKey").GetString());
     }
 
     [Fact(DisplayName = "BR-QD-017: a bit error rate beyond its level puts the row beyond the level while nothing was recorded")]

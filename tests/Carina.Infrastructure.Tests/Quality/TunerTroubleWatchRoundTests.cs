@@ -7,7 +7,7 @@ using Carina.Infrastructure.Quality;
 
 namespace Carina.Infrastructure.Tests.Quality;
 
-public sealed class LockWatchRoundTests
+public sealed class TunerTroubleWatchRoundTests
 {
     private const string FirstSatellite = "adapter0";
 
@@ -44,7 +44,7 @@ public sealed class LockWatchRoundTests
         {
             Assert.Equal(QualityThresholdKey.LockRate, incident.Breached);
             Assert.Equal(QualityIncidentOwner.Tuner, incident.Owner);
-            Assert.Equal(TunerFaults.CannotLockClassification, incident.Classification);
+            Assert.Equal(TunerTroubles.CannotLockClassification, incident.Classification);
             Assert.Equal(QualityIncidentState.Notified, incident.State);
             Assert.Equal(Noon, incident.DetectedAt);
         });
@@ -157,5 +157,68 @@ public sealed class LockWatchRoundTests
         await harness.Round().WatchAsync(Cancel);
 
         Assert.DoesNotContain(harness.Incidents.Incidents, incident => incident.Breached is QualityThresholdKey.SupplySilence);
+    }
+
+    [Fact(DisplayName = "BR-QD-018: two satellite tuners the driver says are failing to tune stand as one incident each under that kind")]
+    public async Task TwoSatelliteTunersFailingToTuneStandAsOneIncidentEachUnderThatKind()
+    {
+        SupplyWatchHarness harness = new();
+
+        harness.Answering(
+            SupplyWatchHarness.FailingToTune(FirstSatellite),
+            SupplyWatchHarness.FailingToTune(SecondSatellite),
+            SupplyWatchHarness.Idle(SupplyWatchHarness.Device));
+
+        await harness.Round().WatchAsync(Cancel);
+
+        harness.Clock.Turn(BetweenPasses);
+
+        await harness.Round().WatchAsync(Cancel);
+
+        Assert.Equal(2, harness.Incidents.Incidents.Count);
+        Assert.All(harness.Incidents.Incidents, incident =>
+        {
+            Assert.Equal(QualityIncidentOwner.Tuner, incident.Owner);
+            Assert.Equal("TuneFailing", incident.Classification);
+            Assert.Equal(QualityIncidentState.Notified, incident.State);
+        });
+    }
+
+    [Fact(DisplayName = "BR-QD-018: a driver started again that no longer says the tuners are failing resolves their incidents")]
+    public async Task ADriverStartedAgainThatNoLongerSaysTheTunersAreFailingResolvesTheirIncidents()
+    {
+        SupplyWatchHarness harness = new();
+
+        harness.Answering(SupplyWatchHarness.FailingToTune(FirstSatellite));
+
+        await harness.Round().WatchAsync(Cancel);
+
+        harness.Clock.Turn(BetweenPasses);
+        harness.Answering(SupplyWatchHarness.Idle(FirstSatellite));
+
+        SupplyWatchPass pass = await harness.Round().WatchAsync(Cancel);
+
+        Assert.Equal(1, pass.Resolved);
+        Assert.Empty(await harness.Incidents.ListUnsettledAsync(Cancel));
+    }
+
+    [Fact(DisplayName = "BR-QD-018: a tuner whose failing to tune reaches the ceiling moves from one kind of incident to the other")]
+    public async Task ATunerWhoseFailingToTuneReachesTheCeilingMovesFromOneKindToTheOther()
+    {
+        SupplyWatchHarness harness = new();
+
+        harness.Answering(SupplyWatchHarness.FailingToTune(FirstSatellite));
+
+        await harness.Round().WatchAsync(Cancel);
+
+        harness.Clock.Turn(BetweenPasses);
+        harness.Answering(SupplyWatchHarness.NotLocking(FirstSatellite));
+
+        await harness.Round().WatchAsync(Cancel);
+
+        QualityIncident standing = Assert.Single(await harness.Incidents.ListUnsettledAsync(Cancel));
+
+        Assert.Equal(TunerTroubles.CannotLockClassification, standing.Classification);
+        Assert.Single(harness.Incidents.Incidents, incident => incident.HasSettled && incident.Classification == "TuneFailing");
     }
 }

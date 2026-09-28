@@ -78,6 +78,16 @@ internal sealed class SupplyWatchHarness
             },
         };
 
+    public static TunerSnapshot FailingToTune(string deviceId)
+        => new(deviceId, TunerKind.Satellite, TunerState.Idle)
+        {
+            Health = new TunerHealthDto
+            {
+                Level = TunerHealthLevel.Degraded,
+                DegradedKind = TunerDegradedKind.TuneFailing,
+            },
+        };
+
     public static TunerSnapshot TurnedOff(string deviceId)
         => NotLocking(deviceId) with { State = TunerState.Disabled };
 

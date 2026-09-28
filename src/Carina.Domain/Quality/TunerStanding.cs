@@ -1,30 +1,35 @@
+using Carina.Domain.Channels;
+
 namespace Carina.Domain.Quality;
 
 /// <summary>
-/// Where one tuner stands on the tuner health table, and whether it stands there because it cannot lock.
+/// Where one tuner stands on the tuner health table, and the trouble the driver says it is in, if any.
 /// </summary>
-public sealed record TunerStanding(QualityStanding Standing, bool CannotLock);
+public sealed record TunerStanding(QualityStanding Standing, TunerTroubleKind? Trouble = null)
+{
+    public bool CannotLock => Trouble is TunerTroubleKind.NoLock;
+}
 
 public static class TunerStandings
 {
     /// <summary>
-    /// Reads one tuner's standing from the recordings made on it, the signal it gave and whether an incident
-    /// says it cannot lock, weighing the recordings and the signal alike.
+    /// Reads one tuner's standing from the recordings made on it, the signal it gave and the trouble an incident
+    /// says it is in, weighing the recordings and the signal alike.
     /// </summary>
     public static TunerStanding Of(
         IReadOnlyList<QualityTally> recorded,
         IReadOnlyList<QualityReading> signal,
-        bool cannotLock)
+        TunerTroubleKind? trouble)
     {
         ArgumentNullException.ThrowIfNull(recorded);
         ArgumentNullException.ThrowIfNull(signal);
 
-        if (cannotLock)
+        if (trouble is { } outOfService && TunerTroubles.TakesItOutOfService(outOfService))
         {
-            return new TunerStanding(QualityStanding.MayNotBeWatchable, CannotLock: true);
+            return new TunerStanding(QualityStanding.MayNotBeWatchable, outOfService);
         }
 
-        QualityStanding? worst = null;
+        QualityStanding? worst = trouble is null ? null : QualityStanding.Warning;
 
         foreach (QualityStanding said in recorded.Select(Said).Concat(signal.Select(Said)).OfType<QualityStanding>())
         {
@@ -34,30 +39,35 @@ public static class TunerStandings
             }
         }
 
-        return new TunerStanding(worst ?? QualityStanding.Unmeasured, CannotLock: false);
+        return new TunerStanding(worst ?? QualityStanding.Unmeasured, trouble);
     }
 
     /// <summary>
-    /// Ranks a standing for a worst-first list: a tuner that cannot lock, then the bands beyond a level, then the
-    /// tuners that could not be reached, then the healthy ones, and last the ones nobody measured.
+    /// Ranks a standing for a worst-first list: a tuner that cannot lock, then one taken out of service for another
+    /// trouble, then the bands beyond a level with a tuner that is not quite well ahead of the rest of its band, then
+    /// the tuners that could not be reached, then the healthy ones, and last the ones nobody measured.
     /// </summary>
     public static int Severity(TunerStanding standing)
     {
         ArgumentNullException.ThrowIfNull(standing);
 
-        if (standing.CannotLock)
+        int troubled = standing.Trouble is { } kind
+            ? kind is TunerTroubleKind.NoLock ? 14 : TunerTroubles.TakesItOutOfService(kind) ? 13 : 1
+            : 0;
+
+        if (troubled > 1)
         {
-            return 5;
+            return troubled;
         }
 
-        return standing.Standing switch
+        return (standing.Standing switch
         {
-            QualityStanding.MayNotBeWatchable => 4,
-            QualityStanding.Warning => 3,
-            QualityStanding.Unreachable => 2,
-            QualityStanding.Good => 1,
-            _ => 0,
-        };
+            QualityStanding.MayNotBeWatchable => 5,
+            QualityStanding.Warning => 4,
+            QualityStanding.Unreachable => 3,
+            QualityStanding.Good => 2,
+            _ => 1,
+        } * 2) + troubled;
     }
 
     private static QualityStanding? Said(QualityTally tally) => tally.State switch
