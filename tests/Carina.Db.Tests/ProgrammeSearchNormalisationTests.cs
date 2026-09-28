@@ -71,9 +71,9 @@ public sealed class ProgrammeSearchNormalisationTests
         string summary,
         bool soundAndPictureAreKept = true)
     {
-        string announced = soundAndPictureAreKept ? " audio, sounds, video, aspect," : string.Empty;
+        string announced = soundAndPictureAreKept ? " audio, sounds, video, aspect, running," : string.Empty;
         string undetermined =
-            soundAndPictureAreKept ? " 'Undetermined', 0, 'Undetermined', 'Undetermined'," : string.Empty;
+            soundAndPictureAreKept ? " 'Undetermined', 0, 'Undetermined', 'Undetermined', 'Undetermined'," : string.Empty;
 
         await using NpgsqlCommand command = connection.CreateCommand();
         command.CommandText = $"""
