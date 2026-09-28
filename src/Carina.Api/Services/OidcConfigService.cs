@@ -38,7 +38,7 @@ public sealed class OidcConfigService(
         return ServiceResult<SignInOptionsView>.Success(SignInOptionsView.Of(held, reachability.State));
     }
 
-    public async Task<ServiceResult<OidcConfigView>> SaveAsync(
+    public async Task<ServiceResult<OidcConfigView, OidcConfigRefusal>> SaveAsync(
         OidcConfigChange change,
         string arrivedAt,
         CancellationToken cancellationToken)
@@ -50,8 +50,15 @@ public sealed class OidcConfigService(
 
         if (Named(change.DiscoveryUrl) is not { } discoveryUrl || Named(change.ClientId) is not { } clientId)
         {
-            held.Clear(now);
-            held.Restrict(change.AllowedGroups, change.AllowedHostedDomains, now);
+            try
+            {
+                held.Clear(now);
+                held.Restrict(change.AllowedGroups, change.AllowedHostedDomains, now);
+            }
+            catch (ArgumentException refusal) when (Refusing(refusal.ParamName) is { } kind)
+            {
+                return ServiceResult<OidcConfigView, OidcConfigRefusal>.Failure(refusal.Message, kind);
+            }
 
             return await SavedAsync(held, arrivedAt, cancellationToken);
         }
@@ -60,7 +67,9 @@ public sealed class OidcConfigService(
 
         if (offered is null && held.ClientSecret is null)
         {
-            return ServiceResult<OidcConfigView>.Failure(AFirstSaveCarriesItsSecret);
+            return ServiceResult<OidcConfigView, OidcConfigRefusal>.Failure(
+                AFirstSaveCarriesItsSecret,
+                OidcConfigRefusal.SecretRequired);
         }
 
         OidcSettings candidate = OidcSettings.Unconfigured(now);
@@ -70,14 +79,16 @@ public sealed class OidcConfigService(
             candidate.Configure(discoveryUrl, clientId, offered ?? held.ClientSecret, now);
             candidate.Restrict(change.AllowedGroups, change.AllowedHostedDomains, now);
         }
-        catch (ArgumentException refusal)
+        catch (ArgumentException refusal) when (Refusing(refusal.ParamName) is { } kind)
         {
-            return ServiceResult<OidcConfigView>.Failure(refusal.Message);
+            return ServiceResult<OidcConfigView, OidcConfigRefusal>.Failure(refusal.Message, kind);
         }
 
         if (await gateway.ReachAsync(candidate.DiscoveryUrl!, cancellationToken) is null)
         {
-            return ServiceResult<OidcConfigView>.Failure(TheProviderDidNotAnswer);
+            return ServiceResult<OidcConfigView, OidcConfigRefusal>.Failure(
+                TheProviderDidNotAnswer,
+                OidcConfigRefusal.ProviderUnreachable);
         }
 
         held.Configure(discoveryUrl, clientId, offered, now);
@@ -86,10 +97,19 @@ public sealed class OidcConfigService(
         return await SavedAsync(held, arrivedAt, cancellationToken);
     }
 
+    private static OidcConfigRefusal? Refusing(string? setting)
+        => setting switch
+        {
+            "discoveryUrl" => OidcConfigRefusal.DiscoveryUrlInvalid,
+            "clientId" => OidcConfigRefusal.ClientIdInvalid,
+            "allowedGroups" or "allowedHostedDomains" => OidcConfigRefusal.RestrictionInvalid,
+            _ => null,
+        };
+
     private static string? Named(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private async Task<ServiceResult<OidcConfigView>> SavedAsync(
+    private async Task<ServiceResult<OidcConfigView, OidcConfigRefusal>> SavedAsync(
         OidcSettings held,
         string arrivedAt,
         CancellationToken cancellationToken)
@@ -97,7 +117,7 @@ public sealed class OidcConfigService(
         await settings.SaveAsync(held, cancellationToken);
         await directory.ProbeAsync(held, cancellationToken);
 
-        return ServiceResult<OidcConfigView>.Success(
+        return ServiceResult<OidcConfigView, OidcConfigRefusal>.Success(
             OidcConfigView.Of(held, reachability.State, origin.RedirectUriFor(arrivedAt)));
     }
 }

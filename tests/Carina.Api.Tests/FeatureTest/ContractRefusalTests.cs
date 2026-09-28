@@ -87,6 +87,10 @@ public sealed class ContractRefusalTests
         Assert.Equal(HttpStatusCode.BadRequest, tooWeakAReplacement.StatusCode);
         Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
         Assert.NotEmpty(await Said(wrongCurrentOne));
+        Assert.Equal("wrongPassword", await RefusalAsync(wrongCurrentOne));
+        Assert.Equal("outOfLength", await RefusalAsync(tooWeakAReplacement));
+        Assert.Equal(12, await LengthAsync(tooWeakAReplacement, "shortestLength"));
+        Assert.Equal(256, await LengthAsync(tooWeakAReplacement, "longestLength"));
         Assert.Empty(
             await DisagreementsAsync(
                 document,
@@ -176,6 +180,12 @@ public sealed class ContractRefusalTests
 
     private static async Task<string> Said(HttpResponseMessage response)
         => JsonNode.Parse(await response.Content.ReadAsStringAsync())!["message"]!.GetValue<string>();
+
+    private static async Task<string> RefusalAsync(HttpResponseMessage response)
+        => JsonNode.Parse(await response.Content.ReadAsStringAsync())!["data"]!["refusal"]!.GetValue<string>();
+
+    private static async Task<int> LengthAsync(HttpResponseMessage response, string bound)
+        => JsonNode.Parse(await response.Content.ReadAsStringAsync())!["data"]![bound]!.GetValue<int>();
 
     private static async Task<IReadOnlyList<string>> DisagreementsAsync(
         JsonNode document,
