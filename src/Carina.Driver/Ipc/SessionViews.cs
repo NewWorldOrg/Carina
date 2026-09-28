@@ -35,6 +35,8 @@ public static class SessionViews
             FirstFault = session.FirstFault?.Message,
             FailureCause = session.FailureCause?.Message,
             FailureTitle = SessionFailureTitles.Of(session.FailureCause),
+            AppendedAfter = session.AppendedAfter,
+            FirstWrittenAt = session.FirstWrittenAt,
             Counters = session.Counters.Snapshot() with
             {
                 DiscardedBytes = session.DiscardedBytes,

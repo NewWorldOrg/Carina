@@ -11,6 +11,12 @@ public interface IRecordingWriter : IDisposable
 
     long BytesWritten { get; }
 
+    /// <summary>
+    /// When the file was last written before this writer opened it, or <see langword="null"/> when it opened a file
+    /// that held nothing.
+    /// </summary>
+    DateTimeOffset? AppendedAfter => null;
+
     void Write(ReadOnlySpan<byte> bytes);
 }
 
@@ -34,6 +40,10 @@ public sealed class RecordingWriter : IRecordingWriter
     {
         this.flushEvery = flushEvery;
         Path = System.IO.Path.Combine(recordingsDirectory, RecordingFile.Of(recordingId));
+        FileInfo before = new(Path);
+        AppendedAfter = before.Exists && before.Length > 0
+            ? new DateTimeOffset(before.LastWriteTimeUtc, TimeSpan.Zero)
+            : null;
         stream = new FileStream(
             Path,
             new FileStreamOptions
@@ -48,6 +58,8 @@ public sealed class RecordingWriter : IRecordingWriter
     }
 
     public string Path { get; }
+
+    public DateTimeOffset? AppendedAfter { get; }
 
     public long BytesWritten => Interlocked.Read(ref bytesWritten);
 

@@ -74,6 +74,7 @@ public sealed class TunerSession : IDisposable
     private string? takenBecause;
     private long faultCount;
     private long endsAtTicks;
+    private long firstWrittenAtTicks;
     private long discardedBytes;
     private long resyncs;
     private int finished;
@@ -254,6 +255,18 @@ public sealed class TunerSession : IDisposable
     public ContinuityCounterTracker Counters { get; } = new();
 
     public long BytesRecorded => recordingWriter?.BytesWritten ?? 0;
+
+    public DateTimeOffset? AppendedAfter => recordingWriter?.AppendedAfter;
+
+    public DateTimeOffset? FirstWrittenAt
+    {
+        get
+        {
+            long ticks = Interlocked.Read(ref firstWrittenAtTicks);
+
+            return ticks is 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
+        }
+    }
 
     public string? RecordingPath => recordingWriter?.Path;
 
@@ -582,6 +595,11 @@ public sealed class TunerSession : IDisposable
         catch (Exception error)
         {
             throw new RecordingWriteException(error);
+        }
+
+        if (Interlocked.Read(ref firstWrittenAtTicks) is 0)
+        {
+            Interlocked.CompareExchange(ref firstWrittenAtTicks, timeProvider.GetUtcNow().UtcTicks, 0);
         }
     }
 

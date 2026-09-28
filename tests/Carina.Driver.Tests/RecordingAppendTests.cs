@@ -94,6 +94,95 @@ public sealed class RecordingAppendTests : IDisposable
         Assert.Equal(AlreadyThere, held[..AlreadyThere.Length]);
     }
 
+    [Fact]
+    public void AWriterOpenedOnAFileThatAlreadyHoldsSomethingSaysWhenItWasLastWritten()
+    {
+        string path = Path.Combine(root, RecordingFile.Of("k-held"));
+        DateTime lastWritten = new(2026, 9, 28, 17, 54, 16, DateTimeKind.Utc);
+
+        File.WriteAllBytes(path, AlreadyThere);
+        File.SetLastWriteTimeUtc(path, lastWritten);
+
+        using RecordingWriter again = new(root, "k-held");
+
+        Assert.Equal(new DateTimeOffset(lastWritten, TimeSpan.Zero), again.AppendedAfter);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AWriterThatBeginsAFileSaysItCarriedOnFromNothing(bool anEmptyFileIsThere)
+    {
+        if (anEmptyFileIsThere)
+        {
+            File.WriteAllBytes(Path.Combine(root, RecordingFile.Of("k-new")), []);
+        }
+
+        using RecordingWriter first = new(root, "k-new");
+
+        Assert.Null(first.AppendedAfter);
+    }
+
+    [Fact]
+    public void ASessionTakenUpOnARecordingSaysWhenTheFileWasLastWrittenAndWhenItFirstWroteToIt()
+    {
+        string path = Path.Combine(root, RecordingFile.Of("k-seam"));
+        DateTime lastWritten = new(2026, 9, 28, 17, 54, 16, DateTimeKind.Utc);
+
+        File.WriteAllBytes(path, AlreadyThere);
+        File.SetLastWriteTimeUtc(path, lastWritten);
+
+        TunerSession session = Begun("k-seam");
+
+        UntilItHasWritten(session, AlreadyThere.Length);
+
+        Assert.Equal(new DateTimeOffset(lastWritten, TimeSpan.Zero), session.AppendedAfter);
+        Assert.Equal(Start, session.FirstWrittenAt);
+
+        session.Stop();
+        session.WaitForEnd(Deadlock);
+        session.Dispose();
+    }
+
+    [Fact]
+    public void ASessionThatBeginsARecordingSaysItCarriedOnFromNothing()
+    {
+        TunerSession session = Begun("k-fresh");
+
+        UntilItHasWritten(session, 0);
+
+        Assert.Null(session.AppendedAfter);
+        Assert.Equal(Start, session.FirstWrittenAt);
+
+        session.Stop();
+        session.WaitForEnd(Deadlock);
+        session.Dispose();
+    }
+
+    private TunerSession Begun(string recordingId)
+    {
+        TunerSessionManager manager = new(
+            Configuration,
+            new ScriptedTunerDeviceFactory(),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        SessionStart taken = manager.Begin(new StartSessionRequest
+        {
+            SessionId = SessionId.Parse("s-" + recordingId),
+            Purpose = SessionPurpose.Recording,
+            Tuning = new TuningRequest(TunerKind.Terrestrial, 55, 50001),
+            OutputRoot = "primary",
+            RecordingId = recordingId,
+            EndsAt = Start.AddHours(1),
+        });
+
+        Assert.True(taken.TryGetSession(out TunerSession? session), taken.Detail);
+
+        return session;
+    }
+
     private static void UntilItHasWritten(TunerSession session, long bytes)
     {
         DateTime giveUp = DateTime.UtcNow + Deadlock;

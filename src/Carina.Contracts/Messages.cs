@@ -344,6 +344,17 @@ public sealed record SessionSnapshot(
     public string? RecordingId { get; init; }
 
     public string? FailureTitle { get; init; }
+
+    /// <summary>
+    /// When the recording's file was last written before this session opened it, or <see langword="null"/> when the
+    /// session began the file rather than carrying on into one that already held something.
+    /// </summary>
+    public DateTimeOffset? AppendedAfter { get; init; }
+
+    /// <summary>
+    /// When this session first wrote into the recording's file, or <see langword="null"/> while it has written nothing.
+    /// </summary>
+    public DateTimeOffset? FirstWrittenAt { get; init; }
 }
 
 public sealed record DriverProblem(string Title, IReadOnlyList<string> Problems)

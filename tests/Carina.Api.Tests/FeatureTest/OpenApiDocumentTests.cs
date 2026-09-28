@@ -410,7 +410,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "id", "reservationId", "programme", "standing", "outcome", "outcomeDetail", "startedAt", "stoppedAt",
                 "abortedAt", "expectedWindow", "promisedWindowEnd", "writtenDurationMs", "resumeCount", "fileSizeBytes",
                 "observedAt", "outputRoot", "fileName", "tunerDeviceId", "drops", "thumbnail", "broadcastGroup", "encode",
-                "unfinishedDeletion", "leftScrambled", "descrambledAt",
+                "unfinishedDeletion", "leftScrambled", "descrambledAt", "gaps", "missedMs",
             ],
             properties.AsObject().Select(entry => entry.Key).ToArray());
 

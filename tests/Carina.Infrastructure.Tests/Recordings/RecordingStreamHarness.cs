@@ -153,7 +153,8 @@ internal static class LedgerCopy
                 recording.SnapshotSounds),
             recording.BroadcastGroupKey,
             recording.BroadcastGroupRole,
-            recording.ThumbnailFault);
+            recording.ThumbnailFault,
+            gaps: recording.Gaps);
 }
 
 internal sealed class WatchedDriver : IDriverClient

@@ -270,7 +270,7 @@ public sealed class OrphanRecoveryService(
                 foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(
                              another,
                              weighed,
-                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, bands).Scrambled))
+                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, loaded.MissedMs, bands).Scrambled))
                 {
                     loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
                 }

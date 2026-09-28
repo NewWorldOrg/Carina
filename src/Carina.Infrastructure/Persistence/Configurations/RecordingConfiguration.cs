@@ -186,6 +186,9 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                     AND descrambled_at >= stopped_at_actual)
                 """);
             table.HasCheckConstraint(
+                "ck_recording_gaps",
+                "jsonb_typeof(gaps) = 'array' AND missed_ms >= 0 AND (missed_ms = 0) = (jsonb_array_length(gaps) = 0)");
+            table.HasCheckConstraint(
                 "ck_recording_counts",
                 """
                 written_duration_ms >= 0
@@ -252,6 +255,19 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 stored => Read<Interruption>(stored),
                 Compared<Interruption>())
             .HasColumnType("jsonb")
+            .IsRequired();
+
+        builder.Property(recording => recording.Gaps)
+            .HasConversion(
+                gaps => JsonSerializer.Serialize(gaps, ProgrammeJson.Options),
+                stored => Read<RecordingGap>(stored),
+                Compared<RecordingGap>())
+            .HasColumnType("jsonb")
+            .HasDefaultValueSql("'[]'::jsonb")
+            .IsRequired();
+
+        builder.Property(recording => recording.MissedMs)
+            .HasDefaultValueSql("0")
             .IsRequired();
 
         builder.Property(recording => recording.ExpectedWindowStart).IsRequired();

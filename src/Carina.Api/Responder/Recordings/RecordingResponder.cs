@@ -66,6 +66,25 @@ public sealed record RecordingInterruptionResponder(
     DateTime OccurredAt,
     DateTime? ResumedAt);
 
+public sealed record RecordingGapResponder(DateTime From, DateTime Until, double Seconds, double AtSecond)
+{
+    public static IReadOnlyList<RecordingGapResponder> Of(Recording recording)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+
+        IReadOnlyList<TimeSpan> placed = RecordingGap.Placed(recording.StartedAtActual, recording.Gaps);
+
+        return
+        [
+            .. recording.Gaps.Select((gap, index) => new RecordingGapResponder(
+                gap.From,
+                gap.Until,
+                gap.Lasts.TotalSeconds,
+                placed[index].TotalSeconds)),
+        ];
+    }
+}
+
 public sealed record RecordingResponder(
     string Id,
     Guid? ReservationId,
@@ -91,14 +110,16 @@ public sealed record RecordingResponder(
     RecordingEncodeResponder Encode,
     RecordingUnfinishedDeletionResponder? UnfinishedDeletion,
     bool LeftScrambled,
-    DateTime? DescrambledAt)
+    DateTime? DescrambledAt,
+    IReadOnlyList<RecordingGapResponder> Gaps,
+    long MissedMs)
 {
     public static RecordingResponder Of(RecordingSeen seen)
     {
         ArgumentNullException.ThrowIfNull(seen);
 
         Recording recording = seen.Recording;
-        RecordingQuality quality = RecordingQuality.Of(recording.Counters, recording.ScrambledPackets, seen.Quality);
+        RecordingQuality quality = RecordingQuality.Of(recording.Counters, recording.ScrambledPackets, recording.MissedMs, seen.Quality);
 
         return new RecordingResponder(
             recording.Id.Wire,
@@ -153,7 +174,9 @@ public sealed record RecordingResponder(
             new RecordingEncodeResponder(seen.Encode, recording.EncodeWhenRecorded),
             RecordingUnfinishedDeletionResponder.Of(recording),
             recording.LeftScrambled,
-            recording.DescrambledAt);
+            recording.DescrambledAt,
+            RecordingGapResponder.Of(recording),
+            recording.MissedMs);
     }
 
     internal static RecordingWindowResponder Window(Recording recording)

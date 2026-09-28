@@ -9,7 +9,7 @@ public static class ThumbnailRules
     public const string NamedForThumbnails = "Thumbnail";
 
     public static readonly IReadOnlyList<string> WaysToSayHowARecordingEnded =
-        ["Settle", "Note", "Interrupt", "Resume", "Abort", "Measure", "Extend", "Wrote", "Acquire"];
+        ["Settle", "Note", "Interrupt", "Resume", "Abort", "Measure", "Extend", "Wrote", "Acquire", "Missed"];
 
     public static readonly IReadOnlyList<string> WaysToReachPastTheAggregate =
         ["GetProperty", "GetField", "GetMethod", "SetValue", "CreateInstance", "ExecuteSql", "FromSql", "Entry", "Property"];

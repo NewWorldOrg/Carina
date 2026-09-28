@@ -160,7 +160,9 @@ public sealed class WireStabilityTests
         IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(LiveSession));
 
         Assert.Equal(SessionSnapshotFields, fields.Take(SessionSnapshotFields.Length));
-        Assert.Equal(["recordingId", "failureTitle"], fields.Skip(SessionSnapshotFields.Length));
+        Assert.Equal(
+            ["recordingId", "failureTitle", "appendedAfter", "firstWrittenAt"],
+            fields.Skip(SessionSnapshotFields.Length));
     }
 
     [Fact]
