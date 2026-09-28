@@ -283,6 +283,8 @@ internal sealed class AppSwapFeature : IAsyncDisposable
 
     public HeldQualityThresholds Thresholds { get; } = new();
 
+    public HeldCandidates Candidates { get; } = new();
+
     public SyntheticDriverHost Driver => driver;
 
     public string RecordingsDirectory => driver.RecordingsDirectory;
@@ -358,6 +360,7 @@ internal sealed class AppSwapFeature : IAsyncDisposable
                 services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
                 services.AddSingleton<IRecordingRepository>(Recordings);
                 services.AddSingleton<IQualityThresholdRepository>(Thresholds);
+                services.AddSingleton<ICandidateChannelRepository>(Candidates);
                 services.AddSingleton<IAnnouncedProgrammes>(Programmes);
                 services.AddSingleton<IServiceTuningDirectory>(Tuning);
                 services.AddSingleton<IAppEventPublisher>(Events);
