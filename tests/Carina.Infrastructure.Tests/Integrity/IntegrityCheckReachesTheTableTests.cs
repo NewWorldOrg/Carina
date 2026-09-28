@@ -141,6 +141,7 @@ public sealed class IntegrityCheckReachesTheTableTests(RepositoryDatabase databa
         using var job = new IntegrityCheckJob(
             provider.GetRequiredService<IServiceScopeFactory>(),
             new LocalRecordingFileSurvey(settings, NullLogger<LocalRecordingFileSurvey>.Instance),
+            new HeldPlaces(),
             settings,
             new StoppedClock(Now),
             NullLogger<IntegrityCheckJob>.Instance);

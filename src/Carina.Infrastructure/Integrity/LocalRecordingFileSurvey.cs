@@ -46,17 +46,34 @@ public sealed class LocalRecordingFileSurvey(
     }
 
     private RootListing Walked(OutputRoot root, string path, CancellationToken cancellationToken)
+        => Walk(root, path, StoragePlace.Recordings, logger, cancellationToken);
+
+    /// <summary>
+    /// Lists every file under <paramref name="path"/> without following a link, or says the place is out
+    /// of reach when it is not there or cannot be read.
+    /// </summary>
+    public static RootListing Walk(
+        OutputRoot root,
+        string path,
+        StoragePlace place,
+        ILogger logger,
+        CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(logger);
+
         try
         {
             if (!Directory.Exists(path))
             {
                 logger.LogWarning(
-                    "Output root {Root} is configured at {Path}, and there is no directory there.",
+                    "{Place} {Root} is configured at {Path}, and there is no directory there.",
+                    place,
                     root.Value,
                     path);
 
-                return RootListing.OutOfReach(root);
+                return RootListing.OutOfReach(root, place);
             }
 
             List<StoredFile> files = [];
@@ -65,7 +82,7 @@ public sealed class LocalRecordingFileSurvey(
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var found = new FileInfo(entry);
+                FileInfo found = new(entry);
 
                 if (found.Exists)
                 {
@@ -73,17 +90,18 @@ public sealed class LocalRecordingFileSurvey(
                 }
             }
 
-            return RootListing.Of(root, files);
+            return RootListing.Of(root, files, place);
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(
                 failure,
-                "Output root {Root} at {Path} could not be read, so nothing under it is judged this time.",
+                "{Place} {Root} at {Path} could not be read, so nothing under it is judged this time.",
+                place,
                 root.Value,
                 path);
 
-            return RootListing.OutOfReach(root);
+            return RootListing.OutOfReach(root, place);
         }
     }
 

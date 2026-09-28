@@ -42,6 +42,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Delete",
         "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Move",
         "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
+        "/Carina.Infrastructure/Integrity/LocalStrayFileEraser.cs File.Delete",
         "/Carina.Infrastructure/Logos/LogoHarvest.cs .CopyTo(",
         "/Carina.Infrastructure/Machines/AnotherProgramme.cs Process.Start",
         "/Carina.Infrastructure/Machines/AnotherProgramme.cs ProcessStartInfo",
@@ -81,10 +82,13 @@ public sealed class FileSystemRuleTests
     }
 
     [Fact]
-    public void NothingThatChecksTheLedgerAgainstTheFilesOpensAFileForWriting()
+    public void TheLedgerCheckWritesNothingAndOnlyRemovesAFileNothingClaimsFromAPlaceThisProcessWrites()
     {
         Assert.Equal(
-            ["/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace("],
+            [
+                "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
+                "/Carina.Infrastructure/Integrity/LocalStrayFileEraser.cs File.Delete",
+            ],
             Inventory.Where(entry => entry.Contains("/Integrity/", StringComparison.Ordinal)).ToArray());
     }
 

@@ -10,6 +10,7 @@ namespace Carina.Infrastructure.Integrity;
 public sealed class IntegrityCheckJob(
     IServiceScopeFactory scopes,
     IRecordingFileSurvey survey,
+    IWrittenFileSurvey written,
     IntegritySettings settings,
     TimeProvider clock,
     ILogger<IntegrityCheckJob> logger) : BackgroundService
@@ -105,16 +106,25 @@ public sealed class IntegrityCheckJob(
             .GetRequiredService<IRecordingLedger>()
             .ListAsync(cancellationToken);
 
-        IReadOnlyList<DeclaredFile> declared = await scope.ServiceProvider
-            .GetRequiredService<IEncodeWorkLedger>()
-            .ListAsync(cancellationToken);
+        IReadOnlyList<DeclaredFile> declared =
+        [
+            .. await scope.ServiceProvider.GetRequiredService<IEncodeWorkLedger>().ListAsync(cancellationToken),
+            .. written.PicturesOf(ledger),
+        ];
 
         IReadOnlyList<OutputRoot> roots = await survey.RootsAsync(cancellationToken);
         List<RootListing> listings = [];
 
-        foreach (OutputRoot root in Walked(roots, ledger))
+        IReadOnlyList<OutputRoot> recordingRoots = Walked(roots, ledger);
+
+        foreach (OutputRoot root in recordingRoots)
         {
             listings.Add(await survey.ListAsync(root, cancellationToken));
+        }
+
+        foreach (OutputRoot place in written.Places.Where(place => !recordingRoots.Contains(place)))
+        {
+            listings.Add(await written.ListAsync(place, cancellationToken));
         }
 
         IntegrityReport swept = IntegrityScan.Compare(
@@ -130,7 +140,7 @@ public sealed class IntegrityCheckJob(
             .SaveAsync(swept, cancellationToken);
 
         logger.LogInformation(
-            "A ledger check read {Rows} row(s) and {Files} file(s) across {Roots} output root(s) "
+            "A ledger check read {Rows} row(s) and {Files} file(s) across {Roots} place(s) "
             + "and found {Findings} disagreement(s).",
             swept.Check.LedgerRowsRead,
             swept.Check.FilesRead,
@@ -140,7 +150,7 @@ public sealed class IntegrityCheckJob(
         return swept;
     }
 
-    private static IEnumerable<OutputRoot> Walked(
+    private static IReadOnlyList<OutputRoot> Walked(
         IReadOnlyList<OutputRoot> offered,
         IReadOnlyList<LedgerFile> ledger)
     {

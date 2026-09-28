@@ -11,10 +11,13 @@ public sealed class FileErasureRuleTests
     }
 
     [Fact]
-    public void EachPortThatThrowsAFileAwayHasTheDriversEraserAsItsOnlyImplementation()
+    public void EachPortThatThrowsAFileAwayIsImplementedByTheDriversErasersAndTheOneForThePlacesTheAppWrites()
     {
         Assert.Equal(
-            FileErasureRules.TheErasersThatAskTheDriver,
+            FileErasureRules.TheErasersThatAskTheDriver
+                .Concat(FileErasureRules.TheErasersOfThePlacesTheAppWrites)
+                .Order(StringComparer.Ordinal)
+                .ToArray(),
             FileErasureRules.WhatImplementsAnErasurePort(RepositoryLayout.SourceDirectory));
     }
 

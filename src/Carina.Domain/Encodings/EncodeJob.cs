@@ -73,6 +73,12 @@ public sealed class EncodeJob
 
     public EncodeStanding Standing => EncodeStandings.Of(Status);
 
+    /// <summary>
+    /// The artefact this job makes: the name it holds once it has named one, and before that the name
+    /// it will be held to.
+    /// </summary>
+    public EncodeFileName ArtefactItMakes => ArtefactName ?? EncodeFileName.Artefact(RecordingId, ProfileId);
+
     public EncodeFileName WorkFileName => EncodeFileName.Working(RecordingId, Id, Attempt);
 
     public EncodeFileName ChaptersFileName => EncodeFileName.Chapters(RecordingId, Id, Attempt);

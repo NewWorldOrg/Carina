@@ -173,6 +173,7 @@ public sealed class NamesTheDiskAllowsTests
         return new IntegrityCheckJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             new LocalRecordingFileSurvey(settings, NullLogger<LocalRecordingFileSurvey>.Instance),
+            new HeldPlaces(),
             settings,
             clock,
             NullLogger<IntegrityCheckJob>.Instance);

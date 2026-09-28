@@ -301,7 +301,8 @@ public sealed class IntegrityCheckJobTests
         HeldChecks checks,
         IntegritySettings? settings = null,
         TimeProvider? clock = null,
-        HeldEncodeWork? working = null)
+        HeldEncodeWork? working = null,
+        HeldPlaces? places = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => ledger);
@@ -311,6 +312,7 @@ public sealed class IntegrityCheckJobTests
         return new IntegrityCheckJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             survey,
+            places ?? new HeldPlaces(),
             settings ?? new IntegritySettings
             {
                 OutputRoots = [new StorageRootPath(Primary, "/srv/recordings")],
@@ -333,5 +335,29 @@ public sealed class IntegrityCheckJobTests
 
         Assert.Equal(1, working.Reads);
         Assert.Equal("stray.m2ts", Assert.Single(run.Swept!.Findings).Path);
+    }
+
+    [Fact]
+    public async Task ARunWalksThePlacesThisProcessWritesAndLeavesWhatTheLedgerClaimsThereAlone()
+    {
+        var encodes = new OutputRoot("encodes");
+        var pictures = new OutputRoot("thumbnails");
+        var places = new HeldPlaces(
+            RootListing.Of(encodes, [new StoredFile("kept.mp4", 9), new StoredFile("left.mp4", 8)], StoragePlace.Encodes),
+            RootListing.Of(pictures, [new StoredFile("kept.jpg", 3), new StoredFile("left.jpg", 2)], StoragePlace.Thumbnails));
+        places.Pictures.Add(new DeclaredFile(pictures, "kept.jpg"));
+        using IntegrityCheckJob job = Job(
+            new HeldLedger(),
+            new HeldSurvey().Declaring(Primary, ("one.encoding", 512)),
+            new HeldChecks(),
+            working: new HeldEncodeWork(new DeclaredFile(Primary, "one.encoding"), new DeclaredFile(encodes, "kept.mp4")),
+            places: places);
+
+        IntegrityRun run = await job.RunAsync(Cancel);
+
+        Assert.Equal(
+            ["encodes/left.mp4", "thumbnails/left.jpg"],
+            run.Swept!.Findings.Select(finding => $"{finding.Root.Value}/{finding.Path}").ToArray());
+        Assert.Equal(3, run.Swept.Check.RootsWalked);
     }
 }

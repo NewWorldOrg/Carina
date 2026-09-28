@@ -13,6 +13,10 @@ internal static class IntegrityFixtures
 
     public static readonly OutputRoot Bulk = new("bulk");
 
+    public static readonly OutputRoot Encodes = new("encodes");
+
+    public static readonly OutputRoot Pictures = new("thumbnails");
+
     public static readonly IntegrityCheckId Check = new(new Guid("9f2b7c10-0000-0000-0000-000000000001"));
 
     public static RecordingId Id(int seed) => new(new Guid(seed, 0, 0, [0, 0, 0, 0, 0, 0, 0, 1]));
@@ -41,6 +45,12 @@ internal static class IntegrityFixtures
         => RootListing.Of(root, [.. files.Select(file => new StoredFile(file.Path, file.SizeBytes))]);
 
     public static RootListing Empty(OutputRoot root) => RootListing.Of(root, []);
+
+    public static RootListing Beside(
+        OutputRoot root,
+        StoragePlace place,
+        params (string Path, long SizeBytes)[] files)
+        => RootListing.Of(root, [.. files.Select(file => new StoredFile(file.Path, file.SizeBytes))], place);
 
     public static DeclaredFile Declared(OutputRoot root, string path) => new(root, path);
 

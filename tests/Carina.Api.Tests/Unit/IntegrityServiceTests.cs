@@ -42,6 +42,7 @@ public sealed class IntegrityServiceTests
             checks,
             new NoLedgerRows(),
             new NoDeclaredFiles(),
+            new NoWrittenPlaces(),
             new EraserThatCancelsTheCaller(callerGaveUp),
             new FindingDisposals(),
             new IntegritySettings(),
@@ -64,6 +65,7 @@ public sealed class IntegrityServiceTests
         return new IntegrityCheckJob(
             scopes,
             new SurveyNeverAskedInTheseTests(),
+            new NoWrittenPlaces(),
             new IntegritySettings(),
             new FixedTimeProvider(ThrownAt),
             NullLogger<IntegrityCheckJob>.Instance);
@@ -82,6 +84,16 @@ public sealed class IntegrityServiceTests
     {
         public Task<IReadOnlyList<LedgerFile>> ListAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<LedgerFile>>([]);
+    }
+
+    private sealed class NoWrittenPlaces : IWrittenFileSurvey
+    {
+        public IReadOnlyList<OutputRoot> Places => [];
+
+        public Task<RootListing> ListAsync(OutputRoot place, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("These tests walk no place.");
+
+        public IReadOnlyList<DeclaredFile> PicturesOf(IReadOnlyList<LedgerFile> ledger) => [];
     }
 
     private sealed class NoDeclaredFiles : IEncodeWorkLedger

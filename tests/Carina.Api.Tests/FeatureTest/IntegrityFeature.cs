@@ -13,6 +13,7 @@ using Carina.Domain.Integrity;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Integrity;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -329,7 +330,11 @@ internal sealed class IntegrityFeature : IAsyncDisposable
 
     private readonly WebApplicationFactory<Program> configured;
 
-    public IntegrityFeature(IntegritySettings? settings = null, string? walking = null, EncodeSettings? encoding = null)
+    public IntegrityFeature(
+        IntegritySettings? settings = null,
+        string? walking = null,
+        EncodeSettings? encoding = null,
+        string? drawing = null)
     {
         Settings = settings ?? new IntegritySettings
         {
@@ -344,6 +349,7 @@ internal sealed class IntegrityFeature : IAsyncDisposable
                 services.AddSingleton<TimeProvider>(Clock);
                 services.AddSingleton(Settings);
                 services.AddSingleton(Encoding);
+                services.AddSingleton(new ThumbnailSettings { WrittenTo = drawing });
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IRecordingRepository>(Running);
                 services.AddSingleton<IRecordingFileSurvey>(

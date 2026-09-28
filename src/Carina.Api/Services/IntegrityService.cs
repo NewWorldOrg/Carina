@@ -16,6 +16,7 @@ public sealed class IntegrityService(
     IIntegrityCheckRepository checks,
     IRecordingLedger ledger,
     IEncodeWorkLedger encodeWork,
+    IWrittenFileSurvey written,
     IStrayFileEraser strays,
     FindingDisposals disposals,
     IntegritySettings settings,
@@ -94,13 +95,17 @@ public sealed class IntegrityService(
         }
 
         IReadOnlyList<LedgerFile> rows = await ledger.ListAsync(cancellationToken);
-        IReadOnlyList<DeclaredFile> declared = await encodeWork.ListAsync(cancellationToken);
+        IReadOnlyList<DeclaredFile> declared =
+        [
+            .. await encodeWork.ListAsync(cancellationToken),
+            .. written.PicturesOf(rows),
+        ];
 
         if (StrayFileDisposal.Claimed(finding, rows, declared))
         {
             return Refused(
-                $"'{finding.Path}' under output root '{finding.Root.Value}' is claimed now by a recording or by "
-                + "encode work still in hand, so it is no longer a file nothing owns and it is left where it is.",
+                $"'{finding.Path}' under '{finding.Root.Value}' is claimed now by a recording, its thumbnail or "
+                + "encode work, so it is no longer a file nothing owns and it is left where it is.",
                 FindingDisposalFailure.FileChanged);
         }
 
