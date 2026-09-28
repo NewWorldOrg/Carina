@@ -19,9 +19,9 @@ public sealed class CreateReservationAction(ReservationService reservations) : C
     [HttpPost]
     [ProducesResponseType<BaseResponder<ReservationSettlementResponder>>(StatusCodes.Status201Created)]
     [ProducesResponseType<BaseResponder<ReservationSettlementResponder>>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<BaseResponder<ReservationSettlementResponder>>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<BaseResponder<ReservationSettlementResponder>>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType<BaseResponder<ReservationSettlementResponder>>(StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType<BaseResponder<ReservationRefusedResponder>>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<BaseResponder<ReservationRefusedResponder>>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<BaseResponder<ReservationRefusedResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(
         [FromBody] CreateReservationRequest? request,
         CancellationToken cancellationToken)
@@ -55,13 +55,23 @@ public sealed class CreateReservationAction(ReservationService reservations) : C
         ServiceResult<ReservationSettlement, ReservationFailure> made =
             await reservations.CreateAsync(draft, cancellationToken);
 
-        return made.IsSuccess
-            ? Created(
+        if (made.IsSuccess)
+        {
+            return Created(
                 new Uri($"/api/reservations/{made.Data!.Reservation.Id.Value}", UriKind.Relative),
                 BaseResponder<ReservationSettlementResponder>.Success(
-                    ReservationSettlementResponder.Of(made.Data!)))
-            : StatusCode(
-                ReservationStatus.Of(made.ErrorType),
-                BaseResponder<ReservationSettlementResponder>.Error(made.ErrorMessage!));
+                    ReservationSettlementResponder.Of(made.Data!)));
+        }
+
+        Programme? primary = made.ErrorType is ReservationFailure.ProgrammeIsAMovedDuplicate
+            ? (await reservations.PrimaryOfMovedAsync(programme, cancellationToken)).Data
+            : null;
+
+        return StatusCode(
+            ReservationStatus.Of(made.ErrorType),
+            new BaseResponder<ReservationRefusedResponder>(
+                false,
+                made.ErrorMessage!,
+                ReservationRefusedResponder.Of(made.ErrorType, primary)));
     }
 }

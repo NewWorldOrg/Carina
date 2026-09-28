@@ -2,6 +2,7 @@ using Carina.Api.Common;
 using Carina.Api.Responder.Epg;
 using Carina.Api.Services;
 using Carina.Domain.Base;
+using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
@@ -143,6 +144,26 @@ public sealed record ReservationListResponder(
             found.LastPage,
             found.PerPage);
     }
+}
+
+public sealed record ReservationPrimaryResponder(string Programme, DateTime StartsAt)
+{
+    public static ReservationPrimaryResponder Of(Programme programme)
+    {
+        ArgumentNullException.ThrowIfNull(programme);
+
+        return new ReservationPrimaryResponder(ProgrammeIdText.Of(programme.Id), programme.StartsAt);
+    }
+}
+
+/// <summary>
+/// Why a reservation was not made, and for a listing of a moved broadcast, the listing that is reserved
+/// in its place.
+/// </summary>
+public sealed record ReservationRefusedResponder(ReservationFailure Refusal, ReservationPrimaryResponder? Primary)
+{
+    public static ReservationRefusedResponder Of(ReservationFailure refusal, Programme? primary)
+        => new(refusal, primary is null ? null : ReservationPrimaryResponder.Of(primary));
 }
 
 public sealed record ReservationSettlementResponder(
