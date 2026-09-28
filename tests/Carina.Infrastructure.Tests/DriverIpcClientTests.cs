@@ -33,6 +33,7 @@ public sealed class DriverIpcClientTests
         DriverCapabilities.TunerLedger,
         DriverCapabilities.LiveTunerToggle,
         DriverCapabilities.TypedTuning,
+        DriverCapabilities.LnbPowerSwitch,
     ];
 
     [Fact]
@@ -280,6 +281,29 @@ public sealed class DriverIpcClientTests
     }
 
     [Fact]
+    public async Task SwitchingLnbPowerNamesTheOneTunerAndTheFlagAndReadsTheLedgerBack()
+    {
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        driver.Ledger = new TunerLedgerDto
+        {
+            Tuners = [new TunerConfigEntry { DeviceId = "adapter1", LnbPower = true, Kind = TunerKind.Satellite }],
+            LoadedHash = "aaaa",
+            SavedHash = "bbbb",
+        };
+        using DriverIpcClient client = ClientFor(socketPath);
+
+        DriverCall<TunerLedgerDto> call = await client.SwitchLnbPowerAsync("adapter1", on: true, CancellationToken.None);
+
+        Assert.True(call.TryGetValue(out TunerLedgerDto? ledger));
+        Assert.True(ledger.HasDrifted());
+        Assert.Equal("adapter1", driver.LastLnbSwitchedDeviceId);
+        Assert.True(driver.LastLnbSwitch?.LnbPower);
+    }
+
+    [Fact]
     public async Task TogglesATunerAndReadsTheAnsweredSnapshot()
     {
         string socketPath = NewSocketPath();
@@ -336,6 +360,7 @@ public sealed class DriverIpcClientTests
     [InlineData("detected")]
     [InlineData("ledgerRead")]
     [InlineData("ledgerReplace")]
+    [InlineData("lnbPower")]
     [InlineData("toggle")]
     public async Task ACallTheDriverDoesNotDeclareIsRefusedLocallyInsteadOfAsARawNotFound(string surface)
     {
@@ -351,7 +376,8 @@ public sealed class DriverIpcClientTests
             "ledgerRead" => Of(await client.GetTunerLedgerAsync(CancellationToken.None)),
             "ledgerReplace" => Of(await client.ReplaceTunerLedgerAsync(
                 [new TunerConfigEntry { DeviceId = "adapter0" }],
-                CancellationToken.None)),
+                    CancellationToken.None)),
+            "lnbPower" => Of(await client.SwitchLnbPowerAsync("adapter0", on: true, CancellationToken.None)),
             _ => Of(await client.ToggleTunerAsync("adapter0", disabled: true, CancellationToken.None)),
         };
 

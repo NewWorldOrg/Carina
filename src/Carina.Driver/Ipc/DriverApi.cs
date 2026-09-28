@@ -67,6 +67,8 @@ public static class DriverApi
         RequestDelegate toggleTuner = context =>
             ToggleTunerAsync(context, configuration, manager);
 
+        RequestDelegate switchLnbPower = context => SwitchLnbPowerAsync(context, ledger);
+
         RequestDelegate sessions = context =>
             Write(
                 context,
@@ -131,6 +133,7 @@ public static class DriverApi
         app.MapPut(DriverEndpoints.Tuners, saveLedger);
         app.MapGet(DriverEndpoints.TunerLedger, showLedger);
         app.MapPatch($"{DriverEndpoints.Tuners}/{{id}}", toggleTuner);
+        app.MapPut($"{DriverEndpoints.Tuners}/{{id}}/{DriverEndpoints.LnbPower}", switchLnbPower);
         app.MapGet(DriverEndpoints.DevicesDetected, detected);
         app.MapGet(DriverEndpoints.Sessions, sessions);
         app.MapPost(DriverEndpoints.Sessions, startSession);
@@ -280,6 +283,81 @@ public static class DriverApi
         }
 
         LedgerRevision revision = ledger.Save(requested, detector.Detect());
+
+        if (revision.Refusal is not LedgerRefusal.None)
+        {
+            (int status, string? title) = Outcome(revision.Refusal);
+
+            await Problem(context, status, title, revision.Detail);
+
+            return;
+        }
+
+        await Write(
+            context,
+            StatusCodes.Status200OK,
+            ledger.View(),
+            DriverJson.Context.TunerLedgerDto
+        );
+    }
+
+    private static async Task SwitchLnbPowerAsync(HttpContext context, TunerLedgerStore ledger)
+    {
+        string deviceId = context.Request.RouteValues["id"] as string ?? string.Empty;
+
+        if (new TunerConfigEntry { DeviceId = deviceId }.Validate() is { Count: > 0 } malformed)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "badDeviceId",
+                string.Join(" ", malformed)
+            );
+
+            return;
+        }
+
+        TunerLnbPowerRequest? request;
+
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync(
+                DriverJson.Context.TunerLnbPowerRequest,
+                context.RequestAborted
+            );
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception error)
+            when (error is JsonException or InvalidOperationException or BadHttpRequestException)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "malformedRequest",
+                $"The body is not the JSON this driver reads: {error.Message}"
+            );
+
+            return;
+        }
+
+        IReadOnlyList<string> problems = request?.Validate() ?? ["lnbPower: the body was empty."];
+
+        if (problems.Count > 0)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "rejected",
+                string.Join(" ", problems)
+            );
+
+            return;
+        }
+
+        LedgerRevision revision = ledger.SwitchLnbPower(deviceId, request!.LnbPower!.Value);
 
         if (revision.Refusal is not LedgerRefusal.None)
         {
@@ -764,6 +842,7 @@ public static class DriverApi
                 StatusCodes.Status409Conflict,
                 "undeterminedKind"
             ),
+            LedgerRefusal.NotInLedger => (StatusCodes.Status404NotFound, "noSuchTuner"),
             _ => (StatusCodes.Status503ServiceUnavailable, "ledgerUnwritable"),
         };
 

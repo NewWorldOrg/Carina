@@ -306,4 +306,68 @@ public sealed class TunerLedgerStoreTests : IDisposable
 
         Assert.Contains("\n", File.ReadAllText(path), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void SwitchingThePowerOfASatelliteTunerChangesThatOneFlagAndNothingElseSaved()
+    {
+        SaveBoth(groundEnabled: false);
+
+        LedgerRevision switched = Store().SwitchLnbPower("adapter1.frontend0", true);
+
+        Assert.Equal(LedgerRefusal.None, switched.Refusal);
+
+        IReadOnlyList<DeviceSettings> written = Reread();
+        DeviceSettings ground = written.Single(device => device.Id == "adapter0.frontend0");
+        DeviceSettings sky = written.Single(device => device.Id == "adapter1.frontend0");
+
+        Assert.False(ground.Enabled);
+        Assert.False(ground.LnbPower);
+        Assert.True(sky.Enabled);
+        Assert.True(sky.LnbPower);
+        Assert.Equal("/dev/dvb/adapter1/frontend0", sky.DevicePath);
+    }
+
+    [Fact]
+    public void SwitchingThePowerOfATerrestrialTunerIsRefusedBeforeItReachesTheFile()
+    {
+        SaveBoth(groundEnabled: true);
+        string before = File.ReadAllText(path);
+
+        LedgerRevision switched = Store().SwitchLnbPower("adapter0.frontend0", true);
+
+        Assert.Equal(LedgerRefusal.Malformed, switched.Refusal);
+        Assert.Equal(before, File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void SwitchingThePowerOfATunerTheLedgerDoesNotHoldIsRefusedAsNotThere()
+    {
+        string before = File.ReadAllText(path);
+
+        LedgerRevision switched = Store().SwitchLnbPower("adapter9.frontend0", true);
+
+        Assert.Equal(LedgerRefusal.NotInLedger, switched.Refusal);
+        Assert.Equal(before, File.ReadAllText(path));
+    }
+
+    private void SaveBoth(bool groundEnabled)
+        => Assert.Equal(
+            LedgerRefusal.None,
+            Store().Save(
+                [
+                    new TunerConfigEntry { DeviceId = "adapter0.frontend0", Disabled = !groundEnabled },
+                    new TunerConfigEntry { DeviceId = "adapter1.frontend0" },
+                ],
+                [Terrestrial, Satellite]
+            ).Refusal
+        );
+
+    private IReadOnlyList<DeviceSettings> Reread()
+    {
+        DriverConfigurationResult reread = DriverConfigurationReader.ReadFile(path, checkTheFilesystem: false);
+
+        Assert.True(reread.TryGetConfiguration(out DriverConfiguration? written, out _));
+
+        return written.Devices ?? [];
+    }
 }

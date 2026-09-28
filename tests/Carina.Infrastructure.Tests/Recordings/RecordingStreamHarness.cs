@@ -217,6 +217,12 @@ internal sealed class WatchedDriver : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public Task<DriverCall<TunerLedgerDto>> SwitchLnbPowerAsync(
+        string deviceId,
+        bool on,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<DriverRestartDto>> RequestRestartAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 

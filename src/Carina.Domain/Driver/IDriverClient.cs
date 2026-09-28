@@ -16,6 +16,14 @@ public interface IDriverClient
         IReadOnlyList<TunerConfigEntry> tuners,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Turns the low-noise block power of one satellite tuner on or off in the saved ledger alone.
+    /// </summary>
+    Task<DriverCall<TunerLedgerDto>> SwitchLnbPowerAsync(
+        string deviceId,
+        bool on,
+        CancellationToken cancellationToken);
+
     Task<DriverCall<DriverRestartDto>> RequestRestartAsync(CancellationToken cancellationToken);
 
     Task<DriverCall<TunerSnapshot>> ToggleTunerAsync(

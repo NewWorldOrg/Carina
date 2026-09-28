@@ -124,6 +124,44 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
     }
 
+    public async Task<DriverCall<TunerLedgerDto>> SwitchLnbPowerAsync(
+        string deviceId,
+        bool on,
+        CancellationToken cancellationToken)
+    {
+        if (new TunerConfigEntry { DeviceId = deviceId }.Validate() is { Count: > 0 } malformed)
+        {
+            return DriverCall<TunerLedgerDto>.Refused(new DriverProblem("badDeviceId", malformed));
+        }
+
+        if (await UndeclaredAsync(DriverCapabilities.LnbPowerSwitch, cancellationToken) is { } undeclared)
+        {
+            return DriverCall<TunerLedgerDto>.Refused(undeclared);
+        }
+
+        try
+        {
+            using CancellationTokenSource patience = Patience(cancellationToken);
+            using JsonContent body = JsonContent.Create(
+                new TunerLnbPowerRequest { LnbPower = on },
+                DriverJson.Context.TunerLnbPowerRequest);
+            using HttpResponseMessage response = await http.PutAsync(
+                $"{DriverEndpoints.Tuner(deviceId)}/{DriverEndpoints.LnbPower}",
+                body,
+                patience.Token);
+
+            return await ReadAsync(
+                response,
+                DriverJson.Context.TunerLedgerDto,
+                bodyRequired: true,
+                patience.Token);
+        }
+        catch (Exception error) when (IsTransport(error, cancellationToken))
+        {
+            return DriverCall<TunerLedgerDto>.Unreachable(WhyUnreachable(error));
+        }
+    }
+
     public async Task<DriverCall<DriverRestartDto>> RequestRestartAsync(
         CancellationToken cancellationToken)
     {

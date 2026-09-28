@@ -5,6 +5,9 @@ using System.Net.Http.Json;
 using System.Runtime.Versioning;
 using System.Text.Json;
 
+using Carina.Contracts;
+using Carina.Domain.Channels;
+
 using driver::Carina.Driver.Configuration;
 
 namespace Carina.Api.Tests.FeatureTest;
@@ -19,13 +22,11 @@ public sealed class LnbPowerReachesTheDriverTests
     private static readonly Uri Tuners = new("/api/tuners", UriKind.Relative);
 
     [Fact]
-    public async Task PowerSavedForASatelliteTunerIsWrittenToTheDriversLedgerAndIsOnOnceTheDriverStartsFromIt()
+    public async Task PowerSwitchedForASatelliteTunerIsWrittenToTheDriversLedgerAndIsOnOnceTheDriverStartsFromIt()
     {
         await using AppSwapFeature feature = await WithASatelliteTunerAsync();
 
-        HttpStatusCode saved = await SaveAsync(feature, groundPower: false, skyPower: true);
-
-        Assert.Equal(HttpStatusCode.OK, saved);
+        Assert.Equal(HttpStatusCode.OK, await SwitchAsync(feature, Sky, true));
         Assert.True(Written(feature.Driver).Single(device => device.Id == Sky).LnbPower);
         Assert.False(Written(feature.Driver).Single(device => device.Id == Ground).LnbPower);
 
@@ -45,14 +46,63 @@ public sealed class LnbPowerReachesTheDriverTests
     }
 
     [Fact]
+    public async Task SwitchingThePowerWritesThatOneFlagAndLeavesEverythingElseTheLedgerSaysAlone()
+    {
+        await using AppSwapFeature feature = await WithASatelliteTunerAsync();
+        feature.Driver.WriteLedger(feature.Driver.Configuration with
+        {
+            Devices =
+            [
+                new DeviceSettings(Ground, DeviceKind.Terrestrial, Enabled: false),
+                new DeviceSettings(Sky, DeviceKind.Satellite),
+            ],
+        });
+
+        Assert.Equal(HttpStatusCode.OK, await SwitchAsync(feature, Sky, true));
+
+        IReadOnlyList<DeviceSettings> written = Written(feature.Driver);
+
+        Assert.False(written.Single(device => device.Id == Ground).Enabled);
+        Assert.True(written.Single(device => device.Id == Sky).Enabled);
+        Assert.True(written.Single(device => device.Id == Sky).LnbPower);
+    }
+
+    [Fact]
+    public async Task SwitchingThePowerAsksNoCandidateToProveItselfAgainAndSettlesNoAllocationAgain()
+    {
+        await using AppSwapFeature feature = await WithASatelliteTunerAsync();
+        feature.Candidates.Candidates.Add(CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            new NetworkId(1),
+            new ServiceId(101),
+            TuningParameters.Terrestrial(53),
+            DateTime.UtcNow));
+        int nudgedBefore = feature.Notices.Nudged.Count;
+
+        Assert.Equal(HttpStatusCode.OK, await SwitchAsync(feature, Sky, true));
+        Assert.Equal(HttpStatusCode.OK, await SwitchAsync(feature, Sky, false));
+
+        Assert.False(Assert.Single(feature.Candidates.Candidates).NeedsRevalidation);
+        Assert.Equal(nudgedBefore, feature.Notices.Nudged.Count);
+    }
+
+    [Fact]
     public async Task PowerAskedForATerrestrialTunerIsRefusedAndTheLedgerOnDiskIsLeftAsItWas()
     {
         await using AppSwapFeature feature = await WithASatelliteTunerAsync();
         string before = await File.ReadAllTextAsync(feature.Driver.LedgerPath);
 
-        HttpStatusCode saved = await SaveAsync(feature, groundPower: true, skyPower: false);
+        Assert.Equal(HttpStatusCode.BadRequest, await SwitchAsync(feature, Ground, true));
+        Assert.Equal(before, await File.ReadAllTextAsync(feature.Driver.LedgerPath));
+    }
 
-        Assert.Equal(HttpStatusCode.BadRequest, saved);
+    [Fact]
+    public async Task PowerForATunerTheLedgerDoesNotHoldIsAnsweredAsNotFound()
+    {
+        await using AppSwapFeature feature = await WithASatelliteTunerAsync();
+        string before = await File.ReadAllTextAsync(feature.Driver.LedgerPath);
+
+        Assert.Equal(HttpStatusCode.NotFound, await SwitchAsync(feature, "synthetic-elsewhere", true));
         Assert.Equal(before, await File.ReadAllTextAsync(feature.Driver.LedgerPath));
     }
 
@@ -61,11 +111,11 @@ public sealed class LnbPowerReachesTheDriverTests
     {
         await using AppSwapFeature feature = await WithASatelliteTunerAsync();
 
-        Assert.Equal(HttpStatusCode.OK, await SaveAsync(feature, groundPower: false, skyPower: true));
+        Assert.Equal(HttpStatusCode.OK, await SwitchAsync(feature, Sky, true));
 
         await RestartFromTheLedgerAsync(feature);
 
-        Assert.Equal(HttpStatusCode.OK, await SaveAsync(feature, groundPower: false, skyPower: false));
+        Assert.Equal(HttpStatusCode.OK, await SwitchAsync(feature, Sky, false));
         Assert.False(Written(feature.Driver).Single(device => device.Id == Sky).LnbPower);
 
         await RestartFromTheLedgerAsync(feature);
@@ -112,16 +162,11 @@ public sealed class LnbPowerReachesTheDriverTests
         return written.Devices ?? [];
     }
 
-    private static async Task<HttpStatusCode> SaveAsync(AppSwapFeature feature, bool groundPower, bool skyPower)
+    private static async Task<HttpStatusCode> SwitchAsync(AppSwapFeature feature, string deviceId, bool on)
     {
-        using HttpResponseMessage response = await feature.App.Client.PutAsJsonAsync(Tuners, new
-        {
-            tuners = new[]
-            {
-                new { deviceId = Ground, disabled = false, lnbPower = groundPower },
-                new { deviceId = Sky, disabled = false, lnbPower = skyPower },
-            },
-        });
+        using HttpResponseMessage response = await feature.App.Client.PutAsJsonAsync(
+            new Uri($"/api/tuners/{deviceId}/lnb-power", UriKind.Relative),
+            new { lnbPower = on });
 
         return response.StatusCode;
     }

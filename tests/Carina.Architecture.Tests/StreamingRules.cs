@@ -58,6 +58,7 @@ public static partial class StreamingRules
         "DiscardAsync",
         "EraseRecordingAsync",
         "ReplaceTunerLedgerAsync",
+        "SwitchLnbPowerAsync",
         "ToggleTunerAsync",
     ];
 

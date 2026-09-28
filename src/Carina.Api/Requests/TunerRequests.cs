@@ -34,3 +34,9 @@ public sealed record ToggleTunerRequest
 {
     public bool? Disabled { get; init; }
 }
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LnbPowerRequest
+{
+    public bool? LnbPower { get; init; }
+}

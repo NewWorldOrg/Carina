@@ -115,6 +115,7 @@ public sealed class StreamingRuleTests
         Assert.Contains("ForgetEverythingAsync(", programmes, StringComparison.Ordinal);
         Assert.Contains("EraseRecordingAsync(", driver, StringComparison.Ordinal);
         Assert.Contains("ReplaceTunerLedgerAsync(", driver, StringComparison.Ordinal);
+        Assert.Contains("SwitchLnbPowerAsync(", driver, StringComparison.Ordinal);
         Assert.Contains("ToggleTunerAsync(", driver, StringComparison.Ordinal);
     }
 

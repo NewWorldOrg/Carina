@@ -44,6 +44,7 @@ public static class DriverJson
 [JsonSerializable(typeof(TunerConfigEntry))]
 [JsonSerializable(typeof(TunerLedgerDto))]
 [JsonSerializable(typeof(TunerToggleRequest))]
+[JsonSerializable(typeof(TunerLnbPowerRequest))]
 [JsonSerializable(typeof(DetectedDeviceDto))]
 [JsonSerializable(typeof(DriverRestartDto))]
 [JsonSerializable(typeof(ExtendSessionRequest))]
