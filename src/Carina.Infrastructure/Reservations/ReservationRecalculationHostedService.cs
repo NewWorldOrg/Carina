@@ -123,6 +123,31 @@ public sealed class ReservationRecalculationHostedService(
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
 
         var faults = new List<RecalculationFault>();
+        BroadcastGroupRun? regrouped = null;
+
+        if (reach is RecalculationReach.Increment or RecalculationReach.Everything)
+        {
+            try
+            {
+                regrouped = await scope.ServiceProvider
+                    .GetRequiredService<BroadcastGroupService>()
+                    .ReconcileAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception failure)
+            {
+                faults.Add(new RecalculationFault(RecalculationStage.Groups, failure.GetType().Name));
+
+                logger.LogError(
+                    failure,
+                    "Holding the reservations against the relayed and moved broadcasts failed; they stay on the "
+                    + "listings they had and the next pass reads the groups again.");
+            }
+        }
+
         RuleApplicationRun? applied = null;
 
         if (reach is RecalculationReach.Increment or RecalculationReach.Everything)
@@ -220,7 +245,7 @@ public sealed class ReservationRecalculationHostedService(
             logger.LogError(failure, "Settling the allocation failed; the next pass is unaffected.");
         }
 
-        return RecalculationPass.Of(answering, reach, cursor, applied, reconciled, recorded, settled, faults);
+        return RecalculationPass.Of(answering, reach, cursor, applied, reconciled, recorded, settled, faults, regrouped);
     }
 
     private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)

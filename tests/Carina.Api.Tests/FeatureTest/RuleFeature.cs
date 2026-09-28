@@ -237,7 +237,9 @@ internal sealed class RuleFeature : IAsyncDisposable
         int serviceId = Listed,
         DateTime? startsAt = null,
         bool shadow = false,
-        int transportStreamId = Carried)
+        int transportStreamId = Carried,
+        IReadOnlyList<RelatedProgramme>? related = null,
+        ProgrammeRunning running = ProgrammeRunning.Undetermined)
     {
         DateTime opens = startsAt ?? Noon.AddHours(2 + eventId);
         Programme programme = Programme.Rehydrate(
@@ -251,10 +253,11 @@ internal sealed class RuleFeature : IAsyncDisposable
             Noon,
             [new ProgrammeGenre(7, 1)],
             [],
-            [],
+            related ?? [],
             false,
             source: ProgrammeSource.ScheduleBasic,
-            revision: eventId);
+            revision: eventId,
+            running: running);
 
         Programmes.Programmes.Add(programme);
 

@@ -78,6 +78,26 @@ public sealed class EpgComparisonTests
             Opens + Reservation.ProvisionalLengthWhenTheEndIsNotAnnounced,
             EpgComparison.EndOf(Announced(Opens, null)));
 
+    [Fact]
+    public void ABroadcastCarriedOnAnotherServiceSaysWhichServiceItWasOnAndWhichItIsOnNow()
+    {
+        Programme elsewhere = Programme.Rehydrate(
+            new ProgrammeId(new NetworkId(1), new ServiceId(5), new EventId(6)),
+            new TransportStreamId(4),
+            Opens,
+            Opens.AddHours(1),
+            "もとの題名",
+            "何の話か",
+            false,
+            Now);
+
+        EpgDivergence carried = Assert.Single(EpgComparison.Of(Booked(), elsewhere, Now));
+
+        Assert.Equal(DivergedField.Service, carried.Field);
+        Assert.Equal("1-2", carried.Before);
+        Assert.Equal("1-5", carried.After);
+    }
+
     private static Reservation Booked()
         => Reservation.Rehydrate(
             ReservationId.New(),

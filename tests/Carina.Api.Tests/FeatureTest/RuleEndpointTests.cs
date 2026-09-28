@@ -375,6 +375,29 @@ public sealed class RuleEndpointTests
     }
 
     [Fact]
+    public async Task BrRd010APreviewCountsAListingAMovedBroadcastSuppressesOutAndTakesThePrimary()
+    {
+        await using var feature = new RuleFeature();
+        DateTime opens = RuleFeature.Noon.AddHours(3);
+        feature.Announced(
+            1,
+            "hill walking",
+            startsAt: opens,
+            related: [new RelatedProgramme(RuleFeature.Network, RuleFeature.Alongside, 2, RelationKind.Moved)]);
+        feature.Announced(2, "hill walking", RuleFeature.Alongside, opens, running: ProgrammeRunning.Running);
+
+        (_, JsonElement body) = await feature.PostAsync("/api/rules/preview", new { query = "keyword=hill" });
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(1, data.GetProperty("matched").GetInt32());
+        Assert.Equal(1, data.GetProperty("excludedAsMoved").GetInt32());
+        Assert.Equal(0, data.GetProperty("excludedAsShadows").GetInt32());
+        Assert.Equal(
+            $"{RuleFeature.Network}-{RuleFeature.Alongside}-2",
+            data.GetProperty("takes").EnumerateArray().Single().GetProperty("programme").GetString());
+    }
+
+    [Fact]
     public async Task APreviewWithNothingCarriedAsAShadowCountsNoneOut()
     {
         await using var feature = new RuleFeature();

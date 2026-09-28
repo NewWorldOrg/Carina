@@ -213,6 +213,65 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task BrRd010AReservationMovedOntoAnotherListingComesBackOnThatListingUnderItsOwnIdentifier()
+    {
+        Reservation planned = ReservationFixtures.Planned();
+        await AddAsync(planned);
+        ProgrammeRef primary = ReservationFixtures.Programme(
+            ReservationFixtures.NextEventId(),
+            serviceId: 1032,
+            startsAt: planned.ProgrammeStartsAt.AddMinutes(-5));
+        BroadcastGroupKey key = new($"movement:{primary.Id}");
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            ReservationRepository repository = new(writing);
+            Reservation loaded = (await repository.FindAsync(planned.Id, Cancel))!;
+            loaded.Retarget(
+                primary,
+                primary.StartsAt.AddHours(1),
+                true,
+                ReservationFixtures.Snapshot("The primary listing"),
+                [new EpgDivergence(DivergedField.Service, "32736-1024", "32736-1032", Now)],
+                key,
+                BroadcastGroupRole.MovementPrimary);
+
+            await repository.SaveAllAsync([loaded], Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        Reservation? found = await new ReservationRepository(reading).FindByProgrammeAsync(primary, Cancel);
+
+        Assert.NotNull(found);
+        Assert.Equal(planned.Id, found.Id);
+        Assert.Equal("The primary listing", found.SnapshotName);
+        Assert.Equal(key, found.BroadcastGroupKey);
+        Assert.Equal(BroadcastGroupRole.MovementPrimary, found.BroadcastGroupRole);
+        Assert.Equal(DivergedField.Service, Assert.Single(found.EpgDivergences).Field);
+    }
+
+    [Fact]
+    public async Task BrRd010AReservationCancelledForTheSameBroadcastIsKeptWithThatReason()
+    {
+        Reservation planned = ReservationFixtures.Planned();
+        await AddAsync(planned);
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            ReservationRepository repository = new(writing);
+            Reservation loaded = (await repository.FindAsync(planned.Id, Cancel))!;
+            loaded.Cancel(ReservationCancellation.SameBroadcast);
+
+            await repository.SaveAllAsync([loaded], Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        Reservation? found = await new ReservationRepository(reading).FindAsync(planned.Id, Cancel);
+
+        Assert.Equal(ReservationCancellation.SameBroadcast, found!.Cancellation);
+    }
+
+    [Fact]
     public async Task WithdrawingARuleBornReservationLeavesNoRowBehind()
     {
         Reservation withdrawn = ReservationFixtures.Planned();

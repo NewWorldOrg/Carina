@@ -37,6 +37,8 @@ public enum ReservationFailure
     RecordingCameOfIt = 12,
 
     StillToBeRecorded = 13,
+
+    ProgrammeIsAMovedDuplicate = 14,
 }
 
 public sealed record ReservationSettlement(
@@ -110,6 +112,21 @@ public sealed class ReservationService(
                 ReservationFailure.ProgrammeIsAShadow);
         }
 
+        DateTime at = clock.GetUtcNow().UtcDateTime;
+        BroadcastGroupResolver groups = BroadcastGroupResolver.Of(await programmes.ListGroupedAsync(cancellationToken));
+        BroadcastResolution resolution = groups.Resolve(programme, at);
+
+        if (resolution.Exclusion is BroadcastExclusion.Moved && resolution.Targets.Count > 0)
+        {
+            Programme primary = resolution.Targets[0].Programme;
+
+            return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                $"Programme {ProgrammeIdText.Of(draft.Programme)} is a listing of a moved broadcast that is "
+                + $"reserved on {ProgrammeIdText.Of(primary.Id)} starting at {primary.StartsAt:O}. Reserve that "
+                + "listing instead, so the broadcast is recorded once.",
+                ReservationFailure.ProgrammeIsAMovedDuplicate);
+        }
+
         var reference = new ProgrammeRef(
             programme.NetworkId,
             programme.ServiceId,
@@ -121,22 +138,8 @@ public sealed class ReservationService(
             return AlreadyReserved<ReservationSettlement>(already);
         }
 
-        DateTime at = clock.GetUtcNow().UtcDateTime;
-        Reservation planned = Reservation.Plan(
-            ReservationId.New(),
-            reference,
-            null,
-            draft.Priority,
-            programme.StartsAt,
-            programme.EndsAt ?? programme.StartsAt + Reservation.ProvisionalLengthWhenTheEndIsNotAnnounced,
-            programme.EndsAt is not null,
-            draft.MarginBefore,
-            draft.MarginAfter,
-            Snapshot(programme, at),
-            null,
-            BroadcastGroupRole.Standalone,
-            at,
-            draft.EncodeWhenRecorded);
+        BroadcastTarget? own = resolution.Targets.FirstOrDefault(target => target.Programme.Id.Equals(programme.Id));
+        Reservation planned = Planned(draft, programme, own, at);
 
         SchedulingRun run;
 
@@ -154,8 +157,63 @@ public sealed class ReservationService(
             return AlreadyReserved<ReservationSettlement>(raced);
         }
 
+        if (run.Settled)
+        {
+            await ReserveAlongsideAsync(draft, resolution, programme, at, cancellationToken);
+        }
+
         return await SettledAsync(run, planned, cancellationToken);
     }
+
+    /// <summary>
+    /// Reserves the other segments of a relayed broadcast that nothing reserves yet, with what was asked
+    /// for the one segment.
+    /// </summary>
+    private async Task ReserveAlongsideAsync(
+        ReservationDraft draft,
+        BroadcastResolution resolution,
+        Programme asked,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        foreach (BroadcastTarget target in resolution.Targets)
+        {
+            if (target.Programme.Id.Equals(asked.Id)
+                || await reservations.FindByProgrammeAsync(target.Reference, cancellationToken) is not null)
+            {
+                continue;
+            }
+
+            try
+            {
+                await scheduler.CreateAsync(Planned(draft, target.Programme, target, at), cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                if (await reservations.FindByProgrammeAsync(target.Reference, cancellationToken) is null)
+                {
+                    throw;
+                }
+            }
+        }
+    }
+
+    private static Reservation Planned(ReservationDraft draft, Programme programme, BroadcastTarget? target, DateTime at)
+        => Reservation.Plan(
+            ReservationId.New(),
+            new ProgrammeRef(programme.NetworkId, programme.ServiceId, programme.EventId, programme.StartsAt),
+            null,
+            draft.Priority,
+            programme.StartsAt,
+            programme.EndsAt ?? programme.StartsAt + Reservation.ProvisionalLengthWhenTheEndIsNotAnnounced,
+            programme.EndsAt is not null,
+            draft.MarginBefore,
+            draft.MarginAfter,
+            Snapshot(programme, at),
+            target?.Key,
+            target?.Role ?? BroadcastGroupRole.Standalone,
+            at,
+            draft.EncodeWhenRecorded);
 
     public async Task<ServiceResult<ReservationSettlement, ReservationFailure>> ReviseAsync(
         ReservationId id,

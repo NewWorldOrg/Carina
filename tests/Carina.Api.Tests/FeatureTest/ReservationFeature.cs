@@ -442,7 +442,9 @@ internal sealed class ReservationFeature : IAsyncDisposable
         string name = "A programme",
         string summary = "What it is about",
         AudioMode audio = AudioMode.Undetermined,
-        int sounds = ProgrammeSnapshot.SoundsUnannounced)
+        int sounds = ProgrammeSnapshot.SoundsUnannounced,
+        IReadOnlyList<RelatedProgramme>? related = null,
+        ProgrammeRunning running = ProgrammeRunning.Undetermined)
     {
         DateTime opens = startsAt ?? Noon.AddHours(2);
         Programme programme = Programme.Rehydrate(
@@ -456,11 +458,12 @@ internal sealed class ReservationFeature : IAsyncDisposable
             Noon,
             [new ProgrammeGenre(7, 1)],
             [new ProgrammeItem("Cast", "Somebody")],
-            [],
+            related ?? [],
             false,
             audio,
             sounds,
-            source: ProgrammeSource.ScheduleBasic);
+            source: ProgrammeSource.ScheduleBasic,
+            running: running);
 
         Programmes.Programmes.Add(programme);
 

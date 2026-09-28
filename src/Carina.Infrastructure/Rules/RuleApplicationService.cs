@@ -27,7 +27,8 @@ public sealed record RuleApplicationRun(
     IReadOnlyList<Reservation> Revived,
     IReadOnlyList<Reservation> Withdrawn,
     IReadOnlyList<Rule> TurnedOff,
-    IReadOnlyList<RuleFault> Faulted);
+    IReadOnlyList<RuleFault> Faulted,
+    int Moved = 0);
 
 public sealed record RuleRehearsal(
     IReadOnlyList<RuleMatch> Taking,
@@ -36,7 +37,8 @@ public sealed record RuleRehearsal(
     IReadOnlyList<Reservation> Withdrawing,
     IReadOnlyList<Reservation> Sweeping,
     IReadOnlyList<Reservation> ChangingHands,
-    SchedulingRun Settled);
+    SchedulingRun Settled,
+    int Moved = 0);
 
 public sealed record RuleRetirement(
     Rule Rule,
@@ -139,7 +141,9 @@ public sealed class RuleApplicationService(
         }
 
         DateTime at = Moment();
-        (IReadOnlyList<Programme> read, _) = await ReadAsync(0, cancellationToken);
+        (IReadOnlyList<Programme> carried, _) = await ReadAsync(0, cancellationToken);
+        BroadcastGroupResolver groups = BroadcastGroupResolver.Of(await programmes.ListGroupedAsync(cancellationToken));
+        IReadOnlyList<Programme> read = Alongside(carried, groups);
         IReadOnlyList<ProgrammeMatch> guide = ProgrammeSearchMatching.Layered(
             [.. read.Where(programme => StillToCome(programme, at))],
             []);
@@ -148,11 +152,17 @@ public sealed class RuleApplicationService(
         Rule[] alongside = [.. enabled.Where(rule => !rule.Id.Equals(draft.Id)), draft];
 
         RuleMatchRun run = await matcher.AgainstAsync(alongside, guide, cancellationToken);
-        RuleMatch[] taking = [.. run.Matches.Where(match => match.Rule.Id.Equals(draft.Id))];
+        RuleTaking resolved = RuleMatcher.Resolved(run.Matches, groups, read, at);
+        RuleMatch[] taking = [.. resolved.Matches.Where(match => match.Rule.Id.Equals(draft.Id))];
+        RuleTaking drafted = RuleMatcher.Resolved(
+            [.. run.Matches.Where(match => match.Rule.Id.Equals(draft.Id))],
+            groups,
+            read,
+            at);
 
-        var making = new List<Reservation>();
-        var changingHands = new List<Reservation>();
-        HashSet<ProgrammeKey> taken = [.. run.Matches.Select(match => Naming(match.Programme))];
+        List<Reservation> making = [];
+        List<Reservation> changingHands = [];
+        HashSet<ProgrammeKey> taken = [.. resolved.Matches.Select(match => Naming(match.Programme))];
 
         foreach (RuleMatch match in taking)
         {
@@ -196,7 +206,8 @@ public sealed class RuleApplicationService(
             withdrawing,
             sweeping,
             changingHands,
-            await scheduling.PreviewAsync(making, cancellationToken));
+            await scheduling.PreviewAsync(making, cancellationToken),
+            drafted.Moved);
     }
 
     private async Task<IReadOnlyList<Reservation>> DroppedAsync(
@@ -239,21 +250,25 @@ public sealed class RuleApplicationService(
     {
         DateTime at = Moment();
         IReadOnlyList<Rule> enabled = await rules.ListEnabledByPrecedenceAsync(cancellationToken);
-        (IReadOnlyList<Programme> read, long revision) = await ReadAsync(from, cancellationToken);
+        (IReadOnlyList<Programme> carried, long revision) = await ReadAsync(from, cancellationToken);
+        BroadcastGroupResolver groups = BroadcastGroupResolver.Of(await programmes.ListGroupedAsync(cancellationToken));
+        IReadOnlyList<Programme> read = Alongside(carried, groups);
 
         RuleMatchRun run = await matcher.AgainstAsync(
             enabled,
             ProgrammeSearchMatching.Layered([.. read.Where(programme => StillToCome(programme, at))], []),
             cancellationToken);
+        RuleTaking resolved = RuleMatcher.Resolved(run.Matches, groups, read, at);
 
         foreach (Rule off in run.TurnedOff)
         {
             await rules.SaveAsync(off, cancellationToken);
         }
 
-        Making making = await MakeAsync(run.Matches, at, cancellationToken);
+        Making making = await MakeAsync(resolved.Matches, at, cancellationToken);
 
-        IReadOnlyList<Reservation> withdrawn = await LeaveAsync(read, run, enabled, sweeping, at, cancellationToken);
+        IReadOnlyList<Reservation> withdrawn =
+            await LeaveAsync(read, run, resolved, enabled, sweeping, at, cancellationToken);
 
         return new RuleApplicationRun(
             revision,
@@ -263,7 +278,8 @@ public sealed class RuleApplicationService(
             making.Revived,
             withdrawn,
             run.TurnedOff,
-            run.Faulted);
+            run.Faulted,
+            resolved.Moved);
     }
 
     private async Task<Making> MakeAsync(
@@ -358,6 +374,7 @@ public sealed class RuleApplicationService(
     private async Task<IReadOnlyList<Reservation>> LeaveAsync(
         IReadOnlyList<Programme> read,
         RuleMatchRun run,
+        RuleTaking resolved,
         IReadOnlyList<Rule> enabled,
         bool sweeping,
         DateTime at,
@@ -367,7 +384,7 @@ public sealed class RuleApplicationService(
         HashSet<RuleId> faulted = run.Faulted.Select(fault => fault.Rule.Id).ToHashSet();
         HashSet<RuleId> standing = enabled.Where(rule => rule.Enabled).Select(rule => rule.Id).ToHashSet();
         IReadOnlyList<Reservation> pending = await reservations.ListPendingAsync(Everything(at), cancellationToken);
-        HashSet<ProgrammeKey> kept = StandingFor(run.Matches.Select(match => Naming(match.Programme)), pending);
+        HashSet<ProgrammeKey> kept = StandingFor(resolved.Matches.Select(match => Naming(match.Programme)), pending);
         HashSet<ProgrammeKey> seen = read.Select(Naming).ToHashSet();
         List<Reservation> leaving = [];
 
@@ -396,12 +413,40 @@ public sealed class RuleApplicationService(
                 continue;
             }
 
+            if (holds && await ContinuesARelayAsync(reservation, kept, cancellationToken))
+            {
+                continue;
+            }
+
             leaving.Add(reservation);
         }
 
         await WithdrawAsync(leaving, cancellationToken);
 
         return leaving;
+    }
+
+    /// <summary>
+    /// Whether this reservation is a segment of a relayed broadcast another segment of which is being
+    /// recorded, has been recorded, or is still taken by a rule.
+    /// </summary>
+    private async Task<bool> ContinuesARelayAsync(
+        Reservation reservation,
+        HashSet<ProgrammeKey> kept,
+        CancellationToken cancellationToken)
+    {
+        if (reservation.BroadcastGroupRole is not BroadcastGroupRole.RelaySegment
+            || reservation.BroadcastGroupKey is not { } key)
+        {
+            return false;
+        }
+
+        IReadOnlyList<Reservation> segments = await reservations.ListForBroadcastGroupAsync(key, cancellationToken);
+
+        return segments.Any(segment => !segment.Id.Equals(reservation.Id)
+            && (segment.StartedAt is not null
+                || segment.RecordingOutcome is not null
+                || kept.Contains(Naming(segment))));
     }
 
     private async Task WithdrawAsync(IReadOnlyList<Reservation> leaving, CancellationToken cancellationToken)
@@ -494,10 +539,25 @@ public sealed class RuleApplicationService(
                 at,
                 match.Programme.Audio,
                 match.Programme.Sounds),
-            null,
-            BroadcastGroupRole.Standalone,
+            match.GroupKey,
+            match.GroupRole,
             at,
             match.Rule.EncodeWhenRecorded);
+
+    /// <summary>
+    /// The programmes read, together with every programme in the guide that shares a relayed or moved
+    /// broadcast with one of them.
+    /// </summary>
+    private static IReadOnlyList<Programme> Alongside(IReadOnlyList<Programme> read, BroadcastGroupResolver groups)
+    {
+        HashSet<ProgrammeId> held = [.. read.Select(programme => programme.Id)];
+
+        return
+        [
+            .. read,
+            .. groups.MembersAlongside(held).Where(member => !held.Contains(member.Id)),
+        ];
+    }
 
     private static bool StillToCome(Programme programme, DateTime at)
         => (programme.EndsAt ?? Provisionally(programme.StartsAt)) > at;

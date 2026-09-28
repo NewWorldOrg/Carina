@@ -621,6 +621,137 @@ public sealed class RuleApplicationServiceTests
         Assert.Equal(2, world.Streams.Reads);
     }
 
+    [Fact]
+    public async Task BrRd010ARuleTakingBothListingsOfAMovedBroadcastReservesItOnceOnThePrimary()
+    {
+        World world = World.Of();
+        world.Rules.Rules.Add(Written("keyword=hill"));
+        world.Guide(
+            Linked(Listed, 1, "hill walking", related: [Link(Alongside, 2, RelationKind.Moved)]),
+            Linked(Alongside, 2, "hill walking", running: ProgrammeRunning.Running));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Reservation made = Assert.Single(run.Made);
+        Assert.Equal(Alongside, made.ServiceId.Value);
+        Assert.Equal(BroadcastGroupRole.MovementPrimary, made.BroadcastGroupRole);
+        Assert.Equal(new BroadcastGroupKey($"movement:{Network}-{Alongside}-2"), made.BroadcastGroupKey);
+        Assert.Equal(1, run.Moved);
+    }
+
+    [Fact]
+    public async Task BrRd010ARuleThatOnlyReachesTheSuppressedListingStillReservesTheBroadcastOnThePrimary()
+    {
+        World world = World.Of();
+        world.Rules.Rules.Add(Written($"keyword=hill&channel={Network}-{Listed}"));
+        world.Guide(
+            Linked(Listed, 1, "hill walking", related: [Link(Alongside, 2, RelationKind.Moved)]),
+            Linked(Alongside, 2, "hill walking", running: ProgrammeRunning.Running));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Equal(Alongside, Assert.Single(run.Made).ServiceId.Value);
+    }
+
+    [Fact]
+    public async Task BrRd010ARuleTakingOneSegmentOfARelayReservesEverySegmentUnderOneKey()
+    {
+        World world = World.Of();
+        world.Rules.Rules.Add(Written("keyword=hill"));
+        world.Guide(
+            Linked(Listed, 1, "hill walking", related: [Link(Alongside, 2, RelationKind.Relayed)]),
+            Linked(Alongside, 2, "continued", startsAt: Now.AddHours(3)));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Equal([1, 2], run.Made.Select(reservation => reservation.EventId.Value).Order());
+        Assert.All(run.Made, reservation => Assert.Equal(BroadcastGroupRole.RelaySegment, reservation.BroadcastGroupRole));
+        Assert.Single(run.Made.Select(reservation => reservation.BroadcastGroupKey).Distinct());
+    }
+
+    [Fact]
+    public async Task BrRd010AnIncrementThatReadsOneSegmentOfARelayReadsTheRestOfItToo()
+    {
+        World world = World.Of();
+        world.Rules.Rules.Add(Written("keyword=hill"));
+        world.Guide(
+            Linked(Listed, 1, "hill walking", revision: 9, related: [Link(Alongside, 2, RelationKind.Relayed)]),
+            Linked(Alongside, 2, "continued", startsAt: Now.AddHours(3), revision: 1));
+
+        RuleApplicationRun run = await world.Applying.SinceAsync(5, Cancel);
+
+        Assert.Equal([1, 2], run.Made.Select(reservation => reservation.EventId.Value).Order());
+    }
+
+    [Fact]
+    public async Task BrRd010TheRestOfARelayIsNotTakenBackOnceTheSegmentBeforeItIsBeingRecorded()
+    {
+        World world = World.Of();
+        Rule rule = Written("keyword=hill");
+        world.Rules.Rules.Add(rule);
+        world.Visited(VisitOutcome.Complete);
+        BroadcastGroupKey key = new($"relay:{Network}-{Listed}-1");
+        Programme first = Linked(Listed, 1, "hill walking", startsAt: Now.AddMinutes(-30), related: [Link(Alongside, 2, RelationKind.Relayed)]);
+        Programme rest = Linked(Alongside, 2, "continued", startsAt: Now.AddHours(3));
+        world.Guide(first, rest);
+        Reservation recording = Standing(first, ReservationState.Scheduled, rule.Id, startedAt: Now.AddMinutes(-31));
+        Reservation after = Standing(rest, ReservationState.Scheduled, rule.Id);
+        recording.Regroup(key, BroadcastGroupRole.RelaySegment);
+        after.Regroup(key, BroadcastGroupRole.RelaySegment);
+        world.Reservations.Standing(recording, after);
+        world.Guide(Linked(Listed, 3, "something else", startsAt: Now.AddHours(5)));
+        world.Programmes.Programmes.Remove(first);
+        world.Guide(Linked(Listed, 1, "not a match any more", startsAt: Now.AddMinutes(-30), related: [Link(Alongside, 2, RelationKind.Relayed)]));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Empty(run.Withdrawn);
+        Assert.Equal(2, world.Reservations.Held.Count);
+    }
+
+    [Fact]
+    public async Task BrRd010ASegmentARuleNoLongerTakesIsTakenBackWhenNothingElseOfTheRelayHolds()
+    {
+        World world = World.Of();
+        Rule rule = Written("keyword=hill");
+        world.Rules.Rules.Add(rule);
+        world.Visited(VisitOutcome.Complete);
+        BroadcastGroupKey key = new($"relay:{Network}-{Listed}-1");
+        Programme rest = Linked(Alongside, 2, "continued", startsAt: Now.AddHours(3));
+        world.Guide(Linked(Listed, 1, "not a match", related: [Link(Alongside, 2, RelationKind.Relayed)]), rest);
+        Reservation after = Standing(rest, ReservationState.Scheduled, rule.Id);
+        after.Regroup(key, BroadcastGroupRole.RelaySegment);
+        world.Reservations.Standing(after);
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Equal([after.Id], run.Withdrawn.Select(reservation => reservation.Id));
+    }
+
+    private static RelatedProgramme Link(int service, int carried, RelationKind kind)
+        => new(Network, service, carried, kind);
+
+    private static Programme Linked(
+        int service,
+        int carried,
+        string name,
+        DateTime? startsAt = null,
+        long revision = 1,
+        ProgrammeRunning running = ProgrammeRunning.Undetermined,
+        IReadOnlyList<RelatedProgramme>? related = null)
+        => Programme.Rehydrate(
+            new ProgrammeId(new NetworkId(Network), new ServiceId(service), new EventId(carried)),
+            new TransportStreamId(Carried),
+            startsAt ?? Now.AddHours(2),
+            (startsAt ?? Now.AddHours(2)).AddHours(1),
+            name,
+            "a summary",
+            false,
+            Now,
+            related: related,
+            revision: revision,
+            running: running);
+
     private static string[] Named(World world)
         => [.. world.Reservations.Held.Select(reservation => reservation.SnapshotName).Order(StringComparer.Ordinal)];
 

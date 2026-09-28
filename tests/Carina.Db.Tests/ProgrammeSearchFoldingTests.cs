@@ -356,12 +356,12 @@ public sealed class ProgrammeSearchFoldingTests
                 network_id, service_id, event_id, transport_stream_id,
                 start_at, end_at, name, summary, is_shadow,
                 genres, items, related, has_subtitles, audio, sounds,
-                video, aspect, source, updated_at)
+                video, aspect, running, source, updated_at)
             VALUES (
                 1, 1049, @event, 1,
                 {At}, {At} + interval '30 minutes', @name, @summary, false,
                 '[]', '[]', '[]', false, 'Undetermined', 0,
-                'Undetermined', 'Undetermined', 'ScheduleBasic', {At})
+                'Undetermined', 'Undetermined', 'Undetermined', 'ScheduleBasic', {At})
             """;
         command.Parameters.AddWithValue("event", carried);
         command.Parameters.AddWithValue("name", name);

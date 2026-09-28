@@ -19,6 +19,8 @@ public enum RecalculationStage
     Outcomes = 3,
 
     Guide = 4,
+
+    Groups = 5,
 }
 
 public sealed record RecalculationFault(RecalculationStage Stage, string Fault);
@@ -32,7 +34,8 @@ public sealed record RecalculationPass(
     ReservationOutcomeRun? Recorded,
     SchedulingRun? Settled,
     IReadOnlyList<RecalculationFault> Faults,
-    RecalculationRefusal? Refusal)
+    RecalculationRefusal? Refusal,
+    BroadcastGroupRun? Regrouped = null)
 {
     public bool Ran => Refusal is null;
 
@@ -47,6 +50,7 @@ public sealed record RecalculationPass(
         GuideRun? reconciled,
         ReservationOutcomeRun? recorded,
         SchedulingRun? settled,
-        IReadOnlyList<RecalculationFault> faults)
-        => new(answering, reach, revision, applied, reconciled, recorded, settled, faults, null);
+        IReadOnlyList<RecalculationFault> faults,
+        BroadcastGroupRun? regrouped = null)
+        => new(answering, reach, revision, applied, reconciled, recorded, settled, faults, null, regrouped);
 }

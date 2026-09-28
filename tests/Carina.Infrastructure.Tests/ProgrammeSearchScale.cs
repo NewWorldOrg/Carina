@@ -146,7 +146,7 @@ public sealed class ProgrammeSearchScale : IAsyncLifetime
         INSERT INTO programme (
             network_id, service_id, event_id, transport_stream_id, start_at, end_at,
             name, summary, is_shadow, genres, items, related, has_subtitles, audio, sounds,
-            video, aspect, source, updated_at)
+            video, aspect, running, source, updated_at)
         SELECT
             32736 + (n % 20) / 5,
             1024 + (n % 20),
@@ -169,6 +169,7 @@ public sealed class ProgrammeSearchScale : IAsyncLifetime
             1,
             'Interlaced1080',
             'SixteenByNine',
+            'Undetermined',
             'ScheduleExtended',
             @anchor
         FROM generate_series(0, @rows - 1) AS n,

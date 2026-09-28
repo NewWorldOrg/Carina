@@ -62,4 +62,10 @@ public interface IProgrammeRepository : IAnnouncedProgrammes
         CancellationToken cancellationToken);
 
     Task<int> ForgetEverythingAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists the programmes that carry a relayed or moved link, together with the programmes those
+    /// links name, as far as the guide holds them.
+    /// </summary>
+    Task<IReadOnlyList<Programme>> ListGroupedAsync(CancellationToken cancellationToken);
 }

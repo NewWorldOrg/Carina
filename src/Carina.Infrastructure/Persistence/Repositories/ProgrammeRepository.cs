@@ -256,6 +256,47 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
     public async Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
         => await context.Set<Programme>().ExecuteDeleteAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Programme>> ListGroupedAsync(CancellationToken cancellationToken)
+    {
+        List<Programme> linking = await context.Set<Programme>()
+            .FromSqlRaw(ProgrammeGrouping.LinkingSql)
+            .ToListAsync(cancellationToken);
+
+        HashSet<ProgrammeId> held = [.. linking.Select(programme => programme.Id)];
+        ProgrammeId[] named =
+        [
+            .. linking
+                .SelectMany(programme => programme.Related)
+                .Where(related => related.Kind is RelationKind.Relayed or RelationKind.Moved)
+                .Select(related => (related.NetworkId, related.ServiceId, related.EventId))
+                .Distinct()
+                .Where(related => related.NetworkId is >= NetworkId.MinValue and <= NetworkId.MaxValue
+                    && related.ServiceId is >= ServiceId.MinValue and <= ServiceId.MaxValue
+                    && related.EventId is >= EventId.MinValue and <= EventId.MaxValue)
+                .Select(related => new ProgrammeId(
+                    new NetworkId(related.NetworkId),
+                    new ServiceId(related.ServiceId),
+                    new EventId(related.EventId)))
+                .Where(id => !held.Contains(id)),
+        ];
+
+        if (named.Length is 0)
+        {
+            return linking;
+        }
+
+        List<Programme> reached = await context.Set<Programme>()
+            .FromSqlRaw(
+                ProgrammeGrouping.NamedSql,
+                new NpgsqlParameter(ProgrammeGrouping.NamedParameter, NpgsqlDbType.Jsonb)
+                {
+                    Value = ProgrammeAbsorption.Heard(named),
+                })
+            .ToListAsync(cancellationToken);
+
+        return [.. linking, .. reached];
+    }
+
     public async Task<DateTime?> CoveredUntilAsync(
         int networkId,
         int serviceId,

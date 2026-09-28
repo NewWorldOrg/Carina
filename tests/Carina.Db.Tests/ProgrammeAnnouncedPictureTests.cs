@@ -66,11 +66,11 @@ public sealed class ProgrammeAnnouncedPictureTests(MigratedScratchDatabase datab
             INSERT INTO programme (
                 network_id, service_id, event_id, transport_stream_id, start_at, end_at,
                 name, summary, is_shadow, genres, items, related, has_subtitles, audio, sounds,
-                video, aspect, source, updated_at)
+                video, aspect, running, source, updated_at)
             VALUES (
                 {networkId}, 1024, 4001, 32736, {Airs}, {Ends},
                 'A programme', 'What it is about', false, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
-                false, 'Undetermined', 0, @video, @aspect, 'ScheduleBasic', {Now})
+                false, 'Undetermined', 0, @video, @aspect, 'Undetermined', 'ScheduleBasic', {Now})
             """;
         command.Parameters.AddWithValue("video", video);
         command.Parameters.AddWithValue("aspect", aspect);

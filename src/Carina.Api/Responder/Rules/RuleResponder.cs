@@ -86,7 +86,8 @@ public sealed record RulePreviewResponder(
     int Contended,
     int ContendedAltogether,
     int ExcludedAsShadows,
-    int SeatsLeftOut)
+    int SeatsLeftOut,
+    int ExcludedAsMoved)
 {
     public static RulePreviewResponder Of(RuleRehearsal rehearsal)
     {
@@ -109,7 +110,8 @@ public sealed record RulePreviewResponder(
                 is AllocationVerdict.Contended),
             rehearsal.Settled.Settled ? rehearsal.Settled.Plan.Contended.Count : 0,
             rehearsal.Shadowed,
-            rehearsal.Settled.Settled ? rehearsal.Settled.SeatsLeftOut : 0);
+            rehearsal.Settled.Settled ? rehearsal.Settled.SeatsLeftOut : 0,
+            rehearsal.Moved);
     }
 
     private static RulePreviewTakeResponder Took(
@@ -144,7 +146,8 @@ public sealed record RuleImpactResponder(
     int Withdrawing,
     int Sweeping,
     int ChangingHands,
-    int ExcludedAsShadows)
+    int ExcludedAsShadows,
+    int ExcludedAsMoved)
 {
     public static RuleImpactResponder Of(RuleRehearsal rehearsal)
     {
@@ -155,7 +158,8 @@ public sealed record RuleImpactResponder(
             rehearsal.Withdrawing.Count,
             rehearsal.Sweeping.Count,
             rehearsal.ChangingHands.Count,
-            rehearsal.Shadowed);
+            rehearsal.Shadowed,
+            rehearsal.Moved);
     }
 }
 
@@ -167,7 +171,8 @@ public sealed record RuleApplicationResponder(
     int Refused,
     int Withdrawn,
     int TurnedOff,
-    int Faulted)
+    int Faulted,
+    int ExcludedAsMoved)
 {
     public static RuleApplicationResponder Of(RuleApplyRun run, RuleApplicationRun applied)
     {
@@ -182,7 +187,8 @@ public sealed record RuleApplicationResponder(
             applied.Refused.Count,
             applied.Withdrawn.Count,
             applied.TurnedOff.Count,
-            applied.Faulted.Count);
+            applied.Faulted.Count,
+            applied.Moved);
     }
 }
 

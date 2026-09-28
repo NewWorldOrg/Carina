@@ -1,10 +1,22 @@
 using Carina.Domain.Programmes;
+using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Programmes;
 
 namespace Carina.Infrastructure.Rules;
 
-public sealed record RuleMatch(Rule Rule, ProgrammeMatch Programme);
+public sealed record RuleMatch(Rule Rule, ProgrammeMatch Programme)
+{
+    public BroadcastGroupKey? GroupKey { get; init; }
+
+    public BroadcastGroupRole GroupRole { get; init; } = BroadcastGroupRole.Standalone;
+}
+
+/// <summary>
+/// The programmes the rules take once each match is replaced by the programmes that stand for its
+/// broadcast, and how many matches were listings a moved broadcast suppresses.
+/// </summary>
+public sealed record RuleTaking(IReadOnlyList<RuleMatch> Matches, int Moved);
 
 public sealed record RuleFault(Rule Rule, Exception Cause);
 
@@ -79,6 +91,67 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
         }
 
         return new RuleMatchRun(found, turnedOff, faulted);
+    }
+
+    /// <summary>
+    /// Replaces every match by the programmes that stand for its broadcast: the primary listing of a
+    /// moved broadcast, every segment still to come of a relayed one. The first rule to reach a
+    /// programme keeps it, as it does before the replacement.
+    /// </summary>
+    public static RuleTaking Resolved(
+        IReadOnlyList<RuleMatch> matches,
+        BroadcastGroupResolver groups,
+        IReadOnlyList<Programme> read,
+        DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(matches);
+        ArgumentNullException.ThrowIfNull(groups);
+        ArgumentNullException.ThrowIfNull(read);
+
+        Dictionary<ProgrammeKey, Programme> held = [];
+
+        foreach (Programme programme in read)
+        {
+            held.TryAdd(Naming(ProgrammeMatch.Of(programme)), programme);
+        }
+
+        List<RuleMatch> taking = [];
+        HashSet<ProgrammeKey> claimed = [];
+        int moved = 0;
+
+        foreach (RuleMatch match in matches)
+        {
+            if (!held.TryGetValue(Naming(match.Programme), out Programme? programme))
+            {
+                if (claimed.Add(Naming(match.Programme)))
+                {
+                    taking.Add(match);
+                }
+
+                continue;
+            }
+
+            BroadcastResolution resolution = groups.Resolve(programme, at);
+
+            if (resolution.Exclusion is BroadcastExclusion.Moved)
+            {
+                moved++;
+            }
+
+            foreach (BroadcastTarget target in resolution.Targets)
+            {
+                ProgrammeMatch standing = ReferenceEquals(target.Programme, programme)
+                    ? match.Programme
+                    : ProgrammeMatch.Of(target.Programme);
+
+                if (claimed.Add(Naming(standing)))
+                {
+                    taking.Add(new RuleMatch(match.Rule, standing) { GroupKey = target.Key, GroupRole = target.Role });
+                }
+            }
+        }
+
+        return new RuleTaking(taking, moved);
     }
 
     public async Task<int> ShadowedByAsync(

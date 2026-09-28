@@ -175,6 +175,42 @@ public sealed class ReservationRecalculationHostedServiceTests
     }
 
     [Fact]
+    public async Task BrRd010APassMovesAReservationOntoThePrimaryOfItsMovedBroadcastBeforeTheRulesAreRead()
+    {
+        using World world = World.Of();
+        Programme suppressed = Programme.Rehydrate(
+            new ProgrammeId(new NetworkId(Network), new ServiceId(Listed), new EventId(1)),
+            new TransportStreamId(Carried),
+            Now.AddHours(2),
+            Now.AddHours(3),
+            "moved",
+            "a summary",
+            false,
+            Now,
+            related: [new RelatedProgramme(Network, Listed + 1, 2, RelationKind.Moved)]);
+        Programme primary = Programme.Rehydrate(
+            new ProgrammeId(new NetworkId(Network), new ServiceId(Listed + 1), new EventId(2)),
+            new TransportStreamId(Carried),
+            Now.AddHours(2),
+            Now.AddHours(3),
+            "moved",
+            "a summary",
+            false,
+            Now,
+            running: ProgrammeRunning.Running);
+        world.Guide(suppressed, primary);
+        Reservation booked = Standing(suppressed);
+        world.Reservations.Standing(booked);
+
+        world.Recalculating.Nudge(RecalculationTrigger.ProgrammesChanged);
+        RecalculationPass pass = await world.Passing();
+
+        Assert.Empty(pass.Faults);
+        Assert.Equal([booked.Id], pass.Regrouped!.Retargeted);
+        Assert.Equal(Listed + 1, booked.ServiceId.Value);
+    }
+
+    [Fact]
     public async Task AnIncrementReadsFromWhereTheSweepBeforeItStopped()
     {
         using World world = World.Of();
@@ -622,6 +658,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddScoped<ReservationSchedulingService>();
             services.AddScoped<ReservationOutcomeService>();
             services.AddScoped<ReservationGuideService>();
+            services.AddScoped<BroadcastGroupService>();
             services.AddScoped<RuleApplicationService>();
 
             provider = services.BuildServiceProvider();
