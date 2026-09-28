@@ -23,6 +23,9 @@ public sealed class StreamVisitConfiguration : IEntityTypeConfiguration<StreamVi
                     "ck_stream_visit_counts",
                     "consecutive_incomplete >= 0 AND last_duration_milliseconds >= 0");
                 table.HasCheckConstraint(
+                    "ck_stream_visit_unheard",
+                    "consecutive_unheard >= 0 AND consecutive_unheard <= consecutive_incomplete");
+                table.HasCheckConstraint(
                     "ck_stream_visit_completion",
                     "last_completed_at IS NULL OR last_completed_at <= last_attempted_at");
             });
@@ -46,6 +49,7 @@ public sealed class StreamVisitConfiguration : IEntityTypeConfiguration<StreamVi
             .IsRequired();
 
         builder.Property(visit => visit.ConsecutiveIncomplete).IsRequired();
+        builder.Property(visit => visit.ConsecutiveUnheard).IsRequired();
         builder.Property(visit => visit.LastDurationMilliseconds).IsRequired();
 
         builder.HasIndex(visit => visit.LastCompletedAt);

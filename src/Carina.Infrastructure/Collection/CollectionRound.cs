@@ -210,6 +210,7 @@ public sealed class CollectionRound(
         CancellationToken abort)
     {
         DateTime at = clock.GetUtcNow().UtcDateTime;
+        IReadOnlyList<VisitTally> counted = TallyOf(stream, visit);
         StreamVisit? held = await visits.FindAsync(stream.NetworkId, stream.TransportStreamId, abort);
 
         if (held is null)
@@ -219,9 +220,10 @@ public sealed class CollectionRound(
                 stream.TransportStreamId,
                 visit.Outcome,
                 at,
-                took);
+                took,
+                heardTheSchedule: counted.Count > 0);
 
-            first.Tallied(TallyOf(stream, visit));
+            first.Tallied(counted);
 
             await visits.SaveAsync(first, abort);
             events.Signal(AppEventName.EpgCollection);
@@ -229,8 +231,8 @@ public sealed class CollectionRound(
             return;
         }
 
-        held.Record(visit.Outcome, at, took);
-        held.Tallied(TallyOf(stream, visit));
+        held.Record(visit.Outcome, at, took, heardTheSchedule: counted.Count > 0);
+        held.Tallied(counted);
 
         await visits.SaveAsync(held, abort);
         events.Signal(AppEventName.EpgCollection);

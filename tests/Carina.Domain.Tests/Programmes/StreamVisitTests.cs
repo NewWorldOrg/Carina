@@ -101,6 +101,75 @@ public sealed class StreamVisitTests
     }
 
     [Fact]
+    public void VisitsThatHeardNoneOfTheScheduleAreCountedApart()
+    {
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
+
+        visit.Record(VisitOutcome.NoLock, At.AddHours(1), Took);
+
+        Assert.Equal(2, visit.ConsecutiveIncomplete);
+        Assert.Equal(2, visit.ConsecutiveUnheard);
+    }
+
+    [Fact]
+    public void HearingPartOfTheScheduleClearsTheUnheardCountButNotTheShortfall()
+    {
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
+
+        visit.Record(VisitOutcome.Incomplete, At.AddHours(1), Took, heardTheSchedule: true);
+
+        Assert.Equal(2, visit.ConsecutiveIncomplete);
+        Assert.Equal(0, visit.ConsecutiveUnheard);
+
+        visit.Record(VisitOutcome.Incomplete, At.AddHours(2), Took);
+
+        Assert.Equal(3, visit.ConsecutiveIncomplete);
+        Assert.Equal(1, visit.ConsecutiveUnheard);
+    }
+
+    [Fact]
+    public void AFirstVisitThatHeardPartOfTheScheduleIsShortButNotUnheard()
+    {
+        StreamVisit visit = StreamVisit.Record(
+            new NetworkId(32739),
+            new TransportStreamId(32739),
+            VisitOutcome.Incomplete,
+            At,
+            Took,
+            heardTheSchedule: true);
+
+        Assert.Equal(1, visit.ConsecutiveIncomplete);
+        Assert.Equal(0, visit.ConsecutiveUnheard);
+    }
+
+    [Fact]
+    public void SettlingClearsTheUnheardCountAndAnInterruptionLeavesIt()
+    {
+        StreamVisit visit = Visit(VisitOutcome.NoBytes);
+
+        visit.Record(VisitOutcome.Interrupted, At.AddHours(1), Took);
+
+        Assert.Equal(1, visit.ConsecutiveUnheard);
+
+        visit.Record(VisitOutcome.BasicOnly, At.AddHours(2), Took);
+
+        Assert.Equal(0, visit.ConsecutiveUnheard);
+    }
+
+    [Fact]
+    public void MoreUnheardVisitsThanShortOnesIsRefused()
+        => Assert.Throws<ArgumentOutOfRangeException>(
+            () => StreamVisit.Rehydrate(
+                new NetworkId(32739),
+                new TransportStreamId(32739),
+                At,
+                null,
+                VisitOutcome.Incomplete,
+                1,
+                30000,
+                2));
+
+    [Fact]
     public void HowLongTheVisitTookIsKept()
         => Assert.Equal(30000, Visit(VisitOutcome.Complete).LastDurationMilliseconds);
 

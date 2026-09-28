@@ -40,6 +40,11 @@ public sealed class StreamVisit
 
     public int ConsecutiveIncomplete { get; private set; }
 
+    /// <summary>
+    /// How many visits in a row, since the stream last settled, heard none of its schedule.
+    /// </summary>
+    public int ConsecutiveUnheard { get; private set; }
+
     public int LastDurationMilliseconds { get; private set; }
 
     public static StreamVisit Rehydrate(
@@ -49,12 +54,15 @@ public sealed class StreamVisit
         DateTime? lastCompletedAt,
         VisitOutcome outcome,
         int consecutiveIncomplete,
-        int lastDurationMilliseconds)
+        int lastDurationMilliseconds,
+        int consecutiveUnheard = 0)
     {
         ArgumentNullException.ThrowIfNull(networkId);
         ArgumentNullException.ThrowIfNull(transportStreamId);
         ArgumentOutOfRangeException.ThrowIfNegative(consecutiveIncomplete);
         ArgumentOutOfRangeException.ThrowIfNegative(lastDurationMilliseconds);
+        ArgumentOutOfRangeException.ThrowIfNegative(consecutiveUnheard);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(consecutiveUnheard, consecutiveIncomplete);
 
         return new StreamVisit
         {
@@ -64,6 +72,7 @@ public sealed class StreamVisit
             LastCompletedAt = UtcTimes.Optional(lastCompletedAt, nameof(lastCompletedAt)),
             Outcome = outcome,
             ConsecutiveIncomplete = consecutiveIncomplete,
+            ConsecutiveUnheard = consecutiveUnheard,
             LastDurationMilliseconds = lastDurationMilliseconds,
         };
     }
@@ -73,7 +82,8 @@ public sealed class StreamVisit
         TransportStreamId transportStreamId,
         VisitOutcome outcome,
         DateTime at,
-        TimeSpan took)
+        TimeSpan took,
+        bool heardTheSchedule = false)
         => Rehydrate(
             networkId,
             transportStreamId,
@@ -81,9 +91,14 @@ public sealed class StreamVisit
             Settles(outcome) ? at : null,
             outcome,
             Counts(outcome) ? 1 : 0,
-            Milliseconds(took));
+            Milliseconds(took),
+            Counts(outcome) && !heardTheSchedule ? 1 : 0);
 
-    public void Record(VisitOutcome outcome, DateTime at, TimeSpan took)
+    /// <summary>
+    /// Writes down a visit's outcome; <paramref name="heardTheSchedule"/> says whether the visit
+    /// heard any section of the stream's schedule.
+    /// </summary>
+    public void Record(VisitOutcome outcome, DateTime at, TimeSpan took, bool heardTheSchedule = false)
     {
         LastAttemptedAt = UtcTimes.Required(at, nameof(at));
         LastDurationMilliseconds = Milliseconds(took);
@@ -97,10 +112,12 @@ public sealed class StreamVisit
         if (Counts(outcome))
         {
             ConsecutiveIncomplete++;
+            ConsecutiveUnheard = heardTheSchedule ? 0 : ConsecutiveUnheard + 1;
         }
         else if (Settles(outcome))
         {
             ConsecutiveIncomplete = 0;
+            ConsecutiveUnheard = 0;
         }
     }
 
