@@ -43,9 +43,10 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
 
         IntegrityFault named = Enum.Parse<IntegrityFault>(fault);
         string observed = IntegrityFaults.ThatWeighedTheFile.Contains(named) ? "99" : "NULL";
+        string ledger = IntegrityFaults.ThatCarryTheLedgerSize.Contains(named) ? "100" : "NULL";
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => FindingAsync(connection, check, $"'{fault}', NULL, 100, {observed}", "'one.m2ts'"));
+            () => FindingAsync(connection, check, $"'{fault}', NULL, {ledger}, {observed}", "'one.m2ts'"));
 
         Assert.Equal("ck_integrity_finding_recording", refusal.ConstraintName);
     }
@@ -58,7 +59,7 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
         Guid check = await CheckAsync(connection);
         IntegrityFault named = Enum.Parse<IntegrityFault>(fault);
         string recording = IntegrityFaults.ThatNameARecording.Contains(named) ? Recording : "NULL";
-        string ledger = IntegrityFaults.ThatNameARecording.Contains(named) ? "100" : "NULL";
+        string ledger = IntegrityFaults.ThatCarryTheLedgerSize.Contains(named) ? "100" : "NULL";
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => FindingAsync(connection, check, $"'{fault}', {recording}, {ledger}, NULL", "'one.m2ts'"));
