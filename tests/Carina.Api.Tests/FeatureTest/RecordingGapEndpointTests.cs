@@ -15,8 +15,8 @@ public sealed class RecordingGapEndpointTests
         await using RecordingFeature feature = new();
         Recording recording = feature.Held();
         recording.Missed(new RecordingGap(
-            recording.StartedAtActual.AddSeconds(556),
-            recording.StartedAtActual.AddSeconds(559.5)));
+            recording.StartedAtActual.AddSeconds(312),
+            recording.StartedAtActual.AddSeconds(314.5)));
         recording.Wrote(TimeSpan.FromHours(1));
         recording.Abort(Ended);
         recording.Settle(RecordingOutcome.Complete, 1_234_567, Ended);
@@ -29,10 +29,10 @@ public sealed class RecordingGapEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal("complete", detail.GetProperty("outcome").GetString());
-        Assert.Equal(3.5, gap.GetProperty("seconds").GetDouble(), 3);
-        Assert.Equal(556, gap.GetProperty("atSecond").GetDouble(), 3);
-        Assert.Equal(3_500, detail.GetProperty("missedMs").GetInt64());
-        Assert.Equal(3_500, listed.GetProperty("missedMs").GetInt64());
+        Assert.Equal(2.5, gap.GetProperty("seconds").GetDouble(), 3);
+        Assert.Equal(312, gap.GetProperty("atSecond").GetDouble(), 3);
+        Assert.Equal(2_500, detail.GetProperty("missedMs").GetInt64());
+        Assert.Equal(2_500, listed.GetProperty("missedMs").GetInt64());
         Assert.Single(listed.GetProperty("gaps").EnumerateArray());
     }
 

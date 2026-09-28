@@ -203,7 +203,7 @@ public sealed class RecordingQualityTests
     [Fact]
     public void ACountedRecordingWithAGapInItStandsAtLeastAtTheWarningLevel()
     {
-        RecordingQuality read = RecordingQuality.Of(DropCounters.Counted(0, 6_885_850), 0, 3_500, AsShipped);
+        RecordingQuality read = RecordingQuality.Of(DropCounters.Counted(0, 1_000_000), 0, 2_500, AsShipped);
 
         Assert.Equal(QualityLevel.Warning, read.Overall);
         Assert.Equal(QualityLevel.Good, read.Scrambled);
@@ -212,7 +212,7 @@ public sealed class RecordingQualityTests
     [Fact]
     public void AGapDoesNotLiftARecordingThatIsAlreadyWorse()
     {
-        RecordingQuality read = RecordingQuality.Of(DropCounters.Counted(50_000, 1_000_000), 0, 3_500, AsShipped);
+        RecordingQuality read = RecordingQuality.Of(DropCounters.Counted(50_000, 1_000_000), 0, 2_500, AsShipped);
 
         Assert.Equal(QualityLevel.MayNotBeWatchable, read.Overall);
     }
@@ -221,7 +221,7 @@ public sealed class RecordingQualityTests
     public void AGapInARecordingNothingCountedLeavesItUnmeasured()
         => Assert.Equal(
             QualityLevel.Unmeasured,
-            RecordingQuality.Of(DropCounters.Unmeasured, null, 3_500, AsShipped).Overall);
+            RecordingQuality.Of(DropCounters.Unmeasured, null, 2_500, AsShipped).Overall);
 
     [Fact]
     public void AGapIsNotNegative()
@@ -234,7 +234,7 @@ public sealed class RecordingQualityTests
         Recording recording = RecordingFactory.Started();
         recording.Measure(DropCounters.Counted(0, 741375), DropTimeline.Unlocated, 0, 0, RecordingFactory.Now);
 
-        recording.Missed(new RecordingGap(RecordingFactory.Now.AddSeconds(10), RecordingFactory.Now.AddSeconds(13.5)));
+        recording.Missed(new RecordingGap(RecordingFactory.Now.AddSeconds(10), RecordingFactory.Now.AddSeconds(12.5)));
         Assert.False(RecordingQuality.CountedClean(AsShipped).Compile()(recording));
     }
 

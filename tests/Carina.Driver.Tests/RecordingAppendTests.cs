@@ -98,7 +98,7 @@ public sealed class RecordingAppendTests : IDisposable
     public void AWriterOpenedOnAFileThatAlreadyHoldsSomethingSaysWhenItWasLastWritten()
     {
         string path = Path.Combine(root, RecordingFile.Of("k-held"));
-        DateTime lastWritten = new(2026, 9, 28, 17, 54, 16, DateTimeKind.Utc);
+        DateTime lastWritten = new(2026, 8, 13, 20, 5, 12, DateTimeKind.Utc);
 
         File.WriteAllBytes(path, AlreadyThere);
         File.SetLastWriteTimeUtc(path, lastWritten);
@@ -127,7 +127,7 @@ public sealed class RecordingAppendTests : IDisposable
     public void ASessionTakenUpOnARecordingSaysWhenTheFileWasLastWrittenAndWhenItFirstWroteToIt()
     {
         string path = Path.Combine(root, RecordingFile.Of("k-seam"));
-        DateTime lastWritten = new(2026, 9, 28, 17, 54, 16, DateTimeKind.Utc);
+        DateTime lastWritten = new(2026, 8, 13, 20, 5, 12, DateTimeKind.Utc);
 
         File.WriteAllBytes(path, AlreadyThere);
         File.SetLastWriteTimeUtc(path, lastWritten);

@@ -622,8 +622,8 @@ public sealed class RecordingStreamSupervisorTests
         WatchedDriver driver = new();
         driver.Holding[RecordingSessions.Named(recording.Id)] = CarriedOn(
             recording,
-            lastWritten: Airs.AddMinutes(9).AddSeconds(16.2),
-            firstWritten: Airs.AddMinutes(9).AddSeconds(19.7));
+            lastWritten: Airs.AddMinutes(5).AddSeconds(12),
+            firstWritten: Airs.AddMinutes(5).AddSeconds(14.5));
         RecordingStreamSupervisor supervisor = Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10)));
 
         RecordingWatch first = await supervisor.WatchAsync(Cancel);
@@ -633,9 +633,9 @@ public sealed class RecordingStreamSupervisorTests
         RecordingGap gap = Assert.Single(read.Gaps);
 
         Assert.True(first.CountsMoved);
-        Assert.Equal(Airs.AddMinutes(9).AddSeconds(16.2), gap.From);
-        Assert.Equal(Airs.AddMinutes(9).AddSeconds(19.7), gap.Until);
-        Assert.Equal(3_500, read.MissedMs);
+        Assert.Equal(Airs.AddMinutes(5).AddSeconds(12), gap.From);
+        Assert.Equal(Airs.AddMinutes(5).AddSeconds(14.5), gap.Until);
+        Assert.Equal(2_500, read.MissedMs);
     }
 
     [Fact]

@@ -9,9 +9,9 @@ public sealed class RecordingGapTests
     [Fact]
     public void AGapLastsFromTheLastWriteBeforeItToTheFirstWriteAfterIt()
     {
-        RecordingGap gap = new(Now.AddMinutes(9).AddSeconds(16.2), Now.AddMinutes(9).AddSeconds(19.7));
+        RecordingGap gap = new(Now.AddMinutes(5).AddSeconds(12), Now.AddMinutes(5).AddSeconds(14.5));
 
-        Assert.Equal(TimeSpan.FromSeconds(3.5), gap.Lasts);
+        Assert.Equal(TimeSpan.FromSeconds(2.5), gap.Lasts);
     }
 
     [Fact]
@@ -31,24 +31,24 @@ public sealed class RecordingGapTests
     {
         Recording recording = RecordingFactory.Started();
 
-        recording.Missed(new RecordingGap(Now.AddSeconds(60), Now.AddSeconds(63.5)));
+        recording.Missed(new RecordingGap(Now.AddSeconds(60), Now.AddSeconds(62.5)));
         recording.Missed(new RecordingGap(Now.AddSeconds(300), Now.AddSeconds(301)));
 
         Assert.Equal(2, recording.Gaps.Count);
-        Assert.Equal(4_500, recording.MissedMs);
+        Assert.Equal(3_500, recording.MissedMs);
     }
 
     [Fact]
     public void TheSameGapSeenAgainIsKeptOnce()
     {
         Recording recording = RecordingFactory.Started();
-        RecordingGap gap = new(Now.AddSeconds(60), Now.AddSeconds(63.5));
+        RecordingGap gap = new(Now.AddSeconds(60), Now.AddSeconds(62.5));
 
         recording.Missed(gap);
         recording.Missed(gap);
 
         Assert.Single(recording.Gaps);
-        Assert.Equal(3_500, recording.MissedMs);
+        Assert.Equal(2_500, recording.MissedMs);
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class RecordingGapTests
 
         Assert.Throws<ArgumentException>(() => recording.Missed(new RecordingGap(Now.AddSeconds(-1), Now.AddSeconds(2))));
 
-        recording.Missed(new RecordingGap(Now.AddSeconds(60), Now.AddSeconds(63.5)));
+        recording.Missed(new RecordingGap(Now.AddSeconds(60), Now.AddSeconds(62.5)));
 
         Assert.Throws<ArgumentException>(() => recording.Missed(new RecordingGap(Now.AddSeconds(62), Now.AddSeconds(70))));
         Assert.Single(recording.Gaps);
@@ -80,26 +80,26 @@ public sealed class RecordingGapTests
         IReadOnlyList<TimeSpan> placed = RecordingGap.Placed(
             Now,
             [
-                new RecordingGap(Now.AddSeconds(556), Now.AddSeconds(559.5)),
+                new RecordingGap(Now.AddSeconds(312), Now.AddSeconds(314.5)),
                 new RecordingGap(Now.AddSeconds(700), Now.AddSeconds(702)),
             ]);
 
-        Assert.Equal([TimeSpan.FromSeconds(556), TimeSpan.FromSeconds(696.5)], placed);
+        Assert.Equal([TimeSpan.FromSeconds(312), TimeSpan.FromSeconds(697.5)], placed);
     }
 
     [Fact]
     public void ARecordingReadBackWithGapsThatOverlapIsRefused()
         => Assert.Throws<ArgumentException>(() => Rehydrated(
             [
-                new RecordingGap(Now.AddSeconds(60), Now.AddSeconds(63.5)),
-                new RecordingGap(Now.AddSeconds(63), Now.AddSeconds(64)),
+                new RecordingGap(Now.AddSeconds(60), Now.AddSeconds(62.5)),
+                new RecordingGap(Now.AddSeconds(62), Now.AddSeconds(64)),
             ]));
 
     [Fact]
     public void ARecordingReadBackWithGapsMissedWhatTheyAddUpTo()
         => Assert.Equal(
-            3_500,
-            Rehydrated([new RecordingGap(Now.AddSeconds(60), Now.AddSeconds(63.5))]).MissedMs);
+            2_500,
+            Rehydrated([new RecordingGap(Now.AddSeconds(60), Now.AddSeconds(62.5))]).MissedMs);
 
     private static Recording Rehydrated(IReadOnlyList<RecordingGap> gaps)
     {

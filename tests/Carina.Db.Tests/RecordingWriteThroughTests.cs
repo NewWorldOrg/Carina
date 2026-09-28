@@ -229,15 +229,15 @@ public sealed class RecordingWriteThroughTests(MigratedScratchDatabase database)
 
         await Reload(
             recording.Id,
-            loaded => loaded.Missed(new RecordingGap(Now.AddMinutes(9).AddSeconds(16.2), Now.AddMinutes(9).AddSeconds(19.7))));
+            loaded => loaded.Missed(new RecordingGap(Now.AddMinutes(5).AddSeconds(12), Now.AddMinutes(5).AddSeconds(14.5))));
 
         await using CarinaDbContext context = Context();
         Recording read = await Load(context, recording.Id);
         RecordingGap gap = Assert.Single(read.Gaps);
 
-        Assert.Equal(Now.AddMinutes(9).AddSeconds(16.2), gap.From);
+        Assert.Equal(Now.AddMinutes(5).AddSeconds(12), gap.From);
         Assert.Equal(DateTimeKind.Utc, gap.From.Kind);
-        Assert.Equal(3_500, read.MissedMs);
+        Assert.Equal(2_500, read.MissedMs);
     }
 
     [Fact]
@@ -254,8 +254,8 @@ public sealed class RecordingWriteThroughTests(MigratedScratchDatabase database)
     }
 
     [Theory]
-    [InlineData("gaps = '[{\"from\":\"2026-08-24T20:09:16.2Z\",\"until\":\"2026-08-24T20:09:19.7Z\"}]'::jsonb")]
-    [InlineData("missed_ms = 3500")]
+    [InlineData("gaps = '[{\"from\":\"2026-08-24T20:05:12Z\",\"until\":\"2026-08-24T20:05:14.5Z\"}]'::jsonb")]
+    [InlineData("missed_ms = 2500")]
     [InlineData("gaps = '{}'::jsonb")]
     public async Task WhatARecordingMissedAndTheGapsItKeptCannotDisagree(string change)
     {
