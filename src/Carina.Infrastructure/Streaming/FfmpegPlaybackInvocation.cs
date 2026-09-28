@@ -44,6 +44,8 @@ public static class FfmpegPlaybackInvocation
             "-loglevel",
             "error",
             .. FfmpegLiveInvocation.Device(encoder),
+            "-fflags",
+            "discardcorrupt",
             "-ss",
             from.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture),
             "-i",

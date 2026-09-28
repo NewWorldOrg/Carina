@@ -59,7 +59,7 @@ public sealed class FfmpegPlaybackInvocationTests
 
         Assert.DoesNotContain("nobuffer", playing);
         Assert.DoesNotContain("-copyts", playing);
-        Assert.DoesNotContain("-fflags", playing);
+        Assert.Equal("discardcorrupt", After(playing, "-fflags"));
     }
 
     [Fact]
@@ -130,6 +130,8 @@ public sealed class FfmpegPlaybackInvocationTests
                 "-hide_banner",
                 "-loglevel",
                 "error",
+                "-fflags",
+                "discardcorrupt",
                 "-ss",
                 "60",
                 "-i",
@@ -265,6 +267,15 @@ public sealed class FfmpegPlaybackInvocationTests
             Assert.DoesNotContain("-filter:a", arguments);
             Assert.DoesNotContain("-channel_layout", arguments);
         }
+    }
+
+    [Fact]
+    public void BrKd027APacketTheStreamItselfSaysArrivedBrokenIsThrownAwayBeforeAnythingIsDecoded()
+    {
+        IReadOnlyList<string> arguments = Arguments(TimeSpan.FromMinutes(1));
+
+        Assert.Equal("discardcorrupt", After(arguments, "-fflags"));
+        Assert.True(Where(arguments, "-fflags") < Where(arguments, "-i"));
     }
 
     [Fact]

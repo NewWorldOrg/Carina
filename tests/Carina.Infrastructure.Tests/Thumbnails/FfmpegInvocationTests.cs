@@ -30,6 +30,22 @@ public sealed class FfmpegInvocationTests
     }
 
     [Fact]
+    public void BrKd027BothPicturesThrowAwayAPacketTheStreamItselfSaysArrivedBroken()
+    {
+        foreach (IReadOnlyList<string> arguments in new[]
+        {
+            FfmpegInvocation.Arguments(Request, 960, StepsFromPerfect),
+            FfmpegInvocation.FrameArguments(Frame, 960, StepsFromPerfect),
+        })
+        {
+            int flags = Index(arguments, "-fflags");
+
+            Assert.Equal("discardcorrupt", arguments[flags + 1]);
+            Assert.True(flags < Index(arguments, "-i"), "an input flag is written before the input it applies to");
+        }
+    }
+
+    [Fact]
     public void ThePositionIsWrittenInSecondsAndKeepsItsFraction()
     {
         IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(
