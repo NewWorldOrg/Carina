@@ -28,6 +28,8 @@ public sealed record ProgrammeBroadcast(
 
     public AspectRatio Aspect { get; init; }
 
+    public ProgrammeRunning Running { get; init; }
+
     public ProgrammeSource Source { get; init; } = ProgrammeSource.ScheduleBasic;
 
     public static readonly TimeSpan FurthestBehind = TimeSpan.FromDays(1);

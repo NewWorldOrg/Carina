@@ -122,6 +122,15 @@ public sealed class ProgrammeAbsorbArmsTests(RepositoryDatabase database)
         ["a sound for a programme that had none"] = new(
             network => [Broadcast(network)],
             network => [Broadcast(network) with { Audio = AudioMode.DualMono, Sounds = 1 }]),
+        ["a running status that arrives undetermined for one already known"] = new(
+            network => [Broadcast(network) with { Running = ProgrammeRunning.Running }],
+            network => [Broadcast(network)]),
+        ["a running status that changed"] = new(
+            network => [Broadcast(network) with { Running = ProgrammeRunning.NotRunning }],
+            network => [Broadcast(network) with { Running = ProgrammeRunning.Running }]),
+        ["a running status for a programme that had none"] = new(
+            network => [Broadcast(network)],
+            network => [Broadcast(network) with { Running = ProgrammeRunning.Pausing }]),
         ["a source that changed"] = new(
             network => [Broadcast(network)],
             network => [Broadcast(network) with { Source = ProgrammeSource.PresentFollowing }]),
@@ -220,6 +229,7 @@ public sealed class ProgrammeAbsorbArmsTests(RepositoryDatabase database)
                     programme.Sounds,
                     programme.Video,
                     programme.Aspect,
+                    programme.Running,
                     programme.Source,
                     programme.UpdatedAt.ToString("O"))),
         ];

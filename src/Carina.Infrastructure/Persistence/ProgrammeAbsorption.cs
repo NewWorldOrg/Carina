@@ -41,6 +41,9 @@ public static class ProgrammeAbsorption
     private const string Aspect =
         "CASE WHEN excluded.aspect = 'Undetermined' THEN programme.aspect ELSE excluded.aspect END";
 
+    private const string Running =
+        "CASE WHEN excluded.running = 'Undetermined' THEN programme.running ELSE excluded.running END";
+
     private const string HasSubtitles =
         $"CASE WHEN excluded.source = '{nameof(ProgrammeSource.ScheduleExtended)}' THEN programme.has_subtitles ELSE excluded.has_subtitles END";
 
@@ -51,12 +54,12 @@ public static class ProgrammeAbsorption
         WITH written AS (
             INSERT INTO programme (
                 network_id, service_id, event_id, transport_stream_id, start_at, end_at, name, summary,
-                is_shadow, genres, items, related, has_subtitles, audio, sounds, video, aspect, source,
-                updated_at)
+                is_shadow, genres, items, related, has_subtitles, audio, sounds, video, aspect, running,
+                source, updated_at)
             SELECT
                 network_id, service_id, event_id, transport_stream_id, start_at, end_at, name, summary,
-                is_shadow, genres, items, related, has_subtitles, audio, sounds, video, aspect, source,
-                updated_at
+                is_shadow, genres, items, related, has_subtitles, audio, sounds, video, aspect, running,
+                source, updated_at
             FROM jsonb_to_recordset(@{RowsParameter}) AS arriving(
                 network_id integer,
                 service_id integer,
@@ -75,6 +78,7 @@ public static class ProgrammeAbsorption
                 sounds integer,
                 video character varying(32),
                 aspect character varying(32),
+                running character varying(32),
                 source character varying(32),
                 updated_at timestamptz)
             ON CONFLICT (network_id, service_id, event_id) DO UPDATE SET
@@ -92,17 +96,19 @@ public static class ProgrammeAbsorption
                 sounds = {Sounds},
                 video = {Video},
                 aspect = {Aspect},
+                running = {Running},
                 source = {Source},
                 updated_at = excluded.updated_at,
                 revision = nextval('{ProgrammeRevisions.Sequence}')
             WHERE (
                 programme.transport_stream_id, programme.start_at, programme.end_at, programme.name, programme.summary,
                 programme.is_shadow, programme.genres, programme.items, programme.related, programme.has_subtitles,
-                programme.audio, programme.sounds, programme.video, programme.aspect, programme.source)
+                programme.audio, programme.sounds, programme.video, programme.aspect, programme.running,
+                programme.source)
             IS DISTINCT FROM (
                 excluded.transport_stream_id, excluded.start_at, {End}, {Name}, {Summary},
                 excluded.is_shadow, {Genres}, {Items}, {Related}, {HasSubtitles},
-                {Audio}, {Sounds}, {Video}, {Aspect}, {Source})
+                {Audio}, {Sounds}, {Video}, {Aspect}, {Running}, {Source})
             RETURNING (xmax = 0) AS added)
         SELECT count(*) FILTER (WHERE added), count(*) FILTER (WHERE NOT added) FROM written
         """;
@@ -167,6 +173,7 @@ public static class ProgrammeAbsorption
         [property: JsonPropertyName("sounds")] int Sounds,
         [property: JsonPropertyName("video")] VideoMode Video,
         [property: JsonPropertyName("aspect")] AspectRatio Aspect,
+        [property: JsonPropertyName("running")] ProgrammeRunning Running,
         [property: JsonPropertyName("source")] ProgrammeSource Source,
         [property: JsonPropertyName("updated_at")] DateTime UpdatedAt)
     {
@@ -189,6 +196,7 @@ public static class ProgrammeAbsorption
                 programme.Sounds,
                 programme.Video,
                 programme.Aspect,
+                programme.Running,
                 programme.Source,
                 programme.UpdatedAt);
     }

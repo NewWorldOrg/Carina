@@ -29,6 +29,7 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
                 table.HasCheckConstraint("ck_programme_sounds", "sounds >= 0");
                 table.HasCheckConstraint("ck_programme_video", $"video IN ({Vocabulary<VideoMode>()})");
                 table.HasCheckConstraint("ck_programme_aspect", $"aspect IN ({Vocabulary<AspectRatio>()})");
+                table.HasCheckConstraint("ck_programme_running", $"running IN ({Vocabulary<ProgrammeRunning>()})");
             });
 
         builder.HasKey(programme => new { programme.NetworkId, programme.ServiceId, programme.EventId });
@@ -79,6 +80,11 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
             .IsRequired();
 
         builder.Property(programme => programme.Aspect)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
+
+        builder.Property(programme => programme.Running)
             .HasConversion<string>()
             .HasMaxLength(32)
             .IsRequired();

@@ -42,6 +42,7 @@ public sealed class ProgrammeTests
     [InlineData("video")]
     [InlineData("aspect")]
     [InlineData("sounds")]
+    [InlineData("running")]
     [InlineData("source")]
     public void AnyOneFieldMovingOnItsOwnCountsAsAChange(string moved)
     {
@@ -103,6 +104,26 @@ public sealed class ProgrammeTests
         Assert.False(programme.Absorb(Broadcast(summary: string.Empty), At.AddHours(1)));
 
         Assert.Equal("What it is about", programme.Summary);
+    }
+
+    [Fact]
+    public void AnUndeterminedRunningStatusDoesNotEraseTheOneAlreadyAnnounced()
+    {
+        var programme = Programme.Discover(Broadcast() with { Running = ProgrammeRunning.Running }, At);
+
+        Assert.False(programme.Absorb(Broadcast(), At.AddHours(1)));
+
+        Assert.Equal(ProgrammeRunning.Running, programme.Running);
+    }
+
+    [Fact]
+    public void ARunningStatusAnnouncedAgainReplacesTheOneHeld()
+    {
+        var programme = Programme.Discover(Broadcast() with { Running = ProgrammeRunning.Running }, At);
+
+        Assert.True(programme.Absorb(Broadcast() with { Running = ProgrammeRunning.NotRunning }, At.AddHours(1)));
+
+        Assert.Equal(ProgrammeRunning.NotRunning, programme.Running);
     }
 
     [Fact]
@@ -411,6 +432,7 @@ public sealed class ProgrammeTests
             "video" => Broadcast() with { Video = VideoMode.Interlaced1080 },
             "aspect" => Broadcast() with { Aspect = AspectRatio.SixteenByNine },
             "sounds" => Broadcast() with { Sounds = 2 },
+            "running" => Broadcast() with { Running = ProgrammeRunning.Running },
             "source" => Broadcast() with { Source = ProgrammeSource.PresentFollowing },
             _ => Broadcast(endsAt: At.AddHours(24)),
         };

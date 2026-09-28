@@ -321,6 +321,64 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task TheRunningStatusThePresentFollowingTableAnnouncesIsStored()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Table(network, 1, running: 4)], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(ProgrammeRunning.Running, stored!.Running);
+    }
+
+    [Fact]
+    public async Task AScheduleTableThatAnnouncesNoRunningStatusDoesNotUnsayThePresentFollowingOne()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
+
+        await writer.WriteAsync([Table(network, 1, running: 4)], [], Cancel);
+        await writer.WriteAsync([Scheduled(network, 1, 3)], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(ProgrammeRunning.Running, stored!.Running);
+    }
+
+    [Fact]
+    public async Task TheRunningStatusAnnouncedInOneTableReachesAProgrammeSeenInSeveralOfThem()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Scheduled(network, 1, 3), Table(network, 1, running: 1)], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(ProgrammeRunning.NotRunning, stored!.Running);
+    }
+
+    [Fact]
+    public async Task AScheduleTableLeavesTheRunningStatusUndetermined()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Scheduled(network, 1, 3)], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(ProgrammeRunning.Undetermined, stored!.Running);
+    }
+
+    [Fact]
     public async Task EventsTheTableItselfThrewAwayAreCountedHereToo()
     {
         int network = NextNetwork();
@@ -741,7 +799,8 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         int carried,
         string name = "あさイチ",
         bool unreadableStart = false,
-        byte[]? extra = null)
+        byte[]? extra = null,
+        int running = 0)
         => Assert.IsType<TableRead<EventInformationTable>.Parsed>(
             EventInformationTable.Read(CarriedSection.Of(new SectionWriter
             {
@@ -753,11 +812,11 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
                     0x7F, 0xE3,
                     (byte)(network >> 8), (byte)(network & 0xFF),
                     0x00, 0x4E,
-                    .. Event(carried, name, unreadableStart, extra),
+                    .. Event(carried, name, unreadableStart, extra, running),
                 ],
             }))).Table;
 
-    private static byte[] Event(int carried, string name, bool unreadableStart, byte[]? extra = null)
+    private static byte[] Event(int carried, string name, bool unreadableStart, byte[]? extra = null, int running = 0)
     {
         byte[] written = [.. name.SelectMany(letter => Kanji(letter))];
         byte[] descriptor = [0x4D, (byte)(5 + written.Length), 0x6A, 0x70, 0x6E, (byte)written.Length, .. written, 0x00];
@@ -768,7 +827,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
             (byte)(carried >> 8), (byte)(carried & 0xFF),
             0xEF, 0x55, unreadableStart ? (byte)0x2A : (byte)0x22, 0x57, 0x00,
             0x00, 0x03, 0x00,
-            0x00, (byte)(descriptor.Length + carriedExtra.Length),
+            (byte)(running << 5), (byte)(descriptor.Length + carriedExtra.Length),
             .. descriptor,
             .. carriedExtra,
         ];

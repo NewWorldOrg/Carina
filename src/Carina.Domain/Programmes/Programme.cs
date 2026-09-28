@@ -49,6 +49,8 @@ public sealed class Programme
 
     public AspectRatio Aspect { get; private set; }
 
+    public ProgrammeRunning Running { get; private set; }
+
     public ProgrammeSource Source { get; private set; }
 
     public DateTime UpdatedAt { get; private set; }
@@ -78,7 +80,8 @@ public sealed class Programme
             broadcast.Sounds,
             broadcast.Video,
             broadcast.Aspect,
-            broadcast.Source);
+            broadcast.Source,
+            running: broadcast.Running);
     }
 
     public static bool Clamps(ProgrammeBroadcast broadcast)
@@ -107,7 +110,8 @@ public sealed class Programme
         AspectRatio aspect = AspectRatio.Undetermined,
         ProgrammeSource source = ProgrammeSource.ScheduleBasic,
         long revision = 0,
-        DateTime? lastHeardAt = null)
+        DateTime? lastHeardAt = null,
+        ProgrammeRunning running = ProgrammeRunning.Undetermined)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(transportStreamId);
@@ -133,6 +137,7 @@ public sealed class Programme
             Sounds = sounds,
             Video = video,
             Aspect = aspect,
+            Running = running,
             Source = source,
             UpdatedAt = UtcTimes.Required(updatedAt, nameof(updatedAt)),
             LastHeardAt = UtcTimes.Optional(lastHeardAt, nameof(lastHeardAt)),
@@ -178,6 +183,7 @@ public sealed class Programme
         int sounds = Kept(Sounds, broadcast.Sounds);
         VideoMode video = Kept(Video, broadcast.Video);
         AspectRatio aspect = Kept(Aspect, broadcast.Aspect);
+        ProgrammeRunning running = Kept(Running, broadcast.Running);
         bool detailOnly = broadcast.Source is ProgrammeSource.ScheduleExtended;
         bool hasSubtitles = detailOnly ? HasSubtitles : broadcast.HasSubtitles;
         ProgrammeSource source = detailOnly ? Source : broadcast.Source;
@@ -193,6 +199,7 @@ public sealed class Programme
             && Sounds == sounds
             && Video == video
             && Aspect == aspect
+            && Running == running
             && Source == source
             && Genres.SequenceEqual(genres)
             && Items.SequenceEqual(items)
@@ -215,6 +222,7 @@ public sealed class Programme
         Sounds = sounds;
         Video = video;
         Aspect = aspect;
+        Running = running;
         Source = source;
         UpdatedAt = at;
 
@@ -236,6 +244,9 @@ public sealed class Programme
 
     private static AspectRatio Kept(AspectRatio held, AspectRatio arriving)
         => arriving is AspectRatio.Undetermined ? held : arriving;
+
+    private static ProgrammeRunning Kept(ProgrammeRunning held, ProgrammeRunning arriving)
+        => arriving is ProgrammeRunning.Undetermined ? held : arriving;
 
     private static IReadOnlyList<T> Kept<T>(IReadOnlyList<T> held, IReadOnlyList<T> arriving)
         => arriving.Count == 0 ? held : arriving;

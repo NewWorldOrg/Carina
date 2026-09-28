@@ -97,6 +97,7 @@ public sealed class ProgrammeWriter(
             Sounds = seen.Sounds == 0 ? arriving.Sounds : seen.Sounds,
             Video = seen.Video is VideoMode.Undetermined ? arriving.Video : seen.Video,
             Aspect = seen.Aspect is AspectRatio.Undetermined ? arriving.Aspect : seen.Aspect,
+            Running = seen.Running is ProgrammeRunning.Undetermined ? arriving.Running : seen.Running,
             IsShadow = seen.IsShadow && arriving.IsShadow,
         };
     }
@@ -134,6 +135,7 @@ public sealed class ProgrammeWriter(
             Sounds = AnnouncedAudio.Sounds(carried.AudioComponents),
             Video = AnnouncedVideo.ModeOf(carried.Components),
             Aspect = AnnouncedVideo.AspectOf(carried.Components),
+            Running = table.IsPresentFollowing ? Running(carried.Status) : ProgrammeRunning.Undetermined,
             Source = Source(table),
         };
     }
@@ -179,6 +181,17 @@ public sealed class ProgrammeWriter(
             EventGroupKind.Relayed or EventGroupKind.RelayedFromAnotherNetwork => RelationKind.Relayed,
             EventGroupKind.Moved or EventGroupKind.MovedToAnotherNetwork => RelationKind.Moved,
             _ => null,
+        };
+
+    private static ProgrammeRunning Running(RunningStatus status)
+        => status switch
+        {
+            RunningStatus.NotRunning => ProgrammeRunning.NotRunning,
+            RunningStatus.StartsInSeconds => ProgrammeRunning.StartsInSeconds,
+            RunningStatus.Pausing => ProgrammeRunning.Pausing,
+            RunningStatus.Running => ProgrammeRunning.Running,
+            RunningStatus.OffAir => ProgrammeRunning.OffAir,
+            _ => ProgrammeRunning.Undetermined,
         };
 
     private static ProgrammeSource Source(EventInformationTable table)
