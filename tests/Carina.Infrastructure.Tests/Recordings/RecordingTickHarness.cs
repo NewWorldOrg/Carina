@@ -86,6 +86,8 @@ internal sealed class PlannedReservations : IReservationRecordingContract
 
     public bool DueOnlyOnce { get; set; }
 
+    public List<TimeSpan> AskedAhead { get; } = [];
+
     public List<ReservationId> Claimed { get; } = [];
 
     public List<ReservationId> Released { get; } = [];
@@ -99,10 +101,15 @@ internal sealed class PlannedReservations : IReservationRecordingContract
         return this;
     }
 
-    public Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<RecordingTick>> DueAtAsync(
+        DateTime at,
+        TimeSpan ahead,
+        CancellationToken cancellationToken)
     {
         lock (due)
         {
+            AskedAhead.Add(ahead);
+
             IReadOnlyList<RecordingTick> answering = [.. due];
 
             if (DueOnlyOnce)

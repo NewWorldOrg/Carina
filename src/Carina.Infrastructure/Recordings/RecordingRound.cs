@@ -48,6 +48,12 @@ public sealed record RecordingRun(
     public IReadOnlyList<ReservationId> Retried { get; init; } = [];
 
     public IReadOnlyList<ReservationId> GaveUp { get; init; } = [];
+
+    /// <summary>
+    /// Reservations whose start was tried ahead of their window and did not take; nothing is written
+    /// down for them and the next tick tries again.
+    /// </summary>
+    public IReadOnlyList<ReservationId> HeldBack { get; init; } = [];
 }
 
 public sealed class RecordingRound(
@@ -88,7 +94,10 @@ public sealed class RecordingRound(
     {
         DateTime now = clock.GetUtcNow().UtcDateTime;
         List<Recording> running = [.. await recordings.ListInFlightAsync(cancellationToken)];
-        IReadOnlyList<RecordingTick> due = await reservations.DueAtAsync(now, cancellationToken);
+        IReadOnlyList<RecordingTick> due = await reservations.DueAtAsync(
+            now,
+            settings.StartingAhead,
+            cancellationToken);
 
         IReadOnlyList<RecordingFollowed> followed = await follower.FollowAsync(
             running,
@@ -105,6 +114,7 @@ public sealed class RecordingRound(
             Followed = followed,
             Retried = starting.Retried,
             GaveUp = starting.GaveUp,
+            HeldBack = starting.HeldBack,
         };
     }
 
@@ -165,6 +175,13 @@ public sealed class RecordingRound(
 
             if (resolution.Tuning is not { } tuning)
             {
+                if (now < due.EffectiveStartAt)
+                {
+                    starting.HeldBack.Add(due.Id);
+
+                    continue;
+                }
+
                 starting.Refused.Add(new RecordingRefusal(
                     due.Id,
                     RecordingRefusalKind.TuningRefused,
@@ -195,6 +212,7 @@ public sealed class RecordingRound(
 
             int startedBefore = starting.Started.Count;
             int refusedBefore = starting.Refused.Count;
+            int heldBackBefore = starting.HeldBack.Count;
 
             await ClaimedAsync(
                 due,
@@ -205,7 +223,7 @@ public sealed class RecordingRound(
                 now,
                 cancellationToken);
 
-            if (history is not null)
+            if (history is not null && starting.HeldBack.Count == heldBackBefore)
             {
                 await retries.TriedAsync(
                     due.Id,
@@ -300,6 +318,13 @@ public sealed class RecordingRound(
 
                 await reservations.ReleaseAsync(due.Id, now, CancellationToken.None);
 
+                if (now < due.EffectiveStartAt)
+                {
+                    starting.HeldBack.Add(due.Id);
+
+                    return;
+                }
+
                 starting.Refused.Add(Refusal(due.Id, answer, tunedWith, running));
 
                 return;
@@ -337,7 +362,9 @@ public sealed class RecordingRound(
         }
         catch (Exception failure)
         {
-            if (!await AbandonAsync(due.Id, issued, now))
+            bool abandoned = await AbandonAsync(due.Id, issued, now);
+
+            if (!abandoned)
             {
                 starting.Unconfirmed.Add(id);
             }
@@ -345,6 +372,13 @@ public sealed class RecordingRound(
             if (failure is OperationCanceledException)
             {
                 throw;
+            }
+
+            if (abandoned && now < due.EffectiveStartAt)
+            {
+                starting.HeldBack.Add(due.Id);
+
+                return;
             }
 
             starting.Refused.Add(new RecordingRefusal(
@@ -507,5 +541,7 @@ public sealed class RecordingRound(
         public List<ReservationId> Retried { get; } = [];
 
         public List<ReservationId> GaveUp { get; } = [];
+
+        public List<ReservationId> HeldBack { get; } = [];
     }
 }

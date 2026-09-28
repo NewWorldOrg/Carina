@@ -38,7 +38,10 @@ internal sealed class SwappedReservations : IReservationRecordingContract
         }
     }
 
-    public Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<RecordingTick>> DueAtAsync(
+        DateTime at,
+        TimeSpan ahead,
+        CancellationToken cancellationToken)
     {
         lock (gate)
         {

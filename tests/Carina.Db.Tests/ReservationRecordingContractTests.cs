@@ -258,6 +258,26 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
     }
 
     [Fact]
+    public async Task AReservationIsDueAsFarAheadOfItsStartAsTheRecorderPrepares()
+    {
+        await Clear();
+        ReservationId soon = await Plan(21851, ReservationState.Scheduled, airs: Tick.AddSeconds(10));
+
+        Assert.Empty(await DueAt(Tick, TimeSpan.FromSeconds(9)));
+        Assert.Equal(soon.Value, Assert.Single(await DueAt(Tick, TimeSpan.FromSeconds(10))));
+        Assert.True(await Claim(soon, Tick));
+    }
+
+    [Fact]
+    public async Task PreparingAheadNeverBringsBackAWindowThatHasClosed()
+    {
+        await Clear();
+        await Plan(21852, ReservationState.Scheduled, airs: Tick.AddHours(-1));
+
+        Assert.Empty(await DueAt(Tick, TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
     public async Task ADriverThatReachesForAClaimAnotherIsHoldingLosesIt()
     {
         await Clear();
@@ -434,15 +454,18 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
             Made);
     }
 
-    private async Task<IReadOnlyList<RecordingTick>> Ticks(DateTime at)
+    private async Task<IReadOnlyList<RecordingTick>> Ticks(DateTime at, TimeSpan? ahead = null)
     {
         await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
 
-        return await new ReservationRecordingContract(context).DueAtAsync(at, CancellationToken.None);
+        return await new ReservationRecordingContract(context).DueAtAsync(
+            at,
+            ahead ?? TimeSpan.Zero,
+            CancellationToken.None);
     }
 
-    private async Task<IReadOnlyList<Guid>> DueAt(DateTime at)
-        => [.. (await Ticks(at)).Select(tick => tick.Id.Value)];
+    private async Task<IReadOnlyList<Guid>> DueAt(DateTime at, TimeSpan? ahead = null)
+        => [.. (await Ticks(at, ahead)).Select(tick => tick.Id.Value)];
 
     private async Task<bool> Claim(ReservationId id, DateTime at)
     {

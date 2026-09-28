@@ -842,6 +842,124 @@ public sealed class RecordingRoundTests
     }
 
     [Fact]
+    public async Task WhatIsDueIsAskedForAsFarAheadAsTheRecorderPrepares()
+    {
+        PlannedReservations reservations = Holding(Due(1));
+
+        await Round(reservations, new HeldRecordings(), new RecordingDriver()).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Settings.StartingAhead, Assert.Single(reservations.AskedAhead));
+        Assert.Equal(TimeSpan.FromSeconds(10), Settings.StartingAhead);
+    }
+
+    [Fact]
+    public async Task AReservationAboutToOpenIsStartedBeforeItsStartAndKeepsTheWindowItWasPromised()
+    {
+        var recordings = new HeldRecordings();
+        var driver = new RecordingDriver();
+        DateTime aheadOfIt = Airs.AddSeconds(-8);
+
+        RecordingRun run = await Round(Holding(Due(1)), recordings, driver, at: aheadOfIt)
+            .RunAsync(CancellationToken.None);
+
+        Recording written = Assert.Single(recordings.Rows);
+
+        Assert.Equal(written.Id, Assert.Single(run.Started));
+        Assert.Single(driver.Started);
+        Assert.Equal(aheadOfIt, written.StartedAtActual);
+        Assert.Equal(Airs + Head, written.ExpectedWindowStart);
+        Assert.Empty(run.HeldBack);
+    }
+
+    [Theory]
+    [InlineData("noDeviceFree")]
+    [InlineData("noLock")]
+    [InlineData("draining")]
+    public async Task ARefusalAheadOfTheStartGivesTheClaimBackAndWritesNothingDown(string title)
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+        RefusalLedger ledger = new RefusalLedger().Knowing(due);
+        var driver = new RecordingDriver
+        {
+            RefusesToStart = DriverCall<SessionSnapshot>.Refused(new DriverProblem(title, [])),
+        };
+
+        RecordingRun run = await Round(
+                reservations,
+                new HeldRecordings(),
+                driver,
+                at: Airs.AddSeconds(-5),
+                ledger: ledger)
+            .RunAsync(CancellationToken.None);
+
+        Assert.Equal(due.Id, Assert.Single(run.HeldBack));
+        Assert.Empty(run.Refused);
+        Assert.Empty(run.Started);
+        Assert.Equal(due.Id, Assert.Single(reservations.Released));
+        Assert.Empty(ledger.Outcomes.Held);
+        Assert.Empty(ledger.Tuning.Failures);
+    }
+
+    [Fact]
+    public async Task TheSameRefusalOnceTheStartHasComeIsWrittenDown()
+    {
+        RecordingTick due = Due(1);
+        RefusalLedger ledger = new RefusalLedger().Knowing(due);
+        var driver = new RecordingDriver
+        {
+            RefusesToStart = DriverCall<SessionSnapshot>.Refused(
+                new DriverProblem(SessionRefusalTitles.NoDeviceFree, [])),
+        };
+
+        RecordingRun run = await Round(Holding(due), new HeldRecordings(), driver, ledger: ledger)
+            .RunAsync(CancellationToken.None);
+
+        Assert.Empty(run.HeldBack);
+        Assert.Equal(RecordingRefusalKind.TunerContended, Assert.Single(run.Refused).Kind);
+        Assert.Single(ledger.Outcomes.Held);
+    }
+
+    [Fact]
+    public async Task AChannelThatCannotBeTunedAheadOfTheStartIsLeftForTheStartToReport()
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+
+        RecordingRun run = await Round(
+                reservations,
+                new HeldRecordings(),
+                new RecordingDriver(),
+                resolution: TuningResolution.Refused(TuningRefusal.NoSelectedChannel),
+                at: Airs.AddSeconds(-5))
+            .RunAsync(CancellationToken.None);
+
+        Assert.Equal(due.Id, Assert.Single(run.HeldBack));
+        Assert.Empty(run.Refused);
+        Assert.Empty(reservations.Claimed);
+    }
+
+    [Fact]
+    public async Task AStartThatThrowsAheadOfItsStartStopsTheSessionGivesTheClaimBackAndIsTriedAgain()
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+        var recordings = new HeldRecordings
+        {
+            RefusingToAdd = new InvalidOperationException("the ledger would not take it"),
+        };
+        var driver = new RecordingDriver();
+
+        RecordingRun run = await Round(reservations, recordings, driver, at: Airs.AddSeconds(-5))
+            .RunAsync(CancellationToken.None);
+
+        Assert.Equal(due.Id, Assert.Single(run.HeldBack));
+        Assert.Empty(run.Refused);
+        Assert.Equal(due.Id, Assert.Single(reservations.Released));
+        Assert.Single(driver.Stopped);
+    }
+
+    [Fact]
     public async Task AGuideThatCannotBeReadLeavesTheRestOfTheRoundStanding()
     {
         var recordings = new HeldRecordings();

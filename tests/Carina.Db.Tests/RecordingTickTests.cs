@@ -310,9 +310,12 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
     private sealed class ClaimedByAnother(IReservationRecordingContract inner, Func<Task<bool>> intruder)
         : IReservationRecordingContract
     {
-        public async Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken)
+        public async Task<IReadOnlyList<RecordingTick>> DueAtAsync(
+            DateTime at,
+            TimeSpan ahead,
+            CancellationToken cancellationToken)
         {
-            IReadOnlyList<RecordingTick> due = await inner.DueAtAsync(at, cancellationToken);
+            IReadOnlyList<RecordingTick> due = await inner.DueAtAsync(at, ahead, cancellationToken);
 
             await intruder();
 
