@@ -347,7 +347,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Equal("string", fault["type"]!.GetValue<string>());
         Assert.Equal(
-            ["sizeDisagrees", "noLedgerRow", "fileMissing", "fileEmpty", "emptyThoughComplete"],
+            ["sizeDisagrees", "noLedgerRow", "fileMissing", "fileEmpty", "emptyThoughComplete", "thumbnailMissing"],
             fault["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 

@@ -1,5 +1,6 @@
 using Carina.Api.Services;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 
 namespace Carina.Api.Responder.Quality;
@@ -9,7 +10,8 @@ public sealed record QualityTunerResponder(
     IReadOnlyList<QualityMeasureResponder> Measures,
     IReadOnlyList<QualitySignalResponder> Signal,
     QualityStanding Standing,
-    bool CannotLock)
+    bool CannotLock,
+    TunerTroubleKind? Trouble)
 {
     public static QualityTunerResponder Of(QualityTunerReading reading)
     {
@@ -20,7 +22,8 @@ public sealed record QualityTunerResponder(
             QualityMeasureResponder.Over(reading.Group.Measures),
             QualitySignalResponder.Over(reading.Signal),
             reading.Standing.Standing,
-            reading.Standing.CannotLock);
+            reading.Standing.CannotLock,
+            reading.Standing.Trouble);
     }
 }
 

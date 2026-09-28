@@ -111,7 +111,9 @@ internal sealed class QualityFeature : IAsyncDisposable
 
     public QualityIncident Restated() => CannotLock("adapter3.frontend0");
 
-    public QualityIncident CannotLock(string tuner)
+    public QualityIncident CannotLock(string tuner) => Troubled(tuner, TunerTroubleKind.NoLock);
+
+    public QualityIncident Troubled(string tuner, TunerTroubleKind trouble)
     {
         QualityIncident elsewhere = QualityIncident.Detect(
             QualityIncidentId.New(),
@@ -121,7 +123,7 @@ internal sealed class QualityFeature : IAsyncDisposable
             0.4,
             QualityThresholdShapes.AsShipped(QualityThresholdKey.LockRate, Noon.AddMinutes(-20)),
             QualityIncidentOwner.Tuner,
-            "NoLock");
+            trouble.ToString());
 
         elsewhere.Notify(Noon.AddMinutes(-20));
         Incidents.Incidents.Add(elsewhere);

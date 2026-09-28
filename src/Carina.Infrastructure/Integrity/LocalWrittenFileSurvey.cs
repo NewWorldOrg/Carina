@@ -107,7 +107,7 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
 
         if (drawsPictures)
         {
-            claimed.AddRange(ledger.Select(row => new DeclaredFile(ThumbnailPlace, row.Id.Wire + ThumbnailJob.Extension)));
+            claimed.AddRange(ledger.Select(row => new DeclaredFile(ThumbnailPlace, PictureOf(row))));
         }
 
         List<DeclaredFile> seenElsewhere = [];
@@ -131,6 +131,20 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
         return [.. claimed.Concat(seenElsewhere).Distinct()];
     }
 
+    public IReadOnlyList<DrawnPicture> Drawn(IReadOnlyList<LedgerFile> ledger)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+
+        return drawsPictures
+            ?
+            [
+                .. ledger
+                    .Where(row => row.ThumbnailDrawn)
+                    .Select(row => new DrawnPicture(row.Id, ThumbnailPlace, PictureOf(row))),
+            ]
+            : [];
+    }
+
     /// <summary>
     /// Where a place is on this machine, when this process walks it or the place it writes into.
     /// </summary>
@@ -140,6 +154,8 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
 
         return places.FirstOrDefault(candidate => candidate.Root.Equals(place))?.Path;
     }
+
+    private static string PictureOf(LedgerFile row) => row.Id.Wire + ThumbnailJob.Extension;
 
     private sealed record Walkable(OutputRoot Root, string Path, StoragePlace Place)
     {

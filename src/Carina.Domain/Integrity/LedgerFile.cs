@@ -9,7 +9,8 @@ public sealed record LedgerFile
         OutputRoot root,
         RecordingFileName fileName,
         LedgerClaim? claim,
-        long? sizeObserved)
+        long? sizeObserved,
+        bool thumbnailDrawn)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(root);
@@ -40,6 +41,7 @@ public sealed record LedgerFile
         FileName = fileName;
         Claim = claim;
         SizeObserved = sizeObserved;
+        ThumbnailDrawn = thumbnailDrawn;
     }
 
     public RecordingId Id { get; }
@@ -52,14 +54,20 @@ public sealed record LedgerFile
 
     public long? SizeObserved { get; }
 
+    /// <summary>
+    /// Whether the row says the recording's thumbnail has been drawn.
+    /// </summary>
+    public bool ThumbnailDrawn { get; }
+
     public static LedgerFile StillWriting(RecordingId id, OutputRoot root, RecordingFileName fileName)
-        => new(id, root, fileName, null, null);
+        => new(id, root, fileName, null, null, false);
 
     public static LedgerFile Ended(
         RecordingId id,
         OutputRoot root,
         RecordingFileName fileName,
         LedgerClaim claim,
-        long sizeObserved)
-        => new(id, root, fileName, claim, sizeObserved);
+        long sizeObserved,
+        bool thumbnailDrawn = false)
+        => new(id, root, fileName, claim, sizeObserved, thumbnailDrawn);
 }

@@ -57,6 +57,8 @@ internal sealed class HeldPlaces(params RootListing[] listings) : IWrittenFileSu
 
     public IReadOnlyList<DeclaredFile> Claimed(IReadOnlyList<LedgerFile> ledger, IReadOnlyList<DeclaredFile> declared)
         => [.. declared, .. Pictures];
+
+    public IReadOnlyList<DrawnPicture> Drawn(IReadOnlyList<LedgerFile> ledger) => [];
 }
 
 internal sealed class HeldSurvey : IRecordingFileSurvey

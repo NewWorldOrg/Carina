@@ -194,6 +194,22 @@ public sealed class IntegrityFinding
             null,
             noticedAt);
 
+    public static IntegrityFinding ThumbnailMissing(IntegrityCheckId checkId, DrawnPicture picture, DateTime noticedAt)
+    {
+        ArgumentNullException.ThrowIfNull(picture);
+
+        return Rehydrate(
+            IntegrityFindingId.Of(IntegrityFault.ThumbnailMissing, picture.Place, picture.Path, picture.Recording),
+            checkId,
+            IntegrityFault.ThumbnailMissing,
+            picture.Place,
+            picture.Path,
+            picture.Recording,
+            null,
+            null,
+            noticedAt);
+    }
+
     public static IntegrityFinding NoLedgerRow(
         IntegrityCheckId checkId,
         OutputRoot root,

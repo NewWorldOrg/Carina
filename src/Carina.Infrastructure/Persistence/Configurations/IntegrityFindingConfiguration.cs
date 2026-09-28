@@ -22,6 +22,7 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
         builder.ToTable("integrity_finding", table =>
         {
             string named = Vocabulary(IntegrityFaults.ThatNameARecording);
+            string sized = Vocabulary(IntegrityFaults.ThatCarryTheLedgerSize);
             string weighed = Vocabulary(IntegrityFaults.ThatWeighedTheFile);
             string unowned = Vocabulary(IntegrityFaults.ThatNameAFileNoRecordingOwns);
 
@@ -33,7 +34,7 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
                 $"(fault IN ({named})) = (recording_id IS NOT NULL)");
             table.HasCheckConstraint(
                 "ck_integrity_finding_ledger_size",
-                $"(fault IN ({named})) = (ledger_size IS NOT NULL)");
+                $"(fault IN ({sized})) = (ledger_size IS NOT NULL)");
             table.HasCheckConstraint(
                 "ck_integrity_finding_observed_size",
                 $"(fault IN ({weighed})) = (observed_size IS NOT NULL)");

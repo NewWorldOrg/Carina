@@ -38,7 +38,7 @@ public sealed class SupplyWatchRound(
 
         readings.AddRange(await supply.ReadAsync(cancellationToken));
 
-        (bool asked, IReadOnlyList<SupplyReading> tuners, IReadOnlyList<TunerFault> cannotLock) =
+        (bool asked, IReadOnlyList<SupplyReading> tuners, IReadOnlyList<TunerTrouble> troubles) =
             await TunersAsync(now, cancellationToken);
 
         readings.AddRange(tuners);
@@ -46,11 +46,13 @@ public sealed class SupplyWatchRound(
         IReadOnlyList<SupplySilenceFinding> quiet = SupplyWatch.Quiet(readings, longest, now);
         IReadOnlyList<QualityIncident> unsettled = await incidents.ListUnsettledAsync(cancellationToken);
         SupplyWatchPlan plan = SupplyWatch.Plan(quiet, unsettled, Observed(asked));
-        LockWatchPlan locks = asked ? LockWatch.Plan(cannotLock, unsettled) : new LockWatchPlan([], []);
+        TunerTroubleWatchPlan troubled = asked
+            ? TunerTroubleWatch.Plan(troubles, unsettled)
+            : new TunerTroubleWatchPlan([], []);
 
         int opened = await OpenAsync(plan.ToOpen, standing.Setting, now, cancellationToken)
-            + await RestateAsync(locks.ToOpen, lockRate.Setting, now, cancellationToken);
-        int resolved = await ResolveAsync([.. plan.ToResolve, .. locks.ToResolve], now, cancellationToken);
+            + await RestateAsync(troubled.ToOpen, lockRate.Setting, now, cancellationToken);
+        int resolved = await ResolveAsync([.. plan.ToResolve, .. troubled.ToResolve], now, cancellationToken);
         int notified = await NotifyAsync(now, cancellationToken);
 
         if (notified > 0 || resolved > 0)
@@ -128,7 +130,7 @@ public sealed class SupplyWatchRound(
                 since));
         }
 
-        return new TunerReadings(true, read, TunerFaults.ThatCannotLock(tuners));
+        return new TunerReadings(true, read, TunerTroubles.Of(tuners));
     }
 
     private async Task<int> OpenAsync(
@@ -155,17 +157,19 @@ public sealed class SupplyWatchRound(
     }
 
     private async Task<int> RestateAsync(
-        IReadOnlyList<TunerFault> cannotLock,
+        IReadOnlyList<TunerTrouble> troubles,
         Threshold applied,
         DateTime now,
         CancellationToken cancellationToken)
     {
-        foreach (TunerFault fault in cannotLock)
+        foreach (TunerTrouble trouble in troubles)
         {
-            await incidents.AddAsync(LockWatch.Restate(QualityIncidentId.New(), fault, now, applied), cancellationToken);
+            await incidents.AddAsync(
+                TunerTroubleWatch.Restate(QualityIncidentId.New(), trouble, now, applied),
+                cancellationToken);
         }
 
-        return cannotLock.Count;
+        return troubles.Count;
     }
 
     private async Task<int> ResolveAsync(
@@ -214,7 +218,7 @@ public sealed class SupplyWatchRound(
 
         logger.LogWarning(
             "A supply watch held {Seconds}s of quiet against {Watched} supply reading(s): {Opened} went quiet or "
-            + "stopped locking, {Notified} were told about, and {Resolved} cleared.",
+            + "were said by the driver to be in trouble, {Notified} were told about, and {Resolved} cleared.",
             pass.Standing.Applied.Current,
             pass.Standing.Supplies.Sum(supply => supply.Watched),
             pass.Opened,
@@ -225,5 +229,5 @@ public sealed class SupplyWatchRound(
     private sealed record TunerReadings(
         bool Asked,
         IReadOnlyList<SupplyReading> Readings,
-        IReadOnlyList<TunerFault> CannotLock);
+        IReadOnlyList<TunerTrouble> Troubles);
 }

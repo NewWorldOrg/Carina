@@ -155,7 +155,7 @@ public sealed class IntegrityScanTests
     }
 
     [Fact]
-    public void ARecordingTheLedgerSaysLandedNothingIsStillWeighedAgainstWhatTheLedgerRecorded()
+    public void AFailedRecordingTheLedgerWeighedAsHoldingSomethingIsCalledEmptyWhenItHoldsNothing()
     {
         IntegrityReport swept = Compare(
             [Failed(Primary, "one.m2ts", 5000, 7)],
@@ -163,10 +163,30 @@ public sealed class IntegrityScanTests
 
         IntegrityFinding found = Assert.Single(swept.Findings);
 
-        Assert.Equal(IntegrityFault.SizeDisagrees, found.Fault);
+        Assert.Equal(IntegrityFault.FileEmpty, found.Fault);
         Assert.Equal(5000, found.LedgerSize);
         Assert.Equal(0, found.ObservedSize);
         Assert.Equal(Id(7), found.RecordingId);
+    }
+
+    [Fact]
+    public void AFailedRecordingTheLedgerWeighedAsHoldingSomethingIsStillWeighedWhenItHoldsSomethingElse()
+    {
+        IntegrityReport swept = Compare(
+            [Failed(Primary, "one.m2ts", 5000, 7)],
+            [Holding(Primary, ("one.m2ts", 4000))]);
+
+        Assert.Equal(IntegrityFault.SizeDisagrees, Assert.Single(swept.Findings).Fault);
+    }
+
+    [Fact]
+    public void ATruncatedRecordingTheLedgerWeighedAtNothingIsNotCalledOutForHoldingNothing()
+    {
+        IntegrityReport swept = Compare(
+            [Truncated(Primary, "one.m2ts", 0)],
+            [Holding(Primary, ("one.m2ts", 0))]);
+
+        Assert.Empty(swept.Findings);
     }
 
     [Fact]
@@ -659,10 +679,10 @@ public sealed class IntegrityScanTests
     }
 
     [Fact]
-    public void TheSweepClassesDisagreementsInFiveWaysAndHasNoWordForADeletion()
+    public void TheSweepClassesDisagreementsInSixWaysAndHasNoWordForADeletion()
     {
         Assert.Equal(
-            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
+            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees", "ThumbnailMissing"],
             Enum.GetNames<IntegrityFault>().Order(StringComparer.Ordinal).ToArray());
     }
 }

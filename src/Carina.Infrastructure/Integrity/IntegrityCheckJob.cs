@@ -131,7 +131,8 @@ public sealed class IntegrityCheckJob(
             declared,
             listings,
             startedAt,
-            clock.GetUtcNow().UtcDateTime);
+            clock.GetUtcNow().UtcDateTime,
+            written.Drawn(ledger));
 
         await scope.ServiceProvider
             .GetRequiredService<IIntegrityCheckRepository>()

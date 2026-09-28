@@ -145,6 +145,27 @@ public sealed class LocalWrittenFileSurveyTests
     }
 
     [Fact]
+    public void EveryRecordingWhoseRowSaysItsPictureIsDrawnIsLookedForInTheThumbnailPlace()
+    {
+        using var recordings = new TempTree();
+        using var pictures = new TempTree();
+        LedgerFile drawn = LedgerFile.Ended(
+            Recorded,
+            Primary,
+            new RecordingFileName(Recorded.Wire + ".ts"),
+            LedgerClaim.EverythingLanded,
+            100,
+            thumbnailDrawn: true);
+
+        DrawnPicture picture = Assert.Single(Survey(recordings.Root, null, pictures.Root).Drawn([drawn, Row]));
+
+        Assert.Equal(Recorded, picture.Recording);
+        Assert.Equal(LocalWrittenFileSurvey.ThumbnailPlace, picture.Place);
+        Assert.Equal(Picture, picture.Path);
+        Assert.Empty(Survey(recordings.Root, null, null).Drawn([drawn]));
+    }
+
+    [Fact]
     public void PicturesDrawnIntoTheEncodeRootAreClaimedThereEvenThoughTheirOwnPlaceIsNotWalked()
     {
         using var recordings = new TempTree();

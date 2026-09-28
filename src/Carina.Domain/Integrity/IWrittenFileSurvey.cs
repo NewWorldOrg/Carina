@@ -19,4 +19,10 @@ public interface IWrittenFileSurvey
     /// under.
     /// </summary>
     IReadOnlyList<DeclaredFile> Claimed(IReadOnlyList<LedgerFile> ledger, IReadOnlyList<DeclaredFile> declared);
+
+    /// <summary>
+    /// The thumbnails the rows in <paramref name="ledger"/> say have been drawn, each where the place thumbnails
+    /// are drawn into has to hold it, or none when this process draws no thumbnails.
+    /// </summary>
+    IReadOnlyList<DrawnPicture> Drawn(IReadOnlyList<LedgerFile> ledger);
 }

@@ -18,6 +18,8 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
 
     private static readonly OutputRoot Primary = new("primary");
 
+    private static readonly OutputRoot Pictures = new("thumbnails");
+
     private static readonly RecordingFileName Name = new("one.m2ts");
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -38,6 +40,7 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
             IntegrityFinding.FileMissing(id, Primary, Id(3), Name, 100, At),
             IntegrityFinding.FileEmpty(id, Primary, Id(4), Name, 100, 0, At),
             IntegrityFinding.EmptyThoughComplete(id, Primary, Id(5), Name, 100, 0, At),
+            IntegrityFinding.ThumbnailMissing(id, new DrawnPicture(Id(6), Pictures, "picture.jpg"), At),
         ];
 
         await SaveAsync(IntegrityReport.Of(check, written));
@@ -58,7 +61,7 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
         IReadOnlyList<IntegrityFinding> back = await FindingsAsync(id);
 
         Assert.Equal(
-            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
+            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees", "ThumbnailMissing"],
             back.Select(finding => finding.Fault.ToString()).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
             written.Select(finding => finding.Id.Value).Order().ToArray(),
@@ -72,6 +75,13 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
         Assert.Equal(512, orphan.ObservedSize);
         Assert.Equal(At, orphan.NoticedAt);
         Assert.Equal("primary", orphan.Root.Value);
+
+        IntegrityFinding picture = back.Single(finding => finding.Fault is IntegrityFault.ThumbnailMissing);
+
+        Assert.Equal(Id(6), picture.RecordingId);
+        Assert.Equal("thumbnails", picture.Root.Value);
+        Assert.Null(picture.LedgerSize);
+        Assert.Null(picture.ObservedSize);
 
         IntegrityFinding missing = back.Single(finding => finding.Fault is IntegrityFault.FileMissing);
 

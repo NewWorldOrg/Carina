@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 
 namespace Carina.Domain.Tests.Quality;
@@ -27,31 +28,31 @@ public sealed class TunerStandingTests
     [Fact(DisplayName = "BR-QD-017: a bit error rate beyond its level shows on the row even when nothing was recorded")]
     public void ABitErrorRateBeyondItsLevelShowsOnTheRowEvenWhenNothingWasRecorded()
     {
-        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalGood, SignalGood, SignalBeyond], cannotLock: false);
+        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalGood, SignalGood, SignalBeyond], trouble: null);
 
-        Assert.Equal(new TunerStanding(QualityStanding.Warning, CannotLock: false), standing);
+        Assert.Equal(new TunerStanding(QualityStanding.Warning), standing);
     }
 
     [Fact(DisplayName = "BR-QD-017: a tuner that cannot lock stands as may not be watchable, and says why")]
     public void ATunerThatCannotLockStandsAsMayNotBeWatchableAndSaysWhy()
     {
-        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalUnmeasured, SignalUnmeasured, SignalUnmeasured], cannotLock: true);
+        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalUnmeasured, SignalUnmeasured, SignalUnmeasured], TunerTroubleKind.NoLock);
 
-        Assert.Equal(new TunerStanding(QualityStanding.MayNotBeWatchable, CannotLock: true), standing);
+        Assert.Equal(new TunerStanding(QualityStanding.MayNotBeWatchable, TunerTroubleKind.NoLock), standing);
     }
 
     [Fact(DisplayName = "BR-QD-017: an enabled tuner nobody measured is unmeasured, not nothing to measure")]
     public void AnEnabledTunerNobodyMeasuredIsUnmeasured()
     {
-        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalUnmeasured, SignalUnmeasured, SignalUnmeasured], cannotLock: false);
+        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalUnmeasured, SignalUnmeasured, SignalUnmeasured], trouble: null);
 
-        Assert.Equal(new TunerStanding(QualityStanding.Unmeasured, CannotLock: false), standing);
+        Assert.Equal(new TunerStanding(QualityStanding.Unmeasured), standing);
     }
 
     [Fact(DisplayName = "BR-QD-017: a tuner with nothing to say but readings it cannot take is unmeasured")]
     public void ATunerWithNothingToSayButReadingsItCannotTakeIsUnmeasured()
     {
-        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalUnsupported], cannotLock: false);
+        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalUnsupported], trouble: null);
 
         Assert.Equal(QualityStanding.Unmeasured, standing.Standing);
     }
@@ -61,10 +62,10 @@ public sealed class TunerStandingTests
     {
         Assert.Equal(
             QualityStanding.MayNotBeWatchable,
-            TunerStandings.Of([RecordedUnwatchable], [SignalBeyond], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedUnwatchable], [SignalBeyond], trouble: null).Standing);
         Assert.Equal(
             QualityStanding.Warning,
-            TunerStandings.Of([RecordedBeyondWarning], [SignalGood], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedBeyondWarning], [SignalGood], trouble: null).Standing);
     }
 
     [Fact(DisplayName = "BR-QD-017: a reading beyond its level outweighs a supply that went quiet, which outweighs what was measured well")]
@@ -72,10 +73,10 @@ public sealed class TunerStandingTests
     {
         Assert.Equal(
             QualityStanding.Warning,
-            TunerStandings.Of([RecordedUnmeasured], [SignalNotSupplied, SignalBeyond], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedUnmeasured], [SignalNotSupplied, SignalBeyond], trouble: null).Standing);
         Assert.Equal(
             QualityStanding.Unreachable,
-            TunerStandings.Of([RecordedWell], [SignalNotSupplied, SignalGood], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedWell], [SignalNotSupplied, SignalGood], trouble: null).Standing);
     }
 
     [Fact(DisplayName = "BR-QD-017: a tuner is unmeasured only when nothing on it was measured")]
@@ -83,24 +84,47 @@ public sealed class TunerStandingTests
     {
         Assert.Equal(
             QualityStanding.Good,
-            TunerStandings.Of([RecordedUnmeasured], [SignalGood, SignalUnmeasured], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedUnmeasured], [SignalGood, SignalUnmeasured], trouble: null).Standing);
         Assert.Equal(
             QualityStanding.Good,
-            TunerStandings.Of([RecordedWell], [SignalUnmeasured], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedWell], [SignalUnmeasured], trouble: null).Standing);
         Assert.Equal(
             QualityStanding.Unmeasured,
-            TunerStandings.Of([RecordedUnmeasured], [SignalUnmeasured, SignalUnsupported], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedUnmeasured], [SignalUnmeasured, SignalUnsupported], trouble: null).Standing);
     }
 
     [Fact(DisplayName = "BR-QD-017: nothing to measure and a reading it cannot take leave a healthy tuner healthy")]
     public void NothingToMeasureAndAReadingItCannotTakeLeaveAHealthyTunerHealthy()
     {
-        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalGood, SignalUnsupported], cannotLock: false);
+        TunerStanding standing = TunerStandings.Of([NothingRecorded], [SignalGood, SignalUnsupported], trouble: null);
 
-        Assert.Equal(new TunerStanding(QualityStanding.Good, CannotLock: false), standing);
+        Assert.Equal(new TunerStanding(QualityStanding.Good), standing);
         Assert.Equal(
             QualityStanding.Good,
-            TunerStandings.Of([RecordedWell], [SignalGood], cannotLock: false).Standing);
+            TunerStandings.Of([RecordedWell], [SignalGood], trouble: null).Standing);
+    }
+
+    [Fact(DisplayName = "BR-QD-018: a tuner taken out of service for any trouble may not be watchable, whatever was measured")]
+    public void ATunerTakenOutOfServiceForAnyTroubleMayNotBeWatchable()
+    {
+        TunerStanding standing = TunerStandings.Of([RecordedWell], [SignalGood], TunerTroubleKind.DeviceFailed);
+
+        Assert.Equal(new TunerStanding(QualityStanding.MayNotBeWatchable, TunerTroubleKind.DeviceFailed), standing);
+        Assert.False(standing.CannotLock);
+    }
+
+    [Fact(DisplayName = "BR-QD-018: a tuner failing to tune stands at least at the warning, and at worse when it measured worse")]
+    public void ATunerFailingToTuneStandsAtLeastAtTheWarning()
+    {
+        Assert.Equal(
+            new TunerStanding(QualityStanding.Warning, TunerTroubleKind.TuneFailing),
+            TunerStandings.Of([NothingRecorded], [SignalUnmeasured], TunerTroubleKind.TuneFailing));
+        Assert.Equal(
+            new TunerStanding(QualityStanding.Warning, TunerTroubleKind.Degraded),
+            TunerStandings.Of([RecordedWell], [SignalGood], TunerTroubleKind.Degraded));
+        Assert.Equal(
+            new TunerStanding(QualityStanding.MayNotBeWatchable, TunerTroubleKind.TuneFailing),
+            TunerStandings.Of([RecordedUnwatchable], [SignalGood], TunerTroubleKind.TuneFailing));
     }
 
     [Fact(DisplayName = "BR-QD-017: worst first puts a tuner that cannot lock on top and the ones nobody measured last")]
@@ -108,22 +132,26 @@ public sealed class TunerStandingTests
     {
         TunerStanding[] shuffled =
         [
-            new(QualityStanding.Unmeasured, false),
-            new(QualityStanding.Good, false),
-            new(QualityStanding.Unreachable, false),
-            new(QualityStanding.MayNotBeWatchable, true),
-            new(QualityStanding.Warning, false),
-            new(QualityStanding.MayNotBeWatchable, false),
+            new(QualityStanding.Unmeasured),
+            new(QualityStanding.Good),
+            new(QualityStanding.Warning, TunerTroubleKind.TuneFailing),
+            new(QualityStanding.Unreachable),
+            new(QualityStanding.MayNotBeWatchable, TunerTroubleKind.NoLock),
+            new(QualityStanding.Warning),
+            new(QualityStanding.MayNotBeWatchable, TunerTroubleKind.LedgerDisagrees),
+            new(QualityStanding.MayNotBeWatchable),
         ];
 
         Assert.Equal(
             [
-                new TunerStanding(QualityStanding.MayNotBeWatchable, true),
-                new TunerStanding(QualityStanding.MayNotBeWatchable, false),
-                new TunerStanding(QualityStanding.Warning, false),
-                new TunerStanding(QualityStanding.Unreachable, false),
-                new TunerStanding(QualityStanding.Good, false),
-                new TunerStanding(QualityStanding.Unmeasured, false),
+                new TunerStanding(QualityStanding.MayNotBeWatchable, TunerTroubleKind.NoLock),
+                new TunerStanding(QualityStanding.MayNotBeWatchable, TunerTroubleKind.LedgerDisagrees),
+                new TunerStanding(QualityStanding.MayNotBeWatchable),
+                new TunerStanding(QualityStanding.Warning, TunerTroubleKind.TuneFailing),
+                new TunerStanding(QualityStanding.Warning),
+                new TunerStanding(QualityStanding.Unreachable),
+                new TunerStanding(QualityStanding.Good),
+                new TunerStanding(QualityStanding.Unmeasured),
             ],
             shuffled.OrderByDescending(TunerStandings.Severity));
     }
