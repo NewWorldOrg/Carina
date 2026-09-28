@@ -33,7 +33,7 @@ public sealed record ThumbnailPlan
             ? new ThumbnailPlan(ThumbnailIntent.Skip, TimeSpan.Zero, ofSomethingUnfinished: false)
             : new ThumbnailPlan(
                 ThumbnailIntent.Draw,
-                settings.PositionIn(subject.Written),
+                RecordingSeam.KeepClear(settings.PositionIn(subject.Written), subject.Seams),
                 subject.Outcome is RecordingOutcome.Truncated);
     }
 }

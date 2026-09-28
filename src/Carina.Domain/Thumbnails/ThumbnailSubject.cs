@@ -11,7 +11,8 @@ public sealed record ThumbnailSubject
         RecordingFileName fileName,
         ServiceId service,
         RecordingOutcome outcome,
-        TimeSpan written)
+        TimeSpan written,
+        IReadOnlyList<RecordingSeam>? seams = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(root);
@@ -40,6 +41,7 @@ public sealed record ThumbnailSubject
         Service = service;
         Outcome = outcome;
         Written = written;
+        Seams = seams ?? [];
     }
 
     public RecordingId Id { get; }
@@ -53,4 +55,9 @@ public sealed record ThumbnailSubject
     public RecordingOutcome Outcome { get; }
 
     public TimeSpan Written { get; }
+
+    /// <summary>
+    /// Where gaps sit in the recording's file, which a picture is not taken from.
+    /// </summary>
+    public IReadOnlyList<RecordingSeam> Seams { get; }
 }

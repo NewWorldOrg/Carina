@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Channels;
+using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Thumbnails;
 
@@ -34,16 +35,17 @@ public sealed class SeamPictureMaterialTests : IDisposable
     public void Dispose() => Directory.Delete(room, recursive: true);
 
     [Fact]
-    public async Task BrKd027AFrameTakenAnywhereAroundTheSeamIsAFrameOfTheBroadcastAndNotTheOneJoinedAcrossIt()
+    public async Task BrKd027AFrameAskedForAnywhereAroundTheSeamIsAFrameOfTheBroadcastAndNotTheOneJoinedAcrossIt()
     {
         Seam seam = await SeamAsync();
         FfmpegThumbnailRenderer renderer = new(new ThumbnailSettings { Width = 640 }, TimeProvider.System);
         List<string> broken = [];
         int drawn = 0;
 
-        for (TimeSpan at = seam.CutAt - TimeSpan.FromSeconds(1); at <= seam.CutAt + TimeSpan.FromSeconds(2); at += Step)
+        for (TimeSpan at = seam.CutAt - TimeSpan.FromSeconds(4); at <= seam.CarriedOnAt + TimeSpan.FromSeconds(4); at += Step)
         {
-            ThumbnailRender frame = await renderer.FrameAsync(new ThumbnailFrameRequest(seam.Joined, Service, at), default);
+            TimeSpan taken = RecordingSeam.KeepClear(at, [new RecordingSeam(seam.CutAt, seam.CarriedOnAt)]);
+            ThumbnailRender frame = await renderer.FrameAsync(new ThumbnailFrameRequest(seam.Joined, Service, taken), default);
 
             Assert.True(frame.Drew, $"no frame was drawn at {at.TotalSeconds:0.00}s: {frame.Note}");
 
@@ -56,7 +58,7 @@ public sealed class SeamPictureMaterialTests : IDisposable
             }
         }
 
-        Assert.True(drawn >= 12, $"only {drawn} frames were drawn");
+        Assert.True(drawn >= 40, $"only {drawn} frames were drawn");
         Assert.Empty(broken);
     }
 
@@ -68,7 +70,11 @@ public sealed class SeamPictureMaterialTests : IDisposable
         string destination = Path.Combine(room, "poster.jpg");
 
         ThumbnailRender drawn = await renderer.RenderAsync(
-            new ThumbnailRequest(seam.Joined, destination, Service, seam.CutAt),
+            new ThumbnailRequest(
+                seam.Joined,
+                destination,
+                Service,
+                RecordingSeam.KeepClear(seam.CutAt, [new RecordingSeam(seam.CutAt, seam.CarriedOnAt)])),
             default);
 
         Assert.True(drawn.Drew, drawn.Note);
@@ -78,7 +84,7 @@ public sealed class SeamPictureMaterialTests : IDisposable
     }
 
     [Fact]
-    public async Task TheSeamThisFileBuildsIsOneAPictureTakenWithoutThrowingBrokenPacketsAwayLandsOn()
+    public async Task TheSeamThisFileBuildsIsOneAPictureTakenWithoutKeepingClearOfItLandsOn()
     {
         Seam seam = await SeamAsync();
         string picture = Path.Combine(room, "unguarded.jpg");
@@ -110,7 +116,7 @@ public sealed class SeamPictureMaterialTests : IDisposable
 
     private async Task<Seam> SeamAsync()
     {
-        string source = await new SyntheticBroadcast { Length = TimeSpan.FromSeconds(10) }
+        string source = await new SyntheticBroadcast { Length = TimeSpan.FromSeconds(16) }
             .WriteAsync(Path.Combine(room, "broadcast" + SyntheticBroadcast.TransportStream));
 
         double start = double.Parse(
@@ -120,10 +126,10 @@ public sealed class SeamPictureMaterialTests : IDisposable
             CultureInfo.InvariantCulture);
         IReadOnlyList<VideoPacket> packets = await PacketsAsync(source);
 
-        VideoPacket key = packets.First(packet => packet.Key && packet.Pts >= start + 3);
+        VideoPacket key = packets.First(packet => packet.Key && packet.Pts >= start + 5);
         long keyEnds = packets.First(packet => packet.Position > key.Position).Position;
         long cut = key.Position + ((keyEnds - key.Position) / PacketSize / 2 * PacketSize);
-        VideoPacket resumed = packets.First(packet => !packet.Key && packet.Pts >= start + 6.5);
+        VideoPacket resumed = packets.First(packet => !packet.Key && packet.Pts >= start + 8.5);
         long carriesOn = resumed.Position + (3 * PacketSize);
 
         byte[] whole = await File.ReadAllBytesAsync(source);
@@ -149,7 +155,11 @@ public sealed class SeamPictureMaterialTests : IDisposable
                 "-",
             ]);
 
-        return new Seam(joined, TimeSpan.FromSeconds(key.Pts - start), Split(frames));
+        return new Seam(
+            joined,
+            TimeSpan.FromSeconds(key.Pts - start),
+            TimeSpan.FromSeconds(resumed.Pts - start),
+            Split(frames));
     }
 
     private static async Task<IReadOnlyList<VideoPacket>> PacketsAsync(string source)
@@ -251,5 +261,5 @@ public sealed class SeamPictureMaterialTests : IDisposable
 
     private sealed record VideoPacket(double Pts, long Position, bool Key);
 
-    private sealed record Seam(string Joined, TimeSpan CutAt, IReadOnlyList<byte[]> Frames);
+    private sealed record Seam(string Joined, TimeSpan CutAt, TimeSpan CarriedOnAt, IReadOnlyList<byte[]> Frames);
 }

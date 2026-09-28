@@ -29,6 +29,22 @@ public sealed class ThumbnailPlanTests
     }
 
     [Fact]
+    public void BrKd027APictureWhosePositionFallsNearASeamIsTakenPastIt()
+    {
+        RecordingId id = RecordingId.New();
+        ThumbnailSubject subject = new(
+            id,
+            new OutputRoot("bulk"),
+            RecordingFileName.For(id, ".m2ts"),
+            new ServiceId(1032),
+            RecordingOutcome.Complete,
+            TimeSpan.FromHours(2),
+            [new RecordingSeam(TimeSpan.FromSeconds(118), TimeSpan.FromSeconds(121))]);
+
+        Assert.Equal(TimeSpan.FromSeconds(124), ThumbnailPlan.For(subject, Settings).At);
+    }
+
+    [Fact]
     public void ARecordingThatIsCutShortGetsOneThatSaysSo()
     {
         ThumbnailPlan plan = ThumbnailPlan.For(Subject(RecordingOutcome.Truncated), Settings);

@@ -40,7 +40,7 @@ public sealed class Scrubber(
             new ThumbnailFrameRequest(
                 Path.Combine(root, recording.FileName.Value),
                 recording.ServiceId,
-                at),
+                RecordingSeam.KeepClear(at, RecordingGap.SeamsIn(recording.StartedAtActual, recording.Gaps))),
             cancellationToken);
 
         return drawn.Picture is { } picture

@@ -75,17 +75,47 @@ public sealed class RecordingGapTests
     }
 
     [Fact]
-    public void EachGapIsPlacedWhereItFallsInWhatWasWritten()
+    public void EachGapIsPlacedOnTheClockTheFileIsPlayedByWhichKeepsRunningThroughEarlierGaps()
     {
-        IReadOnlyList<TimeSpan> placed = RecordingGap.Placed(
+        IReadOnlyList<RecordingSeam> seams = RecordingGap.SeamsIn(
             Now,
             [
                 new RecordingGap(Now.AddSeconds(312), Now.AddSeconds(314.5)),
                 new RecordingGap(Now.AddSeconds(700), Now.AddSeconds(702)),
             ]);
 
-        Assert.Equal([TimeSpan.FromSeconds(312), TimeSpan.FromSeconds(697.5)], placed);
+        Assert.Equal(
+            [
+                new RecordingSeam(TimeSpan.FromSeconds(312), TimeSpan.FromSeconds(314.5)),
+                new RecordingSeam(TimeSpan.FromSeconds(700), TimeSpan.FromSeconds(702)),
+            ],
+            seams);
     }
+
+    [Theory]
+    [InlineData(100, 100)]
+    [InlineData(308.9, 308.9)]
+    [InlineData(309, 317.5)]
+    [InlineData(313, 317.5)]
+    [InlineData(317.5, 317.5)]
+    [InlineData(317.6, 317.6)]
+    public void AStillIsTakenPastASeamItWouldFallNear(double asked, double taken)
+        => Assert.Equal(
+            TimeSpan.FromSeconds(taken),
+            RecordingSeam.KeepClear(
+                TimeSpan.FromSeconds(asked),
+                [new RecordingSeam(TimeSpan.FromSeconds(312), TimeSpan.FromSeconds(314.5))]));
+
+    [Fact]
+    public void AStillMovedPastOneSeamIsMovedPastTheNextWhenItLandsNearThatOneToo()
+        => Assert.Equal(
+            TimeSpan.FromSeconds(325),
+            RecordingSeam.KeepClear(
+                TimeSpan.FromSeconds(313),
+                [
+                    new RecordingSeam(TimeSpan.FromSeconds(312), TimeSpan.FromSeconds(314.5)),
+                    new RecordingSeam(TimeSpan.FromSeconds(319), TimeSpan.FromSeconds(322)),
+                ]));
 
     [Fact]
     public void ARecordingReadBackWithGapsThatOverlapIsRefused()

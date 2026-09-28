@@ -26,22 +26,13 @@ public sealed record RecordingGap
     public TimeSpan Lasts => Until - From;
 
     /// <summary>
-    /// Where each gap falls in what was written: the time from the start of the recording to the gap, less the gaps
-    /// before it.
+    /// Where each gap falls in the recording's file, measured the way a player measures it: the broadcast's own clock
+    /// keeps running through a gap, so a later gap lies after the earlier ones rather than closer to the start.
     /// </summary>
-    public static IReadOnlyList<TimeSpan> Placed(DateTime startedAt, IReadOnlyList<RecordingGap> gaps)
+    public static IReadOnlyList<RecordingSeam> SeamsIn(DateTime startedAt, IReadOnlyList<RecordingGap> gaps)
     {
         ArgumentNullException.ThrowIfNull(gaps);
 
-        List<TimeSpan> placed = [];
-        TimeSpan missedBefore = TimeSpan.Zero;
-
-        foreach (RecordingGap gap in gaps)
-        {
-            placed.Add(gap.From - startedAt - missedBefore);
-            missedBefore += gap.Lasts;
-        }
-
-        return placed;
+        return [.. gaps.Select(gap => new RecordingSeam(gap.From - startedAt, gap.Until - startedAt))];
     }
 }

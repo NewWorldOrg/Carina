@@ -72,7 +72,7 @@ public sealed record RecordingGapResponder(DateTime From, DateTime Until, double
     {
         ArgumentNullException.ThrowIfNull(recording);
 
-        IReadOnlyList<TimeSpan> placed = RecordingGap.Placed(recording.StartedAtActual, recording.Gaps);
+        IReadOnlyList<RecordingSeam> seams = RecordingGap.SeamsIn(recording.StartedAtActual, recording.Gaps);
 
         return
         [
@@ -80,7 +80,7 @@ public sealed record RecordingGapResponder(DateTime From, DateTime Until, double
                 gap.From,
                 gap.Until,
                 gap.Lasts.TotalSeconds,
-                placed[index].TotalSeconds)),
+                seams[index].From.TotalSeconds)),
         ];
     }
 }
