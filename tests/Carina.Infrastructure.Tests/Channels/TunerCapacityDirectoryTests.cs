@@ -69,6 +69,32 @@ public sealed class TunerCapacityDirectoryTests
     }
 
     [Fact]
+    public async Task ATunerTheRunningDriverHasTurnedOffHoldsNoSeatThoughTheLedgerStillHasItOn()
+    {
+        TunerCapacity capacity = await ReadAsync(
+            [Wanted("adapter0", TunerKind.Terrestrial), Wanted("adapter1", TunerKind.Satellite)],
+            [
+                new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle),
+                new TunerSnapshot("adapter1", TunerKind.Satellite, TunerState.Disabled),
+            ]);
+
+        Assert.Equal(1, capacity.SeatCount);
+        Assert.False(capacity.CanServe(TuneSystem.IsdbSBs));
+        Assert.False(capacity.CanServe(TuneSystem.IsdbSCs110));
+        Assert.True(capacity.CanServe(TuneSystem.IsdbT));
+    }
+
+    [Fact]
+    public async Task ATunerStillDrainingBeforeItTurnsOffKeepsItsSeatUntilItIsReleased()
+    {
+        TunerCapacity capacity = await ReadAsync(
+            [Wanted("adapter1", TunerKind.Satellite)],
+            [new TunerSnapshot("adapter1", TunerKind.Satellite, TunerState.Draining)]);
+
+        Assert.True(capacity.CanServe(TuneSystem.IsdbSBs));
+    }
+
+    [Fact]
     public async Task ATunerAnOlderDriverNeverDescribedIsUndeterminedRatherThanAbsent()
     {
         TunerCapacity capacity = await ReadAsync([Wanted("adapter0", TunerKind.Unspecified)], []);
