@@ -54,6 +54,28 @@ public sealed class RecordingSettingsTests
     }
 
     [Fact]
+    public void ARecordingIsPreparedOneTickAndItsSettingUpAheadOfItsStart()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(5), RecordingSettings.SettingUp);
+        Assert.Equal(TimeSpan.FromSeconds(10), RecordingSettings.Default.StartingAhead);
+        Assert.Equal(
+            TimeSpan.FromSeconds(2) + RecordingSettings.SettingUp,
+            Built(between: TimeSpan.FromSeconds(2)).StartingAhead);
+    }
+
+    [Fact]
+    public void PreparingNoFurtherAheadThanOneTickIsRefused()
+    {
+        ArgumentOutOfRangeException refused = Assert.Throws<ArgumentOutOfRangeException>(
+            () => Built(startingAhead: TimeSpan.FromSeconds(5)));
+
+        Assert.Equal("startingAhead", refused.ParamName);
+        Assert.Equal(
+            TimeSpan.FromSeconds(5) + TimeSpan.FromTicks(1),
+            Built(startingAhead: TimeSpan.FromSeconds(5) + TimeSpan.FromTicks(1)).StartingAhead);
+    }
+
+    [Fact]
     public void ATickWithNoGapBetweenItsTurnsIsRefused()
     {
         Assert.Equal(
@@ -82,6 +104,7 @@ public sealed class RecordingSettingsTests
         Assert.Equal(RecordingSettings.Default.TuningLead, read.TuningLead);
         Assert.Equal(RecordingSettings.Default.OutputRoot, read.OutputRoot);
         Assert.Equal(RecordingSettings.Default.UndecidedEndAhead, read.UndecidedEndAhead);
+        Assert.Equal(RecordingSettings.Default.StartingAhead, read.StartingAhead);
     }
 
     [Fact]
@@ -114,6 +137,7 @@ public sealed class RecordingSettingsTests
             ["Recording:TuningLead"] = "00:00:30",
             ["Recording:OutputRoot"] = "archive",
             ["Recording:UndecidedEndAhead"] = "00:25:00",
+            ["Recording:StartingAhead"] = "00:00:15",
         });
 
         Assert.Equal(TimeSpan.FromSeconds(20), read.BeforeFirstTick);
@@ -121,6 +145,7 @@ public sealed class RecordingSettingsTests
         Assert.Equal(TimeSpan.FromSeconds(30), read.TuningLead);
         Assert.Equal("archive", read.OutputRoot.Value);
         Assert.Equal(TimeSpan.FromMinutes(25), read.UndecidedEndAhead);
+        Assert.Equal(TimeSpan.FromSeconds(15), read.StartingAhead);
     }
 
     [Fact]
@@ -152,6 +177,12 @@ public sealed class RecordingSettingsTests
             Assert.Throws<ArgumentException>(
                 () => Read(new Dictionary<string, string?> { ["Recording:UndecidedEndAhead"] = "a while" }))
                 .ParamName);
+
+        Assert.Equal(
+            "startingAhead",
+            Assert.Throws<ArgumentException>(
+                () => Read(new Dictionary<string, string?> { ["Recording:StartingAhead"] = "00:00:03" }))
+                .ParamName);
     }
 
     [Fact]
@@ -168,13 +199,15 @@ public sealed class RecordingSettingsTests
         TimeSpan? before = null,
         TimeSpan? between = null,
         TimeSpan? lead = null,
-        TimeSpan? ahead = null)
+        TimeSpan? ahead = null,
+        TimeSpan? startingAhead = null)
         => new(
             before ?? TimeSpan.FromSeconds(10),
             between ?? TimeSpan.FromSeconds(5),
             lead ?? TimeSpan.FromSeconds(15),
             new OutputRoot("primary"),
-            ahead ?? RecordingSettings.HoldingAnUnannouncedEnd);
+            ahead ?? RecordingSettings.HoldingAnUnannouncedEnd,
+            startingAhead);
 
     private static RecordingSettings Read(IDictionary<string, string?> settings)
     {

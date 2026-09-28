@@ -1339,6 +1339,11 @@ public sealed class TunerSessionManager(
 
     private void Forget(TunerSession session)
     {
+        ended.Enqueue(session);
+
+        while (ended.Count > RetainedSessions && ended.TryDequeue(out _))
+        { }
+
         sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
 
         if (tunings.TryRemove(session.SessionId, out TuningKey? tuning))
@@ -1367,11 +1372,6 @@ public sealed class TunerSessionManager(
 
         pool.Leave(session.SessionId);
         pool.Sweep();
-
-        ended.Enqueue(session);
-
-        while (ended.Count > RetainedSessions && ended.TryDequeue(out _))
-        { }
 
         Announce();
     }

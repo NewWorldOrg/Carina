@@ -55,6 +55,7 @@ public static class ThumbnailRules
         "/Carina.Api/Services/RecordingService.cs",
         "/Carina.Api/Responder/Recordings/RecordingDetailResponder.cs",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs",
+        "/Carina.Infrastructure/Integrity/LocalWrittenFileSurvey.cs",
         "/Carina.Api/Playback/ScrubDelivery.cs",
         "/Carina.Api/Playback/ThumbnailDelivery.cs",
         "/Carina.Api/Program.cs",

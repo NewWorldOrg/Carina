@@ -21,6 +21,11 @@ public sealed record RecordingSettings
 
     public static readonly TimeSpan HoldingAnUnannouncedEnd = TimeSpan.FromMinutes(20);
 
+    /// <summary>
+    /// What taking a seat, tuning, beginning the session and the first byte usually take together.
+    /// </summary>
+    public static readonly TimeSpan SettingUp = TimeSpan.FromSeconds(5);
+
     public static readonly RecordingSettings Default = new(
         TimeSpan.FromSeconds(10),
         NoticingItIsDue,
@@ -33,7 +38,8 @@ public sealed record RecordingSettings
         TimeSpan betweenTicks,
         TimeSpan tuningLead,
         OutputRoot outputRoot,
-        TimeSpan undecidedEndAhead)
+        TimeSpan undecidedEndAhead,
+        TimeSpan? startingAhead = null)
     {
         ArgumentNullException.ThrowIfNull(outputRoot);
 
@@ -81,11 +87,23 @@ public sealed record RecordingSettings
                 + "allocation never made room for.");
         }
 
+        TimeSpan ahead = startingAhead ?? betweenTicks + SettingUp;
+
+        if (ahead <= betweenTicks)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(startingAhead),
+                ahead,
+                "A reservation is noticed up to one tick after its preparation was due, so preparing no more than "
+                + $"{betweenTicks} ahead of its start can still notice it only once it has started.");
+        }
+
         BeforeFirstTick = beforeFirstTick;
         BetweenTicks = betweenTicks;
         TuningLead = tuningLead;
         OutputRoot = outputRoot;
         UndecidedEndAhead = undecidedEndAhead;
+        StartingAhead = ahead;
     }
 
     public TimeSpan BeforeFirstTick { get; }
@@ -101,4 +119,10 @@ public sealed record RecordingSettings
     /// end. It is shorter than the horizon the allocation holds a tuner seat on.
     /// </summary>
     public TimeSpan UndecidedEndAhead { get; }
+
+    /// <summary>
+    /// How long before a reservation's start the recorder begins to prepare it, so that the first packet
+    /// lands by the start: one tick to notice it and <see cref="SettingUp"/> to set it up.
+    /// </summary>
+    public TimeSpan StartingAhead { get; }
 }

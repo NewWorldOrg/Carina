@@ -22,13 +22,24 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
                end_at_confirmed, started_at, snapshot_summary, snapshot_extended, snapshot_genres,
                captured_at, snapshot_audio, snapshot_sounds, margin_after, encode_when_recorded
         FROM {View}
-        WHERE in_flight OR (effective_start_at <= $1 AND $1 < effective_end_at)
+        WHERE in_flight OR (effective_start_at <= $2 AND $1 < effective_end_at)
         ORDER BY effective_start_at, id
         """;
 
-    public async Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<RecordingTick>> DueAtAsync(
+        DateTime at,
+        TimeSpan ahead,
+        CancellationToken cancellationToken)
     {
         DateTime moment = InUtc(at);
+
+        if (ahead < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ahead),
+                ahead,
+                "Preparing a recording ahead of its start looks forwards, never back.");
+        }
 
         await context.Database.OpenConnectionAsync(cancellationToken);
 
@@ -38,6 +49,7 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
             await using DbCommand command = connection.CreateCommand();
             command.CommandText = DueAt;
             command.Parameters.Add(Moment(command, moment));
+            command.Parameters.Add(Moment(command, moment + ahead));
 
             await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             List<RecordingTick> due = [];

@@ -6,10 +6,15 @@ public sealed class RootListing
 {
     private readonly Dictionary<string, StoredFile> byPath;
 
-    private RootListing(OutputRoot root, bool reachable, IReadOnlyList<StoredFile> files)
+    private RootListing(OutputRoot root, bool reachable, IReadOnlyList<StoredFile> files, StoragePlace place)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(files);
+
+        if (!Enum.IsDefined(place))
+        {
+            throw new ArgumentOutOfRangeException(nameof(place), place, "A listing is of a place the sweep walks.");
+        }
 
         byPath = new Dictionary<string, StoredFile>(StringComparer.Ordinal);
 
@@ -28,6 +33,7 @@ public sealed class RootListing
         Root = root;
         Reachable = reachable;
         Files = [.. files];
+        Place = place;
     }
 
     public OutputRoot Root { get; }
@@ -36,9 +42,16 @@ public sealed class RootListing
 
     public IReadOnlyList<StoredFile> Files { get; }
 
-    public static RootListing Of(OutputRoot root, IReadOnlyList<StoredFile> files) => new(root, true, files);
+    public StoragePlace Place { get; }
 
-    public static RootListing OutOfReach(OutputRoot root) => new(root, false, []);
+    public static RootListing Of(
+        OutputRoot root,
+        IReadOnlyList<StoredFile> files,
+        StoragePlace place = StoragePlace.Recordings)
+        => new(root, true, files, place);
+
+    public static RootListing OutOfReach(OutputRoot root, StoragePlace place = StoragePlace.Recordings)
+        => new(root, false, [], place);
 
     public StoredFile? At(string path)
     {

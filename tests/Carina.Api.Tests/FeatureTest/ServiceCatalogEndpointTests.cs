@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Api.Common;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Reservations;
@@ -97,6 +98,49 @@ public sealed class ServiceCatalogEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal([RecalculationTrigger.SelectedChannelChanged], feature.Notices.Nudged);
+    }
+
+    [Theory]
+    [InlineData("/api/services/70000-1")]
+    [InlineData("/api/services/1-70000")]
+    [InlineData("/api/services/-1-101")]
+    public async Task AServiceNamedOutsideTheRangeOfItsIdsIsRefusedAsARequestAndNotAFault(string path)
+    {
+        await using var feature = new CatalogFeature();
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal(ServiceKeyText.Description, body.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task ASelectedChannelNamedByTheUuidThatIsAllZeroesIsRefusedAsARequestAndNothingMoves()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "Two ways in", TuningParameters.Terrestrial(Terrestrial));
+
+        (HttpStatusCode status, JsonElement body) = await feature.PutAsync(
+            $"{OneService}/selected-channel",
+            new { candidateChannelId = Guid.Empty });
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal(CandidateChannelIdText.Description, body.GetProperty("message").GetString());
+        Assert.Empty(feature.Notices.Nudged);
+    }
+
+    [Fact]
+    public async Task ACandidateNamedByTheUuidThatIsAllZeroesIsRefusedAsARequestAndNothingIsRemoved()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "Two ways in", TuningParameters.Terrestrial(Terrestrial));
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync(
+            $"{OneService}/candidate-channels/{Guid.Empty}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal(CandidateChannelIdText.Description, body.GetProperty("message").GetString());
+        Assert.Single(feature.Candidates.Candidates);
     }
 
     [Fact]

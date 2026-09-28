@@ -16,15 +16,21 @@ public sealed class GetServiceAction(ChannelCatalogService channelCatalogService
 {
     [HttpGet]
     [ProducesResponseType<BaseResponder<BroadcastServiceResponder>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<BaseResponder<BroadcastServiceResponder>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<BaseResponder<BroadcastServiceResponder>>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Invoke(
         int networkId,
         int serviceId,
         CancellationToken cancellationToken)
     {
+        if (ServiceKeyText.Read(networkId, serviceId) is not { } key)
+        {
+            return BadRequest(BaseResponder<BroadcastServiceResponder>.Error(ServiceKeyText.Description));
+        }
+
         ServiceResult<ServiceWithChannels, CatalogFailure> result = await channelCatalogService.FindAsync(
-            new NetworkId(networkId),
-            new ServiceId(serviceId),
+            key.Network,
+            key.Service,
             cancellationToken);
 
         if (!result.IsSuccess)

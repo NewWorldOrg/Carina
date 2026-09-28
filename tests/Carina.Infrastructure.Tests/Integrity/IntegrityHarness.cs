@@ -44,6 +44,21 @@ internal sealed class HeldEncodeWork(params DeclaredFile[] files) : IEncodeWorkL
     }
 }
 
+internal sealed class HeldPlaces(params RootListing[] listings) : IWrittenFileSurvey
+{
+    private readonly List<RootListing> listings = [.. listings];
+
+    public List<DeclaredFile> Pictures { get; } = [];
+
+    public IReadOnlyList<OutputRoot> Places => [.. listings.Select(listing => listing.Root)];
+
+    public Task<RootListing> ListAsync(OutputRoot place, CancellationToken cancellationToken)
+        => Task.FromResult(listings.Single(listing => listing.Root.Equals(place)));
+
+    public IReadOnlyList<DeclaredFile> Claimed(IReadOnlyList<LedgerFile> ledger, IReadOnlyList<DeclaredFile> declared)
+        => [.. declared, .. Pictures];
+}
+
 internal sealed class HeldSurvey : IRecordingFileSurvey
 {
     private readonly Dictionary<string, RootListing> listings = new(StringComparer.Ordinal);

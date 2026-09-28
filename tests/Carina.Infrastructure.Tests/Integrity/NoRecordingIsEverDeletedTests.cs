@@ -256,6 +256,7 @@ public sealed class NoRecordingIsEverDeletedTests
         return new IntegrityCheckJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             new LocalRecordingFileSurvey(settings, NullLogger<LocalRecordingFileSurvey>.Instance),
+            new HeldPlaces(),
             settings,
             new StoppedClock(Now),
             NullLogger<IntegrityCheckJob>.Instance);

@@ -245,6 +245,23 @@ public sealed class ScanEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, status);
     }
 
+    [Theory]
+    [InlineData("GET", "")]
+    [InlineData("POST", "/apply")]
+    [InlineData("POST", "/cancel")]
+    public async Task AScanNamedByTheUuidThatIsAllZeroesIsRefusedAsARequestAndNotAFault(string method, string rest)
+    {
+        await using var feature = new ScanFeature();
+        string path = $"/api/tuners/scan/{Guid.Empty}{rest}";
+
+        (HttpStatusCode status, JsonElement body) = method is "GET"
+            ? await feature.GetAsync(path)
+            : await feature.PostAsync(path);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal(ScanIdText.Description, body.GetProperty("message").GetString());
+    }
+
     [Fact]
     public async Task ACompletedScanShowsTheDifferenceItIsProposing()
     {

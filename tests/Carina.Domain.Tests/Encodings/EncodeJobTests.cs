@@ -149,6 +149,17 @@ public sealed class EncodeJobTests
         Assert.Equal(EncodeFileName.Working(job.RecordingId, job.Id, 2), job.WorkFileName);
     }
 
+    [Fact(DisplayName = "the artefact a job makes is the name it will be held to until it names it")]
+    public void TheArtefactAJobMakesIsTheNameItWillBeHeldToUntilItNamesIt()
+    {
+        EncodeJob waiting = Waiting();
+        EncodeJob named = Named();
+
+        Assert.Null(waiting.ArtefactName);
+        Assert.Equal(EncodeFileName.Artefact(waiting.RecordingId, waiting.ProfileId), waiting.ArtefactItMakes);
+        Assert.Equal(named.ArtefactName, named.ArtefactItMakes);
+    }
+
     [Fact(DisplayName = "the artefact is named while the job runs, and only then")]
     public void TheArtefactIsNamedWhileTheJobRunsAndOnlyThen()
     {

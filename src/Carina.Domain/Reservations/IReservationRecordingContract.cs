@@ -27,7 +27,11 @@ public sealed record RecordingTick(
 
 public interface IReservationRecordingContract
 {
-    Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken);
+    /// <summary>
+    /// The reservations in flight, and those whose effective window has not closed at <paramref name="at"/>
+    /// and opens no later than <paramref name="ahead"/> after it.
+    /// </summary>
+    Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, TimeSpan ahead, CancellationToken cancellationToken);
 
     Task<bool> ClaimAsync(ReservationId id, DateTime at, CancellationToken cancellationToken);
 

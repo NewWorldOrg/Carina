@@ -17,6 +17,7 @@ public sealed class PutSelectedChannelAction(ChannelCatalogService channelCatalo
 {
     [HttpPut]
     [ProducesResponseType<BaseResponder<BroadcastServiceResponder>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<BaseResponder<BroadcastServiceResponder>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<BaseResponder<BroadcastServiceResponder>>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<BaseResponder<BroadcastServiceResponder>>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Invoke(
@@ -25,10 +26,24 @@ public sealed class PutSelectedChannelAction(ChannelCatalogService channelCatalo
         [FromBody] SelectedChannelRequest? request,
         CancellationToken cancellationToken)
     {
+        if (ServiceKeyText.Read(networkId, serviceId) is not { } key)
+        {
+            return BadRequest(BaseResponder<BroadcastServiceResponder>.Error(ServiceKeyText.Description));
+        }
+
+        CandidateChannelId? candidate = request?.CandidateChannelId is { } chosen
+            ? CandidateChannelIdText.Read(chosen)
+            : null;
+
+        if (request?.CandidateChannelId is not null && candidate is null)
+        {
+            return BadRequest(BaseResponder<BroadcastServiceResponder>.Error(CandidateChannelIdText.Description));
+        }
+
         ServiceResult<ServiceWithChannels, CatalogFailure> result = await channelCatalogService.SelectAsync(
-            new NetworkId(networkId),
-            new ServiceId(serviceId),
-            request?.CandidateChannelId is { } chosen ? new CandidateChannelId(chosen) : null,
+            key.Network,
+            key.Service,
+            candidate,
             cancellationToken);
 
         if (!result.IsSuccess)

@@ -189,6 +189,7 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeChapter.cs EncodeChapter.Segment ChapterSegment",
         "/Carina.Domain/Encodings/EncodeDestination.cs EncodeDestination.IsRetired bool",
         "/Carina.Domain/Encodings/EncodeDestinationId.cs EncodeDestinationId.Wire string",
+        "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.ArtefactItMakes EncodeFileName",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.ChaptersFileName EncodeFileName",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.HasEnded bool",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Standing EncodeStanding",

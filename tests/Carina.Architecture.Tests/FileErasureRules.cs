@@ -10,6 +10,12 @@ public static partial class FileErasureRules
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs",
     ];
 
+    public static readonly IReadOnlyList<string> TheErasersOfThePlacesTheAppWrites =
+    [
+        "/Carina.Infrastructure/Integrity/LocalStrayFileEraser.cs",
+        "/Carina.Infrastructure/Integrity/PlacedStrayFileEraser.cs",
+    ];
+
     public static readonly IReadOnlyList<string> TheWayAFindingIsThrownAway =
     [
         "/Carina.Api/Controllers/Recordings/DeleteIntegrityFindingAction.cs",

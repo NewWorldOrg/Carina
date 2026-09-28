@@ -17,7 +17,7 @@ public static class IntegrityScan
         ArgumentNullException.ThrowIfNull(declared);
         ArgumentNullException.ThrowIfNull(listings);
 
-        Dictionary<string, RootListing> reachable = Reachable(listings, out int outOfReach);
+        Dictionary<string, RootListing> reachable = Reachable(listings, ledger, out int outOfReach);
         HashSet<string> claimed = Claimed(ledger, declared);
         List<IntegrityFinding> findings = [];
 
@@ -33,7 +33,8 @@ public static class IntegrityScan
                 continue;
             }
 
-            if (!reachable.TryGetValue(row.Root.Value, out RootListing? listing))
+            if (!reachable.TryGetValue(row.Root.Value, out RootListing? listing)
+                || listing.Place is not StoragePlace.Recordings)
             {
                 beyondReach++;
                 continue;
@@ -124,8 +125,12 @@ public static class IntegrityScan
 
     private static Dictionary<string, RootListing> Reachable(
         IReadOnlyList<RootListing> listings,
+        IReadOnlyList<LedgerFile> ledger,
         out int outOfReach)
     {
+        HashSet<string> recordingFiles = new(
+            ledger.Where(row => row is not null).Select(row => row.FileName.Value),
+            StringComparer.Ordinal);
         Dictionary<string, RootListing> reachable = new(StringComparer.Ordinal);
         HashSet<string> seen = new(StringComparer.Ordinal);
         outOfReach = 0;
@@ -141,7 +146,7 @@ public static class IntegrityScan
                     nameof(listings));
             }
 
-            if (listing.Reachable)
+            if (listing.Reachable && !ShowsTheRecordings(listing, recordingFiles))
             {
                 reachable[listing.Root.Value] = listing;
             }
@@ -153,6 +158,14 @@ public static class IntegrityScan
 
         return reachable;
     }
+
+    /// <summary>
+    /// Whether a place other than a recording root holds a file under a recording's own file name, which
+    /// is how a recording root looks when it is mounted there as well.
+    /// </summary>
+    private static bool ShowsTheRecordings(RootListing listing, HashSet<string> recordingFiles)
+        => listing.Place is not StoragePlace.Recordings
+           && listing.Files.Any(file => recordingFiles.Contains(file.Path));
 
     private static HashSet<string> Claimed(IReadOnlyList<LedgerFile> ledger, IReadOnlyList<DeclaredFile> declared)
     {

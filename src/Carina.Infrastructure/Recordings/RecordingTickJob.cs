@@ -103,6 +103,13 @@ public sealed class RecordingTickJob(
                 run.GaveUp.Count);
         }
 
+        if (run.HeldBack.Count > 0)
+        {
+            logger.LogDebug(
+                "{HeldBack} reservation(s) tried ahead of their start did not start yet; the next tick tries again.",
+                run.HeldBack.Count);
+        }
+
         if (run.Started.Count is 0 && run.Stopped.Count is 0 && run.Refused.Count is 0)
         {
             return;
