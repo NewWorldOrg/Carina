@@ -17,6 +17,15 @@ public static class EpgComparison
 
         var found = new List<EpgDivergence>();
 
+        if (!reservation.NetworkId.Equals(programme.NetworkId) || !reservation.ServiceId.Equals(programme.ServiceId))
+        {
+            found.Add(new EpgDivergence(
+                DivergedField.Service,
+                Carried(reservation.NetworkId.Value, reservation.ServiceId.Value),
+                Carried(programme.NetworkId.Value, programme.ServiceId.Value),
+                at));
+        }
+
         if (Moved(reservation.ProgrammeStartsAt, programme.StartsAt))
         {
             found.Add(new EpgDivergence(
@@ -55,4 +64,6 @@ public static class EpgComparison
         => (announced - held).Duration() > Unremarkable;
 
     private static string Said(DateTime moment) => moment.ToString("O");
+
+    private static string Carried(int networkId, int serviceId) => $"{networkId}-{serviceId}";
 }

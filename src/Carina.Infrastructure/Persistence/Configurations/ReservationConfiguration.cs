@@ -54,7 +54,7 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
             table.HasCheckConstraint(
                 "ck_reservation_cancellation",
                 """
-                (cancelled_because IS NULL OR cancelled_because IN ('ByHand', 'ProgrammeGone'))
+                (cancelled_because IS NULL OR cancelled_because IN ('ByHand', 'ProgrammeGone', 'SameBroadcast'))
                 AND (state = 'Cancelled') = (cancelled_because IS NOT NULL)
                 """);
             table.HasCheckConstraint(

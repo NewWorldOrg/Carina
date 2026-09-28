@@ -446,6 +446,59 @@ public sealed class Reservation
         CapturedAt = snapshot.CapturedAt;
     }
 
+    /// <summary>
+    /// Moves this reservation onto another listing of the same broadcast and says what moved. The
+    /// reservation keeps its identity, priority, margins, rule and wishes; a reservation already
+    /// holding a tuner does not move.
+    /// </summary>
+    public void Retarget(
+        ProgrammeRef programme,
+        DateTime endAt,
+        bool endAtConfirmed,
+        ProgrammeSnapshot snapshot,
+        IReadOnlyList<EpgDivergence> divergences,
+        BroadcastGroupKey? key,
+        BroadcastGroupRole role)
+    {
+        ArgumentNullException.ThrowIfNull(programme);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(divergences);
+
+        RefuseUnless(State is ReservationState.Scheduled or ReservationState.Conflict);
+
+        if (IsPinned)
+        {
+            throw new InvalidOperationException(
+                "A reservation that has been claimed is being recorded from the service it was given, "
+                + "and moving it to another listing would not move the recording.");
+        }
+
+        Regroup(key, role);
+        Reframe(programme.StartsAt, endAt, endAtConfirmed);
+
+        NetworkId = programme.NetworkId;
+        ServiceId = programme.ServiceId;
+        EventId = programme.EventId;
+        ProgrammeStartsAt = StartAt;
+        SnapshotName = snapshot.Name;
+        SnapshotSummary = snapshot.Summary;
+        SnapshotExtended = snapshot.Extended;
+        SnapshotGenres = snapshot.Genres;
+        SnapshotAudio = snapshot.Audio;
+        SnapshotSounds = snapshot.Sounds;
+        CapturedAt = snapshot.CapturedAt;
+
+        if (EpgMissing)
+        {
+            Reappear();
+        }
+
+        if (divergences.Count > 0)
+        {
+            Diverge(divergences);
+        }
+    }
+
     public void Diverge(IReadOnlyList<EpgDivergence> divergences)
     {
         ArgumentNullException.ThrowIfNull(divergences);
