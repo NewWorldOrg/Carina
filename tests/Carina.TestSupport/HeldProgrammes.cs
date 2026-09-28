@@ -157,6 +157,31 @@ public sealed class HeldProgrammes : IProgrammeRepository
                 .Take(rows),
         ]);
 
+    public Task<IReadOnlyList<Programme>> ListGroupedAsync(CancellationToken cancellationToken)
+    {
+        Programme[] linking =
+        [
+            .. Programmes.Where(programme => programme.Related.Any(related =>
+                related.Kind is RelationKind.Relayed or RelationKind.Moved)),
+        ];
+        HashSet<(int, int, int)> named =
+        [
+            .. linking
+                .SelectMany(programme => programme.Related)
+                .Where(related => related.Kind is RelationKind.Relayed or RelationKind.Moved)
+                .Select(related => (related.NetworkId, related.ServiceId, related.EventId)),
+        ];
+
+        return Task.FromResult<IReadOnlyList<Programme>>(
+        [
+            .. linking,
+            .. Programmes
+                .Where(programme => !linking.Contains(programme))
+                .Where(programme => named.Contains(
+                    (programme.NetworkId.Value, programme.ServiceId.Value, programme.EventId.Value))),
+        ]);
+    }
+
     public Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
     {
         Wiped++;

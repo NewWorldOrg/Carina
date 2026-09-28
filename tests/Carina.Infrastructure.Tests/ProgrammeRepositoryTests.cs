@@ -583,6 +583,63 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         }
     }
 
+    [Fact]
+    public async Task BrRd010TheGroupedProgrammesAreTheOnesCarryingARelayOrAMoveAndTheOnesTheyName()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 1) with
+        {
+            Related = [new RelatedProgramme(network, 1049, 2, RelationKind.Relayed)],
+        }, At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 2), At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 3) with
+        {
+            Related = [new RelatedProgramme(network, 1049, 4, RelationKind.Moved)],
+        }, At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 4), At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 5) with
+        {
+            Related = [new RelatedProgramme(network, 1049, 6, RelationKind.Shared)],
+        }, At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 6), At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 7), At), Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<Programme> grouped = await new ProgrammeRepository(reading).ListGroupedAsync(Cancel);
+
+        Assert.Equal(
+            [1, 2, 3, 4],
+            grouped
+                .Where(programme => programme.NetworkId.Value == network)
+                .Select(programme => programme.EventId.Value)
+                .Order());
+    }
+
+    [Fact]
+    public async Task BrRd010AProgrammeNamedByALinkButNotInTheGuideIsLeftOutOfTheGroupedOnes()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 1) with
+        {
+            Related = [new RelatedProgramme(network, 1049, 9, RelationKind.Relayed)],
+            Running = ProgrammeRunning.Running,
+        }, At), Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme grouped = Assert.Single(
+            await new ProgrammeRepository(reading).ListGroupedAsync(Cancel),
+            programme => programme.NetworkId.Value == network);
+
+        Assert.Equal(1, grouped.EventId.Value);
+        Assert.Equal(ProgrammeRunning.Running, grouped.Running);
+    }
+
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 
     private static ProgrammeId Id(int network, int carried = 1)

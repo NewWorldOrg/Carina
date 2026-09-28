@@ -351,4 +351,7 @@ internal sealed class StubbornProgrammes(IProgrammeRepository held) : IProgramme
 
     public Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
         => held.ForgetEverythingAsync(cancellationToken);
+
+    public Task<IReadOnlyList<Programme>> ListGroupedAsync(CancellationToken cancellationToken)
+        => held.ListGroupedAsync(cancellationToken);
 }
