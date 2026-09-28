@@ -70,6 +70,30 @@ public sealed class ReservationEndpointTests
     }
 
     [Theory]
+    [InlineData(ReservationCancellation.ByHand, "byHand")]
+    [InlineData(ReservationCancellation.SameBroadcast, "sameBroadcast")]
+    public async Task ACancelledReservationSaysWhyItWasCancelled(ReservationCancellation cancellation, string said)
+    {
+        await using var feature = new ReservationFeature();
+        Reservation cancelled = feature.Booked(4001, state: ReservationState.Cancelled, cancellation: cancellation);
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/reservations/{cancelled.Id.Value}");
+
+        Assert.Equal(said, body.GetProperty("data").GetProperty("cancellation").GetString());
+    }
+
+    [Fact]
+    public async Task AReservationThatStandsSaysNothingOfACancellation()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation standing = feature.Booked(4001);
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/reservations/{standing.Id.Value}");
+
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("data").GetProperty("cancellation").ValueKind);
+    }
+
+    [Theory]
     [InlineData("page=0")]
     [InlineData("from=2026-01-01T00:00:00Z&to=2027-06-01T00:00:00Z")]
     [InlineData("from=2026-08-24T12:00:00Z&to=2026-08-24T11:00:00Z")]

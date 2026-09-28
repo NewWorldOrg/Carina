@@ -74,6 +74,7 @@ public sealed record ReservationResponder(
     ReservationReceptionResponder Reception,
     ReservationDivergenceResponder Epg,
     ReservationBroadcastGroupResponder BroadcastGroup,
+    ReservationCancellation? Cancellation,
     DateTime CreatedAt)
 {
     public static ReservationResponder Of(Reservation reservation)
@@ -119,6 +120,7 @@ public sealed record ReservationResponder(
             new ReservationBroadcastGroupResponder(
                 reservation.BroadcastGroupKey?.Value,
                 reservation.BroadcastGroupRole),
+            reservation.Cancellation,
             reservation.CreatedAt);
     }
 }
