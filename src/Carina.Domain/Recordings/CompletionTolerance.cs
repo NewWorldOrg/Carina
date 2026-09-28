@@ -2,7 +2,7 @@ namespace Carina.Domain.Recordings;
 
 public sealed record CompletionTolerance
 {
-    public static readonly CompletionTolerance Default = new(0.995, 0.95, 10);
+    public static readonly CompletionTolerance Default = new(0.995, 0.5, 10);
 
     public CompletionTolerance(double completeCoverage, double truncatedCoverage, int sizeSlackPercent)
     {
