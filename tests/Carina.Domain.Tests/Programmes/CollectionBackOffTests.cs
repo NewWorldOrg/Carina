@@ -75,6 +75,31 @@ public sealed class CollectionBackOffTests
     }
 
     [Fact]
+    public void ComingBackShortHavingHeardPartOfAScheduleThatAlreadyReachesTheGoalWaitsTheOrdinaryTime()
+    {
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
+
+        visit.Record(
+            VisitOutcome.Incomplete,
+            At,
+            TimeSpan.FromSeconds(1),
+            heardTheSchedule: true,
+            reachedTheGoal: true);
+
+        Assert.Equal(At + Settings.BetweenVisits, CollectionBackOff.NotBefore(visit, Settings));
+    }
+
+    [Fact]
+    public void ReachingTheGoalDoesNotShortenTheWaitOfAStreamThatHeardNothing()
+    {
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
+
+        visit.Record(VisitOutcome.NoLock, At, TimeSpan.FromSeconds(1), reachedTheGoal: true);
+
+        Assert.Equal(At + (Settings.BeforeRetrying * 2), CollectionBackOff.NotBefore(visit, Settings));
+    }
+
+    [Fact]
     public void OnlyTheVisitsThatHeardNothingSinceTheScheduleWasLastHeardStretchTheWait()
     {
         StreamVisit visit = Visit(VisitOutcome.Incomplete);

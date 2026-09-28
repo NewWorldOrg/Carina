@@ -1944,6 +1944,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("outcome");
 
+                    b.Property<bool>("ReachedTheGoal")
+                        .HasColumnType("boolean")
+                        .HasColumnName("reached_the_goal");
+
                     b.HasKey("NetworkId", "TransportStreamId")
                         .HasName("pk_stream_visit");
 

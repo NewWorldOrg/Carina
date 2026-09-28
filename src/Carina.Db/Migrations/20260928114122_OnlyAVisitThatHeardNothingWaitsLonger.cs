@@ -21,7 +21,15 @@ public partial class OnlyAVisitThatHeardNothingWaitsLonger : Migration
             nullable: false,
             defaultValue: 0);
 
+        migrationBuilder.AddColumn<bool>(
+            name: "reached_the_goal",
+            table: "stream_visit",
+            type: "boolean",
+            nullable: false,
+            defaultValue: false);
+
         migrationBuilder.Sql("ALTER TABLE stream_visit ALTER COLUMN consecutive_unheard DROP DEFAULT");
+        migrationBuilder.Sql("ALTER TABLE stream_visit ALTER COLUMN reached_the_goal DROP DEFAULT");
 
         migrationBuilder.AddCheckConstraint(
             name: "ck_stream_visit_unheard",
@@ -36,6 +44,10 @@ public partial class OnlyAVisitThatHeardNothingWaitsLonger : Migration
 
         migrationBuilder.DropCheckConstraint(
             name: "ck_stream_visit_unheard",
+            table: "stream_visit");
+
+        migrationBuilder.DropColumn(
+            name: "reached_the_goal",
             table: "stream_visit");
 
         migrationBuilder.DropColumn(

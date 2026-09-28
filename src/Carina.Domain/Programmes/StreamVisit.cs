@@ -45,6 +45,12 @@ public sealed class StreamVisit
     /// </summary>
     public int ConsecutiveUnheard { get; private set; }
 
+    /// <summary>
+    /// Whether, once the last visit was written down, every service of the stream reached the wanted
+    /// coverage.
+    /// </summary>
+    public bool ReachedTheGoal { get; private set; }
+
     public int LastDurationMilliseconds { get; private set; }
 
     public static StreamVisit Rehydrate(
@@ -55,7 +61,8 @@ public sealed class StreamVisit
         VisitOutcome outcome,
         int consecutiveIncomplete,
         int lastDurationMilliseconds,
-        int consecutiveUnheard = 0)
+        int consecutiveUnheard = 0,
+        bool reachedTheGoal = false)
     {
         ArgumentNullException.ThrowIfNull(networkId);
         ArgumentNullException.ThrowIfNull(transportStreamId);
@@ -73,6 +80,7 @@ public sealed class StreamVisit
             Outcome = outcome,
             ConsecutiveIncomplete = consecutiveIncomplete,
             ConsecutiveUnheard = consecutiveUnheard,
+            ReachedTheGoal = reachedTheGoal,
             LastDurationMilliseconds = lastDurationMilliseconds,
         };
     }
@@ -83,7 +91,8 @@ public sealed class StreamVisit
         VisitOutcome outcome,
         DateTime at,
         TimeSpan took,
-        bool heardTheSchedule = false)
+        bool heardTheSchedule = false,
+        bool reachedTheGoal = false)
         => Rehydrate(
             networkId,
             transportStreamId,
@@ -92,17 +101,25 @@ public sealed class StreamVisit
             outcome,
             Counts(outcome) ? 1 : 0,
             Milliseconds(took),
-            Counts(outcome) && !heardTheSchedule ? 1 : 0);
+            Counts(outcome) && !heardTheSchedule ? 1 : 0,
+            reachedTheGoal);
 
     /// <summary>
     /// Writes down a visit's outcome; <paramref name="heardTheSchedule"/> says whether the visit
-    /// heard any section of the stream's schedule.
+    /// heard any section of the stream's schedule, and <paramref name="reachedTheGoal"/> whether every
+    /// service of the stream then reached the wanted coverage.
     /// </summary>
-    public void Record(VisitOutcome outcome, DateTime at, TimeSpan took, bool heardTheSchedule = false)
+    public void Record(
+        VisitOutcome outcome,
+        DateTime at,
+        TimeSpan took,
+        bool heardTheSchedule = false,
+        bool reachedTheGoal = false)
     {
         LastAttemptedAt = UtcTimes.Required(at, nameof(at));
         LastDurationMilliseconds = Milliseconds(took);
         Outcome = outcome;
+        ReachedTheGoal = reachedTheGoal;
 
         if (Settles(outcome))
         {

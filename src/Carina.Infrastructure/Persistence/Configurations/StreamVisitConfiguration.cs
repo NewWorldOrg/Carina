@@ -50,6 +50,7 @@ public sealed class StreamVisitConfiguration : IEntityTypeConfiguration<StreamVi
 
         builder.Property(visit => visit.ConsecutiveIncomplete).IsRequired();
         builder.Property(visit => visit.ConsecutiveUnheard).IsRequired();
+        builder.Property(visit => visit.ReachedTheGoal).IsRequired();
         builder.Property(visit => visit.LastDurationMilliseconds).IsRequired();
 
         builder.HasIndex(visit => visit.LastCompletedAt);

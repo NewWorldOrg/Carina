@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    [Migration("20260928112500_OnlyAVisitThatHeardNothingWaitsLonger")]
+    [Migration("20260928114122_OnlyAVisitThatHeardNothingWaitsLonger")]
     partial class OnlyAVisitThatHeardNothingWaitsLonger
     {
         /// <inheritdoc />
@@ -1946,6 +1946,10 @@ namespace Carina.Db.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasColumnName("outcome");
+
+                    b.Property<bool>("ReachedTheGoal")
+                        .HasColumnType("boolean")
+                        .HasColumnName("reached_the_goal");
 
                     b.HasKey("NetworkId", "TransportStreamId")
                         .HasName("pk_stream_visit");

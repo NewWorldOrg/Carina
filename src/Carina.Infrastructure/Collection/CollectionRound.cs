@@ -211,6 +211,8 @@ public sealed class CollectionRound(
     {
         DateTime at = clock.GetUtcNow().UtcDateTime;
         IReadOnlyList<VisitTally> counted = TallyOf(stream, visit);
+        bool heard = counted.Count > 0;
+        bool reached = heard && await ReachedTheGoalAsync(stream, at, abort);
         StreamVisit? held = await visits.FindAsync(stream.NetworkId, stream.TransportStreamId, abort);
 
         if (held is null)
@@ -221,7 +223,8 @@ public sealed class CollectionRound(
                 visit.Outcome,
                 at,
                 took,
-                heardTheSchedule: counted.Count > 0);
+                heardTheSchedule: heard,
+                reachedTheGoal: reached);
 
             first.Tallied(counted);
 
@@ -231,11 +234,34 @@ public sealed class CollectionRound(
             return;
         }
 
-        held.Record(visit.Outcome, at, took, heardTheSchedule: counted.Count > 0);
+        held.Record(visit.Outcome, at, took, heardTheSchedule: heard, reachedTheGoal: reached);
         held.Tallied(counted);
 
         await visits.SaveAsync(held, abort);
         events.Signal(AppEventName.EpgCollection);
+    }
+
+    private async Task<bool> ReachedTheGoalAsync(BroadcastStream stream, DateTime at, CancellationToken abort)
+    {
+        if (stream.Services.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (ServiceId service in stream.Services)
+        {
+            DateTime? until = await programmes.CoveredUntilAsync(
+                stream.NetworkId.Value,
+                service.Value,
+                abort);
+
+            if (!GuideCoverage.IsMet(until, at, settings.WantedCoverage))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static IReadOnlyList<VisitTally> TallyOf(BroadcastStream stream, VisitResult visit)
