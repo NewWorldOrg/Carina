@@ -28,6 +28,11 @@ public sealed class AddCandidateChannelAction(ChannelCatalogService channelCatal
         [FromBody] AddCandidateChannelRequest? request,
         CancellationToken cancellationToken)
     {
+        if (ServiceKeyText.Read(networkId, serviceId) is not { } key)
+        {
+            return BadRequest(BaseResponder<BroadcastServiceResponder>.Error(ServiceKeyText.Description));
+        }
+
         if (request?.Tuning is not { } asked)
         {
             return BadRequest(BaseResponder<BroadcastServiceResponder>.Error(
@@ -40,8 +45,8 @@ public sealed class AddCandidateChannelAction(ChannelCatalogService channelCatal
         }
 
         ServiceResult<ServiceWithChannels, CatalogFailure> result = await channelCatalogService.AddCandidateAsync(
-            new NetworkId(networkId),
-            new ServiceId(serviceId),
+            key.Network,
+            key.Service,
             tuning,
             cancellationToken);
 

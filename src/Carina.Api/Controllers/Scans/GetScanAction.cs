@@ -16,10 +16,16 @@ public sealed class GetScanAction(ScanService scanService) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<BaseResponder<ScanProgressResponder>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<BaseResponder<ScanProgressResponder>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<BaseResponder<ScanProgressResponder>>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Invoke(Guid scanId, CancellationToken cancellationToken)
     {
-        ServiceResult<ScanProgress, ScanFailure> result = await scanService.ProgressAsync(new ScanRunId(scanId), cancellationToken);
+        if (ScanIdText.Read(scanId) is not { } named)
+        {
+            return BadRequest(BaseResponder<ScanProgressResponder>.Error(ScanIdText.Description));
+        }
+
+        ServiceResult<ScanProgress, ScanFailure> result = await scanService.ProgressAsync(named, cancellationToken);
 
         if (!result.IsSuccess)
         {

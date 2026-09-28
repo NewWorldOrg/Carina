@@ -16,11 +16,17 @@ public sealed class CancelScanAction(ScanService scanService) : ControllerBase
 {
     [HttpPost]
     [ProducesResponseType<BaseResponder<ScanProgressResponder>>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<BaseResponder<ScanProgressResponder>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<BaseResponder<ScanProgressResponder>>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<BaseResponder<ScanProgressResponder>>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Invoke(Guid scanId, CancellationToken cancellationToken)
     {
-        ServiceResult<ScanProgress, ScanFailure> result = await scanService.CancelAsync(new ScanRunId(scanId), cancellationToken);
+        if (ScanIdText.Read(scanId) is not { } named)
+        {
+            return BadRequest(BaseResponder<ScanProgressResponder>.Error(ScanIdText.Description));
+        }
+
+        ServiceResult<ScanProgress, ScanFailure> result = await scanService.CancelAsync(named, cancellationToken);
 
         if (!result.IsSuccess)
         {

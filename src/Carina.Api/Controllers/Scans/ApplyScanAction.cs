@@ -17,12 +17,18 @@ public sealed class ApplyScanAction(ScanService scanService) : ControllerBase
 {
     [HttpPost]
     [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status410Gone)]
     public async Task<IActionResult> Invoke(Guid scanId, CancellationToken cancellationToken)
     {
-        ServiceResult<ScanApplication, ScanFailure> result = await scanService.ApplyAsync(new ScanRunId(scanId), cancellationToken);
+        if (ScanIdText.Read(scanId) is not { } named)
+        {
+            return BadRequest(BaseResponder<ScanApplicationResponder>.Error(ScanIdText.Description));
+        }
+
+        ServiceResult<ScanApplication, ScanFailure> result = await scanService.ApplyAsync(named, cancellationToken);
 
         if (!result.IsSuccess)
         {
