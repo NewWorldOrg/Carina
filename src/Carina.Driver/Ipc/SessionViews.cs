@@ -144,12 +144,16 @@ public static class SessionViews
     )
     {
         DeviceFaultKind? kind = manager.FaultKindOf(deviceId);
+        bool faulted = manager.IsFaulted(deviceId, out string? fault);
+        bool failing = !faulted && manager.IsFailingToTune(deviceId);
 
         return new()
         {
-            Level = manager.IsFaulted(deviceId, out string? fault)
+            Level = faulted
                 ? TunerHealthLevel.Faulted
-                : TunerHealthLevel.Healthy,
+                : failing
+                    ? TunerHealthLevel.Degraded
+                    : TunerHealthLevel.Healthy,
             DisablePending = state is TunerState.Draining,
             LnbPowered = device.Kind is DeviceKind.Satellite && device.LnbPower,
             Detail = fault,
@@ -158,6 +162,7 @@ public static class SessionViews
             FaultKind = kind?.Kind ?? TunerFaultKind.Unspecified,
             FaultDeclaredKind = kind?.Declared is { } declared ? DeviceViews.Wire(declared) : null,
             FaultReceivableKinds = [.. (kind?.Receives ?? []).Select(DeviceViews.Wire)],
+            DegradedKind = failing ? TunerDegradedKind.TuneFailing : TunerDegradedKind.Unspecified,
         };
     }
 

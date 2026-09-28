@@ -52,7 +52,7 @@ public sealed class TunerStatusTests
         };
 
         Assert.Equal(
-            """{"level":"faulted","disablePending":false,"lnbPowered":true,"detail":"the kind on this adapter is not the kind the ledger names","changedAt":null,"faultTitle":null,"faultKind":"unspecified","faultDeclaredKind":null,"faultReceivableKinds":[]}""",
+            """{"level":"faulted","disablePending":false,"lnbPowered":true,"detail":"the kind on this adapter is not the kind the ledger names","changedAt":null,"faultTitle":null,"faultKind":"unspecified","faultDeclaredKind":null,"faultReceivableKinds":[],"degradedKind":"unspecified"}""",
             DriverJson.Serialize(health)
         );
     }
@@ -103,6 +103,24 @@ public sealed class TunerStatusTests
         Assert.Equal(TunerFaultKind.Unspecified, health.FaultKind);
         Assert.Null(health.FaultDeclaredKind);
         Assert.Empty(health.FaultReceivableKinds);
+    }
+
+    [Fact]
+    public void ADegradedKindRoundTripsAndOneThisBuildDoesNotKnowReadsAsUnspecified()
+    {
+        TunerHealthDto? read = DriverJson.Deserialize(
+            DriverJson.Serialize(new TunerHealthDto
+            {
+                Level = TunerHealthLevel.Degraded,
+                DegradedKind = TunerDegradedKind.TuneFailing,
+            }),
+            DriverJson.Context.TunerHealthDto);
+        TunerHealthDto? unknown = DriverJson.Deserialize(
+            """{"level":"degraded","degradedKind":"runningHot"}""",
+            DriverJson.Context.TunerHealthDto);
+
+        Assert.Equal(TunerDegradedKind.TuneFailing, read?.DegradedKind);
+        Assert.Equal(TunerDegradedKind.Unspecified, unknown?.DegradedKind);
     }
 
     [Fact]

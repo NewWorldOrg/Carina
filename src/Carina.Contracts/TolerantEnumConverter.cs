@@ -212,6 +212,24 @@ public sealed class TunerFaultKindConverter : TolerantEnumConverter<TunerFaultKi
         };
 }
 
+public sealed class TunerDegradedKindConverter : TolerantEnumConverter<TunerDegradedKind>
+{
+    protected override string NameOf(TunerDegradedKind value) =>
+        value switch
+        {
+            TunerDegradedKind.TuneFailing => "tuneFailing",
+            _ => "unspecified",
+        };
+
+    protected override TunerDegradedKind? ValueOf(string name) =>
+        name switch
+        {
+            "tuneFailing" => TunerDegradedKind.TuneFailing,
+            "unspecified" => TunerDegradedKind.Unspecified,
+            _ => null,
+        };
+}
+
 public sealed class DeviceDetectionConverter : TolerantEnumConverter<DeviceDetection>
 {
     protected override string NameOf(DeviceDetection value) =>

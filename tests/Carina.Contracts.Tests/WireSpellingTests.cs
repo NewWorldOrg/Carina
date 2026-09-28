@@ -23,6 +23,7 @@ public sealed class WireSpellingTests
         AssertEveryValueIsSpelled(DriverJson.Context.TunerHealthLevel);
         AssertEveryValueIsSpelled(DriverJson.Context.DeviceDetection);
         AssertEveryValueIsSpelled(DriverJson.Context.TunerFaultKind);
+        AssertEveryValueIsSpelled(DriverJson.Context.TunerDegradedKind);
         AssertEveryValueIsSpelled(DriverJson.Context.TunerKind);
         AssertEveryValueIsSpelled(DriverJson.Context.TunerState);
         AssertEveryValueIsSpelled(DriverJson.Context.SessionState);

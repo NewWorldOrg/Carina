@@ -31,6 +31,17 @@ public enum TunerFaultKind
     RepeatedTuneFailure = 4,
 }
 
+/// <summary>
+/// Why the driver says a device it still hands out is not quite well, as a kind the reader can put in its own words.
+/// </summary>
+[JsonConverter(typeof(TunerDegradedKindConverter))]
+public enum TunerDegradedKind
+{
+    Unspecified = 0,
+
+    TuneFailing = 1,
+}
+
 [JsonConverter(typeof(DeviceDetectionConverter))]
 public enum DeviceDetection
 {
@@ -85,6 +96,12 @@ public sealed record TunerHealthDto
         get => faultReceivableKinds;
         init => faultReceivableKinds = value ?? [];
     }
+
+    /// <summary>
+    /// Why the device is degraded, or <see cref="TunerDegradedKind.Unspecified"/> when it is not degraded or the
+    /// driver that answered does not name the kind.
+    /// </summary>
+    public TunerDegradedKind DegradedKind { get; init; }
 }
 
 public sealed record CurrentSessionDto

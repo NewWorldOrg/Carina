@@ -500,6 +500,7 @@ public sealed class WireStabilityTests
                 "faultKind",
                 "faultDeclaredKind",
                 "faultReceivableKinds",
+                "degradedKind",
             ],
             FieldsOf(DriverJson.Serialize(new TunerHealthDto()))
         );

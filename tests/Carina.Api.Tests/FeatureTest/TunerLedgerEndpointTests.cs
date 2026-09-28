@@ -692,6 +692,33 @@ public sealed class TunerLedgerEndpointTests
         Assert.Equal("unspecified", observed.GetProperty("faultKind").GetString());
         Assert.Equal(JsonValueKind.Null, observed.GetProperty("faultDeclaredKind").ValueKind);
         Assert.Empty(observed.GetProperty("faultReceivableKinds").EnumerateArray());
+        Assert.Equal("unspecified", observed.GetProperty("degradedKind").GetString());
+    }
+
+    [Fact]
+    public async Task ADegradedTunerNamesTheKindOfDegradation()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), driver =>
+        {
+            Stocked(driver);
+            driver.Tuners =
+            [
+                new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)
+                {
+                    Health = new TunerHealthDto
+                    {
+                        Level = TunerHealthLevel.Degraded,
+                        DegradedKind = TunerDegradedKind.TuneFailing,
+                    },
+                },
+            ];
+        });
+
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        JsonElement observed = body.GetProperty("data").GetProperty("observed")[0];
+
+        Assert.Equal("degraded", observed.GetProperty("health").GetString());
+        Assert.Equal("tuneFailing", observed.GetProperty("degradedKind").GetString());
     }
 
     [Fact]

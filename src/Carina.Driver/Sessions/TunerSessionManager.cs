@@ -1483,6 +1483,13 @@ public sealed class TunerSessionManager(
 
         if (streak < RepeatedTuneFailureCeiling)
         {
+            if (streak is 1)
+            {
+                healthChangedAt[deviceId] = timeProvider.GetUtcNow();
+                events?.Signal(DriverEvents.TunerHealthChanged);
+                events?.Signal(DriverEvents.Tuners);
+            }
+
             return;
         }
 
@@ -1499,9 +1506,31 @@ public sealed class TunerSessionManager(
 
     private void ForgiveTuneFailures(string deviceId)
     {
+        bool forgiven;
+
         lock (streakGate)
         {
-            tuneFailureStreaks.Remove(deviceId);
+            forgiven = tuneFailureStreaks.Remove(deviceId);
+        }
+
+        if (forgiven && !faultedDevices.ContainsKey(deviceId))
+        {
+            healthChangedAt[deviceId] = timeProvider.GetUtcNow();
+            events?.Signal(DriverEvents.TunerHealthChanged);
+            events?.Signal(DriverEvents.Tuners);
+        }
+    }
+
+    /// <summary>
+    /// Whether a channel has failed to tune on this device since it last delivered a session through to its end,
+    /// fewer times than it takes to fault the device.
+    /// </summary>
+    public bool IsFailingToTune(string deviceId)
+    {
+        lock (streakGate)
+        {
+            return tuneFailureStreaks.TryGetValue(deviceId, out Dictionary<TuningKey, int>? perChannel)
+                   && perChannel.Values.Any(streak => streak > 0);
         }
     }
 
