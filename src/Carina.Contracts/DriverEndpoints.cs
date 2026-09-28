@@ -16,6 +16,10 @@ public static class DriverEndpoints
 
     public const string TunerLedger = "/tuners/ledger";
 
+    public const string LnbPower = "lnb-power";
+
+    public const string LedgerRevisionHeader = "If-Match";
+
     public const string Restart = "/restart";
 
     public const string Storage = "/storage";

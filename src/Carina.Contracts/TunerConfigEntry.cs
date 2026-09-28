@@ -51,3 +51,16 @@ public sealed record TunerToggleRequest
             ]
             : [];
 }
+
+public sealed record TunerLnbPowerRequest
+{
+    public bool? LnbPower { get; init; }
+
+    public IReadOnlyList<string> Validate() =>
+        LnbPower is null
+            ?
+            [
+                "lnbPower: expected true to power the low-noise block from this tuner or false to stop.",
+            ]
+            : [];
+}

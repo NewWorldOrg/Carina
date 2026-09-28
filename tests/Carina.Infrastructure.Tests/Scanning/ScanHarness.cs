@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Scanning;
+using Carina.Infrastructure.Tests.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -99,14 +101,20 @@ public sealed class StillClock : TimeProvider
 
 public sealed class ScanHarness
 {
-    public ScanHarness(ScriptedDriverClient driver, TimeProvider? clock = null, ScanSettings? settings = null)
+    public ScanHarness(
+        ScriptedDriverClient driver,
+        TimeProvider? clock = null,
+        ScanSettings? settings = null,
+        TunerCapacity? capacity = null)
     {
         Driver = driver;
         Clock = clock ?? new StillClock();
         Settings = settings ?? ScanSettings.Default;
+        Capacity = new HeldSeating(capacity);
 
         Orchestrator = new ChannelScanOrchestrator(
             Driver,
+            Capacity,
             Signals,
             Runs,
             Services,
@@ -122,6 +130,8 @@ public sealed class ScanHarness
     public TimeProvider Clock { get; }
 
     public ScanSettings Settings { get; }
+
+    internal HeldSeating Capacity { get; }
 
     public DriverSignalRelay Signals { get; } = new(NullLogger<DriverSignalRelay>.Instance);
 

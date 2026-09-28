@@ -20,6 +20,7 @@ public sealed class StartScanAction(ScanService scanService) : ControllerBase
     [ProducesResponseType<BaseResponder<ScanStartedResponder>>(StatusCodes.Status202Accepted)]
     [ProducesResponseType<BaseResponder<ScanStartedResponder>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<BaseResponder<ScanRefusedResponder>>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<BaseResponder<ScanStartedResponder>>(StatusCodes.Status422UnprocessableEntity)]
     [ProducesResponseType<BaseResponder<ScanStartedResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(
         [FromBody] StartScanRequest? request,
@@ -34,6 +35,11 @@ public sealed class StartScanAction(ScanService scanService) : ControllerBase
 
         ServiceResult<ScanLaunch> result = await scanService.StartAsync(scope, cancellationToken);
         ScanLaunch launch = result.Data!;
+
+        if (launch is { NoTunerReceivesIt: true, CouldNotStartBecause: { } nothingToReceive })
+        {
+            return UnprocessableEntity(BaseResponder<ScanStartedResponder>.Error(nothingToReceive));
+        }
 
         if (launch.CouldNotStartBecause is { } refusal)
         {

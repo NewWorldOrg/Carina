@@ -38,10 +38,22 @@ internal sealed class TunerHoldingDriverClient : IDriverClient
         => throw new NotSupportedException();
 
     public Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+        => Task.FromResult(Unreachable is { } failure
+            ? DriverCall<TunerLedgerDto>.Unreachable(failure)
+            : DriverCall<TunerLedgerDto>.Reached(new TunerLedgerDto
+            {
+                Tuners = [.. Tuners.Select(tuner => new TunerConfigEntry { DeviceId = tuner.DeviceId, Kind = tuner.Kind })],
+            }));
 
     public Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(
         IReadOnlyList<TunerConfigEntry> tuners,
+        string? expectedSavedHash,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<TunerLedgerDto>> SwitchLnbPowerAsync(
+        string deviceId,
+        bool on,
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 

@@ -26,6 +26,8 @@ public sealed record TunerLedgerRequest
 {
     public IReadOnlyList<TunerEntryRequest>? Tuners { get; init; }
 
+    public string? SavedHash { get; init; }
+
     public IReadOnlyList<TunerConfigEntry> ToEntries()
         => [.. (Tuners ?? []).Select(entry => entry.ToEntry())];
 }
@@ -33,4 +35,10 @@ public sealed record TunerLedgerRequest
 public sealed record ToggleTunerRequest
 {
     public bool? Disabled { get; init; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LnbPowerRequest
+{
+    public bool? LnbPower { get; init; }
 }

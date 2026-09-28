@@ -31,6 +31,13 @@ internal sealed class LedgerOnlyDriverClient : IDriverClient
 
     public Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(
         IReadOnlyList<TunerConfigEntry> tuners,
+        string? expectedSavedHash,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<TunerLedgerDto>> SwitchLnbPowerAsync(
+        string deviceId,
+        bool on,
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 

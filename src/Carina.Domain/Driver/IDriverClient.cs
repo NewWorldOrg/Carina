@@ -12,8 +12,21 @@ public interface IDriverClient
 
     Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Replaces the saved ledger. When <paramref name="expectedSavedHash"/> is given, the driver takes the
+    /// save only while its saved ledger is still the one that hash was read from.
+    /// </summary>
     Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(
         IReadOnlyList<TunerConfigEntry> tuners,
+        string? expectedSavedHash,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Turns the low-noise block power of one satellite tuner on or off in the saved ledger alone.
+    /// </summary>
+    Task<DriverCall<TunerLedgerDto>> SwitchLnbPowerAsync(
+        string deviceId,
+        bool on,
         CancellationToken cancellationToken);
 
     Task<DriverCall<DriverRestartDto>> RequestRestartAsync(CancellationToken cancellationToken);

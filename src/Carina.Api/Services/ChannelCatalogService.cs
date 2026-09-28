@@ -25,13 +25,15 @@ public enum CatalogFailure
 public sealed record ServiceWithChannels(
     BroadcastService Service,
     IReadOnlyList<CandidateChannel> Candidates,
-    StationLogoStamp? Logo = null);
+    StationLogoStamp? Logo = null,
+    ServiceReception Reception = ServiceReception.Unknown);
 
 public sealed class ChannelCatalogService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates,
     IStationLogoRepository logos,
     IDriverClient driver,
+    ITunerCapacityDirectory capacity,
     IAppEventPublisher events,
     IRecalculationNotice notices,
     TimeProvider clock)
@@ -39,18 +41,22 @@ public sealed class ChannelCatalogService(
     public async Task<ServiceResult<IReadOnlyList<ServiceWithChannels>>> ListAsync(
         CancellationToken cancellationToken)
     {
-        var listed = new List<ServiceWithChannels>();
+        List<ServiceWithChannels> listed = [];
         IReadOnlyList<StationLogoStamp> collected = await logos.StampsAsync(cancellationToken);
+        TunerCapacity? inService = await capacity.ReadAsync(cancellationToken);
 
         foreach (BroadcastService service in await services.ListAsync(cancellationToken))
         {
+            IReadOnlyList<CandidateChannel> held = await candidates.ListForServiceAsync(
+                service.NetworkId,
+                service.ServiceId,
+                cancellationToken);
+
             listed.Add(new ServiceWithChannels(
                 service,
-                await candidates.ListForServiceAsync(
-                    service.NetworkId,
-                    service.ServiceId,
-                    cancellationToken),
-                CollectedFor(service, collected)));
+                held,
+                CollectedFor(service, collected),
+                ServiceReceptions.Of(held, inService)));
         }
 
         return ServiceResult<IReadOnlyList<ServiceWithChannels>>.Success(listed);
@@ -254,6 +260,7 @@ public sealed class ChannelCatalogService(
         return new ServiceWithChannels(
             service,
             found,
-            CollectedFor(service, await logos.StampsAsync(cancellationToken)));
+            CollectedFor(service, await logos.StampsAsync(cancellationToken)),
+            ServiceReceptions.Of(found, await capacity.ReadAsync(cancellationToken)));
     }
 }

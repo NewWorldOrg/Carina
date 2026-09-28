@@ -9,6 +9,7 @@ public static class TunerLedgerStatus
         TunerLedgerFailure.DriverUnreachable => StatusCodes.Status503ServiceUnavailable,
         TunerLedgerFailure.CapabilityMissing => StatusCodes.Status501NotImplemented,
         TunerLedgerFailure.NoSuchTuner => StatusCodes.Status404NotFound,
+        TunerLedgerFailure.LedgerChanged => StatusCodes.Status409Conflict,
         _ => StatusCodes.Status400BadRequest,
     };
 }

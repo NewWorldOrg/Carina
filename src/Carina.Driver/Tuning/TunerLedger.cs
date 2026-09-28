@@ -15,6 +15,8 @@ public enum LedgerRefusal
     UnknownDevice,
     UndeterminedKind,
     Unwritable,
+    Stale,
+    NotInLedger,
 }
 
 public sealed record LedgerRevision

@@ -200,6 +200,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "putPlaybackPosition",
                 "putSelectedChannel",
                 "putTunerHealthSettings",
+                "putTunerLnbPower",
                 "putTuners",
                 "queueEncodeJob",
                 "rebuildEpg",

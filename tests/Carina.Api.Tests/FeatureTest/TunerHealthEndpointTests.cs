@@ -134,6 +134,31 @@ public sealed class TunerHealthEndpointTests
     }
 
     [Fact]
+    public async Task ATypeWhoseOnlyTunerHasBeenTurnedOffIsNoLongerJudgedEvenThoughItsServicesWentQuiet()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(
+            FakeDriver.HelloFor("instance-a", capabilities: Everything),
+            driver =>
+            {
+                Stocked(
+                    driver,
+                    [Entry("adapter0", TunerKind.Terrestrial), Entry("adapter1", TunerKind.Satellite)]);
+
+                driver.Tuners =
+                [
+                    new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle),
+                    new TunerSnapshot("adapter1", TunerKind.Satellite, TunerState.Disabled),
+                ];
+            });
+        Quiet(feature, TimeSpan.FromDays(9));
+
+        Assert.Equal(
+            ["isdbT"],
+            (await SystemsAsync(feature)).EnumerateArray()
+                .Select(system => system.GetProperty("system").GetString()));
+    }
+
+    [Fact]
     public async Task AMachineWhoseTunersAreAllUndeterminedDoesNotAnswerAllClear()
     {
         await using DriverFeature feature = await StartAsync(TunerKind.Unspecified);

@@ -10,24 +10,29 @@ using Microsoft.AspNetCore.Mvc;
 namespace Carina.Api.Controllers.Tuners;
 
 [ApiController]
-[Route("api/tuners")]
+[Route("api/tuners/{deviceId}/lnb-power")]
 [EndpointEffect(EndpointEffect.Changing)]
-public sealed class PutTunersAction(TunerLedgerService tunerLedgerService) : ControllerBase
+public sealed class PutTunerLnbPowerAction(TunerLedgerService tunerLedgerService) : ControllerBase
 {
     [HttpPut]
     [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status200OK)]
     [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status501NotImplemented)]
     [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(
-        [FromBody] TunerLedgerRequest request,
+        string deviceId,
+        [FromBody] LnbPowerRequest request,
         CancellationToken cancellationToken)
     {
-        ServiceResult<TunerLedgerView, TunerLedgerFailure> result = await tunerLedgerService.ReplaceAsync(
-            request?.ToEntries() ?? [],
-            request?.SavedHash,
-            cancellationToken);
+        if (request?.LnbPower is not { } on)
+        {
+            return BadRequest(BaseResponder<TunerLedgerResponder>.Error(
+                "lnbPower: expected true to power the low-noise block from this tuner or false to stop."));
+        }
+
+        ServiceResult<TunerLedgerView, TunerLedgerFailure> result =
+            await tunerLedgerService.SwitchLnbPowerAsync(deviceId, on, cancellationToken);
 
         if (!result.IsSuccess)
         {

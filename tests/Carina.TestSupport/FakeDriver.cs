@@ -48,6 +48,12 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public TunerToggleRequest? LastToggle { get; private set; }
 
+    public string? LastLedgerRevision { get; private set; }
+
+    public string? LastLnbSwitchedDeviceId { get; private set; }
+
+    public TunerLnbPowerRequest? LastLnbSwitch { get; private set; }
+
     public StartSessionRequest? LastStartRequest { get; private set; }
 
     public string? LastStopReason { get; private set; }
@@ -126,6 +132,7 @@ public sealed class FakeDriver : IAsyncDisposable
             driver.CannedAsync(context, driver.Ledger, DriverJson.Context.TunerLedgerDto));
         app.MapPut(DriverEndpoints.Tuners, driver.ReplaceLedgerAsync);
         app.MapPatch($"{DriverEndpoints.Tuners}/{{id}}", driver.ToggleTunerAsync);
+        app.MapPut($"{DriverEndpoints.Tuners}/{{id}}/{DriverEndpoints.LnbPower}", driver.SwitchLnbPowerAsync);
         app.MapPost(DriverEndpoints.Sessions, driver.StartSessionAsync);
         app.MapDelete($"{DriverEndpoints.Sessions}/{{id}}", driver.StopSessionAsync);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", driver.AbortedStreamAsync);
@@ -281,6 +288,9 @@ public sealed class FakeDriver : IAsyncDisposable
             context.RequestAborted);
 
         LastReplacedLedger = entries;
+        LastLedgerRevision = context.Request.Headers[DriverEndpoints.LedgerRevisionHeader].ToString() is { Length: > 0 } read
+            ? read
+            : null;
 
         if (entries is not { Count: > 0 })
         {
@@ -310,6 +320,21 @@ public sealed class FakeDriver : IAsyncDisposable
         DetectedDevices
             .FirstOrDefault(device => string.Equals(device.DeviceId, deviceId, StringComparison.Ordinal))
             ?.Kinds.FirstOrDefault() ?? TunerKind.Unspecified;
+
+    private async Task SwitchLnbPowerAsync(HttpContext context)
+    {
+        if (await HandledAsync(context))
+        {
+            return;
+        }
+
+        LastLnbSwitchedDeviceId = context.Request.RouteValues["id"] as string ?? string.Empty;
+        LastLnbSwitch = await context.Request.ReadFromJsonAsync(
+            DriverJson.Context.TunerLnbPowerRequest,
+            context.RequestAborted);
+
+        await WriteAsync(context, StatusCodes.Status200OK, Ledger, DriverJson.Context.TunerLedgerDto);
+    }
 
     private async Task ToggleTunerAsync(HttpContext context)
     {

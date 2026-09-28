@@ -23,9 +23,11 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
     private readonly ScanSettings settings;
     private readonly TunedStreamProbe prober;
     private readonly IDriverClient driver;
+    private readonly ITunerCapacityDirectory capacity;
 
     public ChannelScanOrchestrator(
         IDriverClient driver,
+        ITunerCapacityDirectory capacity,
         IDriverSignals signals,
         IScanRunRepository runs,
         IBroadcastServiceRepository services,
@@ -36,9 +38,11 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         ScanSettings settings)
     {
         ArgumentNullException.ThrowIfNull(driver);
+        ArgumentNullException.ThrowIfNull(capacity);
         ArgumentNullException.ThrowIfNull(settings);
 
         this.driver = driver;
+        this.capacity = capacity;
         this.signals = signals;
         this.runs = runs;
         this.services = services;
@@ -72,6 +76,15 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                 greeting.Failure ?? "The driver did not answer, so no tuner can be asked to scan.");
         }
 
+        if (await ReceivableAsync(scope, cancellationToken) is not { } walkable)
+        {
+            return ScanOutcome.NothingATunerCanReceive(
+                $"No tuner in service receives {string.Join(", ", scope.Systems.Select(TuneSystemConverter.WireName))},"
+                + " so there is nothing this scan could walk.");
+        }
+
+        IReadOnlyList<TuningParameters> targets = await ScanTargets.WalkAsync(walkable, satelliteStreams, cancellationToken);
+
         ScanRunStart start = await runs.StartAsync(
             ScanRun.Start(ScanRunId.New(), hello.InstanceId, Now),
             cancellationToken);
@@ -92,12 +105,22 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             }
         });
 
-        return await WalkAsync(run, scope, observer, interruption, cancellationToken);
+        return await WalkAsync(run, targets, observer, interruption, cancellationToken);
+    }
+
+    private async Task<ScanScope?> ReceivableAsync(ScanScope scope, CancellationToken cancellationToken)
+    {
+        if (await capacity.ReadAsync(cancellationToken) is not { Undetermined.Count: 0 } known)
+        {
+            return scope;
+        }
+
+        return scope.Within(known.Reachable);
     }
 
     private async Task<ScanOutcome> WalkAsync(
         ScanRun run,
-        ScanScope scope,
+        IReadOnlyList<TuningParameters> targets,
         IScanRunObserver observer,
         CancellationTokenSource interruption,
         CancellationToken cancellationToken)
@@ -106,7 +129,6 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             cancellationToken,
             interruption.Token);
 
-        IReadOnlyList<TuningParameters> targets = await ScanTargets.WalkAsync(scope, satelliteStreams, cancellationToken);
         var attempts = new List<ScanRunAttempt>();
         var carried = new Dictionary<TuningParameters, StreamProbe>();
         var probed = new Dictionary<TuningParameters, StreamProbe>();
