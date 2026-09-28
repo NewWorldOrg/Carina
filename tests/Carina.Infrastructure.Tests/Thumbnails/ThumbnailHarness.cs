@@ -101,6 +101,58 @@ internal sealed class HeldRenderer(
     }
 }
 
+internal sealed class GatedRenderer : IThumbnailRenderer
+{
+    private readonly Lock counting = new();
+
+    private int drawing;
+
+    private int mostAtOnce;
+
+    public TaskCompletionSource Gate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public ConcurrentQueue<ThumbnailRequest> Asked { get; } = new();
+
+    public int MostAtOnce
+    {
+        get
+        {
+            lock (counting)
+            {
+                return mostAtOnce;
+            }
+        }
+    }
+
+    public async Task<ThumbnailRender> RenderAsync(ThumbnailRequest request, CancellationToken cancellationToken)
+    {
+        Asked.Enqueue(request);
+
+        lock (counting)
+        {
+            drawing++;
+            mostAtOnce = Math.Max(mostAtOnce, drawing);
+        }
+
+        try
+        {
+            await Gate.Task.WaitAsync(cancellationToken);
+
+            return ThumbnailRender.Drawn();
+        }
+        finally
+        {
+            lock (counting)
+            {
+                drawing--;
+            }
+        }
+    }
+
+    public Task<ThumbnailRender> FrameAsync(ThumbnailFrameRequest request, CancellationToken cancellationToken)
+        => Task.FromResult(ThumbnailRender.Drawn([0xff, 0xd8]));
+}
+
 internal sealed class ThrowingRenderer : IThumbnailRenderer
 {
     public Task<ThumbnailRender> RenderAsync(ThumbnailRequest request, CancellationToken cancellationToken)

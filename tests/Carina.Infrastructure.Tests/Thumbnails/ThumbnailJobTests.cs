@@ -411,6 +411,51 @@ public sealed class ThumbnailJobTests
         Assert.Equal(ThumbnailFault.ProgrammeMissing, Assert.Single(worklist.Written).Fault);
     }
 
+    [Fact]
+    public async Task AskingAgainWhileAPassIsDrawingTheSameRecordingWaitsForItInsteadOfDrawingAlongside()
+    {
+        ThumbnailSubject subject = Subject(RecordingOutcome.Complete);
+        HeldWorklist worklist = new HeldWorklist().Holding(subject);
+        GatedRenderer renderer = new();
+        using ThumbnailJob job = Job(worklist, renderer);
+
+        Task<ThumbnailPass> pass = job.RunAsync(Cancel);
+        await Eventually.Happens(() => renderer.Asked.Count is 1, "the pass never started drawing");
+
+        Task<ThumbnailRemake> remake = job.RemakeAsync(subject.Id, Cancel);
+
+        Assert.Single(renderer.Asked);
+        Assert.False(remake.IsCompleted);
+
+        renderer.Gate.SetResult();
+
+        Assert.Equal(1, (await pass.WaitAsync(Eventually.Patience)).Drawn);
+        Assert.Equal(ThumbnailRemake.Drawn, await remake.WaitAsync(Eventually.Patience));
+        Assert.Equal(2, renderer.Asked.Count);
+        Assert.Equal(1, renderer.MostAtOnce);
+        Assert.All(renderer.Asked, asked => Assert.Equal($"/srv/pictures/{subject.Id.Wire}.jpg", asked.Destination));
+    }
+
+    [Fact]
+    public async Task TwoRequestsToDrawTheSameRecordingAgainAreDrawnOneAfterTheOther()
+    {
+        ThumbnailSubject subject = Subject(RecordingOutcome.Complete);
+        HeldWorklist worklist = new HeldWorklist().Holding(subject);
+        GatedRenderer renderer = new();
+        using ThumbnailJob job = Job(worklist, renderer);
+
+        Task<ThumbnailRemake> first = job.RemakeAsync(subject.Id, Cancel);
+        Task<ThumbnailRemake> second = job.RemakeAsync(subject.Id, Cancel);
+
+        Assert.Single(renderer.Asked);
+
+        renderer.Gate.SetResult();
+
+        Assert.Equal(ThumbnailRemake.Drawn, await first.WaitAsync(Eventually.Patience));
+        Assert.Equal(ThumbnailRemake.Drawn, await second.WaitAsync(Eventually.Patience));
+        Assert.Equal(1, renderer.MostAtOnce);
+    }
+
     private static ThumbnailSettings Settings { get; } = new()
     {
         WrittenTo = "/srv/pictures",

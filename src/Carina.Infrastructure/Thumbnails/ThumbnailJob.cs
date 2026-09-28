@@ -18,6 +18,8 @@ public sealed class ThumbnailJob(
 {
     public const string Extension = ".jpg";
 
+    private readonly SemaphoreSlim oneAtATime = new(1, 1);
+
     private int running;
 
     public async Task<ThumbnailPass> RunAsync(CancellationToken cancellationToken)
@@ -67,6 +69,12 @@ public sealed class ThumbnailJob(
             ThumbnailState.Failed => ThumbnailRemake.Failed,
             _ => ThumbnailRemake.OutOfReach,
         };
+    }
+
+    public override void Dispose()
+    {
+        oneAtATime.Dispose();
+        base.Dispose();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -174,6 +182,23 @@ public sealed class ThumbnailJob(
     }
 
     private async Task<ThumbnailState?> WorkOnAsync(
+        IThumbnailWorklist worklist,
+        ThumbnailSubject subject,
+        CancellationToken cancellationToken)
+    {
+        await oneAtATime.WaitAsync(cancellationToken);
+
+        try
+        {
+            return await DrawAsync(worklist, subject, cancellationToken);
+        }
+        finally
+        {
+            oneAtATime.Release();
+        }
+    }
+
+    private async Task<ThumbnailState?> DrawAsync(
         IThumbnailWorklist worklist,
         ThumbnailSubject subject,
         CancellationToken cancellationToken)
