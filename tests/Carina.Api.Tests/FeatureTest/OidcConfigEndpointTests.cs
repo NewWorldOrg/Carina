@@ -36,6 +36,7 @@ public sealed class OidcConfigEndpointTests
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, saved.StatusCode);
+        Assert.Equal("providerUnreachable", await RefusalAsync(saved));
         Assert.Null(probe.Settings.Settings);
         Assert.Equal(0, probe.Settings.Saves);
     }
@@ -115,6 +116,7 @@ public sealed class OidcConfigEndpointTests
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, saved.StatusCode);
+        Assert.Equal("secretRequired", await RefusalAsync(saved));
         Assert.Contains(
             OidcConfigService.AFirstSaveCarriesItsSecret,
             await saved.Content.ReadAsStringAsync(),
@@ -134,7 +136,66 @@ public sealed class OidcConfigEndpointTests
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, saved.StatusCode);
+        Assert.Equal("discoveryUrlInvalid", await RefusalAsync(saved));
         Assert.Empty(probe.Idp.Visits);
+    }
+
+    [Fact]
+    public async Task AClientIdTooLongToKeepIsRefusedAsAClientIdThatCannotBeKept()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp();
+
+        using HttpResponseMessage saved = await probe.SaveConfigAsync(new
+        {
+            discoveryUrl = MockIdentityProvider.DiscoveryUrl,
+            clientId = new string('c', OidcSettings.LongestClientId + 1),
+            clientSecret = OidcProbe.Secret,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, saved.StatusCode);
+        Assert.Equal("clientIdInvalid", await RefusalAsync(saved));
+        Assert.Null(probe.Settings.Settings);
+    }
+
+    [Fact]
+    public async Task ARestrictionCarryingAControlCharacterIsRefusedAsARestrictionThatCannotBeKept()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp();
+
+        using HttpResponseMessage saved = await probe.SaveConfigAsync(new
+        {
+            discoveryUrl = MockIdentityProvider.DiscoveryUrl,
+            clientId = "carina",
+            clientSecret = OidcProbe.Secret,
+            allowedGroups = new[] { "opera\u0007tors" },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, saved.StatusCode);
+        Assert.Equal("restrictionInvalid", await RefusalAsync(saved));
+        Assert.Null(probe.Settings.Settings);
+    }
+
+    [Fact]
+    public async Task ClearingTheFormWithARestrictionThatCannotBeKeptIsRefusedRatherThanFailing()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp();
+
+        using HttpResponseMessage saved = await probe.SaveConfigAsync(new
+        {
+            discoveryUrl = string.Empty,
+            clientId = string.Empty,
+            allowedHostedDomains = new[] { "example\u0007test" },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, saved.StatusCode);
+        Assert.Equal("restrictionInvalid", await RefusalAsync(saved));
+    }
+
+    private static async Task<string?> RefusalAsync(HttpResponseMessage refused)
+    {
+        using JsonDocument body = JsonDocument.Parse(await refused.Content.ReadAsStringAsync());
+
+        return body.RootElement.GetProperty("data").GetProperty("refusal").GetString();
     }
 
     [Fact]

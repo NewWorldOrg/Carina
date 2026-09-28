@@ -22,6 +22,8 @@ public sealed class WireSpellingTests
         AssertEveryValueIsSpelled(DriverJson.Context.SignalLock);
         AssertEveryValueIsSpelled(DriverJson.Context.TunerHealthLevel);
         AssertEveryValueIsSpelled(DriverJson.Context.DeviceDetection);
+        AssertEveryValueIsSpelled(DriverJson.Context.TunerFaultKind);
+        AssertEveryValueIsSpelled(DriverJson.Context.TunerDegradedKind);
         AssertEveryValueIsSpelled(DriverJson.Context.TunerKind);
         AssertEveryValueIsSpelled(DriverJson.Context.TunerState);
         AssertEveryValueIsSpelled(DriverJson.Context.SessionState);
@@ -71,6 +73,17 @@ public sealed class WireSpellingTests
     public void TunerHealthLevelIsSpelledThisWay(TunerHealthLevel value, string wire)
     {
         AssertRoundTrip(value, wire, DriverJson.Context.TunerHealthLevel);
+    }
+
+    [Theory]
+    [InlineData(TunerFaultKind.Unspecified, "unspecified")]
+    [InlineData(TunerFaultKind.LedgerDisagrees, "ledgerDisagrees")]
+    [InlineData(TunerFaultKind.DeviceFailed, "deviceFailed")]
+    [InlineData(TunerFaultKind.DeviceFailedAgain, "deviceFailedAgain")]
+    [InlineData(TunerFaultKind.RepeatedTuneFailure, "repeatedTuneFailure")]
+    public void TunerFaultKindIsSpelledThisWay(TunerFaultKind value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.TunerFaultKind);
     }
 
     [Theory]

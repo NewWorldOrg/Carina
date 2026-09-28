@@ -42,3 +42,5 @@ public sealed record OidcConfigResponder(
             view.RedirectUriGuessed);
     }
 }
+
+public sealed record OidcConfigRefusedResponder(OidcConfigRefusal Refusal);

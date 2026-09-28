@@ -52,6 +52,8 @@ public static class FfmpegInvocation
             "-loglevel",
             "error",
             "-y",
+            "-fflags",
+            "discardcorrupt",
             "-ss",
             at.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture),
             "-i",

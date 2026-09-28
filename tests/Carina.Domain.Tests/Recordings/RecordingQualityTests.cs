@@ -143,6 +143,7 @@ public sealed class RecordingQualityTests
         RecordingQuality read = RecordingQuality.Of(
             counted,
             20_000,
+            0,
             Bands(Moved(QualityThresholdKey.PacketsLeftScrambledUnwatchable, 0.01, 0.05)));
 
         Assert.Equal(QualityLevel.Warning, read.Scrambled);
@@ -155,6 +156,7 @@ public sealed class RecordingQualityTests
         RecordingQuality read = RecordingQuality.Of(
             DropCounters.Counted(5_000, 1_000_000),
             0,
+            0,
             Bands(Moved(QualityThresholdKey.PacketsLostUnwatchable, 0.001, 0.01)));
 
         Assert.Equal(QualityLevel.Warning, read.Overall);
@@ -162,7 +164,7 @@ public sealed class RecordingQualityTests
 
     [Fact]
     public void ARecordingIsNotReadWithoutTheLevelsItIsReadAgainst()
-        => Assert.Throws<ArgumentNullException>(() => RecordingQuality.Of(DropCounters.Counted(0, 1), 0, null!));
+        => Assert.Throws<ArgumentNullException>(() => RecordingQuality.Of(DropCounters.Counted(0, 1), 0, 0, null!));
 
     [Fact]
     public void ARecordingThatLostNothingAndWasUnlockedIsCountedClean()
@@ -198,8 +200,46 @@ public sealed class RecordingQualityTests
         Assert.False(RecordingQuality.CountedClean(tighter).Compile()(recording));
     }
 
+    [Fact]
+    public void ACountedRecordingWithAGapInItStandsAtLeastAtTheWarningLevel()
+    {
+        RecordingQuality read = RecordingQuality.Of(DropCounters.Counted(0, 1_000_000), 0, 2_500, AsShipped);
+
+        Assert.Equal(QualityLevel.Warning, read.Overall);
+        Assert.Equal(QualityLevel.Good, read.Scrambled);
+    }
+
+    [Fact]
+    public void AGapDoesNotLiftARecordingThatIsAlreadyWorse()
+    {
+        RecordingQuality read = RecordingQuality.Of(DropCounters.Counted(50_000, 1_000_000), 0, 2_500, AsShipped);
+
+        Assert.Equal(QualityLevel.MayNotBeWatchable, read.Overall);
+    }
+
+    [Fact]
+    public void AGapInARecordingNothingCountedLeavesItUnmeasured()
+        => Assert.Equal(
+            QualityLevel.Unmeasured,
+            RecordingQuality.Of(DropCounters.Unmeasured, null, 2_500, AsShipped).Overall);
+
+    [Fact]
+    public void AGapIsNotNegative()
+        => Assert.Throws<ArgumentOutOfRangeException>(
+            () => RecordingQuality.Of(DropCounters.Counted(0, 1), 0, -1, AsShipped));
+
+    [Fact]
+    public void ARecordingWithAGapInItIsNotCountedClean()
+    {
+        Recording recording = RecordingFactory.Started();
+        recording.Measure(DropCounters.Counted(0, 741375), DropTimeline.Unlocated, 0, 0, RecordingFactory.Now);
+
+        recording.Missed(new RecordingGap(RecordingFactory.Now.AddSeconds(10), RecordingFactory.Now.AddSeconds(12.5)));
+        Assert.False(RecordingQuality.CountedClean(AsShipped).Compile()(recording));
+    }
+
     private static RecordingQuality Read(DropCounters counters, long? scrambled)
-        => RecordingQuality.Of(counters, scrambled, AsShipped);
+        => RecordingQuality.Of(counters, scrambled, 0, AsShipped);
 
     private static bool CountedClean(DropCounters counters, long? scrambled)
     {

@@ -569,14 +569,42 @@ public sealed class SessionViewsTests : IDisposable
     {
         TunerSessionManager manager = Manager();
 
-        manager.Fault("adapter0", "the frontend stopped answering");
+        TunerContradiction contradiction = new("adapter0", DeviceKind.Terrestrial, [DeviceKind.Satellite]);
+
+        manager.Fault(contradiction);
 
         TunerHealthDto? health = Tuner(manager, "adapter0").Health;
 
         Assert.NotNull(health);
         Assert.Equal(TunerHealthLevel.Faulted, health.Level);
-        Assert.Equal("the frontend stopped answering", health.Detail);
+        Assert.Equal(contradiction.Detail, health.Detail);
         Assert.Equal(Start, health.ChangedAt);
+    }
+
+    [Fact]
+    public void ATunerTheLedgerDisagreesWithNamesTheKindOfFaultAndBothKinds()
+    {
+        TunerSessionManager manager = Manager();
+
+        manager.Fault(new TunerContradiction("adapter0", DeviceKind.Terrestrial, [DeviceKind.Satellite]));
+
+        TunerHealthDto? health = Tuner(manager, "adapter0").Health;
+
+        Assert.NotNull(health);
+        Assert.Equal(TunerFaultKind.LedgerDisagrees, health.FaultKind);
+        Assert.Equal(TunerKind.Terrestrial, health.FaultDeclaredKind);
+        Assert.Equal([TunerKind.Satellite], health.FaultReceivableKinds);
+    }
+
+    [Fact]
+    public void AHealthyTunerNamesNoKindOfFault()
+    {
+        TunerHealthDto? health = Tuner(Manager(), "adapter0").Health;
+
+        Assert.NotNull(health);
+        Assert.Equal(TunerFaultKind.Unspecified, health.FaultKind);
+        Assert.Null(health.FaultDeclaredKind);
+        Assert.Empty(health.FaultReceivableKinds);
     }
 
     [Fact]

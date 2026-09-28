@@ -25,7 +25,7 @@ public sealed class TunerLedgerReconciler(
 
         foreach (TunerContradiction contradiction in contradictions)
         {
-            sessions.Fault(contradiction.DeviceId, contradiction.Detail);
+            sessions.Fault(contradiction);
 
             diagnostics.Report(
                 DiagnosticReason.DeviceFaulted,

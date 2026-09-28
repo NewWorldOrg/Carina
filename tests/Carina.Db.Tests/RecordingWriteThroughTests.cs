@@ -221,6 +221,56 @@ public sealed class RecordingWriteThroughTests(MigratedScratchDatabase database)
         Assert.Equal(Now.AddHours(1), read.PromisedWindowEnd);
     }
 
+    [Fact]
+    public async Task AGapKeptOnARecordingIsReadBackWithWhatItMissed()
+    {
+        Recording recording = Begin(60120);
+        await Add(recording);
+
+        await Reload(
+            recording.Id,
+            loaded => loaded.Missed(new RecordingGap(Now.AddMinutes(5).AddSeconds(12), Now.AddMinutes(5).AddSeconds(14.5))));
+
+        await using CarinaDbContext context = Context();
+        Recording read = await Load(context, recording.Id);
+        RecordingGap gap = Assert.Single(read.Gaps);
+
+        Assert.Equal(Now.AddMinutes(5).AddSeconds(12), gap.From);
+        Assert.Equal(DateTimeKind.Utc, gap.From.Kind);
+        Assert.Equal(2_500, read.MissedMs);
+    }
+
+    [Fact]
+    public async Task ARecordingThatNeverMissedAnythingIsReadBackWithoutAGap()
+    {
+        Recording recording = Begin(60121);
+        await Add(recording);
+
+        await using CarinaDbContext context = Context();
+        Recording read = await Load(context, recording.Id);
+
+        Assert.Empty(read.Gaps);
+        Assert.Equal(0, read.MissedMs);
+    }
+
+    [Theory]
+    [InlineData("gaps = '[{\"from\":\"2026-08-24T20:05:12Z\",\"until\":\"2026-08-24T20:05:14.5Z\"}]'::jsonb")]
+    [InlineData("missed_ms = 2500")]
+    [InlineData("gaps = '{}'::jsonb")]
+    public async Task WhatARecordingMissedAndTheGapsItKeptCannotDisagree(string change)
+    {
+        Recording recording = Begin(60122 + change.Length);
+        await Add(recording);
+
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using NpgsqlCommand command = new($"UPDATE recording SET {change} WHERE id = '{recording.Id.Value}'", connection);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_gaps", refusal.ConstraintName);
+    }
+
     private static Recording Begin(
         int eventId,
         ReservationId? reservationId = null,

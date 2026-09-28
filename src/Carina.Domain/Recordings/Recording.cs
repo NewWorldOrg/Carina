@@ -9,6 +9,8 @@ public sealed class Recording
 {
     private List<Interruption> interruptions = [];
 
+    private List<RecordingGap> gaps = [];
+
     private List<OutcomeDetail> outcomeDetail = [];
 
     private Recording()
@@ -50,6 +52,14 @@ public sealed class Recording
         get => interruptions;
         private set => interruptions = [.. value];
     }
+
+    public IReadOnlyList<RecordingGap> Gaps
+    {
+        get => gaps;
+        private set => gaps = [.. value];
+    }
+
+    public long MissedMs { get; private set; }
 
     public DateTime ExpectedWindowStart { get; private set; }
 
@@ -214,7 +224,8 @@ public sealed class Recording
         DateTime? leftBehindAt = null,
         int? filesLeftBehind = null,
         bool encodeWhenRecorded = true,
-        DateTime? descrambledAt = null)
+        DateTime? descrambledAt = null,
+        IReadOnlyList<RecordingGap>? gaps = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -301,6 +312,7 @@ public sealed class Recording
         RefuseAThumbnailForAFailure(outcome, thumbnailState);
         RefuseAPictureThatDoesNotSayWhyItIsMissing(thumbnailState, thumbnailFault);
         RefuseAHistoryThatDoesNotAddUp(interruptions, resumeCount, startedAtActual);
+        RefuseGapsThatDoNotFollowOneAnother(gaps ?? [], startedAtActual);
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, stoppedAtActual, nameof(stoppedAtActual));
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, abortedAt, nameof(abortedAt));
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, observedAt, nameof(observedAt));
@@ -380,6 +392,8 @@ public sealed class Recording
             DescrambledAt = UtcTimes.Optional(descrambledAt, nameof(descrambledAt)),
             EncodeWhenRecorded = encodeWhenRecorded,
             Interruptions = interruptions,
+            Gaps = gaps ?? [],
+            MissedMs = MissedIn(gaps ?? []),
             OutcomeDetail = outcomeDetail,
         };
     }
@@ -549,6 +563,26 @@ public sealed class Recording
             interruptions[^1].OccurredAt,
             UtcTimes.Required(at, nameof(at)));
         ResumeCount++;
+    }
+
+    /// <summary>
+    /// Keeps a gap a session carrying on into this recording's file left behind. A gap that ends where one already
+    /// kept ends is the same gap seen again, and is kept once.
+    /// </summary>
+    public void Missed(RecordingGap gap)
+    {
+        ArgumentNullException.ThrowIfNull(gap);
+        RefuseUnlessInFlight();
+
+        if (gaps.Any(kept => kept.Until == gap.Until))
+        {
+            return;
+        }
+
+        RefuseGapsThatDoNotFollowOneAnother([.. gaps, gap], StartedAtActual);
+
+        gaps.Add(gap);
+        MissedMs = MissedIn(gaps);
     }
 
     public void Note(OutcomeDetail detail)
@@ -745,6 +779,26 @@ public sealed class Recording
             throw new ArgumentException(
                 $"A picture that is {thumbnailState} was not stopped by anything, so it names no fault.",
                 nameof(thumbnailFault));
+        }
+    }
+
+    private static long MissedIn(IReadOnlyList<RecordingGap> gaps)
+        => gaps.Sum(gap => (long)Math.Ceiling(gap.Lasts.TotalMilliseconds));
+
+    private static void RefuseGapsThatDoNotFollowOneAnother(IReadOnlyList<RecordingGap> gaps, DateTime startedAtActual)
+    {
+        DateTime previous = startedAtActual;
+
+        foreach (RecordingGap gap in gaps)
+        {
+            if (gap.From < previous)
+            {
+                throw new ArgumentException(
+                    "Gaps fall after the recording began, in the order they happened, and none of them overlap.",
+                    nameof(gaps));
+            }
+
+            previous = gap.Until;
         }
     }
 

@@ -23,6 +23,19 @@ public sealed record OidcConfigChange(
     IReadOnlyList<string>? AllowedGroups,
     IReadOnlyList<string>? AllowedHostedDomains);
 
+public enum OidcConfigRefusal
+{
+    SecretRequired = 1,
+
+    DiscoveryUrlInvalid = 2,
+
+    ClientIdInvalid = 3,
+
+    RestrictionInvalid = 4,
+
+    ProviderUnreachable = 5,
+}
+
 public sealed record OidcConfigView(
     bool Configured,
     string? DiscoveryUrl,

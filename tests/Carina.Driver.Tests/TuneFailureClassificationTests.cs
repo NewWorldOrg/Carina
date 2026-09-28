@@ -236,6 +236,7 @@ public sealed class TuneFailureClassificationTests
 
         Assert.Equal(TunerState.Faulted, tuner.State);
         Assert.Equal(SessionRefusalTitles.NoLock, tuner.Health?.FaultTitle);
+        Assert.Equal(TunerFaultKind.RepeatedTuneFailure, tuner.Health?.FaultKind);
     }
 
     [Fact]
@@ -268,7 +269,7 @@ public sealed class TuneFailureClassificationTests
         )));
 
         manager.Begin(Request("scan-1", 14));
-        manager.Fault("adapter0", "the kind on this adapter is not the kind the ledger names");
+        manager.Fault(new TunerContradiction("adapter0", DeviceKind.Terrestrial, [DeviceKind.Satellite]));
 
         TunerSnapshot tuner = Assert.Single(SessionViews.Tuners(Configuration, manager));
 
@@ -289,6 +290,52 @@ public sealed class TuneFailureClassificationTests
 
         Assert.Equal(TunerState.Idle, tuner.State);
         Assert.Null(tuner.Health?.FaultTitle);
+        Assert.Equal(TunerHealthLevel.Degraded, tuner.Health?.Level);
+        Assert.Equal(TunerDegradedKind.TuneFailing, tuner.Health?.DegradedKind);
+        Assert.Equal(TunerFaultKind.Unspecified, tuner.Health?.FaultKind);
+    }
+
+    [Fact]
+    public void ATunerThatDeliversASessionThroughAfterFailingToTuneIsHealthyAgain()
+    {
+        TunerSessionManager manager = Manager(new FailingChannelDeviceFactory(deadChannel: 14));
+
+        Assert.Equal(SessionRefusal.NoLock, manager.Begin(Request("scan-1", 14)).Refusal);
+        clock.Advance(TimeSpan.FromSeconds(6));
+
+        Assert.Equal(
+            TunerHealthLevel.Degraded,
+            Assert.Single(SessionViews.Tuners(Configuration, manager)).Health?.Level);
+
+        Assert.True(manager.Begin(Request("scan-2", 20)).TryGetSession(out TunerSession? delivered));
+
+        delivered.Stop();
+        delivered.WaitForEnd(Deadlock);
+
+        TunerSnapshot tuner = Assert.Single(SessionViews.Tuners(Configuration, manager));
+
+        Assert.Equal(TunerHealthLevel.Healthy, tuner.Health?.Level);
+        Assert.Equal(TunerDegradedKind.Unspecified, tuner.Health?.DegradedKind);
+    }
+
+    [Fact]
+    public void ATunerThatFaultedIsFaultedRatherThanDegraded()
+    {
+        TunerSessionManager manager = Manager(new ThrowingDeviceFactory(() => DvbFailure.NoLock(
+            "the frontend did not lock within 5 seconds."
+        )));
+
+        for (int attempt = 1; attempt <= TunerSessionManager.RepeatedTuneFailureCeiling; attempt++)
+        {
+            manager.Begin(Request($"scan-{attempt}", 14));
+
+            clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        TunerSnapshot tuner = Assert.Single(SessionViews.Tuners(Configuration, manager));
+
+        Assert.Equal(TunerHealthLevel.Faulted, tuner.Health?.Level);
+        Assert.Equal(TunerDegradedKind.Unspecified, tuner.Health?.DegradedKind);
     }
 
     private sealed class FailingChannelDeviceFactory(int deadChannel) : ITunerDeviceFactory

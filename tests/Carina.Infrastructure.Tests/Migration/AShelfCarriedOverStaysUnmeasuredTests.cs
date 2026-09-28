@@ -75,7 +75,7 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
             arrived.Order(StringComparer.Ordinal));
         Assert.All(shelf.Items, recording =>
         {
-            RecordingQuality quality = RecordingQuality.Of(recording.Counters, recording.ScrambledPackets, bands);
+            RecordingQuality quality = RecordingQuality.Of(recording.Counters, recording.ScrambledPackets, recording.MissedMs, bands);
 
             Assert.False(recording.Counters.Measured);
             Assert.Null(recording.Counters.Dropped);

@@ -38,6 +38,24 @@ public sealed class ScrubberTests
     }
 
     [Fact]
+    public async Task BrKd027AFrameAskedForNearASeamIsTakenPastIt()
+    {
+        HeldRenderer renderer = new();
+        Recording recording = Begin(new ServiceId(1024));
+        recording.Missed(new RecordingGap(Noon.AddSeconds(312), Noon.AddSeconds(314.5)));
+        recording.Wrote(TimeSpan.FromMinutes(30));
+        recording.Abort(Noon.AddMinutes(30));
+        recording.Settle(RecordingOutcome.Complete, 1_000, Noon.AddMinutes(30));
+
+        await Scrubber(renderer, recording).AtAsync(recording.Id, TimeSpan.FromSeconds(313), Cancel);
+        await Scrubber(renderer, recording).AtAsync(recording.Id, TimeSpan.FromSeconds(400), Cancel);
+
+        Assert.Equal(
+            [TimeSpan.FromSeconds(317.5), TimeSpan.FromSeconds(400)],
+            renderer.AskedForAFrame.Select(asked => asked.At));
+    }
+
+    [Fact]
     public async Task ThePictureTheProgrammeHandedOverIsThePictureThatComesBack()
     {
         var renderer = new HeldRenderer(framed: _ => ThumbnailRender.Drawn(Picture));

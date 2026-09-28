@@ -38,3 +38,9 @@ public sealed record SessionResponder(
 }
 
 public sealed record PasswordChangedResponder(int SessionsEnded);
+
+public sealed record PasswordRefusedResponder(PasswordRefusal Refusal, int ShortestLength, int LongestLength)
+{
+    public static PasswordRefusedResponder Of(PasswordRefusal refusal)
+        => new(refusal, LocalAccountService.ShortestPassword, LocalAccountService.LongestPassword);
+}

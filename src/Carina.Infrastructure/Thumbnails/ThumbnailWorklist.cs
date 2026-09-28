@@ -34,7 +34,9 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
                 recording.FileName,
                 recording.ServiceId,
                 recording.Outcome,
-                recording.WrittenDurationMs))
+                recording.WrittenDurationMs,
+                recording.StartedAtActual,
+                recording.Gaps))
             .ToListAsync(cancellationToken);
 
         return [.. rows.Select(Read)];
@@ -93,7 +95,8 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
             recording.FileName,
             recording.ServiceId,
             outcome,
-            recording.Written);
+            recording.Written,
+            RecordingGap.SeamsIn(recording.StartedAtActual, recording.Gaps));
     }
 
     private IQueryable<Recording> Waiting()
@@ -115,7 +118,8 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
             row.FileName,
             row.Service,
             outcome,
-            TimeSpan.FromMilliseconds(row.WrittenDurationMs));
+            TimeSpan.FromMilliseconds(row.WrittenDurationMs),
+            RecordingGap.SeamsIn(row.StartedAtActual, row.Gaps));
     }
 
     private sealed record Row(
@@ -124,5 +128,7 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
         RecordingFileName FileName,
         ServiceId Service,
         RecordingOutcome? Outcome,
-        long WrittenDurationMs);
+        long WrittenDurationMs,
+        DateTime StartedAtActual,
+        IReadOnlyList<RecordingGap> Gaps);
 }

@@ -25,8 +25,8 @@ public sealed class RecordingIsFrozenOnceItEndsTests
 
         Assert.Equal(
             [
-                "Abort", "Acquire", "Descrambled", "Erased", "Extend", "Illustrate", "Interrupt", "Measure", "Note",
-                "Resume", "Settle", "Wrote",
+                "Abort", "Acquire", "Descrambled", "Erased", "Extend", "Illustrate", "Interrupt", "Measure", "Missed",
+                "Note", "Resume", "Settle", "Wrote",
             ],
             offered);
         Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Length);
@@ -75,6 +75,8 @@ public sealed class RecordingIsFrozenOnceItEndsTests
             null,
             0,
             Later));
+        Assert.Throws<InvalidOperationException>(
+            () => recording.Missed(new RecordingGap(Later, Later.AddSeconds(3))));
         Assert.Throws<InvalidOperationException>(() => recording.Note(RecordingFactory.Fault()));
         Assert.Throws<InvalidOperationException>(() => recording.Resume(Later));
         Assert.Throws<InvalidOperationException>(
@@ -153,7 +155,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Empty(moved.Except(
             [nameof(Recording.ThumbnailState), nameof(Recording.ThumbnailFault)],
             StringComparer.Ordinal));
-        Assert.Equal(48, before.Count);
+        Assert.Equal(50, before.Count);
     }
 
     private static Recording Settled()

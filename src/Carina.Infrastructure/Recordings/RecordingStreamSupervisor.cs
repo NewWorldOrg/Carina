@@ -307,6 +307,7 @@ public sealed class RecordingStreamSupervisor(
         DropTimeline positions = Placed(reading.Positions);
         long? scrambled = reading.ScrambledPackets;
         DateTime opened = session.StartedAt.UtcDateTime;
+        RecordingGap? gap = GapBefore(session);
         bool resumed = false;
         bool advanced = false;
 
@@ -322,8 +323,15 @@ public sealed class RecordingStreamSupervisor(
                 RecordingResumption.Adopt(loaded, session.DeviceId);
                 bool measured = ReadsDifferently(loaded, counters, positions, scrambled, reading.EovfCount);
                 bool wrote = Advance(loaded, opened, now);
+                bool missed = gap is not null && Follows(loaded, gap);
+
+                if (missed)
+                {
+                    loaded.Missed(gap!);
+                }
+
                 loaded.Measure(counters, positions, scrambled, reading.EovfCount, now);
-                advanced = wrote || measured;
+                advanced = wrote || measured || missed;
                 resumed = RecordingResumption.CloseAnyOpenBreak(loaded, now);
 
                 return true;
@@ -482,7 +490,7 @@ public sealed class RecordingStreamSupervisor(
                 foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(
                              false,
                              weighed,
-                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, bands).Scrambled))
+                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, loaded.MissedMs, bands).Scrambled))
                 {
                     loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
                 }
@@ -546,7 +554,7 @@ public sealed class RecordingStreamSupervisor(
                         loaded.ExpectedWindowStart,
                         loaded.ExpectedWindowEnd,
                         loaded.AbortedAt,
-                        RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, bands).Scrambled),
+                        RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, loaded.MissedMs, bands).Scrambled),
                     bitrate,
                     CompletionTolerance.Default);
 
@@ -720,6 +728,25 @@ public sealed class RecordingStreamSupervisor(
                 ? RecordingFault.DriverLost
                 : RecordingFault.TuneFailed,
         };
+
+    /// <summary>
+    /// The stretch a session that carried on into a file that already held something left out: from the last write
+    /// before it opened the file to its own first write.
+    /// </summary>
+    private static RecordingGap? GapBefore(SessionSnapshot session)
+        => session.AppendedAfter is { } after
+           && session.FirstWrittenAt is { } first
+           && first > after
+            ? new RecordingGap(after.UtcDateTime, first.UtcDateTime)
+            : null;
+
+    /// <summary>
+    /// Whether a gap is one this recording has not kept yet and that falls after the start and after every gap it
+    /// has kept.
+    /// </summary>
+    private static bool Follows(Recording recording, RecordingGap gap)
+        => gap.From >= recording.StartedAtActual
+           && recording.Gaps.All(kept => kept.Until != gap.Until && gap.From >= kept.Until);
 
     private static DateTime AsFarAsItIsCounted(Recording recording)
         => recording.MeasuredUpdatedAt ?? recording.StartedAtActual;

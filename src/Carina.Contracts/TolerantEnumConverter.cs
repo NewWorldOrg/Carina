@@ -188,6 +188,48 @@ public sealed class TunerHealthLevelConverter : TolerantEnumConverter<TunerHealt
         };
 }
 
+public sealed class TunerFaultKindConverter : TolerantEnumConverter<TunerFaultKind>
+{
+    protected override string NameOf(TunerFaultKind value) =>
+        value switch
+        {
+            TunerFaultKind.LedgerDisagrees => "ledgerDisagrees",
+            TunerFaultKind.DeviceFailed => "deviceFailed",
+            TunerFaultKind.DeviceFailedAgain => "deviceFailedAgain",
+            TunerFaultKind.RepeatedTuneFailure => "repeatedTuneFailure",
+            _ => "unspecified",
+        };
+
+    protected override TunerFaultKind? ValueOf(string name) =>
+        name switch
+        {
+            "ledgerDisagrees" => TunerFaultKind.LedgerDisagrees,
+            "deviceFailed" => TunerFaultKind.DeviceFailed,
+            "deviceFailedAgain" => TunerFaultKind.DeviceFailedAgain,
+            "repeatedTuneFailure" => TunerFaultKind.RepeatedTuneFailure,
+            "unspecified" => TunerFaultKind.Unspecified,
+            _ => null,
+        };
+}
+
+public sealed class TunerDegradedKindConverter : TolerantEnumConverter<TunerDegradedKind>
+{
+    protected override string NameOf(TunerDegradedKind value) =>
+        value switch
+        {
+            TunerDegradedKind.TuneFailing => "tuneFailing",
+            _ => "unspecified",
+        };
+
+    protected override TunerDegradedKind? ValueOf(string name) =>
+        name switch
+        {
+            "tuneFailing" => TunerDegradedKind.TuneFailing,
+            "unspecified" => TunerDegradedKind.Unspecified,
+            _ => null,
+        };
+}
+
 public sealed class DeviceDetectionConverter : TolerantEnumConverter<DeviceDetection>
 {
     protected override string NameOf(DeviceDetection value) =>

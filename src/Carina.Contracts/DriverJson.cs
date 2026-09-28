@@ -68,6 +68,8 @@ public static class DriverJson
 [JsonSerializable(typeof(SignalLock))]
 [JsonSerializable(typeof(TunerHealthLevel))]
 [JsonSerializable(typeof(DeviceDetection))]
+[JsonSerializable(typeof(TunerFaultKind))]
+[JsonSerializable(typeof(TunerDegradedKind))]
 [JsonSerializable(typeof(TunerKind))]
 [JsonSerializable(typeof(TunerState))]
 [JsonSerializable(typeof(SessionState))]

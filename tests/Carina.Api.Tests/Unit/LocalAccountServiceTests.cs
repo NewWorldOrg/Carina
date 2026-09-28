@@ -293,7 +293,7 @@ public sealed class LocalAccountServiceTests
             new string('x', LocalAccountService.ShortestPassword - 1));
 
         Assert.False(asked.IsSuccess);
-        Assert.Equal(PasswordRefusal.TooWeak, asked.ErrorType);
+        Assert.Equal(PasswordRefusal.OutOfLength, asked.ErrorType);
         Assert.Equal(SessionStatus.Active, there.StatusAt(Now(), SessionPolicy.Default));
     }
 

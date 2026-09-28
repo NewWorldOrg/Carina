@@ -1104,7 +1104,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         TunerSessionManager manager = Manager();
 
-        manager.Fault("adapter1", "the delivery systems it reports are not the ones recorded");
+        manager.Fault(new TunerContradiction("adapter1", DeviceKind.Satellite, [DeviceKind.Terrestrial]));
 
         SessionStart start = manager.Begin(TypedSatellite("s-9"));
 

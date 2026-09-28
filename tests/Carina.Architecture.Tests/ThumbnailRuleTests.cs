@@ -63,6 +63,7 @@ public sealed class ThumbnailRuleTests
     [InlineData("Extend")]
     [InlineData("Wrote")]
     [InlineData("Acquire")]
+    [InlineData("Missed")]
     public void EveryWayOfSayingHowARecordingEndedIsStillCalledWhatTheTripWireCallsIt(string named)
     {
         Assert.Contains(named, ThumbnailRules.WaysToSayHowARecordingEnded, StringComparer.Ordinal);

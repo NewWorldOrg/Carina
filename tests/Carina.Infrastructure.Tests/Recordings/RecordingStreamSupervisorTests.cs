@@ -614,6 +614,75 @@ public sealed class RecordingStreamSupervisorTests
     }
 
     [Fact]
+    public async Task ASessionThatCarriedOnIntoTheFileLeavesTheStretchItMissedOnTheRecording()
+    {
+        Recording recording = InFlight();
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+        WatchedDriver driver = new();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = CarriedOn(
+            recording,
+            lastWritten: Airs.AddMinutes(5).AddSeconds(12),
+            firstWritten: Airs.AddMinutes(5).AddSeconds(14.5));
+        RecordingStreamSupervisor supervisor = Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10)));
+
+        RecordingWatch first = await supervisor.WatchAsync(Cancel);
+        await supervisor.WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+        RecordingGap gap = Assert.Single(read.Gaps);
+
+        Assert.True(first.CountsMoved);
+        Assert.Equal(Airs.AddMinutes(5).AddSeconds(12), gap.From);
+        Assert.Equal(Airs.AddMinutes(5).AddSeconds(14.5), gap.Until);
+        Assert.Equal(2_500, read.MissedMs);
+    }
+
+    [Fact]
+    public async Task ASessionThatBeganTheFileLeavesNoGap()
+    {
+        Recording recording = InFlight();
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+        WatchedDriver driver = new();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = CarriedOn(
+            recording,
+            lastWritten: null,
+            firstWritten: Airs.AddSeconds(1));
+
+        await Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10))).WatchAsync(Cancel);
+
+        Assert.Empty(ledger.Read(recording.Id).Gaps);
+        Assert.Equal(0, ledger.Read(recording.Id).MissedMs);
+    }
+
+    [Fact]
+    public async Task AGapTheDriverPlacesBeforeTheRecordingBeganIsNotKept()
+    {
+        Recording recording = InFlight();
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+        WatchedDriver driver = new();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = CarriedOn(
+            recording,
+            lastWritten: Airs.AddSeconds(-5),
+            firstWritten: Airs.AddSeconds(2));
+
+        RecordingWatch watch = await Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10))).WatchAsync(Cancel);
+
+        Assert.Equal(1, watch.Kept);
+        Assert.Empty(ledger.Read(recording.Id).Gaps);
+    }
+
+    private static DriverCall<SessionSnapshot> CarriedOn(Recording recording, DateTime? lastWritten, DateTime firstWritten)
+        => DriverCall<SessionSnapshot>.Reached(
+            Live(recording, firstWritten.AddSeconds(-1)).Value! with
+            {
+                AppendedAfter = lastWritten is { } after ? new DateTimeOffset(after) : null,
+                FirstWrittenAt = new DateTimeOffset(firstWritten),
+            });
+
+    [Fact]
     public async Task APassAtTheInstantARecordingWasLastCountedMovedNoCounts()
     {
         Recording recording = InFlight();

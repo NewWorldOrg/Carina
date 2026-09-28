@@ -86,7 +86,7 @@ public sealed class LocalAccountService(
         {
             return ServiceResult<int, PasswordRefusal>.Failure(
                 $"A password is between {ShortestPassword} and {LongestPassword} characters long.",
-                PasswordRefusal.TooWeak);
+                PasswordRefusal.OutOfLength);
         }
 
         DateTime at = clock.GetUtcNow().UtcDateTime;

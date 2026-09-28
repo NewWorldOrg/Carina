@@ -18,9 +18,9 @@ public sealed record PasswordChange(Subject Subject, SessionHandle Keep, string 
 
 public enum PasswordRefusal
 {
-    None,
-    WrongPassword,
-    TooWeak,
+    WrongPassword = 1,
+
+    OutOfLength = 2,
 }
 
 public sealed record SessionView(
