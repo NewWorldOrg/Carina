@@ -11,13 +11,20 @@ namespace Carina.Infrastructure.Integrity;
 /// <summary>
 /// Walks the roots this process encodes into and the directory it draws thumbnails into. A place is
 /// left out when it shares a name with a recording root, or when its directory is a recording root's,
-/// or one inside it or around it, or one already taken.
+/// or one inside it or around it, or one already taken. What is claimed in a place left out is still
+/// claimed wherever that place is walked under another name.
 /// </summary>
 public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
 {
     public static readonly OutputRoot ThumbnailPlace = new("thumbnails");
 
     private readonly IReadOnlyList<Walkable> places;
+
+    private readonly IReadOnlyList<Walkable> walked;
+
+    private readonly IReadOnlyList<Walkable> named;
+
+    private readonly bool drawsPictures;
 
     private readonly ILogger<LocalWrittenFileSurvey> logger;
 
@@ -66,6 +73,9 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
         }
 
         places = kept;
+        walked = taken;
+        named = [.. recordings.OutputRoots.Select(root => Walkable.Of(root, StoragePlace.Recordings)), .. offered];
+        drawsPictures = thumbnails.WrittenTo is not null;
     }
 
     public IReadOnlyList<OutputRoot> Places => [.. places.Select(place => place.Root)];
@@ -86,13 +96,39 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
             LocalRecordingFileSurvey.Walk(found.Root, found.Path, found.Place, logger, cancellationToken));
     }
 
-    public IReadOnlyList<DeclaredFile> PicturesOf(IReadOnlyList<LedgerFile> ledger)
+    public IReadOnlyList<DeclaredFile> Claimed(
+        IReadOnlyList<LedgerFile> ledger,
+        IReadOnlyList<DeclaredFile> declared)
     {
         ArgumentNullException.ThrowIfNull(ledger);
+        ArgumentNullException.ThrowIfNull(declared);
 
-        return places.Any(place => place.Place is StoragePlace.Thumbnails)
-            ? [.. ledger.Select(row => new DeclaredFile(ThumbnailPlace, row.Id.Wire + ThumbnailJob.Extension))]
-            : [];
+        List<DeclaredFile> claimed = [.. declared];
+
+        if (drawsPictures)
+        {
+            claimed.AddRange(ledger.Select(row => new DeclaredFile(ThumbnailPlace, row.Id.Wire + ThumbnailJob.Extension)));
+        }
+
+        List<DeclaredFile> seenElsewhere = [];
+
+        foreach (DeclaredFile file in claimed)
+        {
+            foreach (Walkable owner in named.Where(place => place.Root.Equals(file.Root)))
+            {
+                string full = System.IO.Path.GetFullPath(System.IO.Path.Combine(owner.Path, file.Path));
+
+                foreach (Walkable place in walked)
+                {
+                    if (place.Holds(full) is { } under && !(place.Root.Equals(file.Root) && under == file.Path))
+                    {
+                        seenElsewhere.Add(new DeclaredFile(place.Root, under));
+                    }
+                }
+            }
+        }
+
+        return [.. claimed.Concat(seenElsewhere).Distinct()];
     }
 
     /// <summary>
@@ -115,6 +151,11 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
                || string.Equals(Path, other.Path, StringComparison.Ordinal)
                || Within(Path, other.Path)
                || Within(other.Path, Path);
+
+        public string? Holds(string full)
+            => Within(Path, full)
+                ? string.Join('/', System.IO.Path.GetRelativePath(Path, full).Split(System.IO.Path.DirectorySeparatorChar))
+                : null;
 
         private static bool Within(string outer, string inner)
             => inner.StartsWith(

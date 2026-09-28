@@ -13,6 +13,8 @@ public sealed class IntegrityWrittenPlacesEndpointTests
 
     private static readonly RecordingId Gone = new(new Guid("7a3e5c1b-0000-0000-0000-0000000000a2"));
 
+    private static readonly RecordingId Writing = new(new Guid("7a3e5c1b-0000-0000-0000-0000000000a3"));
+
     private static readonly OutputRoot Encodes = new("encodes");
 
     private static readonly string KeptFile = Kept.Wire + ".ts";
@@ -143,6 +145,47 @@ public sealed class IntegrityWrittenPlacesEndpointTests
         Assert.Equal(HttpStatusCode.OK, ran);
         Assert.Empty(Listed(page));
         Assert.Equal(1, feature.Checks.Saved[^1].Check.RootsOutOfReach);
+    }
+
+    [Fact]
+    public async Task PicturesDrawnIntoTheEncodeRootAreNotOrphansWhileTheirRecordingsAreWrittenDown()
+    {
+        using var recordings = new RecordingStore();
+        using var shared = new RecordingStore();
+        recordings.Holding(KeptFile, 400);
+        shared.Holding(KeptArtefact, 90)
+            .Holding(Kept.Wire + ".jpg", 30)
+            .Holding(Writing.Wire + ".jpg", 25)
+            .Holding(Gone.Wire + ".jpg", 20);
+        await using IntegrityFeature feature = Walking(recordings, shared, shared);
+        feature.Ledger.Rows.Add(
+            LedgerFile.StillWriting(Writing, IntegrityFeature.Primary, new RecordingFileName(Writing.Wire + ".ts")));
+
+        (HttpStatusCode ran, _) = await feature.PostAsync("/api/recordings/integrity/run");
+        (_, JsonElement page) = await feature.GetAsync("/api/recordings/integrity");
+
+        Assert.Equal(HttpStatusCode.OK, ran);
+        Assert.Equal([$"encodes/{Gone.Wire}.jpg noLedgerRow"], Listed(page));
+    }
+
+    [Fact]
+    public async Task APictureInTheEncodeRootWhoseRecordingIsWrittenDownSinceTheCheckCannotBeThrownAway()
+    {
+        using var recordings = new RecordingStore();
+        using var shared = new RecordingStore();
+        recordings.Holding(KeptFile, 400);
+        shared.Holding(Gone.Wire + ".jpg", 20);
+        await using IntegrityFeature feature = Walking(recordings, shared, shared);
+        IntegrityFinding finding = await CheckedAsync(feature, Gone.Wire + ".jpg");
+        feature.Ledger.Rows.Add(
+            LedgerFile.StillWriting(Gone, IntegrityFeature.Primary, new RecordingFileName(Gone.Wire + ".ts")));
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/integrity/findings/{finding.Id.Value}/delete");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("fileChanged", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.True(File.Exists(Path.Combine(shared.Root, Gone.Wire + ".jpg")));
     }
 
     private static IntegrityFeature Walking(RecordingStore recordings, RecordingStore encodes, RecordingStore pictures)

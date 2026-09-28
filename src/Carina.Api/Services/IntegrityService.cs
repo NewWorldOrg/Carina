@@ -95,11 +95,7 @@ public sealed class IntegrityService(
         }
 
         IReadOnlyList<LedgerFile> rows = await ledger.ListAsync(cancellationToken);
-        IReadOnlyList<DeclaredFile> declared =
-        [
-            .. await encodeWork.ListAsync(cancellationToken),
-            .. written.PicturesOf(rows),
-        ];
+        IReadOnlyList<DeclaredFile> declared = written.Claimed(rows, await encodeWork.ListAsync(cancellationToken));
 
         if (StrayFileDisposal.Claimed(finding, rows, declared))
         {

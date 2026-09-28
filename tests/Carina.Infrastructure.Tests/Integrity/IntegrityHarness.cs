@@ -55,7 +55,8 @@ internal sealed class HeldPlaces(params RootListing[] listings) : IWrittenFileSu
     public Task<RootListing> ListAsync(OutputRoot place, CancellationToken cancellationToken)
         => Task.FromResult(listings.Single(listing => listing.Root.Equals(place)));
 
-    public IReadOnlyList<DeclaredFile> PicturesOf(IReadOnlyList<LedgerFile> ledger) => [.. Pictures];
+    public IReadOnlyList<DeclaredFile> Claimed(IReadOnlyList<LedgerFile> ledger, IReadOnlyList<DeclaredFile> declared)
+        => [.. declared, .. Pictures];
 }
 
 internal sealed class HeldSurvey : IRecordingFileSurvey

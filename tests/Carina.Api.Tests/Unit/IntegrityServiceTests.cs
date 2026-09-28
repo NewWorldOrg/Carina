@@ -93,7 +93,10 @@ public sealed class IntegrityServiceTests
         public Task<RootListing> ListAsync(OutputRoot place, CancellationToken cancellationToken)
             => throw new InvalidOperationException("These tests walk no place.");
 
-        public IReadOnlyList<DeclaredFile> PicturesOf(IReadOnlyList<LedgerFile> ledger) => [];
+        public IReadOnlyList<DeclaredFile> Claimed(
+            IReadOnlyList<LedgerFile> ledger,
+            IReadOnlyList<DeclaredFile> declared)
+            => declared;
     }
 
     private sealed class NoDeclaredFiles : IEncodeWorkLedger

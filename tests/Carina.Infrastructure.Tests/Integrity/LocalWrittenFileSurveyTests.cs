@@ -125,19 +125,84 @@ public sealed class LocalWrittenFileSurveyTests
             () => Survey(recordings.Root, null, null).ListAsync(Primary, Cancel));
     }
 
+    private static readonly RecordingId Recorded = new(new Guid("7a3e5c1b-0000-0000-0000-000000000001"));
+
+    private static readonly LedgerFile Row =
+        LedgerFile.StillWriting(Recorded, Primary, new RecordingFileName(Recorded.Wire + ".ts"));
+
+    private static readonly string Picture = Recorded.Wire + ".jpg";
+
     [Fact]
     public void EveryRecordingTheLedgerHoldsClaimsItsPicture()
     {
         using var recordings = new TempTree();
         using var pictures = new TempTree();
-        var id = new RecordingId(new Guid("7a3e5c1b-0000-0000-0000-000000000001"));
-        LedgerFile row = LedgerFile.StillWriting(id, Primary, new RecordingFileName(id.Wire + ".ts"));
 
-        DeclaredFile claimed = Assert.Single(Survey(recordings.Root, null, pictures.Root).PicturesOf([row]));
+        DeclaredFile claimed = Assert.Single(Survey(recordings.Root, null, pictures.Root).Claimed([Row], []));
 
-        Assert.Equal(LocalWrittenFileSurvey.ThumbnailPlace, claimed.Root);
-        Assert.Equal(id.Wire + ".jpg", claimed.Path);
-        Assert.Empty(Survey(recordings.Root, null, null).PicturesOf([row]));
+        Assert.Equal(new DeclaredFile(LocalWrittenFileSurvey.ThumbnailPlace, Picture), claimed);
+        Assert.Empty(Survey(recordings.Root, null, null).Claimed([Row], []));
+    }
+
+    [Fact]
+    public void PicturesDrawnIntoTheEncodeRootAreClaimedThereEvenThoughTheirOwnPlaceIsNotWalked()
+    {
+        using var recordings = new TempTree();
+        using var encodes = new TempTree();
+        LocalWrittenFileSurvey survey = Survey(recordings.Root, encodes.Root, encodes.Root);
+
+        IReadOnlyList<DeclaredFile> claimed = survey.Claimed([Row], []);
+
+        Assert.DoesNotContain(LocalWrittenFileSurvey.ThumbnailPlace, survey.Places);
+        Assert.Contains(new DeclaredFile(Encodes, Picture), claimed);
+    }
+
+    [Fact]
+    public void PicturesDrawnIntoADirectoryInsideTheEncodeRootAreClaimedByTheirPathUnderIt()
+    {
+        using var recordings = new TempTree();
+        using var encodes = new TempTree();
+        encodes.HoldingDirectory("thumbs");
+
+        IReadOnlyList<DeclaredFile> claimed =
+            Survey(recordings.Root, encodes.Root, encodes.Under("thumbs")).Claimed([Row], []);
+
+        Assert.Contains(new DeclaredFile(Encodes, "thumbs/" + Picture), claimed);
+    }
+
+    [Fact]
+    public void PicturesDrawnInsideTheRecordingRootAreClaimedThereToo()
+    {
+        using var recordings = new TempTree();
+        recordings.HoldingDirectory("thumbs");
+
+        IReadOnlyList<DeclaredFile> claimed =
+            Survey(recordings.Root, null, recordings.Under("thumbs")).Claimed([Row], []);
+
+        Assert.Contains(new DeclaredFile(Primary, "thumbs/" + Picture), claimed);
+    }
+
+    [Fact]
+    public void AnArtefactClaimedInAnEncodeRootSetOnTheRecordingRootIsClaimedUnderTheRecordingRoot()
+    {
+        using var recordings = new TempTree();
+
+        IReadOnlyList<DeclaredFile> claimed = Survey(recordings.Root, recordings.Root, null)
+            .Claimed([], [new DeclaredFile(Encodes, "one.mp4")]);
+
+        Assert.Contains(new DeclaredFile(Primary, "one.mp4"), claimed);
+        Assert.Contains(new DeclaredFile(Encodes, "one.mp4"), claimed);
+    }
+
+    [Fact]
+    public void AClaimOutsideEveryWalkedPlaceIsHandedBackAsItCame()
+    {
+        using var recordings = new TempTree();
+        using var encodes = new TempTree();
+
+        Assert.Equal(
+            [new DeclaredFile(Encodes, "one.mp4")],
+            Survey(recordings.Root, encodes.Root, null).Claimed([], [new DeclaredFile(Encodes, "one.mp4")]));
     }
 
     private static LocalWrittenFileSurvey Survey(string recordings, string? encodes, string? pictures)

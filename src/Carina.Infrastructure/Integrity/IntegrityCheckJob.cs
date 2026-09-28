@@ -106,11 +106,9 @@ public sealed class IntegrityCheckJob(
             .GetRequiredService<IRecordingLedger>()
             .ListAsync(cancellationToken);
 
-        IReadOnlyList<DeclaredFile> declared =
-        [
-            .. await scope.ServiceProvider.GetRequiredService<IEncodeWorkLedger>().ListAsync(cancellationToken),
-            .. written.PicturesOf(ledger),
-        ];
+        IReadOnlyList<DeclaredFile> declared = written.Claimed(
+            ledger,
+            await scope.ServiceProvider.GetRequiredService<IEncodeWorkLedger>().ListAsync(cancellationToken));
 
         IReadOnlyList<OutputRoot> roots = await survey.RootsAsync(cancellationToken);
         List<RootListing> listings = [];

@@ -13,7 +13,10 @@ public interface IWrittenFileSurvey
     Task<RootListing> ListAsync(OutputRoot place, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The thumbnail of every recording the ledger holds, as a file the sweep does not call an orphan.
+    /// Everything the ledgers claim, as the sweep has to see it: <paramref name="declared"/>, the thumbnail
+    /// of every recording in <paramref name="ledger"/>, and each of those again under every walked place
+    /// whose directory holds it, so a claim follows the file whichever name the place it lies in is walked
+    /// under.
     /// </summary>
-    IReadOnlyList<DeclaredFile> PicturesOf(IReadOnlyList<LedgerFile> ledger);
+    IReadOnlyList<DeclaredFile> Claimed(IReadOnlyList<LedgerFile> ledger, IReadOnlyList<DeclaredFile> declared);
 }
