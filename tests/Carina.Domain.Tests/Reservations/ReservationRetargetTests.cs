@@ -103,6 +103,26 @@ public sealed class ReservationRetargetTests
     }
 
     [Fact]
+    public void BrRd010AListingThatEndsBeforeItStartsLeavesTheReservationWhereItWas()
+    {
+        Reservation booked = ReservationFactory.Planned();
+        ProgrammeRef before = booked.Programme;
+        ProgrammeRef primary = Elsewhere(booked.ProgrammeStartsAt);
+
+        Assert.Throws<ArgumentException>(() => booked.Retarget(
+            primary,
+            primary.StartsAt,
+            true,
+            Snapshot(),
+            [Carried()],
+            Key,
+            BroadcastGroupRole.MovementPrimary));
+
+        Assert.Equal(before, booked.Programme);
+        Assert.Equal(BroadcastGroupRole.Standalone, booked.BroadcastGroupRole);
+    }
+
+    [Fact]
     public void BrRd010AReservationStandingAsideForTheSameBroadcastIsCancelledForThatReason()
     {
         Reservation booked = ReservationFactory.Planned();

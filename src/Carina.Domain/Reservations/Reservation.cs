@@ -473,6 +473,11 @@ public sealed class Reservation
                 + "and moving it to another listing would not move the recording.");
         }
 
+        if (endAt <= programme.StartsAt)
+        {
+            throw new ArgumentException("A reservation ends after it starts.", nameof(endAt));
+        }
+
         Regroup(key, role);
         Reframe(programme.StartsAt, endAt, endAtConfirmed);
 
