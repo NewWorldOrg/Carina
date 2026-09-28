@@ -97,6 +97,8 @@ public sealed class IntegrityServiceTests
             IReadOnlyList<LedgerFile> ledger,
             IReadOnlyList<DeclaredFile> declared)
             => declared;
+
+        public IReadOnlyList<DrawnPicture> Drawn(IReadOnlyList<LedgerFile> ledger) => [];
     }
 
     private sealed class NoDeclaredFiles : IEncodeWorkLedger

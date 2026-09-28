@@ -22,12 +22,13 @@ public sealed class IntegrityFaultTests
     }
 
     [Fact]
-    public void EveryClassEitherWeighedTheFileOrIsTheOneWithNothingToWeigh()
+    public void EveryClassEitherWeighedTheFileOrIsOneWithNothingToWeigh()
     {
         Assert.Equal(
             Enum.GetValues<IntegrityFault>().Order().ToArray(),
             IntegrityFaults.ThatWeighedTheFile
                 .Append(IntegrityFault.FileMissing)
+                .Append(IntegrityFault.ThumbnailMissing)
                 .Order()
                 .ToArray());
     }
@@ -36,6 +37,16 @@ public sealed class IntegrityFaultTests
     public void NoClassBothWeighedTheFileAndFoundNothingToWeigh()
     {
         Assert.DoesNotContain(IntegrityFault.FileMissing, IntegrityFaults.ThatWeighedTheFile);
+        Assert.DoesNotContain(IntegrityFault.ThumbnailMissing, IntegrityFaults.ThatWeighedTheFile);
+    }
+
+    [Fact]
+    public void TheClassesThatCarryTheLedgerSizeAreTheOnesAboutTheRecordingsOwnFile()
+    {
+        Assert.Equal(
+            [IntegrityFault.ThumbnailMissing],
+            IntegrityFaults.ThatNameARecording.Except(IntegrityFaults.ThatCarryTheLedgerSize).ToArray());
+        Assert.Empty(IntegrityFaults.ThatCarryTheLedgerSize.Except(IntegrityFaults.ThatNameARecording));
     }
 
     [Fact]
@@ -47,16 +58,16 @@ public sealed class IntegrityFaultTests
     }
 
     [Fact]
-    public void TheOnlyClassWithNothingToWeighIsTheOneWhoseFileIsNotThere()
+    public void TheOnlyClassesWithNothingToWeighAreTheOnesWhoseFileIsNotThere()
     {
         Assert.Equal(
-            [IntegrityFault.FileMissing],
+            [IntegrityFault.FileMissing, IntegrityFault.ThumbnailMissing],
             Enum.GetValues<IntegrityFault>().Except(IntegrityFaults.ThatWeighedTheFile).ToArray());
     }
 
     [Theory]
     [InlineData(0)]
-    [InlineData(6)]
+    [InlineData(7)]
     [InlineData(99)]
     [InlineData(-1)]
     public void AClassTheSweepCannotNameIsRefused(int fault)
@@ -70,16 +81,17 @@ public sealed class IntegrityFaultTests
     [InlineData(IntegrityFault.FileMissing)]
     [InlineData(IntegrityFault.FileEmpty)]
     [InlineData(IntegrityFault.EmptyThoughComplete)]
+    [InlineData(IntegrityFault.ThumbnailMissing)]
     public void EveryClassTheSweepCanNameIsTakenAsItIs(IntegrityFault fault)
     {
         Assert.Equal(fault, IntegrityFaults.Named(fault));
     }
 
     [Fact]
-    public void TheClassesTheSweepCanNameAreTheseFiveAndNoOthers()
+    public void TheClassesTheSweepCanNameAreTheseSixAndNoOthers()
     {
         Assert.Equal(
-            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
+            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees", "ThumbnailMissing"],
             Enum.GetNames<IntegrityFault>().Order(StringComparer.Ordinal).ToArray());
     }
 }

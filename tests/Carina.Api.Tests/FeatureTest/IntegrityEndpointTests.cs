@@ -110,12 +110,13 @@ public sealed class IntegrityEndpointTests
             IntegrityFinding.NoLedgerRow(check, IntegrityFeature.Primary, "b.m2ts", 3, IntegrityFeature.Noon),
             IntegrityFinding.FileMissing(check, IntegrityFeature.Primary, id, new RecordingFileName("c.m2ts"), 4, IntegrityFeature.Noon),
             IntegrityFinding.FileEmpty(check, IntegrityFeature.Primary, id, new RecordingFileName("d.m2ts"), 5, 0, IntegrityFeature.Noon),
-            IntegrityFinding.EmptyThoughComplete(check, IntegrityFeature.Primary, id, new RecordingFileName("e.m2ts"), 6, 0, IntegrityFeature.Noon));
+            IntegrityFinding.EmptyThoughComplete(check, IntegrityFeature.Primary, id, new RecordingFileName("e.m2ts"), 6, 0, IntegrityFeature.Noon),
+            IntegrityFinding.ThumbnailMissing(check, new DrawnPicture(id, IntegrityFeature.Primary, "f.jpg"), IntegrityFeature.Noon));
 
         (_, JsonElement page) = await feature.GetAsync("/api/recordings/integrity?perPage=200");
 
         Assert.Equal(
-            ["sizeDisagrees", "noLedgerRow", "fileMissing", "fileEmpty", "emptyThoughComplete"],
+            ["sizeDisagrees", "noLedgerRow", "fileMissing", "fileEmpty", "emptyThoughComplete", "thumbnailMissing"],
             page.GetProperty("data").GetProperty("items").EnumerateArray()
                 .Select(item => item.GetProperty("fault").GetString()!)
                 .ToArray());

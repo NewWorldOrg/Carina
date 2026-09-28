@@ -13,6 +13,88 @@ public sealed class IntegrityScanPlacesTests
     private const string Picture = "00000001000000000000000000000001.jpg";
 
     [Fact]
+    public void APictureTheRowSaysIsDrawnButThePlaceDoesNotHoldIsCalledMissing()
+    {
+        IntegrityReport report = IntegrityScan.Compare(
+            Check,
+            [Complete(Primary, RecordingFile, 100)],
+            [Declared(Pictures, Picture)],
+            [Holding(Primary, (RecordingFile, 100)), Beside(Pictures, StoragePlace.Thumbnails)],
+            At,
+            Done,
+            [new DrawnPicture(Id(1), Pictures, Picture)]);
+
+        IntegrityFinding missing = Assert.Single(report.Findings);
+
+        Assert.Equal(IntegrityFault.ThumbnailMissing, missing.Fault);
+        Assert.Equal(Pictures, missing.Root);
+        Assert.Equal(Picture, missing.Path);
+        Assert.Equal(Id(1), missing.RecordingId);
+        Assert.Null(missing.LedgerSize);
+        Assert.Null(missing.ObservedSize);
+    }
+
+    [Fact]
+    public void APictureTheRowSaysIsDrawnAndThePlaceHoldsIsLeftAlone()
+    {
+        IntegrityReport report = IntegrityScan.Compare(
+            Check,
+            [Complete(Primary, RecordingFile, 100)],
+            [Declared(Pictures, Picture)],
+            [Holding(Primary, (RecordingFile, 100)), Beside(Pictures, StoragePlace.Thumbnails, (Picture, 20))],
+            At,
+            Done,
+            [new DrawnPicture(Id(1), Pictures, Picture)]);
+
+        Assert.Empty(report.Findings);
+    }
+
+    [Fact]
+    public void APictureIsNotCalledMissingFromAPlaceTheSweepCouldNotRead()
+    {
+        IntegrityReport report = IntegrityScan.Compare(
+            Check,
+            [Complete(Primary, RecordingFile, 100)],
+            [],
+            [Holding(Primary, (RecordingFile, 100)), RootListing.OutOfReach(Pictures, StoragePlace.Thumbnails)],
+            At,
+            Done,
+            [new DrawnPicture(Id(1), Pictures, Picture)]);
+
+        Assert.Empty(report.Findings);
+    }
+
+    [Fact]
+    public void APictureIsNotCalledMissingWhenThePlaceIsNotWalkedAtAll()
+    {
+        IntegrityReport report = IntegrityScan.Compare(
+            Check,
+            [Complete(Primary, RecordingFile, 100)],
+            [],
+            [Holding(Primary, (RecordingFile, 100))],
+            At,
+            Done,
+            [new DrawnPicture(Id(1), Pictures, Picture)]);
+
+        Assert.Empty(report.Findings);
+    }
+
+    [Fact]
+    public void APictureIsLookedForOnlyInAPlaceWalkedAsTheThumbnails()
+    {
+        IntegrityReport report = IntegrityScan.Compare(
+            Check,
+            [Complete(Primary, RecordingFile, 100)],
+            [],
+            [Holding(Primary, (RecordingFile, 100)), Beside(Encodes, StoragePlace.Encodes)],
+            At,
+            Done,
+            [new DrawnPicture(Id(1), Encodes, Picture)]);
+
+        Assert.Empty(report.Findings);
+    }
+
+    [Fact]
     public void AnArtefactNothingClaimsIsAnOrphanOfTheRootItIsIn()
     {
         IntegrityReport report = Compare(

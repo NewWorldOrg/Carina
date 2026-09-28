@@ -679,10 +679,10 @@ public sealed class IntegrityScanTests
     }
 
     [Fact]
-    public void TheSweepClassesDisagreementsInFiveWaysAndHasNoWordForADeletion()
+    public void TheSweepClassesDisagreementsInSixWaysAndHasNoWordForADeletion()
     {
         Assert.Equal(
-            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
+            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees", "ThumbnailMissing"],
             Enum.GetNames<IntegrityFault>().Order(StringComparer.Ordinal).ToArray());
     }
 }

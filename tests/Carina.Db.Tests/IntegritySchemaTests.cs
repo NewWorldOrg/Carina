@@ -90,17 +90,17 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
         }
 
         Assert.Equal(
-            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
+            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees", "ThumbnailMissing"],
             await FaultsAsync(connection, check));
     }
 
     [Fact]
-    public async Task TheTableTakesTheseFiveClassesAndNoOthers()
+    public async Task TheTableTakesTheseSixClassesAndNoOthers()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         Assert.Equal(
-            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
+            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees", "ThumbnailMissing"],
             await ClassesTakenAsync(connection));
     }
 
@@ -213,6 +213,9 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
     [InlineData("'SizeDisagrees', " + Recording + ", 5, NULL", "ck_integrity_finding_observed_size")]
     [InlineData("'FileEmpty', " + Recording + ", 5, NULL", "ck_integrity_finding_observed_size")]
     [InlineData("'EmptyThoughComplete', " + Recording + ", NULL, 0", "ck_integrity_finding_ledger_size")]
+    [InlineData("'ThumbnailMissing', NULL, NULL, NULL", "ck_integrity_finding_recording")]
+    [InlineData("'ThumbnailMissing', " + Recording + ", 5, NULL", "ck_integrity_finding_ledger_size")]
+    [InlineData("'ThumbnailMissing', " + Recording + ", NULL, 1", "ck_integrity_finding_observed_size")]
     [InlineData("'Whatever', " + Recording + ", 5, 1", "ck_integrity_finding_fault")]
     [InlineData("'SizeDisagrees', " + Recording + ", -1, 1", "ck_integrity_finding_sizes")]
     [InlineData("'SizeDisagrees', " + Recording + ", 5, -1", "ck_integrity_finding_sizes")]
@@ -426,6 +429,7 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
         {
             IntegrityFault.NoLedgerRow => $"'{fault}', NULL, NULL, 1",
             IntegrityFault.FileMissing => $"'{fault}', {Recording}, 100, NULL",
+            IntegrityFault.ThumbnailMissing => $"'{fault}', {Recording}, NULL, NULL",
             _ => $"'{fault}', {Recording}, 100, 99",
         };
 

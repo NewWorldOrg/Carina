@@ -73,6 +73,18 @@ public sealed class RecordingLedgerTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task ARecordingWhoseThumbnailIsReadySaysItsPictureIsDrawn()
+    {
+        Recording drawn = await AddAsync(6109, "primary");
+        Recording pending = await AddAsync(6110, "primary");
+        await SettleAsync(drawn.Id, RecordingOutcome.Complete, 3_400_000_000, ThumbnailState.Ready);
+        await SettleAsync(pending.Id, RecordingOutcome.Complete, 3_400_000_000);
+
+        Assert.True((await FindAsync(drawn.Id)).ThumbnailDrawn);
+        Assert.False((await FindAsync(pending.Id)).ThumbnailDrawn);
+    }
+
+    [Fact]
     public async Task TheLedgerComesBackWithTheRootEachRecordingWasWrittenUnder()
     {
         Recording under = await AddAsync(6104, "bulk");
@@ -132,7 +144,11 @@ public sealed class RecordingLedgerTests(RepositoryDatabase database)
         return recording;
     }
 
-    private async Task SettleAsync(RecordingId id, RecordingOutcome outcome, long fileSizeObserved)
+    private async Task SettleAsync(
+        RecordingId id,
+        RecordingOutcome outcome,
+        long fileSizeObserved,
+        ThumbnailState? thumbnail = null)
     {
         await using CarinaDbContext context = database.Open();
         Recording loaded = await context.FindAsync<Recording>([id], Cancel)
@@ -146,6 +162,12 @@ public sealed class RecordingLedgerTests(RepositoryDatabase database)
         }
 
         loaded.Settle(outcome, fileSizeObserved, Now.AddHours(1));
+
+        if (thumbnail is { } state)
+        {
+            loaded.Illustrate(state);
+        }
+
         await context.SaveChangesAsync(Cancel);
     }
 }

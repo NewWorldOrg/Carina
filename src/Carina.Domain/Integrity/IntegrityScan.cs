@@ -10,7 +10,8 @@ public static class IntegrityScan
         IReadOnlyList<DeclaredFile> declared,
         IReadOnlyList<RootListing> listings,
         DateTime startedAt,
-        DateTime finishedAt)
+        DateTime finishedAt,
+        IReadOnlyList<DrawnPicture>? drawn = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(ledger);
@@ -66,6 +67,18 @@ public static class IntegrityScan
                         ledgerSize,
                         file.SizeBytes,
                         startedAt));
+            }
+        }
+
+        foreach (DrawnPicture picture in drawn ?? [])
+        {
+            ArgumentNullException.ThrowIfNull(picture);
+
+            if (reachable.TryGetValue(picture.Place.Value, out RootListing? pictures)
+                && pictures.Place is StoragePlace.Thumbnails
+                && pictures.At(picture.Path) is null)
+            {
+                findings.Add(IntegrityFinding.ThumbnailMissing(id, picture, startedAt));
             }
         }
 

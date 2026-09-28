@@ -19,7 +19,8 @@ public sealed class RecordingLedger(CarinaDbContext context) : IRecordingLedger
                 recording.OutputRoot,
                 recording.FileName,
                 recording.Outcome,
-                recording.FileSizeObserved))
+                recording.FileSizeObserved,
+                recording.ThumbnailState))
             .ToListAsync(cancellationToken);
 
         return [.. rows.Select(Read)];
@@ -38,7 +39,13 @@ public sealed class RecordingLedger(CarinaDbContext context) : IRecordingLedger
                 $"Recording {row.Id.Wire} ended {outcome} without a size read off the disk.");
         }
 
-        return LedgerFile.Ended(row.Id, row.OutputRoot, row.FileName, Claimed(outcome), observed);
+        return LedgerFile.Ended(
+            row.Id,
+            row.OutputRoot,
+            row.FileName,
+            Claimed(outcome),
+            observed,
+            row.ThumbnailState is ThumbnailState.Ready);
     }
 
     private static LedgerClaim Claimed(RecordingOutcome outcome)
@@ -58,5 +65,6 @@ public sealed class RecordingLedger(CarinaDbContext context) : IRecordingLedger
         OutputRoot OutputRoot,
         RecordingFileName FileName,
         RecordingOutcome? Outcome,
-        long? FileSizeObserved);
+        long? FileSizeObserved,
+        ThumbnailState ThumbnailState);
 }

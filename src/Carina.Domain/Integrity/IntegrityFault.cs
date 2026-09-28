@@ -11,11 +11,25 @@ public enum IntegrityFault
     FileEmpty = 4,
 
     EmptyThoughComplete = 5,
+
+    ThumbnailMissing = 6,
 }
 
 public static class IntegrityFaults
 {
     public static readonly IReadOnlyList<IntegrityFault> ThatNameARecording =
+    [
+        IntegrityFault.SizeDisagrees,
+        IntegrityFault.FileMissing,
+        IntegrityFault.FileEmpty,
+        IntegrityFault.EmptyThoughComplete,
+        IntegrityFault.ThumbnailMissing,
+    ];
+
+    /// <summary>
+    /// The classes that name a recording's own file, and so carry the size the ledger recorded for it.
+    /// </summary>
+    public static readonly IReadOnlyList<IntegrityFault> ThatCarryTheLedgerSize =
     [
         IntegrityFault.SizeDisagrees,
         IntegrityFault.FileMissing,
