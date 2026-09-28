@@ -307,7 +307,6 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
 
         return await context.Set<Programme>()
             .Where(programme => programme.NetworkId == network && programme.ServiceId == service)
-            .Where(programme => !programme.IsShadow)
             .MaxAsync(programme => (DateTime?)(programme.EndsAt ?? programme.StartsAt), cancellationToken);
     }
 }

@@ -141,8 +141,7 @@ public sealed class HeldProgrammes : IProgrammeRepository
         CancellationToken cancellationToken)
         => Task.FromResult(Programmes
             .Where(programme => programme.NetworkId.Value == networkId
-                && programme.ServiceId.Value == serviceId
-                && !programme.IsShadow)
+                && programme.ServiceId.Value == serviceId)
             .Max(programme => (DateTime?)(programme.EndsAt ?? programme.StartsAt)));
 
     public Task<IReadOnlyList<Programme>> ListAfterAsync(

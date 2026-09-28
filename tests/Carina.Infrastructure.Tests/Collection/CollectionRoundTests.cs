@@ -473,6 +473,142 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
             driver.Started);
     }
 
+    [Fact]
+    public async Task AStreamHeardOnlyInPartKeepsWhatEachVisitHeardAndIsRetriedWithoutStretchingTheWait()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), StayingOpenAfter(LastSegmentOnly(network, 1, carried: 1)));
+
+        await using CarinaDbContext context = database.Open();
+
+        RoundResult first = await Round(driver, context, Lossy).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        driver.Script(TuningParameters.Terrestrial(22), StayingOpenAfter(LastSegmentOnly(network, 1, carried: 2)));
+
+        await using CarinaDbContext again = database.Open();
+
+        RoundResult second = await Round(driver, again, Lossy).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        Assert.Equal(new RoundResult(1, 0, 1), first);
+        Assert.Equal(new RoundResult(1, 0, 1), second);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit visit = (await new StreamVisitRepository(reading).FindAsync(
+            new NetworkId(network),
+            new TransportStreamId(1),
+            Cancel))!;
+        var programmes = new ProgrammeRepository(reading);
+
+        Assert.Equal(VisitOutcome.Incomplete, visit.Outcome);
+        Assert.Equal(2, visit.ConsecutiveIncomplete);
+        Assert.Equal(0, visit.ConsecutiveUnheard);
+        Assert.False(visit.ReachedTheGoal);
+        Assert.Equal(
+            visit.LastAttemptedAt + new CollectionSettings().BeforeRetrying,
+            CollectionBackOff.NotBefore(visit, new CollectionSettings()));
+        Assert.NotNull(await programmes.FindAsync(Carried(network, 1), Cancel));
+        Assert.NotNull(await programmes.FindAsync(Carried(network, 2), Cancel));
+    }
+
+    [Fact]
+    public async Task AStreamHeardOnlyInPartWhoseGuideAlreadyReachesTheGoalIsLeftForTheOrdinaryWait()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), StayingOpenAfter(LastSegmentOnly(network, 1, carried: 2)));
+
+        await using CarinaDbContext context = database.Open();
+
+        await new ProgrammeRepository(context).AddAsync(Reaching(network, 1049, DateTime.UtcNow.AddDays(9)), Cancel);
+        await Round(driver, context, Lossy).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit visit = (await new StreamVisitRepository(reading).FindAsync(
+            new NetworkId(network),
+            new TransportStreamId(1),
+            Cancel))!;
+
+        Assert.Equal(VisitOutcome.Incomplete, visit.Outcome);
+        Assert.Equal(0, visit.ConsecutiveUnheard);
+        Assert.True(visit.ReachedTheGoal);
+        Assert.Equal(
+            visit.LastAttemptedAt + new CollectionSettings().BetweenVisits,
+            CollectionBackOff.NotBefore(visit, new CollectionSettings()));
+    }
+
+    [Fact]
+    public async Task AStreamThatLocksButCarriesNoneOfItsScheduleStretchesTheWait()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), StayingOpenAfter(Described(network, 1, [1049])));
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context, Lossy).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        await using CarinaDbContext again = database.Open();
+
+        await Round(driver, again, Lossy).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit visit = (await new StreamVisitRepository(reading).FindAsync(
+            new NetworkId(network),
+            new TransportStreamId(1),
+            Cancel))!;
+
+        Assert.Equal(VisitOutcome.Incomplete, visit.Outcome);
+        Assert.Equal(2, visit.ConsecutiveUnheard);
+        Assert.Equal(
+            visit.LastAttemptedAt + (new CollectionSettings().BeforeRetrying * 2),
+            CollectionBackOff.NotBefore(visit, new CollectionSettings()));
+    }
+
+    private static ProgrammeId Carried(int network, int carried)
+        => new(new NetworkId(network), new ServiceId(1049), new EventId(carried));
+
+    private static readonly CollectionSettings Lossy = new()
+    {
+        LongestVisit = TimeSpan.FromSeconds(2),
+        BeforeRetrying = TimeSpan.Zero,
+    };
+
+    private static ChannelScript StayingOpenAfter(byte[] bytes)
+        => new()
+        {
+            Paced = () =>
+            {
+                PacedStream stream = PacedStream.InChunksOf(bytes, bytes.Length);
+
+                stream.Allow(1);
+
+                return stream;
+            },
+        };
+
+    private static byte[] LastSegmentOnly(int network, int stream, int carried)
+        => [.. new TransportStreamWriter(EventInformationTable.Pid)
+            .Sections(new SectionWriter
+            {
+                TableId = EventInformationTable.FirstScheduleActualTableId,
+                TableIdExtension = 1049,
+                SectionNumber = 248,
+                LastSectionNumber = 248,
+                Body =
+                [
+                    (byte)(stream >> 8), (byte)(stream & 0xFF),
+                    (byte)(network >> 8), (byte)(network & 0xFF),
+                    248, EventInformationTable.FirstScheduleActualTableId,
+                    .. ScheduledEvent(carried),
+                ],
+            }.ToBytes())
+            .Packets
+            .SelectMany(packet => packet.ToArray())];
+
     private static CollectionSettings Aiming(TimeSpan wanted, TimeSpan revisitsBelow)
         => new()
         {

@@ -61,6 +61,65 @@ public sealed class CollectionBackOffTests
     }
 
     [Fact]
+    public void ComingBackShortWhileHearingPartOfTheScheduleWaitsOnlyTheRetryTime()
+    {
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
+
+        for (int again = 0; again < 30; again++)
+        {
+            visit.Record(VisitOutcome.Incomplete, At, TimeSpan.FromSeconds(1), heardTheSchedule: true);
+        }
+
+        Assert.Equal(31, visit.ConsecutiveIncomplete);
+        Assert.Equal(At + Settings.BeforeRetrying, CollectionBackOff.NotBefore(visit, Settings));
+    }
+
+    [Fact]
+    public void ComingBackShortHavingHeardPartOfAScheduleThatAlreadyReachesTheGoalWaitsTheOrdinaryTime()
+    {
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
+
+        visit.Record(
+            VisitOutcome.Incomplete,
+            At,
+            TimeSpan.FromSeconds(1),
+            heardTheSchedule: true,
+            reachedTheGoal: true);
+
+        Assert.Equal(At + Settings.BetweenVisits, CollectionBackOff.NotBefore(visit, Settings));
+    }
+
+    [Fact]
+    public void ReachingTheGoalDoesNotShortenTheWaitOfAStreamThatHeardNothing()
+    {
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
+
+        visit.Record(VisitOutcome.NoLock, At, TimeSpan.FromSeconds(1), reachedTheGoal: true);
+
+        Assert.Equal(At + (Settings.BeforeRetrying * 2), CollectionBackOff.NotBefore(visit, Settings));
+    }
+
+    [Fact]
+    public void OnlyTheVisitsThatHeardNothingSinceTheScheduleWasLastHeardStretchTheWait()
+    {
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
+
+        for (int again = 0; again < 10; again++)
+        {
+            visit.Record(VisitOutcome.NoLock, At, TimeSpan.FromSeconds(1));
+        }
+
+        visit.Record(VisitOutcome.Incomplete, At, TimeSpan.FromSeconds(1), heardTheSchedule: true);
+        visit.Record(VisitOutcome.Incomplete, At, TimeSpan.FromSeconds(1));
+
+        Assert.Equal(At + Settings.BeforeRetrying, CollectionBackOff.NotBefore(visit, Settings));
+
+        visit.Record(VisitOutcome.NoBytes, At, TimeSpan.FromSeconds(1));
+
+        Assert.Equal(At + (Settings.BeforeRetrying * 2), CollectionBackOff.NotBefore(visit, Settings));
+    }
+
+    [Fact]
     public void AVisitTheDriverCutShortIsRetriedAtOnce()
     {
         Assert.Null(CollectionBackOff.NotBefore(Visit(VisitOutcome.Interrupted), Settings));

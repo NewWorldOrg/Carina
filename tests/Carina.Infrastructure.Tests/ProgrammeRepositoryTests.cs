@@ -351,7 +351,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task HowFarAServiceIsCoveredIgnoresTheProgrammesThatAreOnlyPlaceholders()
+    public async Task HowFarAServiceIsCoveredCountsTheSlotsItOnlyShares()
     {
         int network = NextNetwork();
         await using CarinaDbContext context = database.Open();
@@ -365,7 +365,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext reading = database.Open();
 
         Assert.Equal(
-            At.AddHours(21),
+            At.AddHours(41),
             await new ProgrammeRepository(reading).CoveredUntilAsync(network, 1049, Cancel));
     }
 

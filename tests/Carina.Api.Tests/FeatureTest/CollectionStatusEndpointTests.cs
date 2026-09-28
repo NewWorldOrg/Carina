@@ -286,6 +286,72 @@ public sealed class CollectionStatusEndpointTests
             ScheduleStarts.AddDays(1).AddHours(22),
             visited: ScheduleStarts.AddHours(22)));
 
+    [Fact]
+    public async Task ASubChannelSharingItsParentsSlotsIsCoveredAsFarAsItsSchedule()
+    {
+        IReadOnlyList<bool> met = await SubChannelMeetsTheGoalAsync(sharesTheRest: true);
+
+        Assert.Equal([true, true], met);
+    }
+
+    [Fact]
+    public async Task ASubChannelWhoseScheduleStopsTodayIsStillShort()
+    {
+        IReadOnlyList<bool> met = await SubChannelMeetsTheGoalAsync(sharesTheRest: false);
+
+        Assert.Equal([true, false], met);
+    }
+
+    private static async Task<IReadOnlyList<bool>> SubChannelMeetsTheGoalAsync(bool sharesTheRest)
+    {
+        await using var feature = new EpgFeature(
+            [Stream(4, 32_736, [1049, 1050])],
+            collection: Aiming,
+            clock: new FixedTimeProvider(At));
+
+        feature.Programmes.Programmes.Add(ProgrammeStartingAt(4, 1049, ScheduleEnds.AddHours(-1)));
+        feature.Programmes.Programmes.Add(ProgrammeStartingAt(4, 1050, At.AddHours(2)));
+
+        if (sharesTheRest)
+        {
+            for (int day = 1; day <= 7; day++)
+            {
+                feature.Programmes.Programmes.Add(
+                    Shared(4, 1050, 100 + day, ScheduleStarts.AddDays(day).AddHours(23)));
+            }
+        }
+
+        await feature.Visits.SaveAsync(
+            StreamVisit.Record(
+                new NetworkId(4),
+                new TransportStreamId(32_736),
+                VisitOutcome.Complete,
+                At,
+                TimeSpan.FromSeconds(60)),
+            CancellationToken.None);
+
+        (_, JsonElement body) = await feature.GetAsync("/api/epg/collection-status");
+        JsonElement only = Assert.Single(body.GetProperty("data").GetProperty("streams").EnumerateArray());
+
+        return
+        [
+            .. only.GetProperty("coverage")
+                .EnumerateArray()
+                .Select(service => service.GetProperty("meetsWantedCoverage").GetBoolean()),
+        ];
+    }
+
+    private static Programme Shared(int network, int service, int eventId, DateTime startsAt)
+        => Programme.Rehydrate(
+            new ProgrammeId(new NetworkId(network), new ServiceId(service), new EventId(eventId)),
+            new TransportStreamId(32_736),
+            startsAt,
+            startsAt.AddHours(1),
+            string.Empty,
+            string.Empty,
+            true,
+            startsAt);
+
     private static async Task<bool> MeetsTheGoalAsync(DateTime lastEnd, DateTime now, DateTime? visited = null)
     {
         await using var feature = new EpgFeature(
