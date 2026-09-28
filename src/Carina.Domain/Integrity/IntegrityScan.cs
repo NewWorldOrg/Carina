@@ -49,7 +49,7 @@ public static class IntegrityScan
                 continue;
             }
 
-            if (file.SizeBytes is 0 && row.Claim is not LedgerClaim.NothingLanded)
+            if (file.SizeBytes is 0 && (ledgerSize > 0 || row.Claim is LedgerClaim.EverythingLanded))
             {
                 findings.Add(Empty(id, row, ledgerSize, file.SizeBytes, startedAt));
                 continue;
