@@ -97,6 +97,8 @@ public sealed class FaultedTunerRecheckTests
 
         FailOn(manager, "s-1");
 
+        Assert.Equal(TunerFaultKind.DeviceFailed, manager.FaultKindOf("adapter0")?.Kind);
+
         TimeSpan[] waits =
         [
             TimeSpan.FromMinutes(1),
@@ -136,6 +138,7 @@ public sealed class FaultedTunerRecheckTests
 
         Assert.Single(check.Tried);
         Assert.True(manager.IsFaulted("adapter0", out _));
+        Assert.Equal(TunerFaultKind.DeviceFailedAgain, manager.FaultKindOf("adapter0")?.Kind);
 
         SessionStart refused = manager.Begin(Watching("s-3"));
 
@@ -164,7 +167,7 @@ public sealed class FaultedTunerRecheckTests
     {
         TunerSessionManager manager = Manager();
 
-        manager.Fault("adapter0", "the delivery systems it reports are not the ones recorded");
+        manager.Fault(new TunerContradiction("adapter0", DeviceKind.Terrestrial, [DeviceKind.Satellite]));
 
         foreach (int minutes in new[] { 1, 5, 15, 60, 60 })
         {
@@ -181,12 +184,12 @@ public sealed class FaultedTunerRecheckTests
         TunerSessionManager manager = Manager();
 
         FailOn(manager, "s-1");
-        manager.Fault("adapter0", "the delivery systems it reports are not the ones recorded");
+        manager.Fault(new TunerContradiction("adapter0", DeviceKind.Terrestrial, [DeviceKind.Satellite]));
         clock.Advance(TimeSpan.FromMinutes(1));
 
         Assert.Empty(check.Tried);
         Assert.True(manager.IsFaulted("adapter0", out string? detail));
-        Assert.Contains("not the ones recorded", detail, StringComparison.Ordinal);
+        Assert.Contains("The ledger calls 'adapter0'", detail, StringComparison.Ordinal);
     }
 
     [Fact]

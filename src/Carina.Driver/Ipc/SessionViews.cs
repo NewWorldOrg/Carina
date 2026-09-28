@@ -139,8 +139,11 @@ public static class SessionViews
         string deviceId,
         TunerSessionManager manager,
         TunerState state
-    ) =>
-        new()
+    )
+    {
+        DeviceFaultKind? kind = manager.FaultKindOf(deviceId);
+
+        return new()
         {
             Level = manager.IsFaulted(deviceId, out string? fault)
                 ? TunerHealthLevel.Faulted
@@ -150,7 +153,11 @@ public static class SessionViews
             Detail = fault,
             ChangedAt = manager.HealthChangedAt(deviceId),
             FaultTitle = manager.FaultTitleOf(deviceId),
+            FaultKind = kind?.Kind ?? TunerFaultKind.Unspecified,
+            FaultDeclaredKind = kind?.Declared is { } declared ? DeviceViews.Wire(declared) : null,
+            FaultReceivableKinds = [.. (kind?.Receives ?? []).Select(DeviceViews.Wire)],
         };
+    }
 
     private static TunerSnapshot Of(
         DeviceSettings device,

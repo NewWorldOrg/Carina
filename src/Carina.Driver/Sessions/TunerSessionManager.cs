@@ -1383,7 +1383,7 @@ public sealed class TunerSessionManager(
             $"The device failed while serving '{session.SessionId}': "
             + (session.FailureCause?.Message ?? "no cause was recorded.");
 
-        faultedDevices[deviceId] = new DeviceFault(fault, null);
+        faultedDevices[deviceId] = new DeviceFault(fault, null, DeviceFaultKind.Failed);
         healthChangedAt[deviceId] = timeProvider.GetUtcNow();
 
         pool.Discard(deviceId);
@@ -1408,7 +1408,8 @@ public sealed class TunerSessionManager(
         faultedDevices[deviceId] = new DeviceFault(
             fault
             + $" It had been handed back out less than {RelapseMinutes} minutes earlier, so it is not tried again.",
-            null);
+            null,
+            DeviceFaultKind.FailedAgain);
 
         logger.LogError(
             "The device {DeviceId} failed again while serving {SessionId} within {RelapseMinutes} minutes of being handed back out, so it is not tried again and stays faulted until the driver restarts.",
@@ -1490,7 +1491,8 @@ public sealed class TunerSessionManager(
             new DeviceFault(
                 $"The device failed to receive {tuning} {streak} times in a row without delivering"
                     + $" anything in between; the last failure was: {cause.Message}",
-                TuningFailureTitles.Of(cause.Failure)
+                TuningFailureTitles.Of(cause.Failure),
+                DeviceFaultKind.RepeatedTuneFailure
             )
         );
     }
@@ -1503,7 +1505,19 @@ public sealed class TunerSessionManager(
         }
     }
 
-    public void Fault(string deviceId, string detail) => Fault(deviceId, new DeviceFault(detail, null));
+    public void Fault(TunerContradiction contradiction)
+    {
+        ArgumentNullException.ThrowIfNull(contradiction);
+
+        Fault(
+            contradiction.DeviceId,
+            new DeviceFault(
+                contradiction.Detail,
+                null,
+                DeviceFaultKind.Disagreeing(contradiction.Declared, contradiction.Receives)
+            )
+        );
+    }
 
     private void Fault(string deviceId, DeviceFault fault)
     {
@@ -1565,6 +1579,9 @@ public sealed class TunerSessionManager(
     public string? FaultTitleOf(string deviceId) =>
         faultedDevices.TryGetValue(deviceId, out DeviceFault? fault) ? fault.Title : null;
 
+    public DeviceFaultKind? FaultKindOf(string deviceId) =>
+        faultedDevices.TryGetValue(deviceId, out DeviceFault? fault) ? fault.Kind : null;
+
     private static TunerKind KindOf(StartSessionRequest request) =>
         request.Tune?.Kind ?? request.Tuning.Kind;
 
@@ -1576,5 +1593,5 @@ public sealed class TunerSessionManager(
             _ => false,
         };
 
-    private sealed record DeviceFault(string Detail, string? Title);
+    private sealed record DeviceFault(string Detail, string? Title, DeviceFaultKind Kind);
 }

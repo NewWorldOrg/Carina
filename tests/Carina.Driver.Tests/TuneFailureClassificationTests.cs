@@ -236,6 +236,7 @@ public sealed class TuneFailureClassificationTests
 
         Assert.Equal(TunerState.Faulted, tuner.State);
         Assert.Equal(SessionRefusalTitles.NoLock, tuner.Health?.FaultTitle);
+        Assert.Equal(TunerFaultKind.RepeatedTuneFailure, tuner.Health?.FaultKind);
     }
 
     [Fact]
@@ -268,7 +269,7 @@ public sealed class TuneFailureClassificationTests
         )));
 
         manager.Begin(Request("scan-1", 14));
-        manager.Fault("adapter0", "the kind on this adapter is not the kind the ledger names");
+        manager.Fault(new TunerContradiction("adapter0", DeviceKind.Terrestrial, [DeviceKind.Satellite]));
 
         TunerSnapshot tuner = Assert.Single(SessionViews.Tuners(Configuration, manager));
 

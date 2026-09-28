@@ -639,6 +639,62 @@ public sealed class TunerLedgerEndpointTests
     }
 
     [Fact]
+    public async Task AFaultedTunerNamesTheKindOfFaultRatherThanOnlyTheDriversSentence()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), driver =>
+        {
+            Stocked(driver);
+            driver.Tuners =
+            [
+                new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Faulted)
+                {
+                    Health = new TunerHealthDto
+                    {
+                        Level = TunerHealthLevel.Faulted,
+                        Detail = "the ledger and the tuner disagree",
+                        FaultKind = TunerFaultKind.LedgerDisagrees,
+                        FaultDeclaredKind = TunerKind.Terrestrial,
+                        FaultReceivableKinds = [TunerKind.Satellite],
+                    },
+                },
+            ];
+        });
+
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        JsonElement observed = body.GetProperty("data").GetProperty("observed")[0];
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("ledgerDisagrees", observed.GetProperty("faultKind").GetString());
+        Assert.Equal("terrestrial", observed.GetProperty("faultDeclaredKind").GetString());
+        Assert.Equal(
+            ["satellite"],
+            observed.GetProperty("faultReceivableKinds").EnumerateArray().Select(kind => kind.GetString()));
+    }
+
+    [Fact]
+    public async Task AFaultedTunerFromADriverThatNamesNoKindSaysUnspecified()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), driver =>
+        {
+            Stocked(driver);
+            driver.Tuners =
+            [
+                new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Faulted)
+                {
+                    Health = new TunerHealthDto { Level = TunerHealthLevel.Faulted, Detail = "something broke" },
+                },
+            ];
+        });
+
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        JsonElement observed = body.GetProperty("data").GetProperty("observed")[0];
+
+        Assert.Equal("unspecified", observed.GetProperty("faultKind").GetString());
+        Assert.Equal(JsonValueKind.Null, observed.GetProperty("faultDeclaredKind").ValueKind);
+        Assert.Empty(observed.GetProperty("faultReceivableKinds").EnumerateArray());
+    }
+
+    [Fact]
     public async Task ATunerBusyWhenDisabledIsReportedAsPendingRatherThanDone()
     {
         await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), driver =>

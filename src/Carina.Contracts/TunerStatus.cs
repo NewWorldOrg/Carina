@@ -14,6 +14,23 @@ public enum TunerHealthLevel
     Faulted = 3,
 }
 
+/// <summary>
+/// Why the driver stopped handing a device out, as a kind the reader can put in its own words.
+/// </summary>
+[JsonConverter(typeof(TunerFaultKindConverter))]
+public enum TunerFaultKind
+{
+    Unspecified = 0,
+
+    LedgerDisagrees = 1,
+
+    DeviceFailed = 2,
+
+    DeviceFailedAgain = 3,
+
+    RepeatedTuneFailure = 4,
+}
+
 [JsonConverter(typeof(DeviceDetectionConverter))]
 public enum DeviceDetection
 {
@@ -30,6 +47,8 @@ public enum DeviceDetection
 
 public sealed record TunerHealthDto
 {
+    private readonly IReadOnlyList<TunerKind> faultReceivableKinds = [];
+
     public TunerHealthLevel Level { get; init; }
 
     public bool DisablePending { get; init; }
@@ -45,6 +64,27 @@ public sealed record TunerHealthDto
     /// or <see langword="null"/> when the device is not faulted or was faulted for another cause.
     /// </summary>
     public string? FaultTitle { get; init; }
+
+    /// <summary>
+    /// Why the device is faulted, or <see cref="TunerFaultKind.Unspecified"/> when it is not faulted or the
+    /// driver that answered does not name the kind.
+    /// </summary>
+    public TunerFaultKind FaultKind { get; init; }
+
+    /// <summary>
+    /// The kind the ledger declares a device to be, when the device is faulted because it receives
+    /// something else.
+    /// </summary>
+    public TunerKind? FaultDeclaredKind { get; init; }
+
+    /// <summary>
+    /// The kinds a device reports it receives, when it is faulted because the ledger declares another.
+    /// </summary>
+    public IReadOnlyList<TunerKind> FaultReceivableKinds
+    {
+        get => faultReceivableKinds;
+        init => faultReceivableKinds = value ?? [];
+    }
 }
 
 public sealed record CurrentSessionDto

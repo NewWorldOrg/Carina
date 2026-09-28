@@ -52,7 +52,7 @@ public sealed class TunerStatusTests
         };
 
         Assert.Equal(
-            """{"level":"faulted","disablePending":false,"lnbPowered":true,"detail":"the kind on this adapter is not the kind the ledger names","changedAt":null,"faultTitle":null}""",
+            """{"level":"faulted","disablePending":false,"lnbPowered":true,"detail":"the kind on this adapter is not the kind the ledger names","changedAt":null,"faultTitle":null,"faultKind":"unspecified","faultDeclaredKind":null,"faultReceivableKinds":[]}""",
             DriverJson.Serialize(health)
         );
     }
@@ -70,6 +70,52 @@ public sealed class TunerStatusTests
 
         Assert.NotNull(read);
         Assert.Equal(SessionRefusalTitles.NoLock, read.FaultTitle);
+    }
+
+    [Fact]
+    public void AHealthFaultedBecauseTheLedgerDisagreesNamesBothKinds()
+    {
+        TunerHealthDto health = new()
+        {
+            Level = TunerHealthLevel.Faulted,
+            FaultKind = TunerFaultKind.LedgerDisagrees,
+            FaultDeclaredKind = TunerKind.Terrestrial,
+            FaultReceivableKinds = [TunerKind.Satellite],
+        };
+
+        TunerHealthDto? read = DriverJson.Deserialize(DriverJson.Serialize(health), DriverJson.Context.TunerHealthDto);
+
+        Assert.NotNull(read);
+        Assert.Equal(TunerFaultKind.LedgerDisagrees, read.FaultKind);
+        Assert.Equal(TunerKind.Terrestrial, read.FaultDeclaredKind);
+        Assert.Equal([TunerKind.Satellite], read.FaultReceivableKinds);
+    }
+
+    [Fact]
+    public void AHealthFromADriverThatNamesNoFaultKindReadsAsNamingNone()
+    {
+        TunerHealthDto? health = DriverJson.Deserialize(
+            """{"level":"faulted","detail":"the frontend stopped answering"}""",
+            DriverJson.Context.TunerHealthDto
+        );
+
+        Assert.NotNull(health);
+        Assert.Equal(TunerFaultKind.Unspecified, health.FaultKind);
+        Assert.Null(health.FaultDeclaredKind);
+        Assert.Empty(health.FaultReceivableKinds);
+    }
+
+    [Fact]
+    public void AFaultKindThisBuildDoesNotKnowReadsAsUnspecified()
+    {
+        TunerHealthDto? health = DriverJson.Deserialize(
+            """{"level":"faulted","faultKind":"overheated","faultReceivableKinds":null}""",
+            DriverJson.Context.TunerHealthDto
+        );
+
+        Assert.NotNull(health);
+        Assert.Equal(TunerFaultKind.Unspecified, health.FaultKind);
+        Assert.Empty(health.FaultReceivableKinds);
     }
 
     [Fact]
