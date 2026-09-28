@@ -30,7 +30,7 @@ public sealed class BroadcastGroupsFromTheGuideTests
             Table(EventInformationTable.FirstScheduleActualTableId, 2, Event(21, Noon.AddMinutes(30), 90, "Moved", Group(EventGroupKind.Moved, (1, 11), (2, 21)))),
             Table(EventInformationTable.PresentFollowingActualTableId, 2, Event(21, Noon.AddMinutes(30), 90, "Moved", running: 4)));
 
-        var resolver = BroadcastGroupResolver.Of(await held.ListGroupedAsync(Cancel));
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of(await held.ListGroupedAsync(Cancel));
         BroadcastResolution fromTheEarlier = resolver.Resolve(Find(held, 1, 11), At);
         BroadcastResolution fromTheRunning = resolver.Resolve(Find(held, 2, 21), At);
 
@@ -50,7 +50,7 @@ public sealed class BroadcastGroupsFromTheGuideTests
             Table(EventInformationTable.FirstScheduleActualTableId, 1, Event(12, Noon, 60, "Relay", Group(EventGroupKind.Relayed, (3, 31)))),
             Table(EventInformationTable.FirstScheduleActualTableId, 3, Event(31, Noon.AddMinutes(60), 60, "Relay continued")));
 
-        var resolver = BroadcastGroupResolver.Of(await held.ListGroupedAsync(Cancel));
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of(await held.ListGroupedAsync(Cancel));
         BroadcastResolution resolved = resolver.Resolve(Find(held, 3, 31), At);
 
         Assert.Equal([Id(1, 12), Id(3, 31)], resolved.Targets.Select(target => target.Programme.Id));
@@ -67,7 +67,7 @@ public sealed class BroadcastGroupsFromTheGuideTests
             Table(EventInformationTable.FirstScheduleActualTableId, 1, Event(13, Noon, 60, "Shared")),
             Table(EventInformationTable.FirstScheduleActualTableId, 4, Event(41, Noon, 60, null, Group(EventGroupKind.Shared, (1, 13)))));
 
-        var resolver = BroadcastGroupResolver.Of(await held.ListGroupedAsync(Cancel));
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of(await held.ListGroupedAsync(Cancel));
         BroadcastResolution resolved = resolver.Resolve(Find(held, 4, 41), At);
 
         Assert.Empty(resolved.Targets);
@@ -89,8 +89,8 @@ public sealed class BroadcastGroupsFromTheGuideTests
 
     private static async Task<HeldProgrammes> ReadAsync(params EventInformationTable[] tables)
     {
-        var held = new HeldProgrammes();
-        var writer = new ProgrammeWriter(held, new UnguardedWrites(), new StillClock(), new SilentEvents(), new CountedNotices());
+        HeldProgrammes held = new();
+        ProgrammeWriter writer = new(held, new UnguardedWrites(), new StillClock(), new SilentEvents(), new CountedNotices());
 
         foreach (EventInformationTable table in tables)
         {

@@ -15,7 +15,7 @@ public sealed class BroadcastGroupResolverTests
     public void BrRd010AProgrammeInNoGroupStandsForItself()
     {
         Programme alone = Listing(1, 101, 60, 120);
-        var resolver = BroadcastGroupResolver.Of([]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([]);
 
         BroadcastResolution resolved = resolver.Resolve(alone, At);
 
@@ -30,7 +30,7 @@ public sealed class BroadcastGroupResolverTests
     public void BrRd010AShadowStandsForNothing()
     {
         Programme shadow = Listing(2, 201, 60, 120, isShadow: true, related: [Link(1, 101, RelationKind.Shared)]);
-        var resolver = BroadcastGroupResolver.Of([shadow]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([shadow]);
 
         BroadcastResolution resolved = resolver.Resolve(shadow, At);
 
@@ -43,7 +43,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme first = Listing(1, 101, 60, 120, related: [Link(2, 201, RelationKind.Moved)]);
         Programme second = Listing(2, 201, 90, 150, related: [Link(1, 101, RelationKind.Moved)]);
-        var resolver = BroadcastGroupResolver.Of([second, first]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([second, first]);
 
         BroadcastResolution fromFirst = resolver.Resolve(first, At);
         BroadcastResolution fromSecond = resolver.Resolve(second, At);
@@ -62,7 +62,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme first = Listing(1, 101, 60, 120, related: [Link(2, 201, RelationKind.Moved)]);
         Programme running = Listing(2, 201, 90, 150, running: ProgrammeRunning.Running);
-        var resolver = BroadcastGroupResolver.Of([first, running]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([first, running]);
 
         BroadcastResolution resolved = resolver.Resolve(first, At);
 
@@ -75,7 +75,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme later = Listing(3, 301, 60, 120, related: [Link(2, 201, RelationKind.Moved)]);
         Programme earlier = Listing(2, 201, 60, 120);
-        var resolver = BroadcastGroupResolver.Of([later, earlier]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([later, earlier]);
 
         Assert.Same(earlier, Assert.Single(resolver.Resolve(later, At).Targets).Programme);
         Assert.Same(earlier, Assert.Single(resolver.Resolve(earlier, At).Targets).Programme);
@@ -86,7 +86,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme first = Listing(1, 101, 60, 120, related: [Link(2, 201, RelationKind.Moved)]);
         Programme second = Listing(2, 201, 120, 180);
-        var resolver = BroadcastGroupResolver.Of([first, second]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([first, second]);
 
         Assert.Same(first, Assert.Single(resolver.Resolve(first, At).Targets).Programme);
         Assert.Same(second, Assert.Single(resolver.Resolve(second, At).Targets).Programme);
@@ -98,7 +98,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme shadow = Listing(1, 101, 0, 120, isShadow: true, related: [Link(2, 201, RelationKind.Moved)]);
         Programme listed = Listing(2, 201, 30, 150);
-        var resolver = BroadcastGroupResolver.Of([shadow, listed]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([shadow, listed]);
 
         BroadcastResolution resolved = resolver.Resolve(listed, At);
 
@@ -112,7 +112,7 @@ public sealed class BroadcastGroupResolverTests
         Programme first = Listing(1, 101, 60, 120, related: [Link(2, 201, RelationKind.Relayed)]);
         Programme second = Listing(2, 201, 120, 180, related: [Link(3, 301, RelationKind.Relayed)]);
         Programme third = Listing(3, 301, 180, 240);
-        var resolver = BroadcastGroupResolver.Of([third, first, second]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([third, first, second]);
 
         foreach (Programme asked in new[] { first, second, third })
         {
@@ -132,7 +132,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme first = Listing(1, 101, -120, -60, related: [Link(2, 201, RelationKind.Relayed)]);
         Programme second = Listing(2, 201, 60, 120);
-        var resolver = BroadcastGroupResolver.Of([first, second]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([first, second]);
 
         Assert.Same(second, Assert.Single(resolver.Resolve(second, At).Targets).Programme);
     }
@@ -143,7 +143,7 @@ public sealed class BroadcastGroupResolverTests
         Programme first = Listing(1, 101, 60, 120, related: [Link(2, 201, RelationKind.Relayed)]);
         Programme segment = Listing(2, 201, 120, 180, related: [Link(3, 301, RelationKind.Moved)]);
         Programme primary = Listing(3, 301, 120, 180, running: ProgrammeRunning.Running);
-        var resolver = BroadcastGroupResolver.Of([first, segment, primary]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([first, segment, primary]);
 
         BroadcastResolution resolved = resolver.Resolve(first, At);
 
@@ -156,7 +156,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme naming = Listing(1, 101, 60, 120, related: [Link(2, 201, RelationKind.Moved)]);
         Programme named = Listing(2, 201, 60, 120, running: ProgrammeRunning.Running);
-        var resolver = BroadcastGroupResolver.Of([naming, named]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([naming, named]);
 
         Assert.Same(named, Assert.Single(resolver.Resolve(named, At).Targets).Programme);
         Assert.Equal(BroadcastExclusion.Moved, resolver.Resolve(naming, At).Exclusion);
@@ -167,7 +167,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme listed = Listing(2, 201, 60, 120, related: [Link(1, 5, RelationKind.Relayed), Link(3, 301, RelationKind.Relayed)]);
         Programme after = Listing(3, 301, 120, 180);
-        var resolver = BroadcastGroupResolver.Of([listed, after]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([listed, after]);
 
         BroadcastResolution resolved = resolver.Resolve(after, At);
 
@@ -191,7 +191,7 @@ public sealed class BroadcastGroupResolverTests
         [
             .. Enumerable.Range(0, listings.Length).Select(turn =>
             {
-                var resolver = BroadcastGroupResolver.Of([.. listings.Skip(turn), .. listings.Take(turn)]);
+                BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([.. listings.Skip(turn), .. listings.Take(turn)]);
 
                 return string.Join(
                     ";",
@@ -210,7 +210,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme primary = Listing(1, 101, 60, 120, running: ProgrammeRunning.Running, related: [Link(2, 201, RelationKind.Moved)]);
         Programme suppressed = Listing(2, 201, 50, 120);
-        var resolver = BroadcastGroupResolver.Of([primary, suppressed]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([primary, suppressed]);
 
         BroadcastPlacement? placed = resolver.Place(Reference(suppressed), suppressed.EndsAt!.Value, At);
 
@@ -224,7 +224,7 @@ public sealed class BroadcastGroupResolverTests
     public void BrRd010AReservationWhoseListingLeftTheGuideIsPlacedOnThePrimaryOfTheListingsOverlappingIt()
     {
         Programme remaining = Listing(2, 201, 60, 120, related: [Link(1, 101, RelationKind.Moved)]);
-        var resolver = BroadcastGroupResolver.Of([remaining]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([remaining]);
         ProgrammeRef gone = Reference(1, 101, 60);
 
         BroadcastPlacement? placed = resolver.Place(gone, At.AddMinutes(120), At);
@@ -236,7 +236,7 @@ public sealed class BroadcastGroupResolverTests
     public void BrRd010AReservationWhoseListingLeftTheGuideWithNothingOverlappingItIsNotPlaced()
     {
         Programme remaining = Listing(2, 201, 300, 360, related: [Link(1, 101, RelationKind.Moved)]);
-        var resolver = BroadcastGroupResolver.Of([remaining]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([remaining]);
 
         Assert.Null(resolver.Place(Reference(1, 101, 60), At.AddMinutes(120), At));
     }
@@ -246,7 +246,7 @@ public sealed class BroadcastGroupResolverTests
     {
         Programme first = Listing(1, 101, 60, 120, related: [Link(2, 201, RelationKind.Relayed)]);
         Programme second = Listing(2, 201, 180, 240);
-        var resolver = BroadcastGroupResolver.Of([first, second]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([first, second]);
 
         BroadcastPlacement? placed = resolver.Place(Reference(first), first.EndsAt!.Value, At);
 
@@ -259,7 +259,7 @@ public sealed class BroadcastGroupResolverTests
     public void BrRd010AReservationOnAListingInNoGroupIsPlacedAsStandingAlone()
     {
         Programme alone = Listing(1, 101, 60, 120);
-        var resolver = BroadcastGroupResolver.Of([alone]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([alone]);
 
         BroadcastPlacement? placed = resolver.Place(Reference(alone), alone.EndsAt!.Value, At);
 
@@ -274,7 +274,7 @@ public sealed class BroadcastGroupResolverTests
         Programme second = Listing(2, 201, 120, 180, related: [Link(3, 301, RelationKind.Moved)]);
         Programme moved = Listing(3, 301, 120, 180);
         Programme elsewhere = Listing(4, 401, 60, 120);
-        var resolver = BroadcastGroupResolver.Of([first, second, moved, elsewhere]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([first, second, moved, elsewhere]);
 
         Assert.Equal([first, second], resolver.MembersAlongside([first.Id]));
         Assert.Equal([first, second, moved], resolver.MembersAlongside([second.Id]));

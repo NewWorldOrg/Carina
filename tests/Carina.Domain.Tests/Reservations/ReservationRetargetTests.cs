@@ -15,7 +15,7 @@ public sealed class ReservationRetargetTests
     [Fact]
     public void BrRd010AReservationMovedOntoThePrimaryKeepsWhatItWasGiven()
     {
-        var rule = RuleId.New();
+        RuleId rule = RuleId.New();
         Reservation booked = ReservationFactory.Planned(
             ruleId: rule,
             priority: new Priority(40),

@@ -63,21 +63,21 @@ public sealed class BroadcastGroupResolver
     {
         ArgumentNullException.ThrowIfNull(grouped);
 
-        var present = new Dictionary<Node, Programme>();
+        Dictionary<Node, Programme> present = [];
 
         foreach (Programme programme in grouped)
         {
             present[Node.Of(programme.Id)] = programme;
         }
 
-        var relays = new Grouping();
-        var movements = new Grouping();
+        Grouping relays = new();
+        Grouping movements = new();
 
         foreach ((Node node, Programme programme) in present)
         {
             foreach (RelatedProgramme related in programme.Related)
             {
-                var other = new Node(related.NetworkId, related.ServiceId, related.EventId);
+                Node other = new(related.NetworkId, related.ServiceId, related.EventId);
 
                 if (related.Kind is RelationKind.Relayed)
                 {
@@ -100,11 +100,11 @@ public sealed class BroadcastGroupResolver
     {
         ArgumentNullException.ThrowIfNull(ids);
 
-        var found = new HashSet<Node>();
+        HashSet<Node> found = [];
 
         foreach (ProgrammeId id in ids)
         {
-            var node = Node.Of(id);
+            Node node = Node.Of(id);
 
             found.UnionWith(relays.MembersOf(node));
             found.UnionWith(movements.MembersOf(node));
@@ -141,7 +141,7 @@ public sealed class BroadcastGroupResolver
     {
         ArgumentNullException.ThrowIfNull(reserved);
 
-        var node = Node.Of(reserved.Id);
+        Node node = Node.Of(reserved.Id);
         Programme? own;
         Programme reached;
 
@@ -178,8 +178,8 @@ public sealed class BroadcastGroupResolver
     private IReadOnlyList<BroadcastTarget> Targets(Programme programme, DateTime at)
     {
         IReadOnlyList<Programme> segments = SegmentsOf(programme, at);
-        var targets = new List<BroadcastTarget>();
-        var taken = new HashSet<Node>();
+        List<BroadcastTarget> targets = [];
+        HashSet<Node> taken = [];
 
         foreach (Programme segment in segments)
         {
@@ -196,14 +196,14 @@ public sealed class BroadcastGroupResolver
 
     private BroadcastTarget Target(Programme asked, Programme target)
     {
-        var askedNode = Node.Of(asked.Id);
+        Node askedNode = Node.Of(asked.Id);
 
         if (relays.MembersOf(askedNode).Count > 1)
         {
             return new BroadcastTarget(target, relays.KeyOf(askedNode, RelayPrefix), BroadcastGroupRole.RelaySegment);
         }
 
-        var targetNode = Node.Of(target.Id);
+        Node targetNode = Node.Of(target.Id);
 
         return movements.MembersOf(targetNode).Count > 1
             ? new BroadcastTarget(
@@ -284,8 +284,8 @@ public sealed class BroadcastGroupResolver
                 .ThenBy(member => Node.Of(member.Id)),
         ];
 
-        var clusters = new List<IReadOnlyList<Programme>>();
-        var running = new List<Programme>();
+        List<IReadOnlyList<Programme>> clusters = [];
+        List<Programme> running = [];
         DateTime reach = DateTime.MinValue;
 
         foreach (Programme member in listed)
