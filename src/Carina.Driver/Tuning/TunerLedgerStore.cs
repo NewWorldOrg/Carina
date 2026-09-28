@@ -21,14 +21,28 @@ public sealed class TunerLedgerStore(DriverConfiguration configuration, string? 
         };
     }
 
+    /// <summary>
+    /// Saves the tuners asked for. When <paramref name="expectedSavedHash"/> is given, the save is taken
+    /// only while the saved ledger is still the one that hash was read from.
+    /// </summary>
     public LedgerRevision Save(
         IReadOnlyList<TunerConfigEntry>? requested,
-        IReadOnlyList<TunerDetection> detected
+        IReadOnlyList<TunerDetection> detected,
+        string? expectedSavedHash = null
     )
     {
         lock (gate)
         {
             DriverConfiguration? saved = Saved();
+
+            if (expectedSavedHash is not null
+                && !string.Equals(expectedSavedHash, SavedHashOf(saved), StringComparison.Ordinal))
+            {
+                return LedgerRevision.Refused(
+                    LedgerRefusal.Stale,
+                    "The ledger has been saved since this one was read; read it again and save from what it says now."
+                );
+            }
 
             LedgerRevision revision = TunerLedger.Revise(
                 requested,
@@ -78,6 +92,9 @@ public sealed class TunerLedgerStore(DriverConfiguration configuration, string? 
             return Write(saved, devices, LedgerRevision.Accepted(devices));
         }
     }
+
+    private static string? SavedHashOf(DriverConfiguration? saved)
+        => saved is null ? null : TunerLedger.Fingerprint(saved.Devices);
 
     private LedgerRevision Write(
         DriverConfiguration? saved,

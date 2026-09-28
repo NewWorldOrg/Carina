@@ -237,6 +237,7 @@ public sealed class DriverIpcClientTests
 
         DriverCall<TunerLedgerDto> call = await client.ReplaceTunerLedgerAsync(
             [new TunerConfigEntry { DeviceId = "adapter0", Disabled = true }],
+            expectedSavedHash: null,
             CancellationToken.None);
 
         Assert.True(call.TryGetValue(out TunerLedgerDto? ledger));
@@ -254,7 +255,7 @@ public sealed class DriverIpcClientTests
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
         using DriverIpcClient client = ClientFor(socketPath);
 
-        DriverCall<TunerLedgerDto> call = await client.ReplaceTunerLedgerAsync([], CancellationToken.None);
+        DriverCall<TunerLedgerDto> call = await client.ReplaceTunerLedgerAsync([], expectedSavedHash: null, CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
         Assert.Equal("emptyLedger", call.Problem?.Title);
@@ -274,10 +275,35 @@ public sealed class DriverIpcClientTests
 
         DriverCall<TunerLedgerDto> call = await client.ReplaceTunerLedgerAsync(
             [new TunerConfigEntry { DeviceId = "adapter9" }],
+            expectedSavedHash: null,
             CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
         Assert.Equal("unknownDevice", call.Problem?.Title);
+    }
+
+    [Fact]
+    public async Task ALedgerReplacementCarriesTheReadingItWasMadeFromWhenItHasOne()
+    {
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        using DriverIpcClient client = ClientFor(socketPath);
+
+        await client.ReplaceTunerLedgerAsync(
+            [new TunerConfigEntry { DeviceId = "adapter0" }],
+            expectedSavedHash: "read-before",
+            CancellationToken.None);
+
+        Assert.Equal("read-before", driver.LastLedgerRevision);
+
+        await client.ReplaceTunerLedgerAsync(
+            [new TunerConfigEntry { DeviceId = "adapter0" }],
+            expectedSavedHash: null,
+            CancellationToken.None);
+
+        Assert.Null(driver.LastLedgerRevision);
     }
 
     [Fact]
@@ -376,7 +402,8 @@ public sealed class DriverIpcClientTests
             "ledgerRead" => Of(await client.GetTunerLedgerAsync(CancellationToken.None)),
             "ledgerReplace" => Of(await client.ReplaceTunerLedgerAsync(
                 [new TunerConfigEntry { DeviceId = "adapter0" }],
-                    CancellationToken.None)),
+                expectedSavedHash: null,
+                CancellationToken.None)),
             "lnbPower" => Of(await client.SwitchLnbPowerAsync("adapter0", on: true, CancellationToken.None)),
             _ => Of(await client.ToggleTunerAsync("adapter0", disabled: true, CancellationToken.None)),
         };

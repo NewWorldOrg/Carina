@@ -97,6 +97,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
     public async Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(
         IReadOnlyList<TunerConfigEntry> tuners,
+        string? expectedSavedHash,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tuners);
@@ -109,8 +110,17 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         try
         {
             using CancellationTokenSource patience = Patience(cancellationToken);
-            using JsonContent body = JsonContent.Create(tuners, DriverJson.Context.IReadOnlyListTunerConfigEntry);
-            using HttpResponseMessage response = await http.PutAsync(DriverEndpoints.Tuners, body, patience.Token);
+            using HttpRequestMessage request = new(HttpMethod.Put, DriverEndpoints.Tuners)
+            {
+                Content = JsonContent.Create(tuners, DriverJson.Context.IReadOnlyListTunerConfigEntry),
+            };
+
+            if (expectedSavedHash is not null)
+            {
+                request.Headers.TryAddWithoutValidation(DriverEndpoints.LedgerRevisionHeader, expectedSavedHash);
+            }
+
+            using HttpResponseMessage response = await http.SendAsync(request, patience.Token);
 
             return await ReadAsync(
                 response,

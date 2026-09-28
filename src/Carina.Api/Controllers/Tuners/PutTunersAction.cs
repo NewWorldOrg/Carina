@@ -17,6 +17,7 @@ public sealed class PutTunersAction(TunerLedgerService tunerLedgerService) : Con
     [HttpPut]
     [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status200OK)]
     [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status501NotImplemented)]
     [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(
@@ -25,6 +26,7 @@ public sealed class PutTunersAction(TunerLedgerService tunerLedgerService) : Con
     {
         ServiceResult<TunerLedgerView, TunerLedgerFailure> result = await tunerLedgerService.ReplaceAsync(
             request?.ToEntries() ?? [],
+            request?.SavedHash,
             cancellationToken);
 
         if (!result.IsSuccess)

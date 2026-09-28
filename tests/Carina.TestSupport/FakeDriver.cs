@@ -48,6 +48,8 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public TunerToggleRequest? LastToggle { get; private set; }
 
+    public string? LastLedgerRevision { get; private set; }
+
     public string? LastLnbSwitchedDeviceId { get; private set; }
 
     public TunerLnbPowerRequest? LastLnbSwitch { get; private set; }
@@ -286,6 +288,9 @@ public sealed class FakeDriver : IAsyncDisposable
             context.RequestAborted);
 
         LastReplacedLedger = entries;
+        LastLedgerRevision = context.Request.Headers[DriverEndpoints.LedgerRevisionHeader].ToString() is { Length: > 0 } read
+            ? read
+            : null;
 
         if (entries is not { Count: > 0 })
         {

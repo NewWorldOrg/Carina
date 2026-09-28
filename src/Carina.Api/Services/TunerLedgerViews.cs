@@ -15,6 +15,8 @@ public enum TunerLedgerFailure
     EmptyLedger = 5,
 
     Malformed = 6,
+
+    LedgerChanged = 7,
 }
 
 public sealed record TunerObservations(IReadOnlyList<TunerSnapshot> Tuners, DateTimeOffset ObservedAt);

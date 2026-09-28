@@ -26,6 +26,8 @@ public sealed record TunerLedgerRequest
 {
     public IReadOnlyList<TunerEntryRequest>? Tuners { get; init; }
 
+    public string? SavedHash { get; init; }
+
     public IReadOnlyList<TunerConfigEntry> ToEntries()
         => [.. (Tuners ?? []).Select(entry => entry.ToEntry())];
 }

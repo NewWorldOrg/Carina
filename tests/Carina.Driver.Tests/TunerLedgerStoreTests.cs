@@ -350,6 +350,56 @@ public sealed class TunerLedgerStoreTests : IDisposable
         Assert.Equal(before, File.ReadAllText(path));
     }
 
+    [Fact]
+    public void ASaveMadeFromTheLedgerAsItStillIsIsTaken()
+    {
+        string read = Store().View().SavedHash!;
+
+        LedgerRevision saved = Store().Save(
+            [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }, new TunerConfigEntry { DeviceId = "adapter1.frontend0" }],
+            [Terrestrial, Satellite],
+            read
+        );
+
+        Assert.Equal(LedgerRefusal.None, saved.Refusal);
+    }
+
+    [Fact]
+    public void ASaveMadeFromALedgerThatHasSinceChangedIsRefusedAndLeavesTheFileAsTheOtherWriterLeftIt()
+    {
+        string read = Store().View().SavedHash!;
+
+        Store().Save(
+            [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }, new TunerConfigEntry { DeviceId = "adapter1.frontend0" }],
+            [Terrestrial, Satellite],
+            read
+        );
+
+        string afterTheFirst = File.ReadAllText(path);
+
+        LedgerRevision stale = Store().Save(
+            [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }],
+            [Terrestrial, Satellite],
+            read
+        );
+
+        Assert.Equal(LedgerRefusal.Stale, stale.Refusal);
+        Assert.Equal(afterTheFirst, File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void ASaveThatNamesNoReadingIsTakenAsBefore()
+    {
+        SaveBoth(groundEnabled: true);
+
+        LedgerRevision saved = Store().Save(
+            [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }],
+            [Terrestrial, Satellite]
+        );
+
+        Assert.Equal(LedgerRefusal.None, saved.Refusal);
+    }
+
     private void SaveBoth(bool groundEnabled)
         => Assert.Equal(
             LedgerRefusal.None,

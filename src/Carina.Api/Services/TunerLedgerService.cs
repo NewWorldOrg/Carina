@@ -16,6 +16,8 @@ public sealed class TunerLedgerService(
 
     public const string NoSuchTunerTitle = "noSuchTuner";
 
+    public const string LedgerChangedTitle = "ledgerChanged";
+
     public async Task<ServiceResult<TunerLedgerView, TunerLedgerFailure>> ReadAsync(
         CancellationToken cancellationToken)
     {
@@ -57,6 +59,7 @@ public sealed class TunerLedgerService(
 
     public async Task<ServiceResult<TunerLedgerView, TunerLedgerFailure>> ReplaceAsync(
         IReadOnlyList<TunerConfigEntry> wanted,
+        string? expectedSavedHash,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(wanted);
@@ -75,7 +78,10 @@ public sealed class TunerLedgerService(
                 TunerLedgerFailure.Malformed);
         }
 
-        DriverCall<TunerLedgerDto> replaced = await driver.ReplaceTunerLedgerAsync(wanted, cancellationToken);
+        DriverCall<TunerLedgerDto> replaced = await driver.ReplaceTunerLedgerAsync(
+            wanted,
+            expectedSavedHash,
+            cancellationToken);
 
         if (!replaced.TryGetValue(out TunerLedgerDto? document))
         {
@@ -185,6 +191,7 @@ public sealed class TunerLedgerService(
         {
             CapabilityMissingTitle => TunerLedgerFailure.CapabilityMissing,
             NoSuchTunerTitle => TunerLedgerFailure.NoSuchTuner,
+            LedgerChangedTitle => TunerLedgerFailure.LedgerChanged,
             _ => TunerLedgerFailure.DriverRefused,
         };
     }

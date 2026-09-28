@@ -282,7 +282,11 @@ public static class DriverApi
             return;
         }
 
-        LedgerRevision revision = ledger.Save(requested, detector.Detect());
+        string? expectedSavedHash = context.Request.Headers[DriverEndpoints.LedgerRevisionHeader].ToString() is { Length: > 0 } read
+            ? read
+            : null;
+
+        LedgerRevision revision = ledger.Save(requested, detector.Detect(), expectedSavedHash);
 
         if (revision.Refusal is not LedgerRefusal.None)
         {
@@ -842,6 +846,7 @@ public static class DriverApi
                 StatusCodes.Status409Conflict,
                 "undeterminedKind"
             ),
+            LedgerRefusal.Stale => (StatusCodes.Status409Conflict, "ledgerChanged"),
             LedgerRefusal.NotInLedger => (StatusCodes.Status404NotFound, "noSuchTuner"),
             _ => (StatusCodes.Status503ServiceUnavailable, "ledgerUnwritable"),
         };

@@ -12,8 +12,13 @@ public interface IDriverClient
 
     Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Replaces the saved ledger. When <paramref name="expectedSavedHash"/> is given, the driver takes the
+    /// save only while its saved ledger is still the one that hash was read from.
+    /// </summary>
     Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(
         IReadOnlyList<TunerConfigEntry> tuners,
+        string? expectedSavedHash,
         CancellationToken cancellationToken);
 
     /// <summary>

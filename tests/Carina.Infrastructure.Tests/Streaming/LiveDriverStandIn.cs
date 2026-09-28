@@ -229,7 +229,7 @@ internal sealed class LiveDriverStandIn : IDriverClient
     public Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(IReadOnlyList<TunerConfigEntry> tuners, CancellationToken cancellationToken)
+    public Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(IReadOnlyList<TunerConfigEntry> tuners, string? expectedSavedHash, CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
     public Task<DriverCall<TunerLedgerDto>> SwitchLnbPowerAsync(
