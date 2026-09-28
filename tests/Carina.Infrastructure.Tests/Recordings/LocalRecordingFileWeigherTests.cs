@@ -54,6 +54,31 @@ public sealed class LocalRecordingFileWeigherTests : IDisposable
         Assert.Null(await Weigher().WeighAsync(new OutputRoot("primary"), name, Cancel));
     }
 
+    [Fact]
+    public async Task AFileOnTheDiskWasLastWrittenWhenTheDiskSays()
+    {
+        RecordingFileName name = Named();
+        string path = Path.Combine(root, name.Value);
+        DateTime written = new(2026, 8, 26, 20, 10, 0, 80, DateTimeKind.Utc);
+        await File.WriteAllBytesAsync(path, new byte[188], Cancel);
+        File.SetLastWriteTimeUtc(path, written);
+
+        Assert.Equal(written, await Weigher().LastWrittenAsync(new OutputRoot("primary"), name, Cancel));
+    }
+
+    [Fact]
+    public async Task AFileThatIsNotThereWasNeverWritten()
+        => Assert.Null(await Weigher().LastWrittenAsync(new OutputRoot("primary"), Named(), Cancel));
+
+    [Fact]
+    public async Task AFileUnderARootNothingSaysWhereToFindHasNoTimeRead()
+    {
+        RecordingFileName name = Named();
+        await File.WriteAllBytesAsync(Path.Combine(root, name.Value), new byte[188], Cancel);
+
+        Assert.Null(await Weigher().LastWrittenAsync(new OutputRoot("bulk"), name, Cancel));
+    }
+
     private static RecordingFileName Named() => RecordingFileName.For(RecordingId.New(), ".ts");
 
     private LocalRecordingFileWeigher Weigher()

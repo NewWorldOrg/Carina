@@ -8,8 +8,34 @@ public sealed class CompletionToleranceTests
     public void TheToleranceTheLedgerStartsWithIsTheOneThatWasDecided()
     {
         Assert.Equal(0.995, CompletionTolerance.Default.CompleteCoverage, 12);
-        Assert.Equal(0.95, CompletionTolerance.Default.TruncatedCoverage, 12);
+        Assert.Equal(0.5, CompletionTolerance.Default.TruncatedCoverage, 12);
         Assert.Equal(10, CompletionTolerance.Default.SizeSlackPercent);
+    }
+
+    [Theory]
+    [InlineData(947_000)]
+    [InlineData(500_000)]
+    public void ARecordingThatWroteHalfItsWindowOrMoreIsCutShortRatherThanFailedByTheToleranceTheLedgerStartsWith(
+        long writtenMs)
+    {
+        RecordingVerdict verdict = CompletionEvaluator.Judge(
+            CompletionFactory.Evidence(bytes: writtenMs * 2_500, written: TimeSpan.FromMilliseconds(writtenMs)),
+            CompletionFactory.Bitrate,
+            CompletionTolerance.Default);
+
+        Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
+        Assert.Equal([RecordingFault.ShortOfTheWindow], verdict.Faults);
+    }
+
+    [Fact]
+    public void ARecordingThatWroteLessThanHalfItsWindowFailsByTheToleranceTheLedgerStartsWith()
+    {
+        RecordingVerdict verdict = CompletionEvaluator.Judge(
+            CompletionFactory.Evidence(bytes: 1_249_997_500, written: TimeSpan.FromMilliseconds(499_999)),
+            CompletionFactory.Bitrate,
+            CompletionTolerance.Default);
+
+        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
     }
 
     [Fact]

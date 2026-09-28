@@ -165,10 +165,17 @@ public sealed class OrphanRecoveryService(
         CancellationToken cancellationToken)
     {
         RecordingFault fault = OrphanRecovery.WhyNothingWasWritingIt(another);
+        DateTime? lastWritten = await weigher.LastWrittenAsync(
+            recording.OutputRoot,
+            recording.FileName,
+            cancellationToken);
 
         await ApplyAsync(
             recording.Id,
-            loaded => RecordingResumption.OpenABreak(loaded, fault, now),
+            loaded => RecordingResumption.OpenABreak(
+                loaded,
+                fault,
+                RecordingResumption.StoppedWritingAt(loaded, lastWritten, now)),
             cancellationToken);
 
         if (await TuneOfAsync(recording, cancellationToken) is not { } tune)

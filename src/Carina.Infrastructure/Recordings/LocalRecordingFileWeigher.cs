@@ -10,6 +10,20 @@ public sealed class LocalRecordingFileWeigher(
     ILogger<LocalRecordingFileWeigher> logger) : IRecordingFileWeigher
 {
     public Task<long?> WeighAsync(OutputRoot root, RecordingFileName fileName, CancellationToken cancellationToken)
+        => Task.FromResult(Read(root, fileName, found => found.Length, cancellationToken));
+
+    public Task<DateTime?> LastWrittenAsync(
+        OutputRoot root,
+        RecordingFileName fileName,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Read(root, fileName, found => found.LastWriteTimeUtc, cancellationToken));
+
+    private T? Read<T>(
+        OutputRoot root,
+        RecordingFileName fileName,
+        Func<FileInfo, T> reading,
+        CancellationToken cancellationToken)
+        where T : struct
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(fileName);
@@ -21,18 +35,18 @@ public sealed class LocalRecordingFileWeigher(
         {
             logger.LogWarning(
                 "Output root {Root} is named by the ledger and nothing tells this process where it is mounted, "
-                + "so the file {File} under it cannot be weighed.",
+                + "so the file {File} under it cannot be read.",
                 root.Value,
                 fileName.Value);
 
-            return Task.FromResult<long?>(null);
+            return null;
         }
 
         try
         {
-            var found = new FileInfo(Path.Combine(mounted.Path, fileName.Value));
+            FileInfo found = new(Path.Combine(mounted.Path, fileName.Value));
 
-            return Task.FromResult(found.Exists ? found.Length : (long?)null);
+            return found.Exists ? reading(found) : null;
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
@@ -42,7 +56,7 @@ public sealed class LocalRecordingFileWeigher(
                 fileName.Value,
                 root.Value);
 
-            return Task.FromResult<long?>(null);
+            return null;
         }
     }
 }

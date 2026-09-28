@@ -250,9 +250,18 @@ public sealed class RecordingStreamSettlementTests
     }
 
     [Fact]
-    public async Task ARecordingThatCoveredFarTooLittleOfTheWindowFailedRatherThanRanShort()
+    public async Task ARecordingThatCoveredMostButNotAllOfTheWindowRanShortRatherThanFailed()
     {
         Recording read = await Judged(TimeSpan.FromSeconds(1700), 3_200_000_000, asked: true);
+
+        Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
+        Assert.Equal(RecordingFault.ShortOfTheWindow, Assert.Single(read.OutcomeDetail).Fault);
+    }
+
+    [Fact]
+    public async Task ARecordingThatCoveredLessThanHalfOfTheWindowFailedRatherThanRanShort()
+    {
+        Recording read = await Judged(TimeSpan.FromSeconds(850), 1_600_000_000, asked: true);
 
         Assert.Equal(RecordingOutcome.Failed, read.Outcome);
         Assert.Equal(RecordingFault.ShortOfTheWindow, Assert.Single(read.OutcomeDetail).Fault);

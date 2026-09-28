@@ -75,7 +75,7 @@ public sealed class PromisedWindowOutcomeTests
 
         Assert.InRange(verdict.Coverage, 0.74, 0.76);
         Assert.Contains(RecordingFault.ShortOfTheWindow, verdict.Faults);
-        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
+        Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class PromisedWindowOutcomeTests
         RecordingVerdict verdict = Judge(window, window.Length - NoTunerForFiftyMinutes);
 
         Assert.InRange(verdict.Coverage, 0.66, 0.68);
-        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
+        Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
     }
 
     private static RecordingWindow Promised(DateTime askedAt)

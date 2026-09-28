@@ -312,6 +312,14 @@ internal sealed class WeighedFiles : IRecordingFileWeigher
 
         return Task.FromResult(Weighs);
     }
+
+    public DateTime? LastWritten { get; set; }
+
+    public Task<DateTime?> LastWrittenAsync(
+        OutputRoot root,
+        RecordingFileName fileName,
+        CancellationToken cancellationToken)
+        => Task.FromResult(LastWritten);
 }
 
 internal sealed class WatchClock(DateTime now) : TimeProvider
