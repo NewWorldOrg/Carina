@@ -566,8 +566,9 @@ public sealed class Recording
     }
 
     /// <summary>
-    /// Keeps a gap a session carrying on into this recording's file left behind. A gap that ends where one already
-    /// kept ends is the same gap seen again, and is kept once.
+    /// Keeps a gap a session carrying on into this recording's file left behind, and moves the interruption opened
+    /// during that gap onto it. A gap that ends where one already kept ends is the same gap seen again, and is kept
+    /// once.
     /// </summary>
     public void Missed(RecordingGap gap)
     {
@@ -583,6 +584,29 @@ public sealed class Recording
 
         gaps.Add(gap);
         MissedMs = MissedIn(gaps);
+        PlaceTheInterruptionOn(gap);
+    }
+
+    /// <summary>
+    /// Moves the last interruption that began before a gap ended and had not resumed before it began so that it
+    /// begins where the gap begins and, when it has resumed, resumes where the gap ends.
+    /// </summary>
+    private void PlaceTheInterruptionOn(RecordingGap gap)
+    {
+        int index = interruptions.FindLastIndex(one => one.OccurredAt < gap.Until);
+
+        if (index < 0 || (interruptions[index].ResumedAt is { } resumed && resumed <= gap.From))
+        {
+            return;
+        }
+
+        Interruption during = interruptions[index];
+        DateTime previous = index is 0 ? StartedAtActual : interruptions[index - 1].ResumedAt!.Value;
+
+        interruptions[index] = new Interruption(
+            during.Fault,
+            gap.From > previous ? gap.From : previous,
+            during.ResumedAt is null ? null : gap.Until);
     }
 
     public void Note(OutcomeDetail detail)

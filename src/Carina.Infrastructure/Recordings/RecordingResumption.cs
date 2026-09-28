@@ -22,6 +22,25 @@ internal static class RecordingResumption
         return true;
     }
 
+    /// <summary>
+    /// When a recording stopped being written: the last write to its file, kept between the moment it was last
+    /// written by an earlier stretch and the moment the break was noticed, or the moment it was noticed when the file
+    /// says nothing.
+    /// </summary>
+    public static DateTime StoppedWritingAt(Recording recording, DateTime? lastWritten, DateTime noticed)
+    {
+        if (lastWritten is not { } written || written >= noticed)
+        {
+            return noticed;
+        }
+
+        DateTime earliest = recording.Interruptions.Count is 0
+            ? recording.StartedAtActual
+            : recording.Interruptions[^1].ResumedAt ?? recording.Interruptions[^1].OccurredAt;
+
+        return written > earliest ? written : earliest;
+    }
+
     public static bool CloseAnyOpenBreak(Recording recording, DateTime at)
     {
         if (recording.Interruptions.Count is 0 || !recording.Interruptions[^1].IsOpen)

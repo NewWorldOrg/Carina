@@ -453,6 +453,27 @@ public sealed class OrphanRecoveryServiceTests
         Assert.Equal(RecordingFault.LeftRunningUnwatched, Assert.Single(read.Interruptions).Fault);
     }
 
+    [Fact]
+    public async Task ABreakOpenedForADriverThatIsGoneBeginsAtTheLastWriteToTheFile()
+    {
+        var ledger = new StreamLedger();
+        Recording recording = InFlight(Airs, Airs.AddMinutes(30));
+        ledger.Hold(recording);
+        OrphanRecoveryService recovery = Recovery(
+            ledger,
+            new WatchedDriver(),
+            new WatchClock(Now),
+            new WeighedFiles { Weighs = 900_000_000, LastWritten = Now.AddSeconds(-112) });
+
+        await recovery.RecoverAsync(Hello(), [Writing(recording)], Cancel);
+        await recovery.RecoverAsync(Hello("driver-2"), [], Cancel);
+
+        Interruption opened = Assert.Single(ledger.Read(recording.Id).Interruptions);
+
+        Assert.Equal(RecordingFault.DriverReplaced, opened.Fault);
+        Assert.Equal(Now.AddSeconds(-112), opened.OccurredAt);
+    }
+
     private static SessionSnapshot Writing(Recording recording)
         => new(
             RecordingSessions.Named(recording.Id),

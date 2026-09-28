@@ -332,7 +332,7 @@ public sealed class RecordingStreamSupervisor(
 
                 loaded.Measure(counters, positions, scrambled, reading.EovfCount, now);
                 advanced = wrote || measured || missed;
-                resumed = RecordingResumption.CloseAnyOpenBreak(loaded, now);
+                resumed = RecordingResumption.CloseAnyOpenBreak(loaded, missed ? gap!.Until : now);
 
                 return true;
             },
@@ -366,6 +366,10 @@ public sealed class RecordingStreamSupervisor(
     {
         RecordingFault fault = BrokeItOff(session);
         TuneFailureKind? tuneFailure = SessionRefusalReading.TuneFailureIn(session);
+        DateTime? lastWritten = await weigher.LastWrittenAsync(
+            recording.OutputRoot,
+            recording.FileName,
+            cancellationToken);
         bool over = false;
 
         bool broke = await ApplyAsync(
@@ -374,7 +378,11 @@ public sealed class RecordingStreamSupervisor(
             {
                 over = ItIsOver(loaded, now);
 
-                if (over || !RecordingResumption.OpenABreak(loaded, fault, now))
+                if (over
+                    || !RecordingResumption.OpenABreak(
+                        loaded,
+                        fault,
+                        RecordingResumption.StoppedWritingAt(loaded, lastWritten, now)))
                 {
                     return false;
                 }

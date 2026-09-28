@@ -65,6 +65,65 @@ public sealed class RecordingGapTests
     }
 
     [Fact]
+    public void AnInterruptionNoticedDuringAGapIsMovedOntoTheGap()
+    {
+        Recording recording = RecordingFactory.Started();
+        recording.Interrupt(RecordingFault.DriverLost, Now.AddSeconds(171.79));
+        recording.Resume(Now.AddSeconds(172.55));
+
+        recording.Missed(new RecordingGap(Now.AddSeconds(60.08), Now.AddSeconds(172.6)));
+
+        Interruption placed = Assert.Single(recording.Interruptions);
+        Assert.Equal(RecordingFault.DriverLost, placed.Fault);
+        Assert.Equal(Now.AddSeconds(60.08), placed.OccurredAt);
+        Assert.Equal(Now.AddSeconds(172.6), placed.ResumedAt);
+        Assert.Equal(1, recording.ResumeCount);
+    }
+
+    [Fact]
+    public void AnInterruptionStillOpenWhenItsGapIsSeenOnlyMovesWhereItBegan()
+    {
+        Recording recording = RecordingFactory.Started();
+        recording.Interrupt(RecordingFault.DriverLost, Now.AddSeconds(171.79));
+
+        recording.Missed(new RecordingGap(Now.AddSeconds(60.08), Now.AddSeconds(172.6)));
+
+        Interruption placed = Assert.Single(recording.Interruptions);
+        Assert.Equal(Now.AddSeconds(60.08), placed.OccurredAt);
+        Assert.True(placed.IsOpen);
+    }
+
+    [Fact]
+    public void AnInterruptionThatResumedBeforeTheGapBeganIsLeftWhereItWas()
+    {
+        Recording recording = RecordingFactory.Started();
+        recording.Interrupt(RecordingFault.DriverLost, Now.AddSeconds(10));
+        recording.Resume(Now.AddSeconds(12));
+
+        recording.Missed(new RecordingGap(Now.AddSeconds(60), Now.AddSeconds(63)));
+
+        Interruption kept = Assert.Single(recording.Interruptions);
+        Assert.Equal(Now.AddSeconds(10), kept.OccurredAt);
+        Assert.Equal(Now.AddSeconds(12), kept.ResumedAt);
+    }
+
+    [Fact]
+    public void AnInterruptionIsNotMovedBeforeTheOneBeforeItResumed()
+    {
+        Recording recording = RecordingFactory.Started();
+        recording.Interrupt(RecordingFault.DriverLost, Now.AddSeconds(10));
+        recording.Resume(Now.AddSeconds(50));
+        recording.Interrupt(RecordingFault.DriverLost, Now.AddSeconds(70));
+        recording.Resume(Now.AddSeconds(71));
+
+        recording.Missed(new RecordingGap(Now.AddSeconds(40), Now.AddSeconds(72)));
+
+        Assert.Equal(Now.AddSeconds(50), recording.Interruptions[1].OccurredAt);
+        Assert.Equal(Now.AddSeconds(72), recording.Interruptions[1].ResumedAt);
+        Assert.Equal(Now.AddSeconds(50), recording.Interruptions[0].ResumedAt);
+    }
+
+    [Fact]
     public void AGapShorterThanAMillisecondStillCountsAsSomethingMissed()
     {
         Recording recording = RecordingFactory.Started();
