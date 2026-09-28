@@ -115,6 +115,38 @@ public sealed class RuleRehearsalTests
     }
 
     [Fact]
+    public async Task BrRd010AListingAMovedBroadcastSuppressesIsCountedOutAndThePrimaryIsTakenInstead()
+    {
+        World world = World.Of();
+        world.Guide(
+            Linked(1, "hill walking", Listed, Now.AddHours(3), related: [new RelatedProgramme(Network, Alongside, 2, RelationKind.Moved)]),
+            Linked(2, "hill walking", Alongside, Now.AddHours(3), running: ProgrammeRunning.Running));
+
+        RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
+
+        Assert.NotNull(rehearsed);
+        Assert.Equal(Alongside, Assert.Single(rehearsed.Taking).Programme.ServiceId.Value);
+        Assert.Equal(Alongside, Assert.Single(rehearsed.Making).ServiceId.Value);
+        Assert.Equal(1, rehearsed.Moved);
+    }
+
+    [Fact]
+    public async Task BrRd010ADraftTakingOneSegmentOfARelayIsShownTakingEverySegment()
+    {
+        World world = World.Of();
+        world.Guide(
+            Linked(1, "hill walking", Listed, Now.AddHours(3), related: [new RelatedProgramme(Network, Alongside, 2, RelationKind.Relayed)]),
+            Linked(2, "continued", Alongside, Now.AddHours(4)));
+
+        RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
+
+        Assert.NotNull(rehearsed);
+        Assert.Equal(["hill walking", "continued"], [.. rehearsed.Taking.Select(taken => taken.Programme.Name)]);
+        Assert.Equal(2, rehearsed.Making.Count);
+        Assert.Equal(0, rehearsed.Moved);
+    }
+
+    [Fact]
     public async Task AProgrammeAlreadyReservedIsNotCountedAsOneMoreToMake()
     {
         World world = World.Of();
@@ -277,6 +309,26 @@ public sealed class RuleRehearsalTests
             shadow,
             Now,
             revision: 1);
+
+    private static Programme Linked(
+        int carried,
+        string name,
+        int service,
+        DateTime startsAt,
+        ProgrammeRunning running = ProgrammeRunning.Undetermined,
+        IReadOnlyList<RelatedProgramme>? related = null)
+        => Programme.Rehydrate(
+            new ProgrammeId(new NetworkId(Network), new ServiceId(service), new EventId(carried)),
+            new TransportStreamId(Carried),
+            startsAt,
+            startsAt.AddHours(1),
+            name,
+            "a summary",
+            false,
+            Now,
+            related: related,
+            revision: 1,
+            running: running);
 
     private static Reservation Standing(Programme programme, RuleId? ruleId = null)
         => Reservation.Rehydrate(
