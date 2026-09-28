@@ -13,6 +13,8 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
 
     public string? CouldNotStart { get; set; }
 
+    public string? NothingATunerCanReceive { get; set; }
+
     public bool HoldsOpen { get; set; }
 
     public string? ThrowsAfterAnnouncing { get; set; }
@@ -44,6 +46,11 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
         if (CouldNotStart is { } refusal)
         {
             return ScanOutcome.CouldNotStart(refusal);
+        }
+
+        if (NothingATunerCanReceive is { } unreceivable)
+        {
+            return ScanOutcome.NothingATunerCanReceive(unreceivable);
         }
 
         ScanRunStart start = await runs.StartAsync(

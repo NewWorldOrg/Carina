@@ -76,6 +76,18 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AScanNoTunerCouldReceiveSaysSoApartFromOneTheDriverCouldNotStart()
+    {
+        Orchestrator.NothingATunerCanReceive = "No tuner in service receives isdbSBs";
+
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Of(TuneSystem.IsdbSBs), CancellationToken.None);
+
+        Assert.False(launch.WasStarted);
+        Assert.True(launch.NoTunerReceivesIt);
+        Assert.Equal("No tuner in service receives isdbSBs", launch.CouldNotStartBecause);
+    }
+
+    [Fact]
     public async Task CancellingAWalkingScanEndsItAsCancelled()
     {
         Orchestrator.HoldsOpen = true;

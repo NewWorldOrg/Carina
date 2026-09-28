@@ -30,11 +30,16 @@ public sealed record ScanProposal(
 
 public sealed record ScanLaunch
 {
-    private ScanLaunch(ScanRunId? started, ScanRunId? alreadyRunning, string? couldNotStart)
+    private ScanLaunch(
+        ScanRunId? started,
+        ScanRunId? alreadyRunning,
+        string? couldNotStart,
+        bool noTunerReceivesIt = false)
     {
         Started = started;
         AlreadyRunning = alreadyRunning;
         CouldNotStartBecause = couldNotStart;
+        NoTunerReceivesIt = noTunerReceivesIt;
     }
 
     public ScanRunId? Started { get; }
@@ -42,6 +47,8 @@ public sealed record ScanLaunch
     public ScanRunId? AlreadyRunning { get; }
 
     public string? CouldNotStartBecause { get; }
+
+    public bool NoTunerReceivesIt { get; }
 
     public bool WasStarted => Started is not null;
 
@@ -60,6 +67,13 @@ public sealed record ScanLaunch
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
 
         return new ScanLaunch(null, null, reason);
+    }
+
+    public static ScanLaunch NothingATunerCanReceive(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        return new ScanLaunch(null, null, reason, noTunerReceivesIt: true);
     }
 }
 
@@ -147,9 +161,12 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
 
         ScanOutcome outcome = await walking;
 
-        return outcome.CouldNotStartBecause is { } reason
-            ? ScanLaunch.CouldNotStart(reason)
-            : ScanLaunch.RefusedBecauseOneIsRunning(outcome.AlreadyRunning);
+        return outcome.CouldNotStartBecause switch
+        {
+            { } reason when outcome.NoTunerReceivesIt => ScanLaunch.NothingATunerCanReceive(reason),
+            { } reason => ScanLaunch.CouldNotStart(reason),
+            _ => ScanLaunch.RefusedBecauseOneIsRunning(outcome.AlreadyRunning),
+        };
     }
 
     public bool IsWalking(ScanRunId id) => live.ContainsKey(id);

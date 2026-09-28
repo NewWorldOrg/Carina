@@ -7,11 +7,13 @@ public sealed record ScanOutcome
         ScanRunId? alreadyRunning,
         string? couldNotStart,
         IReadOnlyList<ScanRunAttempt> attempts,
-        ScanDifference difference)
+        ScanDifference difference,
+        bool noTunerReceivesIt = false)
     {
         Run = run;
         AlreadyRunning = alreadyRunning;
         CouldNotStartBecause = couldNotStart;
+        NoTunerReceivesIt = noTunerReceivesIt;
         Attempts = attempts;
         Difference = difference;
     }
@@ -21,6 +23,8 @@ public sealed record ScanOutcome
     public ScanRunId? AlreadyRunning { get; }
 
     public string? CouldNotStartBecause { get; }
+
+    public bool NoTunerReceivesIt { get; }
 
     public IReadOnlyList<ScanRunAttempt> Attempts { get; }
 
@@ -52,5 +56,12 @@ public sealed record ScanOutcome
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
 
         return new ScanOutcome(null, null, reason, [], ScanDifference.Nothing);
+    }
+
+    public static ScanOutcome NothingATunerCanReceive(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        return new ScanOutcome(null, null, reason, [], ScanDifference.Nothing, noTunerReceivesIt: true);
     }
 }

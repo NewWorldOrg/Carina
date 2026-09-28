@@ -83,6 +83,21 @@ public sealed class ScanEndpointTests
     }
 
     [Fact]
+    public async Task AScanOfSystemsNoTunerInServiceReceivesIsRefusedAsUnprocessableWithTheReason()
+    {
+        await using var feature = new ScanFeature
+        {
+            Orchestrator = { NothingATunerCanReceive = "No tuner in service receives isdbSBs" },
+        };
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/tuners/scan");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, status);
+        Assert.Equal("No tuner in service receives isdbSBs", body.GetProperty("message").GetString());
+        Assert.Empty(feature.Runs.Runs);
+    }
+
+    [Fact]
     public async Task AScanOverNamedChannelsWalksExactlyThose()
     {
         await using var feature = new ScanFeature { Orchestrator = { HoldsOpen = true } };
