@@ -215,6 +215,31 @@ public sealed class ReservationService(
             at,
             draft.EncodeWhenRecorded);
 
+    /// <summary>
+    /// The listing a moved broadcast is reserved on, when the programme named is one of its other
+    /// listings.
+    /// </summary>
+    public async Task<ServiceResult<Programme, ReservationFailure>> PrimaryOfMovedAsync(
+        ProgrammeId id,
+        CancellationToken cancellationToken)
+    {
+        if (await programmes.FindAsync(id, cancellationToken) is { } programme)
+        {
+            BroadcastGroupResolver groups =
+                BroadcastGroupResolver.Of(await programmes.ListGroupedAsync(cancellationToken));
+            BroadcastResolution resolution = groups.Resolve(programme, clock.GetUtcNow().UtcDateTime);
+
+            if (resolution.Exclusion is BroadcastExclusion.Moved && resolution.Targets.Count > 0)
+            {
+                return ServiceResult<Programme, ReservationFailure>.Success(resolution.Targets[0].Programme);
+            }
+        }
+
+        return ServiceResult<Programme, ReservationFailure>.Failure(
+            $"Programme {ProgrammeIdText.Of(id)} is not a listing of a moved broadcast reserved elsewhere.",
+            ReservationFailure.NoSuchProgramme);
+    }
+
     public async Task<ServiceResult<ReservationSettlement, ReservationFailure>> ReviseAsync(
         ReservationId id,
         ReservationRevision revision,

@@ -484,7 +484,8 @@ internal sealed class ReservationFeature : IAsyncDisposable
         bool diverged = false,
         bool missing = false,
         DateTime? acknowledgedAt = null,
-        bool receptionUnavailable = false)
+        bool receptionUnavailable = false,
+        ReservationCancellation? cancellation = null)
     {
         DateTime opens = startsAt ?? Noon.AddHours(2);
         Reservation reservation = Reservation.Rehydrate(
@@ -517,7 +518,7 @@ internal sealed class ReservationFeature : IAsyncDisposable
             receptionUnavailable,
             receptionUnavailable ? Noon : null,
             Noon,
-            state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null);
+            state is ReservationState.Cancelled ? cancellation ?? ReservationCancellation.ByHand : null);
 
         Reservations.Standing(reservation);
 

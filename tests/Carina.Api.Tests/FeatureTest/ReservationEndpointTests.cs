@@ -70,6 +70,30 @@ public sealed class ReservationEndpointTests
     }
 
     [Theory]
+    [InlineData(ReservationCancellation.ByHand, "byHand")]
+    [InlineData(ReservationCancellation.SameBroadcast, "sameBroadcast")]
+    public async Task ACancelledReservationSaysWhyItWasCancelled(ReservationCancellation cancellation, string said)
+    {
+        await using var feature = new ReservationFeature();
+        Reservation cancelled = feature.Booked(4001, state: ReservationState.Cancelled, cancellation: cancellation);
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/reservations/{cancelled.Id.Value}");
+
+        Assert.Equal(said, body.GetProperty("data").GetProperty("cancellation").GetString());
+    }
+
+    [Fact]
+    public async Task AReservationThatStandsSaysNothingOfACancellation()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation standing = feature.Booked(4001);
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/reservations/{standing.Id.Value}");
+
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("data").GetProperty("cancellation").ValueKind);
+    }
+
+    [Theory]
     [InlineData("page=0")]
     [InlineData("from=2026-01-01T00:00:00Z&to=2027-06-01T00:00:00Z")]
     [InlineData("from=2026-08-24T12:00:00Z&to=2026-08-24T11:00:00Z")]
@@ -466,6 +490,21 @@ public sealed class ReservationEndpointTests
     }
 
     [Fact]
+    public async Task BrRv001TheRefusalOfAMovedListingSaysSoAndNamesThePrimaryInItsData()
+    {
+        await using var feature = new ReservationFeature(seats: 2);
+        feature.Announced(4001, related: [new RelatedProgramme(ReservationFeature.Network, 1032, 5001, RelationKind.Moved)]);
+        feature.Announced(5001, serviceId: 1032, running: ProgrammeRunning.Running);
+
+        (_, JsonElement body) = await feature.PostAsync("/api/reservations", Asking(4001));
+        JsonElement refused = body.GetProperty("data");
+
+        Assert.Equal("programmeIsAMovedDuplicate", refused.GetProperty("refusal").GetString());
+        Assert.Equal($"{ReservationFeature.Network}-1032-5001", refused.GetProperty("primary").GetProperty("programme").GetString());
+        Assert.Equal(Noon.AddHours(2), refused.GetProperty("primary").GetProperty("startsAt").GetDateTime());
+    }
+
+    [Fact]
     public async Task BrRd010ThePrimaryListingOfAMovedBroadcastIsReservedAsTheBroadcastsPrimary()
     {
         await using var feature = new ReservationFeature(seats: 2);
@@ -530,6 +569,8 @@ public sealed class ReservationEndpointTests
 
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.Contains("already reserved", body.GetProperty("message").GetString()!, StringComparison.Ordinal);
+        Assert.Equal("alreadyReserved", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("data").GetProperty("primary").ValueKind);
         Assert.Single(feature.Reservations.Held);
     }
 
