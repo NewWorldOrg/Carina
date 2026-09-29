@@ -137,6 +137,7 @@ public sealed class CollectionOptionsTests
             new KeyValuePair<string, string?>(
                 "ConnectionStrings:Carina", "Host=db;Database=carina;Username=carina;Password=placeholder"),
             new KeyValuePair<string, string?>(DriverOptions.SocketPathKey, "/run/carina/driver.sock"),
+            new KeyValuePair<string, string?>(SealingKeyOptions.DirectoryKey, "/var/lib/carina/keys"),
             new KeyValuePair<string, string?>($"{CollectionOptions.Section}:BetweenSweeps", "half an hour"),
         ]);
         builder.Services.AddCarinaInfrastructure(builder.Configuration);

@@ -28,6 +28,7 @@ jobs:
     env:
       ConnectionStrings__Carina: Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder
       CARINA_DRIVER_SOCKET: /run/carina/driver.sock
+      CARINA_DATA_PROTECTION_KEYS: /var/lib/carina/keys
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

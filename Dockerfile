@@ -115,7 +115,8 @@ RUN ldconfig
 ARG CARINA_UID=10001
 ARG CARINA_GID=10001
 RUN groupadd --gid ${CARINA_GID} carina \
-    && useradd --uid ${CARINA_UID} --gid carina --no-create-home --shell /usr/sbin/nologin carina
+    && useradd --uid ${CARINA_UID} --gid carina --no-create-home --shell /usr/sbin/nologin carina \
+    && install -d -o carina -g carina -m 0700 /var/lib/carina/keys
 
 WORKDIR /opt/carina
 COPY --from=driver-build /out/driver ./driver

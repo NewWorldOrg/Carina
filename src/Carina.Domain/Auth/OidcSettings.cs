@@ -30,6 +30,8 @@ public sealed class OidcSettings
 
     public bool IsConfigured => DiscoveryUrl is not null && ClientId is not null && ClientSecret is not null;
 
+    public bool SecretLost => DiscoveryUrl is not null && ClientSecret is null;
+
     public string? ProviderName =>
         DiscoveryUrl is not null && Uri.TryCreate(DiscoveryUrl, UriKind.Absolute, out Uri? parsed)
             ? parsed.Host
@@ -70,6 +72,17 @@ public sealed class OidcSettings
                 nameof(allowedHostedDomains)),
             UpdatedAt = UtcTimes.Required(updatedAt, nameof(updatedAt)),
         };
+    }
+
+    public void ReadBack(ClientSecret? clientSecret)
+    {
+        if (clientSecret is not null && DiscoveryUrl is null)
+        {
+            throw new InvalidOperationException(
+                "A client secret belongs to an identity provider, so it is read back only into settings that name one.");
+        }
+
+        ClientSecret = clientSecret;
     }
 
     public void Configure(string discoveryUrl, string clientId, ClientSecret? clientSecret, DateTime at)

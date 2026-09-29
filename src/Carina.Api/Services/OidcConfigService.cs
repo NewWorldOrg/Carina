@@ -19,6 +19,9 @@ public sealed class OidcConfigService(
     public const string AFirstSaveCarriesItsSecret =
         "The client secret is write-only, so the first save of an identity provider has to carry one.";
 
+    public const string TheSecretWasLost =
+        "The client secret that was kept can no longer be opened with the keys this installation holds, so it has to be entered again.";
+
     public async Task<ServiceResult<OidcConfigView>> ReadAsync(
         string arrivedAt,
         CancellationToken cancellationToken)
@@ -64,6 +67,13 @@ public sealed class OidcConfigService(
         }
 
         ClientSecret? offered = Named(change.ClientSecret) is { } secret ? new ClientSecret(secret) : null;
+
+        if (offered is null && held.SecretLost)
+        {
+            return ServiceResult<OidcConfigView, OidcConfigRefusal>.Failure(
+                TheSecretWasLost,
+                OidcConfigRefusal.SecretLost);
+        }
 
         if (offered is null && held.ClientSecret is null)
         {

@@ -40,6 +40,8 @@ using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Streaming;
 using Carina.Infrastructure.Thumbnails;
 
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -68,6 +70,18 @@ public static class ServiceCollectionExtensions
                     || options.SocketPath.StartsWith('/'),
                 $"{DriverOptions.SocketPathKey} must be an absolute path.")
             .ValidateOnStart();
+
+        services.AddOptions<SealingKeyOptions>()
+            .Configure(options => options.Directory = configuration[SealingKeyOptions.DirectoryKey])
+            .ValidateDataAnnotations()
+            .Validate(
+                options => string.IsNullOrEmpty(options.Directory)
+                    || options.Directory.StartsWith('/'),
+                $"{SealingKeyOptions.DirectoryKey} must be an absolute path.")
+            .ValidateOnStart();
+
+        services.AddDataProtection().SetApplicationName(SealingKeyOptions.ApplicationName);
+        services.AddSingleton<IConfigureOptions<KeyManagementOptions>, SealingKeyPlacement>();
 
         services.AddSingleton<IValidateOptions<IntegrityOptions>, IntegrityValidation>();
         services.AddOptions<IntegrityOptions>()
@@ -241,6 +255,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(PlaybackGrantPolicy.Default);
         services.TryAddSingleton<IPlaybackGrantStore, PlaybackGrantStore>();
         services.TryAddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
+        services.TryAddSingleton<ClientSecretSeal>();
         services.TryAddSingleton<ILoginThrottle, LoginThrottle>();
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
         services.AddSingleton<IDriverClient, DriverIpcClient>();
@@ -342,6 +357,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAppEventPublisher>(provider =>
             provider.GetRequiredService<AppEventHub>());
         services.AddHostedService<LocalAccountBootstrap>();
+        services.AddHostedService<ClientSecretSealing>();
         services.AddHostedService<AuthUpkeepJob>();
         services.AddHostedService<DriverConnectionSupervisor>();
         services.AddHostedService<AppEventHubLifetime>();

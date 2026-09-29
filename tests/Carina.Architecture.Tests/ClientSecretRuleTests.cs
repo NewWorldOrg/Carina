@@ -3,12 +3,12 @@ namespace Carina.Architecture.Tests;
 public sealed class ClientSecretRuleTests
 {
     [Fact]
-    public void TheClientSecretIsReadInTheClearOnlyWhereItIsStoredAndWhereItIsSpent()
+    public void TheClientSecretIsReadInTheClearOnlyWhereItIsSealedAndWhereItIsSpent()
     {
         Assert.Equal(
             [
+                "Carina.Infrastructure/Auth/ClientSecretSeal.cs",
                 "Carina.Infrastructure/Auth/OidcGateway.cs",
-                "Carina.Infrastructure/Persistence/Configurations/OidcSettingsConfiguration.cs",
             ],
             SourceScan.FilesMentioning(
                 RepositoryLayout.SourceDirectory,

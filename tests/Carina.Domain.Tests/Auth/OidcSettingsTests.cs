@@ -160,6 +160,62 @@ public sealed class OidcSettingsTests
         Assert.DoesNotContain("s3cr3t", $"{secret}", StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void AProviderWhoseSecretCouldNotBeReadBackIsLostAndNotInUse()
+    {
+        OidcSettings settings = Configured();
+
+        settings.ReadBack(null);
+
+        Assert.True(settings.SecretLost);
+        Assert.False(settings.IsConfigured);
+        Assert.Equal(Discovery, settings.DiscoveryUrl);
+        Assert.Equal("carina", settings.ClientId);
+    }
+
+    [Fact]
+    public void ASecretReadBackIsTheOneTheProviderUses()
+    {
+        OidcSettings settings = Configured();
+        settings.ReadBack(null);
+
+        settings.ReadBack(new ClientSecret("s3cr3t"));
+
+        Assert.False(settings.SecretLost);
+        Assert.True(settings.IsConfigured);
+    }
+
+    [Fact]
+    public void ANewSecretEnteredAfterItWasLostPutsTheProviderBackInUse()
+    {
+        OidcSettings settings = Configured();
+        settings.ReadBack(null);
+
+        settings.Configure(Discovery, "carina", new ClientSecret("entered-again"), At.AddDays(1));
+
+        Assert.False(settings.SecretLost);
+        Assert.Equal(new ClientSecret("entered-again"), settings.ClientSecret);
+    }
+
+    [Fact]
+    public void SavingTheFormAgainWithoutASecretCannotCoverASecretThatWasLost()
+    {
+        OidcSettings settings = Configured();
+        settings.ReadBack(null);
+
+        Assert.Throws<InvalidOperationException>(
+            () => settings.Configure(Discovery, "carina", null, At.AddDays(1)));
+    }
+
+    [Fact]
+    public void AnInstallationWithNoProviderHasNoSecretToLose()
+    {
+        OidcSettings settings = OidcSettings.Unconfigured(At);
+
+        Assert.False(settings.SecretLost);
+        Assert.Throws<InvalidOperationException>(() => settings.ReadBack(new ClientSecret("s3cr3t")));
+    }
+
     private static OidcSettings Configured()
     {
         OidcSettings settings = OidcSettings.Unconfigured(At);

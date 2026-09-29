@@ -31,6 +31,8 @@ using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
 
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -52,6 +54,7 @@ public sealed class ServiceCollectionExtensionsTests
     {
         ["ConnectionStrings:Carina"] = ConnectionString,
         ["CARINA_DRIVER_SOCKET"] = "/run/carina/driver.sock",
+        ["CARINA_DATA_PROTECTION_KEYS"] = "/var/lib/carina/keys",
     };
 
     [Fact]
@@ -560,5 +563,42 @@ public sealed class ServiceCollectionExtensionsTests
             () => provider.GetRequiredService<IOptions<DriverOptions>>().Value);
 
         Assert.Contains("absolute path", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsAMissingPlaceForTheSealingKeys()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings.Remove("CARINA_DATA_PROTECTION_KEYS");
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<SealingKeyOptions>>().Value);
+
+        Assert.Contains("CARINA_DATA_PROTECTION_KEYS", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsARelativePlaceForTheSealingKeys()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["CARINA_DATA_PROTECTION_KEYS"] = "keys";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<SealingKeyOptions>>().Value);
+
+        Assert.Contains("absolute path", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheSealingKeysAreKeptWhereTheSettingSays()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        KeyManagementOptions management = provider.GetRequiredService<IOptions<KeyManagementOptions>>().Value;
+
+        FileSystemXmlRepository kept = Assert.IsType<FileSystemXmlRepository>(management.XmlRepository);
+        Assert.Equal("/var/lib/carina/keys", kept.Directory.FullName);
     }
 }

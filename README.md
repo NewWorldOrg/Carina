@@ -107,6 +107,7 @@ health は表示するだけで、unhealthy になっても何も再起動しな
 | `CARINA_ROLE` | イメージが起動する役割 |
 | `ConnectionStrings__Carina` | PostgreSQL の接続文字列。既定値は無く、未設定なら起動しない |
 | `CARINA_DRIVER_SOCKET` | `driver` とつなぐソケットのパス。既定値は無く、未設定なら起動しない |
+| `CARINA_DATA_PROTECTION_KEYS` | OIDC の client secret を封じる鍵の置き場(絶対パス)。既定値は無く、未設定なら起動しない。コンテナを作り直しても残る場所を渡す |
 | `CARINA_DB_CONNECTION` | スキーマ適用時の接続文字列 |
 | `CARINA_PUBLIC_ORIGIN` | ブラウザがこのインストールに到達するアドレス(`https://host`) |
 | `Integrity__OutputRoots` | `driver` の出力ルートが `app` からどこに見えるか(`primary=/srv/recordings`) |
@@ -128,12 +129,17 @@ health は表示するだけで、unhealthy になっても何も再起動しな
 `CARINA_PUBLIC_ORIGIN` は ID プロバイダへ登録する redirect URI の出所。
 未設定でも起動するが、リクエストの届いたアドレスからの推定になる。
 
+画面から入れた OIDC の client secret は、DB には `CARINA_DATA_PROTECTION_KEYS` の鍵で封じた形でだけ入る。
+DB のバックアップだけでは secret を開けないので、鍵の置き場は DB とは別に残す。
+鍵の置き場を失うと secret を開けなくなり、ID プロバイダでのサインインは止まって、設定画面が secret の入れ直しを求める(ローカルアカウントは使える)。
+
 置き場所とハードウェアは compose が受け取る。
 
 | 変数 | 用途 |
 | --- | --- |
 | `CARINA_RECORDINGS_DIR` | 録画を書くホスト側のディレクトリ。未設定なら Docker のボリューム |
 | `CARINA_ENCODES_DIR` | エンコードの成果物を書くホスト側のディレクトリ。未設定なら Docker のボリューム |
+| `CARINA_KEYS_DIR` | client secret を封じる鍵を置くホスト側のディレクトリ。未設定なら Docker のボリューム |
 | `CARINA_DRI` | 映像処理装置のディレクトリ(`/dev/dri`)。未設定なら何も渡さない |
 | `CARINA_DRI_VIDEO_GID` / `CARINA_DRI_RENDER_GID` | `card0` / `renderD128` の所有グループの番号 |
 | `CARINA_ENCODINGS_PREFER` | 録画をあとからエンコードするときの変換器(`Software` / `Vaapi`)。既定は `Software` |
