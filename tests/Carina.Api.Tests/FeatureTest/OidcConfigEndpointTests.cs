@@ -20,6 +20,7 @@ public sealed class OidcConfigEndpointTests
         Assert.Equal("http://localhost/api/auth/oidc/callback", config.GetProperty("redirectUri").GetString());
         Assert.True(config.GetProperty("admitsEveryone").GetBoolean());
         Assert.False(config.GetProperty("secretHeld").GetBoolean());
+        Assert.False(config.GetProperty("secretLost").GetBoolean());
     }
 
     [Fact]
@@ -121,6 +122,52 @@ public sealed class OidcConfigEndpointTests
             OidcConfigService.AFirstSaveCarriesItsSecret,
             await saved.Content.ReadAsStringAsync(),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ASecretThatCanNoLongerBeOpenedIsSaidToBeLostWhileTheRestOfTheFormStays()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().WithTheSecretLost();
+
+        JsonElement config = await ReadAsync(probe);
+
+        Assert.True(config.GetProperty("secretLost").GetBoolean());
+        Assert.False(config.GetProperty("secretHeld").GetBoolean());
+        Assert.False(config.GetProperty("configured").GetBoolean());
+        Assert.Equal(MockIdentityProvider.DiscoveryUrl, config.GetProperty("discoveryUrl").GetString());
+    }
+
+    [Fact]
+    public async Task SavingWithoutASecretWhileTheSecretIsLostIsRefusedAsLost()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().WithTheSecretLost();
+
+        using HttpResponseMessage saved = await probe.SaveConfigAsync(new
+        {
+            discoveryUrl = MockIdentityProvider.DiscoveryUrl,
+            clientId = "carina",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, saved.StatusCode);
+        Assert.Equal("secretLost", await RefusalAsync(saved));
+        Assert.Equal(0, probe.Settings.Saves);
+    }
+
+    [Fact]
+    public async Task EnteringTheSecretAgainAfterItWasLostPutsTheProviderBackInUse()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().WithTheSecretLost();
+
+        JsonElement config = await SaveAsync(probe, new
+        {
+            discoveryUrl = MockIdentityProvider.DiscoveryUrl,
+            clientId = "carina",
+            clientSecret = OidcProbe.Secret,
+        });
+
+        Assert.True(config.GetProperty("configured").GetBoolean());
+        Assert.True(config.GetProperty("secretHeld").GetBoolean());
+        Assert.False(config.GetProperty("secretLost").GetBoolean());
     }
 
     [Fact]

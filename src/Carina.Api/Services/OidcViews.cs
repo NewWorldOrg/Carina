@@ -34,6 +34,8 @@ public enum OidcConfigRefusal
     RestrictionInvalid = 4,
 
     ProviderUnreachable = 5,
+
+    SecretLost = 6,
 }
 
 public sealed record OidcConfigView(
@@ -41,6 +43,7 @@ public sealed record OidcConfigView(
     string? DiscoveryUrl,
     string? ClientId,
     bool SecretHeld,
+    bool SecretLost,
     IReadOnlyList<string> AllowedGroups,
     IReadOnlyList<string> AllowedHostedDomains,
     bool AdmitsEveryone,
@@ -58,6 +61,7 @@ public sealed record OidcConfigView(
             settings.DiscoveryUrl,
             settings.ClientId,
             settings.ClientSecret is not null,
+            settings.SecretLost,
             settings.AllowedGroups,
             settings.AllowedHostedDomains,
             settings.Restriction.AdmitsEveryone,

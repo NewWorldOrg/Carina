@@ -7,6 +7,10 @@ namespace Carina.Infrastructure.Persistence.Configurations;
 
 public sealed class OidcSettingsConfiguration : IEntityTypeConfiguration<OidcSettings>
 {
+    public const string SealedSecret = "SealedClientSecret";
+
+    public const string UnsealedSecret = "UnsealedClientSecret";
+
     public void Configure(EntityTypeBuilder<OidcSettings> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -20,8 +24,9 @@ public sealed class OidcSettingsConfiguration : IEntityTypeConfiguration<OidcSet
                     $"id = {OidcSettings.TheOnlyRow}");
                 table.HasCheckConstraint(
                     "ck_oidc_config_whole",
-                    "(discovery_url IS NULL AND client_id IS NULL AND client_secret IS NULL)"
-                    + " OR (discovery_url IS NOT NULL AND client_id IS NOT NULL AND client_secret IS NOT NULL)");
+                    "(discovery_url IS NULL AND client_id IS NULL AND client_secret IS NULL AND client_secret_sealed IS NULL)"
+                    + " OR (discovery_url IS NOT NULL AND client_id IS NOT NULL"
+                    + " AND (client_secret IS NULL) <> (client_secret_sealed IS NULL))");
             });
 
         builder.HasKey(settings => settings.Id);
@@ -36,8 +41,13 @@ public sealed class OidcSettingsConfiguration : IEntityTypeConfiguration<OidcSet
         builder.Property(settings => settings.ClientId)
             .HasMaxLength(OidcSettings.LongestClientId);
 
-        builder.Property(settings => settings.ClientSecret)
-            .HasConversion(secret => secret!.Value, value => new ClientSecret(value))
+        builder.Ignore(settings => settings.ClientSecret);
+
+        builder.Property<string?>(SealedSecret)
+            .HasColumnName("client_secret_sealed");
+
+        builder.Property<string?>(UnsealedSecret)
+            .HasColumnName("client_secret")
             .HasMaxLength(512);
 
         builder.PrimitiveCollection(settings => settings.AllowedGroups)

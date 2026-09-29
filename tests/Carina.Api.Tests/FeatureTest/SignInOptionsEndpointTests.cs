@@ -34,6 +34,19 @@ public sealed class SignInOptionsEndpointTests
     }
 
     [Fact]
+    public async Task AProviderWhoseSecretIsLostIsNotOfferedSoTheLocalAccountIsTheWayIn()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().WithTheSecretLost().WithALocalAccount();
+
+        JsonElement options = await AskAsync(probe);
+        using HttpResponseMessage signedIn = await probe.LogInAsync();
+
+        Assert.False(options.GetProperty("identityProvider").GetBoolean());
+        Assert.Equal(OnTheWire(OidcReach.NotConfigured), options.GetProperty("reach").GetString());
+        Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
+    }
+
+    [Fact]
     public async Task AProviderThatStoppedAnsweringIsSaidToBeOutOfReachSoTheScreenOffersTheLocalAccount()
     {
         await using OidcProbe probe = OidcProbe.OverHttp().Configured();

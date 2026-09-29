@@ -83,6 +83,14 @@ internal sealed class OidcProbe : IAsyncDisposable
         return this;
     }
 
+    public OidcProbe WithTheSecretLost()
+    {
+        Configured();
+        Settings.Settings!.ReadBack(null);
+
+        return this;
+    }
+
     public OidcProbe WithALocalAccount()
     {
         Accounts.Account = LocalAccount.Bootstrap(

@@ -20,6 +20,7 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
     [
         ConnectionStringKey,
         DriverOptions.SocketPathKey,
+        SealingKeyOptions.DirectoryKey,
         PublicOrigin.Key,
         TrustedProxies.ProxiesKey,
         TrustedProxies.NetworksKey,
@@ -29,6 +30,9 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
     public string DriverSocketPath { get; init; } =
         Path.Combine(Path.GetTempPath(), "carina-feature-tests", "no-driver.sock");
 
+    public string SealingKeysPath { get; init; } =
+        Path.Combine(Path.GetTempPath(), "carina-feature-tests", "sealing-keys");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -36,6 +40,7 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseEnvironment(Environments.Development);
         builder.UseSetting(ConnectionStringKey, DatabaseNoResolverIsAskedAbout);
         builder.UseSetting(DriverOptions.SocketPathKey, DriverSocketPath);
+        builder.UseSetting(SealingKeyOptions.DirectoryKey, SealingKeysPath);
         builder.UseSetting(PublicOrigin.Key, string.Empty);
         builder.UseSetting(TrustedProxies.ProxiesKey, string.Empty);
         builder.UseSetting(TrustedProxies.NetworksKey, string.Empty);
