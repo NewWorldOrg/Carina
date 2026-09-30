@@ -173,7 +173,7 @@ public sealed class TcpBindingGateTests
     [Fact]
     public void TheVariablesTheEntrypointDropsAreTheOnesTheGateNames()
     {
-        string[] lines = File.ReadAllLines(Path.Combine(RepositoryRoot(), "docker", "entrypoint.sh"));
+        string[] lines = File.ReadAllLines(Path.Combine(RepositoryFiles.Root(), "docker", "entrypoint.sh"));
         int opened = Array.FindIndex(
             lines,
             line => line.StartsWith("drop_web_server_variables()", StringComparison.Ordinal)
@@ -195,21 +195,4 @@ public sealed class TcpBindingGateTests
     }
 
     private const string Loop = "for name in ";
-
-    private static string RepositoryRoot()
-    {
-        DirectoryInfo? directory = new(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Carina.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not locate the repository root.");
-    }
 }

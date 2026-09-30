@@ -5,6 +5,8 @@ readonly driver_entry=/opt/carina/driver/Carina.Driver
 readonly app_entry=/opt/carina/app/Carina.Api.dll
 readonly migrate_entry=/opt/carina/db/Carina.Db.dll
 readonly render_nodes=/dev/dri
+readonly carina_uid=10001
+readonly carina_gid=10001
 
 drop_web_server_variables() {
     local name
@@ -34,7 +36,7 @@ adopt_shared_connection_string() {
 
 run_as_carina() {
     if [ "$(id -u)" = 0 ]; then
-        exec setpriv --reuid carina --regid carina --init-groups --no-new-privs "$@"
+        exec setpriv --reuid "${carina_uid}" --regid "${carina_gid}" --clear-groups --no-new-privs "$@"
     fi
     exec "$@"
 }
@@ -55,7 +57,7 @@ render_node_groups() {
 app_groups() {
     local list=''
     local gid
-    for gid in $(id -G carina) $(render_node_groups); do
+    for gid in "${carina_gid}" $(render_node_groups); do
         if [ "${gid}" = 0 ]; then
             echo "role=app is not given group 0." >&2
             continue
@@ -68,20 +70,32 @@ app_groups() {
     printf '%s' "${list}"
 }
 
-run_app_as_carina() {
-    if [ "$(id -u)" != 0 ]; then
-        exec "$@"
+require_writable_keys() {
+    local keys="${CARINA_DATA_PROTECTION_KEYS:-}"
+    [ -n "${keys}" ] || return 0
+    mkdir -p -- "${keys}" 2>/dev/null || true
+    if [ -d "${keys}" ] && [ -w "${keys}" ] && [ -x "${keys}" ]; then
+        return 0
     fi
-    local groups
-    groups="$(app_groups)"
-    exec setpriv --reuid carina --regid carina --groups "${groups}" --no-new-privs "$@"
+    echo "role=app runs as uid $(id -u) with groups $(id -G | tr ' ' ',') and cannot write CARINA_DATA_PROTECTION_KEYS=${keys}; mount a directory there that this uid or one of these groups can write." >&2
+    exit 77
+}
+
+run_app() {
+    if [ "$(id -u)" = 0 ]; then
+        local groups
+        groups="$(app_groups)"
+        exec setpriv --reuid "${carina_uid}" --regid "${carina_gid}" --groups "${groups}" --no-new-privs "$0" app
+    fi
+    require_writable_keys
+    exec dotnet "${app_entry}"
 }
 
 run_all() {
     ( drop_web_server_variables; drop_database_variables; exec "${driver_entry}" ) &
     local driver_pid=$!
 
-    ( run_app_as_carina dotnet "${app_entry}" ) &
+    ( run_app ) &
     local app_pid=$!
 
     trap 'kill -TERM "${driver_pid}" "${app_pid}" 2>/dev/null || true' TERM INT
@@ -106,7 +120,7 @@ main() {
             drop_database_variables
             exec "${driver_entry}"
             ;;
-        app) run_app_as_carina dotnet "${app_entry}" ;;
+        app) run_app ;;
         migrate)
             adopt_shared_connection_string
             run_as_carina dotnet "${migrate_entry}" --migrate

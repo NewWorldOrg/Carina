@@ -112,11 +112,9 @@ COPY --from=ffmpeg-build /out/ffmpeg/bin/ /usr/local/bin/
 COPY --from=ffmpeg-build /out/ffmpeg/lib/ /usr/local/lib/
 RUN ldconfig
 
-ARG CARINA_UID=10001
-ARG CARINA_GID=10001
-RUN groupadd --gid ${CARINA_GID} carina \
-    && useradd --uid ${CARINA_UID} --gid carina --no-create-home --shell /usr/sbin/nologin carina \
-    && install -d -o carina -g carina -m 0700 /var/lib/carina/keys
+RUN groupadd --gid 10001 carina \
+    && useradd --uid 10001 --gid carina --no-create-home --shell /usr/sbin/nologin carina \
+    && install -d -o 10001 -g 10001 -m 0770 /var/lib/carina/keys
 
 WORKDIR /opt/carina
 COPY --from=driver-build /out/driver ./driver
