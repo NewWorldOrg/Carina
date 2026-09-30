@@ -282,3 +282,7 @@ task restart:driver   # コード変更の反映
 
 driver は呼び出し元を認証しない。
 境界は Unix ドメインソケットのパーミッションと所有グループだけで、TCP ポートは開かない。
+
+## ライセンス
+
+AGPL-3.0-only。著作権者は NewWorldOrg。詳細は `LICENSE` を参照。
