@@ -91,7 +91,7 @@ health は表示するだけで、unhealthy になっても何も再起動しな
 | キー | 用途 |
 | --- | --- |
 | `socketPath` | `app` とつなぐ Unix ドメインソケット。`/run/` の下 |
-| `socketGroupId` | ソケットの所有グループの id |
+| `socketGroupId` | ソケットの所有グループの id。既定は 10001。`app` を動かすグループと同じ値にする |
 | `outputRoots` | 録画の書き出し先。`name` と絶対パスの `path` を 1 つ以上 |
 | `devices` | チューナー。1 つ以上、うち 1 つ以上が `enabled` |
 
@@ -132,6 +132,10 @@ health は表示するだけで、unhealthy になっても何も再起動しな
 画面から入れた OIDC の client secret は、DB には `CARINA_DATA_PROTECTION_KEYS` の鍵で封じた形でだけ入る。
 DB のバックアップだけでは secret を開けないので、鍵の置き場は DB とは別に残す。
 鍵の置き場を失うと secret を開けなくなり、ID プロバイダでのサインインは止まって、設定画面が secret の入れ直しを求める(ローカルアカウントは使える)。
+
+root で起動したイメージは `app` を uid・gid 10001 に降ろして動かす。
+番号を変えるときは Docker の `user:` か k8s の `runAsUser`・`runAsGroup`・`fsGroup` で渡し、`socketGroupId` をそのグループにそろえる。
+`CARINA_DATA_PROTECTION_KEYS` にはその番号で書けるディレクトリを渡す。書けなければ `app` は理由を言って起動しない。
 
 置き場所とハードウェアは compose が受け取る。
 
