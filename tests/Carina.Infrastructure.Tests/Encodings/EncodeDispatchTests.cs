@@ -302,6 +302,154 @@ public sealed class EncodeDispatchTests
         Assert.Equal(next.Id, claimedNext.Job);
     }
 
+    [Fact(DisplayName = "an ending the ledger refuses three times closes the row as failed, so the row is not left running and the next job is claimed")]
+    public async Task AnEndingTheLedgerRefusesThreeTimesClosesTheRowAsFailed()
+    {
+        var held = new HeldEncodeJobs { KeepsItsOwnRows = true };
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
+        var scratch = new HeldEncodeScratch();
+        EncodeScratchFile owed = EncodeScratchFile.Record(
+            EncodeScratchFileId.New(),
+            first.Id,
+            EncodeScratchKind.WorkFile,
+            EncodeHarness.Primary,
+            EncodeFileName.Working(first.RecordingId, first.Id, 1),
+            Now);
+        scratch.Files.Add(owed);
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3, OutputRoots = [new StorageRootPath(EncodeHarness.Primary, Path.GetTempPath())] },
+            scratch,
+            whenRun: claimed =>
+            {
+                if (claimed.Id.Equals(first.Id))
+                {
+                    claimed.Name(EncodeFileName.Artefact(claimed.RecordingId, claimed.ProfileId));
+                    claimed.Complete(Now);
+                }
+            });
+
+        for (int look = 1; look < EncodeDispatch.MostTriesAtAnEnding; look++)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => dispatch.LookAsync(Cancel));
+        }
+
+        EncodeJob next = Waiting();
+        held.Jobs.Add(next);
+        EncodeLook after = await dispatch.LookAsync(Cancel);
+
+        EncodeJob closed = held.Jobs.Single(job => job.Id.Equals(first.Id));
+        Assert.Equal(EncodeJobStatus.Failed, closed.Status);
+        Assert.Equal(EncodeFailure.EndingNotKept, closed.Failure!.Failure);
+        Assert.Contains("Completed", closed.Failure.Note, StringComparison.Ordinal);
+        Assert.Equal(Now, closed.EndedAt);
+        Assert.Equal(1, closed.Attempt);
+        Assert.Equal(EncodeClaimStanding.Claimed, after.Standing);
+        Assert.Equal(next.Id, after.Job);
+        Assert.False(owed.IsOwedARemoval, "the work file of a job closed as failed is still owed a removal");
+    }
+
+    [Fact(DisplayName = "an ending that was itself a failure is closed saying which failure it was")]
+    public async Task AnEndingThatWasItselfAFailureIsClosedSayingWhichFailureItWas()
+    {
+        var held = new HeldEncodeJobs { KeepsItsOwnRows = true };
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3 },
+            whenRun: claimed => claimed.Fail(EncodeFailure.NotEnoughRoom, "the disk is full", Now));
+
+        await LookUntilTheEndingIsGivenUpAsync(dispatch);
+
+        EncodeJob closed = held.Jobs.Single(job => job.Id.Equals(first.Id));
+        Assert.Equal(EncodeFailure.EndingNotKept, closed.Failure!.Failure);
+        Assert.Contains("Failed", closed.Failure.Note, StringComparison.Ordinal);
+        Assert.Contains(nameof(EncodeFailure.NotEnoughRoom), closed.Failure.Note, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "a row that cannot be closed either is closed at the next look, before another job is claimed")]
+    public async Task ARowThatCannotBeClosedEitherIsClosedAtTheNextLook()
+    {
+        var held = new HeldEncodeJobs { KeepsItsOwnRows = true };
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
+        bool ledgerIsAway = false;
+        held.WhenSaving = _ =>
+        {
+            if (ledgerIsAway)
+            {
+                throw new TimeoutException("the ledger did not answer");
+            }
+        };
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3 },
+            whenRun: claimed =>
+            {
+                if (claimed.Id.Equals(first.Id))
+                {
+                    claimed.Cancel(Now);
+                }
+            });
+
+        for (int look = 1; look < EncodeDispatch.MostTriesAtAnEnding; look++)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => dispatch.LookAsync(Cancel));
+        }
+
+        ledgerIsAway = true;
+        await Assert.ThrowsAsync<TimeoutException>(() => dispatch.LookAsync(Cancel));
+        Assert.Equal(EncodeJobStatus.Running, held.Jobs.Single(job => job.Id.Equals(first.Id)).Status);
+
+        ledgerIsAway = false;
+        EncodeJob next = Waiting();
+        held.Jobs.Add(next);
+        EncodeLook after = await dispatch.LookAsync(Cancel);
+
+        EncodeJob closed = held.Jobs.Single(job => job.Id.Equals(first.Id));
+        Assert.Equal(EncodeJobStatus.Failed, closed.Status);
+        Assert.Equal(EncodeFailure.EndingNotKept, closed.Failure!.Failure);
+        Assert.Contains("Cancelled", closed.Failure.Note, StringComparison.Ordinal);
+        Assert.Equal(next.Id, after.Job);
+    }
+
+    [Fact(DisplayName = "a row another hand moved while its ending was being refused is left as that hand left it")]
+    public async Task ARowAnotherHandMovedWhileItsEndingWasBeingRefusedIsLeftAsThatHandLeftIt()
+    {
+        var held = new HeldEncodeJobs { KeepsItsOwnRows = true };
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3 },
+            whenRun: claimed => claimed.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Now));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => dispatch.LookAsync(Cancel));
+        held.Jobs.Single(job => job.Id.Equals(first.Id)).Cancel(Now);
+        await LookUntilTheEndingIsGivenUpAsync(dispatch, alreadyLooked: 1);
+
+        EncodeJob left = held.Jobs.Single(job => job.Id.Equals(first.Id));
+        Assert.Equal(EncodeJobStatus.Cancelled, left.Status);
+        Assert.Null(left.Failure);
+        Assert.DoesNotContain(held.Moves, move => move.StartsWith("saved", StringComparison.Ordinal));
+    }
+
+    private static async Task LookUntilTheEndingIsGivenUpAsync(EncodeDispatch dispatch, int alreadyLooked = 0)
+    {
+        for (int look = alreadyLooked + 1; look < EncodeDispatch.MostTriesAtAnEnding; look++)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => dispatch.LookAsync(Cancel));
+        }
+
+        await dispatch.LookAsync(Cancel);
+    }
+
     [Fact(DisplayName = "While the card is making a picture for someone watching, a look bound for the card asks the ledger nothing and says why")]
     public async Task WhileSomeoneIsWatchingALookBoundForTheCardAsksTheLedgerNothing()
     {
@@ -503,7 +651,8 @@ public sealed class EncodeDispatchTests
             NullLogger<EncodeScratchCleaner>.Instance));
         services.AddScoped<EncodeJobRunner>(_ =>
         {
-            whenRun?.Invoke(held.Jobs.Single(job => job.Status is EncodeJobStatus.Running));
+            whenRun?.Invoke(
+                held.KeepsItsOwnRows ? held.HandedOut! : held.Jobs.Single(job => job.Status is EncodeJobStatus.Running));
 
             throw new InvalidOperationException("this run cannot be built");
         });

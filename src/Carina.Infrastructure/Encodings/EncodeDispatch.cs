@@ -136,8 +136,8 @@ public sealed class EncodeDispatch(
     /// <summary>
     /// Writes the ending a run reached before it threw. A write that fails throws and is made again at
     /// the next look, before anything else is claimed; after <see cref="MostTriesAtAnEnding"/> failed
-    /// writes the ending is dropped and the row is left as it is. A row that has moved on meanwhile is
-    /// read again and left as it is.
+    /// writes the ending is dropped and the row is closed as failed. A row that has moved on meanwhile
+    /// is read again and left as it is.
     /// </summary>
     private async Task<EncodeJobStatus?> WriteTheEndingAsync(CancellationToken cancellationToken)
     {
@@ -160,16 +160,18 @@ public sealed class EncodeDispatch(
 
             logger.LogError(
                 failure,
-                "Job {Job} ended {Status} on attempt {Attempt} and the ledger refused its ending {Tries} times; it is dropped, and the next start recovers the row.",
+                "Job {Job} ended {Status} on attempt {Attempt} and the ledger refused its ending {Tries} times; the ending is dropped and the row is closed as failed.",
                 job.Id.Wire,
                 job.Status,
                 job.Attempt,
                 triesAtTheEnding);
 
+            EncodeJobStatus? closed = await CloseWithoutItsEndingAsync(job, cancellationToken);
+
             unwritten = null;
             triesAtTheEnding = 0;
 
-            return null;
+            return closed;
         }
 
         triesAtTheEnding = 0;
@@ -191,6 +193,41 @@ public sealed class EncodeDispatch(
 
         return job.Status;
     }
+
+    /// <summary>
+    /// Closes as failed the row of a job whose ending the ledger would not take, and sweeps what it
+    /// still owes a removal for. A row that is no longer running the attempt that ended is left as it
+    /// is.
+    /// </summary>
+    private async Task<EncodeJobStatus?> CloseWithoutItsEndingAsync(EncodeJob ended, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        IEncodeJobRepository jobs = scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>();
+        EncodeJob? held = await jobs.FindAsync(ended.Id, cancellationToken);
+
+        if (held is null)
+        {
+            return null;
+        }
+
+        if (held.Status is EncodeJobStatus.Running && held.Attempt == ended.Attempt)
+        {
+            held.Fail(EncodeFailure.EndingNotKept, EndingNotKept(ended), clock.GetUtcNow().UtcDateTime);
+            await jobs.SaveAsync(held, cancellationToken);
+        }
+
+        if (held.HasEnded)
+        {
+            await scope.ServiceProvider.GetRequiredService<EncodeScratchCleaner>().ClearAsync(held, cancellationToken);
+        }
+
+        return held.Status;
+    }
+
+    private static string EndingNotKept(EncodeJob ended)
+        => ended.Failure is { } failure
+            ? $"the job ended {ended.Status} ({failure.Failure}) and the ledger refused that ending {MostTriesAtAnEnding} times"
+            : $"the job ended {ended.Status} and the ledger refused that ending {MostTriesAtAnEnding} times";
 
     /// <summary>
     /// Reads the job again in a fresh scope, and sweeps what it still owes a removal for if it has
