@@ -157,8 +157,10 @@ last_touched() {
 
 tags() {
   derive
-  echo "driver=driver-sha-$(last_touched driver)"
-  echo "app=app-sha-$(last_touched app)"
+  driver_commit="$(last_touched driver)"
+  app_commit="$(last_touched app)"
+  echo "driver=driver-sha-${driver_commit}"
+  echo "app=app-sha-${app_commit}"
 }
 
 tag_in() {
