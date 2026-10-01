@@ -1,0 +1,26 @@
+--- a/libavcodec/libaribcaption.c
++++ b/libavcodec/libaribcaption.c
+@@ -845,6 +845,7 @@
+ {
+     ARIBCaptionContext *ctx = avctx->priv_data;
+     int status;
++    int erases_screen = 0;
+ 
+     ff_dlog(ctx, "ARIB caption packet pts=%"PRIx64":\n", avpkt->pts);
+     if (sub->num_rects) {
+@@ -911,7 +912,14 @@
+         aribcc_caption_cleanup(&ctx->caption);
+         return status;
+     }
+-    if (status > 0) {
++    if (status == 0 && ctx->subtitle_type == SUBTITLE_BITMAP &&
++        ctx->caption.region_count == 0 &&
++        (ctx->caption.flags & ARIBCC_CAPTIONFLAGS_CLEARSCREEN)) {
++        ff_dlog(ctx, "clear screen with no region, emitting an empty subtitle\n");
++        sub->format = 0;
++        erases_screen = 1;
++    }
++    if (status > 0 || erases_screen) {
+         *got_sub_ptr = 1;
+         if (ctx->avpkt->pts != AV_NOPTS_VALUE)
+             sub->pts = av_rescale_q(ctx->avpkt->pts,

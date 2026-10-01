@@ -34,14 +34,12 @@ RUN git clone --depth 1 --branch "${ARIBCAPTION_TAG}" \
         -DARIBCC_SHARED_LIBRARY=ON -DARIBCC_USE_FONTCONFIG=ON -DARIBCC_USE_FREETYPE=ON -DARIBCC_BUILD_TESTS=OFF \
     && cmake --build aribcaption-build -j"$(nproc)" \
     && cmake --install aribcaption-build --prefix /usr/local
-# Ported from denpa's patches/ffmpeg-aribcaption-clear.patch (written against ffmpeg 9.x): in bitmap mode a
-# caption statement carrying only CS (clear screen) reports an empty subtitle, so the caption before it is erased.
-COPY patches/ffmpeg-aribcaption-clear.patch /src/patches/
+COPY patches/ffmpeg-aribcaption-erase-on-clear.patch /src/patches/
 RUN curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && echo "${FFMPEG_SHA256}  ffmpeg-${FFMPEG_VERSION}.tar.xz" | sha256sum -c - \
     && tar xf "ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && cd "ffmpeg-${FFMPEG_VERSION}" \
-    && patch -p1 --fuzz=0 < /src/patches/ffmpeg-aribcaption-clear.patch \
+    && patch -p1 --fuzz=0 < /src/patches/ffmpeg-aribcaption-erase-on-clear.patch \
     && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure --prefix=/usr/local \
         --disable-doc --disable-debug --disable-ffplay \
         --enable-gpl --enable-libx264 --enable-vaapi --enable-libdrm \
