@@ -141,9 +141,9 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
         Recording recording = Begin(6203, null);
         await Add(recording);
 
-        var driver = new WatchedDriver();
+        WatchedDriver driver = new();
         SessionId named = RecordingSessions.Named(recording.Id);
-        var clock = new WatchClock(Airs.AddMinutes(10));
+        WatchClock clock = new(Airs.AddMinutes(10));
         RecordingStreamSupervisor supervisor = Supervisor(driver, new WeighedFiles { Weighs = 0 }, clock, recording.Id, null);
         DateTime opened = Airs.AddTicks(1_234_567);
         DateTime reopened = Airs.AddMinutes(11).AddTicks(7_654_321);

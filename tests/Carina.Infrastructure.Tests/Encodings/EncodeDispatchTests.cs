@@ -305,11 +305,11 @@ public sealed class EncodeDispatchTests
     [Fact(DisplayName = "an ending the ledger refuses three times closes the row as failed, so the row is not left running and the next job is claimed")]
     public async Task AnEndingTheLedgerRefusesThreeTimesClosesTheRowAsFailed()
     {
-        var held = new HeldEncodeJobs { KeepsItsOwnRows = true };
+        HeldEncodeJobs held = new() { KeepsItsOwnRows = true };
         EncodeJob first = Waiting();
         held.Jobs.Add(first);
         held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
-        var scratch = new HeldEncodeScratch();
+        HeldEncodeScratch scratch = new();
         EncodeScratchFile owed = EncodeScratchFile.Record(
             EncodeScratchFileId.New(),
             first.Id,
@@ -354,7 +354,7 @@ public sealed class EncodeDispatchTests
     [Fact(DisplayName = "an ending that was itself a failure is closed saying which failure it was")]
     public async Task AnEndingThatWasItselfAFailureIsClosedSayingWhichFailureItWas()
     {
-        var held = new HeldEncodeJobs { KeepsItsOwnRows = true };
+        HeldEncodeJobs held = new() { KeepsItsOwnRows = true };
         EncodeJob first = Waiting();
         held.Jobs.Add(first);
         held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
@@ -374,7 +374,7 @@ public sealed class EncodeDispatchTests
     [Fact(DisplayName = "a row that cannot be closed either is closed at the next look, before another job is claimed")]
     public async Task ARowThatCannotBeClosedEitherIsClosedAtTheNextLook()
     {
-        var held = new HeldEncodeJobs { KeepsItsOwnRows = true };
+        HeldEncodeJobs held = new() { KeepsItsOwnRows = true };
         EncodeJob first = Waiting();
         held.Jobs.Add(first);
         held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
@@ -421,7 +421,7 @@ public sealed class EncodeDispatchTests
     [Fact(DisplayName = "a row another hand moved while its ending was being refused is left as that hand left it")]
     public async Task ARowAnotherHandMovedWhileItsEndingWasBeingRefusedIsLeftAsThatHandLeftIt()
     {
-        var held = new HeldEncodeJobs { KeepsItsOwnRows = true };
+        HeldEncodeJobs held = new() { KeepsItsOwnRows = true };
         EncodeJob first = Waiting();
         held.Jobs.Add(first);
         held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");

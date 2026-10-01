@@ -726,11 +726,11 @@ public sealed class RecordingStreamSupervisorTests
     public async Task AStreamOpenedAgainAddsWhatItCountsToWhatTheOneBeforeItCounted()
     {
         Recording recording = InFlight();
-        var ledger = new StreamLedger();
+        StreamLedger ledger = new();
         ledger.Hold(recording);
-        var driver = new WatchedDriver();
+        WatchedDriver driver = new();
         SessionId named = RecordingSessions.Named(recording.Id);
-        var clock = new WatchClock(Airs.AddMinutes(10));
+        WatchClock clock = new(Airs.AddMinutes(10));
         RecordingStreamSupervisor supervisor = Supervisor(ledger, driver, clock);
         driver.Holding[named] = Live(recording, Airs, Counted(1_000, 3, 20, 1, 900_000, new DropBucketDto(12, 3, 0)));
 
