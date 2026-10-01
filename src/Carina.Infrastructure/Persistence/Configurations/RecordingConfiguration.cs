@@ -189,6 +189,27 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "ck_recording_gaps",
                 "jsonb_typeof(gaps) = 'array' AND missed_ms >= 0 AND (missed_ms = 0) = (jsonb_array_length(gaps) = 0)");
             table.HasCheckConstraint(
+                "ck_recording_what_was_carried",
+                $"""
+                (carried_cc_dropped_packets IS NULL) = (carried_cc_total_packets IS NULL)
+                AND (carried_cc_total_packets IS NULL
+                    OR (cc_measured
+                        AND carried_cc_dropped_packets BETWEEN 0 AND cc_dropped_packets
+                        AND carried_cc_total_packets BETWEEN carried_cc_dropped_packets AND cc_total_packets))
+                AND (carried_scrambled_packets IS NULL
+                    OR (scrambled_packets IS NOT NULL
+                        AND carried_scrambled_packets BETWEEN 0 AND scrambled_packets))
+                AND carried_eovf_count BETWEEN 0 AND eovf_count
+                AND (carried_pcr_anchor IS NOT NULL
+                    OR (recording_json_count(carried_drop_positions) = 0
+                        AND recording_json_count(carried_pcr_reanchors) = 0))
+                AND (carried_pcr_anchor IS NULL
+                    OR (carried_cc_total_packets IS NOT NULL
+                        AND carried_pcr_anchor BETWEEN 0 AND {DropTimeline.PcrWrapsAt - 1}))
+                AND recording_positions_hold(carried_drop_positions, carried_cc_dropped_packets, carried_scrambled_packets)
+                AND recording_reanchors_hold(carried_pcr_reanchors, {DropTimeline.PcrWrapsAt})
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_counts",
                 """
                 written_duration_ms >= 0
@@ -323,6 +344,44 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.Property(recording => recording.ScrambledPackets);
         builder.Property(recording => recording.EovfCount).IsRequired();
         builder.Property(recording => recording.MeasuredUpdatedAt);
+
+        builder.Ignore(recording => recording.Carried);
+        builder.Property(recording => recording.CarriedCcDroppedPackets).HasColumnName("carried_cc_dropped_packets");
+        builder.Property(recording => recording.CarriedCcTotalPackets).HasColumnName("carried_cc_total_packets");
+        builder.Property(recording => recording.CarriedScrambledPackets);
+        builder.Property(recording => recording.CarriedEovfCount).HasDefaultValueSql("0").IsRequired();
+        builder.Property(recording => recording.CountedSessionOpenedAt);
+
+        builder.ComplexProperty(recording => recording.CarriedPositions, positions =>
+        {
+            positions.IsRequired();
+
+            positions.Ignore(timeline => timeline.Located);
+            positions.Ignore(timeline => timeline.Continuity);
+            positions.Ignore(timeline => timeline.Scrambled);
+
+            positions.Property(timeline => timeline.AnchorPcr).HasColumnName("carried_pcr_anchor");
+
+            positions.Property(timeline => timeline.Buckets)
+                .HasConversion(
+                    buckets => JsonSerializer.Serialize(buckets, ProgrammeJson.Options),
+                    stored => Read<DropBucket>(stored),
+                    Compared<DropBucket>())
+                .HasColumnName("carried_drop_positions")
+                .HasColumnType("jsonb")
+                .HasDefaultValueSql("'[]'::jsonb")
+                .IsRequired();
+
+            positions.Property(timeline => timeline.Reanchors)
+                .HasConversion(
+                    reanchors => JsonSerializer.Serialize(reanchors, ProgrammeJson.Options),
+                    stored => Read<PcrReanchor>(stored),
+                    Compared<PcrReanchor>())
+                .HasColumnName("carried_pcr_reanchors")
+                .HasColumnType("jsonb")
+                .HasDefaultValueSql("'[]'::jsonb")
+                .IsRequired();
+        });
 
         builder.Property(recording => recording.ThumbnailState)
             .HasConversion<string>()

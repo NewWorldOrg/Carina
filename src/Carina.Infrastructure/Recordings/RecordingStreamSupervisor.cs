@@ -321,7 +321,10 @@ public sealed class RecordingStreamSupervisor(
                 }
 
                 RecordingResumption.Adopt(loaded, session.DeviceId);
-                bool measured = ReadsDifferently(loaded, counters, positions, scrambled, reading.EovfCount);
+                DropCounters countedBefore = loaded.Counters;
+                DropTimeline placedBefore = loaded.Positions;
+                long? scrambledBefore = loaded.ScrambledPackets;
+                long overflowsBefore = loaded.EovfCount;
                 bool wrote = Advance(loaded, opened, now);
                 bool missed = gap is not null && Follows(loaded, gap);
 
@@ -330,7 +333,8 @@ public sealed class RecordingStreamSupervisor(
                     loaded.Missed(gap!);
                 }
 
-                loaded.Measure(counters, positions, scrambled, reading.EovfCount, now);
+                loaded.Measure(counters, positions, scrambled, reading.EovfCount, now, opened);
+                bool measured = ReadsDifferently(loaded, countedBefore, placedBefore, scrambledBefore, overflowsBefore);
                 advanced = wrote || measured || missed;
                 resumed = RecordingResumption.CloseAnyOpenBreak(loaded, missed ? gap!.Until : now);
 
