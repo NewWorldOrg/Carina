@@ -258,11 +258,11 @@ driver がライブ録画を書き込むルートそのもので、移行が運�
 | `driver` | 特権プロセス |
 | `app` | HTTP プロセス |
 | `migrate` | スキーマを適用して終了 |
-| `web` | フロントエンド。配布用イメージのビルドが成果物を差し込む |
 | `all` | 両プロセスを 1 コンテナで起動(開発用) |
 
-前段にリバースプロキシを置き、`/api/*` を `app` へ、それ以外を `web` へ送る。
-振り分けはイメージの外側の役割で、`web` も `/api/*` を中継しない。
+画面はこのイメージに入っていない。別のイメージで動かす。
+前段にリバースプロキシを置き、`/api/*` を `app` へ、それ以外を画面へ送る。
+振り分けはイメージの外側の役割で、画面も `/api/*` を中継しない。
 **両者は同一オリジンに置く。**
 別オリジンだとブラウザはセッション Cookie を送らず、iPadOS ではサードパーティ Cookie が遮断される。
 
@@ -272,6 +272,26 @@ driver がライブ録画を書き込むルートそのもので、移行が運�
 `ffmpeg` と `libaribb25` は配布物のパッケージではなくイメージの中でソースから作る。
 字幕を絵にするデコーダを持つパッケージが無いため。VAAPI には `intel-media-va-driver` も要る。
 同梱物のライセンスと `ffmpeg` の対応するソースはイメージの `/usr/share/doc/carina/` にあり、一覧は `THIRD-PARTY-NOTICES.md` にある。
+
+## イメージのタグ
+
+`master` に入るたびに、CI が同じ 1 つのイメージを `ghcr.io/newworldorg/carina` へ 2 つのタグで出す。
+対応する CPU は amd64 だけ。
+
+| タグ | `<commit>` が指すもの | 使う役割 |
+| --- | --- | --- |
+| `driver-sha-<commit>` | driver 側を最後に変えたコミット | `driver` |
+| `app-sha-<commit>` | app 側を最後に変えたコミット | `app`、`migrate` |
+
+**更新で driver を入れ替える必要があるのは、`driver-sha-*` が前と変わったときだけ。**
+app だけの変更では `app-sha-*` だけが動くので、`driver` は前のタグのまま動かし続ければよく、録画は止まらない。
+
+- driver 側は `Carina.Driver` とそれが参照するプロジェクト、app 側は `Carina.Api`・`Carina.Db` とそれらが参照するプロジェクト
+- `Carina.Contracts`、`Dockerfile`、`Directory.Build.props`、`Directory.Packages.props`、`docker/entrypoint.sh` の変更は両方のタグを動かす
+- 試験、文書、CI の定義、開発用の compose の変更はどちらのタグも動かさない
+- 一度出たタグは上書きされない
+
+どちらの側に何が入るかは `.github/image-tags.sh inputs driver`(または `app`)が答える。
 
 ## driver の操作
 

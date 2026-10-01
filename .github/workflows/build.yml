@@ -47,6 +47,15 @@ jobs:
       - run: dotnet restore
       - run: dotnet format --no-restore --verify-no-changes
 
+  image-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: A change to one side of the image moves that side's tag and leaves the other where it was
+        run: .github/image-tags.sh prove
+
   every-test-is-selected-by-a-job:
     runs-on: ubuntu-latest
     steps:

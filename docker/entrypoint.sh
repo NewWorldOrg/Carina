@@ -125,13 +125,9 @@ main() {
             adopt_shared_connection_string
             run_as_carina dotnet "${migrate_entry}" --migrate
             ;;
-        web)
-            echo "role=web carries no asset in this image; the distribution image build supplies it." >&2
-            exec sleep infinity
-            ;;
         all) run_all ;;
         *)
-            echo "unknown role '${role}': expected driver, app, web, all or migrate." >&2
+            echo "unknown role '${role}': expected driver, app, migrate or all." >&2
             exit 64
             ;;
     esac
