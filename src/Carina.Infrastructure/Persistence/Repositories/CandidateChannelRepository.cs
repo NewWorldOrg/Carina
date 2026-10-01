@@ -170,7 +170,17 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
         }
 
         scored.Evaluated(score);
-        await context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.Entry(scored).State = EntityState.Detached;
+
+            return false;
+        }
 
         return true;
     }

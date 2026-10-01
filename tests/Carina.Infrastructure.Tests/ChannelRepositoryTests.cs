@@ -1,9 +1,13 @@
+using System.Data.Common;
+
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
+
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Carina.Infrastructure.Tests;
 
@@ -143,6 +147,34 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
             Cancel);
 
         Assert.False(written);
+    }
+
+    [Fact(DisplayName = "a candidate removed between being read and being written is one that was not scored, and the next one in the same context is still written")]
+    public async Task ACandidateRemovedBetweenBeingReadAndBeingWrittenIsNotScoredAndTheNextStillIs()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
+        CandidateChannel gone = Candidate(network, 1, 27);
+        CandidateChannel staying = Candidate(network, 1, 28);
+        var candidates = new CandidateChannelRepository(context);
+        await candidates.AddAsync(gone, Cancel);
+        await candidates.AddAsync(staying, Cancel);
+        CandidateScore score = CandidateScore.Of(360, 360, 24_000, 0, At, At.AddDays(7), At.AddDays(7));
+
+        await using CarinaDbContext scoring = database.Open(new RemovedBeforeItIsWritten(database, gone.Id));
+        var scorer = new CandidateChannelRepository(scoring);
+
+        bool wroteTheOneThatWent = await scorer.ScoreAsync(gone.Id, score, Cancel);
+        bool wroteTheOneThatStayed = await scorer.ScoreAsync(staying.Id, score, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<CandidateChannel> stored = await new CandidateChannelRepository(reading)
+            .ListForServiceAsync(new NetworkId(network), new ServiceId(1), Cancel);
+
+        Assert.False(wroteTheOneThatWent);
+        Assert.True(wroteTheOneThatStayed);
+        Assert.Equal(score, Assert.Single(stored).Score);
     }
 
     [Fact]
@@ -435,6 +467,33 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         Assert.Equal(
             before.Select(stream => stream.TransportStreamId),
             after.Select(stream => stream.TransportStreamId));
+    }
+
+    /// <summary>
+    /// Removes one candidate, through a connection of its own, just before the first update the
+    /// context it watches sends.
+    /// </summary>
+    private sealed class RemovedBeforeItIsWritten(RepositoryDatabase database, CandidateChannelId removed)
+        : DbCommandInterceptor
+    {
+        private bool done;
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!done && command.CommandText.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))
+            {
+                done = true;
+
+                await using CarinaDbContext removing = database.Open();
+                await new CandidateChannelRepository(removing).RemoveAsync(removed, cancellationToken);
+            }
+
+            return await base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
     }
 
     private static int NextNetwork() => BroadcastIds.NextNetwork();
