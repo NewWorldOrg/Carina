@@ -18,6 +18,8 @@ public sealed class StartOidcLoginAction(OidcLoginService logins) : ControllerBa
         [FromQuery(Name = LoginRedirect.ReturnKey)] string? next,
         CancellationToken cancellationToken)
     {
+        NeverStored.Mark(Response);
+
         ServiceResult<OidcStart, OidcRefusal> asked = await logins.StartAsync(
             new OidcStartAttempt(
                 OidcHandshake.MarkCarriedBy(Request),

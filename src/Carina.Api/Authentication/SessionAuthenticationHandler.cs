@@ -34,6 +34,7 @@ public sealed class SessionAuthenticationHandler(
         if (session is null || session.StatusAt(now, policy) is not SessionStatus.Active)
         {
             Response.Cookies.Delete(SessionCookie.Name, SessionCookie.Discarding(Request.IsHttps));
+            NeverStored.Mark(Response);
 
             return AuthenticateResult.NoResult();
         }

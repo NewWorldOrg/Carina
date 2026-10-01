@@ -19,6 +19,8 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins) : Controlle
         [FromQuery(Name = OidcHandshake.CodeKey)] string? code,
         CancellationToken cancellationToken)
     {
+        NeverStored.Mark(Response);
+
         ServiceResult<OidcArrival, OidcRefusal> asked = await logins.CompleteAsync(
             new OidcArrivalAttempt(
                 state,

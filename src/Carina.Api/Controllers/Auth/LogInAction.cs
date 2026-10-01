@@ -27,6 +27,8 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
         [FromBody] LoginRequest? request,
         CancellationToken cancellationToken)
     {
+        NeverStored.Mark(Response);
+
         var attempt = new LoginAttempt(
             request?.Username ?? string.Empty,
             request?.Password ?? string.Empty,
