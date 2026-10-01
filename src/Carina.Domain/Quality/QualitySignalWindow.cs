@@ -60,6 +60,6 @@ public sealed record QualitySignalWindow(
                     .Select(counts => new LayerErrorPeak(counts.Layer, counts.ErrorRate.GetValueOrDefault())),
             ],
             signal.MetricsNotRead,
-            signal.CarriesAnyValue ? sample.TakenAt : null);
+            signal.FiguresReadAt);
     }
 }

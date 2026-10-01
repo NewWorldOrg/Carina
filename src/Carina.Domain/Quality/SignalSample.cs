@@ -45,6 +45,13 @@ public sealed record SignalSample
 
     public bool CarriesAnyValue => CarrierToNoiseMilliDecibels is not null || BitErrors.Count > 0;
 
+    /// <summary>
+    /// When the figures this sample carries were measured: the later of the two moments they were read at, or
+    /// <see langword="null"/> when it carries none.
+    /// </summary>
+    public DateTime? FiguresReadAt
+        => CarrierToNoiseReadAt > BitErrorsReadAt ? CarrierToNoiseReadAt : BitErrorsReadAt ?? CarrierToNoiseReadAt;
+
     public LayerBitErrorCounts? Layer(int layer)
         => BitErrors.FirstOrDefault(counts => counts.Layer == layer);
 

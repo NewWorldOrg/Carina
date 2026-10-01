@@ -57,6 +57,44 @@ public sealed class SignalsThatNeverChangeTests
         Assert.Equal(Between * 5, asked[^1].TakenAt - asked[^1].Signal.CarrierToNoiseReadAt);
     }
 
+    [Fact(DisplayName = "a figure asked for again and again is last taken when the frontend took it, not when it was last asked for")]
+    public void AFigureAskedForAgainAndAgainIsLastTakenWhenTheFrontendTookIt()
+    {
+        IReadOnlyList<QualitySignalSample> asked =
+        [
+            .. Enumerable
+                .Range(0, 6)
+                .Select(step => Sample(
+                    Noon + (Between * step),
+                    "live-1",
+                    SignalSample.WithLock(Noon + (Between * step), 30_000, Noon))),
+        ];
+
+        SignalFigures figures = Assert.Single(QualitySignalSurvey.Figures([], asked));
+        QualitySignalRead read = QualitySignalSurvey
+            .Read([figures], [Tuner], Levels)
+            .Single(one => one.Key == QualityThresholdKey.CarrierToNoiseFloor);
+
+        Assert.Equal(Noon, figures.LastTakenAt);
+        Assert.Equal(Noon, read.LastTakenAt);
+    }
+
+    [Fact(DisplayName = "figures taken at different moments are last taken at the later of the two")]
+    public void FiguresTakenAtDifferentMomentsAreLastTakenAtTheLaterOfTheTwo()
+    {
+        QualitySignalSample sample = Sample(
+            Noon + (Between * 3),
+            "live-1",
+            SignalSample.WithLock(
+                Noon + (Between * 3),
+                30_000,
+                Noon,
+                [new LayerBitErrorCounts(0, 8, 4_000_000)],
+                Noon + Between));
+
+        Assert.Equal(Noon + Between, QualitySignalWindow.Of(sample).LastCarriedAt);
+    }
+
     [Fact(DisplayName = "counters that began again at a lower number are not differenced across the session that started them over")]
     public void CountersThatBeganAgainAtALowerNumberAreNotDifferencedAcrossTheSession()
     {
