@@ -220,6 +220,73 @@ public sealed class OidcSignInTests
             StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "BR-AU-003: a caller refused on the way back is sent to the login screen still carrying where they set out for")]
+    public async Task BrAu003ACallerRefusedOnTheWayBackStillCarriesWhereTheySetOutFor()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
+
+        Uri authorize = await probe.AuthorizeUriAsync("/settings/authentication");
+        string code = probe.Idp.Authorize(authorize, new MockIdentityUser("owner"));
+
+        probe.Idp.LetEveryCodeLapse();
+
+        using HttpResponseMessage arrived = await probe.CallbackAsync(MockIdentityProvider.StateOf(authorize), code);
+
+        Assert.Equal(
+            LoginRedirect.AfterAFailedSignIn("/settings/authentication"),
+            Assert.Single(arrived.Headers.NonValidated[HeaderNames.Location]));
+    }
+
+    [Fact(DisplayName = "BR-AU-003: a handshake left open past its window still sends its own browser back with where it set out for")]
+    public async Task BrAu003AHandshakeLeftOpenPastItsWindowStillCarriesWhereItSetOutFor()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
+
+        Uri authorize = await probe.AuthorizeUriAsync("/library?sort=newest");
+        string code = probe.Idp.Authorize(authorize, new MockIdentityUser("owner"));
+
+        probe.Clock.Wind(OidcLoginPolicy.Default.HandshakeLifetime);
+
+        using HttpResponseMessage arrived = await probe.CallbackAsync(MockIdentityProvider.StateOf(authorize), code);
+
+        Assert.Equal(
+            LoginRedirect.AfterAFailedSignIn("/library?sort=newest"),
+            Assert.Single(arrived.Headers.NonValidated[HeaderNames.Location]));
+    }
+
+    [Fact(DisplayName = "BR-AU-003: a state nobody issued carries nowhere, so the caller is sent to the login screen bound for the front page")]
+    public async Task BrAu003AStateNobodyIssuedCarriesNowhere()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
+
+        Uri authorize = await probe.AuthorizeUriAsync("/settings/authentication");
+        string code = probe.Idp.Authorize(authorize, new MockIdentityUser("owner"));
+
+        using HttpResponseMessage arrived = await probe.CallbackAsync(Unguessable.Issue(), code);
+
+        Assert.Equal(
+            LoginRedirect.AfterAFailedSignIn(null),
+            Assert.Single(arrived.Headers.NonValidated[HeaderNames.Location]));
+    }
+
+    [Fact(DisplayName = "BR-AU-003: another browser finishing a handshake is not told where the one that began it was going")]
+    public async Task BrAu003AnotherBrowserIsNotToldWhereTheOneThatBeganWasGoing()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
+
+        Uri authorize = await probe.AuthorizeUriAsync("/settings/authentication");
+        string code = probe.Idp.Authorize(authorize, new MockIdentityUser("owner"));
+
+        using HttpResponseMessage arrived = await probe.CallbackAsync(
+            MockIdentityProvider.StateOf(authorize),
+            code,
+            probe.Signed);
+
+        Assert.Equal(
+            LoginRedirect.AfterAFailedSignIn(null),
+            Assert.Single(arrived.Headers.NonValidated[HeaderNames.Location]));
+    }
+
     [Fact]
     public async Task ATokenSignedWithAKeyTheProviderNeverPublishedBuysNoSession()
     {

@@ -21,7 +21,7 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins) : Controlle
     {
         NeverStored.Mark(Response);
 
-        ServiceResult<OidcArrival, OidcRefusal> asked = await logins.CompleteAsync(
+        ServiceResult<OidcArrival> asked = await logins.CompleteAsync(
             new OidcArrivalAttempt(
                 state,
                 code,
@@ -30,14 +30,16 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins) : Controlle
                 DeviceLabel.From(Request.Headers.UserAgent.ToString())),
             cancellationToken);
 
-        if (asked.Data is not { } arrival)
+        OidcArrival arrival = asked.Data!;
+
+        if (arrival.Cookie is not { } cookie)
         {
-            return Redirect(LoginRedirect.AfterAFailedSignIn(null));
+            return Redirect(LoginRedirect.AfterAFailedSignIn(arrival.ReturnPath));
         }
 
         Response.Cookies.Append(
             SessionCookie.Name,
-            arrival.Cookie.Value,
+            cookie.Value,
             SessionCookie.Carrying(Request.IsHttps, arrival.SessionLifetime));
 
         return Redirect(arrival.ReturnPath);
