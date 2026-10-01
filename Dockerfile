@@ -13,8 +13,9 @@ RUN git clone --depth 1 --branch "${ARIBB25_TAG}" \
     && test "$(git -C libaribb25 rev-parse HEAD)" = "${ARIBB25_COMMIT}" \
     && cmake -S libaribb25 -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j"$(nproc)" \
-    && mkdir -p /out/card \
-    && cp -P build/libaribb25.so* /out/card/
+    && mkdir -p /out/card /out/notices/libaribb25 \
+    && cp -P build/libaribb25.so* /out/card/ \
+    && cp libaribb25/LICENSE libaribb25/NOTICE /out/notices/libaribb25/
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS ffmpeg-build
 ARG ARIBCAPTION_TAG=v1.1.2
@@ -34,14 +35,12 @@ RUN git clone --depth 1 --branch "${ARIBCAPTION_TAG}" \
         -DARIBCC_SHARED_LIBRARY=ON -DARIBCC_USE_FONTCONFIG=ON -DARIBCC_USE_FREETYPE=ON -DARIBCC_BUILD_TESTS=OFF \
     && cmake --build aribcaption-build -j"$(nproc)" \
     && cmake --install aribcaption-build --prefix /usr/local
-# Ported from denpa's patches/ffmpeg-aribcaption-clear.patch (written against ffmpeg 9.x): in bitmap mode a
-# caption statement carrying only CS (clear screen) reports an empty subtitle, so the caption before it is erased.
-COPY patches/ffmpeg-aribcaption-clear.patch /src/patches/
+COPY patches/ffmpeg-aribcaption-erase-on-clear.patch /src/patches/
 RUN curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && echo "${FFMPEG_SHA256}  ffmpeg-${FFMPEG_VERSION}.tar.xz" | sha256sum -c - \
     && tar xf "ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && cd "ffmpeg-${FFMPEG_VERSION}" \
-    && patch -p1 --fuzz=0 < /src/patches/ffmpeg-aribcaption-clear.patch \
+    && patch -p1 --fuzz=0 < /src/patches/ffmpeg-aribcaption-erase-on-clear.patch \
     && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure --prefix=/usr/local \
         --disable-doc --disable-debug --disable-ffplay \
         --enable-gpl --enable-libx264 --enable-vaapi --enable-libdrm \
@@ -50,7 +49,13 @@ RUN curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && make install \
     && mkdir -p /out/ffmpeg/bin /out/ffmpeg/lib \
     && cp /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /out/ffmpeg/bin/ \
-    && cp -P /usr/local/lib/libaribcaption.so* /out/ffmpeg/lib/
+    && cp -P /usr/local/lib/libaribcaption.so* /out/ffmpeg/lib/ \
+    && mkdir -p /out/notices/ffmpeg/source /out/notices/libaribcaption \
+    && cp COPYING.GPLv2 COPYING.LGPLv2.1 LICENSE.md /out/notices/ffmpeg/ \
+    && cp "/src/ffmpeg-${FFMPEG_VERSION}.tar.xz" /src/patches/ffmpeg-aribcaption-erase-on-clear.patch /out/notices/ffmpeg/source/ \
+    && sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' config.h | tr ' ' '\n' > /out/notices/ffmpeg/source/configure-options.txt \
+    && test -s /out/notices/ffmpeg/source/configure-options.txt \
+    && cp /src/libaribcaption/LICENSE /out/notices/libaribcaption/
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS driver-build
 ARG RID=linux-x64
@@ -110,6 +115,9 @@ COPY docker/fonts.conf /etc/fonts/local.conf
 COPY --from=card-build /out/card/ /usr/local/lib/
 COPY --from=ffmpeg-build /out/ffmpeg/bin/ /usr/local/bin/
 COPY --from=ffmpeg-build /out/ffmpeg/lib/ /usr/local/lib/
+COPY --from=card-build /out/notices/ /usr/share/doc/carina/
+COPY --from=ffmpeg-build /out/notices/ /usr/share/doc/carina/
+COPY LICENSE /usr/share/doc/carina/LICENSE
 RUN ldconfig
 
 RUN groupadd --gid 10001 carina \

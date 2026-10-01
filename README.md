@@ -271,6 +271,7 @@ driver がライブ録画を書き込むルートそのもので、移行が運�
 
 `ffmpeg` と `libaribb25` は配布物のパッケージではなくイメージの中でソースから作る。
 字幕を絵にするデコーダを持つパッケージが無いため。VAAPI には `intel-media-va-driver` も要る。
+同梱物のライセンスと `ffmpeg` の対応するソースはイメージの `/usr/share/doc/carina/` にあり、一覧は `THIRD-PARTY-NOTICES.md` にある。
 
 ## driver の操作
 
