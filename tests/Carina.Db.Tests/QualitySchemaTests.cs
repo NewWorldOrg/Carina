@@ -147,7 +147,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
             connection,
             measured: "true",
             dropped: "2",
-            total: "741375",
+            total: "750000",
             measuredUpdatedAt: Later,
             endedAt: Later,
             session: session);
@@ -163,7 +163,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("Survey", reading.GetString(0));
         Assert.False(await reading.IsDBNullAsync(1));
         Assert.Equal(2, reading.GetInt64(2));
-        Assert.Equal(741_375, reading.GetInt64(3));
+        Assert.Equal(750_000, reading.GetInt64(3));
         Assert.False(await reading.ReadAsync());
     }
 

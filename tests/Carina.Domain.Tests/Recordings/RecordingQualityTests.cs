@@ -11,11 +11,11 @@ public sealed class RecordingQualityTests
 
     public static TheoryData<long, long, long> TheRecordingsTheCardCouldNotUnlock => new()
     {
-        { 0, 8186079, 7849499 },
-        { 67982, 16187058, 13934536 },
-        { 16180, 121372342, 104591214 },
-        { 0, 5302549, 5042768 },
-        { 0, 19462879, 18746364 },
+        { 0, 8_000_000, 7_600_000 },
+        { 70_000, 16_000_000, 14_000_000 },
+        { 16_000, 120_000_000, 100_000_000 },
+        { 0, 5_000_000, 4_800_000 },
+        { 0, 20_000_000, 19_000_000 },
     };
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class RecordingQualityTests
     [Fact]
     public void ARecordingCountedCleanOnBothSidesIsGood()
     {
-        RecordingQuality read = Read(DropCounters.Counted(0, 6889195), 0);
+        RecordingQuality read = Read(DropCounters.Counted(0, 7_000_000), 0);
 
         Assert.Equal(QualityLevel.Good, read.Overall);
         Assert.Equal(QualityLevel.Good, read.Scrambled);
@@ -47,7 +47,7 @@ public sealed class RecordingQualityTests
     [Fact]
     public void TheOneCleanMeasurementThereIsReadsAsGood()
     {
-        Assert.Equal(QualityLevel.Good, Read(DropCounters.Counted(2, 741375), 27).Overall);
+        Assert.Equal(QualityLevel.Good, Read(DropCounters.Counted(2, 750_000), 30).Overall);
     }
 
     [Theory]
@@ -114,7 +114,7 @@ public sealed class RecordingQualityTests
     [Fact]
     public void ACountedRecordingWithNothingSaidAboutItsEncryptionIsUnmeasuredRatherThanGood()
     {
-        RecordingQuality read = Read(DropCounters.Counted(0, 6889195), null);
+        RecordingQuality read = Read(DropCounters.Counted(0, 7_000_000), null);
 
         Assert.Equal(QualityLevel.Unmeasured, read.Overall);
         Assert.Equal(QualityLevel.Unmeasured, read.Scrambled);
@@ -168,7 +168,7 @@ public sealed class RecordingQualityTests
 
     [Fact]
     public void ARecordingThatLostNothingAndWasUnlockedIsCountedClean()
-        => Assert.True(CountedClean(DropCounters.Counted(0, 741375), 27));
+        => Assert.True(CountedClean(DropCounters.Counted(0, 750_000), 30));
 
     [Fact]
     public void ARecordingThatLostNothingButWasLeftScrambledIsNotCountedClean()
@@ -195,7 +195,7 @@ public sealed class RecordingQualityTests
     {
         QualityBands tighter = Bands(Moved(QualityThresholdKey.PacketsLeftScrambled, 0.0005, 0.00001));
         Recording recording = RecordingFactory.Started();
-        recording.Measure(DropCounters.Counted(0, 741375), DropTimeline.Unlocated, 27, 0, RecordingFactory.Now);
+        recording.Measure(DropCounters.Counted(0, 750_000), DropTimeline.Unlocated, 30, 0, RecordingFactory.Now);
 
         Assert.False(RecordingQuality.CountedClean(tighter).Compile()(recording));
     }
@@ -232,7 +232,7 @@ public sealed class RecordingQualityTests
     public void ARecordingWithAGapInItIsNotCountedClean()
     {
         Recording recording = RecordingFactory.Started();
-        recording.Measure(DropCounters.Counted(0, 741375), DropTimeline.Unlocated, 0, 0, RecordingFactory.Now);
+        recording.Measure(DropCounters.Counted(0, 750_000), DropTimeline.Unlocated, 0, 0, RecordingFactory.Now);
 
         recording.Missed(new RecordingGap(RecordingFactory.Now.AddSeconds(10), RecordingFactory.Now.AddSeconds(12.5)));
         Assert.False(RecordingQuality.CountedClean(AsShipped).Compile()(recording));

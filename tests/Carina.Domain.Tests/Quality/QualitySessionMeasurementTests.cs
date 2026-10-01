@@ -67,11 +67,11 @@ public sealed class QualitySessionMeasurementTests
     public void ASessionThatHasBeenCountedSaysWhenItWasLastCounted()
     {
         QualitySessionMeasurement measurement = Open(SessionPurpose.Survey);
-        measurement.Observe(2, 741375, 1, Started.AddMinutes(1));
+        measurement.Observe(2, 750_000, 1, Started.AddMinutes(1));
 
         Assert.True(measurement.CcMeasured);
         Assert.Equal(2, measurement.CcDroppedPackets);
-        Assert.Equal(741375, measurement.CcTotalPackets);
+        Assert.Equal(750_000, measurement.CcTotalPackets);
         Assert.Equal(1, measurement.EovfCount);
         Assert.Equal(Started.AddMinutes(1), measurement.MeasuredUpdatedAt);
     }
@@ -80,11 +80,11 @@ public sealed class QualitySessionMeasurementTests
     public void ASessionThatHasEndedKeepsWhatItMeasuredAfterTheSessionIsGone()
     {
         QualitySessionMeasurement measurement = Open(SessionPurpose.Survey);
-        measurement.Observe(2, 741375, 1, Started.AddMinutes(1));
+        measurement.Observe(2, 750_000, 1, Started.AddMinutes(1));
         measurement.Close(Started.AddMinutes(2));
 
         Assert.True(measurement.HasEnded);
-        Assert.Equal(741375, measurement.CcTotalPackets);
+        Assert.Equal(750_000, measurement.CcTotalPackets);
     }
 
     [Fact]

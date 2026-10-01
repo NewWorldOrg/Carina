@@ -98,7 +98,7 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
     public async Task ARecordingThatLostNothingButWasLeftScrambledIsNotAnsweredAsClean()
     {
         int network = await StockedAsync(0);
-        Recording unlocked = await AddAsync(network, 1, counters: DropCounters.Counted(0, 741375), scrambled: 27);
+        Recording unlocked = await AddAsync(network, 1, counters: DropCounters.Counted(0, 750_000), scrambled: 30);
         await AddAsync(network, 2, counters: DropCounters.Counted(0, 1000), scrambled: 900);
         await AddAsync(network, 3, counters: DropCounters.Counted(0, 1000));
         await AddAsync(network, 4, counters: DropCounters.Counted(0, 0), scrambled: 0);
