@@ -27,6 +27,25 @@ internal sealed class RecordedStartup : ILoggerProvider
 {
     private readonly List<SaidLine> said = [];
 
+    public IReadOnlyList<SaidLine> Everything
+    {
+        get
+        {
+            lock (said)
+            {
+                return [.. said];
+            }
+        }
+    }
+
+    public IReadOnlyList<SaidLine> By<T>()
+    {
+        lock (said)
+        {
+            return [.. said.Where(line => string.Equals(line.Category, typeof(T).FullName, StringComparison.Ordinal))];
+        }
+    }
+
     public IReadOnlyList<SaidLine> By<T>(LogLevel level)
     {
         lock (said)

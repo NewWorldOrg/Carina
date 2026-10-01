@@ -11,7 +11,7 @@ namespace Carina.Api.Controllers.Auth;
 [Route(OidcHandshake.StartRoute)]
 [EndpointEffect(EndpointEffect.Reading)]
 [ApiExplorerSettings(IgnoreApi = true)]
-public sealed class StartOidcLoginAction(OidcLoginService logins) : ControllerBase
+public sealed class StartOidcLoginAction(OidcLoginService logins, SignInRecord record) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Invoke(
@@ -29,8 +29,15 @@ public sealed class StartOidcLoginAction(OidcLoginService logins) : ControllerBa
 
         if (asked.Data is not { } start)
         {
+            record.Write(
+                HttpContext,
+                SignInMoment.TheWayToTheProviderCouldNotBeOpened,
+                reason: asked.ErrorType.ToString());
+
             return Redirect(LoginRedirect.AfterAFailedSignIn(next));
         }
+
+        record.Write(HttpContext, SignInMoment.TheWayToTheProviderWasOpened);
 
         Response.Cookies.Append(
             OidcHandshake.MarkName,

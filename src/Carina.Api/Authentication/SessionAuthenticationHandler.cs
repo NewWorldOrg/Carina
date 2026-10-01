@@ -13,14 +13,14 @@ public sealed class SessionAuthenticationHandler(
     UrlEncoder encoder,
     IAuthSessionRepository sessions,
     SessionPolicy policy,
+    SignInRecord record,
     TimeProvider clock) : AuthenticationHandler<AuthenticationSchemeOptions>(options, loggers, encoder)
 {
     public const string SchemeName = "CarinaSession";
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Cookies.TryGetValue(SessionCookie.Name, out string? carried)
-            || string.IsNullOrEmpty(carried))
+        if (SessionCookie.CarriedBy(Request) is not { } carried)
         {
             return AuthenticateResult.NoResult();
         }
@@ -35,6 +35,7 @@ public sealed class SessionAuthenticationHandler(
         {
             Response.Cookies.Delete(SessionCookie.Name, SessionCookie.Discarding(Request.IsHttps));
             NeverStored.Mark(Response);
+            record.Write(Context, WhyItOpenedNothing(session), session?.Method, session?.DeviceLabel);
 
             return AuthenticateResult.NoResult();
         }
@@ -42,10 +43,23 @@ public sealed class SessionAuthenticationHandler(
         if (session.Touch(now, policy))
         {
             await sessions.SaveAsync(session, Context.RequestAborted);
+            record.Write(Context, SignInMoment.TheSessionWasUsed, session.Method, session.DeviceLabel);
         }
 
         return AuthenticateResult.Success(
             new AuthenticationTicket(SessionClaims.Principal(session, Scheme.Name), Scheme.Name));
+    }
+
+    private static SignInMoment WhyItOpenedNothing(AuthSession? session)
+    {
+        if (session is null)
+        {
+            return SignInMoment.TheSessionCookieNamedNoSession;
+        }
+
+        return session.RevokedAt is null
+            ? SignInMoment.TheSessionHadExpired
+            : SignInMoment.TheSessionHadBeenRevoked;
     }
 
     private static SessionId? Named(string carried)

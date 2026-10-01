@@ -1,7 +1,6 @@
 using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Services;
-using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,7 +10,7 @@ namespace Carina.Api.Controllers.Auth;
 [Route(OidcHandshake.CallbackRoute)]
 [EndpointEffect(EndpointEffect.Reading)]
 [ApiExplorerSettings(IgnoreApi = true)]
-public sealed class CompleteOidcLoginAction(OidcLoginService logins) : ControllerBase
+public sealed class CompleteOidcLoginAction(OidcLoginService logins, SignInRecord record) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Invoke(
@@ -32,10 +31,21 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins) : Controlle
 
         OidcArrival arrival = asked.Data!;
 
-        if (arrival.Cookie is not { } cookie)
+        if (arrival.Cookie is not { } cookie || arrival.Session is not { } session)
         {
+            record.Write(
+                HttpContext,
+                SignInMoment.TheWayBackFromTheProviderWasRefused,
+                reason: arrival.Refusal.ToString());
+
             return Redirect(LoginRedirect.AfterAFailedSignIn(arrival.ReturnPath));
         }
+
+        record.Write(
+            HttpContext,
+            SignInMoment.TheWayBackFromTheProviderOpenedASession,
+            session.Method,
+            session.DeviceLabel);
 
         Response.Cookies.Append(
             SessionCookie.Name,

@@ -16,7 +16,7 @@ namespace Carina.Api.Controllers.Auth;
 [ApiController]
 [Route("api/auth/login")]
 [EndpointEffect(EndpointEffect.Changing)]
-public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock) : ControllerBase
+public sealed class LogInAction(LocalAccountService accounts, SignInRecord record, TimeProvider clock) : ControllerBase
 {
     [HttpPost]
     [Consumes("application/json")]
@@ -41,6 +41,7 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
         if (outcome.RetryAt is { } retryAt)
         {
             Response.Headers[HeaderNames.RetryAfter] = Patience(retryAt);
+            record.Write(HttpContext, SignInMoment.ALocalSignInWasHeldOff);
 
             return StatusCode(
                 StatusCodes.Status429TooManyRequests,
@@ -49,6 +50,8 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
 
         if (outcome.Session is not { } session || outcome.Cookie is not { } cookie)
         {
+            record.Write(HttpContext, SignInMoment.ALocalSignInWasRefused);
+
             return Unauthorized(
                 BaseResponder<MeResponder>.Error(LocalAccountService.TheSameRefusalForEveryBadLogin));
         }
@@ -57,6 +60,7 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
             SessionCookie.Name,
             cookie.Value,
             SessionCookie.Carrying(Request.IsHttps, outcome.SessionLifetime));
+        record.Write(HttpContext, SignInMoment.ALocalSignInOpenedASession, session.Method, session.DeviceLabel);
 
         return Ok(BaseResponder<MeResponder>.Success(MeResponder.Of(session)));
     }

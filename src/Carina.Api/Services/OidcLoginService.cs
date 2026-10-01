@@ -13,8 +13,7 @@ public sealed class OidcLoginService(
     PublicOrigin origin,
     OidcLoginPolicy policy,
     SessionPolicy sessionPolicy,
-    TimeProvider clock,
-    ILogger<OidcLoginService> logger)
+    TimeProvider clock)
 {
     public const string TheSameRefusalForEveryFailedSignIn =
         "Signing in through the identity provider did not work.";
@@ -31,12 +30,12 @@ public sealed class OidcLoginService(
 
         if (held?.IsConfigured is not true)
         {
-            return Refused<OidcStart>(OidcRefusal.NoIdentityProviderIsConfigured);
+            return Refused(OidcRefusal.NoIdentityProviderIsConfigured);
         }
 
         if (await directory.ForAsync(held, cancellationToken) is not { } endpoints)
         {
-            return Refused<OidcStart>(OidcRefusal.TheIdentityProviderIsOutOfReach);
+            return Refused(OidcRefusal.TheIdentityProviderIsOutOfReach);
         }
 
         string mark = Unguessable.IsOne(attempt.BrowserMark) ? attempt.BrowserMark! : Unguessable.Issue();
@@ -170,26 +169,13 @@ public sealed class OidcLoginService(
         return new Uri($"{endpoints.Authorization}{separator}{query}");
     }
 
-    private ServiceResult<T, OidcRefusal> Refused<T>(OidcRefusal refusal)
-    {
-        Note(refusal);
-
-        return ServiceResult<T, OidcRefusal>.Failure(TheSameRefusalForEveryFailedSignIn, refusal);
-    }
+    private static ServiceResult<OidcStart, OidcRefusal> Refused(OidcRefusal refusal)
+        => ServiceResult<OidcStart, OidcRefusal>.Failure(TheSameRefusalForEveryFailedSignIn, refusal);
 
     private ServiceResult<OidcArrival> TurnedAway(OidcRefusal refusal, PendingOidcLogin? begunByThisBrowser = null)
-    {
-        Note(refusal);
-
-        return ServiceResult<OidcArrival>.Success(
+        => ServiceResult<OidcArrival>.Success(
             OidcArrival.Refused(
                 refusal,
                 begunByThisBrowser?.ReturnPath ?? LoginRedirect.Home,
                 sessionPolicy.AbsoluteLifetime));
-    }
-
-    private void Note(OidcRefusal refusal)
-        => logger.LogWarning(
-            "Signing in through the identity provider was refused: {Refusal}. The caller was told only that it did not work.",
-            refusal);
 }
