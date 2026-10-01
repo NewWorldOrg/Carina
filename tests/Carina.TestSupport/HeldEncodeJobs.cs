@@ -19,8 +19,23 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 
     public Func<EncodeJob, bool>? WhenWritingTheEnding { get; set; }
 
+    /// <summary>
+    /// Whether a claim hands out a copy of the row, so that what is done to the job handed out reaches the ledger
+    /// only when it is written back.
+    /// </summary>
+    public bool KeepsItsOwnRows { get; set; }
+
+    /// <summary>
+    /// The copy the last claim handed out while <see cref="KeepsItsOwnRows"/> was set.
+    /// </summary>
+    public EncodeJob? HandedOut { get; private set; }
+
     public Task<EncodeJob?> FindAsync(EncodeJobId id, CancellationToken cancellationToken)
-        => Task.FromResult(Jobs.FirstOrDefault(job => job.Id.Equals(id)));
+    {
+        EncodeJob? row = Jobs.FirstOrDefault(job => job.Id.Equals(id));
+
+        return Task.FromResult(KeepsItsOwnRows && row is not null ? Copied(row) : row);
+    }
 
     public Task AddAsync(EncodeJob job, CancellationToken cancellationToken)
     {
@@ -32,6 +47,15 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 
     public Task SaveAsync(EncodeJob job, CancellationToken cancellationToken)
     {
+        if (KeepsItsOwnRows)
+        {
+            WhenSaving?.Invoke(job);
+            Land(job);
+            Moves.Add($"saved {job.Id.Wire} {job.Status}");
+
+            return Task.CompletedTask;
+        }
+
         if (!Jobs.Contains(job))
         {
             Jobs.Add(job);
@@ -51,6 +75,11 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 
         if (landed)
         {
+            if (KeepsItsOwnRows)
+            {
+                Land(job);
+            }
+
             Moves.Add($"wrote the ending {job.Id.Wire} {job.Status}");
         }
 
@@ -120,8 +149,52 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
         next.Start(at);
         Moves.Add($"claimed {next.Id.Wire} to run");
 
+        if (KeepsItsOwnRows)
+        {
+            HandedOut = Copied(next);
+
+            return Task.FromResult(EncodeClaim.Of(HandedOut));
+        }
+
         return Task.FromResult(EncodeClaim.Of(next));
     }
+
+    private void Land(EncodeJob job)
+    {
+        int held = Jobs.FindIndex(row => row.Id.Equals(job.Id));
+
+        if (held < 0)
+        {
+            Jobs.Add(Copied(job));
+        }
+        else
+        {
+            Jobs[held] = Copied(job);
+        }
+    }
+
+    private static EncodeJob Copied(EncodeJob job)
+        => EncodeJob.Rehydrate(
+            job.Id,
+            job.RecordingId,
+            job.ProfileId,
+            job.DestinationId,
+            job.OutputRoot,
+            job.Status,
+            job.Attempt,
+            job.QueuedAt,
+            job.StartedAt,
+            job.EndedAt,
+            job.Failure,
+            job.ArtefactName,
+            job.Route,
+            job.Programme,
+            job.Headway,
+            job.Timeline,
+            job.Chapters,
+            job.MakesItAgain,
+            job.NameGivenUpAt,
+            job.ReplacedAt);
 
     public Task<IReadOnlyList<EncodeJob>> ListRunningAsync(CancellationToken cancellationToken)
     {

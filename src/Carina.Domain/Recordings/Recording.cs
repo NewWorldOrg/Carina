@@ -89,6 +89,32 @@ public sealed class Recording
 
     public long EovfCount { get; private set; }
 
+    public long? CarriedCcDroppedPackets { get; private set; }
+
+    public long? CarriedCcTotalPackets { get; private set; }
+
+    public DropTimeline CarriedPositions { get; private set; } = DropTimeline.Unlocated;
+
+    public long? CarriedScrambledPackets { get; private set; }
+
+    public long CarriedEovfCount { get; private set; }
+
+    /// <summary>
+    /// What the sessions before the one being counted had counted, which the counts of this recording stand on.
+    /// </summary>
+    public CarriedCount Carried
+        => new(
+            DropCounters.Rehydrate(CarriedCcDroppedPackets is not null, CarriedCcDroppedPackets, CarriedCcTotalPackets),
+            CarriedPositions,
+            CarriedScrambledPackets,
+            CarriedEovfCount);
+
+    /// <summary>
+    /// When the session whose counts were last taken opened, to the millisecond, or <see langword="null"/> when
+    /// nothing has said which session was counted.
+    /// </summary>
+    public DateTime? CountedSessionOpenedAt { get; private set; }
+
     public TunerDeviceId? TunerDeviceId { get; private set; }
 
     public ThumbnailState ThumbnailState { get; private set; } = ThumbnailState.Pending;
@@ -225,7 +251,9 @@ public sealed class Recording
         int? filesLeftBehind = null,
         bool encodeWhenRecorded = true,
         DateTime? descrambledAt = null,
-        IReadOnlyList<RecordingGap>? gaps = null)
+        IReadOnlyList<RecordingGap>? gaps = null,
+        CarriedCount? carried = null,
+        DateTime? countedSessionOpenedAt = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -305,6 +333,7 @@ public sealed class Recording
         }
 
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
+        RefuseACarryBeyondTheCount(carried ?? CarriedCount.Nothing, counters, scrambledPackets, eovfCount);
         RefuseAMeasurementFromNoTuner(counters, eovfCount, tunerDeviceId);
         RefuseAReasonFromNoTuner(outcomeDetail, tunerDeviceId);
         RefuseAReasonBeforeTheRecordingBegan(outcomeDetail, startedAtActual);
@@ -374,6 +403,13 @@ public sealed class Recording
             Positions = positions,
             ScrambledPackets = scrambledPackets,
             EovfCount = eovfCount,
+            CarriedCcDroppedPackets = carried?.Counters.Dropped,
+            CarriedCcTotalPackets = carried?.Counters.Total,
+            CarriedPositions = carried?.Positions ?? DropTimeline.Unlocated,
+            CarriedScrambledPackets = carried?.ScrambledPackets,
+            CarriedEovfCount = carried?.Overflows ?? 0,
+            CountedSessionOpenedAt = ToTheMillisecond(
+                UtcTimes.Optional(countedSessionOpenedAt, nameof(countedSessionOpenedAt))),
             MeasuredUpdatedAt = UtcTimes.Optional(measuredUpdatedAt, nameof(measuredUpdatedAt)),
             TunerDeviceId = tunerDeviceId,
             ThumbnailState = thumbnailState,
@@ -495,12 +531,19 @@ public sealed class Recording
         TunerDeviceId = tunerDeviceId;
     }
 
+    /// <summary>
+    /// Takes what the session writing this recording has counted so far. A session that opened at another moment
+    /// than the one counted before is a new one: what was counted until then is carried, and what a session counts
+    /// is added to what is carried. A reading that does not say when its session opened is of the session already
+    /// being counted.
+    /// </summary>
     public void Measure(
         DropCounters counters,
         DropTimeline positions,
         long? scrambledPackets,
         long eovfCount,
-        DateTime at)
+        DateTime at,
+        DateTime? sessionOpenedAt = null)
     {
         ArgumentNullException.ThrowIfNull(counters);
         ArgumentNullException.ThrowIfNull(positions);
@@ -523,14 +566,48 @@ public sealed class Recording
         RefuseAMeasurementFromNoTuner(counters, eovfCount, TunerDeviceId);
         RefuseATimeBeforeTheRecordingBegan(StartedAtActual, at, nameof(at));
 
-        CcMeasured = counters.Measured;
-        CcDroppedPackets = counters.Dropped;
-        CcTotalPackets = counters.Total;
-        Positions = positions;
-        ScrambledPackets = scrambledPackets;
-        EovfCount = eovfCount;
+        DateTime? opened = ToTheMillisecond(UtcTimes.Optional(sessionOpenedAt, nameof(sessionOpenedAt)))
+                           ?? CountedSessionOpenedAt;
+        CarriedCount carried = CountedSessionOpenedAt is { } counted && counted != opened
+            ? new CarriedCount(Counters, Positions, ScrambledPackets, EovfCount)
+            : Carried;
+        DropCounters whole = Sum(carried.Counters, counters);
+        TimeSpan into = opened is { } session && session > StartedAtActual ? session - StartedAtActual : TimeSpan.Zero;
+
+        CarriedCcDroppedPackets = carried.Counters.Dropped;
+        CarriedCcTotalPackets = carried.Counters.Total;
+        CarriedPositions = carried.Positions;
+        CarriedScrambledPackets = carried.ScrambledPackets;
+        CarriedEovfCount = carried.Overflows;
+        CountedSessionOpenedAt = opened;
+        CcMeasured = whole.Measured;
+        CcDroppedPackets = whole.Dropped;
+        CcTotalPackets = whole.Total;
+        Positions = carried.Positions.Then(positions, into);
+        ScrambledPackets = Sum(carried.ScrambledPackets, scrambledPackets);
+        EovfCount = carried.Overflows + eovfCount;
         MeasuredUpdatedAt = UtcTimes.Required(at, nameof(at));
     }
+
+    private static DropCounters Sum(DropCounters before, DropCounters later)
+    {
+        if (!before.Measured)
+        {
+            return later;
+        }
+
+        return later.Measured
+            ? DropCounters.Counted(
+                before.Dropped.GetValueOrDefault() + later.Dropped.GetValueOrDefault(),
+                before.Total.GetValueOrDefault() + later.Total.GetValueOrDefault())
+            : before;
+    }
+
+    private static long? Sum(long? before, long? later)
+        => before is null ? later : before + later.GetValueOrDefault();
+
+    private static DateTime? ToTheMillisecond(DateTime? at)
+        => at is { } moment ? moment.AddTicks(-(moment.Ticks % TimeSpan.TicksPerMillisecond)) : null;
 
     public void Interrupt(RecordingFault fault, DateTime at)
     {
@@ -758,6 +835,30 @@ public sealed class Recording
             throw new ArgumentException(
                 $"A timeline places {positions.Scrambled} scrambled packets, but only {scrambledPackets ?? 0} were counted.",
                 nameof(positions));
+        }
+    }
+
+    private static void RefuseACarryBeyondTheCount(
+        CarriedCount carried,
+        DropCounters counters,
+        long? scrambledPackets,
+        long eovfCount)
+    {
+        RefuseAPositionNothingCounted(carried.Counters, carried.Positions, carried.ScrambledPackets);
+
+        if (carried.Counters.Measured
+            && (!counters.Measured || carried.Counters.Dropped > counters.Dropped || carried.Counters.Total > counters.Total))
+        {
+            throw new ArgumentException(
+                "A recording counts what its earlier sessions counted and more, never less.",
+                nameof(carried));
+        }
+
+        if (carried.ScrambledPackets > (scrambledPackets ?? 0) || carried.Overflows > eovfCount)
+        {
+            throw new ArgumentException(
+                "A recording counts what its earlier sessions counted and more, never less.",
+                nameof(carried));
         }
     }
 

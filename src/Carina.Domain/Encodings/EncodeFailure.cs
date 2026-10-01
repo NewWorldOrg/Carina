@@ -17,6 +17,8 @@ public enum EncodeFailure
     DestinationCollision = 6,
 
     HeadTooFar = 7,
+
+    EndingNotKept = 8,
 }
 
 public static class EncodeFailures

@@ -135,6 +135,50 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
         Assert.Equal(Airs.AddMinutes(10), read.MeasuredUpdatedAt);
     }
 
+    [Fact(DisplayName = "a stream opened again is added to the one before it in the ledger, and reading it again off the ledger adds it once")]
+    public async Task AStreamOpenedAgainIsAddedToTheOneBeforeItInTheLedger()
+    {
+        Recording recording = Begin(6203, null);
+        await Add(recording);
+
+        WatchedDriver driver = new();
+        SessionId named = RecordingSessions.Named(recording.Id);
+        WatchClock clock = new(Airs.AddMinutes(10));
+        RecordingStreamSupervisor supervisor = Supervisor(driver, new WeighedFiles { Weighs = 0 }, clock, recording.Id, null);
+        DateTime opened = Airs.AddTicks(1_234_567);
+        DateTime reopened = Airs.AddMinutes(11).AddTicks(7_654_321);
+
+        driver.Holding[named] = Live(
+            recording,
+            opened,
+            new SessionCounters(Packets: 1000, Drops: 3, ScrambledPackets: 20, DeviceOverflows: 1, CcMeasured: true, ScrambleMeasured: true));
+        await supervisor.WatchAsync(Cancel);
+
+        driver.Holding[named] = Live(
+            recording,
+            reopened,
+            new SessionCounters(Packets: 500, Drops: 2, ScrambledPackets: 5, DeviceOverflows: 2, CcMeasured: true, ScrambleMeasured: true));
+        clock.Now = Airs.AddMinutes(12);
+        await supervisor.WatchAsync(Cancel);
+
+        driver.Holding[named] = Live(
+            recording,
+            reopened,
+            new SessionCounters(Packets: 800, Drops: 4, ScrambledPackets: 6, DeviceOverflows: 2, CcMeasured: true, ScrambleMeasured: true));
+        clock.Now = Airs.AddMinutes(13);
+        await supervisor.WatchAsync(Cancel);
+
+        await using CarinaDbContext reader = database.Open();
+        Recording read = await reader.Set<Recording>().SingleAsync(row => row.Id == recording.Id);
+
+        Assert.Equal(DropCounters.Counted(7, 1_807), read.Counters);
+        Assert.Equal(26, read.ScrambledPackets);
+        Assert.Equal(3, read.EovfCount);
+        Assert.Equal(DropCounters.Counted(3, 1_003), read.Carried.Counters);
+        Assert.Equal(20, read.Carried.ScrambledPackets);
+        Assert.Equal(1, read.Carried.Overflows);
+    }
+
     private sealed class OnceOnly
     {
         private int done;

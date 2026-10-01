@@ -328,8 +328,8 @@ public sealed class EncodeJobTests
         Assert.Equal(Ended, job.Failure.NoticedAt);
     }
 
-    [Fact(DisplayName = "the seven reasons a job fails for are these and no other")]
-    public void TheSevenReasonsAJobFailsForAreTheseAndNoOther()
+    [Fact(DisplayName = "the eight reasons a job fails for are these and no other")]
+    public void TheEightReasonsAJobFailsForAreTheseAndNoOther()
     {
         Assert.Equal(
             [
@@ -340,6 +340,7 @@ public sealed class EncodeJobTests
                 EncodeFailure.TimedOut,
                 EncodeFailure.DestinationCollision,
                 EncodeFailure.HeadTooFar,
+                EncodeFailure.EndingNotKept,
             ],
             Enum.GetValues<EncodeFailure>());
     }

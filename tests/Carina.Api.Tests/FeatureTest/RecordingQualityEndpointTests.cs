@@ -11,7 +11,7 @@ public sealed class RecordingQualityEndpointTests
     public async Task ARecordingLeftEncryptedIsNotOfferedAsAGoodOneEvenThoughNothingWasLost()
     {
         await using var feature = new RecordingFeature();
-        Measured(feature, dropped: 0, total: 5302549, scrambled: 5042768);
+        Measured(feature, dropped: 0, total: 5_000_000, scrambled: 4_800_000);
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/recordings");
         JsonElement drops = body.GetProperty("data").GetProperty("items")[0].GetProperty("drops");
@@ -19,14 +19,14 @@ public sealed class RecordingQualityEndpointTests
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal("mayNotBeWatchable", drops.GetProperty("quality").GetString());
         Assert.Equal(0, drops.GetProperty("ccDroppedPackets").GetInt64());
-        Assert.Equal(5042768, drops.GetProperty("scrambledPackets").GetInt64());
+        Assert.Equal(4_800_000, drops.GetProperty("scrambledPackets").GetInt64());
     }
 
     [Fact]
     public async Task ARecordingTheCardUnlockedAndNothingWasLostFromIsGood()
     {
         await using var feature = new RecordingFeature();
-        Measured(feature, dropped: 0, total: 6889195, scrambled: 0);
+        Measured(feature, dropped: 0, total: 7_000_000, scrambled: 0);
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/recordings");
         JsonElement drops = body.GetProperty("data").GetProperty("items")[0].GetProperty("drops");
@@ -83,7 +83,7 @@ public sealed class RecordingQualityEndpointTests
     public async Task TheOneRecordingSaysTheSameThingTheListSaidAboutIt()
     {
         await using var feature = new RecordingFeature();
-        Recording recording = Measured(feature, dropped: 0, total: 5302549, scrambled: 5042768);
+        Recording recording = Measured(feature, dropped: 0, total: 5_000_000, scrambled: 4_800_000);
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
         JsonElement drops = body.GetProperty("data").GetProperty("recording").GetProperty("drops");

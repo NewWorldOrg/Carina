@@ -712,15 +712,72 @@ public sealed class RecordingStreamSupervisorTests
     }
 
     [Fact]
-    public async Task TheSameLossesReadOnAStreamOpenedThatInstantMoveNoCounts()
+    public async Task AStreamOpenedThatInstantThatHasCountedNothingYetMovesNoCounts()
     {
         (RecordingWatch watch, Recording read) = await ReadAgainOnAStreamOpenedThatInstant(
-            new SessionCounters(Packets: 1000, Drops: 0, CcMeasured: true));
+            new SessionCounters(Packets: 0, Drops: 0, CcMeasured: true));
 
         Assert.False(watch.CountsMoved);
         Assert.Equal(1, watch.Kept);
         Assert.Equal(TimeSpan.FromMinutes(10), read.Written);
     }
+
+    [Fact(DisplayName = "a stream opened again adds what it counts to what the one before it counted, and places its losses after them")]
+    public async Task AStreamOpenedAgainAddsWhatItCountsToWhatTheOneBeforeItCounted()
+    {
+        Recording recording = InFlight();
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+        WatchedDriver driver = new();
+        SessionId named = RecordingSessions.Named(recording.Id);
+        WatchClock clock = new(Airs.AddMinutes(10));
+        RecordingStreamSupervisor supervisor = Supervisor(ledger, driver, clock);
+        driver.Holding[named] = Live(recording, Airs, Counted(1_000, 3, 20, 1, 900_000, new DropBucketDto(12, 3, 0)));
+
+        await supervisor.WatchAsync(Cancel);
+
+        DateTime reopened = Airs.AddMinutes(11);
+        long clockWhenReopened = 900_000 + (662 * DropTimeline.TicksPerSecond);
+        driver.Holding[named] = Live(recording, reopened, Counted(500, 2, 5, 2, clockWhenReopened, new DropBucketDto(5, 2, 0)));
+        clock.Now = Airs.AddMinutes(12);
+        RecordingWatch added = await supervisor.WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+        Assert.True(added.CountsMoved);
+        Assert.Equal(DropCounters.Counted(5, 1_505), read.Counters);
+        Assert.Equal(25, read.ScrambledPackets);
+        Assert.Equal(3, read.EovfCount);
+        Assert.Equal(900_000, read.Positions.AnchorPcr);
+        Assert.Equal([new DropBucket(12, 3, 0), new DropBucket(667, 2, 0)], read.Positions.Buckets);
+
+        driver.Holding[named] = Live(recording, reopened, Counted(800, 4, 6, 2, clockWhenReopened, new DropBucketDto(5, 2, 0), new DropBucketDto(90, 2, 0)));
+        clock.Now = Airs.AddMinutes(13);
+        await supervisor.WatchAsync(Cancel);
+
+        Recording again = ledger.Read(recording.Id);
+        Assert.Equal(DropCounters.Counted(7, 1_807), again.Counters);
+        Assert.Equal(26, again.ScrambledPackets);
+        Assert.Equal(3, again.EovfCount);
+        Assert.Equal(
+            [new DropBucket(12, 3, 0), new DropBucket(667, 2, 0), new DropBucket(752, 2, 0)],
+            again.Positions.Buckets);
+    }
+
+    private static SessionCounters Counted(
+        long packets,
+        long drops,
+        long scrambled,
+        long overflows,
+        long anchor,
+        params DropBucketDto[] placed)
+        => new(
+            Packets: packets,
+            Drops: drops,
+            ScrambledPackets: scrambled,
+            DeviceOverflows: overflows,
+            CcMeasured: true,
+            ScrambleMeasured: true,
+            Positions: new DropPositionsDto(anchor, placed, []));
 
     private static async Task<(RecordingWatch Watch, Recording Read)> ReadAgainOnAStreamOpenedThatInstant(
         SessionCounters counters)

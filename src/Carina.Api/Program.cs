@@ -28,6 +28,8 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.AddConsoleLinesWithTheirTime();
+
 builder.Services
     .AddControllers(options => options.Filters.Add(new ProducesAttribute("application/json")))
     .AddJsonOptions(options => WireJson.Configure(options.JsonSerializerOptions))

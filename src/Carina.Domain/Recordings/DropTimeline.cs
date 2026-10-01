@@ -8,6 +8,10 @@ public sealed record DropTimeline
 {
     public const long PcrWrapsAt = 8_589_934_592;
 
+    public const long TicksPerSecond = 90_000;
+
+    public static readonly TimeSpan SeamTolerance = TimeSpan.FromSeconds(30);
+
     private DropTimeline(long? anchorPcr, IReadOnlyList<DropBucket> buckets, IReadOnlyList<PcrReanchor> reanchors)
     {
         AnchorPcr = anchorPcr;
@@ -93,6 +97,66 @@ public sealed record DropTimeline
 
         return new DropTimeline(anchorPcr, [.. buckets], [.. reanchors]);
     }
+
+    /// <summary>
+    /// This timeline carried on by a later session's. The later session's seconds are placed as far along as its
+    /// clock began after this one's; when that disagrees with <paramref name="into"/>, how far into the recording
+    /// the later session opened, by more than <see cref="SeamTolerance"/>, they are placed by
+    /// <paramref name="into"/> and the jump is kept as a re-anchor.
+    /// </summary>
+    public DropTimeline Then(DropTimeline later, TimeSpan into)
+    {
+        ArgumentNullException.ThrowIfNull(later);
+
+        if (later.AnchorPcr is not { } began)
+        {
+            return this;
+        }
+
+        if (AnchorPcr is not { } anchor)
+        {
+            return later;
+        }
+
+        int from = Reanchors.Count > 0 ? Reanchors[^1].Second : 0;
+        long origin = Reanchors.Count > 0 ? Reanchors[^1].After : anchor;
+        long byTheClock = from + (Wrapped(began - origin) / TicksPerSecond);
+        long opened = Math.Max(0, (long)into.TotalSeconds);
+        bool believed = Math.Abs(byTheClock - opened) <= (long)SeamTolerance.TotalSeconds;
+        int seam = (int)(believed ? byTheClock : Math.Max(opened, LastNamedSecond));
+
+        SortedDictionary<int, DropBucket> buckets = [];
+
+        foreach (DropBucket bucket in Buckets.Concat(later.Buckets.Select(one => one with { Second = one.Second + seam })))
+        {
+            buckets[bucket.Second] = buckets.TryGetValue(bucket.Second, out DropBucket? held)
+                ? new DropBucket(bucket.Second, held.Continuity + bucket.Continuity, held.Scrambled + bucket.Scrambled)
+                : bucket;
+        }
+
+        IEnumerable<PcrReanchor> joined = later.Reanchors.Select(one => one with { Second = one.Second + seam });
+
+        if (!believed)
+        {
+            joined = joined.Prepend(new PcrReanchor(seam, Wrapped(origin + ((seam - from) * TicksPerSecond)), began));
+        }
+
+        SortedDictionary<int, PcrReanchor> reanchors = [];
+
+        foreach (PcrReanchor reanchor in Reanchors.Concat(joined))
+        {
+            reanchors[reanchor.Second] = reanchors.TryGetValue(reanchor.Second, out PcrReanchor? held)
+                ? held with { After = reanchor.After }
+                : reanchor;
+        }
+
+        return Rehydrate(anchor, [.. buckets.Values], [.. reanchors.Values]);
+    }
+
+    private int LastNamedSecond
+        => Math.Max(Buckets.Count > 0 ? Buckets[^1].Second : 0, Reanchors.Count > 0 ? Reanchors[^1].Second : 0);
+
+    private static long Wrapped(long pcr) => ((pcr % PcrWrapsAt) + PcrWrapsAt) % PcrWrapsAt;
 
     private static void WithinTheClock(long pcr, string parameterName)
     {

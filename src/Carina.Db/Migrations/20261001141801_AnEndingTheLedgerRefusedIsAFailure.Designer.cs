@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261001141801_AnEndingTheLedgerRefusedIsAFailure")]
+    partial class AnEndingTheLedgerRefusedIsAFailure
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2502,24 +2505,6 @@ namespace Carina.Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("captured_at");
 
-                    b.Property<long?>("CarriedCcDroppedPackets")
-                        .HasColumnType("bigint")
-                        .HasColumnName("carried_cc_dropped_packets");
-
-                    b.Property<long?>("CarriedCcTotalPackets")
-                        .HasColumnType("bigint")
-                        .HasColumnName("carried_cc_total_packets");
-
-                    b.Property<long>("CarriedEovfCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("carried_eovf_count")
-                        .HasDefaultValueSql("0");
-
-                    b.Property<long?>("CarriedScrambledPackets")
-                        .HasColumnType("bigint")
-                        .HasColumnName("carried_scrambled_packets");
-
                     b.Property<long?>("CcDroppedPackets")
                         .HasColumnType("bigint")
                         .HasColumnName("cc_dropped_packets");
@@ -2531,10 +2516,6 @@ namespace Carina.Db.Migrations
                     b.Property<long?>("CcTotalPackets")
                         .HasColumnType("bigint")
                         .HasColumnName("cc_total_packets");
-
-                    b.Property<DateTime?>("CountedSessionOpenedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("counted_session_opened_at");
 
                     b.Property<DateTime?>("DescrambledAt")
                         .HasColumnType("timestamp with time zone")
@@ -2727,29 +2708,6 @@ namespace Carina.Db.Migrations
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
 
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "CarriedPositions", "Carina.Domain.Recordings.Recording.CarriedPositions#DropTimeline", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<long?>("AnchorPcr")
-                                .HasColumnType("bigint")
-                                .HasColumnName("carried_pcr_anchor");
-
-                            b1.Property<string>("Buckets")
-                                .IsRequired()
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("jsonb")
-                                .HasColumnName("carried_drop_positions")
-                                .HasDefaultValueSql("'[]'::jsonb");
-
-                            b1.Property<string>("Reanchors")
-                                .IsRequired()
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("jsonb")
-                                .HasColumnName("carried_pcr_reanchors")
-                                .HasDefaultValueSql("'[]'::jsonb");
-                        });
-
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Positions", "Carina.Domain.Recordings.Recording.Positions#DropTimeline", b1 =>
                         {
                             b1.IsRequired();
@@ -2847,8 +2805,6 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_recording_thumbnail", "thumbnail_state IN ('Pending', 'Ready', 'Failed', 'Skipped')\nAND (recording_outcome IS DISTINCT FROM 'Failed' OR thumbnail_state <> 'Ready')\nAND (thumbnail_state = 'Failed') = (thumbnail_fault IS NOT NULL)\nAND (thumbnail_fault IS NULL OR thumbnail_fault IN ('ProgrammeMissing', 'SourceOutOfReach', 'Refused', 'TimedOut', 'NothingWasWritten'))");
 
                             t.HasCheckConstraint("ck_recording_tuner", "tuner_device_id IS NOT NULL\nOR (NOT cc_measured\n    AND eovf_count = 0\n    AND NOT recording_reasons_name_any(outcome_detail, ARRAY['TuneFailed', 'DriverLost', 'TunerContended', 'ScramblingUnresolved']::text[]))");
-
-                            t.HasCheckConstraint("ck_recording_what_was_carried", "(carried_cc_dropped_packets IS NULL) = (carried_cc_total_packets IS NULL)\nAND (carried_cc_total_packets IS NULL\n    OR (cc_measured\n        AND carried_cc_dropped_packets BETWEEN 0 AND cc_dropped_packets\n        AND carried_cc_total_packets BETWEEN carried_cc_dropped_packets AND cc_total_packets))\nAND (carried_scrambled_packets IS NULL\n    OR (scrambled_packets IS NOT NULL\n        AND carried_scrambled_packets BETWEEN 0 AND scrambled_packets))\nAND carried_eovf_count BETWEEN 0 AND eovf_count\nAND (carried_pcr_anchor IS NOT NULL\n    OR (recording_json_count(carried_drop_positions) = 0\n        AND recording_json_count(carried_pcr_reanchors) = 0))\nAND (carried_pcr_anchor IS NULL\n    OR (carried_cc_total_packets IS NOT NULL\n        AND carried_pcr_anchor BETWEEN 0 AND 8589934591))\nAND recording_positions_hold(carried_drop_positions, carried_cc_dropped_packets, carried_scrambled_packets)\nAND recording_reanchors_hold(carried_pcr_reanchors, 8589934592)");
 
                             t.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
 

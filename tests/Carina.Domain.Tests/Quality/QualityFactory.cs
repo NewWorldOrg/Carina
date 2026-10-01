@@ -9,7 +9,7 @@ internal static class QualityFactory
 {
     public static readonly DateTime Settled = new(2026, 8, 10, 3, 0, 0, DateTimeKind.Utc);
 
-    public static Threshold Firm(double value, long observations = 741_375)
+    public static Threshold Firm(double value, long observations = 750_000)
         => Threshold.Of(value, value, provisional: false, observations, Settled);
 
     public static Threshold Provisional(double value, long observations = 0)

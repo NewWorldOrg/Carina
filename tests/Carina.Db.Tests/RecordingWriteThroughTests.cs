@@ -271,6 +271,92 @@ public sealed class RecordingWriteThroughTests(MigratedScratchDatabase database)
         Assert.Equal("ck_recording_gaps", refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "what earlier sessions counted and which session is being counted are read back, and the session read back is not counted twice")]
+    public async Task WhatEarlierSessionsCountedAndWhichSessionIsBeingCountedAreReadBack()
+    {
+        Recording recording = Begin(60130);
+        recording.Acquire(new TunerDeviceId("pt3-1"));
+        await Add(recording);
+        DateTime opened = Now.AddTicks(1_234_567);
+        DateTime reopened = Now.AddMinutes(10).AddTicks(7_654_321);
+        DropTimeline placedAgain = DropTimeline.Rehydrate(
+            900_000 + (602 * DropTimeline.TicksPerSecond),
+            [new DropBucket(5, 2, 0)],
+            []);
+
+        await Reload(
+            recording.Id,
+            loaded => loaded.Measure(
+                DropCounters.Counted(3, 1_000),
+                DropTimeline.Rehydrate(900_000, [new DropBucket(12, 3, 0)], []),
+                20,
+                1,
+                Now.AddMinutes(9),
+                opened));
+        await Reload(
+            recording.Id,
+            loaded => loaded.Measure(DropCounters.Counted(2, 500), placedAgain, 5, 2, Now.AddMinutes(12), reopened));
+        await Reload(
+            recording.Id,
+            loaded => loaded.Measure(DropCounters.Counted(4, 900), placedAgain, 6, 2, Now.AddMinutes(13), reopened));
+
+        await using CarinaDbContext context = Context();
+        Recording read = await Load(context, recording.Id);
+
+        Assert.Equal(DropCounters.Counted(7, 1_900), read.Counters);
+        Assert.Equal(26, read.ScrambledPackets);
+        Assert.Equal(3, read.EovfCount);
+        Assert.Equal([new DropBucket(12, 3, 0), new DropBucket(607, 2, 0)], read.Positions.Buckets);
+        Assert.Equal(DropCounters.Counted(3, 1_000), read.Carried.Counters);
+        Assert.Equal(20, read.Carried.ScrambledPackets);
+        Assert.Equal(1, read.Carried.Overflows);
+        Assert.Equal(900_000, read.Carried.Positions.AnchorPcr);
+        Assert.Equal([new DropBucket(12, 3, 0)], read.Carried.Positions.Buckets);
+        Assert.Equal(Now.AddMinutes(10).AddMilliseconds(765), read.CountedSessionOpenedAt);
+        Assert.Equal(DateTimeKind.Utc, read.CountedSessionOpenedAt!.Value.Kind);
+    }
+
+    [Fact]
+    public async Task ARecordingOnlyOneSessionWroteIsReadBackCarryingNothing()
+    {
+        Recording recording = Begin(60131);
+        await Add(recording);
+
+        await using CarinaDbContext context = Context();
+        Recording read = await Load(context, recording.Id);
+
+        Assert.Equal(DropCounters.Unmeasured, read.Carried.Counters);
+        Assert.False(read.Carried.Positions.Located);
+        Assert.Null(read.Carried.ScrambledPackets);
+        Assert.Equal(0, read.Carried.Overflows);
+        Assert.Null(read.CountedSessionOpenedAt);
+    }
+
+    [Theory]
+    [InlineData("carried_eovf_count = 2")]
+    [InlineData("carried_cc_dropped_packets = 0")]
+    [InlineData("carried_cc_dropped_packets = 4, carried_cc_total_packets = 1000")]
+    [InlineData("carried_cc_dropped_packets = 0, carried_cc_total_packets = 1001")]
+    [InlineData("carried_scrambled_packets = 21")]
+    [InlineData("carried_pcr_anchor = 900000")]
+    [InlineData("carried_drop_positions = '[{\"second\":1,\"continuity\":1,\"scrambled\":0}]'::jsonb")]
+    [InlineData("carried_cc_dropped_packets = 1, carried_cc_total_packets = 10, carried_pcr_anchor = 900000, carried_drop_positions = '[{\"second\":1,\"continuity\":2,\"scrambled\":0}]'::jsonb")]
+    public async Task ARecordingCannotCarryMoreThanItCountsNorPlaceWhatItDoesNotCarry(string change)
+    {
+        Recording recording = Begin(60132 + change.Length);
+        recording.Acquire(new TunerDeviceId("pt3-1"));
+        recording.Measure(DropCounters.Counted(3, 1_000), DropTimeline.Unlocated, 20, 1, Now.AddMinutes(9), Now);
+        await Add(recording);
+
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using NpgsqlCommand command = new($"UPDATE recording SET {change} WHERE id = '{recording.Id.Value}'", connection);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_what_was_carried", refusal.ConstraintName);
+    }
+
     private static Recording Begin(
         int eventId,
         ReservationId? reservationId = null,

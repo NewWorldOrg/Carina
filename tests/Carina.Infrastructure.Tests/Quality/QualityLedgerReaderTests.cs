@@ -39,14 +39,14 @@ public sealed class QualityLedgerReaderTests(RepositoryDatabase database)
     public async Task WhatTheLedgerCountedComesBackAsItWasCounted()
     {
         await ClearAsync();
-        Recording measured = await WrittenAsync(6011, Airs, dropped: 117, total: 741_375, scrambled: 27, overflows: 2);
+        Recording measured = await WrittenAsync(6011, Airs, dropped: 120, total: 750_000, scrambled: 30, overflows: 2);
 
         QualityLedgerRow row = Assert.Single(await ReadAsync(Now.AddDays(-1), Now));
 
         Assert.True(row.Counters.Measured);
-        Assert.Equal(117, row.Counters.Dropped);
-        Assert.Equal(741_375, row.Counters.Total);
-        Assert.Equal(27, row.ScrambledPackets);
+        Assert.Equal(120, row.Counters.Dropped);
+        Assert.Equal(750_000, row.Counters.Total);
+        Assert.Equal(30, row.ScrambledPackets);
         Assert.Equal(2, row.Overflows);
         Assert.Equal(measured.Id, row.Recording);
         Assert.NotNull(row.MeasuredUpdatedAt);
