@@ -13,8 +13,9 @@ RUN git clone --depth 1 --branch "${ARIBB25_TAG}" \
     && test "$(git -C libaribb25 rev-parse HEAD)" = "${ARIBB25_COMMIT}" \
     && cmake -S libaribb25 -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j"$(nproc)" \
-    && mkdir -p /out/card \
-    && cp -P build/libaribb25.so* /out/card/
+    && mkdir -p /out/card /out/notices/libaribb25 \
+    && cp -P build/libaribb25.so* /out/card/ \
+    && cp libaribb25/LICENSE libaribb25/NOTICE /out/notices/libaribb25/
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS ffmpeg-build
 ARG ARIBCAPTION_TAG=v1.1.2
@@ -48,7 +49,13 @@ RUN curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && make install \
     && mkdir -p /out/ffmpeg/bin /out/ffmpeg/lib \
     && cp /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /out/ffmpeg/bin/ \
-    && cp -P /usr/local/lib/libaribcaption.so* /out/ffmpeg/lib/
+    && cp -P /usr/local/lib/libaribcaption.so* /out/ffmpeg/lib/ \
+    && mkdir -p /out/notices/ffmpeg/source /out/notices/libaribcaption \
+    && cp COPYING.GPLv2 COPYING.LGPLv2.1 LICENSE.md /out/notices/ffmpeg/ \
+    && cp "/src/ffmpeg-${FFMPEG_VERSION}.tar.xz" /src/patches/ffmpeg-aribcaption-erase-on-clear.patch /out/notices/ffmpeg/source/ \
+    && sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' config.h | tr ' ' '\n' > /out/notices/ffmpeg/source/configure-options.txt \
+    && test -s /out/notices/ffmpeg/source/configure-options.txt \
+    && cp /src/libaribcaption/LICENSE /out/notices/libaribcaption/
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS driver-build
 ARG RID=linux-x64
@@ -108,6 +115,9 @@ COPY docker/fonts.conf /etc/fonts/local.conf
 COPY --from=card-build /out/card/ /usr/local/lib/
 COPY --from=ffmpeg-build /out/ffmpeg/bin/ /usr/local/bin/
 COPY --from=ffmpeg-build /out/ffmpeg/lib/ /usr/local/lib/
+COPY --from=card-build /out/notices/ /usr/share/doc/carina/
+COPY --from=ffmpeg-build /out/notices/ /usr/share/doc/carina/
+COPY LICENSE /usr/share/doc/carina/LICENSE
 RUN ldconfig
 
 RUN groupadd --gid 10001 carina \
