@@ -18,9 +18,13 @@ using Microsoft.Extensions.Options;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-public sealed class DriverStatusEndpointTests
+public sealed class DriverStatusEndpointTests : IDisposable
 {
     private const string SchemeName = "Test";
+
+    private readonly TestingWebApplicationFactory factory = new();
+
+    public void Dispose() => factory.Dispose();
 
     private sealed class TestAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -40,9 +44,9 @@ public sealed class DriverStatusEndpointTests
         }
     }
 
-    private static HttpClient ClientReading(IDriverStatusReader? reader)
+    private HttpClient ClientReading(IDriverStatusReader? reader)
     {
-        WebApplicationFactory<Program> factory = new TestingWebApplicationFactory().WithWebHostBuilder(builder =>
+        WebApplicationFactory<Program> reading = factory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
             {
                 services
@@ -57,7 +61,7 @@ public sealed class DriverStatusEndpointTests
                 }
             }));
 
-        HttpClient client = factory.CreateClient();
+        HttpClient client = reading.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             SchemeName,
             "anything");

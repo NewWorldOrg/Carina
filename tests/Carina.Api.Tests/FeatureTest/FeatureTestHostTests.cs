@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 using Npgsql;
 
@@ -20,6 +22,43 @@ public sealed class FeatureTestHostTests
         wired.CreateClient().Dispose();
 
         Assert.Empty(left);
+    }
+
+    [Fact(DisplayName = "an application raised from a host reshaped more than once is stopped when the host it came from is let go of")]
+    public async Task AnApplicationRaisedFromAHostReshapedMoreThanOnceIsStoppedWithIt()
+    {
+        TestingWebApplicationFactory factory = new();
+        WebApplicationFactory<Program> reshapedTwice = factory
+            .WithWebHostBuilder(_ => { })
+            .WithWebHostBuilder(_ => { });
+
+        reshapedTwice.CreateClient().Dispose();
+
+        IHostApplicationLifetime raised = reshapedTwice.Services.GetRequiredService<IHostApplicationLifetime>();
+
+        await factory.DisposeAsync();
+
+        Assert.True(
+            raised.ApplicationStopped.IsCancellationRequested,
+            "the application is still running after the host it was raised from was let go of, "
+            + "and its entry point and everything it started stay behind in this process");
+    }
+
+    [Fact(DisplayName = "letting go of the host without waiting stops the applications raised from it as well")]
+    public void LettingGoWithoutWaitingStopsTheApplicationsRaisedFromIt()
+    {
+        TestingWebApplicationFactory factory = new();
+        WebApplicationFactory<Program> reshapedTwice = factory
+            .WithWebHostBuilder(_ => { })
+            .WithWebHostBuilder(_ => { });
+
+        reshapedTwice.CreateClient().Dispose();
+
+        IHostApplicationLifetime raised = reshapedTwice.Services.GetRequiredService<IHostApplicationLifetime>();
+
+        factory.Dispose();
+
+        Assert.True(raised.ApplicationStopped.IsCancellationRequested);
     }
 
     [Fact]
