@@ -277,10 +277,11 @@ public sealed class OidcSignInTests
         Uri authorize = await probe.AuthorizeUriAsync("/settings/authentication");
         string code = probe.Idp.Authorize(authorize, new MockIdentityUser("owner"));
 
+        using HttpClient another = probe.Relaying("seen=before");
         using HttpResponseMessage arrived = await probe.CallbackAsync(
             MockIdentityProvider.StateOf(authorize),
             code,
-            probe.Signed);
+            another);
 
         Assert.Equal(
             LoginRedirect.AfterAFailedSignIn(null),
