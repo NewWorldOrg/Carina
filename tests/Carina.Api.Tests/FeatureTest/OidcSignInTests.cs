@@ -32,6 +32,18 @@ public sealed class OidcSignInTests
         Assert.NotEmpty(asked["code_challenge"].ToString());
     }
 
+    [Fact(DisplayName = "BR-AU-021: the address of the provider is handed over escaped, with no raw space in it")]
+    public async Task BrAu021TheAddressOfTheProviderIsHandedOverEscaped()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
+
+        using HttpResponseMessage started = await probe.StartAsync();
+        string handed = Assert.Single(started.Headers.NonValidated[HeaderNames.Location]);
+
+        Assert.DoesNotContain(" ", handed, StringComparison.Ordinal);
+        Assert.Contains("scope=openid%20profile%20email", handed, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task TwoStartsNeverShareAStateANonceOrAChallenge()
     {

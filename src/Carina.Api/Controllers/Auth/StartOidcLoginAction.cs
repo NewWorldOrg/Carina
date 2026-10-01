@@ -35,6 +35,6 @@ public sealed class StartOidcLoginAction(OidcLoginService logins) : ControllerBa
             start.BrowserMark,
             OidcHandshake.MarkCookie(Request.IsHttps, start.MarkLifetime));
 
-        return Redirect(start.Authorize.ToString());
+        return Redirect(start.Authorize.AbsoluteUri);
     }
 }
