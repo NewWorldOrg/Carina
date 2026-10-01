@@ -518,6 +518,17 @@ with warnings as errors and the format check, and the three test jobs above. A
 second workflow builds the image and renders the compose file; it stays out of
 the way of draft pull requests.
 
+On a push to `master` that second workflow also publishes the image to GHCR under
+two tags, `driver-sha-<commit>` and `app-sha-<commit>`, each named for the last
+commit that touched its side. `.github/image-tags.sh` derives the two sides from
+the stages of the `Dockerfile` and the project references they publish rather
+than from a list, and refuses to answer when something that goes into the image
+belongs to neither side. Its `prove` runs on every push: a change to the app
+alone must leave the driver tag where it was and move the app tag, and the other
+way round, so a numbering that never moves is caught as surely as one that always
+does. A tag that is already in the registry is never pushed again, because a
+driver left running on it would have its image changed underneath it.
+
 ## Development environment
 
 `compose.yml` brings up `app`, `driver` and `db` on the repository mounted at
