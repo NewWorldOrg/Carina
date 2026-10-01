@@ -31,7 +31,7 @@ The image carries the components below beside Carina itself.
 | FFmpeg 6.1.6, built with `--enable-gpl` and libx264 | GPL-2.0-or-later | <https://ffmpeg.org/releases/ffmpeg-6.1.6.tar.xz> | `/usr/share/doc/carina/ffmpeg/` |
 | libaribcaption v1.1.2 | MIT | <https://github.com/xqq/libaribcaption> | `/usr/share/doc/carina/libaribcaption/` |
 | libaribb25 v0.2.9 | Apache-2.0 | <https://github.com/tsukumijima/libaribb25> | `/usr/share/doc/carina/libaribb25/` |
-| x264 | GPL-2.0-or-later | Ubuntu package `libx264-164` | `/usr/share/doc/libx264-164/copyright` |
+| x264 | GPL-2.0-or-later | Ubuntu package `libx264-164` (source package `x264`) | `/usr/share/doc/libx264-164/copyright` |
 | Noto CJK fonts | OFL-1.1 | Ubuntu package `fonts-noto-cjk` | `/usr/share/doc/fonts-noto-cjk/copyright` |
 | Other Ubuntu packages | as each states | Ubuntu archive | `/usr/share/doc/<package>/copyright` |
 
