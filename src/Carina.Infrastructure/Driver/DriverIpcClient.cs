@@ -18,7 +18,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
     public static readonly TimeSpan RequestPatience = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// How long a session start is waited for, which is longer than the driver may take to answer one.
+    /// How long the answer to a session start is waited for.
     /// </summary>
     public static readonly TimeSpan SessionStartPatience = TimeSpan.FromSeconds(30);
 

@@ -30,8 +30,8 @@ public sealed class QualitySignalSample
     public SignalSample Signal { get; private set; } = null!;
 
     /// <summary>
-    /// The physical channel the tuner was on when the sample was taken, or null for a sample taken
-    /// before the channel was kept.
+    /// The physical channel the tuner was on when the sample was taken, or null when the sample does
+    /// not say.
     /// </summary>
     public int? PhysicalChannel { get; private set; }
 
