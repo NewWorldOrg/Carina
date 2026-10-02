@@ -17,6 +17,11 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 {
     public static readonly TimeSpan RequestPatience = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// How long a session start is waited for, which is longer than the driver may take to answer one.
+    /// </summary>
+    public static readonly TimeSpan SessionStartPatience = TimeSpan.FromSeconds(30);
+
     private readonly HttpClient http;
 
     private readonly ILogger<DriverIpcClient> logger;
@@ -285,7 +290,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
         try
         {
-            using CancellationTokenSource patience = Patience(cancellationToken);
+            using CancellationTokenSource patience = Patience(cancellationToken, SessionStartPatience);
             using JsonContent body = JsonContent.Create(agreed, DriverJson.Context.StartSessionRequest);
             using HttpResponseMessage response = await http.PostAsync(DriverEndpoints.Sessions, body, patience.Token);
 
@@ -297,7 +302,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
-            return DriverCall<SessionSnapshot>.Unreachable(WhyUnreachable(error));
+            return DriverCall<SessionSnapshot>.Unreachable(WhyUnreachable(error, SessionStartPatience));
         }
     }
 
@@ -587,9 +592,12 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
     }
 
     private static CancellationTokenSource Patience(CancellationToken cancellationToken)
+        => Patience(cancellationToken, RequestPatience);
+
+    private static CancellationTokenSource Patience(CancellationToken cancellationToken, TimeSpan waited)
     {
         CancellationTokenSource source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        source.CancelAfter(RequestPatience);
+        source.CancelAfter(waited);
 
         return source;
     }
@@ -603,8 +611,11 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
                or OperationCanceledException;
 
     private string WhyUnreachable(Exception error)
+        => WhyUnreachable(error, RequestPatience);
+
+    private string WhyUnreachable(Exception error, TimeSpan waited)
     {
-        string reason = Reason(error);
+        string reason = Reason(error, waited);
 
         logger.LogWarning(
             error,
@@ -615,11 +626,11 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         return reason;
     }
 
-    private static string Reason(Exception error)
+    private static string Reason(Exception error, TimeSpan waited)
     {
         if (error is OperationCanceledException)
         {
-            return $"The driver did not answer within {RequestPatience.TotalSeconds:0} seconds.";
+            return $"The driver did not answer within {waited.TotalSeconds:0} seconds.";
         }
 
         if (SocketErrorIn(error) is { } refused)
