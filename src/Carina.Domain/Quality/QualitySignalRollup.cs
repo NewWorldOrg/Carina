@@ -36,6 +36,12 @@ public sealed class QualitySignalRollup
 
     public IReadOnlyList<LayerErrorRate> BitErrors { get; private set; } = [];
 
+    /// <summary>
+    /// The one physical channel every sample in the window was taken on, or null when they were not
+    /// all taken on one or any of them does not say.
+    /// </summary>
+    public int? PhysicalChannel { get; private set; }
+
     public double? LockRate => Samples is 0 ? null : (double)Locked / Samples;
 
     public static QualitySignalRollup Rehydrate(
@@ -51,7 +57,8 @@ public sealed class QualitySignalRollup
         double? carrierToNoiseAverage,
         int? carrierToNoiseLowest,
         int? carrierToNoiseHighest,
-        IReadOnlyList<LayerErrorRate>? bitErrors)
+        IReadOnlyList<LayerErrorRate>? bitErrors,
+        int? physicalChannel = null)
     {
         if (!Enum.IsDefined(granularity))
         {
@@ -86,6 +93,11 @@ public sealed class QualitySignalRollup
                 nameof(carrierToNoiseAverage));
         }
 
+        if (physicalChannel is { } channel)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(channel, nameof(physicalChannel));
+        }
+
         return new QualitySignalRollup
         {
             Granularity = granularity,
@@ -101,6 +113,7 @@ public sealed class QualitySignalRollup
             CarrierToNoiseLowest = carrierToNoiseLowest,
             CarrierToNoiseHighest = carrierToNoiseHighest,
             BitErrors = Layers(bitErrors),
+            PhysicalChannel = physicalChannel,
         };
     }
 

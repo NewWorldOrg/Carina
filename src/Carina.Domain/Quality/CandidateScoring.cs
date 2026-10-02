@@ -73,6 +73,7 @@ public static class CandidateScoring
         [
             .. windows.Where(window => window.Network.Equals(stream.NetworkId)
                                        && window.Service.Equals(filedUnder)
+                                       && window.PhysicalChannel == candidate.Tuning.PhysicalChannel
                                        && window.Start >= from
                                        && window.Start < period.Until),
         ]);

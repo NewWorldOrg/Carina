@@ -18,7 +18,8 @@ public enum QualityLevel
 /// <summary>
 /// One recording read against the levels the quality domain keeps. What was lost and what was left scrambled are
 /// judged apart; the scrambling is answered on its own, and the recording as a whole stands at the worse of the two.
-/// A counted recording with a gap in it stands at least at the warning level.
+/// A counted recording with a gap in it stands at least at the warning level. A recording descrambled since it
+/// ended is read without the packets that were left scrambled while it was received.
 /// </summary>
 public sealed record RecordingQuality
 {
@@ -32,7 +33,33 @@ public sealed record RecordingQuality
 
     public QualityLevel Scrambled { get; }
 
+    /// <summary>
+    /// The recording as it stands now: one descrambled since it ended reads good on scrambling.
+    /// </summary>
+    public static RecordingQuality Of(Recording recording, QualityBands bands)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+
+        return Read(
+            recording.Counters,
+            recording.ScrambledPackets,
+            recording.MissedMs,
+            bands,
+            recording.DescrambledAt is not null);
+    }
+
+    /// <summary>
+    /// What was counted while the recording was received, whatever has been done to its file since.
+    /// </summary>
     public static RecordingQuality Of(DropCounters counters, long? scrambledPackets, long missedMs, QualityBands bands)
+        => Read(counters, scrambledPackets, missedMs, bands, descrambled: false);
+
+    private static RecordingQuality Read(
+        DropCounters counters,
+        long? scrambledPackets,
+        long missedMs,
+        QualityBands bands,
+        bool descrambled)
     {
         ArgumentNullException.ThrowIfNull(counters);
         ArgumentNullException.ThrowIfNull(bands);
@@ -49,9 +76,11 @@ public sealed record RecordingQuality
         }
 
         QualityLevel lost = Read(dropped, total, bands.For(QualityMetric.PacketsLost));
-        QualityLevel scrambled = scrambledPackets is { } left
-            ? Read(left, total, bands.For(QualityMetric.PacketsLeftScrambled))
-            : QualityLevel.Unmeasured;
+        QualityLevel scrambled = descrambled
+            ? QualityLevel.Good
+            : scrambledPackets is { } left
+                ? Read(left, total, bands.For(QualityMetric.PacketsLeftScrambled))
+                : QualityLevel.Unmeasured;
 
         QualityLevel worse = lost > scrambled ? lost : scrambled;
 
@@ -62,7 +91,8 @@ public sealed record RecordingQuality
 
     /// <summary>
     /// The recordings that lost no packet out of at least one counted, whose packets left scrambled stay under the
-    /// warning level and that have no gap in them, as a condition a store can search by.
+    /// warning level or that have been descrambled since, and that have no gap in them, as a condition a store can
+    /// search by.
     /// </summary>
     public static Expression<Func<Recording, bool>> CountedClean(QualityBands bands)
     {
@@ -80,8 +110,9 @@ public sealed record RecordingQuality
         return recording => recording.CcMeasured
             && recording.CcTotalPackets > 0
             && recording.CcDroppedPackets == 0
-            && recording.ScrambledPackets != null
-            && recording.ScrambledPackets < warning * recording.CcTotalPackets
+            && (recording.DescrambledAt != null
+                || (recording.ScrambledPackets != null
+                    && recording.ScrambledPackets < warning * recording.CcTotalPackets))
             && recording.MissedMs == 0;
     }
 

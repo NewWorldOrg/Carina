@@ -19,6 +19,16 @@ public static class SignalFiling
         return StreamAt(intended, SlotOf(tuning));
     }
 
+    /// <summary>
+    /// The physical channel a tune names, or null when it names none.
+    /// </summary>
+    public static int? ChannelOf(TuneParams tune)
+    {
+        ArgumentNullException.ThrowIfNull(tune);
+
+        return SlotOf(tune).Channel;
+    }
+
     public static bool Same(TuningParameters left, TuningParameters right)
     {
         ArgumentNullException.ThrowIfNull(left);

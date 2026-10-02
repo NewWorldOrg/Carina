@@ -449,6 +449,50 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_signal_sample_not_taken", refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "a sample is kept on the physical channel it was taken on, or on none")]
+    public async Task ASampleIsKeptOnThePhysicalChannelItWasTakenOnOrOnNone()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await NotTakenAsync(connection, "'NothingReported'", physicalChannel: "27");
+        await NotTakenAsync(connection, "'NothingReported'", physicalChannel: "NULL");
+    }
+
+    [Theory(DisplayName = "a sample cannot be kept on a channel that is no channel")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    public async Task ASampleCannotBeKeptOnAChannelThatIsNoChannel(string channel)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => NotTakenAsync(connection, "'NothingReported'", physicalChannel: channel));
+
+        Assert.Equal("ck_quality_signal_sample_physical_channel", refusal.ConstraintName);
+    }
+
+    [Fact(DisplayName = "a window is kept on the one physical channel it was taken on, or on none")]
+    public async Task AWindowIsKeptOnTheOnePhysicalChannelItWasTakenOnOrOnNone()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await WindowAsync(connection, Taken, "27");
+        await WindowAsync(connection, Later, "NULL");
+    }
+
+    [Theory(DisplayName = "a window cannot be kept on a channel that is no channel")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    public async Task AWindowCannotBeKeptOnAChannelThatIsNoChannel(string channel)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => WindowAsync(connection, Taken, channel));
+
+        Assert.Equal("ck_quality_signal_rollup_physical_channel", refusal.ConstraintName);
+    }
+
     private static Task SampleAsync(
         NpgsqlConnection connection,
         string locked,
@@ -457,17 +501,30 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         string bitErrors = "'[]'::jsonb",
         string bitErrorsReadAt = "NULL",
         string notTakenBecause = "NULL",
-        string metricsNotRead = "'[]'::jsonb")
+        string metricsNotRead = "'[]'::jsonb",
+        string physicalChannel = "NULL")
         => new NpgsqlCommand(
             $"""
             INSERT INTO quality_signal_sample (
                 driver_instance_id, session_id, taken_at, purpose, tuner_device_id, network_id, service_id,
                 locked, lock_read_at, cnr_milli_decibels, cnr_read_at, bit_errors, bit_errors_read_at,
-                metrics_not_read, not_taken_because)
+                metrics_not_read, not_taken_because, physical_channel)
             VALUES (
                 'driver-7', '{Guid.NewGuid():N}', {Taken}, 'Survey', 'adapter0', 32736, 1024,
                 {locked}, {Taken}, {cnr}, {cnrReadAt}, {bitErrors}, {bitErrorsReadAt},
-                {metricsNotRead}, {notTakenBecause})
+                {metricsNotRead}, {notTakenBecause}, {physicalChannel})
+            """,
+            connection).ExecuteNonQueryAsync();
+
+    private static Task WindowAsync(NpgsqlConnection connection, string start, string physicalChannel)
+        => new NpgsqlCommand(
+            $"""
+            INSERT INTO quality_signal_rollup (
+                granularity, window_start, tuner_device_id, network_id, service_id,
+                samples, locked, unmeasured, unreachable, bit_errors, physical_channel)
+            VALUES (
+                'Hour', {start}, 'adapter-{Guid.NewGuid():N}', 32736, 1024,
+                6, 6, 0, 0, '[]'::jsonb, {physicalChannel})
             """,
             connection).ExecuteNonQueryAsync();
 
@@ -476,14 +533,16 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         string because,
         string locked = "false",
         string cnr = "NULL",
-        string metricsNotRead = "'[]'::jsonb")
+        string metricsNotRead = "'[]'::jsonb",
+        string physicalChannel = "NULL")
         => SampleAsync(
             connection,
             locked,
             cnr,
             cnr is "NULL" ? "NULL" : Taken,
             notTakenBecause: because,
-            metricsNotRead: metricsNotRead);
+            metricsNotRead: metricsNotRead,
+            physicalChannel: physicalChannel);
 
     private static Task MeasurementAsync(
         NpgsqlConnection connection,

@@ -41,6 +41,16 @@ public sealed class SignalSampleRoundTests
         Assert.Equal(30000, sample.Signal.CarrierToNoiseMilliDecibels);
     }
 
+    [Fact(DisplayName = "a sample is kept with the physical channel the session was tuned to")]
+    public async Task ASampleIsKeptWithThePhysicalChannelTheSessionWasTunedTo()
+    {
+        HeldQualitySignalSamples samples = new();
+
+        await Round(samples, Held(Quality(30000))).TakeAsync(Cancel);
+
+        Assert.Equal(Terrestrial.PhysicalChannel, Assert.Single(samples.Samples).PhysicalChannel);
+    }
+
     [Fact(DisplayName = "a tuner holding nothing is left alone rather than tuned to be measured")]
     public async Task ATunerHoldingNothingIsLeftAloneRatherThanTunedToBeMeasured()
     {

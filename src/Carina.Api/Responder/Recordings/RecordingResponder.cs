@@ -119,7 +119,7 @@ public sealed record RecordingResponder(
         ArgumentNullException.ThrowIfNull(seen);
 
         Recording recording = seen.Recording;
-        RecordingQuality quality = RecordingQuality.Of(recording.Counters, recording.ScrambledPackets, recording.MissedMs, seen.Quality);
+        RecordingQuality quality = RecordingQuality.Of(recording, seen.Quality);
 
         return new RecordingResponder(
             recording.Id.Wire,

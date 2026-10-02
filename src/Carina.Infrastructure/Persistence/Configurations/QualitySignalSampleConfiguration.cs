@@ -62,6 +62,9 @@ public sealed class QualitySignalSampleConfiguration : IEntityTypeConfiguration<
                 AND jsonb_typeof(bit_errors) = 'array'
                 AND jsonb_typeof(metrics_not_read) = 'array'
                 """);
+            table.HasCheckConstraint(
+                "ck_quality_signal_sample_physical_channel",
+                "physical_channel IS NULL OR physical_channel > 0");
         });
 
         builder.HasKey(sample => new { sample.DriverInstanceId, sample.Session, sample.TakenAt });
@@ -98,6 +101,8 @@ public sealed class QualitySignalSampleConfiguration : IEntityTypeConfiguration<
             .HasConversion(id => id.Value, stored => new ServiceId(stored))
             .HasColumnName("service_id")
             .IsRequired();
+
+        builder.Property(sample => sample.PhysicalChannel);
 
         builder.ComplexProperty(sample => sample.Signal, signal =>
         {

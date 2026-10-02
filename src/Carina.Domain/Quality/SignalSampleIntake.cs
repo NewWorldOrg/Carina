@@ -11,7 +11,8 @@ public sealed record SignalReadingAsk(
     TunerDeviceId Tuner,
     NetworkId Network,
     ServiceId Service,
-    SignalQualityDto? Quality);
+    SignalQualityDto? Quality,
+    int? PhysicalChannel = null);
 
 public static class SignalSampleIntake
 {
@@ -27,7 +28,8 @@ public static class SignalSampleIntake
             ask.Tuner,
             ask.Network,
             ask.Service,
-            Read(ask.Quality, at));
+            Read(ask.Quality, at),
+            ask.PhysicalChannel);
     }
 
     public static SignalSample Read(SignalQualityDto? quality, DateTime askedAt)

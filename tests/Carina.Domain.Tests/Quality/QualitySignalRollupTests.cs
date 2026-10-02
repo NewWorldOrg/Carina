@@ -82,6 +82,29 @@ public sealed class QualitySignalRollupTests
             34000,
             null));
 
+    [Fact(DisplayName = "the physical channel a window was rolled up on reaches whoever reads the window")]
+    public void ThePhysicalChannelAWindowWasRolledUpOnReachesWhoeverReadsTheWindow()
+    {
+        QualitySignalRollup rollup = QualitySignalRollup.Rehydrate(
+            QualityWindow.Hour,
+            WindowStart,
+            new TunerDeviceId("adapter0"),
+            new NetworkId(32736),
+            new ServiceId(1024),
+            360,
+            360,
+            0,
+            0,
+            null,
+            null,
+            null,
+            null,
+            27);
+
+        Assert.Equal(27, rollup.PhysicalChannel);
+        Assert.Equal(27, QualitySignalWindow.Of(rollup).PhysicalChannel);
+    }
+
     [Fact(DisplayName = "a window rolls each broadcast layer up on its own")]
     public void AWindowRollsEachBroadcastLayerUpOnItsOwn()
     {
