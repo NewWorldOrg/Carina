@@ -31,7 +31,11 @@ public sealed class LogOutAction(AuthSessionService sessions) : ControllerBase
         Response.Cookies.Delete(
             SessionCookie.Name,
             SessionCookie.Discarding(Request.IsHttps));
-        SignInHappening.Leave(HttpContext, SignInMoment.SignedOut, SessionClaims.MethodOf(User));
+        SignInHappening.Leave(
+            HttpContext,
+            SignInMoment.SignedOut,
+            SessionClaims.MethodOf(User),
+            SessionClaims.DeviceOf(User));
 
         return NoContent();
     }

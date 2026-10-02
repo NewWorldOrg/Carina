@@ -195,6 +195,63 @@ public sealed class SignInRecordTests
         }
     }
 
+    [Fact(DisplayName = "BR-AU-020: a line for a session that was ended says who ended it, how many were ended, and how the ended one had signed in and where")]
+    public void BrAu020ALineForASessionThatWasEndedSaysWhoEndedItAndWhatWasEnded()
+    {
+        string handle = SessionHandle.Of(SessionId.Issue()).Value;
+
+        Record().Write(
+            Asking("DELETE", $"/api/auth/sessions/{handle}", "api/auth/sessions/{id}", Tablet),
+            SignInMoment.TheSessionRevokedAnother,
+            AuthMethod.Local,
+            "a desk",
+            ended: new EndedSessions(1, AuthMethod.Oidc, "a phone"));
+
+        (LogLevel level, string said) = Assert.Single(logger.Lines);
+
+        Assert.Equal(LogLevel.Information, level);
+        Assert.Contains(nameof(SignInMoment.TheSessionRevokedAnother), said, StringComparison.Ordinal);
+        Assert.Contains("DELETE /api/auth/sessions/{id}", said, StringComparison.Ordinal);
+        Assert.Contains(
+            "signed in by Local on a desk, ended 1 signed in by Oidc on a phone",
+            said,
+            StringComparison.Ordinal);
+        Assert.Contains(Tablet, said, StringComparison.Ordinal);
+        Assert.DoesNotContain(handle, said, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-AU-020: a line for the sessions a changed password ended says how many and names none of them")]
+    public void BrAu020ALineForTheSessionsAChangedPasswordEndedSaysHowManyAndNamesNone()
+    {
+        Record().Write(
+            Asking("POST", "/api/auth/password", "api/auth/password", Tablet),
+            SignInMoment.AChangedPasswordRevokedTheOthers,
+            AuthMethod.Local,
+            "a desk",
+            ended: new EndedSessions(3));
+
+        string said = Assert.Single(logger.Lines).Said;
+
+        Assert.Contains(
+            $"signed in by Local on a desk, ended 3 signed in by {SignInRecord.Unsaid} on {SignInRecord.Unsaid}",
+            said,
+            StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-AU-020: the label of an ended device cannot break the line it is written in")]
+    public void BrAu020TheLabelOfAnEndedDeviceCannotBreakTheLineItIsWrittenIn()
+    {
+        Record().Write(
+            Asking("DELETE", "/api/auth/sessions/any", "api/auth/sessions/{id}", Tablet),
+            SignInMoment.TheSessionRevokedAnother,
+            ended: new EndedSessions(1, AuthMethod.Local, "a phone\nSign-in SignedOut at"));
+
+        string said = Assert.Single(logger.Lines).Said;
+
+        Assert.DoesNotContain('\n', said);
+        Assert.Contains("on a phone?Sign-in SignedOut at", said, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "BR-AU-020: a way in that was refused is a warning")]
     public void BrAu020AWayInThatWasRefusedIsAWarning()
     {

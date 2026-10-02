@@ -15,6 +15,12 @@ public sealed class SignInRecord(ILogger<SignInRecord> logger, TimeProvider cloc
         "Sign-in {Moment} at {Method} {Route}: session cookie {SessionCookie}, handshake cookie {HandshakeCookie}, "
         + "signed in by {SignInMethod} on {Device}, reason {Reason}, fetch site {FetchSite}, agent {UserAgent}.";
 
+    public const string EndingLine =
+        "Sign-in {Moment} at {Method} {Route}: session cookie {SessionCookie}, handshake cookie {HandshakeCookie}, "
+        + "signed in by {SignInMethod} on {Device}, "
+        + "ended {Ended} signed in by {EndedSignInMethod} on {EndedDevice}, "
+        + "fetch site {FetchSite}, agent {UserAgent}.";
+
     public const string Carried = "carried";
 
     public const string Absent = "absent";
@@ -44,7 +50,8 @@ public sealed class SignInRecord(ILogger<SignInRecord> logger, TimeProvider cloc
         SignInMoment moment,
         AuthMethod? method = null,
         string? device = null,
-        string? reason = null)
+        string? reason = null,
+        EndedSessions? ended = null)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -56,20 +63,33 @@ public sealed class SignInRecord(ILogger<SignInRecord> logger, TimeProvider cloc
             return;
         }
 
+        if (ended is not null)
+        {
+            WriteWhatWasEnded(context, moment, method, device, ended, agent);
+
+            return;
+        }
+
         logger.Log(
             LevelOf(moment),
             Line,
             moment,
             Plain(request.Method, LongestWord),
             RouteOf(context),
-            SessionCookie.CarriedBy(request) is null ? Absent : Carried,
-            request.Cookies.ContainsKey(OidcHandshake.MarkName) ? Carried : Absent,
+            SessionCookieOf(request),
+            HandshakeCookieOf(request),
             method?.ToString() ?? Unsaid,
             Plain(device, AuthSession.LongestDeviceLabel),
             Plain(reason, LongestRoute),
             Plain(request.Headers[FetchSite].ToString(), LongestWord),
             agent);
     }
+
+    private static string SessionCookieOf(HttpRequest request)
+        => SessionCookie.CarriedBy(request) is null ? Absent : Carried;
+
+    private static string HandshakeCookieOf(HttpRequest request)
+        => request.Cookies.ContainsKey(OidcHandshake.MarkName) ? Carried : Absent;
 
     private static bool IsSaidOncePerQuiet(SignInMoment moment)
         => moment is SignInMoment.RefusedWithoutASessionCookie
@@ -98,6 +118,33 @@ public sealed class SignInRecord(ILogger<SignInRecord> logger, TimeProvider cloc
         string plain = new string([.. said.Select(letter => letter is >= ' ' and <= '~' ? letter : '?')]).Trim();
 
         return plain.Length > longest ? plain[..longest] : plain;
+    }
+
+    private void WriteWhatWasEnded(
+        HttpContext context,
+        SignInMoment moment,
+        AuthMethod? method,
+        string? device,
+        EndedSessions ended,
+        string agent)
+    {
+        HttpRequest request = context.Request;
+
+        logger.Log(
+            LevelOf(moment),
+            EndingLine,
+            moment,
+            Plain(request.Method, LongestWord),
+            RouteOf(context),
+            SessionCookieOf(request),
+            HandshakeCookieOf(request),
+            method?.ToString() ?? Unsaid,
+            Plain(device, AuthSession.LongestDeviceLabel),
+            ended.Count,
+            ended.Method?.ToString() ?? Unsaid,
+            Plain(ended.Device, AuthSession.LongestDeviceLabel),
+            Plain(request.Headers[FetchSite].ToString(), LongestWord),
+            agent);
     }
 
     private bool MaySay(SignInMoment moment, string agent)

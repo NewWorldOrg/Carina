@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Domain.Auth;
 
@@ -28,7 +29,9 @@ public sealed class AuthSessionService(
         ]);
     }
 
-    public async Task<ServiceResult> RevokeAsync(SessionHandle target, CancellationToken cancellationToken)
+    public async Task<ServiceResult<EndedSessions>> RevokeAsync(
+        SessionHandle target,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(target);
 
@@ -36,17 +39,20 @@ public sealed class AuthSessionService(
 
         if (held is null)
         {
-            return ServiceResult.Failure(NoSuchSession);
+            return ServiceResult<EndedSessions>.Failure(NoSuchSession);
         }
 
-        if (held.Revoke(clock.GetUtcNow().UtcDateTime))
+        bool ended = held.Revoke(clock.GetUtcNow().UtcDateTime);
+
+        if (ended)
         {
             await sessions.SaveAsync(held, cancellationToken);
         }
 
         grants.RevokeEverythingOf(held.Subject);
 
-        return ServiceResult.Success();
+        return ServiceResult<EndedSessions>.Success(
+            new EndedSessions(ended ? 1 : 0, held.Method, held.DeviceLabel));
     }
 
     public async Task<ServiceResult> LogOutAsync(

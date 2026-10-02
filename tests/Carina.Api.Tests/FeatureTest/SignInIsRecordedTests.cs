@@ -20,7 +20,19 @@ public sealed class SignInIsRecordedTests
 
     private const string Tablet = "a tablet that signed in a while ago";
 
+    private const string Desk = "a desk that is asking";
+
+    private const string Phone = "a phone that came through the provider";
+
+    private const string Replacement = "a replacement password";
+
+    private const string ProviderSubject = "the-subject-at-the-provider";
+
+    private const string ProviderName = "somebody@example.test";
+
     private static readonly Uri Me = new("/api/auth/me", UriKind.Relative);
+
+    private static readonly Uri Password = new("/api/auth/password", UriKind.Relative);
 
     private static readonly Uri Logout = new("/api/auth/logout", UriKind.Relative);
 
@@ -132,6 +144,157 @@ public sealed class SignInIsRecordedTests
             ],
             Written().Select(said => said.Only("Moment")));
         Assert.Equal(nameof(AuthMethod.Local), Written()[^1].Only("SignInMethod"));
+    }
+
+    [Fact(DisplayName = "BR-AU-020: a sign-out is written down with the device that signed out")]
+    public async Task BrAu020ASignOutIsWrittenDownWithTheDeviceThatSignedOut()
+    {
+        await using AuthProbe probe = Probe().WithAnAccount();
+        using HttpClient desk = Carrying(probe, probe.Sitting(Desk));
+
+        using HttpResponseMessage left = await desk.PostAsJsonAsync(Logout, new { });
+
+        Assert.Equal(HttpStatusCode.NoContent, left.StatusCode);
+
+        SaidLine said = Assert.Single(Written());
+
+        Assert.Equal(nameof(SignInMoment.SignedOut), said.Only("Moment"));
+        Assert.Equal(Desk, said.Only("Device"));
+    }
+
+    [Fact(DisplayName = "BR-AU-020: ending another device is written down with the device that asked and the one that was ended")]
+    public async Task BrAu020EndingAnotherDeviceIsWrittenDownWithTheDeviceThatAskedAndTheOneThatWasEnded()
+    {
+        await using AuthProbe probe = Probe().WithAnAccount();
+        using HttpClient desk = Carrying(probe, probe.Sitting(Desk));
+        AuthSession phone = ThroughTheProvider(probe);
+
+        using HttpResponseMessage ended = await EndAsync(desk, phone);
+
+        Assert.Equal(HttpStatusCode.NoContent, ended.StatusCode);
+
+        SaidLine said = Assert.Single(Written());
+
+        Assert.Equal(nameof(SignInMoment.TheSessionRevokedAnother), said.Only("Moment"));
+        Assert.Equal("/api/auth/sessions/{id}", said.Only("Route"));
+        Assert.Equal(nameof(AuthMethod.Local), said.Only("SignInMethod"));
+        Assert.Equal(Desk, said.Only("Device"));
+        Assert.Equal("1", said.Only("Ended"));
+        Assert.Equal(nameof(AuthMethod.Oidc), said.Only("EndedSignInMethod"));
+        Assert.Equal(Phone, said.Only("EndedDevice"));
+    }
+
+    [Fact(DisplayName = "BR-AU-020: a device ending its own session is written down as ending itself, apart from ending another")]
+    public async Task BrAu020ADeviceEndingItsOwnSessionIsWrittenDownAsEndingItself()
+    {
+        await using AuthProbe probe = Probe().WithAnAccount();
+        AuthSession sitting = probe.Sitting(Desk);
+        using HttpClient desk = Carrying(probe, sitting);
+
+        using HttpResponseMessage ended = await EndAsync(desk, sitting);
+
+        Assert.Equal(HttpStatusCode.NoContent, ended.StatusCode);
+
+        SaidLine said = Assert.Single(Written());
+
+        Assert.Equal(nameof(SignInMoment.TheSessionRevokedItself), said.Only("Moment"));
+        Assert.Equal(Desk, said.Only("Device"));
+        Assert.Equal("1", said.Only("Ended"));
+        Assert.Equal(Desk, said.Only("EndedDevice"));
+    }
+
+    [Fact(DisplayName = "BR-AU-020: asking to end a session that does not exist writes nothing down")]
+    public async Task BrAu020AskingToEndASessionThatDoesNotExistWritesNothingDown()
+    {
+        await using AuthProbe probe = Probe().WithAnAccount();
+        using HttpClient desk = Carrying(probe, probe.Sitting(Desk));
+
+        using var asking = new HttpRequestMessage(
+            HttpMethod.Delete,
+            new Uri($"/api/auth/sessions/{SessionHandle.Of(SessionId.Issue()).Value}", UriKind.Relative))
+        {
+            Content = AuthProbe.Json(),
+        };
+        using HttpResponseMessage ended = await desk.SendAsync(asking);
+
+        Assert.Equal(HttpStatusCode.NotFound, ended.StatusCode);
+        Assert.Empty(Written());
+    }
+
+    [Fact(DisplayName = "BR-AU-020: a changed password is written down with the device that changed it and how many others it ended")]
+    public async Task BrAu020AChangedPasswordIsWrittenDownWithTheDeviceThatChangedItAndHowManyOthersItEnded()
+    {
+        await using AuthProbe probe = Probe().WithAnAccount();
+        using HttpClient desk = Carrying(probe, probe.Sitting(Desk));
+
+        probe.Sitting(Tablet);
+        probe.Sitting(Tablet);
+
+        using HttpResponseMessage changed = await desk.PostAsJsonAsync(
+            Password,
+            new { currentPassword = AuthProbe.Password, newPassword = Replacement });
+
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+
+        SaidLine said = Assert.Single(Written());
+
+        Assert.Equal(nameof(SignInMoment.AChangedPasswordRevokedTheOthers), said.Only("Moment"));
+        Assert.Equal("/api/auth/password", said.Only("Route"));
+        Assert.Equal(nameof(AuthMethod.Local), said.Only("SignInMethod"));
+        Assert.Equal(Desk, said.Only("Device"));
+        Assert.Equal("2", said.Only("Ended"));
+        Assert.Equal(SignInRecord.Unsaid, said.Only("EndedSignInMethod"));
+        Assert.Equal(SignInRecord.Unsaid, said.Only("EndedDevice"));
+    }
+
+    [Fact(DisplayName = "BR-AU-020: a password change that is refused writes nothing down")]
+    public async Task BrAu020APasswordChangeThatIsRefusedWritesNothingDown()
+    {
+        await using AuthProbe probe = Probe().WithAnAccount();
+        using HttpClient desk = Carrying(probe, probe.Sitting(Desk));
+
+        using HttpResponseMessage refused = await desk.PostAsJsonAsync(
+            Password,
+            new { currentPassword = "not the password at all", newPassword = Replacement });
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Empty(Written());
+    }
+
+    [Fact(DisplayName = "BR-AU-020: nothing that ending a session or changing the password carries is in any line: not either password, a cookie, a handle, a name or the address")]
+    public async Task BrAu020NothingThatEndingASessionOrChangingThePasswordCarriesIsInAnyLine()
+    {
+        await using AuthProbe probe = Probe().WithAnAccount();
+        AuthSession sitting = probe.Sitting(Desk);
+        using HttpClient desk = Carrying(probe, sitting);
+        AuthSession phone = ThroughTheProvider(probe);
+        AuthSession tablet = probe.Sitting(Tablet);
+
+        using HttpResponseMessage ended = await EndAsync(desk, phone);
+        using HttpResponseMessage changed = await desk.PostAsJsonAsync(
+            Password,
+            new { currentPassword = AuthProbe.Password, newPassword = Replacement });
+        using HttpResponseMessage endedItself = await EndAsync(desk, sitting);
+
+        Assert.Equal(HttpStatusCode.NoContent, endedItself.StatusCode);
+        Assert.Equal(
+            [
+                nameof(SignInMoment.TheSessionRevokedAnother),
+                nameof(SignInMoment.AChangedPasswordRevokedTheOthers),
+                nameof(SignInMoment.TheSessionRevokedItself),
+            ],
+            Written().Select(said => said.Only("Moment")));
+        NothingSays(
+            log.Everything,
+            AuthProbe.Password,
+            Replacement,
+            probe.Sessions.CookieOf(sitting).Value,
+            probe.Sessions.CookieOf(phone).Value,
+            probe.Sessions.CookieOf(tablet).Value,
+            sitting.Handle.Value,
+            phone.Handle.Value,
+            tablet.Handle.Value);
+        NothingSays(Written(), FirstCredentials.Username, ProviderSubject, ProviderName, Caller);
     }
 
     [Fact(DisplayName = "BR-AU-020: a local sign-in held off for too many tries is written down as held off")]
@@ -306,6 +469,36 @@ public sealed class SignInIsRecordedTests
                 now - lastUsedAgo,
                 Tablet,
                 null));
+    }
+
+    private static HttpClient Carrying(AuthProbe probe, AuthSession session)
+        => probe.Relaying($"{SessionCookie.Name}={probe.Sessions.CookieOf(session).Value}");
+
+    private static AuthSession ThroughTheProvider(AuthProbe probe)
+    {
+        SessionId cookie = SessionId.Issue();
+
+        return probe.Sessions.Seat(
+            cookie,
+            AuthSession.Start(
+                cookie,
+                new Subject(ProviderSubject),
+                ProviderName,
+                AuthMethod.Oidc,
+                Phone,
+                DateTime.UtcNow));
+    }
+
+    private static async Task<HttpResponseMessage> EndAsync(HttpClient asking, AuthSession ended)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            new Uri($"/api/auth/sessions/{ended.Handle.Value}", UriKind.Relative))
+        {
+            Content = AuthProbe.Json(),
+        };
+
+        return await asking.SendAsync(request);
     }
 
     private AuthProbe Probe() => AuthProbe.OverHttp(Heard);
