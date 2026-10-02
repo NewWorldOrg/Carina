@@ -86,20 +86,32 @@ public static class PalettePng
                 int at = column * BytesPerPixel;
                 uint colour = Colour(line[at + 3], line[at + 2] & mask, line[at + 1] & mask, line[at] & mask);
 
-                if (!palette.TryGetValue(colour, out byte index))
+                if (!TryIndex(palette, colour, out byte index))
                 {
-                    if (palette.Count == ColoursAtMost)
-                    {
-                        return false;
-                    }
-
-                    index = (byte)palette.Count;
-                    palette[colour] = index;
+                    return false;
                 }
 
                 indices[(row * width) + column] = index;
             }
         }
+
+        return true;
+    }
+
+    private static bool TryIndex(Dictionary<uint, byte> palette, uint colour, out byte index)
+    {
+        if (palette.TryGetValue(colour, out index))
+        {
+            return true;
+        }
+
+        if (palette.Count == ColoursAtMost)
+        {
+            return false;
+        }
+
+        index = (byte)palette.Count;
+        palette[colour] = index;
 
         return true;
     }

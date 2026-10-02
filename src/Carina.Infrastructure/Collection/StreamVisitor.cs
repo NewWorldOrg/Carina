@@ -106,22 +106,21 @@ public sealed class StreamVisitor(
 
         try
         {
-            await using (stream)
+            await using Stream visited = stream;
+
+            while (!harvest.CanLetGo)
             {
-                while (!harvest.CanLetGo)
+                int got = await visited.ReadAsync(buffer, reading.Token);
+
+                if (got == 0)
                 {
-                    int got = await stream.ReadAsync(buffer, reading.Token);
+                    interrupted = anyBytes;
 
-                    if (got == 0)
-                    {
-                        interrupted = anyBytes;
-
-                        break;
-                    }
-
-                    anyBytes = true;
-                    harvest.Push(buffer.AsSpan(0, got));
+                    break;
                 }
+
+                anyBytes = true;
+                harvest.Push(buffer.AsSpan(0, got));
             }
         }
         catch (OperationCanceledException) when (abort.IsCancellationRequested)

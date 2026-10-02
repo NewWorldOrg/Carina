@@ -55,29 +55,31 @@ public static class DriverEventStream
                 await context.Response.StartAsync(context.RequestAborted);
                 await context.Response.Body.FlushAsync(context.RequestAborted);
 
-                while (true)
-                {
-                    IReadOnlyList<string> names = await listener.TakeAsync(context.RequestAborted);
-
-                    using CancellationTokenSource leash = CancellationTokenSource.CreateLinkedTokenSource(
-                        context.RequestAborted
-                    );
-                    leash.CancelAfter(patience);
-
-                    foreach (string name in names)
-                    {
-                        await context.Response.WriteAsync(
-                            $"event: {name}\ndata: {name}\n\n",
-                            leash.Token
-                        );
-                    }
-
-                    await context.Response.Body.FlushAsync(leash.Token);
-                }
+                await RelayAsync(context, listener, patience);
             }
             catch (Exception error)
                 when (error is OperationCanceledException or ChannelClosedException or IOException)
             { }
+        }
+    }
+
+    private static async Task RelayAsync(HttpContext context, DriverEventListener listener, TimeSpan patience)
+    {
+        while (true)
+        {
+            IReadOnlyList<string> names = await listener.TakeAsync(context.RequestAborted);
+
+            using CancellationTokenSource leash = CancellationTokenSource.CreateLinkedTokenSource(
+                context.RequestAborted
+            );
+            leash.CancelAfter(patience);
+
+            foreach (string name in names)
+            {
+                await context.Response.WriteAsync($"event: {name}\ndata: {name}\n\n", leash.Token);
+            }
+
+            await context.Response.Body.FlushAsync(leash.Token);
         }
     }
 }

@@ -126,30 +126,29 @@ public sealed class RideAlongHarvester(
 
         try
         {
-            await using (stream)
+            await using Stream riding = stream;
+
+            while (true)
             {
-                while (true)
+                int got = await riding.ReadAsync(buffer, stoppingToken);
+
+                if (got == 0)
                 {
-                    int got = await stream.ReadAsync(buffer, stoppingToken);
-
-                    if (got == 0)
-                    {
-                        break;
-                    }
-
-                    RideAlongMark reading = load.Mark();
-
-                    harvest.Push(buffer.AsSpan(0, got));
-                    load.Read(reading, got);
-
-                    if (clock.GetElapsedTime(lastSaved) < settings.BetweenRideAlongSaves)
-                    {
-                        continue;
-                    }
-
-                    await SaveAsync(harvest, load, sessionId, stoppingToken);
-                    lastSaved = clock.GetTimestamp();
+                    break;
                 }
+
+                RideAlongMark reading = load.Mark();
+
+                harvest.Push(buffer.AsSpan(0, got));
+                load.Read(reading, got);
+
+                if (clock.GetElapsedTime(lastSaved) < settings.BetweenRideAlongSaves)
+                {
+                    continue;
+                }
+
+                await SaveAsync(harvest, load, sessionId, stoppingToken);
+                lastSaved = clock.GetTimestamp();
             }
         }
         catch (Exception ending) when (ending is OperationCanceledException or IOException)

@@ -118,17 +118,22 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
             {
                 string full = System.IO.Path.GetFullPath(System.IO.Path.Combine(owner.Path, file.Path));
 
-                foreach (Walkable place in walked)
-                {
-                    if (place.Holds(full) is { } under && !(place.Root.Equals(file.Root) && under == file.Path))
-                    {
-                        seenElsewhere.Add(new DeclaredFile(place.Root, under));
-                    }
-                }
+                seenElsewhere.AddRange(SeenElsewhere(file, full));
             }
         }
 
         return [.. claimed.Concat(seenElsewhere).Distinct()];
+    }
+
+    private IEnumerable<DeclaredFile> SeenElsewhere(DeclaredFile file, string full)
+    {
+        foreach (Walkable place in walked)
+        {
+            if (place.Holds(full) is { } under && !(place.Root.Equals(file.Root) && under == file.Path))
+            {
+                yield return new DeclaredFile(place.Root, under);
+            }
+        }
     }
 
     public IReadOnlyList<DrawnPicture> Drawn(IReadOnlyList<LedgerFile> ledger)

@@ -165,58 +165,7 @@ public sealed class LiveWireSocket(
     {
         try
         {
-            Task advanced = startup?.Advanced ?? Never;
-
-            await SayWhereWeAreAsync(cancellationToken);
-
-            Task<bool> waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
-            int quiets = 0;
-
-            while (true)
-            {
-                switch (await FirstOfAsync(waiting, advanced, settings.BetweenPings, clock, cancellationToken))
-                {
-                    case Woken.ByProgress:
-                        quiets = 0;
-                        advanced = startup!.Advanced;
-                        await SayWhatMovedAsync(cancellationToken);
-
-                        continue;
-                    case Woken.ByQuiet:
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        if (++quiets > settings.QuietsBeforeTheCeiling)
-                        {
-                            await SayWhyItEndedAsync(LiveDeparture.SourceWentQuiet, cancellationToken);
-
-                            return LiveDeparture.SourceWentQuiet;
-                        }
-
-                        if (!await SayWhereWeAreAsync(cancellationToken))
-                        {
-                            await SendAsync(LiveControls.Frame(LiveControl.Ping), cancellationToken);
-                        }
-
-                        continue;
-                    default:
-                        quiets = 0;
-                        break;
-                }
-
-                if (!await waiting)
-                {
-                    await SayWhyItEndedAsync(LiveDeparture.SourceEnded, cancellationToken);
-
-                    return LiveDeparture.SourceEnded;
-                }
-
-                while (frames.TryRead(out LiveFrame? frame))
-                {
-                    await SendAsync(frame, cancellationToken);
-                }
-
-                waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
-            }
+            return await RelayAsync(frames, cancellationToken);
         }
         catch (ViewerTooSlow)
         {
@@ -237,6 +186,64 @@ public sealed class LiveWireSocket(
             await SayWhyItEndedIfItCanAsync(LiveDeparture.SourceBroke, cancellationToken);
 
             return LiveDeparture.SourceBroke;
+        }
+    }
+
+    private async Task<LiveDeparture> RelayAsync(
+        ChannelReader<LiveFrame> frames,
+        CancellationToken cancellationToken)
+    {
+        Task advanced = startup?.Advanced ?? Never;
+
+        await SayWhereWeAreAsync(cancellationToken);
+
+        Task<bool> waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
+        int quiets = 0;
+
+        while (true)
+        {
+            switch (await FirstOfAsync(waiting, advanced, settings.BetweenPings, clock, cancellationToken))
+            {
+                case Woken.ByProgress:
+                    quiets = 0;
+                    advanced = startup!.Advanced;
+                    await SayWhatMovedAsync(cancellationToken);
+
+                    continue;
+                case Woken.ByQuiet:
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (++quiets > settings.QuietsBeforeTheCeiling)
+                    {
+                        await SayWhyItEndedAsync(LiveDeparture.SourceWentQuiet, cancellationToken);
+
+                        return LiveDeparture.SourceWentQuiet;
+                    }
+
+                    if (!await SayWhereWeAreAsync(cancellationToken))
+                    {
+                        await SendAsync(LiveControls.Frame(LiveControl.Ping), cancellationToken);
+                    }
+
+                    continue;
+                default:
+                    quiets = 0;
+                    break;
+            }
+
+            if (!await waiting)
+            {
+                await SayWhyItEndedAsync(LiveDeparture.SourceEnded, cancellationToken);
+
+                return LiveDeparture.SourceEnded;
+            }
+
+            while (frames.TryRead(out LiveFrame? frame))
+            {
+                await SendAsync(frame, cancellationToken);
+            }
+
+            waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
         }
     }
 

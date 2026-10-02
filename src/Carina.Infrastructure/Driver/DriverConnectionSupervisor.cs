@@ -144,24 +144,23 @@ public sealed class DriverConnectionSupervisor(
 
         try
         {
-            await using (stream)
+            await using Stream events = stream;
+
+            await foreach (string name in SseFrames.ReadNamesAsync(events, stoppingToken))
             {
-                await foreach (string name in SseFrames.ReadNamesAsync(stream, stoppingToken))
+                if (!DriverEvents.IsKnown(name))
                 {
-                    if (!DriverEvents.IsKnown(name))
-                    {
-                        continue;
-                    }
-
-                    if (name == DriverEvents.Draining
-                        && observation.Connection is not DriverConnection.Draining)
-                    {
-                        observation = observation.WhileDraining();
-                        monitor.Record(observation);
-                    }
-
-                    signals.Publish(name);
+                    continue;
                 }
+
+                if (name == DriverEvents.Draining
+                    && observation.Connection is not DriverConnection.Draining)
+                {
+                    observation = observation.WhileDraining();
+                    monitor.Record(observation);
+                }
+
+                signals.Publish(name);
             }
         }
         catch (Exception error) when (error is IOException or HttpRequestException)

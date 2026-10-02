@@ -37,19 +37,13 @@ public sealed class EncodeIntakeJob(
             {
                 EncodeIntake took = await TakeAsync(stoppingToken);
 
-                if (!took.Automatically)
+                if (!took.Automatically && !told)
                 {
-                    if (!told)
-                    {
-                        logger.LogInformation(
-                            "A recording that ends is not being queued for encoding, because the auto-run is turned off.");
-                        told = true;
-                    }
-
-                    continue;
+                    logger.LogInformation(
+                        "A recording that ends is not being queued for encoding, because the auto-run is turned off.");
                 }
 
-                told = false;
+                told = !took.Automatically;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

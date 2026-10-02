@@ -54,27 +54,7 @@ public static class CaptionFrames
 
                 NutReading reading = frames.Read(mouthful.AsSpan(0, read));
 
-                foreach (NutFrame frame in reading.Frames)
-                {
-                    if (frame.Pts.Value >= LivePts.ComesAroundAt
-                        || (previous is { } seen && seen.Span.SequenceEqual(frame.Data.Span)))
-                    {
-                        continue;
-                    }
-
-                    previous = frame.Data;
-
-                    if (!RgbaPng.TryDecode(frame.Data.Span, canvas.Size, pixels.AsSpan(0, canvas.FrameLength)))
-                    {
-                        fault = CaptionFlowFault.APictureThatIsNotAPng;
-
-                        break;
-                    }
-
-                    showing = Shown(canvas.Drawn(pixels.AsSpan(0, canvas.FrameLength)), showing, frame.Pts, into);
-                }
-
-                fault ??= Of(reading.Fault);
+                fault = ShowEvery(reading.Frames) ?? Of(reading.Fault);
             }
 
             return fault ?? Of(frames.Ended().Fault);
@@ -88,6 +68,29 @@ public static class CaptionFrames
             ArrayPool<byte>.Shared.Return(mouthful);
             ArrayPool<byte>.Shared.Return(pixels);
             into.TryComplete();
+        }
+
+        CaptionFlowFault? ShowEvery(IReadOnlyList<NutFrame> arrived)
+        {
+            foreach (NutFrame frame in arrived)
+            {
+                if (frame.Pts.Value >= LivePts.ComesAroundAt
+                    || (previous is { } seen && seen.Span.SequenceEqual(frame.Data.Span)))
+                {
+                    continue;
+                }
+
+                previous = frame.Data;
+
+                if (!RgbaPng.TryDecode(frame.Data.Span, canvas.Size, pixels.AsSpan(0, canvas.FrameLength)))
+                {
+                    return CaptionFlowFault.APictureThatIsNotAPng;
+                }
+
+                showing = Shown(canvas.Drawn(pixels.AsSpan(0, canvas.FrameLength)), showing, frame.Pts, into);
+            }
+
+            return null;
         }
     }
 
