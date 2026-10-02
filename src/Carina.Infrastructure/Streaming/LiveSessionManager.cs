@@ -214,8 +214,9 @@ public sealed class LiveSessionManager(
     }
 
     /// <summary>
-    /// Waits for what is being let go of to reach the driver, for no longer than one wait; when the
-    /// wait runs out, the refusal stands.
+    /// Waits for what is being let go of to reach the driver, for no longer than one wait, and says
+    /// whether a tuner came free; when the wait runs out, or every reading behind what was let go of
+    /// is still being read by somebody else, the refusal stands.
     /// </summary>
     /// <remarks>
     /// Holds its own deadline, disposed of with the wait.
@@ -230,9 +231,7 @@ public sealed class LiveSessionManager(
 
         try
         {
-            await EndedAsync(letting).WaitAsync(leash.Token);
-
-            return true;
+            return await EndedAsync(letting).WaitAsync(leash.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -240,12 +239,22 @@ public sealed class LiveSessionManager(
         }
     }
 
-    private static async Task EndedAsync(IReadOnlyList<LiveSession> letting)
+    /// <summary>
+    /// Waits for the sessions to be torn down and for the readings that closed behind them to let
+    /// their supply go, and says whether any reading did.
+    /// </summary>
+    private static async Task<bool> EndedAsync(IReadOnlyList<LiveSession> letting)
     {
         await Task.WhenAll(letting.Select(session => QuietlyAsync(session.Life)));
 
-        await Task.WhenAll(
-            letting.Select(session => session.Reception).Distinct().Select(reading => QuietlyAsync(reading.Life)));
+        LiveReception[] closing =
+        [
+            .. letting.Select(session => session.Reception).Distinct().Where(reading => reading.IsClosed),
+        ];
+
+        await Task.WhenAll(closing.Select(reading => QuietlyAsync(reading.Life)));
+
+        return closing.Length > 0;
     }
 
     /// <summary>
@@ -273,7 +282,8 @@ public sealed class LiveSessionManager(
         return [.. leaving];
     }
 
-    private static bool HasLetGo(LiveSession gone) => gone.Life.IsCompleted && gone.Reception.Life.IsCompleted;
+    private static bool HasLetGo(LiveSession gone)
+        => gone.Life.IsCompleted && (!gone.Reception.IsClosed || gone.Reception.Life.IsCompleted);
 
     private LiveSession Expected(LiveSessionKey key)
     {

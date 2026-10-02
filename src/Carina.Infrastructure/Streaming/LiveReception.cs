@@ -70,6 +70,21 @@ internal sealed class LiveReception
 
     internal LiveSupplyEnding? Ending => stream?.Ending;
 
+    /// <summary>
+    /// Whether the last seat has left this reading, so that what it reads from is being let go of or
+    /// already has been.
+    /// </summary>
+    internal bool IsClosed
+    {
+        get
+        {
+            lock (gate)
+            {
+                return closed;
+            }
+        }
+    }
+
     internal SessionId? Supply
     {
         get
