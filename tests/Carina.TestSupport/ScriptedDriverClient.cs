@@ -53,6 +53,8 @@ public sealed class ScriptedDriverClient : IDriverClient
 
     public List<TuningParameters> Started { get; } = [];
 
+    public Action<TuningParameters>? Starting { get; set; }
+
     public List<SessionPurpose> Purposes { get; } = [];
 
     public List<SessionId> Stopped { get; } = [];
@@ -126,6 +128,8 @@ public sealed class ScriptedDriverClient : IDriverClient
         CancellationToken cancellationToken)
     {
         TuningParameters tuning = TuningOf(request.Tune!);
+
+        Starting?.Invoke(tuning);
 
         lock (gate)
         {

@@ -105,12 +105,12 @@ public sealed class CollectionRound(
             long began = clock.GetTimestamp();
             VisitResult? visit = await VisitAsync(stream, hurried, began, walking, abort);
 
+            turnedAway.RemoveAll(refused => ReferenceEquals(refused.Stream, stream));
+
             if (visit is null)
             {
                 return new Pass(visited, gathered, cameBackShort, TheDriverWentAway: true);
             }
-
-            turnedAway.RemoveAll(refused => ReferenceEquals(refused.Stream, stream));
 
             if (visit.WorthWaitingOut)
             {

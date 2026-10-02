@@ -336,6 +336,47 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         Assert.Single(visit.Tally);
     }
 
+    [Fact]
+    public async Task AStreamTheDriverLeftWhileItWasTriedAgainIsWrittenDownOnceAndNotCountedAsTurnedAway()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 2 };
+        using var interruption = new CancellationTokenSource();
+        int asked = 0;
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+        driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
+        driver.Starting = _ =>
+        {
+            asked++;
+
+            if (asked == 3)
+            {
+                interruption.Cancel();
+
+                throw new OperationCanceledException(interruption.Token);
+            }
+        };
+
+        await using CarinaDbContext context = database.Open();
+
+        RoundResult walked = await Round(driver, context, clock: new HurriedClock())
+            .WalkAsync([Stream(network, 1, 22), Stream(network, 2, 24)], interruption.Token, Cancel);
+
+        Assert.Equal(new RoundResult(0, 0, 0, TurnedAway: 1), walked);
+        Assert.Equal(3, asked);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit[] recorded =
+        [
+            .. (await new StreamVisitRepository(reading).ListAsync(Cancel))
+                .Where(visit => visit.NetworkId.Value == network),
+        ];
+
+        Assert.Equal(2, recorded.Length);
+        Assert.All(recorded, visit => Assert.Equal(VisitOutcome.Interrupted, visit.Outcome));
+    }
+
     private static TimeSpan Sum(IEnumerable<TimeSpan> waits)
         => waits.Aggregate(TimeSpan.Zero, (total, wait) => total + wait);
 
