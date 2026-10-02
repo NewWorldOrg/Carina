@@ -51,9 +51,13 @@ public static class TunerStandings
     {
         ArgumentNullException.ThrowIfNull(standing);
 
-        int troubled = standing.Trouble is { } kind
-            ? kind is TunerTroubleKind.NoLock ? 14 : TunerTroubles.TakesItOutOfService(kind) ? 13 : 1
-            : 0;
+        int troubled = standing.Trouble switch
+        {
+            null => 0,
+            TunerTroubleKind.NoLock => 14,
+            { } kind when TunerTroubles.TakesItOutOfService(kind) => 13,
+            _ => 1,
+        };
 
         if (troubled > 1)
         {
