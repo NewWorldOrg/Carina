@@ -12,11 +12,11 @@ namespace Carina.Conventions.Tests;
 /// <para>
 /// Reads the same source for blocks standing inside one another. The statements that open a block
 /// are <c>if</c>, <c>for</c>, <c>foreach</c>, <c>while</c>, <c>do</c>, <c>switch</c>, <c>try</c>,
-/// a <c>using</c> statement and <c>lock</c>; an <c>else</c>, a <c>catch</c>, a <c>finally</c> and
-/// a <c>switch</c> section stand level with the statement they belong to, and an <c>else if</c>
-/// stands level with the <c>if</c> before it. The count starts again at each method, accessor,
-/// local function and lambda. A function that goes deeper than three is named by the line of its
-/// deepest block.
+/// a <c>using</c> statement, <c>lock</c>, <c>fixed</c>, <c>checked</c>, <c>unchecked</c> and
+/// <c>unsafe</c>; an <c>else</c>, a <c>catch</c>, a <c>finally</c> and a <c>switch</c> section
+/// stand level with the statement they belong to, and an <c>else if</c> stands level with the
+/// <c>if</c> before it. The count starts again at each method, accessor, local function and
+/// lambda. A function that goes deeper than three is named by the line of its deepest block.
 /// </para>
 /// </summary>
 public static class NestingConventionRules
@@ -64,7 +64,10 @@ public static class NestingConventionRules
             or SwitchStatementSyntax
             or TryStatementSyntax
             or UsingStatementSyntax
-            or LockStatementSyntax;
+            or LockStatementSyntax
+            or FixedStatementSyntax
+            or CheckedStatementSyntax
+            or UnsafeStatementSyntax;
 
     private static bool IsAFunction(SyntaxNode node)
         => node is BaseMethodDeclarationSyntax

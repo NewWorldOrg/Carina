@@ -443,9 +443,10 @@ nothing.
   reads the syntax tree and refuses an expression that joins more than two
   conditionals and a function whose blocks stand more than three deep. A block
   is opened by `if`, `for`, `foreach`, `while`, `do`, `switch`, `try`, a `using`
-  statement and `lock`; `else`, `catch`, `finally` and a `switch` section stand
-  level with the statement they belong to, and the count starts again at each
-  method, accessor, local function and lambda.
+  statement, `lock`, `fixed`, `checked`, `unchecked` and `unsafe`; `else`,
+  `catch`, `finally` and a `switch` section stand level with the statement they
+  belong to, and the count starts again at each method, accessor, local function
+  and lambda.
 - Comments earn their place or are absent. Code that needs a comment to be
   understood is rewritten instead.
 - Warnings are errors. The build is the gate.
