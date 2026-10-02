@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Collection;
 
-public sealed record RoundResult(int Visited, int Gathered, int CameBackShort);
+public sealed record RoundResult(int Visited, int Gathered, int CameBackShort, int TurnedAway = 0);
 
 public sealed class CollectionRound(
     IStreamVisitRepository visits,
@@ -20,6 +20,10 @@ public sealed class CollectionRound(
     TimeProvider clock,
     ILogger<CollectionRound> logger)
 {
+    /// <summary>
+    /// Visits every stream that is due, in the order of the plan. A stream every tuner is too busy for is
+    /// stepped over, and those stepped over are tried again together after each wait on full tuners.
+    /// </summary>
     public async Task<RoundResult> WalkAsync(
         IReadOnlyList<BroadcastStream> streams,
         CancellationToken interruption,
@@ -37,81 +41,130 @@ public sealed class CollectionRound(
             now,
             settings.RevisitsBelow,
             hurried);
+        IReadOnlyList<BroadcastStream> waiting =
+        [
+            .. plan
+                .Select(planned => streams.FirstOrDefault(stream =>
+                    stream.NetworkId.Equals(planned.NetworkId)
+                    && stream.TransportStreamId.Equals(planned.TransportStreamId)))
+                .OfType<BroadcastStream>(),
+        ];
+        var turnedAway = new List<TurnedAway>();
+        var walked = new RoundResult(0, 0, 0);
+
+        for (int attempt = 1; waiting.Count > 0; attempt++)
+        {
+            Pass pass = await PassAsync(waiting, turnedAway, hurried, walking.Token, abort);
+
+            walked = new RoundResult(
+                walked.Visited + pass.Visited,
+                walked.Gathered + pass.Gathered,
+                walked.CameBackShort + pass.CameBackShort);
+
+            if (pass.TheDriverWentAway
+                || turnedAway.Count == 0
+                || attempt >= settings.WhenTunersAreFull.FailureCeiling
+                || !await WaitedForATunerAsync(attempt, walking.Token, abort))
+            {
+                break;
+            }
+
+            waiting = [.. turnedAway.Select(refused => refused.Stream)];
+        }
+
+        foreach (TurnedAway refused in turnedAway)
+        {
+            await RecordAsync(refused.Stream, refused.Visit, refused.Took, abort);
+        }
+
+        if (turnedAway.Count > 0)
+        {
+            logger.LogInformation(
+                "Every tuner stayed busy for {TurnedAway} stream(s); they wait for the next sweep.",
+                turnedAway.Count);
+        }
+
+        return walked with { TurnedAway = turnedAway.Count };
+    }
+
+    private async Task<Pass> PassAsync(
+        IReadOnlyList<BroadcastStream> waiting,
+        List<TurnedAway> turnedAway,
+        bool hurried,
+        CancellationToken walking,
+        CancellationToken abort)
+    {
         int visited = 0;
         int gathered = 0;
         int cameBackShort = 0;
 
-        foreach (PlannedVisit planned in plan)
+        foreach (BroadcastStream stream in waiting)
         {
             abort.ThrowIfCancellationRequested();
 
-            if (streams.FirstOrDefault(stream =>
-                stream.NetworkId.Equals(planned.NetworkId)
-                && stream.TransportStreamId.Equals(planned.TransportStreamId)) is not { } stream)
-            {
-                continue;
-            }
-
             long began = clock.GetTimestamp();
-            VisitResult visit;
+            VisitResult? visit = await VisitAsync(stream, hurried, began, walking, abort);
 
-            try
+            if (visit is null)
             {
-                visit = await VisitAsync(stream, hurried, walking.Token);
+                return new Pass(visited, gathered, cameBackShort, TheDriverWentAway: true);
             }
-            catch (OperationCanceledException) when (!abort.IsCancellationRequested)
-            {
-                logger.LogInformation(
-                    "The driver went away mid-walk; {NetworkId}-{TransportStreamId} is recorded as interrupted.",
-                    stream.NetworkId.Value,
-                    stream.TransportStreamId.Value);
-                await RecordAsync(
-                    stream,
-                    new VisitResult(VisitOutcome.Interrupted, new ProgrammesWritten(0, 0, 0), null),
-                    clock.GetElapsedTime(began),
-                    abort);
 
-                break;
-            }
+            turnedAway.RemoveAll(refused => ReferenceEquals(refused.Stream, stream));
 
             if (visit.WorthWaitingOut)
             {
-                logger.LogInformation(
-                    "Every tuner stayed busy; the rest of this walk waits for the next sweep.");
-                await RecordAsync(stream, visit, clock.GetElapsedTime(began), abort);
+                turnedAway.Add(new TurnedAway(stream, visit, clock.GetElapsedTime(began)));
 
-                break;
+                continue;
             }
 
             visited++;
+            gathered += visit.Outcome is VisitOutcome.Complete or VisitOutcome.BasicOnly ? 1 : 0;
+            cameBackShort += CameBackShort(visit.Outcome) ? 1 : 0;
 
-            if (visit.Outcome is VisitOutcome.Complete or VisitOutcome.BasicOnly)
-            {
-                gathered++;
-            }
-            else if (visit.Outcome is not VisitOutcome.Interrupted)
-            {
-                cameBackShort++;
-            }
-
-            if (visit.Written.Discarded > 0 || visit.Written.Clamped > 0)
-            {
-                logger.LogInformation(
-                    "Visiting {NetworkId}-{TransportStreamId} threw away {Discarded} event(s) that could not be taken "
-                    + "and cut {Clamped} programme(s) to the length kept.",
-                    stream.NetworkId.Value,
-                    stream.TransportStreamId.Value,
-                    visit.Written.Discarded,
-                    visit.Written.Clamped);
-            }
-
-            NoticeWhatTheStreamDeclared(stream, visit);
-
-            await TellTheTunerWhatHappenedAsync(stream, visit.Outcome, abort);
-            await RecordAsync(stream, visit, clock.GetElapsedTime(began), abort);
+            await SettleAsync(stream, visit, clock.GetElapsedTime(began), abort);
         }
 
-        return new RoundResult(visited, gathered, cameBackShort);
+        return new Pass(visited, gathered, cameBackShort, TheDriverWentAway: false);
+    }
+
+    private static bool CameBackShort(VisitOutcome outcome)
+        => outcome is VisitOutcome.Incomplete or VisitOutcome.NoLock or VisitOutcome.NoBytes;
+
+    private async Task SettleAsync(BroadcastStream stream, VisitResult visit, TimeSpan took, CancellationToken abort)
+    {
+        if (visit.Written.Discarded > 0 || visit.Written.Clamped > 0)
+        {
+            logger.LogInformation(
+                "Visiting {NetworkId}-{TransportStreamId} threw away {Discarded} event(s) that could not be taken "
+                + "and cut {Clamped} programme(s) to the length kept.",
+                stream.NetworkId.Value,
+                stream.TransportStreamId.Value,
+                visit.Written.Discarded,
+                visit.Written.Clamped);
+        }
+
+        NoticeWhatTheStreamDeclared(stream, visit);
+
+        await TellTheTunerWhatHappenedAsync(stream, visit.Outcome, abort);
+        await RecordAsync(stream, visit, took, abort);
+    }
+
+    private async Task<bool> WaitedForATunerAsync(int attempt, CancellationToken walking, CancellationToken abort)
+    {
+        try
+        {
+            await Task.Delay(settings.WhenTunersAreFull.DelayAfter(attempt), clock, walking);
+
+            return true;
+        }
+        catch (OperationCanceledException) when (!abort.IsCancellationRequested)
+        {
+            logger.LogInformation("The driver went away while the walk waited for a tuner.");
+
+            return false;
+        }
     }
 
     private async Task TellTheTunerWhatHappenedAsync(
@@ -164,42 +217,40 @@ public sealed class CollectionRound(
             stream.Services));
     }
 
-    private async Task<VisitResult> VisitAsync(BroadcastStream stream, bool hurried, CancellationToken abort)
+    private async Task<VisitResult?> VisitAsync(
+        BroadcastStream stream,
+        bool hurried,
+        long began,
+        CancellationToken walking,
+        CancellationToken abort)
     {
-        int refusals = 0;
-
-        while (true)
+        try
         {
-            VisitResult visit;
+            return await visitor.VisitAsync(stream.Tuning, hurried, walking);
+        }
+        catch (OperationCanceledException) when (!abort.IsCancellationRequested)
+        {
+            logger.LogInformation(
+                "The driver went away mid-walk; {NetworkId}-{TransportStreamId} is recorded as interrupted.",
+                stream.NetworkId.Value,
+                stream.TransportStreamId.Value);
+            await RecordAsync(
+                stream,
+                new VisitResult(VisitOutcome.Interrupted, new ProgrammesWritten(0, 0, 0), null),
+                clock.GetElapsedTime(began),
+                abort);
 
-            try
-            {
-                visit = await visitor.VisitAsync(stream.Tuning, hurried, abort);
-            }
-            catch (Exception failure) when (failure is not OperationCanceledException)
-            {
-                logger.LogWarning(
-                    failure,
-                    "Visiting {NetworkId}-{TransportStreamId} failed; the walk carries on.",
-                    stream.NetworkId.Value,
-                    stream.TransportStreamId.Value);
+            return null;
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                failure,
+                "Visiting {NetworkId}-{TransportStreamId} failed; the walk carries on.",
+                stream.NetworkId.Value,
+                stream.TransportStreamId.Value);
 
-                return new VisitResult(VisitOutcome.Interrupted, new ProgrammesWritten(0, 0, 0), failure.Message);
-            }
-
-            if (!visit.WorthWaitingOut)
-            {
-                return visit;
-            }
-
-            refusals++;
-
-            if (refusals >= settings.WhenTunersAreFull.FailureCeiling)
-            {
-                return visit;
-            }
-
-            await Task.Delay(settings.WhenTunersAreFull.DelayAfter(refusals), clock, abort);
+            return new VisitResult(VisitOutcome.Interrupted, new ProgrammesWritten(0, 0, 0), failure.Message);
         }
     }
 
@@ -235,7 +286,11 @@ public sealed class CollectionRound(
         }
 
         held.Record(visit.Outcome, at, took, heardTheSchedule: heard, reachedTheGoal: reached);
-        held.Tallied(counted);
+
+        if (!visit.WorthWaitingOut)
+        {
+            held.Tallied(counted);
+        }
 
         await visits.SaveAsync(held, abort);
         events.Signal(AppEventName.EpgCollection);
@@ -274,6 +329,10 @@ public sealed class CollectionRound(
                     counted.SectionsHeard,
                     counted.VersionChanges)),
         ];
+
+    private sealed record TurnedAway(BroadcastStream Stream, VisitResult Visit, TimeSpan Took);
+
+    private sealed record Pass(int Visited, int Gathered, int CameBackShort, bool TheDriverWentAway);
 
     private async Task<IReadOnlyList<StreamCoverage>> CoverageAsync(
         IReadOnlyList<BroadcastStream> streams,

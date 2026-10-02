@@ -69,11 +69,13 @@ public sealed class EpgCollector(
             .WalkAsync(streams, interruption.Token, stoppingToken);
 
         logger.LogInformation(
-            "A sweep visited {Visited} of {Offered} stream(s); {Gathered} gave a guide and {Short} came back short.",
+            "A sweep visited {Visited} of {Offered} stream(s); {Gathered} gave a guide, {Short} came back short "
+            + "and {TurnedAway} found every tuner busy.",
             walked.Visited,
             streams.Count,
             walked.Gathered,
-            walked.CameBackShort);
+            walked.CameBackShort,
+            walked.TurnedAway);
 
         await scope.ServiceProvider
             .GetRequiredService<ArchiveTransfer>()
