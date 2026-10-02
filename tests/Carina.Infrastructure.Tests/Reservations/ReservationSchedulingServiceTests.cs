@@ -208,10 +208,21 @@ public sealed class ReservationSchedulingServiceTests
         WatchedWrite write = new();
         HeldReservations ledger = new(write);
 
-        (_, Reservation lost) = await TwoAfterOneSeatAsync(ledger, write);
+        ReservationSchedulingService scheduler = OneSeat(ledger, write);
 
-        Assert.Equal(ReservationState.Conflict, lost.State);
-        Assert.Empty((await OneSeat(ledger, write).RecalculateAsync(Cancel)).Displaced);
+        Reservation standing = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            priority: new Priority(20));
+        Reservation arriving = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            priority: new Priority(10));
+
+        await scheduler.CreateAsync(standing, Cancel);
+        SchedulingRun run = await scheduler.CreateAsync(arriving, Cancel);
+
+        Assert.Equal(ReservationState.Scheduled, standing.State);
+        Assert.Equal(ReservationState.Conflict, arriving.State);
+        Assert.Empty(run.Displaced);
     }
 
     [Fact]
