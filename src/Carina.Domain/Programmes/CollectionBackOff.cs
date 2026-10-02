@@ -33,6 +33,17 @@ public static class CollectionBackOff
             + (doubled > settings.LongestBackOff ? settings.LongestBackOff : doubled);
     }
 
+    /// <summary>
+    /// Whether a stream may be visited at <paramref name="now"/>: it was never visited, its last visit
+    /// was interrupted, or its wait is over.
+    /// </summary>
+    public static bool IsDue(StreamVisit? visit, DateTime now, CollectionSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return visit is null || NotBefore(visit, settings) is not { } waited || waited <= now;
+    }
+
     public static bool IsWorthReportingToTheTuner(VisitOutcome outcome)
         => outcome is VisitOutcome.NoLock or VisitOutcome.NoBytes;
 }

@@ -1,5 +1,6 @@
 using Carina.Broadcast.Tables;
 using Carina.BroadcastTestSupport;
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Programmes;
@@ -87,6 +88,140 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
         Assert.Equal(0, recorded.ConsecutiveIncomplete);
     }
 
+    [Fact]
+    public async Task ATunerComingFreeWithAVisitDueStartsTheNextSweepAheadOfItsTime()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = Impatient.WhenTunersAreFull.FailureCeiling };
+        var relay = new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance);
+
+        driver.Script(TuningParameters.Terrestrial(22), new ChannelScript { Bytes = Schedule(network) });
+
+        await using ServiceProvider provider = Provider(driver, Offering(network, 22), relay, Impatient);
+        EpgCollector collector = provider.GetServices<IHostedService>().OfType<EpgCollector>().Single();
+        using var stopping = new CancellationTokenSource();
+
+        await collector.StartAsync(stopping.Token);
+        await Until(
+            async () => await RecordedAsync(network) is { Outcome: VisitOutcome.Interrupted },
+            "the sweep that found every tuner busy was never written down");
+
+        Assert.Empty(driver.Started);
+
+        relay.Publish(DriverEvents.Tuners);
+
+        await Until(
+            async () => await ProgrammeAsync(network) is not null,
+            "the tuner came free and the visit that was due still waited for the next sweep");
+        await stopping.CancelAsync();
+        await collector.StopAsync(Cancel);
+    }
+
+    [Fact]
+    public async Task ATunerComingFreeWithNothingDueLeavesTheSweepToItsTime()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+        var relay = new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance);
+
+        driver.Script(TuningParameters.Terrestrial(22), new ChannelScript { Bytes = Schedule(network) });
+
+        await using ServiceProvider provider = Provider(driver, Offering(network, 22), relay, Impatient);
+        EpgCollector collector = provider.GetServices<IHostedService>().OfType<EpgCollector>().Single();
+        using var stopping = new CancellationTokenSource();
+
+        await collector.StartAsync(stopping.Token);
+        await Until(
+            async () => await ProgrammeAsync(network) is not null,
+            "the sweep never wrote the guide it was offered");
+
+        relay.Publish(DriverEvents.Tuners);
+
+        await Task.Delay(Impatient.SoonestAfterASweep * 10, Cancel);
+        await stopping.CancelAsync();
+        await collector.StopAsync(Cancel);
+
+        Assert.Single(driver.Started);
+        Assert.Equal(0, driver.TunerReads);
+    }
+
+    [Fact]
+    public async Task ASignalWhileEveryTunerIsStillInUseLeavesTheSweepToItsTime()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 1_000 };
+        var relay = new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance);
+
+        driver.Script(TuningParameters.Terrestrial(22), new ChannelScript { Bytes = Schedule(network) });
+        driver.Hold(SessionId.Parse("live-somebody-watching"), TuningParameters.Terrestrial(24));
+
+        await using ServiceProvider provider = Provider(driver, Offering(network, 22), relay, Impatient);
+        EpgCollector collector = provider.GetServices<IHostedService>().OfType<EpgCollector>().Single();
+        using var stopping = new CancellationTokenSource();
+
+        await collector.StartAsync(stopping.Token);
+        await Until(
+            async () => await RecordedAsync(network) is { Outcome: VisitOutcome.Interrupted },
+            "the sweep that found every tuner busy was never written down");
+
+        int refusalsLeft = driver.BusyRefusalsRemaining;
+
+        relay.Publish(DriverEvents.Tuners);
+
+        await Until(() => driver.TunerReads > 0, "the collector never looked at the tuners after the signal");
+        await Task.Delay(Impatient.SoonestAfterASweep * 10, Cancel);
+        await stopping.CancelAsync();
+        await collector.StopAsync(Cancel);
+
+        Assert.Equal(refusalsLeft, driver.BusyRefusalsRemaining);
+    }
+
+    [Fact]
+    public async Task SignalsThatKeepComingAreLookedAtNoCloserTogetherThanTheSoonestASweepMayFollow()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 1_000 };
+        var relay = new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance);
+        CollectionSettings spaced = Impatient with { SoonestAfterASweep = TimeSpan.FromMilliseconds(400) };
+
+        driver.Script(TuningParameters.Terrestrial(22), new ChannelScript { Bytes = Schedule(network) });
+        driver.Hold(SessionId.Parse("live-somebody-watching"), TuningParameters.Terrestrial(24));
+
+        await using ServiceProvider provider = Provider(driver, Offering(network, 22), relay, spaced);
+        EpgCollector collector = provider.GetServices<IHostedService>().OfType<EpgCollector>().Single();
+        using var stopping = new CancellationTokenSource();
+
+        await collector.StartAsync(stopping.Token);
+        await Until(
+            async () => await RecordedAsync(network) is { Outcome: VisitOutcome.Interrupted },
+            "the sweep that found every tuner busy was never written down");
+
+        long began = TimeProvider.System.GetTimestamp();
+
+        for (int signal = 0; signal < 40; signal++)
+        {
+            relay.Publish(DriverEvents.Tuners);
+            await Task.Delay(TimeSpan.FromMilliseconds(25), Cancel);
+        }
+
+        await stopping.CancelAsync();
+        await collector.StopAsync(Cancel);
+
+        TimeSpan signalled = TimeProvider.System.GetElapsedTime(began);
+
+        Assert.InRange(driver.TunerReads, 1, (int)(signalled / spaced.SoonestAfterASweep) + 1);
+    }
+
+    private static readonly CollectionSettings Impatient = new()
+    {
+        SoonestAfterASweep = TimeSpan.FromMilliseconds(20),
+        WhenTunersAreFull = new RotationBackoff(
+            TimeSpan.FromMilliseconds(1),
+            2,
+            TimeSpan.FromMilliseconds(4),
+            2),
+    };
+
     private async Task<StreamVisit?> RecordedAsync(int network)
     {
         await using CarinaDbContext reading = database.Open();
@@ -136,7 +271,8 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
     private ServiceProvider Provider(
         ScriptedDriverClient driver,
         OfferedStreams offered,
-        DriverSignalRelay? relay = null)
+        DriverSignalRelay? relay = null,
+        CollectionSettings? settings = null)
     {
         var services = new ServiceCollection();
 
@@ -148,7 +284,7 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
             new StreamVisitRepository(scope.GetRequiredService<CarinaDbContext>()));
         services.AddScoped<IBroadcastStreamDirectory>(_ => offered);
         services.AddSingleton<IDriverClient>(driver);
-        services.AddSingleton(new CollectionSettings());
+        services.AddSingleton(settings ?? new CollectionSettings());
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<ITuneFailureReporter>(new RememberedTuneReports());
         services.AddSingleton(provider => new RescanNoticeBoard(
@@ -176,6 +312,12 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
             scope.GetRequiredService<CollectionSettings>(),
             scope.GetRequiredService<TimeProvider>(),
             NullLogger<CollectionRound>.Instance));
+        services.AddScoped(scope => new WalkOpeningLook(
+            scope.GetRequiredService<IBroadcastStreamDirectory>(),
+            scope.GetRequiredService<IStreamVisitRepository>(),
+            scope.GetRequiredService<IDriverClient>(),
+            scope.GetRequiredService<CollectionSettings>(),
+            scope.GetRequiredService<TimeProvider>()));
         services.AddHostedService<EpgCollector>();
 
         return services.BuildServiceProvider();

@@ -91,10 +91,14 @@ public sealed class ScriptedDriverClient : IDriverClient
             : DriverCall<DriverHello>.Reached(
                 new DriverHello(DriverProtocol.Version, InstanceId, [DriverCapabilities.TypedTuning])));
 
+    public int TunerReads { get; private set; }
+
     public Task<DriverCall<IReadOnlyList<TunerSnapshot>>> GetTunersAsync(CancellationToken cancellationToken)
     {
         lock (gate)
         {
+            TunerReads++;
+
             TunerSnapshot[] snapshots = live
                 .Select(entry => new TunerSnapshot(DeviceId, TunerKind.Terrestrial, TunerState.Busy)
                 {
