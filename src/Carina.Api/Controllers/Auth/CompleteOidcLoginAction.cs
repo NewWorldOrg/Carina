@@ -1,7 +1,6 @@
 using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Services;
-using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,7 +18,9 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins) : Controlle
         [FromQuery(Name = OidcHandshake.CodeKey)] string? code,
         CancellationToken cancellationToken)
     {
-        ServiceResult<OidcArrival, OidcRefusal> asked = await logins.CompleteAsync(
+        NeverStored.Mark(Response);
+
+        ServiceResult<OidcArrival> asked = await logins.CompleteAsync(
             new OidcArrivalAttempt(
                 state,
                 code,
@@ -28,14 +29,27 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins) : Controlle
                 DeviceLabel.From(Request.Headers.UserAgent.ToString())),
             cancellationToken);
 
-        if (asked.Data is not { } arrival)
+        OidcArrival arrival = asked.Data!;
+
+        if (arrival.Cookie is not { } cookie || arrival.Session is not { } session)
         {
-            return Redirect(LoginRedirect.AfterAFailedSignIn(null));
+            SignInHappening.Leave(
+                HttpContext,
+                SignInMoment.TheWayBackFromTheProviderWasRefused,
+                reason: arrival.Refusal.ToString());
+
+            return Redirect(LoginRedirect.AfterAFailedSignIn(arrival.ReturnPath));
         }
+
+        SignInHappening.Leave(
+            HttpContext,
+            SignInMoment.TheWayBackFromTheProviderOpenedASession,
+            session.Method,
+            session.DeviceLabel);
 
         Response.Cookies.Append(
             SessionCookie.Name,
-            arrival.Cookie.Value,
+            cookie.Value,
             SessionCookie.Carrying(Request.IsHttps, arrival.SessionLifetime));
 
         return Redirect(arrival.ReturnPath);
