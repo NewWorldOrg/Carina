@@ -1,6 +1,7 @@
 using System.Security.Claims;
 
 using Carina.Api.Authentication;
+using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
@@ -147,6 +148,46 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
 
         Assert.True(reached);
         Assert.Empty(heard.Lines);
+    }
+
+    [Fact(DisplayName = "BR-AU-020: what a way in left on the request it answered is written down by the gate")]
+    public async Task BrAu020WhatAWayInLeftOnTheRequestIsWrittenDownByTheGate()
+    {
+        var heard = new RecordingLogger();
+
+        bool reached = await RunAsync(
+            Asking("POST", "/api/auth/login"),
+            admitted => SignInHappening.Leave(
+                admitted,
+                SignInMoment.ALocalSignInOpenedASession,
+                AuthMethod.Local,
+                "a browser on a desk"),
+            heard);
+
+        Assert.True(reached);
+
+        string said = Assert.Single(heard.Lines);
+
+        Assert.Contains(nameof(SignInMoment.ALocalSignInOpenedASession), said, StringComparison.Ordinal);
+        Assert.Contains($"signed in by {nameof(AuthMethod.Local)} on a browser on a desk", said, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-AU-020: the reason a way in left for turning a request away is written down with it")]
+    public async Task BrAu020TheReasonAWayInLeftIsWrittenDownWithIt()
+    {
+        var heard = new RecordingLogger();
+
+        await RunAsync(
+            Asking("GET", "/api/health"),
+            admitted => SignInHappening.Leave(
+                admitted,
+                SignInMoment.TheWayBackFromTheProviderWasRefused,
+                reason: "the handshake had lapsed"),
+            heard);
+
+        string said = Assert.Single(heard.Lines);
+
+        Assert.Contains("reason the handshake had lapsed", said, StringComparison.Ordinal);
     }
 
     private static DefaultHttpContext Asking(string method, string path, string accept = "application/json")

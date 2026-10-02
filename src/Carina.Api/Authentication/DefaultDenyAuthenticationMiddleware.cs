@@ -25,6 +25,7 @@ public sealed class DefaultDenyAuthenticationMiddleware
         if (Admits(context))
         {
             await next(context);
+            NoteWhatTheWayInLeft(context);
 
             return;
         }
@@ -53,6 +54,14 @@ public sealed class DefaultDenyAuthenticationMiddleware
             && SessionCookie.CarriedBy(context.Request) is null)
         {
             record.Write(context, SignInMoment.RefusedWithoutASessionCookie);
+        }
+    }
+
+    private void NoteWhatTheWayInLeft(HttpContext context)
+    {
+        if (SignInHappening.LeftOn(context) is { } happened)
+        {
+            record.Write(context, happened.Moment, happened.Method, happened.Device, happened.Reason);
         }
     }
 

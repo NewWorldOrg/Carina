@@ -10,7 +10,7 @@ namespace Carina.Api.Controllers.Auth;
 [Route(OidcHandshake.CallbackRoute)]
 [EndpointEffect(EndpointEffect.Reading)]
 [ApiExplorerSettings(IgnoreApi = true)]
-public sealed class CompleteOidcLoginAction(OidcLoginService logins, SignInRecord record) : ControllerBase
+public sealed class CompleteOidcLoginAction(OidcLoginService logins) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Invoke(
@@ -33,7 +33,7 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins, SignInRecor
 
         if (arrival.Cookie is not { } cookie || arrival.Session is not { } session)
         {
-            record.Write(
+            SignInHappening.Leave(
                 HttpContext,
                 SignInMoment.TheWayBackFromTheProviderWasRefused,
                 reason: arrival.Refusal.ToString());
@@ -41,7 +41,7 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins, SignInRecor
             return Redirect(LoginRedirect.AfterAFailedSignIn(arrival.ReturnPath));
         }
 
-        record.Write(
+        SignInHappening.Leave(
             HttpContext,
             SignInMoment.TheWayBackFromTheProviderOpenedASession,
             session.Method,

@@ -10,7 +10,7 @@ namespace Carina.Api.Controllers.Auth;
 [ApiController]
 [Route("api/auth/logout")]
 [EndpointEffect(EndpointEffect.Changing)]
-public sealed class LogOutAction(AuthSessionService sessions, SignInRecord record) : ControllerBase
+public sealed class LogOutAction(AuthSessionService sessions) : ControllerBase
 {
     [HttpPost]
     [Consumes("application/json")]
@@ -31,7 +31,7 @@ public sealed class LogOutAction(AuthSessionService sessions, SignInRecord recor
         Response.Cookies.Delete(
             SessionCookie.Name,
             SessionCookie.Discarding(Request.IsHttps));
-        record.Write(HttpContext, SignInMoment.SignedOut, SessionClaims.MethodOf(User));
+        SignInHappening.Leave(HttpContext, SignInMoment.SignedOut, SessionClaims.MethodOf(User));
 
         return NoContent();
     }
