@@ -80,7 +80,14 @@ public sealed class QualitySupplyReader(CarinaDbContext context, CollectionSetti
 
         DateTime heard = latestAttempt is { } attempted && attempted > overdue ? attempted : overdue;
 
-        return [SupplyReading.Of(SupplySilence.GuideVisits, QualitySubject.TheGuideLedger, heard)];
+        return
+        [
+            SupplyReading.Of(
+                SupplySilence.GuideVisits,
+                QualitySubject.TheGuideLedger,
+                heard,
+                settings.LongestBetweenAttempts()),
+        ];
     }
 
     private sealed record Writing(

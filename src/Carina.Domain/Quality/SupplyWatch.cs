@@ -35,11 +35,12 @@ public enum SupplyWatchStep
 
 public sealed record SupplyReading
 {
-    private SupplyReading(SupplySilence silence, QualitySubject subject, DateTime lastHeardAt)
+    private SupplyReading(SupplySilence silence, QualitySubject subject, DateTime lastHeardAt, TimeSpan? allowed)
     {
         Silence = silence;
         Subject = subject;
         LastHeardAt = lastHeardAt;
+        Allowed = allowed;
     }
 
     public SupplySilence Silence { get; }
@@ -48,7 +49,16 @@ public sealed record SupplyReading
 
     public DateTime LastHeardAt { get; }
 
-    public static SupplyReading Of(SupplySilence silence, QualitySubject subject, DateTime lastHeardAt)
+    /// <summary>
+    /// How long this supply may stay quiet when that is not the threshold every supply shares.
+    /// </summary>
+    public TimeSpan? Allowed { get; }
+
+    public static SupplyReading Of(
+        SupplySilence silence,
+        QualitySubject subject,
+        DateTime lastHeardAt,
+        TimeSpan? allowed = null)
     {
         if (!Enum.IsDefined(silence))
         {
@@ -60,17 +70,22 @@ public sealed record SupplyReading
 
         ArgumentNullException.ThrowIfNull(subject);
 
-        return new SupplyReading(silence, subject, UtcTimes.Required(lastHeardAt, nameof(lastHeardAt)));
+        return new SupplyReading(
+            silence,
+            subject,
+            UtcTimes.Required(lastHeardAt, nameof(lastHeardAt)),
+            SupplyAllowance.Checked(allowed, nameof(allowed)));
     }
 }
 
 public sealed record SupplySilenceFinding
 {
-    private SupplySilenceFinding(SupplySilence silence, QualitySubject subject, TimeSpan quiet)
+    private SupplySilenceFinding(SupplySilence silence, QualitySubject subject, TimeSpan quiet, TimeSpan? allowed)
     {
         Silence = silence;
         Subject = subject;
         Quiet = quiet;
+        Allowed = allowed;
     }
 
     public SupplySilence Silence { get; }
@@ -79,9 +94,18 @@ public sealed record SupplySilenceFinding
 
     public TimeSpan Quiet { get; }
 
+    /// <summary>
+    /// What the silence was held against when that was not the threshold every supply shares.
+    /// </summary>
+    public TimeSpan? Allowed { get; }
+
     public double Seconds => Quiet.TotalSeconds;
 
-    public static SupplySilenceFinding Of(SupplySilence silence, QualitySubject subject, TimeSpan quiet)
+    public static SupplySilenceFinding Of(
+        SupplySilence silence,
+        QualitySubject subject,
+        TimeSpan quiet,
+        TimeSpan? allowed = null)
     {
         if (!Enum.IsDefined(silence))
         {
@@ -94,7 +118,23 @@ public sealed record SupplySilenceFinding
         ArgumentNullException.ThrowIfNull(subject);
         ArgumentOutOfRangeException.ThrowIfNegative(quiet.Ticks, nameof(quiet));
 
-        return new SupplySilenceFinding(silence, subject, quiet);
+        return new SupplySilenceFinding(silence, subject, quiet, SupplyAllowance.Checked(allowed, nameof(allowed)));
+    }
+}
+
+internal static class SupplyAllowance
+{
+    public static TimeSpan? Checked(TimeSpan? allowed, string parameterName)
+    {
+        if (allowed is { } given && given <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                allowed,
+                "A supply is only quiet for longer than nothing.");
+        }
+
+        return allowed;
     }
 }
 
@@ -135,9 +175,9 @@ public static class SupplyWatch
         {
             TimeSpan silent = now - reading.LastHeardAt;
 
-            if (silent >= longest)
+            if (silent >= (reading.Allowed ?? longest))
             {
-                found.Add(SupplySilenceFinding.Of(reading.Silence, reading.Subject, silent));
+                found.Add(SupplySilenceFinding.Of(reading.Silence, reading.Subject, silent, reading.Allowed));
             }
         }
 

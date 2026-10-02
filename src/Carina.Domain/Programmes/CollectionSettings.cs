@@ -34,4 +34,11 @@ public sealed record CollectionSettings
 
     public RotationBackoff WhenTunersAreFull { get; init; } =
         new(TimeSpan.FromSeconds(30), 2, TimeSpan.FromMinutes(5), 4);
+
+    /// <summary>
+    /// The longest a collector that is running goes from one attempt to the next while a visit is due: the wait
+    /// between sweeps, the waits a sweep spends on full tuners before it gives up, and one visit.
+    /// </summary>
+    public TimeSpan LongestBetweenAttempts()
+        => BetweenSweeps + WhenTunersAreFull.WaitBeforeTheCeiling() + LongestVisit;
 }

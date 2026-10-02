@@ -158,13 +158,18 @@ public sealed class SupplyWatchRound(
                     QualityThresholdKey.SupplySilence,
                     finding.Subject,
                     finding.Seconds,
-                    applied,
+                    HeldAgainst(finding, applied, now),
                     silence: finding.Silence),
                 cancellationToken);
         }
 
         return opening.Count;
     }
+
+    private static Threshold HeldAgainst(SupplySilenceFinding finding, Threshold shared, DateTime now)
+        => finding.Allowed is { } allowed
+            ? Threshold.Provisionally(allowed.TotalSeconds, 0, now)
+            : shared;
 
     private async Task<IReadOnlyList<ThresholdBreach>> BreachesAsync(
         IReadOnlyList<QualityThresholdStanding> levels,

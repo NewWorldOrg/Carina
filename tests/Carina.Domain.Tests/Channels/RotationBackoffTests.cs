@@ -24,6 +24,22 @@ public sealed class RotationBackoffTests
     }
 
     [Fact]
+    public void TheWaitBeforeTheCeilingIsEveryDelayThatComesBeforeGivingUp()
+    {
+        RotationBackoff backoff = new(TimeSpan.FromSeconds(30), 2, TimeSpan.FromMinutes(5), 4);
+
+        Assert.Equal(TimeSpan.FromSeconds(30 + 60 + 120), backoff.WaitBeforeTheCeiling());
+    }
+
+    [Fact]
+    public void TheWaitBeforeTheCeilingCountsADelayThatStoppedGrowingAtTheMaximum()
+    {
+        RotationBackoff backoff = new(TimeSpan.FromMinutes(1), 2, TimeSpan.FromMinutes(2), 5);
+
+        Assert.Equal(TimeSpan.FromMinutes(1 + 2 + 2 + 2), backoff.WaitBeforeTheCeiling());
+    }
+
+    [Fact]
     public void ThereIsNoDelayToAskForBeforeTheFirstFailure()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => RotationBackoff.Default.DelayAfter(0));

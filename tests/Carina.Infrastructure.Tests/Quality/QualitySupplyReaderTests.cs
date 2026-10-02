@@ -35,6 +35,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
             [SupplySilence.RecordingProgress, SupplySilence.RecordingMeasurement],
             read.Select(reading => reading.Silence));
         Assert.All(read, reading => Assert.Equal(writing.Id.Wire, reading.Subject.Key));
+        Assert.All(read, reading => Assert.Null(reading.Allowed));
         Assert.Equal(Airs.AddMinutes(10), read[0].LastHeardAt);
         Assert.Equal(Airs.AddMinutes(12), read[1].LastHeardAt);
     }
@@ -91,29 +92,82 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Single(await ReadAsync());
     }
 
-    [Fact(DisplayName = "a ledger something was attempted on within the threshold is not quiet, overdue visit or not")]
-    public async Task ALedgerSomethingWasAttemptedOnWithinTheThresholdIsNotQuiet()
+    [Fact(DisplayName = "a ledger with a visit overdue is not quiet while the next sweep has yet to come round")]
+    public async Task ALedgerWithAVisitOverdueIsNotQuietWhileTheNextSweepHasYetToComeRound()
     {
         await ClearAsync();
         await VisitedAsync(VisitOutcome.Complete, Airs, 32_736);
-        await VisitedAsync(VisitOutcome.Complete, Now - TimeSpan.FromMinutes(1), 32_737);
+        await VisitedAsync(VisitOutcome.Complete, Now - (FiveMinutes * 2), 32_737);
 
         SupplyReading read = Assert.Single(await ReadAsync());
 
-        Assert.Equal(Now - TimeSpan.FromMinutes(1), read.LastHeardAt);
+        Assert.Equal(Now - (FiveMinutes * 2), read.LastHeardAt);
         Assert.Empty(SupplyWatch.Quiet([read], FiveMinutes, Now));
     }
 
-    [Fact(DisplayName = "a ledger with a visit overdue and nothing attempted for longer than the threshold is quiet")]
-    public async Task ALedgerWithAVisitOverdueAndNothingAttemptedForLongerThanTheThresholdIsQuiet()
+    [Fact(DisplayName = "a ledger with a visit overdue and nothing attempted for as long as a sweep takes to come round is quiet")]
+    public async Task ALedgerWithAVisitOverdueAndNothingAttemptedForAsLongAsASweepTakesToComeRoundIsQuiet()
     {
+        TimeSpan round = new CollectionSettings().LongestBetweenAttempts();
+
         await ClearAsync();
         await VisitedAsync(VisitOutcome.Complete, Airs, 32_736);
-        await VisitedAsync(VisitOutcome.Complete, Now - TimeSpan.FromMinutes(10), 32_737);
+        await VisitedAsync(VisitOutcome.Complete, Now - round, 32_737);
+
+        SupplyReading read = Assert.Single(await ReadAsync());
+        SupplySilenceFinding found = Assert.Single(SupplyWatch.Quiet([read], FiveMinutes, Now));
+
+        Assert.Equal(Now - round, read.LastHeardAt);
+        Assert.Equal(round, found.Allowed);
+    }
+
+    [Fact(DisplayName = "a ledger whose overdue visits full tuners turn away sweep after sweep is not quiet")]
+    public async Task ALedgerWhoseOverdueVisitsFullTunersTurnAwaySweepAfterSweepIsNotQuiet()
+    {
+        CollectionSettings settings = new();
+        DateTime turnedAway = Now - settings.BetweenSweeps - settings.WhenTunersAreFull.WaitBeforeTheCeiling();
+
+        await ClearAsync();
+        await VisitedAsync(VisitOutcome.Complete, Airs, 32_736);
+        await VisitedAsync(VisitOutcome.Interrupted, turnedAway, 32_737);
 
         SupplyReading read = Assert.Single(await ReadAsync());
 
-        Assert.Equal(Now - TimeSpan.FromMinutes(10), read.LastHeardAt);
+        Assert.Equal(turnedAway, read.LastHeardAt);
+        Assert.Empty(SupplyWatch.Quiet([read], FiveMinutes, Now));
+    }
+
+    [Fact(DisplayName = "a ledger that went quiet is heard from again once something is attempted on it")]
+    public async Task ALedgerThatWentQuietIsHeardFromAgainOnceSomethingIsAttemptedOnIt()
+    {
+        await ClearAsync();
+        await VisitedAsync(VisitOutcome.Complete, Airs, 32_736);
+        await VisitedAsync(VisitOutcome.Complete, Airs.AddMinutes(1), 32_737);
+
+        Assert.Single(SupplyWatch.Quiet(await ReadAsync(), FiveMinutes, Now));
+
+        await VisitedAsync(VisitOutcome.Complete, Now - TimeSpan.FromMinutes(1), 32_736);
+
+        Assert.Empty(SupplyWatch.Quiet(await ReadAsync(), FiveMinutes, Now));
+    }
+
+    [Fact(DisplayName = "how long the visit ledger may stay quiet follows the collection settings rather than a number of its own")]
+    public async Task HowLongTheVisitLedgerMayStayQuietFollowsTheCollectionSettings()
+    {
+        CollectionSettings hurried = new()
+        {
+            BetweenSweeps = FiveMinutes,
+            LongestVisit = TimeSpan.FromMinutes(1),
+            WhenTunersAreFull = new RotationBackoff(TimeSpan.FromSeconds(10), 2, TimeSpan.FromMinutes(1), 2),
+        };
+
+        await ClearAsync();
+        await VisitedAsync(VisitOutcome.Complete, Airs, 32_736);
+        await VisitedAsync(VisitOutcome.Complete, Now - (FiveMinutes * 2), 32_737);
+
+        SupplyReading read = Assert.Single(await ReadAsync(hurried));
+
+        Assert.Equal(TimeSpan.FromSeconds(300 + 10 + 60), read.Allowed);
         Assert.Single(SupplyWatch.Quiet([read], FiveMinutes, Now));
     }
 
@@ -127,11 +181,11 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Empty(await ReadAsync());
     }
 
-    private async Task<IReadOnlyList<SupplyReading>> ReadAsync()
+    private async Task<IReadOnlyList<SupplyReading>> ReadAsync(CollectionSettings? settings = null)
     {
         await using CarinaDbContext reading = database.Open();
 
-        return await new QualitySupplyReader(reading, new CollectionSettings()).ReadAsync(Cancel);
+        return await new QualitySupplyReader(reading, settings ?? new CollectionSettings()).ReadAsync(Cancel);
     }
 
     private async Task ClearAsync()
