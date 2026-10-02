@@ -14,7 +14,19 @@ public sealed record OidcArrivalAttempt(
     string ArrivedAt,
     string DeviceLabel);
 
-public sealed record OidcArrival(SessionId Cookie, AuthSession Session, string ReturnPath, TimeSpan SessionLifetime);
+public sealed record OidcArrival(
+    SessionId? Cookie,
+    AuthSession? Session,
+    OidcRefusal Refusal,
+    string ReturnPath,
+    TimeSpan SessionLifetime)
+{
+    public static OidcArrival Opened(SessionId cookie, AuthSession session, string returnPath, TimeSpan lifetime)
+        => new(cookie, session, OidcRefusal.None, returnPath, lifetime);
+
+    public static OidcArrival Refused(OidcRefusal refusal, string returnPath, TimeSpan lifetime)
+        => new(null, null, refusal, returnPath, lifetime);
+}
 
 public sealed record OidcConfigChange(
     string? DiscoveryUrl,

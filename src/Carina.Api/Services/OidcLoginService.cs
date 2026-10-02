@@ -13,8 +13,7 @@ public sealed class OidcLoginService(
     PublicOrigin origin,
     OidcLoginPolicy policy,
     SessionPolicy sessionPolicy,
-    TimeProvider clock,
-    ILogger<OidcLoginService> logger)
+    TimeProvider clock)
 {
     public const string TheSameRefusalForEveryFailedSignIn =
         "Signing in through the identity provider did not work.";
@@ -31,12 +30,12 @@ public sealed class OidcLoginService(
 
         if (held?.IsConfigured is not true)
         {
-            return Refused<OidcStart>(OidcRefusal.NoIdentityProviderIsConfigured);
+            return Refused(OidcRefusal.NoIdentityProviderIsConfigured);
         }
 
         if (await directory.ForAsync(held, cancellationToken) is not { } endpoints)
         {
-            return Refused<OidcStart>(OidcRefusal.TheIdentityProviderIsOutOfReach);
+            return Refused(OidcRefusal.TheIdentityProviderIsOutOfReach);
         }
 
         string mark = Unguessable.IsOne(attempt.BrowserMark) ? attempt.BrowserMark! : Unguessable.Issue();
@@ -54,7 +53,7 @@ public sealed class OidcLoginService(
                 policy.HandshakeLifetime));
     }
 
-    public async Task<ServiceResult<OidcArrival, OidcRefusal>> CompleteAsync(
+    public async Task<ServiceResult<OidcArrival>> CompleteAsync(
         OidcArrivalAttempt attempt,
         CancellationToken cancellationToken)
     {
@@ -64,34 +63,34 @@ public sealed class OidcLoginService(
 
         if (held?.IsConfigured is not true)
         {
-            return Refused<OidcArrival>(OidcRefusal.NoIdentityProviderIsConfigured);
+            return TurnedAway(OidcRefusal.NoIdentityProviderIsConfigured);
         }
 
         if (attempt.State is not { Length: > 0 } state || handshakes.Take(state) is not { } pending)
         {
-            return Refused<OidcArrival>(OidcRefusal.NoHandshakeAnsweredToThatState);
+            return TurnedAway(OidcRefusal.NoHandshakeAnsweredToThatState);
         }
 
         DateTime now = clock.GetUtcNow().UtcDateTime;
 
         if (!pending.BelongsTo(attempt.BrowserMark))
         {
-            return Refused<OidcArrival>(OidcRefusal.TheHandshakeBelongsToAnotherBrowser);
+            return TurnedAway(OidcRefusal.TheHandshakeBelongsToAnotherBrowser);
         }
 
         if (pending.HasLapsed(now, policy))
         {
-            return Refused<OidcArrival>(OidcRefusal.TheHandshakeLapsed);
+            return TurnedAway(OidcRefusal.TheHandshakeLapsed, pending);
         }
 
         if (attempt.Code is not { Length: > 0 } code)
         {
-            return Refused<OidcArrival>(OidcRefusal.TheCodeWasRefused);
+            return TurnedAway(OidcRefusal.TheCodeWasRefused, pending);
         }
 
         if (await directory.ForAsync(held, cancellationToken) is not { } endpoints)
         {
-            return Refused<OidcArrival>(OidcRefusal.TheIdentityProviderIsOutOfReach);
+            return TurnedAway(OidcRefusal.TheIdentityProviderIsOutOfReach, pending);
         }
 
         string? idToken = await gateway.ExchangeAsync(
@@ -106,12 +105,12 @@ public sealed class OidcLoginService(
 
         if (idToken is null)
         {
-            return Refused<OidcArrival>(OidcRefusal.TheCodeWasRefused);
+            return TurnedAway(OidcRefusal.TheCodeWasRefused, pending);
         }
 
         if (await gateway.ReadAsync(endpoints, idToken, cancellationToken) is not { } claims)
         {
-            return Refused<OidcArrival>(OidcRefusal.TheIdTokenDidNotVerify);
+            return TurnedAway(OidcRefusal.TheIdTokenDidNotVerify, pending);
         }
 
         OidcRefusal answered = new IdTokenExpectation(endpoints.Issuer, held.ClientId!, pending.Nonce)
@@ -119,14 +118,14 @@ public sealed class OidcLoginService(
 
         if (answered is not OidcRefusal.None)
         {
-            return Refused<OidcArrival>(answered);
+            return TurnedAway(answered, pending);
         }
 
         OidcRefusal allowed = held.Restriction.Refuses(claims);
 
         if (allowed is not OidcRefusal.None)
         {
-            return Refused<OidcArrival>(allowed);
+            return TurnedAway(allowed, pending);
         }
 
         SessionId cookie = SessionId.Issue();
@@ -140,8 +139,8 @@ public sealed class OidcLoginService(
 
         await sessions.SaveAsync(session, cancellationToken);
 
-        return ServiceResult<OidcArrival, OidcRefusal>.Success(
-            new OidcArrival(cookie, session, pending.ReturnPath, sessionPolicy.AbsoluteLifetime));
+        return ServiceResult<OidcArrival>.Success(
+            OidcArrival.Opened(cookie, session, pending.ReturnPath, sessionPolicy.AbsoluteLifetime));
     }
 
     private static Uri AuthorizeUri(
@@ -170,12 +169,13 @@ public sealed class OidcLoginService(
         return new Uri($"{endpoints.Authorization}{separator}{query}");
     }
 
-    private ServiceResult<T, OidcRefusal> Refused<T>(OidcRefusal refusal)
-    {
-        logger.LogWarning(
-            "Signing in through the identity provider was refused: {Refusal}. The caller was told only that it did not work.",
-            refusal);
+    private static ServiceResult<OidcStart, OidcRefusal> Refused(OidcRefusal refusal)
+        => ServiceResult<OidcStart, OidcRefusal>.Failure(TheSameRefusalForEveryFailedSignIn, refusal);
 
-        return ServiceResult<T, OidcRefusal>.Failure(TheSameRefusalForEveryFailedSignIn, refusal);
-    }
+    private ServiceResult<OidcArrival> TurnedAway(OidcRefusal refusal, PendingOidcLogin? begunByThisBrowser = null)
+        => ServiceResult<OidcArrival>.Success(
+            OidcArrival.Refused(
+                refusal,
+                begunByThisBrowser?.ReturnPath ?? LoginRedirect.Home,
+                sessionPolicy.AbsoluteLifetime));
 }

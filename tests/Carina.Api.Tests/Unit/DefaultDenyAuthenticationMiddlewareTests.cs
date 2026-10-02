@@ -1,9 +1,13 @@
 using System.Security.Claims;
 
 using Carina.Api.Authentication;
+using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.Unit;
 
@@ -96,6 +100,96 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
         Assert.False(context.Response.Headers.ContainsKey("Location"));
     }
 
+    [Fact(DisplayName = "BR-AU-020: an API request refused for carrying no session cookie is written down")]
+    public async Task BrAu020AnApiRequestRefusedForCarryingNoSessionCookieIsWrittenDown()
+    {
+        var heard = new RecordingLogger();
+
+        await RunAsync(Asking("GET", "/api/tuners"), heard: heard);
+
+        string said = Assert.Single(heard.Lines);
+
+        Assert.Contains(nameof(SignInMoment.RefusedWithoutASessionCookie), said, StringComparison.Ordinal);
+        Assert.Contains($"session cookie {SignInRecord.Absent}", said, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-AU-020: a refused request that did carry a cookie is left to whoever judged the cookie, so it is written once")]
+    public async Task BrAu020ARefusedRequestThatDidCarryACookieIsLeftToWhoeverJudgedTheCookie()
+    {
+        var heard = new RecordingLogger();
+        DefaultHttpContext context = Asking("GET", "/api/tuners");
+        context.Request.Headers[HeaderNames.Cookie] = $"{SessionCookie.Name}=something-that-opened-nothing";
+
+        bool reached = await RunAsync(context, heard: heard);
+
+        Assert.False(reached);
+        Assert.Empty(heard.Lines);
+    }
+
+    [Theory(DisplayName = "BR-AU-020: a screen sent to the login screen, a request outside the API and an open surface are not written down")]
+    [InlineData("/programs", "text/html")]
+    [InlineData("/recordings/1.ts", "video/mp2t")]
+    [InlineData("/api/health", "application/json")]
+    public async Task BrAu020WhatIsNotAnApiRefusalIsNotWrittenDown(string path, string accept)
+    {
+        var heard = new RecordingLogger();
+
+        await RunAsync(Asking("GET", path, accept), heard: heard);
+
+        Assert.Empty(heard.Lines);
+    }
+
+    [Fact(DisplayName = "BR-AU-020: a request that was admitted is not written down by the gate")]
+    public async Task BrAu020ARequestThatWasAdmittedIsNotWrittenDownByTheGate()
+    {
+        var heard = new RecordingLogger();
+
+        bool reached = await RunAsync(Authenticated(Asking("GET", "/api/tuners")), heard: heard);
+
+        Assert.True(reached);
+        Assert.Empty(heard.Lines);
+    }
+
+    [Fact(DisplayName = "BR-AU-020: what a way in left on the request it answered is written down by the gate")]
+    public async Task BrAu020WhatAWayInLeftOnTheRequestIsWrittenDownByTheGate()
+    {
+        var heard = new RecordingLogger();
+
+        bool reached = await RunAsync(
+            Asking("POST", "/api/auth/login"),
+            admitted => SignInHappening.Leave(
+                admitted,
+                SignInMoment.ALocalSignInOpenedASession,
+                AuthMethod.Local,
+                "a browser on a desk"),
+            heard);
+
+        Assert.True(reached);
+
+        string said = Assert.Single(heard.Lines);
+
+        Assert.Contains(nameof(SignInMoment.ALocalSignInOpenedASession), said, StringComparison.Ordinal);
+        Assert.Contains($"signed in by {nameof(AuthMethod.Local)} on a browser on a desk", said, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-AU-020: the reason a way in left for turning a request away is written down with it")]
+    public async Task BrAu020TheReasonAWayInLeftIsWrittenDownWithIt()
+    {
+        var heard = new RecordingLogger();
+
+        await RunAsync(
+            Asking("GET", "/api/health"),
+            admitted => SignInHappening.Leave(
+                admitted,
+                SignInMoment.TheWayBackFromTheProviderWasRefused,
+                reason: "the handshake had lapsed"),
+            heard);
+
+        string said = Assert.Single(heard.Lines);
+
+        Assert.Contains("reason the handshake had lapsed", said, StringComparison.Ordinal);
+    }
+
     private static DefaultHttpContext Asking(string method, string path, string accept = "application/json")
     {
         var context = new DefaultHttpContext();
@@ -126,7 +220,10 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
         return context;
     }
 
-    private static async Task<bool> RunAsync(HttpContext context, Action<HttpContext>? behind = null)
+    private static async Task<bool> RunAsync(
+        HttpContext context,
+        Action<HttpContext>? behind = null,
+        ILogger<SignInRecord>? heard = null)
     {
         bool reached = false;
         var middleware = new DefaultDenyAuthenticationMiddleware(
@@ -137,10 +234,34 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
 
                 return Task.CompletedTask;
             },
-            new StubEnvironment(Environments.Production));
+            new StubEnvironment(Environments.Production),
+            new SignInRecord(heard ?? NullLogger<SignInRecord>.Instance, TimeProvider.System));
 
         await middleware.InvokeAsync(context);
 
         return reached;
+    }
+
+    private sealed class RecordingLogger : ILogger<SignInRecord>
+    {
+        public List<string> Lines { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            ArgumentNullException.ThrowIfNull(formatter);
+
+            Lines.Add(formatter(state, exception));
+        }
     }
 }

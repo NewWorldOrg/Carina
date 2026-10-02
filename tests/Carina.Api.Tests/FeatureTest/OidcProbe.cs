@@ -24,7 +24,7 @@ internal sealed class OidcProbe : IAsyncDisposable
 
     private readonly WebApplicationFactory<Program> wired;
 
-    private OidcProbe(bool secure)
+    private OidcProbe(bool secure, Action<IServiceCollection>? alsoWired)
     {
         outward = new HttpClient(Idp);
         Clock = new WoundClock(Founded);
@@ -39,6 +39,7 @@ internal sealed class OidcProbe : IAsyncDisposable
                 services.AddSingleton<IPasswordHasher>(Hasher);
                 services.AddSingleton<IOidcGateway>(new OidcGateway(outward));
                 services.AddSingleton<TimeProvider>(Clock);
+                alsoWired?.Invoke(services);
             }));
 
         Client = Browsing(wired, secure);
@@ -63,9 +64,9 @@ internal sealed class OidcProbe : IAsyncDisposable
 
     public HttpClient Signed { get; }
 
-    public static OidcProbe OverHttp() => new(secure: false);
+    public static OidcProbe OverHttp(Action<IServiceCollection>? alsoWired = null) => new(secure: false, alsoWired);
 
-    public static OidcProbe OverHttps() => new(secure: true);
+    public static OidcProbe OverHttps() => new(secure: true, alsoWired: null);
 
     public OidcProbe Configured(
         IEnumerable<string>? allowedGroups = null,
