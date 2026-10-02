@@ -166,12 +166,7 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
 
                 if (!read.Refused)
                 {
-                    if (read.Value is 0)
-                    {
-                        return [];
-                    }
-
-                    return read.Value == count ? buffer : buffer[..read.Value];
+                    return Delivered(buffer, read.Value);
                 }
 
                 if (read.Error is Errno.Overflowed)
@@ -198,6 +193,16 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
                 throw NothingArrived();
             }
         }
+    }
+
+    private static byte[] Delivered(byte[] buffer, int read)
+    {
+        if (read is 0)
+        {
+            return [];
+        }
+
+        return read == buffer.Length ? buffer : buffer[..read];
     }
 
     private DvbDeviceException NothingArrived()

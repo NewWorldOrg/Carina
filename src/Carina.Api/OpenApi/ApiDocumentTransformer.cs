@@ -51,21 +51,29 @@ public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
     {
         var names = new List<string>();
 
+        foreach (OpenApiTagReference tag in TagsOfEveryOperation(document))
+        {
+            string? name = tag.Reference.Id;
+            if (name is not null && !names.Contains(name, StringComparer.Ordinal))
+            {
+                names.Add(name);
+            }
+        }
+
+        return [.. names.Select(name => new OpenApiTag { Name = name })];
+    }
+
+    private static IEnumerable<OpenApiTagReference> TagsOfEveryOperation(OpenApiDocument document)
+    {
         foreach (KeyValuePair<string, IOpenApiPathItem> path in document.Paths ?? [])
         {
             foreach (KeyValuePair<HttpMethod, OpenApiOperation> operation in path.Value.Operations ?? [])
             {
                 foreach (OpenApiTagReference tag in operation.Value.Tags ?? new HashSet<OpenApiTagReference>())
                 {
-                    string? name = tag.Reference.Id;
-                    if (name is not null && !names.Contains(name, StringComparer.Ordinal))
-                    {
-                        names.Add(name);
-                    }
+                    yield return tag;
                 }
             }
         }
-
-        return [.. names.Select(name => new OpenApiTag { Name = name })];
     }
 }

@@ -48,22 +48,7 @@ public static class AppEventStream
                 await context.Response.StartAsync(context.RequestAborted);
                 await context.Response.Body.FlushAsync(context.RequestAborted);
 
-                Task<IReadOnlyList<AppEventName>> waiting = listener.TakeAsync(context.RequestAborted);
-
-                while (true)
-                {
-                    if (!await SignalledWithinAsync(waiting, quiet, context.RequestAborted))
-                    {
-                        await WriteAsync(context, Keepalive, patience);
-
-                        continue;
-                    }
-
-                    IReadOnlyList<AppEventName> names = await waiting;
-                    waiting = listener.TakeAsync(context.RequestAborted);
-
-                    await WriteAsync(context, Frames(names), patience);
-                }
+                await RelayAsync(context, listener, quiet, patience);
             }
             catch (Exception error)
                 when (error is OperationCanceledException or ChannelClosedException or IOException)
@@ -77,6 +62,30 @@ public static class AppEventStream
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return $"event: {name}\ndata\n\n";
+    }
+
+    private static async Task RelayAsync(
+        HttpContext context,
+        AppEventListener listener,
+        TimeSpan quiet,
+        TimeSpan patience)
+    {
+        Task<IReadOnlyList<AppEventName>> waiting = listener.TakeAsync(context.RequestAborted);
+
+        while (true)
+        {
+            if (!await SignalledWithinAsync(waiting, quiet, context.RequestAborted))
+            {
+                await WriteAsync(context, Keepalive, patience);
+
+                continue;
+            }
+
+            IReadOnlyList<AppEventName> names = await waiting;
+            waiting = listener.TakeAsync(context.RequestAborted);
+
+            await WriteAsync(context, Frames(names), patience);
+        }
     }
 
     private static string Frames(IReadOnlyList<AppEventName> names)

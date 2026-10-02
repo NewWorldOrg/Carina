@@ -87,19 +87,18 @@ public sealed class LogoVisitor(IDriverClient driver, LogoSweepSettings settings
 
         try
         {
-            await using (carrying)
+            await using Stream held = carrying;
+
+            while (!harvest.ThereIsNothingLeftToWaitFor(stream.Services))
             {
-                while (!harvest.ThereIsNothingLeftToWaitFor(stream.Services))
+                int got = await held.ReadAsync(buffer.AsMemory(0, ReadBufferSize), reading.Token);
+
+                if (got == 0)
                 {
-                    int got = await carrying.ReadAsync(buffer.AsMemory(0, ReadBufferSize), reading.Token);
-
-                    if (got == 0)
-                    {
-                        break;
-                    }
-
-                    harvest.Push(buffer.AsSpan(0, got));
+                    break;
                 }
+
+                harvest.Push(buffer.AsSpan(0, got));
             }
         }
         catch (OperationCanceledException) when (abort.IsCancellationRequested)

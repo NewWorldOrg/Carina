@@ -33,18 +33,16 @@ public sealed class FfmpegEncodeInvocationTests
         {
             var shapes = new TheoryData<EncodeCodec, EncodeResolution, Deinterlace, EncodeEncoder>();
 
-            foreach (EncodeCodec codec in Enum.GetValues<EncodeCodec>())
+            IEnumerable<(EncodeCodec Codec, EncodeResolution Resolution, Deinterlace Deinterlace, EncodeEncoder Encoder)> every =
+                from codec in Enum.GetValues<EncodeCodec>()
+                from resolution in Enum.GetValues<EncodeResolution>()
+                from deinterlace in Enum.GetValues<Deinterlace>()
+                from encoder in Enum.GetValues<EncodeEncoder>()
+                select (codec, resolution, deinterlace, encoder);
+
+            foreach ((EncodeCodec codec, EncodeResolution resolution, Deinterlace deinterlace, EncodeEncoder encoder) in every)
             {
-                foreach (EncodeResolution resolution in Enum.GetValues<EncodeResolution>())
-                {
-                    foreach (Deinterlace deinterlace in Enum.GetValues<Deinterlace>())
-                    {
-                        foreach (EncodeEncoder encoder in Enum.GetValues<EncodeEncoder>())
-                        {
-                            shapes.Add(codec, resolution, deinterlace, encoder);
-                        }
-                    }
-                }
+                shapes.Add(codec, resolution, deinterlace, encoder);
             }
 
             return shapes;

@@ -300,8 +300,6 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                     continue;
                 }
 
-                bool wasInRotation = candidate.IsInRotation;
-
                 if (attempt.Outcome is ScanAttemptOutcome.Succeeded
                     && probed.TryGetValue(candidate.Tuning, out StreamProbe? probe)
                     && Names(probe, service.ServiceId))
@@ -312,17 +310,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                 }
                 else
                 {
-                    candidate.RecordTuningFailure(settings.Rotation, at);
-
-                    if (wasInRotation && !candidate.IsInRotation)
-                    {
-                        departures.Add(new RotationDeparture(
-                            candidate.NetworkId,
-                            candidate.ServiceId,
-                            candidate.Tuning,
-                            candidate.ConsecutiveFailures,
-                            candidate.NeedsAttentionSince ?? at));
-                    }
+                    RecordTuningFailure(candidate, at, departures);
                 }
 
                 await candidates.SaveAsync(candidate, CancellationToken.None);
@@ -330,6 +318,23 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         }
 
         return departures;
+    }
+
+    private void RecordTuningFailure(CandidateChannel candidate, DateTime at, List<RotationDeparture> departures)
+    {
+        bool wasInRotation = candidate.IsInRotation;
+
+        candidate.RecordTuningFailure(settings.Rotation, at);
+
+        if (wasInRotation && !candidate.IsInRotation)
+        {
+            departures.Add(new RotationDeparture(
+                candidate.NetworkId,
+                candidate.ServiceId,
+                candidate.Tuning,
+                candidate.ConsecutiveFailures,
+                candidate.NeedsAttentionSince ?? at));
+        }
     }
 
     private static bool SaysNothingOfReception(ScanRunAttempt attempt)

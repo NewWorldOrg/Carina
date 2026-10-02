@@ -52,10 +52,7 @@ public sealed class SlowViewer
                 {
                     received++;
 
-                    if (pause > TimeSpan.Zero)
-                    {
-                        await Task.Delay(pause, clock, cancellationToken);
-                    }
+                    await PauseAsync(cancellationToken);
                 }
             }
 
@@ -70,5 +67,13 @@ public sealed class SlowViewer
         }
 
         return new SlowViewing(received, viewing.Backlog);
+    }
+
+    private async Task PauseAsync(CancellationToken cancellationToken)
+    {
+        if (pause > TimeSpan.Zero)
+        {
+            await Task.Delay(pause, clock, cancellationToken);
+        }
     }
 }

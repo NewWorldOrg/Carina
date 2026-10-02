@@ -312,18 +312,26 @@ public static class DriverConfigurationReader
         {
             if (entry.ValueKind is JsonValueKind.Object)
             {
-                foreach (JsonProperty property in entry.EnumerateObject())
-                {
-                    if (!knownKeys.Contains(property.Name, StringComparer.Ordinal))
-                    {
-                        problems.Add(
-                            $"{arrayName}[{index}].{property.Name}: this driver has no such setting."
-                        );
-                    }
-                }
+                CheckEntryKeys(entry, $"{arrayName}[{index}]", knownKeys, problems);
             }
 
             index++;
+        }
+    }
+
+    private static void CheckEntryKeys(
+        JsonElement entry,
+        string entryName,
+        string[] knownKeys,
+        List<string> problems
+    )
+    {
+        foreach (JsonProperty property in entry.EnumerateObject())
+        {
+            if (!knownKeys.Contains(property.Name, StringComparer.Ordinal))
+            {
+                problems.Add($"{entryName}.{property.Name}: this driver has no such setting.");
+            }
         }
     }
 

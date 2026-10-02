@@ -493,31 +493,9 @@ internal sealed class LiveSeat
 
     private async Task PumpAsync()
     {
-        bool fed = false;
-
         try
         {
-            ChannelReader<Offered> queued = backlog.Reader;
-
-            while (await queued.WaitToReadAsync(letGo.Token))
-            {
-                while (queued.TryRead(out Offered next))
-                {
-                    Volatile.Write(ref waitingSince, next.At);
-
-                    await into.WriteAsync(next.Bytes, letGo.Token);
-                    await into.FlushAsync(letGo.Token);
-
-                    Volatile.Write(ref waitingSince, NothingWaiting);
-                    Interlocked.Add(ref held, -next.Bytes.Length);
-
-                    if (!fed)
-                    {
-                        fed = true;
-                        locked();
-                    }
-                }
-            }
+            await WriteWhatIsOfferedAsync();
         }
         catch (Exception gone)
             when (gone is IOException or ObjectDisposedException or OperationCanceledException or InvalidOperationException)
@@ -531,6 +509,32 @@ internal sealed class LiveSeat
             if (Volatile.Read(ref noMore) is not 0)
             {
                 Close();
+            }
+        }
+    }
+
+    private async Task WriteWhatIsOfferedAsync()
+    {
+        bool fed = false;
+        ChannelReader<Offered> queued = backlog.Reader;
+
+        while (await queued.WaitToReadAsync(letGo.Token))
+        {
+            while (queued.TryRead(out Offered next))
+            {
+                Volatile.Write(ref waitingSince, next.At);
+
+                await into.WriteAsync(next.Bytes, letGo.Token);
+                await into.FlushAsync(letGo.Token);
+
+                Volatile.Write(ref waitingSince, NothingWaiting);
+                Interlocked.Add(ref held, -next.Bytes.Length);
+
+                if (!fed)
+                {
+                    fed = true;
+                    locked();
+                }
             }
         }
     }
