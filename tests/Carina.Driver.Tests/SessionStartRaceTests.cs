@@ -1,8 +1,11 @@
+using System.Collections.Concurrent;
+
 using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Driver.Tests;
@@ -26,6 +29,18 @@ public sealed class SessionStartRaceTests : IDisposable
             6,
             new TunerSettings(TunerBackend.Fake),
             [new DeviceSettings("adapter0", DeviceKind.Terrestrial)]
+        );
+
+    private DriverConfiguration TwoTuners() =>
+        new(
+            "/run/carina/driver.sock",
+            [new OutputRootSettings("primary", root)],
+            6,
+            new TunerSettings(TunerBackend.Fake),
+            [
+                new DeviceSettings("adapter0", DeviceKind.Terrestrial),
+                new DeviceSettings("adapter1", DeviceKind.Terrestrial),
+            ]
         );
 
     private static StartSessionRequest Request(
@@ -150,6 +165,149 @@ public sealed class SessionStartRaceTests : IDisposable
         recorder.WaitForEnd(Deadlock);
 
         Assert.Equal(SessionStopReason.Requested, recorder.StopReason);
+    }
+
+    [Fact(DisplayName = "a recording started again under its name while the run before it is still being put away is turned away before it touches another tuner, and holds the tuner it is given once that run is put away")]
+    public void ARecordingStartedAgainWhileTheRunBeforeItIsBeingPutAwayTouchesNoOtherTuner()
+    {
+        OpeningsCountedFactory factory = new(failing: "adapter0");
+        ParkedOnAFailedDeviceLogger log = new();
+        TunerSessionManager manager = new(
+            TwoTuners(),
+            factory,
+            clock,
+            log,
+            recordingWriters: new CountingRecordingWriterFactory(),
+            deviceCheck: new NothingToCheck()
+        );
+
+        SessionStart first = manager.Begin(Request("r-1", SessionPurpose.Recording));
+
+        Assert.True(first.TryGetSession(out TunerSession? broken), first.Detail);
+        Assert.Equal("adapter0", broken.DeviceId);
+        Assert.True(log.Parked.Wait(Deadlock), "The run on the failed device was never put away.");
+
+        SessionStart whilePuttingAway = manager.Begin(Request("r-1", SessionPurpose.Recording));
+        int openedWhilePuttingAway = factory.OpeningsOf("adapter1");
+
+        log.LetGo.Set();
+        broken.WaitForEnd(Deadlock);
+
+        SessionStart again = manager.Begin(Request("r-1", SessionPurpose.Recording));
+
+        Assert.Equal(SessionRefusal.DuplicateSession, whilePuttingAway.Refusal);
+        Assert.Equal(0, openedWhilePuttingAway);
+        Assert.True(again.TryGetSession(out TunerSession? carriedOn), again.Detail);
+        Assert.Equal("adapter1", carriedOn.DeviceId);
+        Assert.True(manager.IsClaimed("adapter1"));
+        Assert.Equal(1, factory.OpeningsOf("adapter1"));
+
+        carriedOn.Stop();
+        carriedOn.WaitForEnd(Deadlock);
+    }
+
+    [Fact(DisplayName = "a run whose putting away fails part way still lets go of what it held, and its name can be taken again")]
+    public void ARunWhosePuttingAwayFailsPartWayStillLetsGoOfWhatItHeld()
+    {
+        OpeningsCountedFactory factory = new(failing: "adapter0");
+        TunerSessionManager manager = new(
+            TwoTuners(),
+            factory,
+            clock,
+            new FailingOnAFailedDeviceLogger(),
+            recordingWriters: new CountingRecordingWriterFactory(),
+            deviceCheck: new NothingToCheck()
+        );
+
+        SessionStart first = manager.Begin(Request("r-1", SessionPurpose.Recording));
+
+        Assert.True(first.TryGetSession(out TunerSession? broken), first.Detail);
+
+        broken.WaitForEnd(Deadlock);
+
+        SessionStart again = manager.Begin(Request("r-1", SessionPurpose.Recording));
+
+        Assert.True(again.TryGetSession(out TunerSession? carriedOn), again.Detail);
+        Assert.Equal("adapter1", carriedOn.DeviceId);
+        Assert.Equal([carriedOn], manager.Sessions);
+
+        carriedOn.Stop();
+        carriedOn.WaitForEnd(Deadlock);
+    }
+
+    private sealed class OpeningsCountedFactory(string failing) : ITunerDeviceFactory
+    {
+        private readonly ConcurrentDictionary<string, int> openings = new(StringComparer.Ordinal);
+
+        public int OpeningsOf(string deviceId) => openings.GetValueOrDefault(deviceId);
+
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+        {
+            openings.AddOrUpdate(device.Id!, 1, (_, opened) => opened + 1);
+
+            return device.Id == failing ? new ScriptedTunerDevice(failAfterReads: 1) : new ScriptedTunerDevice();
+        }
+    }
+
+    private sealed class NothingToCheck : ITunerDeviceCheck
+    {
+        public void Check(DeviceSettings device)
+        { }
+    }
+
+    private sealed class ParkedOnAFailedDeviceLogger : ILogger<TunerSessionManager>
+    {
+        public ManualResetEventSlim Parked { get; } = new(false);
+
+        public ManualResetEventSlim LetGo { get; } = new(false);
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        )
+        {
+            if (
+                logLevel is LogLevel.Warning
+                && formatter(state, exception).Contains("failed while serving", StringComparison.Ordinal)
+            )
+            {
+                Parked.Set();
+                LetGo.Wait(Deadlock);
+            }
+        }
+    }
+
+    private sealed class FailingOnAFailedDeviceLogger : ILogger<TunerSessionManager>
+    {
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        )
+        {
+            if (
+                logLevel is LogLevel.Warning
+                && formatter(state, exception).Contains("failed while serving", StringComparison.Ordinal)
+            )
+            {
+                throw new IOException("the log could not be written");
+            }
+        }
     }
 
     private sealed class OneFrontendDeviceFactory : ITunerDeviceFactory

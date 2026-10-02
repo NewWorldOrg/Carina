@@ -108,6 +108,35 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         Assert.Equal(unlocked.Id, Assert.Single(spotless.Items).Id);
     }
 
+    [Fact(DisplayName = "BR-KD-031: a recording descrambled since is answered as clean, and one still left scrambled is not")]
+    public async Task ARecordingDescrambledSinceIsAnsweredAsClean()
+    {
+        int network = await StockedAsync(0);
+        Recording descrambled = await AddAsync(
+            network,
+            1,
+            counters: DropCounters.Counted(0, 1000),
+            scrambled: 900,
+            endedScrambled: true,
+            descrambled: true);
+        await AddAsync(network, 2, counters: DropCounters.Counted(0, 1000), scrambled: 900, endedScrambled: true);
+        await AddAsync(
+            network,
+            3,
+            counters: DropCounters.Counted(1, 1000),
+            scrambled: 900,
+            endedScrambled: true,
+            descrambled: true);
+
+        PaginatedList<Recording> spotless = await ListAsync(Query(network, drops: DropReading.Clean));
+
+        Recording found = Assert.Single(spotless.Items);
+
+        Assert.Equal(descrambled.Id, found.Id);
+        Assert.Equal(900, found.ScrambledPackets);
+        Assert.NotNull(found.DescrambledAt);
+    }
+
     [Fact]
     public async Task AChannelFilterAnswersOnlyTheRecordingsOfTheChannelsItNames()
     {
@@ -635,7 +664,9 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         long? scrambled = null,
         string name = "A programme",
         string summary = "",
-        string extended = "")
+        string extended = "",
+        bool endedScrambled = false,
+        bool descrambled = false)
     {
         RecordingId id = RecordingId.New();
         DateTime started = startedAt ?? Noon.AddMinutes(eventId);
@@ -681,6 +712,19 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
 
             recording.Abort(started.AddHours(1));
             recording.Settle(settled, settled is RecordingOutcome.Failed ? 0 : 1_000, started.AddHours(1));
+        }
+
+        if (endedScrambled)
+        {
+            recording.Wrote(TimeSpan.FromHours(1));
+            recording.Note(new OutcomeDetail(RecordingFault.ScramblingUnresolved, null, string.Empty, started));
+            recording.Abort(started.AddHours(1));
+            recording.Settle(RecordingOutcome.Complete, 1_000, started.AddHours(1));
+        }
+
+        if (descrambled)
+        {
+            recording.Descrambled(started.AddDays(1));
         }
 
         await using CarinaDbContext context = Context();

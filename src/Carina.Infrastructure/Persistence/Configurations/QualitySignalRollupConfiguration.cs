@@ -49,6 +49,9 @@ public sealed class QualitySignalRollupConfiguration : IEntityTypeConfiguration<
             table.HasCheckConstraint(
                 "ck_quality_signal_rollup_bit_errors",
                 "jsonb_typeof(bit_errors) = 'array'");
+            table.HasCheckConstraint(
+                "ck_quality_signal_rollup_physical_channel",
+                "physical_channel IS NULL OR physical_channel > 0");
         });
 
         builder.HasKey(rollup => new
@@ -99,6 +102,8 @@ public sealed class QualitySignalRollupConfiguration : IEntityTypeConfiguration<
             .HasColumnName("bit_errors")
             .HasColumnType("jsonb")
             .IsRequired();
+
+        builder.Property(rollup => rollup.PhysicalChannel);
 
         builder.Ignore(rollup => rollup.LockRate);
 

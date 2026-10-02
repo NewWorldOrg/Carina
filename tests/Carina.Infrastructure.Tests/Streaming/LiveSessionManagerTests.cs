@@ -416,6 +416,44 @@ public sealed class LiveSessionManagerTests
         Assert.Equal(2, supply.Asked);
     }
 
+    [Fact(DisplayName = "BR-PS-001: a profile that has left a channel somebody still watches through another profile does not make the one asking wait")]
+    public async Task BrPs001AProfileThatLeftAChannelStillWatchedDoesNotMakeTheOneAskingWait()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        await using ILiveViewing watching = await Joined(EveryFrame);
+        await (await Joined(EveryField)).DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => manager.Keys.Count is 1 && transcoders.Raised[1].Disposed,
+            "the profile nobody watches has left the ledger and stopped its transcoder");
+
+        LiveJoin refused = await manager.JoinAsync(AnotherChannel, CancellationToken.None).WaitAsync(Eventually.Patience);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Equal([EveryFrame], manager.Keys);
+        Assert.False(supply.Opened[0].Disposed);
+        Assert.Equal(2, supply.Asked);
+    }
+
+    [Fact(DisplayName = "BR-PS-001: giving up a profile nobody watches, on a channel somebody watches through another, frees no tuner and the one asking is refused without waiting")]
+    public async Task BrPs001GivingUpAProfileOfAChannelStillWatchedFreesNoTunerAndTheOneAskingIsNotMadeToWait()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        await using ILiveViewing watching = await Joined(EveryFrame);
+        await (await Joined(EveryField)).DisposeAsync();
+
+        LiveJoin refused = await manager.JoinAsync(AnotherChannel, CancellationToken.None).WaitAsync(Eventually.Patience);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Equal([EveryFrame], manager.Keys);
+        Assert.False(supply.Opened[0].Disposed);
+        Assert.Equal(2, supply.Asked);
+    }
+
     [Fact]
     public async Task BrPs001ATranscoderThatStopsTakingBytesDoesNotHoldUpTheOtherProfileOfTheChannel()
     {

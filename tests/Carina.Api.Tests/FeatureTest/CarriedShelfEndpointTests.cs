@@ -17,7 +17,11 @@ public sealed class CarriedShelfEndpointTests
 
     private const int Stations = 6;
 
+    private static readonly TimeSpan BetweenAirings = TimeSpan.FromHours(60);
+
     private static readonly DateTime FirstAired = new(2026, 4, 1, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime LastAired = FirstAired + (BetweenAirings * (Shelf - 1));
 
     private static readonly string?[] Metrics = ["packetsLost", "packetsLeftScrambled", "overflows"];
 
@@ -44,6 +48,7 @@ public sealed class CarriedShelfEndpointTests
             seen.AddRange(body.GetProperty("data").GetProperty("items").EnumerateArray());
         }
 
+        Assert.Equal(Shelf, seen.Count);
         Assert.Equal(Shelf, seen.Select(item => item.GetProperty("id").GetString()).Distinct(StringComparer.Ordinal).Count());
         Assert.All(seen, item => SaysNothingWasCounted(item.GetProperty("drops")));
     }
@@ -89,15 +94,17 @@ public sealed class CarriedShelfEndpointTests
                 service: 1_001 + (at % Stations),
                 tuner: null,
                 kind: null,
-                startedAt: FirstAired.AddHours(60 * at));
+                startedAt: FirstAired + (BetweenAirings * at));
         }
 
-        const string Period = "from=2026-03-31T00:00:00Z&until=2026-09-07T12:00:00Z";
+        string period = string.Create(
+            CultureInfo.InvariantCulture,
+            $"from={FirstAired.AddDays(-1):yyyy-MM-ddTHH:mm:ssZ}&until={LastAired.AddDays(1):yyyy-MM-ddTHH:mm:ssZ}");
 
-        JsonElement summary = await DataAsync(feature, $"/api/quality/summary?{Period}");
-        JsonElement channels = await DataAsync(feature, $"/api/quality/channels?{Period}&sort=worst");
-        JsonElement tuners = await DataAsync(feature, $"/api/quality/tuners?{Period}");
-        JsonElement beyond = await DataAsync(feature, $"/api/quality/recordings?{Period}&sort=worst");
+        JsonElement summary = await DataAsync(feature, $"/api/quality/summary?{period}");
+        JsonElement channels = await DataAsync(feature, $"/api/quality/channels?{period}&sort=worst");
+        JsonElement tuners = await DataAsync(feature, $"/api/quality/tuners?{period}");
+        JsonElement beyond = await DataAsync(feature, $"/api/quality/recordings?{period}&sort=worst");
 
         Assert.Equal(Shelf, summary.GetProperty("recordings").GetInt32());
         ReadsUnmeasuredThroughout(summary.GetProperty("measures"), Shelf);
@@ -133,7 +140,7 @@ public sealed class CarriedShelfEndpointTests
     private static Recording Carried(int at)
     {
         RecordingId id = RecordingId.New();
-        DateTime start = FirstAired.AddHours(60 * at);
+        DateTime start = FirstAired + (BetweenAirings * at);
         DateTime end = start.AddMinutes(30);
 
         return Recording.Rehydrate(
@@ -143,7 +150,7 @@ public sealed class CarriedShelfEndpointTests
             new OutputRoot("carried"),
             RecordingFileName.For(id, ".m2ts"),
             188 * (at + 1),
-            RecordingFeature.Noon,
+            end,
             start,
             end,
             end,

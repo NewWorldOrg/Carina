@@ -65,6 +65,39 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
         Assert.Equal(SignalNotTaken.NoTimeGiven, held.Signal.NotTakenBecause);
     }
 
+    [Fact(DisplayName = "a sample comes back on the physical channel it was taken on, and one kept without a channel comes back without one")]
+    public async Task ASampleComesBackOnThePhysicalChannelItWasTakenOn()
+    {
+        await ClearAsync();
+
+        await AddAsync(
+        [
+            Sample(Noon, SignalSample.WithoutLock(Noon), "live-1", channel: 27),
+            Sample(Noon.AddSeconds(10), SignalSample.WithoutLock(Noon.AddSeconds(10)), "live-2"),
+        ]);
+
+        await using CarinaDbContext reading = database.Open();
+
+        IReadOnlyList<QualitySignalSample> held = await new QualitySignalSampleRepository(reading)
+            .ListTakenBetweenAsync(Noon.AddHours(-1), Noon.AddHours(1), Cancel);
+
+        Assert.Equal([27, null], held.OrderBy(sample => sample.TakenAt).Select(sample => sample.PhysicalChannel));
+    }
+
+    [Fact(DisplayName = "a window comes back on the physical channel it was rolled up on, and loses it when it is saved again as taken on more than one")]
+    public async Task AWindowComesBackOnThePhysicalChannelItWasRolledUpOn()
+    {
+        await ClearAsync();
+
+        await SaveAsync([Rollup(Noon, samples: 6, locked: 6, channel: 27)]);
+
+        Assert.Equal(27, Assert.Single(await WindowsAsync()).PhysicalChannel);
+
+        await SaveAsync([Rollup(Noon, samples: 12, locked: 12)]);
+
+        Assert.Null(Assert.Single(await WindowsAsync()).PhysicalChannel);
+    }
+
     [Fact(DisplayName = "a sweep lets go only of the samples taken before its cutoff")]
     public async Task ASweepLetsGoOnlyOfTheSamplesTakenBeforeItsCutoff()
     {
@@ -151,7 +184,11 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
         Assert.Equal(12000, figure.CarrierToNoiseLowest);
     }
 
-    private static QualitySignalSample Sample(DateTime at, SignalSample signal, string session = "live-1")
+    private static QualitySignalSample Sample(
+        DateTime at,
+        SignalSample signal,
+        string session = "live-1",
+        int? channel = null)
         => QualitySignalSample.Rehydrate(
             "instance-a",
             SessionId.Parse(session),
@@ -160,13 +197,15 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
             new TunerDeviceId("adapter3.frontend0"),
             new NetworkId(32736),
             new ServiceId(1024),
-            signal);
+            signal,
+            channel);
 
     private static QualitySignalRollup Rollup(
         DateTime windowStart,
         long samples,
         long locked,
-        QualityWindow granularity = QualityWindow.Hour)
+        QualityWindow granularity = QualityWindow.Hour,
+        int? channel = null)
         => QualitySignalRollup.Rehydrate(
             granularity,
             windowStart,
@@ -180,7 +219,8 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
             30000,
             30000,
             30000,
-            [new LayerErrorRate(0, 0, 0)]);
+            [new LayerErrorRate(0, 0, 0)],
+            channel);
 
     private async Task AddAsync(IReadOnlyList<QualitySignalSample> samples)
     {
@@ -194,6 +234,14 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
         await using CarinaDbContext writing = database.Open();
 
         await new QualitySignalRollupRepository(writing).SaveAsync(rollups, Cancel);
+    }
+
+    private async Task<IReadOnlyList<QualitySignalRollup>> WindowsAsync()
+    {
+        await using CarinaDbContext reading = database.Open();
+
+        return await new QualitySignalRollupRepository(reading)
+            .ListAsync(QualityWindow.Hour, Noon.AddHours(-1), Noon.AddHours(1), Cancel);
     }
 
     private async Task ClearAsync()

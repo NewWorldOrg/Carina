@@ -70,7 +70,8 @@ public sealed class SignalSampleRound(
                     whereabouts.Tuner,
                     whereabouts.Network,
                     whereabouts.Service,
-                    tuner.SignalQuality),
+                    tuner.SignalQuality,
+                    SignalFiling.ChannelOf(tune)),
                 at));
         }
 
