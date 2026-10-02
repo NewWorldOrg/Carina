@@ -42,14 +42,19 @@ internal sealed class SupplyWatchHarness
 
     public SilentEvents Events { get; } = new();
 
-    public SupplyWatchRound Round()
+    public SupplyWatchRound Round() => Round(Signals);
+
+    public SupplyWatchRound RoundOverTheSamples()
+        => Round(new QualitySignalReader(new HeldQualitySignalRollups(), Samples));
+
+    private SupplyWatchRound Round(IQualitySignalReader signals)
         => new(
             Thresholds,
             Incidents,
             Supply,
             Samples,
             Ledger,
-            Signals,
+            signals,
             Driver,
             Board,
             Events,

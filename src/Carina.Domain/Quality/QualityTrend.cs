@@ -106,7 +106,7 @@ public static class QualityTrend
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(windows);
         QualitySignalRead read = QualitySignalSurvey
-            .Read(figures, [.. figures.Select(figure => figure.Tuner)], standings)
+            .ReadAtWorst(figures, [.. figures.Select(figure => figure.Tuner)], standings)
             .First(one => one.Key == key);
 
         return new QualityTrendPoint(
@@ -125,7 +125,7 @@ public static class QualityTrend
 
         foreach (SignalFigures figure in figures)
         {
-            if (QualitySignalSurvey.Observed(key, figure) is not { } observed)
+            if (QualitySignalSurvey.Worst(key, figure) is not { } observed)
             {
                 continue;
             }

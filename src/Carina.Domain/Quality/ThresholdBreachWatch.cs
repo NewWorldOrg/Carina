@@ -52,8 +52,8 @@ public static class ThresholdBreachWatch
     }
 
     /// <summary>
-    /// Names each tuner whose signal went beyond a level, once for each reading taken of it. A tuner the driver
-    /// says cannot lock is not named again for its lock rate.
+    /// Names each tuner whose signal usually read beyond a level, once for each reading taken of it. A tuner the
+    /// driver says cannot lock is not named again for its lock rate.
     /// </summary>
     public static IReadOnlyList<ThresholdBreach> Received(
         IReadOnlyList<SignalFigures> figures,

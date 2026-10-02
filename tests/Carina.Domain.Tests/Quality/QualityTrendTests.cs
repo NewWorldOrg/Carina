@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
@@ -131,6 +132,25 @@ public sealed class QualityTrendTests
         Assert.Equal(1, whole.Points[1].Reading.BeyondThreshold);
     }
 
+    [Fact(DisplayName = "BR-QD-021: an hour is told by the worst moment in it, though the tuner usually read within the floor")]
+    public void AnHourIsToldByTheWorstMomentInIt()
+    {
+        QualityTrendFrame frame = Hours();
+        DateTime hour = frame.Buckets[2].From;
+
+        QualityTrendSeries whole = QualityTrend.Signal(
+            frame,
+            QualityThresholdKey.CarrierToNoiseFloor,
+            [
+                .. Enumerable.Range(0, 5).Select(turn => QualitySignalWindow.Of(Sample(hour.AddSeconds(10 * turn), 30_000))),
+                QualitySignalWindow.Of(Sample(hour.AddMinutes(1), 6_000)),
+            ],
+            AsShipped)[0];
+
+        Assert.Equal(QualityState.AtOrAboveWarning, whole.Points[2].State);
+        Assert.Equal(6_000, whole.Points[2].Worst);
+    }
+
     [Fact(DisplayName = "bit errors stay apart by layer in every point")]
     public void BitErrorsStayApartByLayerInEveryPoint()
     {
@@ -225,6 +245,17 @@ public sealed class QualityTrendTests
     private static QualityTrendFrame Days(int days) => QualityTrendFrame.Over(days, Now, QualityTrendStep.Day)!;
 
     private static QualityTrendFrame Hours() => QualityTrendFrame.Over(1, Now, QualityTrendStep.Hour)!;
+
+    private static QualitySignalSample Sample(DateTime at, int carrierToNoise)
+        => QualitySignalSample.Rehydrate(
+            "instance-a",
+            SessionId.Parse("live-1"),
+            at,
+            SessionPurpose.Live,
+            new TunerDeviceId("adapter0"),
+            new NetworkId(1),
+            new ServiceId(101),
+            SignalSample.WithLock(at, carrierToNoise, at));
 
     private static QualitySignalWindow Window(
         DateTime start,

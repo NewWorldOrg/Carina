@@ -97,6 +97,7 @@ public sealed class QualityMeasurementsOutliveTheAppTests(RepositoryDatabase dat
 
             Assert.Equal(1, figures.Samples);
             Assert.Equal(9_000, figures.CarrierToNoiseLowest);
+            Assert.Equal(9_000, figures.CarrierToNoiseUsual);
         });
 
         IReadOnlyList<QualityIncident> standing = await BreachesAsync(second, channel, device);

@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
@@ -102,11 +103,90 @@ public sealed class ThresholdBreachWatchTests
         Assert.Empty(ThresholdBreachWatch.Received(
             [
                 Figures("adapter0", samples: 100, locked: 100, carrierToNoise: 30_000, bitErrors: 0),
-                new SignalFigures(new TunerDeviceId("adapter1"), 10, 0, 0, 10, null, null, [], null),
-                new SignalFigures(new TunerDeviceId("adapter2"), 10, 10, 0, 0, null, null, [], null),
+                new SignalFigures(new TunerDeviceId("adapter1"), 10, 0, 0, 10, null, null, null, null, [], null),
+                new SignalFigures(new TunerDeviceId("adapter2"), 10, 10, 0, 0, null, null, null, null, [], null),
             ],
             Levels,
             new HashSet<string>(StringComparer.Ordinal)));
+    }
+
+    [Fact(DisplayName = "BR-QD-021: a tuner whose worst moment went beyond a level while it usually read within it is no breach")]
+    public void ATunerWhoseWorstMomentWentBeyondALevelWhileItUsuallyReadWithinItIsNoBreach()
+    {
+        Assert.Empty(ThresholdBreachWatch.Received(
+            [
+                Figures(
+                    "adapter0",
+                    samples: 100,
+                    locked: 100,
+                    carrierToNoise: 30_000,
+                    bitErrors: 0,
+                    carrierToNoiseLowest: 6_000,
+                    bitErrorsHighest: 0.02),
+            ],
+            Levels,
+            new HashSet<string>(StringComparer.Ordinal)));
+    }
+
+    [Fact(DisplayName = "BR-QD-021: a breach of a signal level keeps what the tuner usually read, not the worst moment of it")]
+    public void ABreachOfASignalLevelKeepsWhatTheTunerUsuallyRead()
+    {
+        IReadOnlyList<ThresholdBreach> breaches = ThresholdBreachWatch.Received(
+            [
+                Figures(
+                    "adapter0",
+                    samples: 100,
+                    locked: 100,
+                    carrierToNoise: 9_000,
+                    bitErrors: 0.01,
+                    carrierToNoiseLowest: 5_000,
+                    bitErrorsHighest: 0.02),
+            ],
+            Levels,
+            new HashSet<string>(StringComparer.Ordinal));
+
+        Assert.Equal(
+            [
+                (QualityThresholdKey.CarrierToNoiseFloor, 9_000d),
+                (QualityThresholdKey.BitErrorRateCeiling, 0.01),
+            ],
+            breaches.Select(breach => (breach.Breached, breach.Observed)));
+    }
+
+    [Fact(DisplayName = "BR-QD-021: one bad sample among sound ones opens nothing, a tuner that goes on reading badly is opened, and it is closed once it reads well again")]
+    public void OneBadSampleOpensNothingGoingOnBadlyOpensAndReadingWellAgainCloses()
+    {
+        HashSet<string> none = new(StringComparer.Ordinal);
+        List<QualitySignalSample> taken = [.. Enumerable.Range(0, 5).Select(turn => Sound(Noon.AddSeconds(10 * turn)))];
+
+        taken.Add(Bad(Noon.AddMinutes(1)));
+
+        Assert.Empty(ThresholdBreachWatch.Received(QualitySignalSurvey.Figures([], taken), Levels, none));
+
+        taken.AddRange(Enumerable.Range(0, 5).Select(turn => Bad(Noon.AddMinutes(2).AddSeconds(10 * turn))));
+
+        IReadOnlyList<ThresholdBreach> breaches =
+            ThresholdBreachWatch.Received(QualitySignalSurvey.Figures([], taken), Levels, none);
+        ThresholdBreachWatchPlan opening = ThresholdBreachWatch.Plan(breaches, []);
+
+        Assert.Equal(
+            [
+                (QualityThresholdKey.CarrierToNoiseFloor, 6_000d),
+                (QualityThresholdKey.BitErrorRateCeiling, 0.02),
+            ],
+            opening.ToOpen.Select(breach => (breach.Breached, breach.Observed)));
+
+        IReadOnlyList<QualityIncident> standing =
+            [.. opening.ToOpen.Select(breach => ThresholdBreachWatch.Open(QualityIncidentId.New(), breach, Noon))];
+
+        taken.AddRange(Enumerable.Range(0, 2).Select(turn => Sound(Noon.AddMinutes(3).AddSeconds(10 * turn))));
+
+        ThresholdBreachWatchPlan closing = ThresholdBreachWatch.Plan(
+            ThresholdBreachWatch.Received(QualitySignalSurvey.Figures([], taken), Levels, none),
+            standing);
+
+        Assert.Empty(closing.ToOpen);
+        Assert.Equal(standing, closing.ToResolve);
     }
 
     [Fact(DisplayName = "BR-QD-020: a tuner the driver says cannot lock is not also a lock rate breach, and its other readings still are")]
@@ -260,6 +340,39 @@ public sealed class ThresholdBreachWatchTests
     private static QualityIncident Standing(QualityThresholdKey key, QualitySubject subject, double observed)
         => ThresholdBreachWatch.Open(QualityIncidentId.New(), Breach(key, subject, observed), Noon);
 
-    private static SignalFigures Figures(string tuner, long samples, long locked, int carrierToNoise, double bitErrors)
-        => new(new TunerDeviceId(tuner), samples, locked, 0, 0, carrierToNoise, bitErrors, [], Noon);
+    private static QualitySignalSample Sound(DateTime at) => Sample(at, 30_000, 0);
+
+    private static QualitySignalSample Bad(DateTime at) => Sample(at, 6_000, 20_000);
+
+    private static QualitySignalSample Sample(DateTime at, int carrierToNoise, long errorBits)
+        => QualitySignalSample.Rehydrate(
+            "instance-a",
+            SessionId.Parse("live-1"),
+            at,
+            SessionPurpose.Live,
+            new TunerDeviceId("adapter0"),
+            new NetworkId(32_736),
+            new ServiceId(1_024),
+            SignalSample.WithLock(at, carrierToNoise, at, [new LayerBitErrorCounts(1, errorBits, 1_000_000)], at));
+
+    private static SignalFigures Figures(
+        string tuner,
+        long samples,
+        long locked,
+        int carrierToNoise,
+        double bitErrors,
+        int? carrierToNoiseLowest = null,
+        double? bitErrorsHighest = null)
+        => new(
+            new TunerDeviceId(tuner),
+            samples,
+            locked,
+            0,
+            0,
+            carrierToNoiseLowest ?? carrierToNoise,
+            carrierToNoise,
+            bitErrorsHighest ?? bitErrors,
+            bitErrors,
+            [],
+            Noon);
 }
