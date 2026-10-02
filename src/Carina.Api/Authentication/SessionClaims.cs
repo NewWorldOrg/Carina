@@ -10,6 +10,8 @@ public static class SessionClaims
 
     public const string Method = "carina:method";
 
+    public const string Device = "carina:device";
+
     public static ClaimsPrincipal Principal(AuthSession session, string scheme)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -21,6 +23,7 @@ public static class SessionClaims
                 new Claim(ClaimTypes.Name, session.Subject.Value),
                 new Claim(Session, session.Handle.Value),
                 new Claim(Method, session.Method.ToString()),
+                new Claim(Device, session.DeviceLabel),
             ],
             scheme);
 
@@ -52,5 +55,14 @@ public static class SessionClaims
         string? carried = principal.FindFirstValue(Method);
 
         return Enum.TryParse(carried, ignoreCase: false, out AuthMethod method) ? method : null;
+    }
+
+    public static string? DeviceOf(ClaimsPrincipal principal)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        string? carried = principal.FindFirstValue(Device);
+
+        return string.IsNullOrEmpty(carried) ? null : carried;
     }
 }

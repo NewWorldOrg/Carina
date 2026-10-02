@@ -28,4 +28,10 @@ public enum SignInMoment
     TheWayBackFromTheProviderWasRefused = 12,
 
     SignedOut = 13,
+
+    TheSessionRevokedItself = 14,
+
+    TheSessionRevokedAnother = 15,
+
+    AChangedPasswordRevokedTheOthers = 16,
 }

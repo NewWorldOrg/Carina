@@ -30,10 +30,22 @@ public sealed class DeleteSessionAction(AuthSessionService sessions) : Controlle
             return NotFound(BaseResponder<string>.Error(AuthSessionService.NoSuchSession));
         }
 
-        ServiceResult ended = await sessions.RevokeAsync(target, cancellationToken);
+        ServiceResult<EndedSessions> ended = await sessions.RevokeAsync(target, cancellationToken);
 
-        return ended.IsSuccess
-            ? NoContent()
-            : NotFound(BaseResponder<string>.Error(ended.ErrorMessage!));
+        if (!ended.IsSuccess)
+        {
+            return NotFound(BaseResponder<string>.Error(ended.ErrorMessage!));
+        }
+
+        SignInHappening.Leave(
+            HttpContext,
+            target.Equals(SessionClaims.SessionOf(User))
+                ? SignInMoment.TheSessionRevokedItself
+                : SignInMoment.TheSessionRevokedAnother,
+            SessionClaims.MethodOf(User),
+            SessionClaims.DeviceOf(User),
+            ended: ended.Data);
+
+        return NoContent();
     }
 }

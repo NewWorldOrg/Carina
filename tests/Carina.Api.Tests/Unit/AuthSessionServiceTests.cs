@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Services;
 using Carina.BroadcastTestSupport;
@@ -124,6 +125,29 @@ public sealed class AuthSessionServiceTests
         Assert.Equal(SessionStatus.Revoked, theirs.StatusAt(Now(), SessionPolicy.Default));
         Assert.Equal(SessionStatus.Active, here.StatusAt(Now(), SessionPolicy.Default));
         Assert.Equal([Stranger], grants.RevokedFor);
+    }
+
+    [Fact]
+    public async Task EndingASessionSaysHowTheEndedOneHadSignedInAndWhere()
+    {
+        AuthSession theirs = StartedThroughTheProvider(Stranger, "somebody@example.test", "a stranger's device");
+
+        ServiceResult<EndedSessions> ended = await Service().RevokeAsync(theirs.Handle, Cancel);
+
+        Assert.Equal(new EndedSessions(1, AuthMethod.Oidc, "a stranger's device"), ended.Data);
+    }
+
+    [Fact]
+    public async Task EndingASessionThatWasAlreadyEndedSaysItEndedNone()
+    {
+        AuthSession there = Started(Owner, "another device");
+
+        await Service().RevokeAsync(there.Handle, Cancel);
+
+        ServiceResult<EndedSessions> again = await Service().RevokeAsync(there.Handle, Cancel);
+
+        Assert.True(again.IsSuccess);
+        Assert.Equal(new EndedSessions(0, AuthMethod.Local, "another device"), again.Data);
     }
 
     [Fact]

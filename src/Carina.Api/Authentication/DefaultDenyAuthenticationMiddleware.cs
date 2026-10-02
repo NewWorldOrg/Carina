@@ -61,7 +61,13 @@ public sealed class DefaultDenyAuthenticationMiddleware
     {
         if (SignInHappening.LeftOn(context) is { } happened)
         {
-            record.Write(context, happened.Moment, happened.Method, happened.Device, happened.Reason);
+            record.Write(
+                context,
+                happened.Moment,
+                happened.Method,
+                happened.Device,
+                happened.Reason,
+                happened.Ended);
         }
     }
 
