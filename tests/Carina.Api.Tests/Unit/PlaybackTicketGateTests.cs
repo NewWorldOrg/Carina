@@ -59,20 +59,6 @@ public sealed class PlaybackTicketGateTests
     }
 
     [Fact]
-    public async Task ATicketAdmitsOneRequestSoAPlayerThatComesBackForARangeIsRefused()
-    {
-        PlaybackTicketStore tickets = Store(out _);
-        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Seven);
-
-        Assert.Equal(StatusCodes.Status200OK, (await ServeAsync(tickets, Offering(issued.InTheClear), Seven)).Status);
-
-        Served again = await ServeAsync(tickets, Offering(issued.InTheClear), Seven);
-
-        Assert.Equal(StatusCodes.Status403Forbidden, again.Status);
-        Assert.DoesNotContain(TheContent, again.Body, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task ATicketForAnotherRecordingDoesNotOpenThisOne()
     {
         PlaybackTicketStore tickets = Store(out _);
@@ -163,49 +149,6 @@ public sealed class PlaybackTicketGateTests
         Assert.False(served.Headers.ContainsKey(HeaderNames.WWWAuthenticate));
     }
 
-    [Fact]
-    public async Task ATicketTakenForSomethingThatCouldNotBeServedIsGoodAgain()
-    {
-        PlaybackTicketStore tickets = Store(out _);
-        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Seven);
-
-        Assert.Equal(
-            StatusCodes.Status200OK,
-            await AnsweredAsync(tickets, Offering(issued.InTheClear), Seven, false));
-        Assert.Equal(StatusCodes.Status200OK, (await ServeAsync(tickets, Offering(issued.InTheClear), Seven)).Status);
-    }
-
-    [Fact]
-    public async Task ATicketTakenForSomethingThatWasServedIsSpentAllTheSame()
-    {
-        PlaybackTicketStore tickets = Store(out _);
-        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Seven);
-
-        Assert.Equal(
-            StatusCodes.Status200OK,
-            await AnsweredAsync(tickets, Offering(issued.InTheClear), Seven, true));
-        Assert.Equal(
-            StatusCodes.Status403Forbidden,
-            (await ServeAsync(tickets, Offering(issued.InTheClear), Seven)).Status);
-    }
-
-    [Fact]
-    public async Task ARequestWithNoTicketIsRefusedAndNothingIsEverServedToHandBack()
-    {
-        PlaybackTicketStore tickets = Store(out _);
-        bool reached = false;
-
-        int status = await AnsweredAsync(tickets, new DefaultHttpContext(), Seven, () =>
-        {
-            reached = true;
-
-            return true;
-        });
-
-        Assert.Equal(StatusCodes.Status403Forbidden, status);
-        Assert.False(reached, "nothing is served to a request carrying no ticket");
-    }
-
     private static HttpContext Offering(string ticket)
     {
         DefaultHttpContext context = new();
@@ -236,27 +179,6 @@ public sealed class PlaybackTicketGateTests
         return new PlaybackTicketStore(clock, PlaybackTicketPolicy.Default);
     }
 
-    private static Task<int> AnsweredAsync(
-        IPlaybackTicketStore tickets,
-        HttpContext context,
-        PlaybackTarget target,
-        bool served)
-        => AnsweredAsync(tickets, context, target, () => served);
-
-    private static async Task<int> AnsweredAsync(
-        IPlaybackTicketStore tickets,
-        HttpContext context,
-        PlaybackTarget target,
-        Func<bool> served)
-    {
-        await new PlaybackTicketGate(tickets, Grants()).AdmitOnceUnlessItIsHandedBackAsync(
-            context,
-            target,
-            (_, _) => Task.FromResult(served()));
-
-        return context.Response.StatusCode;
-    }
-
     private static async Task<Served> ServeAsync(
         IPlaybackTicketStore tickets,
         HttpContext context,
@@ -266,7 +188,7 @@ public sealed class PlaybackTicketGateTests
         context.Response.Body = body;
         Subject? watcher = null;
 
-        await new PlaybackTicketGate(tickets, Grants()).AdmitOnceAsync(
+        await new PlaybackTicketGate(tickets, Grants()).AdmitForAsLongAsTheGrantLastsAsync(
             context,
             target,
             async (admitted, opened) =>

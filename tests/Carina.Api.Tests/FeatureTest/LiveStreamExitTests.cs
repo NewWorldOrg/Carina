@@ -33,7 +33,7 @@ public sealed class LiveStreamExitTests
     public LiveStreamExitTests() => transcoders = new HeldTranscoders(budget);
 
     [Fact]
-    public async Task ATicketOpensTheStreamOnceAndTheSameTicketOpensItNoSecondTime()
+    public async Task APlayerThatOpensTheStreamAgainWithTheSameTicketIsLetInAgain()
     {
         await using AuthProbe probe = Wiring();
         string ticket = await IssuedAsync(probe);
@@ -46,10 +46,29 @@ public sealed class LiveStreamExitTests
 
         first.Dispose();
 
-        using HttpResponseMessage again = await player.GetAsync(Asked(), HttpCompletionOption.ResponseHeadersRead);
+        using HttpResponseMessage again = await OpenedAsync(player);
 
-        Assert.Equal(HttpStatusCode.Forbidden, again.StatusCode);
-        Assert.Null(again.Headers.Location);
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Equal(LiveStreamDelivery.MediaType, again.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task TheTicketThatOpenedOneChannelOpensNoOther()
+    {
+        await using AuthProbe probe = Wiring();
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Carrying(probe, ticket);
+        using HttpResponseMessage opened = await OpenedAsync(player);
+
+        Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
+
+        using HttpResponseMessage another = await player.GetAsync(
+            new Uri("/api/live/32737-1032/stream", UriKind.Relative),
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Forbidden, another.StatusCode);
+        Assert.Null(another.Headers.Location);
     }
 
     [Fact]

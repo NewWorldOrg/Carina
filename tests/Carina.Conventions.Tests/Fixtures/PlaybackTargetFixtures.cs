@@ -7,10 +7,6 @@ internal sealed class BoundTicketStore : IPlaybackTicketStore
     public IssuedPlaybackTicket? Issue(Subject subject, PlaybackTarget target) => null;
 
     public PlaybackTicket? Take(string? offered, PlaybackTarget target) => null;
-
-    public void HandBack(PlaybackTicket spent, PlaybackTarget target)
-    {
-    }
 }
 
 internal sealed class UnboundTicketStore : IPlaybackTicketStore
@@ -22,10 +18,6 @@ internal sealed class UnboundTicketStore : IPlaybackTicketStore
     public PlaybackTicket? Take(string? offered, PlaybackTarget target) => null;
 
     public PlaybackTicket? Take(string? offered) => null;
-
-    public void HandBack(PlaybackTicket spent, PlaybackTarget target)
-    {
-    }
 }
 
 internal sealed class PassThatOpensAnything : IPlaybackGrantStore

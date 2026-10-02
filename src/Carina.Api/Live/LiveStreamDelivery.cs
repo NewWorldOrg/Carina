@@ -43,13 +43,13 @@ public static class LiveStreamDelivery
 
         return context.RequestServices
             .GetRequiredService<PlaybackTicketGate>()
-            .AdmitOnceUnlessItIsHandedBackAsync(
+            .AdmitForAsLongAsTheGrantLastsAsync(
                 context,
                 LiveService.TargetOf(channel.Network, channel.Service),
                 (_, _) => CarryAsync(context, channel, sessions));
     }
 
-    private static async Task<bool> CarryAsync(HttpContext context, LiveChannelKey channel, ILiveSessionManager sessions)
+    private static async Task CarryAsync(HttpContext context, LiveChannelKey channel, ILiveSessionManager sessions)
     {
         LiveHandover handed = await sessions.HandOverAsync(channel, context.RequestAborted);
 
@@ -59,7 +59,7 @@ public static class LiveStreamDelivery
 
             await RefuseAsync(context, Of(refused), LiveRefusalClosures.Because(refused));
 
-            return false;
+            return;
         }
 
         await using (carrying)
@@ -68,7 +68,7 @@ public static class LiveStreamDelivery
             {
                 await RefuseAsync(context, StatusCodes.Status503ServiceUnavailable, NothingCameInTime);
 
-                return false;
+                return;
             }
 
             context.Response.StatusCode = StatusCodes.Status200OK;
@@ -79,8 +79,6 @@ public static class LiveStreamDelivery
             await context.Response.Body.FlushAsync(context.RequestAborted);
             await QuietlyAsync(carrying.Bytes, context.Response, context.RequestAborted);
         }
-
-        return true;
     }
 
     private static async Task RefuseAsync(HttpContext context, int status, string because)

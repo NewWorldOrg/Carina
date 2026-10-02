@@ -12,45 +12,6 @@ public sealed class PlaybackTicketGate(IPlaybackTicketStore tickets, IPlaybackGr
 
     public const string NeverCached = "no-store, private";
 
-    public Task AdmitOnceAsync(
-        HttpContext context,
-        PlaybackTarget target,
-        Func<Subject, PlaybackTarget, Task> serve)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(target);
-
-        return AnsweredAsync(context, target, serve, Spent(context, target));
-    }
-
-    /// <summary>
-    /// Admits one request the way <see cref="AdmitOnceAsync"/> does, and hands the ticket back
-    /// unspent when what it was for could not be served.
-    /// </summary>
-    public async Task AdmitOnceUnlessItIsHandedBackAsync(
-        HttpContext context,
-        PlaybackTarget target,
-        Func<Subject, PlaybackTarget, Task<bool>> serve)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(target);
-        ArgumentNullException.ThrowIfNull(serve);
-
-        NeverKept(context);
-
-        if (tickets.Take(PlaybackTicketCarrier.OfferedBy(context.Request), target) is not { } taken)
-        {
-            await RefusedAsync(context);
-
-            return;
-        }
-
-        if (!await serve(taken.Subject, target))
-        {
-            tickets.HandBack(taken, target);
-        }
-    }
-
     public Task AdmitForAsLongAsTheGrantLastsAsync(
         HttpContext context,
         PlaybackTarget target,
@@ -97,9 +58,6 @@ public sealed class PlaybackTicketGate(IPlaybackTicketStore tickets, IPlaybackGr
 
         return context.Response.WriteAsync(TheSameRefusalForEveryBadTicket, context.RequestAborted);
     }
-
-    private Subject? Spent(HttpContext context, PlaybackTarget target)
-        => tickets.Take(PlaybackTicketCarrier.OfferedBy(context.Request), target)?.Subject;
 
     private Subject? Entering(string? offered, PlaybackTarget target)
     {
