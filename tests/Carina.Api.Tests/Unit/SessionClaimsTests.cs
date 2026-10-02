@@ -28,4 +28,27 @@ public sealed class SessionClaimsTests
             claim => claim.Value.Contains(carried.Value, StringComparison.Ordinal));
         Assert.Equal(SessionHandle.Of(carried).Value, principal.FindFirstValue(SessionClaims.Session));
     }
+
+    [Fact]
+    public void ThePrincipalSaysHowItsSessionSignedInAndOnWhichDevice()
+    {
+        AuthSession session = AuthSession.Start(
+            SessionId.Issue(),
+            new Subject("carina"),
+            "carina",
+            AuthMethod.Oidc,
+            "a device",
+            At);
+
+        ClaimsPrincipal principal = SessionClaims.Principal(session, SessionAuthenticationHandler.SchemeName);
+
+        Assert.Equal(AuthMethod.Oidc, SessionClaims.MethodOf(principal));
+        Assert.Equal("a device", SessionClaims.DeviceOf(principal));
+    }
+
+    [Fact]
+    public void APrincipalWithNoSessionNamesNoDevice()
+    {
+        Assert.Null(SessionClaims.DeviceOf(new ClaimsPrincipal(new ClaimsIdentity())));
+    }
 }

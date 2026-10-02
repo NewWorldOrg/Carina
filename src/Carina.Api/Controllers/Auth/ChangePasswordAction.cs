@@ -42,6 +42,13 @@ public sealed class ChangePasswordAction(LocalAccountService accounts) : Control
 
         if (asked.IsSuccess)
         {
+            SignInHappening.Leave(
+                HttpContext,
+                SignInMoment.AChangedPasswordRevokedTheOthers,
+                SessionClaims.MethodOf(User),
+                SessionClaims.DeviceOf(User),
+                ended: new EndedSessions(asked.Data));
+
             return Ok(BaseResponder<PasswordChangedResponder>.Success(
                 new PasswordChangedResponder(asked.Data)));
         }
