@@ -167,7 +167,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
 
         SupplyReading read = Assert.Single(await ReadAsync(hurried));
 
-        Assert.Equal(TimeSpan.FromSeconds(300 + 10 + 60), read.Allowed);
+        Assert.Equal(TimeSpan.FromSeconds(300 + 10 + 60 + 60), read.Allowed);
         Assert.Single(SupplyWatch.Quiet([read], FiveMinutes, Now));
     }
 

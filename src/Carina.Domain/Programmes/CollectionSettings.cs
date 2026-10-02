@@ -37,8 +37,9 @@ public sealed record CollectionSettings
 
     /// <summary>
     /// The longest a collector that is running goes from one attempt to the next while a visit is due: the wait
-    /// between sweeps, the waits a sweep spends on full tuners before it gives up, and one visit.
+    /// between sweeps, the waits a sweep spends on full tuners before it gives up, and one visit that listens
+    /// for as long as it may and writes for as long again.
     /// </summary>
     public TimeSpan LongestBetweenAttempts()
-        => BetweenSweeps + WhenTunersAreFull.WaitBeforeTheCeiling() + LongestVisit;
+        => BetweenSweeps + WhenTunersAreFull.WaitBeforeTheCeiling() + (LongestVisit * 2);
 }

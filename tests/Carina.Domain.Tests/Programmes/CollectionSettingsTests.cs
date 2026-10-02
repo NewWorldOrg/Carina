@@ -18,7 +18,7 @@ public sealed class CollectionSettingsTests
         => Assert.Equal(TimeSpan.FromMinutes(3), new CollectionSettings().LongestVisit);
 
     [Fact]
-    public void TheLongestBetweenAttemptsIsASweepTheWaitsOnFullTunersAndOneVisit()
+    public void TheLongestBetweenAttemptsIsASweepTheWaitsOnFullTunersAndOneVisitListeningAndWriting()
     {
         CollectionSettings settings = new()
         {
@@ -28,7 +28,7 @@ public sealed class CollectionSettingsTests
         };
 
         Assert.Equal(
-            TimeSpan.FromMinutes(10) + TimeSpan.FromSeconds(10 + 20) + TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(10) + TimeSpan.FromSeconds(10 + 20) + TimeSpan.FromMinutes(2 + 2),
             settings.LongestBetweenAttempts());
     }
 
