@@ -32,6 +32,20 @@ public sealed class CandidateScoreRoundTests
         Assert.Equal(At, candidate.Score?.EvaluatedAt);
     }
 
+    [Fact(DisplayName = "BR-QD-019: what was measured before the channel was kept is written back to no candidate")]
+    public async Task WhatWasMeasuredBeforeTheChannelWasKeptIsWrittenBackToNoCandidate()
+    {
+        HeldCandidates candidates = new();
+        HeldQualitySignals signals = new();
+        CandidateChannel candidate = Selected(candidates, 101, 27, At.AddDays(-30));
+        signals.Windows.Add(Window(At.AddHours(-2), 101, samples: 360, locked: 350, channel: null));
+
+        int written = await Round(candidates, signals).RunAsync(Cancel);
+
+        Assert.Equal(0, written);
+        Assert.Null(candidate.Score);
+    }
+
     [Fact(DisplayName = "writing scores back leaves every selection as it was")]
     public async Task WritingScoresBackLeavesEverySelectionAsItWas()
     {
@@ -113,7 +127,12 @@ public sealed class CandidateScoreRoundTests
         return candidate;
     }
 
-    private static QualitySignalWindow Window(DateTime start, int service, long samples, long locked)
+    private static QualitySignalWindow Window(
+        DateTime start,
+        int service,
+        long samples,
+        long locked,
+        int? channel = 27)
         => new(
             start,
             new TunerDeviceId("adapter0.frontend0"),
@@ -126,7 +145,8 @@ public sealed class CandidateScoreRoundTests
             null,
             [],
             [],
-            null);
+            null,
+            channel);
 
     private sealed class StoppedClock(DateTime at) : TimeProvider
     {
