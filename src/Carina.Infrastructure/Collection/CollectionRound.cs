@@ -243,25 +243,17 @@ public sealed class CollectionRound(
 
     private async Task<bool> ReachedTheGoalAsync(BroadcastStream stream, DateTime at, CancellationToken abort)
     {
-        if (stream.Services.Count == 0)
-        {
-            return false;
-        }
+        var coveredUntil = new List<DateTime?>(stream.Services.Count);
 
         foreach (ServiceId service in stream.Services)
         {
-            DateTime? until = await programmes.CoveredUntilAsync(
+            coveredUntil.Add(await programmes.CoveredUntilAsync(
                 stream.NetworkId.Value,
                 service.Value,
-                abort);
-
-            if (!GuideCoverage.IsMet(until, at, settings.WantedCoverage))
-            {
-                return false;
-            }
+                abort));
         }
 
-        return true;
+        return GuideCoverage.IsMetByEveryServiceHoldingAGuide(coveredUntil, at, settings.WantedCoverage);
     }
 
     private static IReadOnlyList<VisitTally> TallyOf(BroadcastStream stream, VisitResult visit)

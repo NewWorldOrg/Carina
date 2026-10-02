@@ -65,6 +65,35 @@ public sealed class GuideCoverageTests
         => Assert.False(GuideCoverage.IsMet(null, NoonInJapan, EightDays));
 
     [Fact]
+    public void AStreamWhoseServicesAllReachTheGoalHasReachedIt()
+        => Assert.True(GuideCoverage.IsMetByEveryServiceHoldingAGuide(
+            [WholeSchedule, WholeSchedule.AddHours(-3)],
+            NoonInJapan,
+            EightDays));
+
+    [Fact]
+    public void AServiceHoldingNoGuideIsLeftOutOfWhatItsStreamHasToReach()
+        => Assert.True(GuideCoverage.IsMetByEveryServiceHoldingAGuide(
+            [WholeSchedule, null, null],
+            NoonInJapan,
+            EightDays));
+
+    [Fact]
+    public void OneServiceHoldingAGuideThatFallsShortKeepsItsStreamFromTheGoal()
+        => Assert.False(GuideCoverage.IsMetByEveryServiceHoldingAGuide(
+            [WholeSchedule, WholeSchedule.AddHours(-3).AddMinutes(-1), null],
+            NoonInJapan,
+            EightDays));
+
+    [Fact]
+    public void AStreamOnWhichNoServiceHoldsAGuideHasNotReachedTheGoal()
+        => Assert.False(GuideCoverage.IsMetByEveryServiceHoldingAGuide([null, null], NoonInJapan, EightDays));
+
+    [Fact]
+    public void AStreamCarryingNoServiceHasNotReachedTheGoal()
+        => Assert.False(GuideCoverage.IsMetByEveryServiceHoldingAGuide([], NoonInJapan, EightDays));
+
+    [Fact]
     public void AStreamNeverVisitedIsMeasuredFromNow()
         => Assert.Equal(NoonInJapan, GuideCoverage.MeasuredFrom(null, NoonInJapan, Settings));
 

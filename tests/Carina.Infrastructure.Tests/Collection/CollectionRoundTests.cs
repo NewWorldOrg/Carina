@@ -540,6 +540,35 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task AServiceThatHoldsNoGuideDoesNotKeepItsStreamFromTheGoal()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), StayingOpenAfter(LastSegmentOnly(network, 1, carried: 2)));
+
+        await using CarinaDbContext context = database.Open();
+
+        await new ProgrammeRepository(context).AddAsync(Reaching(network, 1049, DateTime.UtcNow.AddDays(9)), Cancel);
+        await Round(driver, context, Lossy).WalkAsync(
+            [Stream(network, 1, 22) with { Services = [new ServiceId(1049), new ServiceId(1433)] }],
+            Cancel,
+            Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit visit = (await new StreamVisitRepository(reading).FindAsync(
+            new NetworkId(network),
+            new TransportStreamId(1),
+            Cancel))!;
+
+        Assert.Equal(VisitOutcome.Incomplete, visit.Outcome);
+        Assert.True(visit.ReachedTheGoal);
+        Assert.Equal(
+            visit.LastAttemptedAt + new CollectionSettings().BetweenVisits,
+            CollectionBackOff.NotBefore(visit, new CollectionSettings()));
+    }
+
+    [Fact]
     public async Task AStreamThatLocksButCarriesNoneOfItsScheduleStretchesTheWait()
     {
         int network = NextNetwork();
