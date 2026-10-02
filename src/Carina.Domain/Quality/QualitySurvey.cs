@@ -4,7 +4,10 @@ public sealed record QualityRowMeasure(QualityMetric Metric, ThresholdVerdict Ve
 
 public sealed record QualityRowReading(QualityLedgerRow Row, IReadOnlyList<QualityRowMeasure> Measures)
 {
-    public QualityStanding Standing => QualityStandings.Worst(Measures.Select(measure => measure.Verdict.Standing));
+    public QualityGapVerdict Gap => QualityGapVerdict.Of(Row);
+
+    public QualityStanding Standing
+        => QualityStandings.Worst([.. Measures.Select(measure => measure.Verdict.Standing), Gap.Standing]);
 
     public bool WentBeyond => QualityStandings.WentBeyond(Standing);
 }

@@ -68,7 +68,9 @@ internal static class QualityFactory
         int service = 1_024,
         string? tuner = "adapter0",
         TuneSystem? kind = TuneSystem.IsdbT,
-        DateTime? startedAt = null)
+        DateTime? startedAt = null,
+        int gaps = 0,
+        long missedMs = 0)
         => QualityLedgerRow.Of(
             RecordingId.New(),
             new NetworkId(network),
@@ -81,7 +83,9 @@ internal static class QualityFactory
                 : DropCounters.Unmeasured,
             scrambled,
             overflows,
-            dropped is null ? null : Settled);
+            dropped is null ? null : Settled,
+            gaps,
+            missedMs);
 
     public static QualityObservation Measured(double observed, QualityFacet? facet = null, ThresholdBand? band = null)
         => QualityObservation.Of(facet ?? Facet(), ThresholdEvaluator.Judge(observed, band ?? PacketsLost()));

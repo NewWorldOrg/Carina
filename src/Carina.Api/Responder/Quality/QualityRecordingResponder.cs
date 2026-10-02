@@ -29,6 +29,16 @@ public sealed record QualityVerdictResponder(
     }
 }
 
+public sealed record QualityGapVerdictResponder(QualityStanding Standing, int Count, long MissedMs)
+{
+    public static QualityGapVerdictResponder Of(QualityGapVerdict verdict)
+    {
+        ArgumentNullException.ThrowIfNull(verdict);
+
+        return new QualityGapVerdictResponder(verdict.Standing, verdict.Count, verdict.MissedMs);
+    }
+}
+
 public sealed record QualityRecordingResponder(
     string Id,
     int NetworkId,
@@ -42,7 +52,8 @@ public sealed record QualityRecordingResponder(
     long? TotalPackets,
     long? ScrambledPackets,
     long Overflows,
-    IReadOnlyList<QualityVerdictResponder> Verdicts)
+    IReadOnlyList<QualityVerdictResponder> Verdicts,
+    QualityGapVerdictResponder Gap)
 {
     public static QualityRecordingResponder Of(QualityRowReading reading)
     {
@@ -63,7 +74,8 @@ public sealed record QualityRecordingResponder(
             row.Counters.Total,
             row.ScrambledPackets,
             row.Overflows,
-            [.. reading.Measures.Select(QualityVerdictResponder.Of)]);
+            [.. reading.Measures.Select(QualityVerdictResponder.Of)],
+            QualityGapVerdictResponder.Of(reading.Gap));
     }
 }
 
