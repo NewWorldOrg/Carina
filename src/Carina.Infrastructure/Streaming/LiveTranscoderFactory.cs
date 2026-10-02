@@ -12,7 +12,7 @@ public sealed class LiveTranscoderFactory(
     public async Task<LiveTranscoderStart> StartAsync(
         ServiceId service,
         LiveProfile profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
         CancellationToken cancellationToken)
@@ -51,7 +51,7 @@ public sealed class LiveTranscoderFactory(
     private async Task<LiveTranscoderStart> StartedAsync(
         ServiceId service,
         LiveProfile profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
         ITranscodeSeat seat,

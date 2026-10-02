@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using Carina.Api.Live;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
+using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -75,7 +76,7 @@ internal sealed class LiveKestrelHost : IAsyncDisposable
     }
 
     private Task CarryAsync(HttpContext context)
-        => LiveWire.Invoke(context, seating, noted, settings, app.Lifetime, TimeProvider.System);
+        => LiveWire.Invoke(context, seating, new HeldSoundOnAir(), noted, settings, app.Lifetime, TimeProvider.System);
 
     private Uri ResolveWire()
     {

@@ -73,6 +73,33 @@ public sealed class LiveSessionKeyTests
             new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Secondary).ToString());
     }
 
+    [Fact(DisplayName = "a key that names no placement takes the whole stream of the sound it names")]
+    public void AKeyThatNamesNoPlacementTakesTheWholeStreamOfTheSoundItNames()
+    {
+        Assert.Equal(SoundPlacement.WholeStream(0), new LiveSessionKey(Network, Service, LiveProfile.Hd30).Placement);
+        Assert.Equal(
+            SoundPlacement.WholeStream(1),
+            new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Secondary).Placement);
+    }
+
+    [Fact(DisplayName = "BR-PD-008: the same sound taken from one channel of its stream is another key, and reads as one")]
+    public void TheSameSoundTakenFromOneChannelOfItsStreamIsAnotherKey()
+    {
+        LiveSessionKey whole = new(Network, Service, LiveProfile.Hd30);
+        LiveSessionKey left = whole.Taking(SoundPlacement.OneChannelOf(0, SoundChannel.Left));
+        LiveSessionKey right = new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Secondary)
+            .Taking(SoundPlacement.OneChannelOf(0, SoundChannel.Right));
+
+        Assert.NotEqual(whole, left);
+        Assert.Equal(left, whole.Taking(SoundPlacement.OneChannelOf(0, SoundChannel.Left)));
+        Assert.Equal(whole, left.Taking(SoundPlacement.WholeStream(0)));
+        Assert.Equal(SoundTrack.Main, left.Sound);
+        Assert.Equal(SoundPlacement.OneChannelOf(0, SoundChannel.Left), left.Placement);
+        Assert.Equal("32736:1024:720p30:main:left", left.ToString());
+        Assert.Equal("32736:1024:720p30:secondary:right", right.ToString());
+        Assert.Throws<ArgumentNullException>(() => whole.Taking(null!));
+    }
+
     [Fact]
     public void NothingOnAKeyCanBeChangedOnceItIsMade()
     {

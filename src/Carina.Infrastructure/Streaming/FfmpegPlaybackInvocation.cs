@@ -50,26 +50,12 @@ public static class FfmpegPlaybackInvocation
             from.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture),
             "-i",
             source.Value,
-            .. Mapping(service, sound),
+            .. FfmpegLiveInvocation.Mapping(service, sound),
             "-vf",
             FfmpegLiveInvocation.Filter(profile, attributes, encoder),
             .. FfmpegLiveInvocation.Encoding(profile, encoder),
             .. FfmpegLiveInvocation.Sound(),
             .. Panning(sound),
-        ];
-    }
-
-    internal static IReadOnlyList<string> Mapping(ServiceId service, SoundPlacement sound)
-    {
-        int programNumber = service.Value;
-        int ordinal = sound.Ordinal;
-
-        return
-        [
-            "-map",
-            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0"),
-            "-map",
-            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:{ordinal}"),
         ];
     }
 

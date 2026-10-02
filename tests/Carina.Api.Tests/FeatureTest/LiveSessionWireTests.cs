@@ -1,7 +1,9 @@
 using System.Net.WebSockets;
 
 using Carina.Api.Live;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
@@ -318,6 +320,103 @@ public sealed class LiveSessionWireTests
         Assert.Equal(WebSocketCloseStatus.PolicyViolation, ending.CloseStatus);
         Assert.Equal(1, few.Started);
         Assert.Equal(1, Sessions(probe).Viewers(EveryFrame));
+    }
+
+    [Theory(DisplayName = "BR-PD-008: a wire opened while the channel is announcing two languages on one sound is given the channel of the language asked for")]
+    [InlineData("", SoundChannel.Left)]
+    [InlineData("&sound=main", SoundChannel.Left)]
+    [InlineData("&sound=secondary", SoundChannel.Right)]
+    public async Task AWireOpenedWhileTwoLanguagesAreOnOneSoundIsGivenTheChannelOfTheLanguageAskedFor(
+        string asked,
+        SoundChannel channel)
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        probe.Programmes.Programmes.Add(OnAir(event_: 7, AudioMode.DualMono, sounds: 1, TimeSpan.FromMinutes(-10)));
+
+        using WebSocket socket = await Carrying(probe, cookie)
+            .ConnectAsync(new Uri(Handshake("32736", "1024", "720p30") + asked), Patiently());
+
+        Assert.Equal(SoundPlacement.OneChannelOf(0, channel), Assert.Single(transcoders.Raised).Sound);
+    }
+
+    [Theory(DisplayName = "BR-PD-008: a wire opened on any other broadcast is given the whole stream of the sound asked for")]
+    [InlineData(AudioMode.Stereo, 1, "", 0)]
+    [InlineData(AudioMode.Stereo, 2, "&sound=secondary", 1)]
+    [InlineData(AudioMode.DualMono, 2, "", 0)]
+    [InlineData(AudioMode.Surround, 1, "", 0)]
+    public async Task AWireOpenedOnAnyOtherBroadcastIsGivenTheWholeStreamOfTheSoundAskedFor(
+        AudioMode audio,
+        int sounds,
+        string asked,
+        int ordinal)
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        probe.Programmes.Programmes.Add(OnAir(event_: 7, audio, sounds, TimeSpan.FromMinutes(-10)));
+
+        using WebSocket socket = await Carrying(probe, cookie)
+            .ConnectAsync(new Uri(Handshake("32736", "1024", "720p30") + asked), Patiently());
+
+        Assert.Equal(SoundPlacement.WholeStream(ordinal), Assert.Single(transcoders.Raised).Sound);
+    }
+
+    [Fact(DisplayName = "BR-PD-008: what the channel announced before and what it will announce next do not decide how the sound on air is taken")]
+    public async Task WhatWasAnnouncedBeforeAndWhatComesNextDoNotDecideHowTheSoundOnAirIsTaken()
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        probe.Programmes.Programmes.Add(OnAir(event_: 6, AudioMode.DualMono, sounds: 1, TimeSpan.FromMinutes(-70)));
+        probe.Programmes.Programmes.Add(OnAir(event_: 7, AudioMode.Stereo, sounds: 1, TimeSpan.FromMinutes(-10)));
+        probe.Programmes.Programmes.Add(OnAir(event_: 8, AudioMode.DualMono, sounds: 1, TimeSpan.FromMinutes(50)));
+        probe.Programmes.Programmes.Add(OnAir(event_: 9, AudioMode.DualMono, sounds: 1, TimeSpan.FromMinutes(-10), service: 1032));
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        Assert.Equal(SoundPlacement.WholeStream(0), Assert.Single(transcoders.Raised).Sound);
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a wire opened after the broadcast changed how it carries its sound is not seated on the transcoder raised before it did")]
+    public async Task AWireOpenedAfterTheBroadcastChangedIsNotSeatedOnTheTranscoderRaisedBefore()
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+        Programme twoLanguages = OnAir(event_: 7, AudioMode.DualMono, sounds: 1, TimeSpan.FromMinutes(-10));
+
+        probe.Programmes.Programmes.Add(twoLanguages);
+
+        using WebSocket before = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        probe.Programmes.Programmes.Remove(twoLanguages);
+        probe.Programmes.Programmes.Add(OnAir(event_: 8, AudioMode.Stereo, sounds: 1, TimeSpan.FromMinutes(-1)));
+
+        using WebSocket after = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        Assert.Equal(
+            [SoundPlacement.OneChannelOf(0, SoundChannel.Left), SoundPlacement.WholeStream(0)],
+            transcoders.Raised.Select(raised => raised.Sound));
+        Assert.Equal(1, Sessions(probe).Viewers(EveryFrame));
+        Assert.Equal(1, Sessions(probe).Viewers(EveryFrame.Taking(SoundPlacement.OneChannelOf(0, SoundChannel.Left))));
+    }
+
+    private static Programme OnAir(int event_, AudioMode audio, int sounds, TimeSpan startsIn, int service = 1024)
+    {
+        DateTime startsAt = DateTime.UtcNow + startsIn;
+
+        return Programme.Rehydrate(
+            new ProgrammeId(new NetworkId(32736), new ServiceId(service), new EventId(event_)),
+            new TransportStreamId(32736),
+            startsAt,
+            startsAt + TimeSpan.FromHours(1),
+            "a programme",
+            string.Empty,
+            isShadow: false,
+            startsAt,
+            audio: audio,
+            sounds: sounds);
     }
 
     private static Uri Handshake(string network, string service, string profile)

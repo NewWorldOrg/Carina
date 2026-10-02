@@ -390,6 +390,72 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
         Assert.Equal("2", Sound(tracks).Value("channels"));
     }
 
+    [Fact(DisplayName = "BR-PD-008: a live viewer of a broadcast carrying two languages on one sound hears only the language asked for, in both ears")]
+    public async Task BrPd008ALiveViewerOfTwoLanguagesOnOneSoundHearsOnlyTheLanguageAskedFor()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguagesOnOneSound) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-two-languages.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> main = await LiveTracksAsync(
+            written,
+            "live-main.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Left));
+        IReadOnlyList<FfprobeRecord> secondary = await LiveTracksAsync(
+            written,
+            "live-secondary.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Right));
+
+        Assert.Equal(["video", "audio"], Types(main));
+        Assert.Equal(["video", "audio"], Types(secondary));
+        Assert.Equal("2", Sound(main).Value("channels"));
+        Assert.Equal("2", Sound(secondary).Value("channels"));
+
+        foreach (int ear in new[] { 0, 1 })
+        {
+            Tones heard = await HeardAsync("live-main.mp4", ear);
+            Tones other = await HeardAsync("live-secondary.mp4", ear);
+
+            Assert.True(
+                heard.Main > heard.Secondary * TimesLouder,
+                $"the main sound in ear {ear} carried {heard.Main:F5} of its own tone and {heard.Secondary:F5} of the other one");
+            Assert.True(
+                other.Secondary > other.Main * TimesLouder,
+                $"the secondary sound in ear {ear} carried {other.Secondary:F5} of its own tone and {other.Main:F5} of the other one");
+        }
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a live viewer of a broadcast that did not announce two languages still hears each channel where the broadcast put it")]
+    public async Task BrPd008ALiveViewerOfABroadcastThatAnnouncedNothingStillHearsEachChannelWhereItWasPut()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguagesOnOneSound) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-as-sent.m2ts"));
+
+        await LiveTracksAsync(written, "live-as-sent.mp4");
+
+        Tones left = await HeardAsync("live-as-sent.mp4", 0);
+        Tones right = await HeardAsync("live-as-sent.mp4", 1);
+
+        Assert.True(left.Main > left.Secondary * TimesLouder, $"the left ear carried {left.Main:F5} and {left.Secondary:F5}");
+        Assert.True(right.Secondary > right.Main * TimesLouder, $"the right ear carried {right.Main:F5} and {right.Secondary:F5}");
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a dual-mono sound taken from one of its channels still reaches a live viewer on two channels")]
+    public async Task BrPd008ADualMonoSoundTakenFromOneOfItsChannelsStillReachesALiveViewerOnTwoChannels()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.DualMono) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-dual-mono-main.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> tracks = await LiveTracksAsync(
+            written,
+            "live-dual-mono-main.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Left));
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("LC", Sound(tracks).Value("profile"));
+        Assert.Equal("2", Sound(tracks).Value("channels"));
+        await BothTracksCarrySomethingAsync("live-dual-mono-main.mp4");
+    }
+
     [Fact]
     public async Task ARecordingCarryingTwoSoundsIsPlayedBackWithItsMainOneAlone()
     {
@@ -679,13 +745,19 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
     private static FfprobeRecord Sound(IReadOnlyList<FfprobeRecord> probed)
         => probed.First(record => record.Value("codec_type") is "audio");
 
-    private async Task<IReadOnlyList<FfprobeRecord>> LiveTracksAsync(string written, string name)
+    private async Task<IReadOnlyList<FfprobeRecord>> LiveTracksAsync(string written, string name, SoundPlacement? sound = null)
     {
         string delivered = Path.Combine(room, name);
 
         await TranscodedAsync(
             [
-                .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None),
+                .. FfmpegLiveInvocation.Arguments(
+                    Service,
+                    LiveProfile.Hd30,
+                    Interlaced,
+                    LiveEncoder.Software,
+                    CaptionOutlet.None,
+                    sound),
                 .. FfmpegLiveInvocation.Delivery(),
             ],
             fed: written,

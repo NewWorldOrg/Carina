@@ -188,7 +188,7 @@ public sealed class FfmpegLiveInvocationTests
 
     [Theory]
     [MemberData(nameof(EveryProfileOnEveryEncoder))]
-    public void NothingReshapesTheSoundSoTwoLanguagesCarriedOnTwoChannelsStayOnTwoChannels(
+    public void NothingReshapesASoundTakenWholeSoEveryChannelTheBroadcastSentIsStillThere(
         LiveProfile profile,
         LiveEncoder encoder)
     {
@@ -231,7 +231,7 @@ public sealed class FfmpegLiveInvocationTests
     {
         Assert.Equal(
             FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None),
-            FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None, SoundTrack.Main));
+            FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None, SoundPlacement.WholeStream(0)));
     }
 
     [Theory]
@@ -246,7 +246,7 @@ public sealed class FfmpegLiveInvocationTests
                 Interlaced,
                 encoder,
                 CaptionOutlet.None,
-                SoundTrack.Secondary),
+                SoundPlacement.WholeStream(1)),
         ];
 
         Assert.Equal(["p:1040:v:0", "p:1040:a:1"], Mapped(arguments));
@@ -265,7 +265,7 @@ public sealed class FfmpegLiveInvocationTests
                 Interlaced,
                 encoder,
                 CaptionOutlet.None,
-                SoundTrack.Secondary),
+                SoundPlacement.WholeStream(1)),
         ];
 
         Assert.Equal(main.Length, second.Length);
@@ -286,7 +286,7 @@ public sealed class FfmpegLiveInvocationTests
                 Interlaced,
                 encoder,
                 CaptionOutlet.None,
-                SoundTrack.Secondary),
+                SoundPlacement.WholeStream(1)),
         ];
 
         Assert.Single(arguments, argument => string.Equals(argument, "-c:a", StringComparison.Ordinal));
@@ -294,16 +294,58 @@ public sealed class FfmpegLiveInvocationTests
         Assert.Single(Mapped(arguments), map => map.StartsWith("p:1040:a", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void ASoundThisApplicationDoesNotCarryIsRefusedBeforeAnythingIsBuilt()
+    [Theory(DisplayName = "BR-PD-008: a sound carried on one channel of its stream is taken from that stream and that channel is put in both ears, the same way a recording is played")]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void BrPd008ASoundCarriedOnOneChannelOfItsStreamIsPutInBothEars(LiveProfile profile, LiveEncoder encoder)
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegLiveInvocation.Arguments(
-            Service,
-            LiveProfile.Hd30,
-            Interlaced,
-            LiveEncoder.Software,
-            CaptionOutlet.None,
-            (SoundTrack)9));
+        string[] left =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                CaptionOutlet.None,
+                SoundPlacement.OneChannelOf(0, SoundChannel.Left)),
+        ];
+        string[] right =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                CaptionOutlet.None,
+                SoundPlacement.OneChannelOf(0, SoundChannel.Right)),
+        ];
+
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(left));
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(right));
+        Assert.Equal(FfmpegPlaybackInvocation.TheLeftChannelInBothEars, left[left.IndexOf("-af") + 1]);
+        Assert.Equal(FfmpegPlaybackInvocation.TheRightChannelInBothEars, right[right.IndexOf("-af") + 1]);
+        Assert.Single(left, argument => string.Equals(argument, "-af", StringComparison.Ordinal));
+        Assert.True(left.IndexOf("-af") > left.IndexOf("-c:a"));
+    }
+
+    [Theory(DisplayName = "BR-PD-008: only the choice of ear is added when a sound is taken from one channel")]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void OnlyTheChoiceOfEarIsAddedWhenASoundIsTakenFromOneChannel(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] whole = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None)];
+        string[] left =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                CaptionOutlet.None,
+                SoundPlacement.OneChannelOf(0, SoundChannel.Left)),
+        ];
+
+        Assert.Equal([.. whole, "-af", FfmpegPlaybackInvocation.TheLeftChannelInBothEars], left);
+        Assert.DoesNotContain("-ac", left);
+        Assert.DoesNotContain("-dual_mono_mode", left);
     }
 
     [Theory]

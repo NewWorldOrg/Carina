@@ -30,13 +30,15 @@ public static class FfmpegLiveInvocation
 
     private const string RecordedFragmentMicroseconds = "200000";
 
+    private static readonly SoundPlacement TheWholeFirstSound = SoundPlacement.WholeStream(0);
+
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
         LiveEncoder encoder,
         CaptionOutlet captions,
-        SoundTrack sound = SoundTrack.Main)
+        SoundPlacement? sound = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
@@ -58,13 +60,7 @@ public static class FfmpegLiveInvocation
                 "The captions are either drawn beside the picture or left out.");
         }
 
-        if (!Enum.IsDefined(sound))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(sound),
-                sound,
-                "A picture is carried with one of the sounds named here.");
-        }
+        SoundPlacement taken = sound ?? TheWholeFirstSound;
 
         return
         [
@@ -79,11 +75,12 @@ public static class FfmpegLiveInvocation
             .. Decoding(attributes, captions),
             "-i",
             Input,
-            .. Mapping(service, sound),
+            .. Mapping(service, taken),
             "-vf",
             Filter(profile, attributes, encoder),
             .. Encoding(profile, encoder),
             .. Sound(),
+            .. FfmpegPlaybackInvocation.Panning(taken),
         ];
     }
 
@@ -169,10 +166,10 @@ public static class FfmpegLiveInvocation
     internal static string Pipe(int descriptor)
         => string.Create(CultureInfo.InvariantCulture, $"pipe:{descriptor}");
 
-    internal static IReadOnlyList<string> Mapping(ServiceId service, SoundTrack sound)
+    internal static IReadOnlyList<string> Mapping(ServiceId service, SoundPlacement sound)
     {
         int programNumber = service.Value;
-        int ordinal = SoundTracks.Ordinal(sound);
+        int ordinal = sound.Ordinal;
 
         return
         [
