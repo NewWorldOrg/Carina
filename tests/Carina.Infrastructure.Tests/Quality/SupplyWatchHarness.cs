@@ -1,5 +1,6 @@
 using Carina.Contracts;
 using Carina.Domain.Driver;
+using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
 using Carina.Infrastructure.Quality;
 using Carina.TestSupport;
@@ -21,6 +22,8 @@ internal sealed class SupplyWatchHarness
     public const string Device = "adapter3.frontend0";
 
     public static readonly DateTime Noon = new(2026, 9, 8, 12, 0, 0, DateTimeKind.Utc);
+
+    public static readonly CollectionSettings Collection = new();
 
     public HandTurnedClock Clock { get; } = new(Noon);
 
@@ -127,5 +130,6 @@ internal sealed class SupplyWatchHarness
         => Supply.Readings.Add(SupplyReading.Of(
             SupplySilence.GuideVisits,
             QualitySubject.TheGuideLedger,
-            at + TimeSpan.FromHours(6)));
+            at + Collection.BetweenVisits,
+            Collection.LongestBetweenAttempts()));
 }

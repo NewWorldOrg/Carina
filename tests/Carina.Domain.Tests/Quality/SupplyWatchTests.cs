@@ -8,6 +8,8 @@ public sealed class SupplyWatchTests
 
     private static readonly TimeSpan FiveMinutes = TimeSpan.FromMinutes(5);
 
+    private static readonly TimeSpan HalfAnHour = TimeSpan.FromMinutes(30);
+
     private static readonly QualitySubject Adapter = QualitySubject.Of(QualitySubjectKind.Tuner, "adapter0");
 
     [Theory(DisplayName = "what a pass does about one supply follows whether it read it, whether it is quiet and whether one already stands")]
@@ -67,6 +69,50 @@ public sealed class SupplyWatchTests
         Assert.Equal(Adapter, found.Subject);
         Assert.Equal(FiveMinutes.TotalSeconds, found.Seconds);
     }
+
+    [Fact(DisplayName = "a supply that carries its own allowance is not quiet inside it, however long the shared threshold is")]
+    public void ASupplyThatCarriesItsOwnAllowanceIsNotQuietInsideIt()
+        => Assert.Empty(SupplyWatch.Quiet(
+            [
+                SupplyReading.Of(
+                    SupplySilence.GuideVisits,
+                    QualitySubject.TheGuideLedger,
+                    Noon - HalfAnHour + TimeSpan.FromSeconds(1),
+                    HalfAnHour),
+            ],
+            FiveMinutes,
+            Noon));
+
+    [Fact(DisplayName = "a supply that carries its own allowance is quiet once that has passed, and says what it was held against")]
+    public void ASupplyThatCarriesItsOwnAllowanceIsQuietOnceThatHasPassed()
+    {
+        SupplySilenceFinding found = Assert.Single(SupplyWatch.Quiet(
+            [SupplyReading.Of(SupplySilence.GuideVisits, QualitySubject.TheGuideLedger, Noon - HalfAnHour, HalfAnHour)],
+            FiveMinutes,
+            Noon));
+
+        Assert.Equal(HalfAnHour.TotalSeconds, found.Seconds);
+        Assert.Equal(HalfAnHour, found.Allowed);
+    }
+
+    [Fact(DisplayName = "a supply held against the shared threshold says it carried no allowance of its own")]
+    public void ASupplyHeldAgainstTheSharedThresholdSaysItCarriedNoAllowanceOfItsOwn()
+    {
+        SupplySilenceFinding found = Assert.Single(SupplyWatch.Quiet(
+            [SupplyReading.Of(SupplySilence.SignalSamples, Adapter, Noon - FiveMinutes)],
+            FiveMinutes,
+            Noon));
+
+        Assert.Null(found.Allowed);
+    }
+
+    [Fact(DisplayName = "an allowance of nothing is not one a supply can be held against")]
+    public void AnAllowanceOfNothingIsNotOneASupplyCanBeHeldAgainst()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => SupplyReading.Of(
+            SupplySilence.GuideVisits,
+            QualitySubject.TheGuideLedger,
+            Noon,
+            TimeSpan.Zero));
 
     [Fact(DisplayName = "the four supplies are told apart rather than counted as one silence")]
     public void TheFourSuppliesAreToldApartRatherThanCountedAsOneSilence()

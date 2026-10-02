@@ -115,6 +115,59 @@ public sealed class SupplyWatchRoundTests
         Assert.Equal(QualitySubject.TheGuideLedger, opened.Subject);
     }
 
+    [Fact(DisplayName = "a visit overdue for less than a sweep takes to come round is not quiet, though the shared threshold has passed")]
+    public async Task AVisitOverdueForLessThanASweepTakesToComeRoundIsNotQuiet()
+    {
+        SupplyWatchHarness harness = new();
+
+        harness.HoldingNothing();
+        harness.Visited(Noon - SupplyWatchHarness.Collection.BetweenVisits - (Shipped * 2));
+
+        SupplyWatchPass pass = await harness.Round().WatchAsync(Cancel);
+
+        Assert.Empty(harness.Incidents.Incidents);
+        Assert.Equal(
+            new SupplySilenceStanding(SupplySilence.GuideVisits, 1, 0),
+            Assert.Single(pass.Standing.Supplies, supply => supply.Silence is SupplySilence.GuideVisits));
+    }
+
+    [Fact(DisplayName = "the record of a visit ledger that went quiet keeps the sweep it was held against rather than the shared threshold")]
+    public async Task TheRecordOfAVisitLedgerThatWentQuietKeepsTheSweepItWasHeldAgainst()
+    {
+        SupplyWatchHarness harness = new();
+        TimeSpan round = SupplyWatchHarness.Collection.LongestBetweenAttempts();
+
+        harness.HoldingNothing();
+        harness.Visited(Noon - SupplyWatchHarness.Collection.BetweenVisits - round);
+
+        SupplyWatchPass pass = await harness.Round().WatchAsync(Cancel);
+
+        QualityIncident opened = Assert.Single(harness.Incidents.Incidents);
+
+        Assert.Equal(round.TotalSeconds, opened.Observed);
+        Assert.Equal(round.TotalSeconds, opened.Applied.Current);
+        Assert.Equal(Shipped.TotalSeconds, pass.Standing.Applied.Current);
+    }
+
+    [Fact(DisplayName = "a visit ledger that went quiet clears once something is attempted on it again")]
+    public async Task AVisitLedgerThatWentQuietClearsOnceSomethingIsAttemptedOnItAgain()
+    {
+        SupplyWatchHarness harness = new();
+
+        harness.HoldingNothing();
+        harness.Visited(Noon - TimeSpan.FromHours(7));
+
+        await harness.Round().WatchAsync(Cancel);
+
+        harness.Supply.Readings.Clear();
+        harness.Visited(Noon - SupplyWatchHarness.Collection.BetweenVisits - TimeSpan.FromMinutes(1));
+
+        SupplyWatchPass second = await harness.Round().WatchAsync(Cancel);
+
+        Assert.Equal(1, second.Resolved);
+        Assert.Equal(QualityIncidentState.Resolved, Assert.Single(harness.Incidents.Incidents).State);
+    }
+
     [Fact(DisplayName = "a visit that is not due again yet is not quiet")]
     public async Task AVisitThatIsNotDueAgainYetIsNotQuiet()
     {

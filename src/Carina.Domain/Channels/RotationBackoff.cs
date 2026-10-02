@@ -62,4 +62,19 @@ public sealed record RotationBackoff
 
         return delay < MaximumDelay ? delay : MaximumDelay;
     }
+
+    /// <summary>
+    /// Every delay waited out between the first failure and the one that reaches the ceiling, added together.
+    /// </summary>
+    public TimeSpan WaitBeforeTheCeiling()
+    {
+        TimeSpan waited = TimeSpan.Zero;
+
+        for (int failures = 1; failures < FailureCeiling; failures++)
+        {
+            waited += DelayAfter(failures);
+        }
+
+        return waited;
+    }
 }
