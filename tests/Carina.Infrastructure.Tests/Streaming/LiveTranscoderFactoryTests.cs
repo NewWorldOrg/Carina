@@ -453,7 +453,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         TimeSpan? grace = null,
         CaptionOutlet captions = CaptionOutlet.None,
         StreamAttributes? attributes = null,
-        SoundTrack sound = SoundTrack.Main,
+        SoundPlacement? sound = null,
         TimeProvider? clock = null)
     {
         LiveTranscoderStart start = await Starting(programme, encoder, cancellationToken, grace, captions, attributes, sound, clock);
@@ -470,7 +470,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         TimeSpan? grace = null,
         CaptionOutlet captions = CaptionOutlet.None,
         StreamAttributes? attributes = null,
-        SoundTrack sound = SoundTrack.Main,
+        SoundPlacement? sound = null,
         TimeProvider? clock = null)
     {
         var settings = new LiveTranscodeSettings
@@ -484,7 +484,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         return factory.StartAsync(
             Service,
             LiveProfile.Hd30,
-            sound,
+            sound ?? SoundPlacement.WholeStream(0),
             attributes ?? Interlaced,
             captions,
             cancellationToken);

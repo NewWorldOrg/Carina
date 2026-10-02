@@ -110,9 +110,31 @@ public sealed class FfmpegPlaybackInvocationTests
             Interlaced,
             LiveEncoder.Software,
             CaptionOutlet.None,
-            SoundTrack.Secondary);
+            TheWholeSecondStream);
 
         Assert.Equal(Mapped(live), Mapped(Arguments(TimeSpan.FromMinutes(1), TheWholeSecondStream)));
+    }
+
+    [Theory(DisplayName = "BR-PD-008: a played recording and a live viewer are given one channel of a stream by the same words")]
+    [InlineData(SoundChannel.Left)]
+    [InlineData(SoundChannel.Right)]
+    public void APlayedRecordingAndALiveViewerAreGivenOneChannelOfAStreamByTheSameWords(SoundChannel channel)
+    {
+        SoundPlacement placement = SoundPlacement.OneChannelOf(0, channel);
+        string[] live =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                LiveProfile.Hd30,
+                Interlaced,
+                LiveEncoder.Software,
+                CaptionOutlet.None,
+                placement),
+        ];
+        string[] played = [.. Arguments(TimeSpan.FromMinutes(1), placement)];
+
+        Assert.Equal(Mapped(live), Mapped(played));
+        Assert.Equal(live[live.IndexOf("-c:a")..], played[played.IndexOf("-c:a")..]);
     }
 
     [Fact]

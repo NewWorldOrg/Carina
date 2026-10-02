@@ -13,6 +13,7 @@ public static class LiveWire
     public static async Task Invoke(
         HttpContext context,
         ILiveSessionManager sessions,
+        ISoundOnAir onAir,
         ILiveDepartureLedger departures,
         LiveWireSettings settings,
         IHostApplicationLifetime running,
@@ -20,6 +21,7 @@ public static class LiveWire
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(onAir);
         ArgumentNullException.ThrowIfNull(departures);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(running);
@@ -45,12 +47,15 @@ public static class LiveWire
             return;
         }
 
-        if (LiveWireRequest.KeyOf(context.Request.Query) is not { } key)
+        if (LiveWireRequest.KeyOf(context.Request.Query) is not { } asked)
         {
             await RefuseAsync(context, StatusCodes.Status400BadRequest, LiveWireRequest.TheKeyThereIs);
 
             return;
         }
+
+        AnnouncedSound announced = await onAir.AnnouncedAsync(asked.Network, asked.Service, context.RequestAborted);
+        LiveSessionKey key = asked.Taking(SoundArrangement.Of(announced).Reaching(asked.Sound));
 
         LiveJoin join = await sessions.JoinAsync(key, context.RequestAborted);
 

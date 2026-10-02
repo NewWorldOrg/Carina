@@ -43,6 +43,7 @@ internal sealed class ProxiedKestrelProbe : IAsyncDisposable
                 services.AddSingleton<ILocalAccountRepository>(Accounts);
                 services.AddSingleton<IPasswordHasher>(Hasher);
                 services.AddSingleton<ILiveSupply>(Supply);
+                services.AddSingleton<ISoundOnAir>(new HeldSoundOnAir());
                 services.AddSingleton<ITranscodeBudget>(budget);
                 services.AddSingleton<ILiveTranscoderFactory>(Transcoders);
             });

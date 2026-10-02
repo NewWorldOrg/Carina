@@ -63,6 +63,29 @@ public sealed class SoundArrangementTests
         Assert.Equal(SoundPlacement.WholeStream(1), arrangement.Placement(SoundTrack.Secondary));
     }
 
+    [Fact(DisplayName = "BR-PD-008: a live viewer of a broadcast announcing two languages on one stream is given the channel of the one asked for")]
+    public void ALiveViewerOfTwoLanguagesOnOneStreamIsGivenTheChannelOfTheOneAskedFor()
+    {
+        SoundArrangement arrangement = SoundArrangement.Of(new AnnouncedSound(AudioMode.DualMono, 1));
+
+        Assert.Equal(SoundPlacement.OneChannelOf(0, SoundChannel.Left), arrangement.Reaching(SoundTrack.Main));
+        Assert.Equal(SoundPlacement.OneChannelOf(0, SoundChannel.Right), arrangement.Reaching(SoundTrack.Secondary));
+    }
+
+    [Theory(DisplayName = "BR-PD-008: a live viewer of any other broadcast is given the whole stream of the sound asked for, announced or not")]
+    [InlineData(AudioMode.Undetermined, 0)]
+    [InlineData(AudioMode.Stereo, 1)]
+    [InlineData(AudioMode.Surround, 1)]
+    [InlineData(AudioMode.Stereo, 2)]
+    [InlineData(AudioMode.DualMono, 2)]
+    public void ALiveViewerOfAnyOtherBroadcastIsGivenTheWholeStreamOfTheSoundAskedFor(AudioMode audio, int sounds)
+    {
+        SoundArrangement arrangement = SoundArrangement.Of(new AnnouncedSound(audio, sounds));
+
+        Assert.Equal(SoundPlacement.WholeStream(0), arrangement.Reaching(SoundTrack.Main));
+        Assert.Equal(SoundPlacement.WholeStream(1), arrangement.Reaching(SoundTrack.Secondary));
+    }
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(1, 1)]

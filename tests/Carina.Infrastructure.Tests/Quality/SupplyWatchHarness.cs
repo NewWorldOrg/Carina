@@ -32,6 +32,10 @@ internal sealed class SupplyWatchHarness
 
     public HeldQualitySignalSamples Samples { get; } = new();
 
+    public HeldQualityLedger Ledger { get; } = new();
+
+    public HeldQualitySignals Signals { get; } = new();
+
     public SamplingDriverStandIn Driver { get; } = new();
 
     public SupplyStandingBoard Board { get; } = new();
@@ -44,6 +48,8 @@ internal sealed class SupplyWatchHarness
             Incidents,
             Supply,
             Samples,
+            Ledger,
+            Signals,
             Driver,
             Board,
             Events,

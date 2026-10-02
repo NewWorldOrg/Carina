@@ -7,7 +7,7 @@ public interface ILiveTranscoderFactory
     Task<LiveTranscoderStart> StartAsync(
         ServiceId service,
         LiveProfile profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
         CancellationToken cancellationToken);

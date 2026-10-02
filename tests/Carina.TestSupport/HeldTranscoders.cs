@@ -46,7 +46,7 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
     public async Task<LiveTranscoderStart> StartAsync(
         ServiceId service,
         LiveProfile profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
         CancellationToken cancellationToken)
@@ -109,7 +109,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
     public HeldTranscoder(
         ServiceId service,
         LiveProfile profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         StreamAttributes attributes,
         CaptionOutlet captioned,
         ITranscodeSeat seat)
@@ -132,7 +132,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public LiveProfile Profile { get; }
 
-    public SoundTrack Sound { get; }
+    public SoundPlacement Sound { get; }
 
     public StreamAttributes Attributes { get; }
 

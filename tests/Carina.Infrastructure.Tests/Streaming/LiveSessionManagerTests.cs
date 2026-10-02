@@ -224,7 +224,9 @@ public sealed class LiveSessionManagerTests
 
         Assert.Equal(2, transcoders.Started);
         Assert.Equal(1, supply.Asked);
-        Assert.Equal([SoundTrack.Main, SoundTrack.Secondary], transcoders.Raised.Select(raised => raised.Sound));
+        Assert.Equal(
+            [SoundPlacement.WholeStream(0), SoundPlacement.WholeStream(1)],
+            transcoders.Raised.Select(raised => raised.Sound));
     }
 
     [Fact]

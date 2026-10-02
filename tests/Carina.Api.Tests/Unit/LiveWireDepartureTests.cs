@@ -23,7 +23,7 @@ public sealed class LiveWireDepartureTests
         var socket = new ScriptedWebSocket { ReceiveThrows = new ObjectDisposedException(nameof(WebSocket)) };
         LiveDepartureLedger ledger = Ledger();
 
-        await LiveWire.Invoke(Asking(socket), new SeatingAt(new HeldLiveSource()), ledger, Impatient(), Running, Clock);
+        await LiveWire.Invoke(Asking(socket), new SeatingAt(new HeldLiveSource()), new HeldSoundOnAir(), ledger, Impatient(), Running, Clock);
 
         Assert.Equal(1L, Counted(ledger, LiveDeparture.ViewerLeft).Times);
     }
@@ -35,7 +35,7 @@ public sealed class LiveWireDepartureTests
         LiveDepartureLedger ledger = Ledger();
 
         await Assert.ThrowsAsync<NotSupportedException>(
-            () => LiveWire.Invoke(Asking(socket), new SeatingAt(new HeldLiveSource()), ledger, Impatient(), Running, Clock));
+            () => LiveWire.Invoke(Asking(socket), new SeatingAt(new HeldLiveSource()), new HeldSoundOnAir(), ledger, Impatient(), Running, Clock));
 
         Assert.Equal(1L, Counted(ledger, LiveDeparture.SourceBroke).Times);
         Assert.Equal(1L, ledger.Read().Counted.Sum(counted => counted.Times));
@@ -49,7 +49,7 @@ public sealed class LiveWireDepartureTests
         LiveDepartureLedger ledger = new(clock, NullLogger<LiveDepartureLedger>.Instance);
 
         await Assert.ThrowsAsync<NotSupportedException>(
-            () => LiveWire.Invoke(Asking(socket), new SeatingAt(new HeldLiveSource()), ledger, Impatient(), Running, clock));
+            () => LiveWire.Invoke(Asking(socket), new SeatingAt(new HeldLiveSource()), new HeldSoundOnAir(), ledger, Impatient(), Running, clock));
 
         Assert.NotNull(Counted(ledger, LiveDeparture.SourceBroke).Longest);
     }

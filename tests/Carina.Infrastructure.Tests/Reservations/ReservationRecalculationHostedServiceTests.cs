@@ -9,6 +9,7 @@ using Carina.Domain.Rules;
 using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
+using Carina.Infrastructure.Tests.Collection;
 using Carina.Infrastructure.Tests.Rules;
 using Carina.TestSupport;
 
@@ -43,6 +44,39 @@ public sealed class ReservationRecalculationHostedServiceTests
             "the sweep the app asks for on start made the reservation the rule takes");
 
         await world.Stopping();
+    }
+
+    [Fact(DisplayName = "a pass that read the rules says in the log how far it reached, how many rules and programmes it read and how long that took")]
+    public async Task APassThatReadTheRulesSaysInTheLogHowManyItReadAndHowLongThatTook()
+    {
+        HeardLog log = new();
+        using World world = World.Of(log: log);
+        world.Rules.Rules.Add(Written("keyword=hill"));
+        world.Guide(Broadcast(1, "hill walking"), Broadcast(2, "river fishing"));
+
+        RecalculationPass pass = await world.Passing(RecalculationTrigger.RulesChanged);
+
+        IReadOnlyDictionary<string, object?> said = Assert.Single(
+            log.Entries,
+            entry => entry.ContainsKey("Milliseconds") && entry.ContainsKey("Rules"));
+
+        Assert.Equal(RecalculationReach.Everything, pass.Reach);
+        Assert.Equal(RecalculationReach.Everything, said["Reach"]);
+        Assert.Equal(1, said["Rules"]);
+        Assert.Equal(2, said["Programmes"]);
+        Assert.Equal(pass.Applied!.Took.TotalMilliseconds, said["Milliseconds"]);
+    }
+
+    [Fact(DisplayName = "a pass that did not read the rules says nothing of how long reading them took")]
+    public async Task APassThatDidNotReadTheRulesSaysNothingOfHowLongReadingThemTook()
+    {
+        HeardLog log = new();
+        using World world = World.Of(log: log);
+
+        RecalculationPass pass = await world.Passing(RecalculationTrigger.TunerConfigurationChanged);
+
+        Assert.Null(pass.Applied);
+        Assert.DoesNotContain(log.Entries, entry => entry.ContainsKey("Milliseconds"));
     }
 
     [Fact]
@@ -603,7 +637,7 @@ public sealed class ReservationRecalculationHostedServiceTests
     {
         private readonly ServiceProvider provider;
 
-        private World(bool seatingThrows, bool rushed)
+        private World(bool seatingThrows, bool rushed, HeardLog? log)
         {
             Write = new WatchedWrite();
             Outcomes = new HeldOutcomes(Write);
@@ -671,7 +705,8 @@ public sealed class ReservationRecalculationHostedServiceTests
                     BetweenReconciliations = TimeSpan.FromHours(1),
                 },
                 rushed ? new RushedClock(Now) : new FixedClock(Now),
-                NullLogger<ReservationRecalculationHostedService>.Instance);
+                log?.For<ReservationRecalculationHostedService>()
+                ?? NullLogger<ReservationRecalculationHostedService>.Instance);
         }
 
         public HeldRules Rules { get; } = new();
@@ -696,8 +731,8 @@ public sealed class ReservationRecalculationHostedServiceTests
 
         public ReservationRecalculationHostedService Recalculating { get; }
 
-        public static World Of(bool seatingThrows = false, bool rushed = false)
-            => new(seatingThrows, rushed);
+        public static World Of(bool seatingThrows = false, bool rushed = false, HeardLog? log = null)
+            => new(seatingThrows, rushed, log);
 
         public Task<RecalculationPass> Passing()
             => Recalculating.RunAsync(CancellationToken.None).WaitAsync(Eventually.Patience);
