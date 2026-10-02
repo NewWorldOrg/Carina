@@ -7,6 +7,10 @@ public sealed class RecordingQualityTests
 {
     private static readonly DateTime At = new(2026, 9, 15, 12, 0, 0, DateTimeKind.Utc);
 
+    private static readonly DateTime Ended = RecordingFactory.Now.AddHours(1);
+
+    private static readonly DateTime Later = Ended.AddDays(2);
+
     private static readonly QualityBands AsShipped = Bands();
 
     public static TheoryData<long, long, long> TheRecordingsTheCardCouldNotUnlock => new()
@@ -238,8 +242,113 @@ public sealed class RecordingQualityTests
         Assert.False(RecordingQuality.CountedClean(AsShipped).Compile()(recording));
     }
 
+    [Fact(DisplayName = "BR-KD-031: a recording descrambled since reads good on scrambling, and as a whole by what it lost alone")]
+    public void ARecordingDescrambledSinceIsReadByWhatItLostAlone()
+    {
+        Recording leftScrambled = EndedScrambled(DropCounters.Counted(0, 5_000_000), 4_800_000);
+        Recording descrambled = EndedScrambled(DropCounters.Counted(0, 5_000_000), 4_800_000);
+
+        descrambled.Descrambled(Later);
+
+        RecordingQuality before = RecordingQuality.Of(leftScrambled, AsShipped);
+        RecordingQuality after = RecordingQuality.Of(descrambled, AsShipped);
+
+        Assert.Equal(QualityLevel.MayNotBeWatchable, before.Scrambled);
+        Assert.Equal(QualityLevel.MayNotBeWatchable, before.Overall);
+        Assert.Equal(QualityLevel.Good, after.Scrambled);
+        Assert.Equal(QualityLevel.Good, after.Overall);
+        Assert.Equal(4_800_000, descrambled.ScrambledPackets);
+    }
+
+    [Fact(DisplayName = "BR-KD-031: what a descrambled recording lost still decides how it stands")]
+    public void WhatADescrambledRecordingLostStillDecidesHowItStands()
+    {
+        Recording recording = EndedScrambled(DropCounters.Counted(50_000, 1_000_000), 900_000);
+
+        recording.Descrambled(Later);
+
+        RecordingQuality read = RecordingQuality.Of(recording, AsShipped);
+
+        Assert.Equal(QualityLevel.Good, read.Scrambled);
+        Assert.Equal(QualityLevel.MayNotBeWatchable, read.Overall);
+    }
+
+    [Fact(DisplayName = "BR-KD-031: a gap in a descrambled recording still holds it at the warning level")]
+    public void AGapInADescrambledRecordingStillHoldsItAtTheWarningLevel()
+    {
+        Recording recording = EndedScrambled(DropCounters.Counted(0, 1_000_000), 900_000, gap: true);
+
+        recording.Descrambled(Later);
+
+        RecordingQuality read = RecordingQuality.Of(recording, AsShipped);
+
+        Assert.Equal(QualityLevel.Good, read.Scrambled);
+        Assert.Equal(QualityLevel.Warning, read.Overall);
+    }
+
+    [Fact(DisplayName = "BR-KD-031: descrambling a recording nothing counted leaves it unmeasured")]
+    public void DescramblingARecordingNothingCountedLeavesItUnmeasured()
+    {
+        Recording recording = EndedScrambled(DropCounters.Unmeasured, null);
+
+        recording.Descrambled(Later);
+
+        RecordingQuality read = RecordingQuality.Of(recording, AsShipped);
+
+        Assert.Equal(QualityLevel.Unmeasured, read.Overall);
+        Assert.Equal(QualityLevel.Unmeasured, read.Scrambled);
+    }
+
+    [Fact(DisplayName = "BR-KD-031: a recording descrambled since is counted clean when it lost nothing and has no gap")]
+    public void ARecordingDescrambledSinceIsCountedCleanWhenItLostNothing()
+    {
+        Recording leftScrambled = EndedScrambled(DropCounters.Counted(0, 1000), 900);
+        Recording descrambled = EndedScrambled(DropCounters.Counted(0, 1000), 900);
+        Recording lost = EndedScrambled(DropCounters.Counted(1, 1000), 900);
+        Recording broken = EndedScrambled(DropCounters.Counted(0, 1000), 900, gap: true);
+        Recording uncounted = EndedScrambled(DropCounters.Unmeasured, null);
+
+        descrambled.Descrambled(Later);
+        lost.Descrambled(Later);
+        broken.Descrambled(Later);
+        uncounted.Descrambled(Later);
+
+        Func<Recording, bool> clean = RecordingQuality.CountedClean(AsShipped).Compile();
+
+        Assert.False(clean(leftScrambled));
+        Assert.True(clean(descrambled));
+        Assert.False(clean(lost));
+        Assert.False(clean(broken));
+        Assert.False(clean(uncounted));
+    }
+
+    [Fact]
+    public void ARecordingIsNotReadWithoutTheRecording()
+        => Assert.Throws<ArgumentNullException>(() => RecordingQuality.Of(null!, AsShipped));
+
     private static RecordingQuality Read(DropCounters counters, long? scrambled)
         => RecordingQuality.Of(counters, scrambled, 0, AsShipped);
+
+    private static Recording EndedScrambled(DropCounters counters, long? scrambled, bool gap = false)
+    {
+        Recording recording = RecordingFactory.Started();
+
+        if (counters.Measured)
+        {
+            recording.Measure(counters, DropTimeline.Unlocated, scrambled, 0, RecordingFactory.Now);
+        }
+
+        if (gap)
+        {
+            recording.Missed(new RecordingGap(RecordingFactory.Now.AddSeconds(10), RecordingFactory.Now.AddSeconds(12.5)));
+        }
+
+        recording.Note(RecordingFactory.Fault(RecordingFault.ScramblingUnresolved));
+        recording.Abort(Ended);
+        recording.Settle(RecordingOutcome.Complete, 1_200_000, Ended);
+
+        return recording;
+    }
 
     private static bool CountedClean(DropCounters counters, long? scrambled)
     {
