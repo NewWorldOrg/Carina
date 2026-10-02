@@ -28,7 +28,9 @@ public sealed record RuleApplicationRun(
     IReadOnlyList<Reservation> Withdrawn,
     IReadOnlyList<Rule> TurnedOff,
     IReadOnlyList<RuleFault> Faulted,
-    int Moved = 0);
+    int Moved = 0,
+    int Rules = 0,
+    TimeSpan Took = default);
 
 public sealed record RuleRehearsal(
     IReadOnlyList<RuleMatch> Taking,
@@ -248,6 +250,7 @@ public sealed class RuleApplicationService(
         bool sweeping,
         CancellationToken cancellationToken)
     {
+        long began = clock.GetTimestamp();
         DateTime at = Moment();
         IReadOnlyList<Rule> enabled = await rules.ListEnabledByPrecedenceAsync(cancellationToken);
         (IReadOnlyList<Programme> carried, long revision) = await ReadAsync(from, cancellationToken);
@@ -279,7 +282,9 @@ public sealed class RuleApplicationService(
             withdrawn,
             run.TurnedOff,
             run.Faulted,
-            resolved.Moved);
+            resolved.Moved,
+            enabled.Count,
+            clock.GetElapsedTime(began));
     }
 
     private async Task<Making> MakeAsync(

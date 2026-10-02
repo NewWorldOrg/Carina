@@ -43,6 +43,25 @@ public sealed class RuleApplicationServiceTests
         Assert.Equal(["hill walking"], Named(world));
     }
 
+    [Fact(DisplayName = "a run says how many rules it read against how many programmes and how long that took")]
+    public async Task ARunSaysHowManyRulesItReadAgainstHowManyProgrammesAndHowLongThatTook()
+    {
+        World world = World.Of(applying: new SteppingClock(Now, TimeSpan.FromMilliseconds(250)));
+        world.Rules.Rules.Add(Written("keyword=hill", name: "hills"));
+        world.Rules.Rules.Add(Written("keyword=river", name: "rivers"));
+        world.Rules.Rules.Add(Written("keyword=sea", name: "seas", enabled: false));
+        world.Guide(
+            Broadcast(Listed, 1, "hill walking"),
+            Broadcast(Listed, 2, "river fishing"),
+            Broadcast(Listed, 3, "a quiz"));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Equal(2, run.Rules);
+        Assert.Equal(3, run.Read);
+        Assert.Equal(TimeSpan.FromMilliseconds(250), run.Took);
+    }
+
     [Fact]
     public async Task AReservationARuleMadeCarriesTheRuleTheMarginsAndThePriorityItWasWrittenWith()
     {
@@ -926,7 +945,7 @@ public sealed class RuleApplicationServiceTests
 
     private sealed class World
     {
-        private World(RuleApplicationSettings settings)
+        private World(RuleApplicationSettings settings, TimeProvider? applying)
         {
             Write = new WatchedWrite();
             Outcomes = new HeldOutcomes(Write);
@@ -962,7 +981,7 @@ public sealed class RuleApplicationServiceTests
                 settings,
                 Write,
                 Events,
-                new FixedClock(Now));
+                applying ?? new FixedClock(Now));
         }
 
         public HeldRules Rules { get; } = new();
@@ -991,7 +1010,8 @@ public sealed class RuleApplicationServiceTests
 
         public RuleApplicationService Applying { get; }
 
-        public static World Of(RuleApplicationSettings? settings = null) => new(settings ?? new RuleApplicationSettings());
+        public static World Of(RuleApplicationSettings? settings = null, TimeProvider? applying = null)
+            => new(settings ?? new RuleApplicationSettings(), applying);
 
         public void Guide(params Programme[] programmes) => Programmes.Programmes.AddRange(programmes);
 

@@ -52,6 +52,26 @@ public sealed class RideAlongHarvesterTests(RepositoryDatabase database)
             && entry.TryGetValue("Clamped", out object? clamped) && clamped is 0);
     }
 
+    [Fact(DisplayName = "what riding along with a session cost is said in the log when it writes the guide down")]
+    public async Task WhatRidingAlongWithASessionCostIsSaidInTheLog()
+    {
+        int network = NextNetwork();
+        ScriptedDriverClient driver = Recording(network, out SessionId recording);
+        var log = new HeardLog();
+
+        await using ServiceProvider provider = Provider(driver, log: log);
+        await RunAsync(provider, async () => await ProgrammeAsync(network) is not null);
+
+        IReadOnlyDictionary<string, object?> cost = log.Entries.Last(entry => entry.ContainsKey("ReadingMilliseconds"));
+
+        Assert.Equal(recording.Value, cost["SessionId"]);
+        Assert.True(cost["Bytes"] is long and > 0, $"the ride is said to have read {cost["Bytes"]} byte(s)");
+        Assert.True(cost["ReadingMilliseconds"] is double and >= 0);
+        Assert.True(cost["WritingMilliseconds"] is double and > 0);
+        Assert.True(cost["AllocatedBytes"] is long and >= 0);
+        Assert.True(cost["ElapsedSeconds"] is double and > 0);
+    }
+
     [Fact]
     public async Task OurOwnCollectionSessionsAreNotRiddenAlongWith()
     {

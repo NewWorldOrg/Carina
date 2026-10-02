@@ -162,6 +162,14 @@ public sealed class ReservationRecalculationHostedService(
                     : await applying.SinceAsync(cursor, cancellationToken);
 
                 cursor = applied.Revision;
+
+                logger.LogInformation(
+                    "Reading {Rules} rule(s) against {Programmes} programme(s) of the guide took {Milliseconds} ms "
+                    + "in a pass that reached {Reach}.",
+                    applied.Rules,
+                    applied.Read,
+                    applied.Took.TotalMilliseconds,
+                    reach);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

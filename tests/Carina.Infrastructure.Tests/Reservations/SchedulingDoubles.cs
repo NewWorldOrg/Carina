@@ -90,6 +90,17 @@ internal sealed class FixedClock(DateTime now) : TimeProvider
     public override DateTimeOffset GetUtcNow() => new(now, TimeSpan.Zero);
 }
 
+internal sealed class SteppingClock(DateTime now, TimeSpan eachLook) : TimeProvider
+{
+    private long looks;
+
+    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+    public override DateTimeOffset GetUtcNow() => new(now, TimeSpan.Zero);
+
+    public override long GetTimestamp() => Interlocked.Increment(ref looks) * eachLook.Ticks;
+}
+
 internal sealed class HeldSeating(TunerCapacity? capacity, WatchedWrite? write = null) : ITunerCapacityDirectory
 {
     public int Reads { get; private set; }

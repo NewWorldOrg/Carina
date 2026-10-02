@@ -120,6 +120,7 @@ public sealed class RideAlongHarvester(
         }
 
         var harvest = new StreamHarvest(clock);
+        var load = new RideAlongLoad(clock);
         byte[] buffer = ArrayPool<byte>.Shared.Rent(64 * 188);
         long lastSaved = clock.GetTimestamp();
 
@@ -136,14 +137,17 @@ public sealed class RideAlongHarvester(
                         break;
                     }
 
+                    RideAlongMark reading = load.Mark();
+
                     harvest.Push(buffer.AsSpan(0, got));
+                    load.Read(reading, got);
 
                     if (clock.GetElapsedTime(lastSaved) < settings.BetweenRideAlongSaves)
                     {
                         continue;
                     }
 
-                    await SaveAsync(harvest, sessionId, stoppingToken);
+                    await SaveAsync(harvest, load, sessionId, stoppingToken);
                     lastSaved = clock.GetTimestamp();
                 }
             }
@@ -156,10 +160,34 @@ public sealed class RideAlongHarvester(
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
-        await SaveAsync(harvest, sessionId, CancellationToken.None);
+        await SaveAsync(harvest, load, sessionId, CancellationToken.None);
     }
 
-    private async Task SaveAsync(StreamHarvest harvest, SessionId sessionId, CancellationToken cancellationToken)
+    private async Task SaveAsync(
+        StreamHarvest harvest,
+        RideAlongLoad load,
+        SessionId sessionId,
+        CancellationToken cancellationToken)
+    {
+        RideAlongMark writing = load.Mark();
+
+        await WriteAsync(harvest, sessionId, cancellationToken);
+
+        load.Wrote(writing);
+
+        logger.LogInformation(
+            "Riding along with {SessionId} for {ElapsedSeconds} s read {Bytes} byte(s): reading them took "
+            + "{ReadingMilliseconds} ms and allocated {AllocatedBytes} byte(s), and writing the guide down took "
+            + "{WritingMilliseconds} ms.",
+            sessionId.Value,
+            load.Elapsed.TotalSeconds,
+            load.Bytes,
+            load.Reading.TotalMilliseconds,
+            load.Allocated,
+            load.Writing.TotalMilliseconds);
+    }
+
+    private async Task WriteAsync(StreamHarvest harvest, SessionId sessionId, CancellationToken cancellationToken)
     {
         Gathered gathered = harvest.TakeWhatIsGathered();
 
