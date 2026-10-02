@@ -183,6 +183,53 @@ public sealed class ThresholdBreachRoundTests
         Assert.False(opened.Restated);
     }
 
+    [Fact(DisplayName = "BR-QD-021: one bad sample among the sound ones of the last day opens nothing")]
+    public async Task OneBadSampleAmongTheSoundOnesOfTheLastDayOpensNothing()
+    {
+        SupplyWatchHarness harness = new();
+
+        harness.HoldingNothing();
+        harness.Samples.Samples.AddRange(Enumerable.Range(1, 20).Select(turn => Sound(Noon.AddMinutes(-turn))));
+        harness.Samples.Samples.Add(Bad(Noon.AddMinutes(-30)));
+
+        SupplyWatchPass pass = await harness.RoundOverTheSamples().WatchAsync(Cancel);
+
+        Assert.Empty(harness.Incidents.Incidents);
+        Assert.Equal(0, pass.Opened);
+    }
+
+    [Fact(DisplayName = "BR-QD-021: a tuner that goes on reading badly is opened at what it usually read, and is closed once it reads well again")]
+    public async Task ATunerThatGoesOnReadingBadlyIsOpenedAndIsClosedOnceItReadsWellAgain()
+    {
+        SupplyWatchHarness harness = new();
+
+        harness.HoldingNothing();
+        harness.Samples.Samples.AddRange(Enumerable.Range(1, 4).Select(turn => Sound(Noon.AddMinutes(-30 - turn))));
+        harness.Samples.Samples.AddRange(Enumerable.Range(1, 5).Select(turn => Bad(Noon.AddMinutes(-turn))));
+
+        await harness.RoundOverTheSamples().WatchAsync(Cancel);
+
+        Assert.Equal(
+            [
+                (QualityThresholdKey.CarrierToNoiseFloor, 6_000d),
+                (QualityThresholdKey.BitErrorRateCeiling, 0.02),
+            ],
+            harness.Incidents.Incidents
+                .OrderBy(incident => incident.Breached)
+                .Select(incident => (incident.Breached, incident.Observed)));
+        Assert.All(
+            harness.Incidents.Incidents,
+            incident => Assert.Equal(QualitySubject.Of(QualitySubjectKind.Tuner, SupplyWatchHarness.Device), incident.Subject));
+
+        harness.Clock.Turn(TimeSpan.FromMinutes(10));
+        harness.Samples.Samples.AddRange(Enumerable.Range(1, 2).Select(turn => Sound(Noon.AddMinutes(turn))));
+
+        SupplyWatchPass pass = await harness.RoundOverTheSamples().WatchAsync(Cancel);
+
+        Assert.Equal(2, pass.Resolved);
+        Assert.All(harness.Incidents.Incidents, incident => Assert.True(incident.HasSettled));
+    }
+
     [Fact(DisplayName = "BR-QD-020: a tuner the driver says cannot lock is restated once and is not opened again as a lock rate of this domain's own")]
     public async Task ATunerTheDriverSaysCannotLockIsNotOpenedAgainAsALockRateOfThisDomainsOwn()
     {
@@ -265,6 +312,32 @@ public sealed class ThresholdBreachRoundTests
             0,
             startedAt);
 
+    private static QualitySignalSample Sound(DateTime at) => Sample(at, 30_000, 0);
+
+    private static QualitySignalSample Bad(DateTime at) => Sample(at, 6_000, 20_000);
+
+    private static QualitySignalSample Sample(DateTime at, int carrierToNoise, long errorBits)
+        => QualitySignalSample.Rehydrate(
+            "instance-a",
+            SessionId.Parse("live-1"),
+            at,
+            SessionPurpose.Live,
+            new TunerDeviceId(SupplyWatchHarness.Device),
+            new NetworkId(32_736),
+            new ServiceId(1_024),
+            SignalSample.WithLock(at, carrierToNoise, at, [new LayerBitErrorCounts(1, errorBits, 1_000_000)], at));
+
     private static SignalFigures Figures(string tuner, long locked, double? bitErrors)
-        => new(new TunerDeviceId(tuner), 100, locked, 0, 0, locked is 0 ? null : 30_000, bitErrors, [], Noon);
+        => new(
+            new TunerDeviceId(tuner),
+            100,
+            locked,
+            0,
+            0,
+            locked is 0 ? null : 30_000,
+            locked is 0 ? null : 30_000,
+            bitErrors,
+            bitErrors,
+            [],
+            Noon);
 }

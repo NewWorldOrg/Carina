@@ -138,7 +138,9 @@ internal sealed class QualityFeature : IAsyncDisposable
         long unreachable = 0,
         int? carrierToNoise = 31_000,
         double? bitErrorRate = 0,
-        IReadOnlyList<string>? notRead = null)
+        IReadOnlyList<string>? notRead = null,
+        int? carrierToNoiseLowest = null,
+        double? bitErrorRateHighest = null)
     {
         SignalFigures figures = new(
             new TunerDeviceId(tuner),
@@ -146,7 +148,9 @@ internal sealed class QualityFeature : IAsyncDisposable
             locked,
             0,
             unreachable,
+            carrierToNoiseLowest ?? carrierToNoise,
             carrierToNoise,
+            bitErrorRateHighest ?? bitErrorRate,
             bitErrorRate,
             notRead ?? [],
             Noon.AddMinutes(-10));

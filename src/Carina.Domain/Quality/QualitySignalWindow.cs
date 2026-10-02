@@ -12,6 +12,13 @@ public sealed record LayerErrorPeak(int Layer, double Highest);
 /// The one physical channel everything in the window was taken on, or null when it was not all taken
 /// on one, does not say, or the window was folded from several.
 /// </param>
+/// <param name="CarrierToNoiseAverage">
+/// The average carrier to noise figure over the window, or null when it read none or was folded from several.
+/// </param>
+/// <param name="BitErrorRateAverage">
+/// The average bit error rate of the layer that averaged worst over the window, or null when it read none or was
+/// folded from several.
+/// </param>
 public sealed record QualitySignalWindow(
     DateTime Start,
     TunerDeviceId Tuner,
@@ -25,8 +32,15 @@ public sealed record QualitySignalWindow(
     IReadOnlyList<LayerErrorPeak> BitErrors,
     IReadOnlyList<string> MetricsNotRead,
     DateTime? LastCarriedAt,
-    int? PhysicalChannel = null)
+    int? PhysicalChannel = null,
+    double? CarrierToNoiseAverage = null,
+    double? BitErrorRateAverage = null)
 {
+    /// <summary>
+    /// How many of the samples in the window carried a figure.
+    /// </summary>
+    public long Carried => Samples - Unmeasured - Unreachable;
+
     public static QualitySignalWindow Of(QualitySignalRollup rollup)
     {
         ArgumentNullException.ThrowIfNull(rollup);
@@ -44,7 +58,9 @@ public sealed record QualitySignalWindow(
             [.. rollup.BitErrors.Select(rate => new LayerErrorPeak(rate.Layer, rate.Highest))],
             [],
             rollup.CarrierToNoiseLowest is not null || rollup.BitErrors.Count > 0 ? rollup.WindowStart : null,
-            rollup.PhysicalChannel);
+            rollup.PhysicalChannel,
+            rollup.CarrierToNoiseAverage,
+            rollup.BitErrors.Count is 0 ? null : rollup.BitErrors.Max(rate => rate.Average));
     }
 
     public static QualitySignalWindow Of(QualitySignalSample sample)
@@ -52,6 +68,12 @@ public sealed record QualitySignalWindow(
         ArgumentNullException.ThrowIfNull(sample);
 
         SignalSample signal = sample.Signal;
+        LayerErrorPeak[] rates =
+        [
+            .. signal.BitErrors
+                .Where(counts => counts.ErrorRate.HasValue)
+                .Select(counts => new LayerErrorPeak(counts.Layer, counts.ErrorRate.GetValueOrDefault())),
+        ];
 
         return new QualitySignalWindow(
             sample.TakenAt,
@@ -63,13 +85,11 @@ public sealed record QualitySignalWindow(
             signal.WasTaken && !signal.CarriesAnyValue ? 1 : 0,
             signal.WasTaken ? 0 : 1,
             signal.CarrierToNoiseMilliDecibels,
-            [
-                .. signal.BitErrors
-                    .Where(counts => counts.ErrorRate.HasValue)
-                    .Select(counts => new LayerErrorPeak(counts.Layer, counts.ErrorRate.GetValueOrDefault())),
-            ],
+            rates,
             signal.MetricsNotRead,
             signal.FiguresReadAt,
-            sample.PhysicalChannel);
+            sample.PhysicalChannel,
+            signal.CarrierToNoiseMilliDecibels,
+            rates.Length is 0 ? null : rates.Max(peak => peak.Highest));
     }
 }

@@ -187,6 +187,20 @@ public sealed class TunersThatNeverLockTests
         Assert.Equal("warning", row.GetProperty("standing").GetString());
     }
 
+    [Fact(DisplayName = "BR-QD-021: a tuner whose worst moment went beyond its levels while it usually read within them stays a healthy row")]
+    public async Task ATunerWhoseWorstMomentWentBeyondItsLevelsStaysAHealthyRow()
+    {
+        await using QualityFeature feature = new();
+        feature.Driver.Tuners = [new TunerSnapshot(Terrestrial, TunerKind.Terrestrial, TunerState.Idle)];
+        feature.Sampled(tuner: Terrestrial, carrierToNoiseLowest: 6_000, bitErrorRateHighest: 0.02);
+
+        JsonElement row = Tuner(await TunersAsync(feature), Terrestrial);
+
+        Assert.Equal("good", State(Signal(row, "carrierToNoiseFloor")));
+        Assert.Equal("good", State(Signal(row, "bitErrorRateCeiling")));
+        Assert.Equal("good", row.GetProperty("standing").GetString());
+    }
+
     [Fact(DisplayName = "BR-QD-017: a driver that cannot be asked still leaves the sampled tuners and the ones that cannot lock on the list")]
     public async Task ADriverThatCannotBeAskedStillLeavesTheSampledTunersOnTheList()
     {

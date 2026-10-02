@@ -214,6 +214,151 @@ public sealed class QualitySignalSurveyTests
         Assert.Equal(Noon, figure.LastTakenAt);
     }
 
+    [Fact(DisplayName = "BR-QD-021: one bad sample among sound ones leaves the tuner within its levels, and the worst of it is still kept")]
+    public void OneBadSampleAmongSoundOnesLeavesTheTunerWithinItsLevels()
+    {
+        IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
+            [],
+            [
+                .. Enumerable.Range(0, 9).Select(turn => Sample(Noon.AddSeconds(10 * turn), Read(30_000 + turn, 0))),
+                Sample(Noon.AddSeconds(90), Read(6_000, 20_000)),
+            ]);
+
+        SignalFigures figure = Assert.Single(figures);
+
+        Assert.Equal(30_004, figure.CarrierToNoiseUsual);
+        Assert.Equal(0, figure.BitErrorRateUsual);
+        Assert.Equal(6_000, figure.CarrierToNoiseLowest);
+        Assert.Equal(0.02, figure.BitErrorRateHighest);
+        Assert.Equal(QualityState.Good, QualityStates.Of(Read(QualityThresholdKey.CarrierToNoiseFloor, figures).Reading));
+        Assert.Equal(QualityState.Good, QualityStates.Of(Read(QualityThresholdKey.BitErrorRateCeiling, figures).Reading));
+    }
+
+    [Fact(DisplayName = "BR-QD-021: a tuner more than half of whose samples read beyond a level is beyond it")]
+    public void ATunerMoreThanHalfOfWhoseSamplesReadBeyondALevelIsBeyondIt()
+    {
+        IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
+            [],
+            [
+                Sample(Noon, Read(30_000, 0)),
+                Sample(Noon.AddSeconds(10), Read(31_000, 0)),
+                Sample(Noon.AddSeconds(20), Read(6_000, 20_000)),
+                Sample(Noon.AddSeconds(30), Read(7_000, 15_000)),
+                Sample(Noon.AddSeconds(40), Read(8_000, 10_000)),
+            ]);
+
+        SignalFigures figure = Assert.Single(figures);
+
+        Assert.Equal(8_000, figure.CarrierToNoiseUsual);
+        Assert.Equal(0.01, figure.BitErrorRateUsual);
+        Assert.Equal(
+            QualityState.AtOrAboveWarning,
+            QualityStates.Of(Read(QualityThresholdKey.CarrierToNoiseFloor, figures).Reading));
+        Assert.Equal(
+            QualityState.AtOrAboveWarning,
+            QualityStates.Of(Read(QualityThresholdKey.BitErrorRateCeiling, figures).Reading));
+    }
+
+    [Fact(DisplayName = "BR-QD-021: a tuner exactly half of whose samples read beyond a level is not beyond it")]
+    public void ATunerExactlyHalfOfWhoseSamplesReadBeyondALevelIsNotBeyondIt()
+    {
+        IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
+            [],
+            [
+                Sample(Noon, Read(30_000, 0)),
+                Sample(Noon.AddSeconds(10), Read(6_000, 20_000)),
+            ]);
+
+        SignalFigures figure = Assert.Single(figures);
+
+        Assert.Equal(30_000, figure.CarrierToNoiseUsual);
+        Assert.Equal(0, figure.BitErrorRateUsual);
+    }
+
+    [Fact(DisplayName = "BR-QD-021: a sample is read by the layer that erred most")]
+    public void ASampleIsReadByTheLayerThatErredMost()
+    {
+        IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
+            [],
+            [
+                Sample(
+                    Noon,
+                    SignalSample.WithLock(
+                        Noon,
+                        30_000,
+                        Noon,
+                        [new LayerBitErrorCounts(0, 0, 1_000_000), new LayerBitErrorCounts(1, 500, 1_000_000)],
+                        Noon)),
+            ]);
+
+        Assert.Equal(0.0005, Assert.Single(figures).BitErrorRateUsual);
+    }
+
+    [Fact(DisplayName = "BR-QD-021: a window that outlived its samples weighs as many as carried a figure in it, at what it averaged")]
+    public void AWindowThatOutlivedItsSamplesWeighsAsManyAsCarriedAFigureInIt()
+    {
+        QualitySignalRollup sound = Rolled(Noon.AddHours(-2), samples: 6, unmeasured: 1, 30_000, 29_000, 31_000, 0);
+        QualitySignalRollup bad = Rolled(Noon.AddHours(-1), samples: 4, unmeasured: 0, 9_000, 6_000, 12_000, 0.01);
+
+        SignalFigures mostlySound = Assert.Single(QualitySignalSurvey.Figures([sound, bad], []));
+
+        Assert.Equal(30_000, mostlySound.CarrierToNoiseUsual);
+        Assert.Equal(0, mostlySound.BitErrorRateUsual);
+        Assert.Equal(6_000, mostlySound.CarrierToNoiseLowest);
+
+        SignalFigures mostlyBad = Assert.Single(QualitySignalSurvey.Figures(
+            [sound, bad],
+            [
+                Sample(Noon, Read(8_000, 20_000)),
+                Sample(Noon.AddSeconds(10), Read(8_500, 20_000)),
+            ]));
+
+        Assert.Equal(9_000, mostlyBad.CarrierToNoiseUsual);
+        Assert.Equal(0.01, mostlyBad.BitErrorRateUsual);
+    }
+
+    [Fact(DisplayName = "BR-QD-021: a tuner that read no figure has no usual reading")]
+    public void ATunerThatReadNoFigureHasNoUsualReading()
+    {
+        SignalFigures figure = Assert.Single(QualitySignalSurvey.Figures(
+            [],
+            [Sample(Noon, SignalSample.WithoutLock(Noon))]));
+
+        Assert.Null(figure.CarrierToNoiseUsual);
+        Assert.Null(figure.BitErrorRateUsual);
+    }
+
+    private static SignalSample Read(int carrierToNoise, long errorBits)
+        => SignalSample.WithLock(
+            Noon,
+            carrierToNoise,
+            Noon,
+            [new LayerBitErrorCounts(1, errorBits, 1_000_000)],
+            Noon);
+
+    private static QualitySignalRollup Rolled(
+        DateTime start,
+        long samples,
+        long unmeasured,
+        double average,
+        int lowest,
+        int highest,
+        double errorRate)
+        => QualitySignalRollup.Rehydrate(
+            QualityWindow.Hour,
+            start,
+            Tuner,
+            new NetworkId(32736),
+            new ServiceId(1024),
+            samples,
+            samples - unmeasured,
+            unmeasured,
+            0,
+            average,
+            lowest,
+            highest,
+            [new LayerErrorRate(0, 0, 0), new LayerErrorRate(1, errorRate, errorRate * 2)]);
+
     private static QualitySignalRead Read(QualityThresholdKey key, IReadOnlyList<SignalFigures> figures)
         => QualitySignalSurvey.Read(figures, [Tuner], Levels).Single(one => one.Key == key);
 
