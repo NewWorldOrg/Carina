@@ -1344,6 +1344,25 @@ public sealed class TunerSessionManager(
         while (ended.Count > RetainedSessions && ended.TryDequeue(out _))
         { }
 
+        try
+        {
+            NoteHowItEnded(session);
+        }
+        finally
+        {
+            LetGoOfTheRecording(session.RecordingId, session.SessionId);
+
+            pool.Leave(session.SessionId);
+            pool.Sweep();
+
+            sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
+        }
+
+        Announce();
+    }
+
+    private void NoteHowItEnded(TunerSession session)
+    {
         if (tunings.TryRemove(session.SessionId, out TuningKey? tuning))
         {
             if (session.State is SessionState.Stopped)
@@ -1365,15 +1384,6 @@ public sealed class TunerSessionManager(
         {
             FaultAfterFailing(session);
         }
-
-        LetGoOfTheRecording(session.RecordingId, session.SessionId);
-
-        pool.Leave(session.SessionId);
-        pool.Sweep();
-
-        sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
-
-        Announce();
     }
 
     private void FaultAfterFailing(TunerSession session)
