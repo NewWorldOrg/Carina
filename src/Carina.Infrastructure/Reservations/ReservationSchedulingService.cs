@@ -109,7 +109,8 @@ public sealed class ReservationSchedulingService(
                         return run;
                     }
 
-                    moved = Apply(run.Plan, considered, at);
+                    Movement movement = Apply(run.Plan, considered, at);
+                    moved = movement.Moved;
 
                     await reservations.SaveAllAsync(Touched(standing, revised), token);
 
@@ -118,7 +119,7 @@ public sealed class ReservationSchedulingService(
                         await reservations.AddAsync(joined, token);
                     }
 
-                    return run;
+                    return run.Displacing(Displaced(movement.Fell, joining, revised));
                 },
                 cancellationToken);
         }
@@ -193,9 +194,16 @@ public sealed class ReservationSchedulingService(
         return stillRunning ? [.. others, revised, .. joining] : [.. others, .. joining];
     }
 
-    private static int Apply(AllocationPlan plan, IReadOnlyList<Reservation> considered, DateTime at)
+    private static ReservationId[] Displaced(
+        IReadOnlyList<ReservationId> fell,
+        IReadOnlyList<Reservation> joining,
+        Reservation? revised)
+        => [.. fell.Where(id => !id.Equals(revised?.Id) && !joining.Any(joined => joined.Id.Equals(id)))];
+
+    private static Movement Apply(AllocationPlan plan, IReadOnlyList<Reservation> considered, DateTime at)
     {
         int moved = 0;
+        List<ReservationId> fell = [];
 
         foreach (Reservation reservation in considered)
         {
@@ -225,9 +233,14 @@ public sealed class ReservationSchedulingService(
             {
                 moved++;
             }
+
+            if (stood is ReservationState.Scheduled && !unreachable && reservation.State is ReservationState.Conflict)
+            {
+                fell.Add(reservation.Id);
+            }
         }
 
-        return moved;
+        return new Movement(moved, fell);
     }
 
     private async Task<Dictionary<ServiceKey, TuningResolution>?> ResolveAsync(
@@ -322,4 +335,6 @@ public sealed class ReservationSchedulingService(
     private readonly record struct ServiceKey(int NetworkId, int ServiceId);
 
     private sealed record RecordingHold(DateTime Until, TunerDeviceId? Tuner);
+
+    private sealed record Movement(int Moved, IReadOnlyList<ReservationId> Fell);
 }

@@ -45,6 +45,7 @@ public sealed record ReservationSettlement(
     Reservation Reservation,
     AllocationVerdict? Verdict,
     IReadOnlyList<Reservation> Instead,
+    IReadOnlyList<Reservation> Displaced,
     int SeatsLeftOut);
 
 public sealed record ReservationDiscarded(ReservationId Id);
@@ -157,36 +158,41 @@ public sealed class ReservationService(
             return AlreadyReserved<ReservationSettlement>(raced);
         }
 
-        if (run.Settled)
-        {
-            await ReserveAlongsideAsync(draft, resolution, programme, at, cancellationToken);
-        }
+        IReadOnlyList<ReservationId> alongside = run.Settled
+            ? await ReserveAlongsideAsync(draft, resolution, planned, at, cancellationToken)
+            : [];
 
-        return await SettledAsync(run, planned, cancellationToken);
+        return await SettledAsync(run, planned, alongside, cancellationToken);
     }
 
     /// <summary>
     /// Reserves the other segments of a relayed broadcast that nothing reserves yet, with what was asked
-    /// for the one segment.
+    /// for the one segment, and answers with the reservations that lost their tuner to them.
     /// </summary>
-    private async Task ReserveAlongsideAsync(
+    private async Task<IReadOnlyList<ReservationId>> ReserveAlongsideAsync(
         ReservationDraft draft,
         BroadcastResolution resolution,
-        Programme asked,
+        Reservation asked,
         DateTime at,
         CancellationToken cancellationToken)
     {
+        HashSet<ReservationId> made = [asked.Id];
+        List<ReservationId> displaced = [];
+
         foreach (BroadcastTarget target in resolution.Targets)
         {
-            if (target.Programme.Id.Equals(asked.Id)
+            if (target.Programme.Id.Equals(asked.Programme.Id)
                 || await reservations.FindByProgrammeAsync(target.Reference, cancellationToken) is not null)
             {
                 continue;
             }
 
+            Reservation segment = Planned(draft, target.Programme, target, at);
+            made.Add(segment.Id);
+
             try
             {
-                await scheduler.CreateAsync(Planned(draft, target.Programme, target, at), cancellationToken);
+                displaced.AddRange((await scheduler.CreateAsync(segment, cancellationToken)).Displaced);
             }
             catch (DbUpdateException)
             {
@@ -196,6 +202,8 @@ public sealed class ReservationService(
                 }
             }
         }
+
+        return [.. displaced.Where(id => !made.Contains(id))];
     }
 
     private static Reservation Planned(ReservationDraft draft, Programme programme, BroadcastTarget? target, DateTime at)
@@ -259,7 +267,7 @@ public sealed class ReservationService(
 
         SchedulingRun run = await scheduler.ReviseAsync(reservation, revision, cancellationToken);
 
-        return await SettledAsync(run, reservation, cancellationToken);
+        return await SettledAsync(run, reservation, [], cancellationToken);
     }
 
     public async Task<ServiceResult<ReservationDiscarded, ReservationFailure>> DiscardAsync(
@@ -348,6 +356,7 @@ public sealed class ReservationService(
     private async Task<ServiceResult<ReservationSettlement, ReservationFailure>> SettledAsync(
         SchedulingRun run,
         Reservation subject,
+        IReadOnlyList<ReservationId> displacedAlongside,
         CancellationToken cancellationToken)
     {
         if (run.Refusal is SchedulingRefusal.CapacityUnknown)
@@ -367,25 +376,45 @@ public sealed class ReservationService(
                 ReservationFailure.SomethingArrivedWhileReading);
         }
 
+        IReadOnlyList<Reservation> displaced =
+        [
+            .. (await HeldAsync([.. run.Displaced, .. displacedAlongside], cancellationToken))
+                .OrderBy(fallen => fallen.StartAt)
+                .ThenBy(fallen => fallen.Id.Value),
+        ];
+
         if (!run.Plan.Answers(subject.Id))
         {
             return ServiceResult<ReservationSettlement, ReservationFailure>.Success(
-                new ReservationSettlement(subject, null, [], run.SeatsLeftOut));
+                new ReservationSettlement(subject, null, [], displaced, run.SeatsLeftOut));
         }
 
         AllocationDecision decision = run.Plan.For(subject.Id);
-        var instead = new List<Reservation>();
 
-        foreach (ReservationId id in decision.Instead)
+        return ServiceResult<ReservationSettlement, ReservationFailure>.Success(
+            new ReservationSettlement(
+                subject,
+                decision.Verdict,
+                await HeldAsync(decision.Instead, cancellationToken),
+                displaced,
+                run.SeatsLeftOut));
+    }
+
+    private async Task<IReadOnlyList<Reservation>> HeldAsync(
+        IReadOnlyList<ReservationId> named,
+        CancellationToken cancellationToken)
+    {
+        var held = new List<Reservation>();
+
+        foreach (ReservationId id in named.Distinct())
         {
-            if (await reservations.FindAsync(id, cancellationToken) is { } recorded)
+            if (await reservations.FindAsync(id, cancellationToken) is { } reservation)
             {
-                instead.Add(recorded);
+                held.Add(reservation);
             }
         }
 
-        return ServiceResult<ReservationSettlement, ReservationFailure>.Success(
-            new ReservationSettlement(subject, decision.Verdict, instead, run.SeatsLeftOut));
+        return held;
     }
 
     private static ProgrammeSnapshot Snapshot(Programme programme, DateTime at)

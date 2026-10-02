@@ -35,6 +35,41 @@ public sealed class SchedulingRunTests
         => Assert.Equal(0, SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown).SeatsLeftOut);
 
     [Fact]
+    public void ARunNamesNobodyAsDisplacedUntilItIsToldWhoWas()
+        => Assert.Empty(SchedulingRun.Of(new AllocationPlan([]), 0).Displaced);
+
+    [Fact]
+    public void ARunToldWhoLostTheirSeatsNamesThemAndKeepsEverythingElseItSaid()
+    {
+        AllocationPlan plan = new([]);
+        ReservationId first = ReservationId.New();
+        ReservationId second = ReservationId.New();
+
+        SchedulingRun run = SchedulingRun.Of(plan, 2).Displacing([first, second]);
+
+        Assert.Equal([first, second], run.Displaced);
+        Assert.True(run.Settled);
+        Assert.Same(plan, run.Plan);
+        Assert.Equal(2, run.SeatsLeftOut);
+    }
+
+    [Fact]
+    public void ARefusedRunDisplacedNobodyBecauseItMovedNobody()
+    {
+        SchedulingRun refused = SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown);
+
+        Assert.Empty(refused.Displaced);
+        Assert.Throws<InvalidOperationException>(() => refused.Displacing([ReservationId.New()]));
+    }
+
+    [Fact]
+    public void ARunIsToldWhoWasDisplacedRatherThanHandedNothing()
+        => Assert.Equal(
+            "displaced",
+            Assert.Throws<ArgumentNullException>(
+                () => SchedulingRun.Of(new AllocationPlan([]), 0).Displacing(null!)).ParamName);
+
+    [Fact]
     public void ARunThatAllocatedIsHandedThePlan()
         => Assert.Equal("plan", Assert.Throws<ArgumentNullException>(() => SchedulingRun.Of(null!, 0)).ParamName);
 

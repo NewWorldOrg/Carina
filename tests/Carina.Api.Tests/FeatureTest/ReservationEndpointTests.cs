@@ -718,6 +718,137 @@ public sealed class ReservationEndpointTests
         Assert.Equal("conflict", Standing(dropped.GetProperty("data")));
     }
 
+    [Fact(DisplayName = "raising a priority names the reservation that fell into contention for it")]
+    public async Task RaisingAPriorityNamesTheReservationThatFellIntoContentionForIt()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001, serviceId: 1024);
+        feature.Announced(4002, serviceId: 1032);
+
+        (_, JsonElement first) = await feature.PostAsync("/api/reservations", Asking(4001, priority: 50));
+        (_, JsonElement second) = await feature.PostAsync(
+            "/api/reservations",
+            Asking(4002, serviceId: 1032, priority: 10));
+
+        (_, JsonElement raised) = await feature.PatchAsync(
+            $"/api/reservations/{Identifier(second)}",
+            new { priority = 90 });
+        JsonElement displaced = Assert.Single(raised.GetProperty("data").GetProperty("displaced").EnumerateArray());
+
+        Assert.Empty(second.GetProperty("data").GetProperty("displaced").EnumerateArray());
+        Assert.Equal(Identifier(first), displaced.GetProperty("id").GetGuid());
+        Assert.Equal("conflict", Standing(displaced));
+        Assert.Empty(raised.GetProperty("data").GetProperty("instead").EnumerateArray());
+    }
+
+    [Fact(DisplayName = "lowering a priority into contention names what is recorded instead and nobody as displaced")]
+    public async Task LoweringAPriorityIntoContentionNamesNobodyAsDisplaced()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation held = feature.Booked(4001, serviceId: 1024, priority: 50);
+        Reservation waiting = feature.Booked(4002, serviceId: 1032, priority: 10, state: ReservationState.Conflict);
+
+        (_, JsonElement lowered) = await feature.PatchAsync(
+            $"/api/reservations/{held.Id.Value}",
+            new { priority = 1 });
+        JsonElement data = lowered.GetProperty("data");
+
+        Assert.Equal("contended", data.GetProperty("verdict").GetString());
+        Assert.Equal(
+            [waiting.Id.Value],
+            data.GetProperty("instead").EnumerateArray().Select(entry => entry.GetProperty("id").GetGuid()));
+        Assert.Empty(data.GetProperty("displaced").EnumerateArray());
+    }
+
+    [Fact(DisplayName = "a new reservation that takes the only seat names the one it took it from")]
+    public async Task ANewReservationThatTakesTheOnlySeatNamesTheOneItTookItFrom()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4002, serviceId: 1032);
+        Reservation held = feature.Booked(4001, serviceId: 1024, priority: 10);
+
+        (HttpStatusCode status, JsonElement made) = await feature.PostAsync(
+            "/api/reservations",
+            Asking(4002, serviceId: 1032, priority: 50));
+        JsonElement data = made.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal("secured", data.GetProperty("verdict").GetString());
+        Assert.Equal(
+            [held.Id.Value],
+            data.GetProperty("displaced").EnumerateArray().Select(entry => entry.GetProperty("id").GetGuid()));
+    }
+
+    [Fact(DisplayName = "restoring a reservation that takes the only seat names the one it took it from")]
+    public async Task RestoringAReservationThatTakesTheOnlySeatNamesTheOneItTookItFrom()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation held = feature.Booked(4001, serviceId: 1024, priority: 10);
+        Reservation cancelled = feature.Booked(
+            4002,
+            serviceId: 1032,
+            priority: 50,
+            state: ReservationState.Cancelled);
+
+        (_, JsonElement restored) = await feature.PostAsync($"/api/reservations/{cancelled.Id.Value}/restore");
+        JsonElement displaced =
+            Assert.Single(restored.GetProperty("data").GetProperty("displaced").EnumerateArray());
+
+        Assert.Equal(held.Id.Value, displaced.GetProperty("id").GetGuid());
+        Assert.Equal("conflict", Standing(displaced));
+    }
+
+    [Fact(DisplayName = "cancelling a reservation answers with nobody displaced")]
+    public async Task CancellingAReservationAnswersWithNobodyDisplaced()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation held = feature.Booked(4001, serviceId: 1024, priority: 50);
+        feature.Booked(4002, serviceId: 1032, priority: 10, state: ReservationState.Conflict);
+
+        (HttpStatusCode status, JsonElement cancelled) =
+            await feature.PostAsync($"/api/reservations/{held.Id.Value}/cancel");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Empty(cancelled.GetProperty("data").GetProperty("displaced").EnumerateArray());
+    }
+
+    [Fact(DisplayName = "the reservations a change displaced come back earliest first")]
+    public async Task TheReservationsAChangeDisplacedComeBackEarliestFirst()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4003, serviceId: 1040, startsAt: Noon.AddHours(2), endsAt: Noon.AddHours(6));
+        Reservation later = feature.Booked(4002, serviceId: 1032, startsAt: Noon.AddHours(4), priority: 10);
+        Reservation earlier = feature.Booked(4001, serviceId: 1024, startsAt: Noon.AddHours(2), priority: 10);
+
+        (_, JsonElement made) = await feature.PostAsync(
+            "/api/reservations",
+            Asking(4003, serviceId: 1040, priority: 50));
+
+        Assert.Equal(
+            [earlier.Id.Value, later.Id.Value],
+            made.GetProperty("data").GetProperty("displaced").EnumerateArray()
+                .Select(entry => entry.GetProperty("id").GetGuid()));
+    }
+
+    [Fact(DisplayName = "a segment reserved alongside names the reservation it displaced too")]
+    public async Task ASegmentReservedAlongsideNamesTheReservationItDisplacedToo()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001, related: [new RelatedProgramme(ReservationFeature.Network, 1032, 5001, RelationKind.Relayed)]);
+        feature.Announced(5001, serviceId: 1032, startsAt: Noon.AddHours(3));
+        Reservation held = feature.Booked(6001, serviceId: 1040, startsAt: Noon.AddHours(3), priority: 10);
+
+        (HttpStatusCode status, JsonElement made) =
+            await feature.PostAsync("/api/reservations", Asking(4001, priority: 50));
+        JsonElement data = made.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal(3, feature.Reservations.Held.Count);
+        Assert.Equal(
+            [held.Id.Value],
+            data.GetProperty("displaced").EnumerateArray().Select(entry => entry.GetProperty("id").GetGuid()));
+    }
+
     [Fact]
     public async Task ChangingOneMarginLeavesTheOtherWhereItWas()
     {
