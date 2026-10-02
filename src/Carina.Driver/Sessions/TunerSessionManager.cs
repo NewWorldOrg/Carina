@@ -1344,8 +1344,6 @@ public sealed class TunerSessionManager(
         while (ended.Count > RetainedSessions && ended.TryDequeue(out _))
         { }
 
-        sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
-
         if (tunings.TryRemove(session.SessionId, out TuningKey? tuning))
         {
             if (session.State is SessionState.Stopped)
@@ -1372,6 +1370,8 @@ public sealed class TunerSessionManager(
 
         pool.Leave(session.SessionId);
         pool.Sweep();
+
+        sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
 
         Announce();
     }
