@@ -18,6 +18,8 @@ public sealed class LogOutAction(AuthSessionService sessions) : ControllerBase
     [ProducesResponseType<BaseResponder<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
+        NeverStored.Mark(Response);
+
         if (SessionClaims.SubjectOf(User) is not { } subject
             || SessionClaims.SessionOf(User) is not { } current)
         {
@@ -29,6 +31,7 @@ public sealed class LogOutAction(AuthSessionService sessions) : ControllerBase
         Response.Cookies.Delete(
             SessionCookie.Name,
             SessionCookie.Discarding(Request.IsHttps));
+        SignInHappening.Leave(HttpContext, SignInMoment.SignedOut, SessionClaims.MethodOf(User));
 
         return NoContent();
     }

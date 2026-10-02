@@ -27,6 +27,8 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
         [FromBody] LoginRequest? request,
         CancellationToken cancellationToken)
     {
+        NeverStored.Mark(Response);
+
         var attempt = new LoginAttempt(
             request?.Username ?? string.Empty,
             request?.Password ?? string.Empty,
@@ -39,6 +41,7 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
         if (outcome.RetryAt is { } retryAt)
         {
             Response.Headers[HeaderNames.RetryAfter] = Patience(retryAt);
+            SignInHappening.Leave(HttpContext, SignInMoment.ALocalSignInWasHeldOff);
 
             return StatusCode(
                 StatusCodes.Status429TooManyRequests,
@@ -47,6 +50,8 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
 
         if (outcome.Session is not { } session || outcome.Cookie is not { } cookie)
         {
+            SignInHappening.Leave(HttpContext, SignInMoment.ALocalSignInWasRefused);
+
             return Unauthorized(
                 BaseResponder<MeResponder>.Error(LocalAccountService.TheSameRefusalForEveryBadLogin));
         }
@@ -55,6 +60,7 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
             SessionCookie.Name,
             cookie.Value,
             SessionCookie.Carrying(Request.IsHttps, outcome.SessionLifetime));
+        SignInHappening.Leave(HttpContext, SignInMoment.ALocalSignInOpenedASession, session.Method, session.DeviceLabel);
 
         return Ok(BaseResponder<MeResponder>.Success(MeResponder.Of(session)));
     }

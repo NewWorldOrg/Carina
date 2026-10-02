@@ -17,6 +17,7 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.AddSingleton<SignInRecord>();
         services.AddScoped<LocalAccountService>();
         services.AddScoped<AuthSessionService>();
         services.AddScoped<OidcLoginService>();

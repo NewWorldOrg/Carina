@@ -18,6 +18,8 @@ public sealed class StartOidcLoginAction(OidcLoginService logins) : ControllerBa
         [FromQuery(Name = LoginRedirect.ReturnKey)] string? next,
         CancellationToken cancellationToken)
     {
+        NeverStored.Mark(Response);
+
         ServiceResult<OidcStart, OidcRefusal> asked = await logins.StartAsync(
             new OidcStartAttempt(
                 OidcHandshake.MarkCarriedBy(Request),
@@ -27,14 +29,21 @@ public sealed class StartOidcLoginAction(OidcLoginService logins) : ControllerBa
 
         if (asked.Data is not { } start)
         {
+            SignInHappening.Leave(
+                HttpContext,
+                SignInMoment.TheWayToTheProviderCouldNotBeOpened,
+                reason: asked.ErrorType.ToString());
+
             return Redirect(LoginRedirect.AfterAFailedSignIn(next));
         }
+
+        SignInHappening.Leave(HttpContext, SignInMoment.TheWayToTheProviderWasOpened);
 
         Response.Cookies.Append(
             OidcHandshake.MarkName,
             start.BrowserMark,
             OidcHandshake.MarkCookie(Request.IsHttps, start.MarkLifetime));
 
-        return Redirect(start.Authorize.ToString());
+        return Redirect(start.Authorize.AbsoluteUri);
     }
 }
