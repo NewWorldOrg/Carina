@@ -11,6 +11,8 @@ public sealed class LiveHandoverTests
 {
     private const int MouthfulsThatOverfillTheReader = 128;
 
+    private const int RoundsOfArrivingWhileLeaving = 2_000;
+
     private static readonly LiveChannelKey Watched = new(new NetworkId(32736), new ServiceId(1024));
 
     private static readonly LiveSessionKey EveryFrame =
@@ -257,6 +259,34 @@ public sealed class LiveHandoverTests
         if (second.Handed is { } more)
         {
             await more.DisposeAsync();
+        }
+    }
+
+    [Fact(DisplayName = "a reader handed the channel while the last reader before it is leaving is never left on a reading that is being let go")]
+    public async Task AReaderArrivingAsTheLastOneLeavesIsNeverLeftOnAReadingBeingLetGo()
+    {
+        for (int round = 0; round < RoundsOfArrivingWhileLeaving; round++)
+        {
+            LiveHandover first = await manager.HandOverAsync(Watched, CancellationToken.None);
+            int spins = round % 64;
+
+            Task leaving = Task.Run(async () => await first.Handed!.DisposeAsync());
+            Task<LiveHandover> arriving = Task.Run(() =>
+            {
+                Thread.SpinWait(spins * 16);
+
+                return manager.HandOverAsync(Watched, CancellationToken.None);
+            });
+
+            await leaving;
+
+            await using ILiveHandedOver arrived = (await arriving).Handed!;
+
+            int askedByNow = supply.Asked;
+
+            await using ILiveHandedOver next = (await manager.HandOverAsync(Watched, CancellationToken.None)).Handed!;
+
+            Assert.Equal(askedByNow, supply.Asked);
         }
     }
 

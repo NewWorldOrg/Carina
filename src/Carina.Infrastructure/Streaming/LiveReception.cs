@@ -129,9 +129,11 @@ internal sealed class LiveReception
             {
                 return;
             }
+
+            closed = true;
         }
 
-        Close();
+        LetGo();
     }
 
     /// <summary>
@@ -186,6 +188,11 @@ internal sealed class LiveReception
             closed = true;
         }
 
+        LetGo();
+    }
+
+    private void LetGo()
+    {
         forget(this);
         stopping.Cancel();
     }
