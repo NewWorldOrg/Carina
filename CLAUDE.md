@@ -435,6 +435,12 @@ nothing.
   so a reader learns the type without following the call. `.editorconfig` raises
   `IDE0008` to an error and `EnforceCodeStyleInBuild` makes the build enforce it,
   rather than memory.
+- Nesting stays shallow: two deep, three only when nothing shallower reads as
+  well, for conditional expressions and for blocks alike. A choice on two axes
+  becomes a named mapping, a staged condition a named method that returns early
+  or a `switch` expression. `NestingConventionRuleTests` reads the syntax tree and
+  refuses an expression that joins more than two conditionals; the depth of
+  blocks is held by review.
 - Comments earn their place or are absent. Code that needs a comment to be
   understood is rewritten instead.
 - Warnings are errors. The build is the gate.
