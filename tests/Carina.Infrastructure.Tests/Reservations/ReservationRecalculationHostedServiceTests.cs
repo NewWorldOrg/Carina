@@ -8,8 +8,8 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Reservations;
-using Carina.Infrastructure.Tests.Collection;
 using Carina.Infrastructure.Rules;
+using Carina.Infrastructure.Tests.Collection;
 using Carina.Infrastructure.Tests.Rules;
 using Carina.TestSupport;
 
