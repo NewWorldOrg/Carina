@@ -199,20 +199,9 @@ public sealed class LiveFragmentMaterialTests : IDisposable
 
                     if (inside is "mdia")
                     {
-                        foreach ((string within, Range said) in Boxes(trak[held]))
-                        {
-                            ReadOnlySpan<byte> box = trak[held][said];
-
-                            if (within is "hdlr")
-                            {
-                                kind = Encoding.ASCII.GetString(box.Slice(8, 4));
-                            }
-
-                            if (within is "mdhd")
-                            {
-                                rate = BinaryPrimitives.ReadUInt32BigEndian(box[(box[0] is 1 ? 20 : 12)..]);
-                            }
-                        }
+                        (string? saidKind, uint? saidRate) = Media(trak[held]);
+                        kind = saidKind ?? kind;
+                        rate = saidRate ?? rate;
                     }
                 }
 
@@ -221,6 +210,29 @@ public sealed class LiveFragmentMaterialTests : IDisposable
                     tracks[track] = (kind, ticks);
                 }
             }
+        }
+
+        private static (string? Kind, uint? Rate) Media(ReadOnlySpan<byte> mdia)
+        {
+            string? kind = null;
+            uint? rate = null;
+
+            foreach ((string within, Range said) in Boxes(mdia))
+            {
+                ReadOnlySpan<byte> box = mdia[said];
+
+                if (within is "hdlr")
+                {
+                    kind = Encoding.ASCII.GetString(box.Slice(8, 4));
+                }
+
+                if (within is "mdhd")
+                {
+                    rate = BinaryPrimitives.ReadUInt32BigEndian(box[(box[0] is 1 ? 20 : 12)..]);
+                }
+            }
+
+            return (kind, rate);
         }
 
         private static (uint Track, ulong DecodedAt)? Stamp(ReadOnlySpan<byte> traf)

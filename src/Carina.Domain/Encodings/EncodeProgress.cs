@@ -27,11 +27,7 @@ public sealed record EncodeProgress
             : Ended ? 1
             : Math.Clamp(Reached / whole, 0, 1);
 
-    public TimeSpan? Left
-        => Ended ? TimeSpan.Zero
-            : Whole is not { } whole || Speed <= 0 ? null
-            : whole - Reached is { Ticks: > 0 } more ? more / Speed
-            : TimeSpan.Zero;
+    public TimeSpan? Left => Ended ? TimeSpan.Zero : LeftWhileRunning();
 
     public static EncodeProgress Of(TimeSpan reached, TimeSpan? whole, double speed, bool ended)
     {
@@ -44,5 +40,15 @@ public sealed record EncodeProgress
         }
 
         return new EncodeProgress(reached, whole, speed, ended);
+    }
+
+    private TimeSpan? LeftWhileRunning()
+    {
+        if (Whole is not { } whole || Speed <= 0)
+        {
+            return null;
+        }
+
+        return whole - Reached is { Ticks: > 0 } more ? more / Speed : TimeSpan.Zero;
     }
 }

@@ -24,8 +24,14 @@ public static class EncodePlacements
         bool somethingIsThere,
         bool thisJobHadAlreadyClaimedTheName,
         bool thisJobBroughtAReplacement)
-        => !somethingIsThere ? EncodePlacementVerdict.Move
-            : thisJobBroughtAReplacement ? EncodePlacementVerdict.Replace
+    {
+        if (!somethingIsThere)
+        {
+            return EncodePlacementVerdict.Move;
+        }
+
+        return thisJobBroughtAReplacement ? EncodePlacementVerdict.Replace
             : thisJobHadAlreadyClaimedTheName ? EncodePlacementVerdict.Reconfirm
             : EncodePlacementVerdict.Collision;
+    }
 }
