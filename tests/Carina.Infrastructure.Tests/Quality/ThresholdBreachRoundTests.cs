@@ -310,7 +310,9 @@ public sealed class ThresholdBreachRoundTests
             DropCounters.Counted(dropped, 1_000_000),
             0,
             0,
-            startedAt);
+            startedAt,
+            0,
+            0);
 
     private static QualitySignalSample Sound(DateTime at) => Sample(at, 30_000, 0);
 

@@ -96,6 +96,81 @@ public sealed class QualitySurveyTests
         Assert.Equal(QualityStanding.Unmeasured, read.Standing);
     }
 
+    [Fact(DisplayName = "a counted recording holding a gap stands at the warning level however clean its packets")]
+    public void ACountedRecordingHoldingAGapStandsAtTheWarningLevel()
+    {
+        QualityRowReading read = QualitySurvey.Read(
+            [QualityFactory.Row(gaps: 2, missedMs: 3_800)],
+            QualityMetrics.All,
+            QualityFactory.Bands())[0];
+
+        Assert.All(read.Measures, measure => Assert.Equal(QualityStanding.Good, measure.Verdict.Standing));
+        Assert.Equal(QualityStanding.Warning, read.Gap.Standing);
+        Assert.Equal(2, read.Gap.Count);
+        Assert.Equal(3_800, read.Gap.MissedMs);
+        Assert.Equal(QualityStanding.Warning, read.Standing);
+        Assert.True(read.WentBeyond);
+    }
+
+    [Fact]
+    public void ACountedRecordingHoldingNoGapIsGoodOnItsGaps()
+    {
+        QualityRowReading read = QualitySurvey.Read(
+            [QualityFactory.Row()],
+            QualityMetrics.All,
+            QualityFactory.Bands())[0];
+
+        Assert.Equal(QualityStanding.Good, read.Gap.Standing);
+        Assert.Equal(0, read.Gap.Count);
+        Assert.Equal(0, read.Gap.MissedMs);
+    }
+
+    [Fact(DisplayName = "a recording nothing counted stays unmeasured whatever gaps it holds")]
+    public void ARecordingNothingCountedStaysUnmeasuredWhateverGapsItHolds()
+    {
+        QualityRowReading read = QualitySurvey.Read(
+            [QualityFactory.Row(dropped: null, total: null, scrambled: null, gaps: 1, missedMs: 1_200)],
+            QualityMetrics.All,
+            QualityFactory.Bands())[0];
+
+        Assert.Equal(QualityStanding.Unmeasured, read.Gap.Standing);
+        Assert.Equal(1, read.Gap.Count);
+        Assert.Equal(1_200, read.Gap.MissedMs);
+        Assert.Equal(QualityStanding.Unmeasured, read.Standing);
+        Assert.False(read.WentBeyond);
+    }
+
+    [Fact(DisplayName = "a gap does not soften a recording that may not be watchable")]
+    public void AGapDoesNotSoftenARecordingThatMayNotBeWatchable()
+    {
+        QualityRowReading read = QualitySurvey.Read(
+            [QualityFactory.Row(dropped: 2_000, total: 1_000_000, gaps: 1, missedMs: 500)],
+            QualityMetrics.All,
+            QualityFactory.Bands())[0];
+
+        Assert.Equal(QualityStanding.MayNotBeWatchable, read.Standing);
+    }
+
+    [Fact(DisplayName = "a gap is read whichever measures were asked for")]
+    public void AGapIsReadWhicheverMeasuresWereAskedFor()
+    {
+        QualityRowReading read = QualitySurvey.Read(
+            [QualityFactory.Row(gaps: 1, missedMs: 500)],
+            [QualityMetric.Overflows],
+            QualityFactory.Bands())[0];
+
+        Assert.Single(read.Measures);
+        Assert.Equal(QualityStanding.Warning, read.Standing);
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(0, -1)]
+    [InlineData(1, 0)]
+    [InlineData(0, 1)]
+    public void ARowRefusesGapsThatDoNotAddUp(int gaps, long missedMs)
+        => Assert.ThrowsAny<ArgumentException>(() => QualityFactory.Row(gaps: gaps, missedMs: missedMs));
+
     [Fact]
     public void ARecordingTheLedgerCannotPlaceIsStillRead()
     {
