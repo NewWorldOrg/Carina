@@ -19,6 +19,8 @@ public sealed class SupplyWatchRound(
     IQualityIncidentRepository incidents,
     IQualitySupplyReader supply,
     IQualitySignalSampleRepository samples,
+    IQualityLedgerReader ledger,
+    IQualitySignalReader signals,
     IDriverClient driver,
     ISupplyStandingBoard board,
     IAppEventPublisher events,
@@ -50,9 +52,17 @@ public sealed class SupplyWatchRound(
             ? TunerTroubleWatch.Plan(troubles, unsettled)
             : new TunerTroubleWatchPlan([], []);
 
+        ThresholdBreachWatchPlan breached = ThresholdBreachWatch.Plan(
+            await BreachesAsync(levels, ThresholdBreachWatch.CannotLock(asked, troubles, unsettled), now, cancellationToken),
+            unsettled);
+
         int opened = await OpenAsync(plan.ToOpen, standing.Setting, now, cancellationToken)
-            + await RestateAsync(troubled.ToOpen, lockRate.Setting, now, cancellationToken);
-        int resolved = await ResolveAsync([.. plan.ToResolve, .. troubled.ToResolve], now, cancellationToken);
+            + await RestateAsync(troubled.ToOpen, lockRate.Setting, now, cancellationToken)
+            + await OpenAsync(breached.ToOpen, now, cancellationToken);
+        int resolved = await ResolveAsync(
+            [.. plan.ToResolve, .. troubled.ToResolve, .. breached.ToResolve],
+            now,
+            cancellationToken);
         int notified = await NotifyAsync(now, cancellationToken);
 
         if (notified > 0 || resolved > 0)
@@ -156,6 +166,43 @@ public sealed class SupplyWatchRound(
         return opening.Count;
     }
 
+    private async Task<IReadOnlyList<ThresholdBreach>> BreachesAsync(
+        IReadOnlyList<QualityThresholdStanding> levels,
+        IReadOnlySet<string> cannotLock,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        QualityPeriod looked = QualityPeriod.Of(now - ThresholdBreachWatch.Looked, now, now)
+                               ?? throw new InvalidOperationException(
+                                   "The span a breach is looked for over is one a period can be read across.");
+
+        return
+        [
+            .. ThresholdBreachWatch.Recorded(
+                await ledger.ReadAsync(looked, cancellationToken),
+                QualityThresholdStanding.Bands(levels)),
+            .. ThresholdBreachWatch.Received(
+                await signals.FiguresAsync(looked, cancellationToken),
+                levels,
+                cannotLock),
+        ];
+    }
+
+    private async Task<int> OpenAsync(
+        IReadOnlyList<ThresholdBreach> opening,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        foreach (ThresholdBreach breach in opening)
+        {
+            await incidents.AddAsync(
+                ThresholdBreachWatch.Open(QualityIncidentId.New(), breach, now),
+                cancellationToken);
+        }
+
+        return opening.Count;
+    }
+
     private async Task<int> RestateAsync(
         IReadOnlyList<TunerTrouble> troubles,
         Threshold applied,
@@ -217,8 +264,9 @@ public sealed class SupplyWatchRound(
         }
 
         logger.LogWarning(
-            "A supply watch held {Seconds}s of quiet against {Watched} supply reading(s): {Opened} went quiet or "
-            + "were said by the driver to be in trouble, {Notified} were told about, and {Resolved} cleared.",
+            "A supply watch held {Seconds}s of quiet against {Watched} supply reading(s): {Opened} went quiet, "
+            + "were said by the driver to be in trouble or read beyond a level, {Notified} were told about, and "
+            + "{Resolved} cleared.",
             pass.Standing.Applied.Current,
             pass.Standing.Supplies.Sum(supply => supply.Watched),
             pass.Opened,

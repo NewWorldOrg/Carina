@@ -44,6 +44,39 @@ public sealed class QualityIncidentEndpointTests
                     && item.GetProperty("classification").GetString() == "NoLock");
     }
 
+    [Fact(DisplayName = "BR-QD-020: a level a channel's recordings passed is listed as this domain's own, on the channel, with the level it was held against")]
+    public async Task ALevelAChannelsRecordingsPassedIsListedAsThisDomainsOwn()
+    {
+        await using var feature = new QualityFeature();
+        QualityIncident breached = ThresholdBreachWatch.Open(
+            QualityIncidentId.New(),
+            new ThresholdBreach(
+                QualityThresholdKey.PacketsLostUnwatchable,
+                QualitySubject.Of(QualitySubjectKind.Channel, "32736-1024"),
+                0.005,
+                QualityThresholdShapes.AsShipped(QualityThresholdKey.PacketsLostUnwatchable, Noon.AddMinutes(-10))),
+            Noon.AddMinutes(-10));
+
+        feature.Incidents.Incidents.Add(breached);
+        feature.Restated();
+
+        JsonElement data = (await feature.GetAsync("/api/quality/incidents")).Body.GetProperty("data");
+        JsonElement incident = data.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("id").GetString() == breached.Id.Value.ToString());
+
+        Assert.Equal("packetsLostUnwatchable", incident.GetProperty("breached").GetString());
+        Assert.Equal("channel", incident.GetProperty("subjectKind").GetString());
+        Assert.Equal("32736-1024", incident.GetProperty("subjectKey").GetString());
+        Assert.Equal(0.005, incident.GetProperty("observed").GetDouble());
+        Assert.Equal(0.001, incident.GetProperty("appliedValue").GetDouble());
+        Assert.Equal("quality", incident.GetProperty("owner").GetString());
+        Assert.False(incident.GetProperty("restated").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, incident.GetProperty("classification").ValueKind);
+        Assert.Equal(JsonValueKind.Null, incident.GetProperty("silence").ValueKind);
+        Assert.Equal(1, data.GetProperty("owned").GetInt32());
+        Assert.Equal(1, data.GetProperty("restated").GetInt32());
+    }
+
     [Fact(DisplayName = "an anomaly that has been told about stays on the list for as long as it stands")]
     public async Task AnAnomalyThatHasBeenToldAboutStaysOnTheListForAsLongAsItStands()
     {
