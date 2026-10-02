@@ -436,6 +436,25 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(properties["quality"]!.ToJsonString(), properties["scrambleQuality"]!.ToJsonString());
     }
 
+    [Fact(DisplayName = "a recording on the quality list is described with its gaps judged in the vocabulary its measures are")]
+    public async Task ARecordingOnTheQualityListIsDescribedWithItsGapsJudged()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+        JsonNode gap = schemas["QualityGapVerdictResponder"]!["properties"]!;
+
+        Assert.Equal(
+            [
+                "id", "networkId", "serviceId", "kind", "tunerDeviceId", "startedAt", "measuredUpdatedAt", "standing",
+                "droppedPackets", "totalPackets", "scrambledPackets", "overflows", "verdicts", "gap",
+            ],
+            schemas["QualityRecordingResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(["standing", "count", "missedMs"], gap.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            schemas["QualityVerdictResponder"]!["properties"]!["standing"]!.ToJsonString(),
+            gap["standing"]!.ToJsonString());
+    }
+
     [Fact]
     public async Task WhatARecordingSaysAboutEncodingCarriesWhetherItAsksForOneBesideWhereItStands()
     {

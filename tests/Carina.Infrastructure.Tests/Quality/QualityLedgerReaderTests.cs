@@ -67,6 +67,30 @@ public sealed class QualityLedgerReaderTests(RepositoryDatabase database)
         Assert.Null(row.MeasuredUpdatedAt);
     }
 
+    [Fact(DisplayName = "the gaps a recording holds come back as how many and how long")]
+    public async Task TheGapsARecordingHoldsComeBackAsHowManyAndHowLong()
+    {
+        await ClearAsync();
+        await WrittenAsync(
+            6051,
+            Airs,
+            dropped: 0,
+            total: 750_000,
+            gaps:
+            [
+                new RecordingGap(Airs.AddMinutes(3), Airs.AddMinutes(3).AddSeconds(2.5)),
+                new RecordingGap(Airs.AddMinutes(8), Airs.AddMinutes(8).AddSeconds(1.3)),
+            ]);
+        await WrittenAsync(6052, Airs.AddHours(1), dropped: 0, total: 750_000);
+
+        IReadOnlyList<QualityLedgerRow> read = await ReadAsync(Now.AddDays(-1), Now);
+
+        Assert.Equal(2, read[0].Gaps);
+        Assert.Equal(3_800, read[0].MissedMs);
+        Assert.Equal(0, read[1].Gaps);
+        Assert.Equal(0, read[1].MissedMs);
+    }
+
     [Fact]
     public async Task AChannelTheCatalogueCarriesIsPlacedAndOneItDoesNotIsLeftUnplaced()
     {
@@ -124,7 +148,8 @@ public sealed class QualityLedgerReaderTests(RepositoryDatabase database)
         long? scrambled = null,
         long overflows = 0,
         int service = 1_024,
-        string? tuner = "adapter3.frontend0")
+        string? tuner = "adapter3.frontend0",
+        IReadOnlyList<RecordingGap>? gaps = null)
     {
         RecordingId id = RecordingId.New();
         Recording begun = Recording.Begin(
@@ -147,6 +172,11 @@ public sealed class QualityLedgerReaderTests(RepositoryDatabase database)
             BroadcastGroupRole.Standalone,
             airs,
             tuner is null ? null : new TunerDeviceId(tuner));
+
+        foreach (RecordingGap gap in gaps ?? [])
+        {
+            begun.Missed(gap);
+        }
 
         await using CarinaDbContext writing = database.Open();
         var repository = new RecordingRepository(writing);

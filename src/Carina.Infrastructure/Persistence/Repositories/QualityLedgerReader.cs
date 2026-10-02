@@ -31,7 +31,9 @@ public sealed class QualityLedgerReader(CarinaDbContext context, IBroadcastStrea
                 recording.CcTotalPackets,
                 recording.ScrambledPackets,
                 recording.EovfCount,
-                recording.MeasuredUpdatedAt))
+                recording.MeasuredUpdatedAt,
+                recording.Gaps,
+                recording.MissedMs))
             .ToListAsync(cancellationToken);
 
         IReadOnlyDictionary<(int Network, int Service), TuneSystem> placed =
@@ -49,7 +51,9 @@ public sealed class QualityLedgerReader(CarinaDbContext context, IBroadcastStrea
                 DropCounters.Rehydrate(row.Measured, row.Dropped, row.Total),
                 row.ScrambledPackets,
                 row.Overflows,
-                row.MeasuredUpdatedAt)),
+                row.MeasuredUpdatedAt,
+                row.Gaps.Count,
+                row.MissedMs)),
         ];
     }
 
@@ -81,5 +85,7 @@ public sealed class QualityLedgerReader(CarinaDbContext context, IBroadcastStrea
         long? Total,
         long? ScrambledPackets,
         long Overflows,
-        DateTime? MeasuredUpdatedAt);
+        DateTime? MeasuredUpdatedAt,
+        IReadOnlyList<RecordingGap> Gaps,
+        long MissedMs);
 }

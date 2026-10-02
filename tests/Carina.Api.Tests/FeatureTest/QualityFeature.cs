@@ -168,7 +168,9 @@ internal sealed class QualityFeature : IAsyncDisposable
         int service = 1_024,
         string? tuner = "adapter3.frontend0",
         TuneSystem? kind = TuneSystem.IsdbT,
-        DateTime? startedAt = null)
+        DateTime? startedAt = null,
+        int gaps = 0,
+        long missedMs = 0)
     {
         QualityLedgerRow row = QualityLedgerRow.Of(
             RecordingId.New(),
@@ -182,7 +184,9 @@ internal sealed class QualityFeature : IAsyncDisposable
                 : DropCounters.Unmeasured,
             scrambled,
             overflows,
-            dropped is null ? null : Noon.AddHours(-2));
+            dropped is null ? null : Noon.AddHours(-2),
+            gaps,
+            missedMs);
 
         Ledger.Rows.Add(row);
 

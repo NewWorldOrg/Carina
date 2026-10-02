@@ -17,7 +17,9 @@ public sealed record QualityLedgerRow
         DropCounters counters,
         long? scrambledPackets,
         long overflows,
-        DateTime? measuredUpdatedAt)
+        DateTime? measuredUpdatedAt,
+        int gaps,
+        long missedMs)
     {
         Recording = recording;
         Network = network;
@@ -29,6 +31,8 @@ public sealed record QualityLedgerRow
         ScrambledPackets = scrambledPackets;
         Overflows = overflows;
         MeasuredUpdatedAt = measuredUpdatedAt;
+        Gaps = gaps;
+        MissedMs = missedMs;
     }
 
     public RecordingId Recording { get; }
@@ -51,6 +55,10 @@ public sealed record QualityLedgerRow
 
     public DateTime? MeasuredUpdatedAt { get; }
 
+    public int Gaps { get; }
+
+    public long MissedMs { get; }
+
     public QualityFacet Facet => QualityFacet.OfWhatIsKnown(Kind, Network, Service, Tuner, StartedAt.Hour);
 
     public static QualityLedgerRow Of(
@@ -63,7 +71,9 @@ public sealed record QualityLedgerRow
         DropCounters counters,
         long? scrambledPackets,
         long overflows,
-        DateTime? measuredUpdatedAt)
+        DateTime? measuredUpdatedAt,
+        int gaps,
+        long missedMs)
     {
         ArgumentNullException.ThrowIfNull(recording);
         ArgumentNullException.ThrowIfNull(network);
@@ -74,6 +84,14 @@ public sealed record QualityLedgerRow
         if (scrambledPackets is { } left)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(left, nameof(scrambledPackets));
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegative(gaps);
+        ArgumentOutOfRangeException.ThrowIfNegative(missedMs);
+
+        if (gaps is 0 != missedMs is 0)
+        {
+            throw new ArgumentException("A recording missed something exactly when it holds a gap.", nameof(missedMs));
         }
 
         UtcTimes.Required(startedAt, nameof(startedAt));
@@ -89,7 +107,9 @@ public sealed record QualityLedgerRow
             counters,
             scrambledPackets,
             overflows,
-            measuredUpdatedAt);
+            measuredUpdatedAt,
+            gaps,
+            missedMs);
     }
 }
 
