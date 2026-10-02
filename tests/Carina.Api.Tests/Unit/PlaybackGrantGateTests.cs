@@ -18,6 +18,10 @@ public sealed class PlaybackGrantGateTests
 
     private static readonly PlaybackTarget Eight = PlaybackTarget.Recording("8");
 
+    private static readonly PlaybackTarget Tokyo = PlaybackTarget.LiveChannel("32736-1024");
+
+    private static readonly PlaybackTarget Education = PlaybackTarget.LiveChannel("32737-1032");
+
     [Fact]
     public async Task APlayerThatComesBackForEveryRangeIsAdmittedOnTheGrantEnteringOpened()
     {
@@ -91,29 +95,38 @@ public sealed class PlaybackGrantGateTests
     }
 
     [Fact]
-    public async Task TheLiveWayInSpendsATicketAndOpensNoGrantAtAll()
+    public async Task APlayerThatOpensALiveChannelAgainIsAdmittedOnTheGrantEnteringOpened()
     {
         Gate gate = Made(out _);
-        string carrier = gate.Issue(Watcher, PlaybackTarget.LiveChannel("32736-1024"));
+        string carrier = gate.Issue(Watcher, Tokyo);
 
-        Assert.Equal(
-            StatusCodes.Status200OK,
-            await gate.WatchOnceAsync(carrier, PlaybackTarget.LiveChannel("32736-1024")));
-        Assert.Equal(0, gate.Grants.Count);
-        Assert.Equal(
-            StatusCodes.Status403Forbidden,
-            await gate.WatchOnceAsync(carrier, PlaybackTarget.LiveChannel("32736-1024")));
+        Assert.Equal(StatusCodes.Status200OK, await gate.EnterAsync(carrier, Tokyo));
+        Assert.Equal(1, gate.Grants.Count);
+        Assert.Equal(StatusCodes.Status200OK, await gate.EnterAsync(carrier, Tokyo));
+        Assert.Null(gate.Tickets.Take(carrier, Tokyo));
     }
 
     [Fact]
-    public async Task AGrantOpenedForARecordingDoesNotAdmitTheLiveWayIn()
+    public async Task AGrantOpenedForALiveChannelOpensNoOtherChannelAndNoRecording()
+    {
+        Gate gate = Made(out _);
+        string carrier = gate.Issue(Watcher, Tokyo);
+
+        await gate.EnterAsync(carrier, Tokyo);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Education));
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Seven));
+    }
+
+    [Fact]
+    public async Task AGrantOpenedForARecordingOpensNoLiveChannel()
     {
         Gate gate = Made(out _);
         string carrier = gate.Issue(Watcher, Seven);
 
         await gate.EnterAsync(carrier, Seven);
 
-        Assert.Equal(StatusCodes.Status403Forbidden, await gate.WatchOnceAsync(carrier, Seven));
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Tokyo));
     }
 
     [Fact]
@@ -170,15 +183,6 @@ public sealed class PlaybackGrantGateTests
             HttpContext context = Offering(carrier);
 
             await gate.AdmitForAsLongAsTheGrantLastsAsync(context, target, (_, _) => Task.CompletedTask);
-
-            return context.Response.StatusCode;
-        }
-
-        internal async Task<int> WatchOnceAsync(string? carrier, PlaybackTarget target)
-        {
-            HttpContext context = Offering(carrier);
-
-            await gate.AdmitOnceAsync(context, target, (_, _) => Task.CompletedTask);
 
             return context.Response.StatusCode;
         }

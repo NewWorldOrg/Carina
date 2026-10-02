@@ -48,23 +48,16 @@ public sealed class LiveTicketReachTests
     }
 
     [Fact]
-    public async Task TheOneSurfaceALiveTicketOpensIsTheChannelHandedOverAsItIsAndItOpensItOnce()
+    public async Task TheOneSurfaceALiveTicketOpensIsTheChannelHandedOverAsItIs()
     {
         await using AuthProbe probe = Wiring(out _);
         string ticket = await IssuedAsync(probe);
 
         using HttpClient player = Carrying(probe, ticket);
-        HttpResponseMessage opened = await OpenedAsync(player);
+        using HttpResponseMessage opened = await OpenedAsync(player);
 
         Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
         Assert.Equal(LiveStreamDelivery.MediaType, opened.Content.Headers.ContentType?.MediaType);
-
-        opened.Dispose();
-
-        using HttpResponseMessage again = await player.GetAsync(Exit, HttpCompletionOption.ResponseHeadersRead);
-
-        Assert.Equal(HttpStatusCode.Forbidden, again.StatusCode);
-        Assert.Null(again.Headers.Location);
     }
 
     [Fact]

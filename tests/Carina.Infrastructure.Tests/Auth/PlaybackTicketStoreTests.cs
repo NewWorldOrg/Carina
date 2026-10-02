@@ -321,49 +321,6 @@ public sealed class PlaybackTicketStoreTests
         Assert.Throws<ArgumentNullException>(() => store.Take(issued.InTheClear, null!));
     }
 
-    [Fact]
-    public void ATicketHandedBackUnspentOpensWhatItWasIssuedForOnceAfterAll()
-    {
-        PlaybackTicketStore store = Store(out _);
-        IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
-        PlaybackTicket? taken = store.Take(issued.InTheClear, Seven);
-
-        Assert.NotNull(taken);
-
-        store.HandBack(taken, Seven);
-
-        Assert.Equal(Watcher, store.Take(issued.InTheClear, Seven)?.Subject);
-        Assert.Null(store.Take(issued.InTheClear, Seven));
-    }
-
-    [Fact]
-    public void ATicketIsHandedBackForWhatItWasTakenForAndForNothingElse()
-    {
-        PlaybackTicketStore store = Store(out _);
-        IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
-        PlaybackTicket? taken = store.Take(issued.InTheClear, Seven);
-
-        Assert.NotNull(taken);
-        Assert.Throws<ArgumentException>(() => store.HandBack(taken, Eight));
-        Assert.Throws<ArgumentNullException>(() => store.HandBack(taken, null!));
-        Assert.Null(store.Take(issued.InTheClear, Seven));
-    }
-
-    [Fact]
-    public void ATicketThatLapsedWhileItWasOutIsNotPutBack()
-    {
-        PlaybackTicketStore store = Store(out WoundClock clock);
-        IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
-        PlaybackTicket? taken = store.Take(issued.InTheClear, Seven);
-
-        Assert.NotNull(taken);
-
-        clock.Wind(PlaybackTicketPolicy.Default.Lifetime);
-        store.HandBack(taken, Seven);
-
-        Assert.Equal(0, store.Count);
-    }
-
     private static IssuedPlaybackTicket Issued(PlaybackTicketStore store, Subject subject, PlaybackTarget target)
     {
         IssuedPlaybackTicket? issued = store.Issue(subject, target);

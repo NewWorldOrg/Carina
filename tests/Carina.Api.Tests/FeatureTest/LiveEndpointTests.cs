@@ -189,10 +189,6 @@ internal sealed class HeldPlaybackTickets : IPlaybackTicketStore
     }
 
     public PlaybackTicket? Take(string? offered, PlaybackTarget target) => null;
-
-    public void HandBack(PlaybackTicket spent, PlaybackTarget target)
-    {
-    }
 }
 
 public sealed class LiveEndpointTests

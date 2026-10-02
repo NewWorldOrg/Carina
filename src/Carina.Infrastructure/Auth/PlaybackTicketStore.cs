@@ -51,26 +51,6 @@ public sealed class PlaybackTicketStore(TimeProvider clock, PlaybackTicketPolicy
         return spent.HasLapsed(Now(), policy) || !spent.Opens(target) ? null : spent;
     }
 
-    public void HandBack(PlaybackTicket spent, PlaybackTarget target)
-    {
-        ArgumentNullException.ThrowIfNull(spent);
-        ArgumentNullException.ThrowIfNull(target);
-
-        if (!spent.Opens(target))
-        {
-            throw new ArgumentException(
-                "A ticket is handed back for what it was taken for and for nothing else.",
-                nameof(target));
-        }
-
-        if (spent.HasLapsed(Now(), policy))
-        {
-            return;
-        }
-
-        held[spent.Digest] = spent;
-    }
-
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
     private int HeldFor(Subject subject) => held.Count(entry => entry.Value.Subject.Equals(subject));
