@@ -22,7 +22,10 @@ internal sealed class DriverFeature : IAsyncDisposable
         TimeSpan.FromMilliseconds(20),
         TimeSpan.FromMilliseconds(200),
         [DriverCapabilities.Recording, DriverCapabilities.Live],
-        () => 1.0);
+        () => 1.0)
+    {
+        DrainPoll = TimeSpan.FromMilliseconds(20),
+    };
 
     private readonly TempSocket socket = new();
     private readonly TestingWebApplicationFactory factory;

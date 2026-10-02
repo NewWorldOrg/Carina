@@ -241,7 +241,10 @@ internal sealed class AppSwapFeature : IAsyncDisposable
         TimeSpan.FromMilliseconds(20),
         TimeSpan.FromMilliseconds(200),
         [DriverCapabilities.Recording, DriverCapabilities.Live],
-        () => 1.0);
+        () => 1.0)
+    {
+        DrainPoll = TimeSpan.FromMilliseconds(20),
+    };
 
     private readonly SyntheticDriverHost driver;
 

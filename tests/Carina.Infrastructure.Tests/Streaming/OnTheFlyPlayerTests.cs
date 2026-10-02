@@ -169,7 +169,9 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         HandTurnedClock clock = new();
 
-        await using IOnTheFlyViewing viewing = await Running(Player("echo ready", clock: clock), TimeSpan.Zero);
+        await using IOnTheFlyViewing viewing = await Running(
+            Player("echo ready; cat > /dev/null", clock: clock),
+            TimeSpan.Zero);
 
         Assert.Equal(0, clock.Pending);
     }

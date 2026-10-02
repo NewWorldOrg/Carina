@@ -8,7 +8,8 @@ public sealed class AuthenticatedRequestTests
     [Fact]
     public async Task AnAuthenticatedRequestReachesTheWorkedExample()
     {
-        using HttpClient client = new TestingWebApplicationFactory().CreateAuthenticatedClient();
+        await using TestingWebApplicationFactory factory = new();
+        using HttpClient client = factory.CreateAuthenticatedClient();
 
         using HttpResponseMessage response = await client.GetAsync(new Uri("/api/driver/status", UriKind.Relative));
 
@@ -26,7 +27,8 @@ public sealed class AuthenticatedRequestTests
     [Fact]
     public async Task AnUnauthenticatedRequestIsStillDeniedWhenASchemeExists()
     {
-        using HttpClient client = new TestingWebApplicationFactory().WithTestScheme().CreateClient();
+        await using TestingWebApplicationFactory factory = new();
+        using HttpClient client = factory.WithTestScheme().CreateClient();
 
         using HttpResponseMessage response = await client.GetAsync(new Uri("/api/driver/status", UriKind.Relative));
 
