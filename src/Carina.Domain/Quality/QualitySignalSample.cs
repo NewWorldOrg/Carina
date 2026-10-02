@@ -29,6 +29,12 @@ public sealed class QualitySignalSample
 
     public SignalSample Signal { get; private set; } = null!;
 
+    /// <summary>
+    /// The physical channel the tuner was on when the sample was taken, or null for a sample taken
+    /// before the channel was kept.
+    /// </summary>
+    public int? PhysicalChannel { get; private set; }
+
     public static QualitySignalSample Rehydrate(
         string driverInstanceId,
         SessionId session,
@@ -37,7 +43,8 @@ public sealed class QualitySignalSample
         TunerDeviceId tuner,
         NetworkId network,
         ServiceId service,
-        SignalSample signal)
+        SignalSample signal,
+        int? physicalChannel = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(driverInstanceId);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(
@@ -62,6 +69,11 @@ public sealed class QualitySignalSample
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(signal);
 
+        if (physicalChannel is { } channel)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(channel, nameof(physicalChannel));
+        }
+
         return new QualitySignalSample
         {
             DriverInstanceId = driverInstanceId,
@@ -72,6 +84,7 @@ public sealed class QualitySignalSample
             Network = network,
             Service = service,
             Signal = signal,
+            PhysicalChannel = physicalChannel,
         };
     }
 }

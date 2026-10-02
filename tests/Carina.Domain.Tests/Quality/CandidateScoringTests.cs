@@ -176,6 +176,36 @@ public sealed class CandidateScoringTests
             Week,
             At));
 
+    [Fact(DisplayName = "what was measured on another physical channel of the same stream, while a selection since cleared sat there, is not counted for the candidates that stayed")]
+    public void WhatWasMeasuredOnAnotherPhysicalChannelIsNotCountedForTheCandidatesThatStayed()
+    {
+        CandidateChannel stayed = Selected(101, 27, At.AddDays(-30));
+        CandidateChannel cleared = Candidate(102, 30);
+
+        CandidateScored scored = Assert.Single(CandidateScoring.Over(
+            [stayed, cleared],
+            [Stream(27, 101, 102)],
+            [
+                Window(At.AddHours(-3), 101, samples: 360, locked: 0, channel: 30),
+                Window(At.AddHours(-2), 101, samples: 360, locked: 360, channel: 27),
+            ],
+            Week,
+            At));
+
+        Assert.Equal(stayed.Id, scored.Candidate);
+        Assert.Equal(360, scored.Score.Samples);
+        Assert.Equal(1.0, scored.Score.LockRate);
+    }
+
+    [Fact(DisplayName = "a window that does not say which physical channel it was taken on is counted for no candidate")]
+    public void AWindowThatDoesNotSayWhichChannelItWasTakenOnIsCountedForNoCandidate()
+        => Assert.Empty(CandidateScoring.Over(
+            [Selected(101, 27, At.AddDays(-30))],
+            [Stream(27, 101)],
+            [Window(At.AddHours(-2), 101, samples: 360, locked: 360, channel: null)],
+            Week,
+            At));
+
     [Fact]
     public void WindowsOutsideThePeriodAreNotCounted()
         => Assert.Empty(CandidateScoring.Over(
@@ -238,7 +268,8 @@ public sealed class CandidateScoringTests
         long locked,
         long unreachable = 0,
         int? carrierToNoise = null,
-        double? errorRate = null)
+        double? errorRate = null,
+        int? channel = 27)
         => new(
             start,
             new TunerDeviceId("adapter0.frontend0"),
@@ -251,5 +282,6 @@ public sealed class CandidateScoringTests
             carrierToNoise,
             errorRate is { } rate ? [new LayerErrorPeak(0, rate)] : [],
             [],
-            carrierToNoise is null && errorRate is null ? null : start);
+            carrierToNoise is null && errorRate is null ? null : start,
+            channel);
 }

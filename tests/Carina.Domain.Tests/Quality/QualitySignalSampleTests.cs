@@ -65,7 +65,21 @@ public sealed class QualitySignalSampleTests
             new ServiceId(1024),
             SignalSample.WithoutLock(Taken)));
 
-    private static QualitySignalSample Sample(SignalSample signal)
+    [Fact(DisplayName = "a sample says which physical channel the tuner was on, and one taken before that was kept says none")]
+    public void ASampleSaysWhichPhysicalChannelTheTunerWasOn()
+    {
+        Assert.Equal(27, Sample(SignalSample.WithoutLock(Taken), 27).PhysicalChannel);
+        Assert.Equal(27, QualitySignalWindow.Of(Sample(SignalSample.WithoutLock(Taken), 27)).PhysicalChannel);
+        Assert.Null(Sample(SignalSample.WithoutLock(Taken)).PhysicalChannel);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void AChannelThatIsNoChannelIsRefused(int channel)
+        => Assert.Throws<ArgumentOutOfRangeException>(() => Sample(SignalSample.WithoutLock(Taken), channel));
+
+    private static QualitySignalSample Sample(SignalSample signal, int? channel = null)
         => QualitySignalSample.Rehydrate(
             "driver-7",
             SessionId.Parse("survey-1"),
@@ -74,5 +88,6 @@ public sealed class QualitySignalSampleTests
             new TunerDeviceId("adapter0"),
             new NetworkId(32736),
             new ServiceId(1024),
-            signal);
+            signal,
+            channel);
 }

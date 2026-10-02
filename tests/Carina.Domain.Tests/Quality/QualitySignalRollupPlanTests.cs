@@ -45,6 +45,46 @@ public sealed class QualitySignalRollupPlanTests
         Assert.Equal(1, window.Unreachable);
     }
 
+    [Fact(DisplayName = "a window whose samples were all taken on one physical channel keeps that channel")]
+    public void AWindowWhoseSamplesWereAllTakenOnOneChannelKeepsIt()
+    {
+        QualitySignalRollup window = Assert.Single(QualitySignalRollupPlan.Over(
+            [
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon), channel: 27),
+                Sample(Noon.AddSeconds(10), SignalSample.WithoutLock(Noon.AddSeconds(10)), channel: 27),
+            ],
+            QualityWindow.Hour));
+
+        Assert.Equal(27, window.PhysicalChannel);
+    }
+
+    [Fact(DisplayName = "a window taken on more than one physical channel says it was taken on none in particular")]
+    public void AWindowTakenOnMoreThanOneChannelKeepsNone()
+    {
+        QualitySignalRollup window = Assert.Single(QualitySignalRollupPlan.Over(
+            [
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon), channel: 27),
+                Sample(Noon.AddSeconds(10), SignalSample.WithLock(Noon.AddSeconds(10), 30000, Noon.AddSeconds(10)), channel: 30),
+            ],
+            QualityWindow.Hour));
+
+        Assert.Equal(2, window.Samples);
+        Assert.Null(window.PhysicalChannel);
+    }
+
+    [Fact(DisplayName = "a window holding a sample that does not say its channel keeps none, rather than the channel of the samples that do")]
+    public void AWindowHoldingASampleThatDoesNotSayItsChannelKeepsNone()
+    {
+        QualitySignalRollup window = Assert.Single(QualitySignalRollupPlan.Over(
+            [
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon), channel: null),
+                Sample(Noon.AddSeconds(10), SignalSample.WithLock(Noon.AddSeconds(10), 30000, Noon.AddSeconds(10)), channel: 27),
+            ],
+            QualityWindow.Hour));
+
+        Assert.Null(window.PhysicalChannel);
+    }
+
     [Fact]
     public void EachMinuteIsRolledUpOnItsOwn()
     {
@@ -176,7 +216,8 @@ public sealed class QualitySignalRollupPlanTests
         DateTime at,
         SignalSample signal,
         string session = "live-1",
-        string tuner = "adapter0")
+        string tuner = "adapter0",
+        int? channel = 27)
         => QualitySignalSample.Rehydrate(
             "instance-a",
             SessionId.Parse(session),
@@ -185,5 +226,6 @@ public sealed class QualitySignalRollupPlanTests
             new TunerDeviceId(tuner),
             new NetworkId(32736),
             new ServiceId(1024),
-            signal);
+            signal,
+            channel);
 }

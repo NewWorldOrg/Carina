@@ -5,6 +5,13 @@ namespace Carina.Domain.Quality;
 
 public sealed record LayerErrorPeak(int Layer, double Highest);
 
+/// <summary>
+/// What was measured of one service on one tuner over one stretch of time.
+/// </summary>
+/// <param name="PhysicalChannel">
+/// The one physical channel everything in the window was taken on, or null when it was not all taken
+/// on one, does not say, or the window was folded from several.
+/// </param>
 public sealed record QualitySignalWindow(
     DateTime Start,
     TunerDeviceId Tuner,
@@ -17,7 +24,8 @@ public sealed record QualitySignalWindow(
     int? CarrierToNoiseLowest,
     IReadOnlyList<LayerErrorPeak> BitErrors,
     IReadOnlyList<string> MetricsNotRead,
-    DateTime? LastCarriedAt)
+    DateTime? LastCarriedAt,
+    int? PhysicalChannel = null)
 {
     public static QualitySignalWindow Of(QualitySignalRollup rollup)
     {
@@ -35,7 +43,8 @@ public sealed record QualitySignalWindow(
             rollup.CarrierToNoiseLowest,
             [.. rollup.BitErrors.Select(rate => new LayerErrorPeak(rate.Layer, rate.Highest))],
             [],
-            rollup.CarrierToNoiseLowest is not null || rollup.BitErrors.Count > 0 ? rollup.WindowStart : null);
+            rollup.CarrierToNoiseLowest is not null || rollup.BitErrors.Count > 0 ? rollup.WindowStart : null,
+            rollup.PhysicalChannel);
     }
 
     public static QualitySignalWindow Of(QualitySignalSample sample)
@@ -60,6 +69,7 @@ public sealed record QualitySignalWindow(
                     .Select(counts => new LayerErrorPeak(counts.Layer, counts.ErrorRate.GetValueOrDefault())),
             ],
             signal.MetricsNotRead,
-            signal.FiguresReadAt);
+            signal.FiguresReadAt,
+            sample.PhysicalChannel);
     }
 }

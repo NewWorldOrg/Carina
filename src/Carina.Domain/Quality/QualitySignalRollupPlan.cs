@@ -69,7 +69,19 @@ public static class QualitySignalRollupPlan
             figures.Length is 0 ? null : figures.Average(),
             figures.Length is 0 ? null : figures.Min(),
             figures.Length is 0 ? null : figures.Max(),
-            Layers(taken));
+            Layers(taken),
+            TheOneChannel(taken));
+    }
+
+    /// <summary>
+    /// The physical channel every one of the samples was taken on, or null when they were not all
+    /// taken on one or any of them does not say.
+    /// </summary>
+    private static int? TheOneChannel(IReadOnlyList<QualitySignalSample> taken)
+    {
+        int? first = taken[0].PhysicalChannel;
+
+        return first is not null && taken.All(sample => sample.PhysicalChannel == first) ? first : null;
     }
 
     private static IReadOnlyList<LayerErrorRate> Layers(IReadOnlyList<QualitySignalSample> taken)
