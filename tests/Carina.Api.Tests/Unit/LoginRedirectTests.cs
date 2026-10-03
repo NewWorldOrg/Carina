@@ -35,6 +35,29 @@ public sealed class LoginRedirectTests
         Assert.Equal(LoginRedirect.Home, LoginRedirect.Within(target));
     }
 
+    [Theory(DisplayName = "BR-AU-003: a letter outside ASCII, or a space, is kept escaped so the target can stand in a response header")]
+    [InlineData("/search?q=ニュース", "/search?q=%E3%83%8B%E3%83%A5%E3%83%BC%E3%82%B9")]
+    [InlineData("/search?q=a b", "/search?q=a%20b")]
+    [InlineData("/library?q=café", "/library?q=caf%C3%A9")]
+    [InlineData("/search?q=📺", "/search?q=%F0%9F%93%BA")]
+    [InlineData("/search?q=%E3%83%8B", "/search?q=%E3%83%8B")]
+    public void BrAu003ALetterOutsideAsciiIsKeptEscaped(string target, string kept)
+    {
+        Assert.Equal(kept, LoginRedirect.Within(target));
+    }
+
+    [Fact(DisplayName = "BR-AU-003: a half of a surrogate pair standing alone is escaped as the replacement character rather than passed on")]
+    public void BrAu003AHalfOfASurrogatePairStandingAloneIsEscapedAsTheReplacementCharacter()
+    {
+        Assert.Equal("/search?q=%EF%BF%BD", LoginRedirect.Within("/search?q=\uD83D"));
+    }
+
+    [Fact(DisplayName = "BR-AU-003: an escaped target is carried to the login screen escaped once more as the value of next")]
+    public void BrAu003AnEscapedTargetIsCarriedToTheLoginScreen()
+    {
+        Assert.Equal("/login?next=%2Fsearch%3Fq%3Da%2520b", LoginRedirect.For("/search?q=a b"));
+    }
+
     [Theory]
     [InlineData("/login")]
     [InlineData("/login?next=%2Fguide")]
