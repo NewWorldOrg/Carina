@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Api.Common;
 using Carina.Domain.Quality;
+using Carina.Domain.Recordings;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -258,7 +260,7 @@ public sealed class QualityEndpointTests
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(1, data.GetProperty("total").GetInt32());
-        Assert.Equal(bad.Recording.Value.ToString(), data.GetProperty("items")[0].GetProperty("id").GetString());
+        Assert.Equal(bad.Recording.Wire, data.GetProperty("items")[0].GetProperty("id").GetString());
         Assert.Equal("mayNotBeWatchable", data.GetProperty("items")[0].GetProperty("standing").GetString());
         Assert.Equal(1, Measure(data, "packetsLost", "whole").GetProperty("unmeasured").GetInt32());
         Assert.Equal(3, Measure(data, "packetsLost", "whole").GetProperty("subjects").GetInt32());
@@ -286,6 +288,20 @@ public sealed class QualityEndpointTests
         Assert.Equal(1_000_000, item.GetProperty("totalPackets").GetInt64());
     }
 
+    [Fact(DisplayName = "the recordings list spells a recording id the way the recording endpoints read it")]
+    public async Task TheRecordingsListSpellsARecordingIdAsTheRecordingEndpointsReadIt()
+    {
+        await using var feature = new QualityFeature();
+        QualityLedgerRow bad = feature.Recorded(dropped: 2_000, total: 1_000_000);
+
+        JsonElement item = Assert.Single(
+            (await feature.GetAsync("/api/quality/recordings")).Body.GetProperty("data").GetProperty("items").EnumerateArray());
+
+        RecordingId? read = RecordingIdText.Read(item.GetProperty("id").GetString());
+
+        Assert.Equal(bad.Recording, read);
+    }
+
     [Fact(DisplayName = "a recording clean on every measure but holding a gap is listed at the warning level")]
     public async Task ARecordingHoldingAGapIsListedAtTheWarningLevel()
     {
@@ -297,7 +313,7 @@ public sealed class QualityEndpointTests
         JsonElement item = Assert.Single(data.GetProperty("items").EnumerateArray());
 
         Assert.Equal(1, data.GetProperty("total").GetInt32());
-        Assert.Equal(gapped.Recording.Value.ToString(), item.GetProperty("id").GetString());
+        Assert.Equal(gapped.Recording.Wire, item.GetProperty("id").GetString());
         Assert.Equal("warning", item.GetProperty("standing").GetString());
         Assert.All(
             item.GetProperty("verdicts").EnumerateArray(),
