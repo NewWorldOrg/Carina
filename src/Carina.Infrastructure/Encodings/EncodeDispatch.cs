@@ -195,9 +195,9 @@ public sealed class EncodeDispatch(
     }
 
     /// <summary>
-    /// Closes as failed the row of a job whose ending the ledger would not take, and sweeps what it
-    /// still owes a removal for. A row that is no longer running the attempt that ended is left as it
-    /// is.
+    /// Closes as failed the row of a job whose ending the ledger would not take, sweeps what it still
+    /// owes a removal for, and removes the artefact it had placed when no completed job names that
+    /// file. A row that is no longer running the attempt that ended is left as it is.
     /// </summary>
     private async Task<EncodeJobStatus?> CloseWithoutItsEndingAsync(EncodeJob ended, CancellationToken cancellationToken)
     {
@@ -210,19 +210,43 @@ public sealed class EncodeDispatch(
             return null;
         }
 
-        if (held.Status is EncodeJobStatus.Running && held.Attempt == ended.Attempt)
+        EncodeScratchCleaner cleaner = scope.ServiceProvider.GetRequiredService<EncodeScratchCleaner>();
+
+        if (held.Status is not EncodeJobStatus.Running || held.Attempt != ended.Attempt)
         {
-            held.Fail(EncodeFailure.EndingNotKept, EndingNotKept(ended), clock.GetUtcNow().UtcDateTime);
-            await jobs.SaveAsync(held, cancellationToken);
+            if (held.HasEnded)
+            {
+                await cleaner.ClearAsync(held, cancellationToken);
+            }
+
+            return held.Status;
         }
 
-        if (held.HasEnded)
+        held.Fail(EncodeFailure.EndingNotKept, EndingNotKept(ended), clock.GetUtcNow().UtcDateTime);
+        await jobs.SaveAsync(held, cancellationToken);
+        await cleaner.ClearAsync(held, cancellationToken);
+
+        if (ended.Status is EncodeJobStatus.Completed
+            && !await AnotherStandsAtItsNameAsync(jobs, ended, cancellationToken))
         {
-            await scope.ServiceProvider.GetRequiredService<EncodeScratchCleaner>().ClearAsync(held, cancellationToken);
+            EncodeScratchFate fate = cleaner.RemoveArtefact(ended);
+
+            logger.LogWarning(
+                "Job {Job} had placed {Artefact} before the ledger refused its ending, and no completed job names that file, so it is removed ({Fate}).",
+                ended.Id.Wire,
+                ended.ArtefactName!.Value,
+                fate);
         }
 
         return held.Status;
     }
+
+    private static async Task<bool> AnotherStandsAtItsNameAsync(
+        IEncodeJobRepository jobs,
+        EncodeJob ended,
+        CancellationToken cancellationToken)
+        => (await jobs.ListForRecordingAsync(ended.RecordingId, cancellationToken))
+            .Any(job => !job.Id.Equals(ended.Id) && job.StandsAsTheArtefact && job.SharesTheArtefactWith(ended));
 
     private static string EndingNotKept(EncodeJob ended)
         => ended.Failure is { } failure

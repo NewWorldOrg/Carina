@@ -159,6 +159,39 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(EncodeJobStatus.Running, read.Status);
     }
 
+    [Fact(DisplayName = "a job that failed holding the name lets go of it in the ledger, and the next job on the same recording and profile claims it")]
+    public async Task AJobThatFailedHoldingTheNameLetsTheNextJobClaimIt()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        var recording = RecordingId.New();
+        EncodeJob first = Job(profile, destination, recording);
+        EncodeJob second = Job(profile, destination, recording);
+        EncodeFileName name = EncodeFileName.Artefact(recording, profile.Id);
+        first.Start(Started);
+
+        await using CarinaDbContext writing = database.Open();
+        var repository = new EncodeJobRepository(writing);
+        await repository.AddAsync(first, Cancel);
+        await repository.AddAsync(second, Cancel);
+
+        Assert.Equal(ArtefactClaim.Claimed, await repository.ClaimArtefactAsync(first, name, Cancel));
+
+        first.Fail(EncodeFailure.EndingNotKept, "the ledger refused the ending", Ended);
+        await repository.SaveAsync(first, Cancel);
+        second.Start(Ended);
+        await repository.SaveAsync(second, Cancel);
+
+        Assert.Equal(ArtefactClaim.Claimed, await repository.ClaimArtefactAsync(second, name, Cancel));
+
+        await using CarinaDbContext reading = database.Open();
+        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(first.Id, Cancel);
+
+        Assert.NotNull(read);
+        Assert.Equal(name, read.ArtefactName);
+        Assert.Equal(Ended, read.NameGivenUpAt);
+    }
+
     [Fact(DisplayName = "two jobs on one recording with one profile — the second to claim the name is refused, and left as it was")]
     public async Task TheSecondJobToClaimTheSameNameIsRefusedAndLeftAsItWas()
     {
