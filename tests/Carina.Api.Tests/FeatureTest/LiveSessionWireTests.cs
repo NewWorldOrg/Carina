@@ -341,10 +341,31 @@ public sealed class LiveSessionWireTests
         Assert.Equal(SoundPlacement.OneChannelOf(0, channel), Assert.Single(transcoders.Raised).Sound);
     }
 
+    [Theory(DisplayName = "BR-PD-008: a wire opened while the channel announces two languages on its main sound beside a second stream is given a channel of the main sound, or the second stream as the third sound")]
+    [InlineData("", 0, SoundChannel.Left)]
+    [InlineData("&sound=secondary", 0, SoundChannel.Right)]
+    [InlineData("&sound=third", 1, null)]
+    public async Task AWireOpenedWhileTwoLanguagesAreOnTheMainSoundBesideASecondStreamIsGivenTheSoundAskedFor(
+        string asked,
+        int ordinal,
+        SoundChannel? channel)
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        probe.Programmes.Programmes.Add(OnAir(event_: 7, AudioMode.DualMono, sounds: 2, TimeSpan.FromMinutes(-10)));
+
+        using WebSocket socket = await Carrying(probe, cookie)
+            .ConnectAsync(new Uri(Handshake("32736", "1024", "720p30") + asked), Patiently());
+
+        SoundPlacement expected = channel is { } side ? SoundPlacement.OneChannelOf(ordinal, side) : SoundPlacement.WholeStream(ordinal);
+
+        Assert.Equal(expected, Assert.Single(transcoders.Raised).Sound);
+    }
+
     [Theory(DisplayName = "BR-PD-008: a wire opened on any other broadcast is given the whole stream of the sound asked for")]
     [InlineData(AudioMode.Stereo, 1, "", 0)]
     [InlineData(AudioMode.Stereo, 2, "&sound=secondary", 1)]
-    [InlineData(AudioMode.DualMono, 2, "", 0)]
     [InlineData(AudioMode.Surround, 1, "", 0)]
     public async Task AWireOpenedOnAnyOtherBroadcastIsGivenTheWholeStreamOfTheSoundAskedFor(
         AudioMode audio,

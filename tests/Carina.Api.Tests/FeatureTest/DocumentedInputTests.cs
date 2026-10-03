@@ -94,7 +94,7 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
         Assert.Equal("query", sound["in"]!.GetValue<string>());
         Assert.Equal("string", sound["schema"]!["type"]!.GetValue<string>());
         Assert.Equal(
-            ["main", "secondary"],
+            ["main", "secondary", "third"],
             sound["schema"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
         Assert.Equal("main", sound["schema"]!["default"]!.GetValue<string>());
     }

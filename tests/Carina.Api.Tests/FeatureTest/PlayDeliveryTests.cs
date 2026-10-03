@@ -580,6 +580,43 @@ public sealed class PlayDeliveryTests
     }
 
     [Fact]
+    public async Task BrPd008ARecordingWithTwoLanguagesOnTheMainSoundBesideASecondStreamIsPlayedWithAnyOfTheThree()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.DualMono, sounds: 2);
+        feature.Player.Sounds = 2;
+
+        using HttpResponseMessage main = await feature.PictureAsync(recording);
+        using HttpResponseMessage secondary = await feature.PictureAsync(recording, "?sound=secondary");
+        using HttpResponseMessage third = await feature.PictureAsync(recording, "?sound=third");
+
+        Assert.Equal(
+            [HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.OK],
+            [main.StatusCode, secondary.StatusCode, third.StatusCode]);
+        Assert.Equal(
+            [
+                SoundPlacement.OneChannelOf(0, SoundChannel.Left),
+                SoundPlacement.OneChannelOf(0, SoundChannel.Right),
+                SoundPlacement.WholeStream(1),
+            ],
+            feature.Player.AskedWith);
+    }
+
+    [Fact]
+    public async Task ThePlanOfABroadcastWithTwoLanguagesOnTheMainSoundBesideASecondStreamNamesAllThree()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.DualMono, sounds: 2);
+        feature.Player.SoundsCannotBeRead = "the stream is never asked when the broadcast announced its sound";
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal(
+            ["main", "secondary", "third"],
+            read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
+    }
+
+    [Fact]
     public async Task ABroadcastThatAnnouncedTwoSoundsOfTheirOwnIsPlayedByTakingTheSecondStreamItCarries()
     {
         await using var feature = new PlayFeature();
