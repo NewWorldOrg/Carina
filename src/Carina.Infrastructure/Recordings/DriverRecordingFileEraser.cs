@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Captions;
 using Carina.Domain.Driver;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
@@ -13,6 +14,7 @@ public sealed class DriverRecordingFileEraser(
     IDriverClient driver,
     IRecordingFileSurvey survey,
     ThumbnailSettings pictures,
+    CaptionSettings captions,
     ILogger<DriverRecordingFileEraser> logger) : IRecordingFileEraser
 {
     public async Task<RecordingErasure> EraseAsync(
@@ -39,22 +41,21 @@ public sealed class DriverRecordingFileEraser(
             return RecordingErasure.Refused(
                 fault,
                 Describe(call),
-                fault is ErasureFault.FileLeftBehind ? 1 + PicturesStillThere(id) : null);
+                fault is ErasureFault.FileLeftBehind ? 1 + DerivedStillThere(id) : null);
         }
 
         int removed = erased.FileRemoved ? 1 : 0;
 
-        if (pictures.WrittenTo is { } gallery)
+        foreach ((string shelf, string derived, string what) in Derived(id))
         {
-            string drawn = Path.Combine(gallery, id.Wire + ThumbnailJob.Extension);
-            bool drawnWasThere = File.Exists(drawn);
+            bool wasThere = File.Exists(derived);
 
-            if (Unlink(gallery, drawn) is { } left)
+            if (Unlink(shelf, derived, what) is { } left)
             {
                 return left;
             }
 
-            removed += drawnWasThere ? 1 : 0;
+            removed += wasThere ? 1 : 0;
         }
 
         logger.LogInformation(
@@ -66,10 +67,24 @@ public sealed class DriverRecordingFileEraser(
         return RecordingErasure.Erased(removed);
     }
 
-    private int PicturesStillThere(RecordingId id)
-        => pictures.WrittenTo is { } gallery && File.Exists(Path.Combine(gallery, id.Wire + ThumbnailJob.Extension))
-            ? 1
-            : 0;
+    private int DerivedStillThere(RecordingId id) => Derived(id).Count(derived => File.Exists(derived.Path));
+
+    private IReadOnlyList<(string Shelf, string Path, string What)> Derived(RecordingId id)
+    {
+        List<(string Shelf, string Path, string What)> derived = [];
+
+        if (pictures.WrittenTo is { } gallery)
+        {
+            derived.Add((gallery, Path.Combine(gallery, id.Wire + ThumbnailJob.Extension), "picture drawn of this recording"));
+        }
+
+        if (captions.WrittenTo is { } shelf)
+        {
+            derived.Add((shelf, Path.Combine(shelf, id.Wire + CaptionSettings.Extension), "captions taken from this recording"));
+        }
+
+        return derived;
+    }
 
     private static ErasureFault FaultIn<T>(DriverCall<T> call)
     {
@@ -156,18 +171,17 @@ public sealed class DriverRecordingFileEraser(
         return OutOfReach(root, absence);
     }
 
-    private RecordingErasure? Unlink(string gallery, string path)
+    private RecordingErasure? Unlink(string shelf, string path, string what)
     {
-        if (!RecordingFilePlace.LiesDirectlyUnder(gallery, path))
+        if (!RecordingFilePlace.LiesDirectlyUnder(shelf, path))
         {
             logger.LogWarning(
-                "The picture drawn of this recording resolves outside the directory pictures are kept in, "
-                + "so nothing is removed.");
+                "The {What} resolves outside the directory it is kept in, so nothing is removed.",
+                what);
 
             return RecordingErasure.Refused(
                 ErasureFault.FileLeftBehind,
-                "The picture drawn of this recording does not resolve to a file in the directory pictures are "
-                + "kept in, so it is left where it is.",
+                $"The {what} does not resolve to a file in the directory it is kept in, so it is left where it is.",
                 1);
         }
 
@@ -179,11 +193,11 @@ public sealed class DriverRecordingFileEraser(
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(failure, "The picture drawn of this recording could not be removed.");
+            logger.LogWarning(failure, "The {What} could not be removed.", what);
 
             return RecordingErasure.Refused(
                 ErasureFault.FileLeftBehind,
-                "The picture drawn of this recording could not be removed; the log says why.",
+                $"The {what} could not be removed; the log says why.",
                 1);
         }
     }

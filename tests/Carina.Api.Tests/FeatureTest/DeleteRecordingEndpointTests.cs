@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 
 using Carina.Contracts;
+using Carina.Domain.Captions;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
@@ -554,6 +555,7 @@ public sealed class DeleteRecordingEndpointTests
                     new IntegritySettings { OutputRoots = [new StorageRootPath(new OutputRoot("bulk"), root)] },
                     NullLogger<LocalRecordingFileSurvey>.Instance),
                 new ThumbnailSettings { WrittenTo = gallery },
+                new CaptionSettings(),
                 NullLogger<DriverRecordingFileEraser>.Instance);
         }
 
