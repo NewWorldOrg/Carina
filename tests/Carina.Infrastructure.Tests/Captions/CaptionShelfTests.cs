@@ -38,6 +38,26 @@ public sealed class CaptionShelfTests : IDisposable
     }
 
     [Fact]
+    public async Task BrPd017WhereTheFilesClockBeganIsReadWithoutReadingTheWholeRecord()
+    {
+        RecordingId id = RecordingId.New();
+        CaptionShelf shelf = Shelf();
+        await shelf.KeepAsync(id, Record(3), Cancel);
+
+        Assert.Equal(TimeSpan.FromSeconds(1), await shelf.StartsAtAsync(id, Cancel));
+        Assert.Null(await shelf.StartsAtAsync(RecordingId.New(), Cancel));
+    }
+
+    [Fact]
+    public async Task AShelfWithNoDirectoryReadsAsHoldingNothing()
+    {
+        CaptionShelf shelf = new(new CaptionSettings());
+
+        Assert.Null(await shelf.ReadAsync(RecordingId.New(), Cancel));
+        Assert.Null(await shelf.StartsAtAsync(RecordingId.New(), Cancel));
+    }
+
+    [Fact]
     public async Task ARecordThatIsNotThereReadsAsNothing()
         => Assert.Null(await Shelf().ReadAsync(RecordingId.New(), Cancel));
 

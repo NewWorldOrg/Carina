@@ -9,7 +9,7 @@ namespace Carina.Infrastructure.Tests.Streaming;
 public sealed class FfmpegCaptionTranscriberTests
 {
     [Fact]
-    public async Task BrPd016AFileWhosePictureSizeCannotBeReadIsAFailureAndNothingIsRun()
+    public async Task BrPd016AFileWhosePictureSizeCannotBeReadIsStillDrawnSoThatOneWithNoCaptionsCanSaySo()
     {
         FfmpegCaptionTranscriber transcriber = new(
             new MachineSettings { Programme = "/nowhere/ffmpeg-that-must-not-run" },
@@ -19,7 +19,7 @@ public sealed class FfmpegCaptionTranscriberTests
 
         CaptionTranscription taken = await transcriber.TranscribeAsync("/srv/recordings/k-1.ts", new ServiceId(1040), CancellationToken.None);
 
-        Assert.Equal(CaptionFault.CanvasUnread, taken.Fault);
+        Assert.Equal(CaptionFault.ProgrammeMissing, taken.Fault);
     }
 
     private sealed class UnreadAttributes : IStreamAttributeReader

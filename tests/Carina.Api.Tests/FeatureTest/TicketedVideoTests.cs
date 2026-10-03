@@ -300,6 +300,7 @@ public sealed class TicketedVideoTests
     [InlineData("/play")]
     [InlineData("/thumbnail")]
     [InlineData("/scrub")]
+    [InlineData("/captions")]
     public async Task TheTicketOpensTheBytesAndNothingElseUnderTheSamePrefix(string beneath)
     {
         await using var feature = new TicketedFeature();
@@ -319,6 +320,7 @@ public sealed class TicketedVideoTests
     [InlineData("/play")]
     [InlineData("/thumbnail")]
     [InlineData("/scrub")]
+    [InlineData("/captions")]
     public async Task EverySurfaceUnderThisPrefixRefusesAStrangerWithTheSameStatus(string beneath)
     {
         await using var feature = new TicketedFeature();

@@ -1,3 +1,4 @@
+using Carina.Domain.Captions;
 using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Streaming;
@@ -30,7 +31,8 @@ public sealed record PlaybackPlanResponder(
     long? Bytes,
     double? ResumeAtSec,
     IReadOnlyList<SoundTrack> Sounds,
-    IReadOnlyList<PlaybackChapterResponder> Chapters)
+    IReadOnlyList<PlaybackChapterResponder> Chapters,
+    CaptionStanding Captions)
 {
     public static PlaybackPlanResponder Of(
         PlaybackPlan plan,
@@ -38,7 +40,8 @@ public sealed record PlaybackPlanResponder(
         string mediaType,
         TimeSpan? resumeAt,
         IReadOnlyList<SoundTrack> sounds,
-        IReadOnlyList<PlaybackChapterResponder> chapters)
+        IReadOnlyList<PlaybackChapterResponder> chapters,
+        CaptionStanding captions)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(handover);
@@ -58,6 +61,7 @@ public sealed record PlaybackPlanResponder(
             plan.Transcodes ? null : handover.Bytes,
             resumeAt?.TotalSeconds,
             sounds,
-            chapters);
+            chapters,
+            captions);
     }
 }

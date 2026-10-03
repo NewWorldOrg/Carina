@@ -115,8 +115,9 @@ app.MapGet(
                 PlaybackService playback,
                 IOnTheFlyPlayer player,
                 IEncodeChapterRepository chapters,
-                IPlaybackPositionRepository positions) =>
-            PlayDelivery.Invoke(context, id, playback, player, chapters, positions))
+                IPlaybackPositionRepository positions,
+                CaptionService captions) =>
+            PlayDelivery.Invoke(context, id, playback, player, chapters, positions, captions))
     .WithName(PlaybackSurfaces.PlayingIsCalled)
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.HowARecordingIsPlayedInABrowser)
@@ -126,6 +127,19 @@ app.MapGet(
         PlaybackSurfaces.WhichProfileThePictureIsEncodedIn,
         PlaybackSurfaces.WhichSoundIsCarried,
         PlaybackSurfaces.WhichOfTheTwoFilesIsPlayed)
+    .WithEffect(EndpointEffect.Reading);
+
+app.MapGet(
+        CaptionDelivery.Path,
+        (HttpContext context, string id, PlaybackService playback, CaptionService captions) =>
+            CaptionDelivery.Invoke(context, id, playback, captions))
+    .WithName(PlaybackSurfaces.TheCaptionsAreCalled)
+    .WithTags(PlaybackSurfaces.Tag)
+    .WithSummary(PlaybackSurfaces.TheCaptionsOfARecording)
+    .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status200OK, PlayDelivery.Json)
+    .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status404NotFound, PlayDelivery.Json)
+    .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status409Conflict, PlayDelivery.Json)
+    .Reads(PlaybackSurfaces.WhereTheCaptionsStart, PlaybackSurfaces.WhichFileTheCaptionsArePlacedOn)
     .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(
