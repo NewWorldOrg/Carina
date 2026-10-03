@@ -32,6 +32,7 @@ public sealed class PlaybackService(
     IPlaybackFileStore files,
     IEncodeJobRepository jobs,
     IEncodeProfileRepository profiles,
+    IArtefactOpenings reads,
     ILogger<PlaybackService> logger)
 {
     public async Task<ServiceResult<PlaybackOffer, PlaybackFailure>> OfferAsync(
@@ -85,6 +86,8 @@ public sealed class PlaybackService(
 
         if (opened.Reading is { } reading)
         {
+            reads.Opened(file.Root, file.Name.Value);
+
             return ServiceResult<Stream, PlaybackFailure>.Success(reading);
         }
 

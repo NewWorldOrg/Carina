@@ -153,12 +153,16 @@ internal sealed class PlayFeature : IAsyncDisposable
                 services.AddSingleton<IPlaybackPositionRepository>(Positions);
             }));
 
-        Client = configured.WithTestScheme().CreateClient();
+        WebApplicationFactory<Program> serving = configured.WithTestScheme();
+        Client = serving.CreateClient();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             TestAuthenticationHandler.SchemeName,
             "anything");
         Stranger = configured.WithTestScheme().CreateClient();
+        Reads = serving.Services.GetRequiredService<IArtefactOpenings>();
     }
+
+    public IArtefactOpenings Reads { get; }
 
     public HttpClient Client { get; }
 
@@ -504,6 +508,24 @@ public sealed class PlayDeliveryTests
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, picture.StatusCode);
         Assert.Equal(recording.FileName, Assert.Single(feature.Player.Opened).Name);
+    }
+
+    [Fact]
+    public async Task BrEd2019AnArtefactHandedOutWholeIsNotedAsOpenedAndAPlanOpensNothing()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+        string artefact = feature.Jobs.Jobs.Single().ArtefactName!.Value;
+
+        using HttpResponseMessage plan = await feature.PlanAsync(recording);
+
+        Assert.Null(feature.Reads.LastOpened(EncodedArtefact.Shelf, artefact));
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, string.Empty, "bytes=0-99");
+
+        Assert.Equal(HttpStatusCode.PartialContent, picture.StatusCode);
+        Assert.NotNull(feature.Reads.LastOpened(EncodedArtefact.Shelf, artefact));
     }
 
     [Fact]

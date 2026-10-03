@@ -17,7 +17,8 @@ namespace Carina.Infrastructure.Captions;
 /// A pass does not start the next recording while anything is being recorded or watched, and first puts
 /// back in the queue any recording whose row says its captions are ready while no record of them is kept.
 /// With room left in the pass, it takes again the captions of ready recordings whose record was kept before
-/// their text was taken, leaving them ready meanwhile.
+/// their text was taken, leaving them ready meanwhile, and then puts a text track of captions into the
+/// artefacts that await one.
 /// </summary>
 public sealed class CaptionJob(
     IServiceScopeFactory scopes,
@@ -111,6 +112,13 @@ public sealed class CaptionJob(
             : await TextlessAsync(worklist, requeued.StillReady, withinReach, settings.AtMostAPass - awaiting.Count, cancellationToken);
 
         tally = await TakeEachAsync(worklist, again, true, tally, cancellationToken);
+
+        if (!tally.Yielded)
+        {
+            Told(await scope.ServiceProvider
+                .GetRequiredService<IArtefactCaptioning>()
+                .CaptionAsync(settings.AtMostAPass, busy => BusyAsync(worklist, busy), cancellationToken));
+        }
 
         CaptionPass pass = CaptionPass.Of(
             awaiting.Count + again.Count,
@@ -210,6 +218,23 @@ public sealed class CaptionJob(
 
     private async Task<bool> BusyAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
         => watching.Anyone || await worklist.AnyBeingRecordedAsync(cancellationToken);
+
+    private void Told(ArtefactCaptioningRound round)
+    {
+        if (round.Read is 0)
+        {
+            return;
+        }
+
+        logger.LogInformation(
+            "A caption pass read {Read} artefact(s) for a text track of captions: {Added} given one, {Withheld} given none, "
+            + "{Failed} failed{Yielded}.",
+            round.Read,
+            round.Added,
+            round.Withheld,
+            round.Failed,
+            round.Yielded ? ", and it stopped because something is being recorded or watched" : string.Empty);
+    }
 
     private void Told(CaptionPass pass)
     {

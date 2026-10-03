@@ -34,6 +34,8 @@ public sealed class CaptionJobTests : IDisposable
 
     private readonly RecordingAppEvents events = new();
 
+    private readonly HeldArtefactCaptioning captioning = new();
+
     public void Dispose()
     {
         Directory.Delete(recordings, recursive: true);
@@ -403,6 +405,32 @@ public sealed class CaptionJobTests : IDisposable
         Assert.True(new CaptionShelf(Settings()).Holds(nothing.Id));
     }
 
+    [Fact]
+    public async Task BrEd2019AfterTheCaptionsAreTakenThePassPutsTextTracksIntoArtefactsAskingWhetherItIsBusyBeforeEach()
+    {
+        Recorded();
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(Record(1));
+
+        await Job().RunAsync(Cancel);
+        watching.Anyone = true;
+        bool busyThen = await captioning.Busy!(Cancel);
+
+        Assert.Equal(Settings().AtMostAPass, captioning.AskedFor);
+        Assert.Single(transcriber.Asked);
+        Assert.True(busyThen);
+    }
+
+    [Fact]
+    public async Task BrEd2019APassThatStoppedForSomebodyWatchingPutsNoTextTrackIntoAnything()
+    {
+        Recorded();
+        watching.Anyone = true;
+
+        await Job().RunAsync(Cancel);
+
+        Assert.Null(captioning.AskedFor);
+    }
+
     private CaptionSettings Settings() => new() { WrittenTo = shelved };
 
     private CaptionJob Job(CaptionSettings? settings = null)
@@ -425,6 +453,7 @@ public sealed class CaptionJobTests : IDisposable
     {
         ServiceCollection services = new();
         services.AddScoped<ICaptionWorklist>(_ => worklist);
+        services.AddScoped<IArtefactCaptioning>(_ => captioning);
 
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
@@ -542,6 +571,24 @@ public sealed class CaptionJobTests : IDisposable
             Asked.Enqueue((source, service));
 
             return Task.FromResult(Answer(source));
+        }
+    }
+
+    private sealed class HeldArtefactCaptioning : IArtefactCaptioning
+    {
+        public int? AskedFor { get; private set; }
+
+        public Func<CancellationToken, Task<bool>>? Busy { get; private set; }
+
+        public Task<ArtefactCaptioningRound> CaptionAsync(
+            int atMost,
+            Func<CancellationToken, Task<bool>> busy,
+            CancellationToken cancellationToken)
+        {
+            AskedFor = atMost;
+            Busy = busy;
+
+            return Task.FromResult(new ArtefactCaptioningRound(0, 0, 0, 0, false));
         }
     }
 
