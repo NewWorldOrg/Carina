@@ -1,3 +1,4 @@
+using Carina.Domain.Captions;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
@@ -26,6 +27,68 @@ public sealed class LocalWrittenFileSurveyTests
         LocalWrittenFileSurvey survey = Survey(recordings.Root, encodes.Root, pictures.Root);
 
         Assert.Equal(["encodes", "thumbnails"], survey.Places.Select(place => place.Value).ToArray());
+    }
+
+    [Fact]
+    public void BrKd025TheDirectoryCaptionsAreKeptInIsWalkedBesideTheOthers()
+    {
+        using var recordings = new TempTree();
+        using var encodes = new TempTree();
+        using var pictures = new TempTree();
+        using var captions = new TempTree();
+
+        LocalWrittenFileSurvey survey = Survey(recordings.Root, encodes.Root, pictures.Root, captions.Root);
+
+        Assert.Equal(["encodes", "thumbnails", "captions"], survey.Places.Select(place => place.Value).ToArray());
+    }
+
+    [Fact]
+    public async Task BrKd025AWalkOfTheCaptionsSaysItListedTheCaptions()
+    {
+        using var recordings = new TempTree();
+        using var captions = new TempTree();
+        captions.Holding("one.captions", 9);
+
+        RootListing listed = await Survey(recordings.Root, null, null, captions.Root).ListAsync(LocalWrittenFileSurvey.CaptionPlace, Cancel);
+
+        Assert.Equal(StoragePlace.Captions, listed.Place);
+        Assert.Equal(["one.captions"], listed.Files.Select(file => file.Path).ToArray());
+    }
+
+    [Fact]
+    public void BrKd025EveryRecordingTheLedgerHoldsClaimsItsCaptionsAndNothingElseOnTheirShelf()
+    {
+        using var recordings = new TempTree();
+        using var captions = new TempTree();
+
+        DeclaredFile claimed = Assert.Single(Survey(recordings.Root, null, null, captions.Root).Claimed([Row], []));
+
+        Assert.Equal(new DeclaredFile(LocalWrittenFileSurvey.CaptionPlace, Recorded.Wire + ".captions"), claimed);
+        Assert.Empty(Survey(recordings.Root, null, null, captions.Root).Drawn([Row]));
+    }
+
+    [Fact]
+    public void BrKd025CaptionsKeptInsideTheRecordingRootAreNotWalkedAndAreClaimedThere()
+    {
+        using var recordings = new TempTree();
+        recordings.HoldingDirectory("captions");
+
+        LocalWrittenFileSurvey survey = Survey(recordings.Root, null, null, recordings.Under("captions"));
+
+        Assert.DoesNotContain(LocalWrittenFileSurvey.CaptionPlace, survey.Places);
+        Assert.Contains(new DeclaredFile(Primary, "captions/" + Recorded.Wire + ".captions"), survey.Claimed([Row], []));
+    }
+
+    [Fact]
+    public void CaptionsKeptInTheDirectoryThumbnailsAreDrawnIntoAreClaimedThere()
+    {
+        using var recordings = new TempTree();
+        using var shared = new TempTree();
+
+        LocalWrittenFileSurvey survey = Survey(recordings.Root, null, shared.Root, shared.Root);
+
+        Assert.Equal(["thumbnails"], survey.Places.Select(place => place.Value).ToArray());
+        Assert.Contains(new DeclaredFile(LocalWrittenFileSurvey.ThumbnailPlace, Recorded.Wire + ".captions"), survey.Claimed([Row], []));
     }
 
     [Fact]
@@ -69,6 +132,7 @@ public sealed class LocalWrittenFileSurveyTests
             new IntegritySettings { OutputRoots = [new StorageRootPath(Primary, recordings.Root)] },
             new EncodeSettings { OutputRoots = [new StorageRootPath(Primary, encodes.Root)] },
             new ThumbnailSettings(),
+            new CaptionSettings(),
             NullLogger<LocalWrittenFileSurvey>.Instance);
 
         Assert.Empty(survey.Places);
@@ -226,7 +290,7 @@ public sealed class LocalWrittenFileSurveyTests
             Survey(recordings.Root, encodes.Root, null).Claimed([], [new DeclaredFile(Encodes, "one.mp4")]));
     }
 
-    private static LocalWrittenFileSurvey Survey(string recordings, string? encodes, string? pictures)
+    private static LocalWrittenFileSurvey Survey(string recordings, string? encodes, string? pictures, string? captions = null)
         => new(
             new IntegritySettings { OutputRoots = [new StorageRootPath(Primary, recordings)] },
             new EncodeSettings
@@ -234,5 +298,6 @@ public sealed class LocalWrittenFileSurveyTests
                 OutputRoots = encodes is null ? [] : [new StorageRootPath(Encodes, encodes)],
             },
             new ThumbnailSettings { WrittenTo = pictures },
+            new CaptionSettings { WrittenTo = captions },
             NullLogger<LocalWrittenFileSurvey>.Instance);
 }
