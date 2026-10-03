@@ -117,12 +117,20 @@ public static class FfmpegLiveInvocation
         ];
 
     internal static IReadOnlyList<string> CaptionOutput(ServiceId service, string target)
+        => CaptionOutput(service, target, []);
+
+    /// <summary>
+    /// The caption output, with <paramref name="alongside"/> mapped into the same container after the
+    /// pictures.
+    /// </summary>
+    internal static IReadOnlyList<string> CaptionOutput(ServiceId service, string target, IReadOnlyList<string> alongside)
         =>
         [
             "-filter_complex",
             Drawing(service),
             "-map",
             DrawnCaptions,
+            .. alongside,
             "-fps_mode",
             "passthrough",
             "-c:v",

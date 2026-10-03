@@ -170,6 +170,26 @@ public sealed class CaptionTranscriptionMaterialTests(ITestOutputHelper output) 
         Assert.Equal(statements[0] + (SyntheticBroadcast.CaptionLastsTenths * Second / 10), alone.Cues[1].Pts);
     }
 
+    [Theory]
+    [InlineData(SyntheticCaptions.EverySecond)]
+    [InlineData(SyntheticCaptions.ShownThenCleared)]
+    [InlineData(SyntheticCaptions.ShownForAWhile)]
+    public async Task BrPd019TheTextChangesAtTheSameMomentsAsThePicturesAndSaysWhatTheBroadcastWrote(SyntheticCaptions captions)
+    {
+        string written = await (SyntheticBroadcast.AsMeasured() with { Length = Whole, Captions = captions })
+            .WriteAsync(Path.Combine(room, $"text-{captions}.m2ts"), Cancel);
+
+        CaptionRecord record = Assert.IsType<CaptionRecord>((await Transcriber().TranscribeAsync(written, Service, Cancel)).Record);
+        IReadOnlyList<CaptionLine> lines = Assert.IsAssignableFrom<IReadOnlyList<CaptionLine>>(record.Lines);
+
+        output.WriteLine($"pictures {string.Join(" ", record.Cues.Select(cue => $"{Seconds(cue.Pts)}{(cue.Clears ? "x" : "+")}"))}");
+        output.WriteLine($"text     {string.Join(" ", lines.Select(line => $"{Seconds(line.Pts)}{line.Text ?? "x"}"))}");
+
+        Assert.Equal(record.Cues.Select(cue => (cue.Pts, cue.Clears)), lines.Select(line => (line.Pts, line.Clears)));
+        Assert.All(lines.Where(line => !line.Clears), line => Assert.Contains(line.Text, new[] { "合成字幕", "CARINA" }));
+        Assert.Contains(lines, line => line.Text == "合成字幕");
+    }
+
     private static string Seconds(long pts) => (pts / (double)Second).ToString("0.000", CultureInfo.InvariantCulture);
 
     private static FfmpegCaptionTranscriber Transcriber()

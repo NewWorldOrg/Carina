@@ -26,11 +26,25 @@ public sealed class FfmpegCaptionInvocationTests
 
         Assert.Equal(["-sub_type", "bitmap", "-canvas_size", "1440x1080", "-font", FfmpegLiveInvocation.Font], alone[(input - 6)..input]);
         Assert.Equal("/srv/recordings/k-1.ts", alone[input + 1]);
-        Assert.Equal(beside[..^1], alone[^beside.Length..^1]);
+        string[] carried = [.. FfmpegCaptionInvocation.Carried(Service)];
+        int drawn = Array.IndexOf(alone, "-filter_complex");
+
+        string[] withoutWhatIsCarried = [.. alone[drawn..(drawn + 4)], .. alone[(drawn + 4 + carried.Length)..^1]];
+
+        Assert.Equal(beside[..^1], withoutWhatIsCarried);
+        Assert.Equal(carried, alone[(drawn + 4)..(drawn + 4 + carried.Length)]);
         Assert.Equal("pipe:1", alone[^1]);
         Assert.Contains("-copyts", alone[..input]);
-        Assert.DoesNotContain("-map", alone[..^beside.Length]);
+        Assert.DoesNotContain("-map", alone[..drawn]);
         Assert.DoesNotContain(alone, argument => argument.Contains(":v:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BrPd019TheCaptionStreamIsCarriedAsItIsBesideThePicturesSoItsTextCanBeRead()
+    {
+        Assert.Equal(
+            ["-map", "0:p:1040:s:0", "-c:s", "copy", "-tag:s", FfmpegCaptionInvocation.CarriedTag],
+            FfmpegCaptionInvocation.Carried(Service));
     }
 
     [Fact]

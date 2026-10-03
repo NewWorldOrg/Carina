@@ -8,7 +8,8 @@ namespace Carina.Infrastructure.Streaming;
 /// <summary>
 /// Draws the captions of one service out of a recorded file with the decoding and the caption output live
 /// viewing builds in <see cref="FfmpegLiveInvocation"/>, with no picture decoded, on the file's own clock
-/// lifted by <see cref="ClockLiftedBySeconds"/>, onto standard output.
+/// lifted by <see cref="ClockLiftedBySeconds"/>, onto standard output, with the caption stream itself
+/// carried unchanged beside the pictures as the second stream of the same container.
 /// </summary>
 public static class FfmpegCaptionInvocation
 {
@@ -18,6 +19,12 @@ public static class FfmpegCaptionInvocation
     /// timestamp ffmpeg reads as negative before the clock came around is still written as it was read.
     /// </summary>
     public const int ClockLiftedBySeconds = 100_000;
+
+    /// <summary>
+    /// The tag the carried caption stream is written under. The container refuses the tag the transport
+    /// stream gave it, and reads no meaning into this one.
+    /// </summary>
+    public const string CarriedTag = "arib";
 
     private static readonly string ClockLift = ClockLiftedBySeconds.ToString(CultureInfo.InvariantCulture);
 
@@ -39,7 +46,24 @@ public static class FfmpegCaptionInvocation
             source.Value,
             "-output_ts_offset",
             ClockLift,
-            .. FfmpegLiveInvocation.CaptionOutput(service, FfmpegLiveInvocation.Output),
+            .. FfmpegLiveInvocation.CaptionOutput(service, FfmpegLiveInvocation.Output, Carried(service)),
+        ];
+    }
+
+    public static IReadOnlyList<string> Carried(ServiceId service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+
+        int programNumber = service.Value;
+
+        return
+        [
+            "-map",
+            string.Create(CultureInfo.InvariantCulture, $"0:p:{programNumber}:s:0"),
+            "-c:s",
+            "copy",
+            "-tag:s",
+            CarriedTag,
         ];
     }
 }

@@ -17,7 +17,7 @@ public enum NutFault
     StoppedPartWayThroughAFrame = 5,
 }
 
-public sealed record NutFrame(LivePts Pts, ReadOnlyMemory<byte> Data);
+public sealed record NutFrame(LivePts Pts, ReadOnlyMemory<byte> Data, int Stream = 0);
 
 public sealed record NutReading(IReadOnlyList<NutFrame> Frames, NutFault? Fault)
 {
@@ -550,7 +550,7 @@ public sealed class NutFrames
         stream.LastPts = pts;
         (long clockNumerator, long clockDenominator) = timeBases[stream.Clock];
 
-        frames.Add(new NutFrame(Stamped(pts, clockNumerator, clockDenominator), data));
+        frames.Add(new NutFrame(Stamped(pts, clockNumerator, clockDenominator), data, (int)streamId));
 
         return 1 + cursor.Consumed;
     }

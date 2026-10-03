@@ -12,7 +12,8 @@ namespace Carina.Infrastructure.Streaming;
 
 /// <summary>
 /// Takes the captions out of a recorded file with the drawing live viewing uses, run on its own with no
-/// picture decoded, at the lowest scheduling priority, and keeps every change in memory.
+/// picture decoded, at the lowest scheduling priority, and keeps every change in memory, of the pictures
+/// and of the text read from the caption stream carried beside them.
 /// </summary>
 public sealed class FfmpegCaptionTranscriber(
     MachineSettings machine,
@@ -90,7 +91,7 @@ public sealed class FfmpegCaptionTranscriber(
             cancellationToken);
 
         return Begins(said) is { } begins
-            ? CaptionTranscription.Transcribed(new CaptionRecord(canvas.Size.Width, canvas.Size.Height, begins, drawn.Cues))
+            ? CaptionTranscription.Transcribed(new CaptionRecord(canvas.Size.Width, canvas.Size.Height, begins, drawn.Cues, drawn.Lines))
             : CaptionTranscription.Failed(
                 CaptionFault.ClockUnread,
                 said.ExitCode is 0 ? $"the programme named no '{StartKey}' this could be read as where the file begins" : said.Complained);
@@ -122,6 +123,7 @@ public sealed class FfmpegCaptionTranscriber(
     private async Task<Drawn> DrawnAsync(Process running, CaptionCanvas canvas, CancellationToken cancellationToken)
     {
         List<CaptionCue> cues = [];
+        CaptionTexts texts = new(Lift);
         Task<string> complaint = running.StandardError.ReadToEndAsync(CancellationToken.None);
 
         using CancellationTokenSource deadline = new(settings.LongestTranscription, clock);
@@ -139,17 +141,18 @@ public sealed class FfmpegCaptionTranscriber(
 
                     return true;
                 },
+                texts.Read,
                 waiting.Token);
 
             await running.WaitForExitAsync(waiting.Token);
 
-            return new Drawn(cues, fault, false, ProgrammeNote.Of(await complaint, ProgrammeNote.Longest));
+            return new Drawn(cues, texts.Lines, fault, false, ProgrammeNote.Of(await complaint, ProgrammeNote.Longest));
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             AnotherProgramme.GiveUpOn(running);
 
-            return new Drawn([], null, true, string.Empty);
+            return new Drawn([], [], null, true, string.Empty);
         }
         catch (OperationCanceledException)
         {
@@ -159,5 +162,10 @@ public sealed class FfmpegCaptionTranscriber(
         }
     }
 
-    private sealed record Drawn(IReadOnlyList<CaptionCue> Cues, CaptionFlowFault? Fault, bool TimedOut, string Complained);
+    private sealed record Drawn(
+        IReadOnlyList<CaptionCue> Cues,
+        IReadOnlyList<CaptionLine> Lines,
+        CaptionFlowFault? Fault,
+        bool TimedOut,
+        string Complained);
 }

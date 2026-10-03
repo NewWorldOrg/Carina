@@ -24,6 +24,8 @@ public static class CaptionFrames
 {
     public const int Mouthful = 64 * 1024;
 
+    public const int PictureStream = 0;
+
     /// <summary>
     /// The longest a subtitle can say it stays on screen, 2^32 − 1 ms, on the 90 kHz clock. A picture ffmpeg
     /// stamps at the end of a caption that never said how long it lasts lands this long after the picture
@@ -58,15 +60,29 @@ public static class CaptionFrames
     /// screen once: a picture cut to what was drawn and packed as a palette PNG, or null when the screen
     /// is cleared. A picture repeated unchanged says nothing. What follows a fault is read and dropped.
     /// </summary>
+    public static Task<CaptionFlowFault?> DrawAsync(
+        Stream pictures,
+        CaptionCanvas canvas,
+        Func<LivePts, CaptionPicture?, bool> changed,
+        CancellationToken cancellationToken)
+        => DrawAsync(pictures, canvas, changed, static _ => { }, cancellationToken);
+
+    /// <summary>
+    /// Reads the pictures as <see cref="DrawAsync(Stream, CaptionCanvas, Func{LivePts, CaptionPicture?, bool}, CancellationToken)"/>
+    /// does from the first stream of the container, and hands every frame of any other stream to
+    /// <paramref name="carried"/> as it arrives.
+    /// </summary>
     public static async Task<CaptionFlowFault?> DrawAsync(
         Stream pictures,
         CaptionCanvas canvas,
         Func<LivePts, CaptionPicture?, bool> changed,
+        Action<NutFrame> carried,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(pictures);
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(changed);
+        ArgumentNullException.ThrowIfNull(carried);
 
         NutFrames frames = new();
         byte[] mouthful = ArrayPool<byte>.Shared.Rent(Mouthful);
@@ -108,6 +124,13 @@ public static class CaptionFrames
         {
             foreach (NutFrame frame in arrived)
             {
+                if (frame.Stream is not PictureStream)
+                {
+                    carried(frame);
+
+                    continue;
+                }
+
                 if (OffTheClock(frame.Pts, last))
                 {
                     continue;

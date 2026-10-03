@@ -2,11 +2,12 @@ namespace Carina.Domain.Captions;
 
 /// <summary>
 /// The captions taken from one recording's file: the canvas they were drawn on, where the file's own
-/// clock begins as it was read when they were taken, and every change in the order ffmpeg drew it.
+/// clock begins as it was read when they were taken, every change in the order ffmpeg drew it, and every
+/// change of their text, or no text at all for a record kept before the text was taken.
 /// </summary>
 public sealed record CaptionRecord
 {
-    public CaptionRecord(int width, int height, TimeSpan startsAt, IReadOnlyList<CaptionCue> cues)
+    public CaptionRecord(int width, int height, TimeSpan startsAt, IReadOnlyList<CaptionCue> cues, IReadOnlyList<CaptionLine>? lines = null)
     {
         ArgumentNullException.ThrowIfNull(cues);
 
@@ -24,6 +25,7 @@ public sealed record CaptionRecord
         Height = height;
         StartsAt = startsAt;
         Cues = cues;
+        Lines = lines;
     }
 
     public int Width { get; }
@@ -33,6 +35,8 @@ public sealed record CaptionRecord
     public TimeSpan StartsAt { get; }
 
     public IReadOnlyList<CaptionCue> Cues { get; }
+
+    public IReadOnlyList<CaptionLine>? Lines { get; }
 
     public int Pictures => Cues.Count(cue => !cue.Clears);
 }
