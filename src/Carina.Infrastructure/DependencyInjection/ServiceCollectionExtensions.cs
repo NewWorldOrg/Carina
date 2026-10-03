@@ -65,7 +65,8 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddOptions<DriverOptions>()
-            .Configure(options => options.SocketPath = configuration[DriverOptions.SocketPathKey])
+            .Configure(options => options.SocketPath =
+                configuration[DriverOptions.SocketPathKey] ?? DriverOptions.DefaultSocketPath)
             .ValidateDataAnnotations()
             .Validate(
                 options => string.IsNullOrEmpty(options.SocketPath)
