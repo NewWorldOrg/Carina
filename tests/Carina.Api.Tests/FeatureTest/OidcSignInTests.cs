@@ -106,6 +106,20 @@ public sealed class OidcSignInTests
         Assert.Equal("/settings/authentication", arrived.Headers.Location!.ToString());
     }
 
+    [Fact(DisplayName = "BR-AU-003: a return target carrying letters outside ASCII comes back escaped, so the way back is a redirect rather than a server error")]
+    public async Task BrAu003AReturnTargetCarryingLettersOutsideAsciiComesBackEscaped()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
+
+        using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner"), "/search?q=ニュース 速報");
+
+        Assert.Equal(HttpStatusCode.Redirect, arrived.StatusCode);
+        Assert.Equal(
+            "/search?q=%E3%83%8B%E3%83%A5%E3%83%BC%E3%82%B9%20%E9%80%9F%E5%A0%B1",
+            Assert.Single(arrived.Headers.NonValidated[HeaderNames.Location]));
+        Assert.Single(probe.Sessions.Sessions);
+    }
+
     [Fact]
     public async Task ACallerCarriedTowardsAnotherHostIsPutBackOnTheFrontPage()
     {
@@ -208,10 +222,11 @@ public sealed class OidcSignInTests
         Uri authorize = await probe.AuthorizeUriAsync();
         string code = probe.Idp.Authorize(authorize, new MockIdentityUser("owner"));
 
+        using HttpClient another = probe.Relaying("seen=before");
         using HttpResponseMessage arrived = await probe.CallbackAsync(
             MockIdentityProvider.StateOf(authorize),
             code,
-            probe.Signed);
+            another);
 
         Assert.Empty(probe.Sessions.Sessions);
         Assert.Contains(
