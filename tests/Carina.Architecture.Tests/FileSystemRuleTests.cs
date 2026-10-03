@@ -40,9 +40,11 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Captions/CaptionShelf.cs File.Move",
         "/Carina.Infrastructure/Captions/CaptionShelf.cs File.WriteAllBytesAsync",
         "/Carina.Infrastructure/Collection/StreamHarvest.cs .CopyTo(",
-        "/Carina.Infrastructure/Encodings/ChapterMetadataFile.cs File.WriteAllTextAsync",
+                "/Carina.Infrastructure/Encodings/CaptionTrackMux.cs File.WriteAllTextAsync",
+"/Carina.Infrastructure/Encodings/ChapterMetadataFile.cs File.WriteAllTextAsync",
         "/Carina.Infrastructure/Encodings/EncodeArtefactPlacer.cs File.Move",
         "/Carina.Infrastructure/Encodings/EncodeScratchCleaner.cs File.Delete",
+        "/Carina.Infrastructure/Encodings/Mp4TrackFlags.cs FileMode.",
         "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.CreateDirectory",
         "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Delete",
         "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Move",
@@ -204,14 +206,16 @@ public sealed class FileSystemRuleTests
             Inventory.Where(entry => entry.Contains("/Thumbnails/", StringComparison.Ordinal)).ToArray());
     }
 
-    [Fact(DisplayName = "the encode feature moves a work file once, deletes only by the ledger, and probes a rename with an empty directory")]
+    [Fact(DisplayName = "the encode feature moves a work file once, writes the chapters and the text of captions it recorded as scratch and turns off a subtitle track's flag in a copy, deletes only by the ledger, and probes a rename with an empty directory")]
     public void TheEncodeFeatureMovesOnceDeletesByTheLedgerAndProbesARenameWithAnEmptyDirectory()
     {
         Assert.Equal(
             [
+                "/Carina.Infrastructure/Encodings/CaptionTrackMux.cs File.WriteAllTextAsync",
                 "/Carina.Infrastructure/Encodings/ChapterMetadataFile.cs File.WriteAllTextAsync",
                 "/Carina.Infrastructure/Encodings/EncodeArtefactPlacer.cs File.Move",
                 "/Carina.Infrastructure/Encodings/EncodeScratchCleaner.cs File.Delete",
+                "/Carina.Infrastructure/Encodings/Mp4TrackFlags.cs FileMode.",
                 "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.CreateDirectory",
                 "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Delete",
                 "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Move",

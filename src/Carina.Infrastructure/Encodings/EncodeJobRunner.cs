@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Carina.Domain.Base;
+using Carina.Domain.Captions;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
@@ -21,7 +22,9 @@ namespace Carina.Infrastructure.Encodings;
 /// The run writes on the job where it ran, each programme's id and start before its output is read,
 /// and its headway at every tenth and at least every <see cref="HeartbeatEvery"/>. The chapter
 /// reading goes into the ledger before the encode starts, whatever the answer; any chapters are
-/// handed to the encode as a metadata file recorded as a scratch file. The look is handed the
+/// handed to the encode as a metadata file recorded as a scratch file. Before the artefact is placed, the
+/// text of the recording's captions is put into the work file as a text track when it was taken by then.
+/// The look is handed the
 /// station watermark learned ahead from another recording of the same service, and the watermark it
 /// learns from this recording is kept once the reading is in the ledger; failing to read or keep a
 /// watermark does not fail the job. Once a job has completed, what earlier jobs of the recording
@@ -42,6 +45,8 @@ public sealed class EncodeJobRunner(
     IChapterDetector detector,
     IEncodeChapterRepository chapters,
     IStationWatermarkRepository watermarks,
+    ICaptionRecords captionRecords,
+    CaptionTrackMux captionTracks,
     MachineSettings programmes,
     EncodeSettings settings,
     IEncodeAutoRunReader autoRun,
@@ -269,6 +274,7 @@ public sealed class EncodeJobRunner(
         }
 
         await MeasureAsync(job, work, cancellationToken);
+        await CaptionAsync(job, work, cancellationToken);
 
         EncodePlacementOutcome placed = await placer.PlaceAsync(job, cancellationToken);
 
@@ -431,6 +437,48 @@ public sealed class EncodeJobRunner(
             length.ToString("c", CultureInfo.InvariantCulture),
             timeline.Expected is { } expected ? expected.ToString("c", CultureInfo.InvariantCulture) : "an unmeasured length",
             timeline.Drift is { } drift ? drift.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture) : "an unknown distance");
+    }
+
+    /// <summary>
+    /// Writes a copy of the work file with the text track of the recording's captions put in, for the placer to
+    /// place in its stead, when the captions were taken with their text by now. Whatever stops that leaves the
+    /// work file as the encode wrote it to be placed, and the job goes on to complete.
+    /// </summary>
+    private async Task CaptionAsync(EncodeJob job, string work, CancellationToken cancellationToken)
+    {
+        if (await recordings.FindAsync(job.RecordingId, cancellationToken) is not { CaptionState: CaptionState.Ready, CaptionsMadeAt: { } madeAt }
+            || await captionRecords.ReadAsync(job.RecordingId, cancellationToken) is not { Lines: not null } record)
+        {
+            logger.LogInformation(
+                "Job {Job} places its artefact with no text track of captions, because the recording's captions with their text are not taken yet; the track is put in once they are.",
+                job.Id.Wire);
+
+            return;
+        }
+
+        CaptionTrackMade made = await CaptionedAsync(job, work, record, cancellationToken);
+
+        job.Tracked(made.Outcome, madeAt);
+        await jobs.SaveAsync(job, cancellationToken);
+
+        logger.Log(
+            made.Outcome is EncodeCaptionTrack.Failed ? LogLevel.Warning : LogLevel.Information,
+            "Job {Job} came to {Outcome} for the text track of captions in its artefact. {Note}",
+            job.Id.Wire,
+            made.Outcome,
+            made.Note);
+    }
+
+    private async Task<CaptionTrackMade> CaptionedAsync(EncodeJob job, string work, CaptionRecord record, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await captionTracks.MakeAsync(job, work, record, cancellationToken);
+        }
+        catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
+        {
+            return CaptionTrackMade.Failed($"putting it in ended in {failure.GetType().Name}: {ProgrammeNote.Of(failure.Message, LongestComplaint)}");
+        }
     }
 
     private async Task SpawnedAsync(EncodeJob job, RunningProgramme spawned, CancellationToken cancellationToken)
