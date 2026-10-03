@@ -115,9 +115,16 @@ public sealed class SignInRecord(ILogger<SignInRecord> logger, TimeProvider cloc
             return Unsaid;
         }
 
-        string plain = new string([.. said.Select(letter => letter is >= ' ' and <= '~' ? letter : '?')]).Trim();
+        ReadOnlySpan<char> kept = said.AsSpan().Trim(' ');
+        ReadOnlySpan<char> cut = kept.Length > longest ? kept[..longest] : kept;
 
-        return plain.Length > longest ? plain[..longest] : plain;
+        return string.Create(cut.Length, cut, static (plain, from) =>
+        {
+            for (int at = 0; at < from.Length; at++)
+            {
+                plain[at] = from[at] is >= ' ' and <= '~' ? from[at] : '?';
+            }
+        });
     }
 
     private void WriteWhatWasEnded(

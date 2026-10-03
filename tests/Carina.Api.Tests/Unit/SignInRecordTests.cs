@@ -118,6 +118,32 @@ public sealed class SignInRecordTests
         Assert.DoesNotContain(new string('a', SignInRecord.LongestAgent + 1), said, StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "BR-AU-020: an agent is trimmed of spaces, cut and has its unprintable letters replaced, however long it arrives")]
+    public void BrAu020AnAgentIsTrimmedCutAndMadePrintableHoweverLongItArrives()
+    {
+        string head = $"  Agent\t{new string('b', SignInRecord.LongestAgent)}";
+        DefaultHttpContext context = Asking("GET", "/api/auth/me", "api/auth/me", $"{head}{new string('c', 100_000)}");
+
+        Record().Write(context, SignInMoment.RefusedWithoutASessionCookie);
+
+        string said = Assert.Single(logger.Lines).Said;
+        string expected = $"Agent?{new string('b', SignInRecord.LongestAgent - "Agent?".Length)}";
+
+        Assert.EndsWith($"agent {expected}.", said, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-AU-020: agents that differ only past the cut are quieted as one")]
+    public void BrAu020AgentsThatDifferOnlyPastTheCutAreQuietedAsOne()
+    {
+        SignInRecord record = Record();
+        string head = new('a', SignInRecord.LongestAgent);
+
+        record.Write(Asking("GET", "/api/auth/me", "api/auth/me", $"{head}one"), SignInMoment.RefusedWithoutASessionCookie);
+        record.Write(Asking("GET", "/api/auth/me", "api/auth/me", $"{head}two"), SignInMoment.RefusedWithoutASessionCookie);
+
+        Assert.Single(logger.Lines);
+    }
+
     [Theory(DisplayName = "BR-AU-020: the same kind of refusal from the same agent is written once in the quiet span")]
     [InlineData(SignInMoment.RefusedWithoutASessionCookie)]
     [InlineData(SignInMoment.TheSessionCookieNamedNoSession)]
