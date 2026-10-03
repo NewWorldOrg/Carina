@@ -115,7 +115,12 @@ public sealed class ArtefactCaptionTracks(
 
         FileInfo before = new(artefact.Path);
         (long Bytes, DateTime WrittenAt) was = (before.Length, before.LastWriteTimeUtc);
-        CaptionTrackMade made = await mux.MakeAsync(job, artefact.Path, record, cancellationToken);
+        CaptionTrackMade made = await mux.MakeAsync(
+            job,
+            artefact.Path,
+            record,
+            CaptionTrackNames.Tried(job),
+            cancellationToken);
 
         if (made.Outcome is not EncodeCaptionTrack.Added)
         {
@@ -163,8 +168,17 @@ public sealed class ArtefactCaptionTracks(
         CancellationToken cancellationToken,
         string note = "")
     {
-        job.Tracked(outcome, madeAt);
-        await jobs.SaveAsync(job, cancellationToken);
+        if (await jobs.FindAsync(job.Id, cancellationToken) is not { StandsAsTheArtefact: true } held)
+        {
+            logger.LogInformation(
+                "The artefact of job {Job} stopped standing while its text track of captions was tried, so what came of it is not written down.",
+                job.Id.Wire);
+
+            return null;
+        }
+
+        held.Tracked(outcome, madeAt);
+        await jobs.SaveAsync(held, cancellationToken);
 
         logger.Log(
             outcome is EncodeCaptionTrack.Failed ? LogLevel.Warning : LogLevel.Information,

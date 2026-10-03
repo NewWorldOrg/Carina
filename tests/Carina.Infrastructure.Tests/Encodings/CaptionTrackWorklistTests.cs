@@ -1,3 +1,4 @@
+using Carina.Domain.Captions;
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
@@ -5,6 +6,7 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Encodings;
 
@@ -96,6 +98,54 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
         Assert.Equal((EncodeCaptionTrack.Added, MadeAt, 0), (saved.CaptionTrack!.Value, saved.CaptionTrackFrom!.Value, saved.CaptionTrackAttempts));
     }
 
+    [Fact]
+    public async Task BrEd2019AnArtefactTriedAgainAfterAFailureIsTriedUnderNewNamesAndWhatCameOfItIsKept()
+    {
+        TimeSpan sourceStart = TimeSpan.FromSeconds(30499.5);
+        EncodeJob standing = await StandingAsync(
+            CaptionState.Ready,
+            timeline: new EncodeTimeline(sourceStart, TimeSpan.FromSeconds(0.5), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30)));
+        long shownAt = (long)((sourceStart.TotalSeconds + 2) * 90_000);
+        await harness.CaptionShelf.KeepAsync(
+            standing.RecordingId,
+            new CaptionRecord(1440, 1080, sourceStart, [new CaptionCue(shownAt, null)], [new CaptionLine(shownAt, "字")]),
+            Cancel);
+        File.WriteAllBytes(harness.ArtefactPathOf(standing), [1, 2, 3, 4]);
+
+        for (int pass = 0; pass < 2; pass++)
+        {
+            await using CarinaDbContext context = database.Open();
+            ArtefactCaptioningRound round = await Tracks(context).CaptionAsync(4, _ => Task.FromResult(false), Cancel);
+
+            Assert.Equal((1, 1), (round.Read, round.Failed));
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        EncodeJob read = (await new EncodeJobRepository(reading).FindAsync(standing.Id, Cancel))!;
+        List<EncodeScratchFile> scratch = await reading.Set<EncodeScratchFile>().AsNoTracking().Where(file => file.JobId == standing.Id).ToListAsync(Cancel);
+
+        Assert.Equal((EncodeCaptionTrack.Failed, MadeAt, 2), (read.CaptionTrack!.Value, read.CaptionTrackFrom!.Value, read.CaptionTrackAttempts));
+        Assert.Equal(4, scratch.Select(file => file.FileName.Value).Distinct().Count());
+        Assert.All(scratch, file => Assert.False(file.IsOwedARemoval));
+    }
+
+    private ArtefactCaptionTracks Tracks(CarinaDbContext context)
+    {
+        EncodeScratchLedger ledger = new(context);
+
+        return new ArtefactCaptionTracks(
+            new CaptionTrackWorklist(context),
+            new EncodeJobRepository(context),
+            harness.CaptionShelf,
+            new CaptionTrackMux(new EncodeScratchFiles(ledger, harness.Places, harness.Clock), harness.Programmes, harness.Clock),
+            harness.Places,
+            new EncodeArtefactPlacer(new EncodeJobRepository(context), ledger, harness.Places, harness.Probe, harness.Clock, NullLogger<EncodeArtefactPlacer>.Instance),
+            new EncodeScratchCleaner(ledger, harness.Places, harness.Clock, NullLogger<EncodeScratchCleaner>.Instance),
+            new ArtefactOpenings(harness.Clock),
+            harness.Clock,
+            NullLogger<ArtefactCaptionTracks>.Instance);
+    }
+
     private static void Failed(EncodeJob job, int times)
     {
         for (int time = 0; time < times; time++)
@@ -111,7 +161,7 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
         return await new CaptionTrackWorklist(context).AwaitingAsync(atMost, Cancel);
     }
 
-    private async Task<EncodeJob> StandingAsync(CaptionState captions, Action<EncodeJob>? tracked = null)
+    private async Task<EncodeJob> StandingAsync(CaptionState captions, Action<EncodeJob>? tracked = null, EncodeTimeline? timeline = null)
     {
         Recording recording = harness.Recorded();
         recording.Caption(captions, captions is CaptionState.Ready ? 3 : null, MadeAt);
@@ -138,7 +188,7 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
             null,
             null,
             null,
-            null,
+            timeline,
             null);
 
         tracked?.Invoke(job);
