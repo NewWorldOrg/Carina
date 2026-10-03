@@ -63,9 +63,20 @@ public sealed class EncodeTimelineTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new EncodeTimeline(SourceStart, TimeSpan.FromSeconds(5.5), SourceLength, null));
         Assert.Throws<ArgumentOutOfRangeException>(() => new EncodeTimeline(SourceStart, TimeSpan.FromSeconds(62170), SourceLength, null));
         Assert.Throws<ArgumentOutOfRangeException>(() => new EncodeTimeline(SourceStart, TimeSpan.FromSeconds(-1), SourceLength, null));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new EncodeTimeline(TimeSpan.FromSeconds(-1), HeadSkip, SourceLength, null));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new EncodeTimeline(-EncodeTimeline.OneTurnOfTheClock, HeadSkip, SourceLength, null));
         Assert.Throws<ArgumentOutOfRangeException>(() => new EncodeTimeline(SourceStart, HeadSkip, TimeSpan.Zero, null));
         Assert.Throws<ArgumentOutOfRangeException>(() => new EncodeTimeline(SourceStart, HeadSkip, SourceLength, TimeSpan.FromSeconds(-1)));
+    }
+
+    [Fact(DisplayName = "a source that begins just before the clock comes around begins before zero, and its captions are shifted by less than its head")]
+    public void ASourceBeginningJustBeforeTheClockComesAroundBeginsBeforeZero()
+    {
+        var timeline = new EncodeTimeline(TimeSpan.FromSeconds(-3.6), HeadSkip, SourceLength, null);
+
+        Assert.Equal(TimeSpan.FromSeconds(-3.6), timeline.SourceStart);
+        Assert.Equal(TimeSpan.FromSeconds(-3.6) + HeadSkip, timeline.CaptionShift);
+        Assert.Equal(TimeSpan.FromTicks(954_437_176_888), EncodeTimeline.OneTurnOfTheClock);
+        _ = new EncodeTimeline(-EncodeTimeline.OneTurnOfTheClock + TimeSpan.FromTicks(1), HeadSkip, SourceLength, null);
     }
 
     [Fact(DisplayName = "a source shorter than the head skipped has nothing left to expect")]
@@ -105,5 +116,7 @@ public sealed class SourceHeadReadingTests
         Assert.Throws<ArgumentOutOfRangeException>(() => SourceHeadReading.Unanswered(SourceHeadFault.Refused, "said"));
         Assert.Throws<ArgumentOutOfRangeException>(() => SourceHeadReading.Unanswered((SourceHeadFault)9, "said"));
         Assert.Throws<ArgumentOutOfRangeException>(() => SourceHeadReading.Read(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(9)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SourceHeadReading.Read(-EncodeTimeline.OneTurnOfTheClock, TimeSpan.Zero));
+        Assert.Equal(TimeSpan.FromSeconds(0.5072), SourceHeadReading.Read(TimeSpan.FromSeconds(-3.6), TimeSpan.FromSeconds(-3.0928)).HeadSkip);
     }
 }

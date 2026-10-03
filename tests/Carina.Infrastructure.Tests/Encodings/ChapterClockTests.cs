@@ -49,6 +49,16 @@ public sealed class ChapterClockTests
             TimeSpan.FromSeconds(30),
             ChapterClock.OnTheArtefact(TimeSpan.FromSeconds(30), TimeSpan.Zero, TimeSpan.Zero, Artefact));
 
+    [Fact(DisplayName = "a source read as beginning before zero, because its clock came around just after it began, has that beginning taken off a moment either side of zero")]
+    public void ASourceBeginningBeforeZeroHasItsBeginningTakenOffEitherSideOfZero()
+    {
+        TimeSpan beforeZero = TimeSpan.FromSeconds(-3.6);
+
+        Assert.Equal(TimeSpan.FromSeconds(1) - HeadSkip, ChapterClock.OnTheArtefact(TimeSpan.FromSeconds(-2.6), beforeZero, HeadSkip, Artefact));
+        Assert.Equal(TimeSpan.FromSeconds(13.6) - HeadSkip, ChapterClock.OnTheArtefact(TimeSpan.FromSeconds(10), beforeZero, HeadSkip, Artefact));
+        Assert.Null(ChapterClock.OnTheArtefact(TimeSpan.FromSeconds(-3.7), beforeZero, HeadSkip, Artefact));
+    }
+
     [Fact(DisplayName = "a stretch is placed by both of its ends, and one end outside the artefact places neither")]
     public void AStretchIsPlacedByBothOfItsEnds()
     {
@@ -120,7 +130,7 @@ public sealed class ChapterClockTests
     public void WhatTheReadingIsMeasuredAgainstIsCheckedFirst()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => ChapterClock.OnTheArtefact(TimeSpan.Zero, TimeSpan.FromSeconds(-1), TimeSpan.Zero, Artefact));
+            () => ChapterClock.OnTheArtefact(TimeSpan.Zero, -EncodeTimeline.OneTurnOfTheClock, TimeSpan.Zero, Artefact));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => ChapterClock.OnTheArtefact(TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromSeconds(-1), Artefact));
         Assert.Throws<ArgumentOutOfRangeException>(

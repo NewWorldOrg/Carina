@@ -107,13 +107,28 @@ public sealed class ChapterLogParsingTests
         ChapterLog nonsense = new();
         nonsense.Complained("[silencedetect @ 0x1] silence_start: N/A");
         nonsense.Complained("[silencedetect @ 0x1] silence_end: 30.4");
-        nonsense.Complained("[blackdetect @ 0x1] black_start:-1 black_end:2");
+        nonsense.Complained("[blackdetect @ 0x1] black_start:N/A black_end:2");
         nonsense.Said("frame:0    pts:0 pts_time:N/A");
         nonsense.Said("lavfi.scene_score=inf");
 
         Assert.Empty(nonsense.Silences);
         Assert.Empty(nonsense.Blacks);
         Assert.Empty(nonsense.Scenes);
+    }
+
+    [Fact(DisplayName = "a moment ffmpeg reads before zero, as it reads a source that begins just before the clock comes around, is kept as it was said")]
+    public void AMomentBeforeZeroIsKeptAsItWasSaid()
+    {
+        ChapterLog around = Complaining(
+            "[silencedetect @ 0x1] silence_start: -3.2",
+            "[silencedetect @ 0x1] silence_end: 1.8 | silence_duration: 5",
+            "[blackdetect @ 0x1] black_start:-2.5 black_end:-0.5 black_duration:2");
+        around.Said("frame:0    pts:-90000 pts_time:-1");
+        around.Said("lavfi.scene_score=0.7");
+
+        Assert.Equal([new ChapterSpan(TimeSpan.FromSeconds(-3.2), TimeSpan.FromSeconds(1.8))], around.Silences);
+        Assert.Equal([new ChapterSpan(TimeSpan.FromSeconds(-2.5), TimeSpan.FromSeconds(-0.5))], around.Blacks);
+        Assert.Equal(TimeSpan.FromSeconds(-1), Assert.Single(around.Scenes).At);
     }
 
     [Fact(DisplayName = "a stretch that ends where it began, or before it, is no stretch")]
