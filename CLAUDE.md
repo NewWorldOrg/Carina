@@ -140,9 +140,8 @@ nothing.
 
   The check also walks the places the app writes into itself — the roots it
   encodes into, the directory it draws thumbnails into and the one it keeps the
-  captions taken from recordings in — and a file there that
-  nothing claims is removed by the app, with the same checks made again just
-  before it unlinks. Such a place is not walked when it shares a name or a
+  captions taken from recordings in — and a file there that nothing claims is
+  removed by the app, with the same checks made again just before it unlinks. Such a place is not walked when it shares a name or a
   directory with a recording root, or when it holds a file under a recording's
   own file name, so a recording root seen from another path is never judged as
   one of them.
