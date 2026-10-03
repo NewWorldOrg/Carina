@@ -1,3 +1,4 @@
+using Carina.Domain.Captions;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
@@ -9,7 +10,8 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Integrity;
 
 /// <summary>
-/// Walks the roots this process encodes into and the directory it draws thumbnails into. A place is
+/// Walks the roots this process encodes into, the directory it draws thumbnails into and the one it
+/// keeps captions in. A place is
 /// left out when it shares a name with a recording root, or when its directory is a recording root's,
 /// or one inside it or around it, or one already taken. What is claimed in a place left out is still
 /// claimed wherever that place is walked under another name.
@@ -17,6 +19,8 @@ namespace Carina.Infrastructure.Integrity;
 public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
 {
     public static readonly OutputRoot ThumbnailPlace = new("thumbnails");
+
+    public static readonly OutputRoot CaptionPlace = new("captions");
 
     private readonly IReadOnlyList<Walkable> places;
 
@@ -26,17 +30,21 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
 
     private readonly bool drawsPictures;
 
+    private readonly bool keepsCaptions;
+
     private readonly ILogger<LocalWrittenFileSurvey> logger;
 
     public LocalWrittenFileSurvey(
         IntegritySettings recordings,
         EncodeSettings encodes,
         ThumbnailSettings thumbnails,
+        CaptionSettings captions,
         ILogger<LocalWrittenFileSurvey> logger)
     {
         ArgumentNullException.ThrowIfNull(recordings);
         ArgumentNullException.ThrowIfNull(encodes);
         ArgumentNullException.ThrowIfNull(thumbnails);
+        ArgumentNullException.ThrowIfNull(captions);
         ArgumentNullException.ThrowIfNull(logger);
 
         this.logger = logger;
@@ -47,6 +55,11 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
         if (thumbnails.WrittenTo is { } drawnInto)
         {
             offered.Add(Walkable.Of(new StorageRootPath(ThumbnailPlace, drawnInto), StoragePlace.Thumbnails));
+        }
+
+        if (captions.WrittenTo is { } keptIn)
+        {
+            offered.Add(Walkable.Of(new StorageRootPath(CaptionPlace, keptIn), StoragePlace.Captions));
         }
 
         List<Walkable> kept = [];
@@ -76,6 +89,7 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
         walked = taken;
         named = [.. recordings.OutputRoots.Select(root => Walkable.Of(root, StoragePlace.Recordings)), .. offered];
         drawsPictures = thumbnails.WrittenTo is not null;
+        keepsCaptions = captions.WrittenTo is not null;
     }
 
     public IReadOnlyList<OutputRoot> Places => [.. places.Select(place => place.Root)];
@@ -108,6 +122,11 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
         if (drawsPictures)
         {
             claimed.AddRange(ledger.Select(row => new DeclaredFile(ThumbnailPlace, PictureOf(row))));
+        }
+
+        if (keepsCaptions)
+        {
+            claimed.AddRange(ledger.Select(row => new DeclaredFile(CaptionPlace, row.Id.Wire + CaptionSettings.Extension)));
         }
 
         List<DeclaredFile> seenElsewhere = [];

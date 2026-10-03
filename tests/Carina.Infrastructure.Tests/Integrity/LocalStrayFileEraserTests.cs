@@ -1,3 +1,4 @@
+using Carina.Domain.Captions;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
@@ -172,6 +173,7 @@ public sealed class LocalStrayFileEraserTests
             new IntegritySettings { OutputRoots = [new StorageRootPath(Primary, recordings.Root)] },
             new EncodeSettings { OutputRoots = [new StorageRootPath(Encodes, encodes.Root)] },
             new ThumbnailSettings(),
+            new CaptionSettings(),
             NullLogger<LocalWrittenFileSurvey>.Instance);
 
     private static IntegrityFinding Found(TempTree encodes, string path)

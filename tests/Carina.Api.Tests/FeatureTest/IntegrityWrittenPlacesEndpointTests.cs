@@ -50,6 +50,39 @@ public sealed class IntegrityWrittenPlacesEndpointTests
     }
 
     [Fact]
+    public async Task BrKd025CaptionsNoRecordingClaimsAreListedAsOrphansAndAreThrownAwayByThisProcess()
+    {
+        using var recordings = new RecordingStore();
+        using var encodes = new RecordingStore();
+        using var pictures = new RecordingStore();
+        using var captions = new RecordingStore();
+        recordings.Holding(KeptFile, 400);
+        captions.Holding(Kept.Wire + ".captions", 30).Holding(Gone.Wire + ".captions", 20).Holding(Gone.Wire + ".captions.part", 5);
+        await using IntegrityFeature feature = Walking(recordings, encodes, pictures, captions);
+
+        (HttpStatusCode ran, _) = await feature.PostAsync("/api/recordings/integrity/run");
+        (_, JsonElement page) = await feature.GetAsync("/api/recordings/integrity");
+
+        Assert.Equal(HttpStatusCode.OK, ran);
+        Assert.Equal(
+            [
+                $"captions/{Gone.Wire}.captions noLedgerRow",
+                $"captions/{Gone.Wire}.captions.part noLedgerRow",
+            ],
+            Listed(page));
+
+        IntegrityFinding finding = feature.Checks.Saved[^1].Findings.Single(found => found.Path == Gone.Wire + ".captions");
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/integrity/findings/{finding.Id.Value}/delete");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("captions", body.GetProperty("data").GetProperty("outputRoot").GetString());
+        Assert.False(File.Exists(Path.Combine(captions.Root, Gone.Wire + ".captions")));
+        Assert.True(File.Exists(Path.Combine(captions.Root, Kept.Wire + ".captions")));
+        Assert.Empty(feature.Driver.AskedAboutStrays);
+    }
+
+    [Fact]
     public async Task APictureNothingClaimsIsThrownAwayByThisProcessAndNothingBesideItIsTouched()
     {
         using var recordings = new RecordingStore();
@@ -188,12 +221,17 @@ public sealed class IntegrityWrittenPlacesEndpointTests
         Assert.True(File.Exists(Path.Combine(shared.Root, Gone.Wire + ".jpg")));
     }
 
-    private static IntegrityFeature Walking(RecordingStore recordings, RecordingStore encodes, RecordingStore pictures)
+    private static IntegrityFeature Walking(
+        RecordingStore recordings,
+        RecordingStore encodes,
+        RecordingStore pictures,
+        RecordingStore? captions = null)
     {
         var feature = new IntegrityFeature(
             walking: recordings.Root,
             encoding: new EncodeSettings { OutputRoots = [new StorageRootPath(Encodes, encodes.Root)] },
-            drawing: pictures.Root);
+            drawing: pictures.Root,
+            captioning: captions?.Root);
 
         feature.Ledger.Rows.Add(LedgerFile.Ended(
             Kept,

@@ -6,6 +6,7 @@ using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Base;
+using Carina.Domain.Captions;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
@@ -334,7 +335,8 @@ internal sealed class IntegrityFeature : IAsyncDisposable
         IntegritySettings? settings = null,
         string? walking = null,
         EncodeSettings? encoding = null,
-        string? drawing = null)
+        string? drawing = null,
+        string? captioning = null)
     {
         Settings = settings ?? new IntegritySettings
         {
@@ -350,6 +352,8 @@ internal sealed class IntegrityFeature : IAsyncDisposable
                 services.AddSingleton(Settings);
                 services.AddSingleton(Encoding);
                 services.AddSingleton(new ThumbnailSettings { WrittenTo = drawing });
+                services.RemoveAll<CaptionSettings>();
+                services.AddSingleton(new CaptionSettings { WrittenTo = captioning });
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IRecordingRepository>(Running);
                 services.AddSingleton<IRecordingFileSurvey>(
