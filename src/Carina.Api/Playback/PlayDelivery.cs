@@ -5,6 +5,7 @@ using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Playback;
 using Carina.Api.Services;
+using Carina.Domain.Captions;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
@@ -65,10 +66,12 @@ public static class PlayDelivery
         PlaybackService playback,
         IOnTheFlyPlayer player,
         IEncodeChapterRepository chapters,
-        IPlaybackPositionRepository positions)
+        IPlaybackPositionRepository positions,
+        CaptionService captions)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(playback);
+        ArgumentNullException.ThrowIfNull(captions);
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(chapters);
         ArgumentNullException.ThrowIfNull(positions);
@@ -140,7 +143,8 @@ public static class PlayDelivery
                     narrowed.Handover,
                     leftOffAt,
                     TheMainSoundAlone,
-                    await MarkedAsync(narrowed, chapters, context.RequestAborted));
+                    await MarkedAsync(narrowed, chapters, context.RequestAborted),
+                    (await captions.StandingAsync(recordingId, narrowed, context.RequestAborted)).Data);
 
                 return;
             }
@@ -174,7 +178,8 @@ public static class PlayDelivery
                 handover,
                 leftOffAt,
                 offering.Tracks,
-                await MarkedAsync(offered.Data!, chapters, context.RequestAborted));
+                await MarkedAsync(offered.Data!, chapters, context.RequestAborted),
+                (await captions.StandingAsync(recordingId, offered.Data!, context.RequestAborted)).Data);
 
             return;
         }
@@ -282,7 +287,8 @@ public static class PlayDelivery
         PlaybackFile handover,
         TimeSpan? leftOffAt,
         IReadOnlyList<SoundTrack> sounds,
-        IReadOnlyList<PlaybackChapterResponder> chapters)
+        IReadOnlyList<PlaybackChapterResponder> chapters,
+        CaptionStanding captions)
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
 
@@ -294,7 +300,8 @@ public static class PlayDelivery
                     MediaTypeOf(plan, handover),
                     leftOffAt,
                     sounds,
-                    chapters)),
+                    chapters,
+                    captions)),
             context.RequestAborted);
     }
 

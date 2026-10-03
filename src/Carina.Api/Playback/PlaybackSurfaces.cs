@@ -14,6 +14,16 @@ public static class PlaybackSurfaces
 
     public const string TheFrameIsCalled = "getVideoScrubFrame";
 
+    public const string TheCaptionsAreCalled = "getVideoCaptions";
+
+    public const string TheCaptionsOfARecording =
+        "The captions of a recording for ten minutes of the source it is played from, starting at the second "
+        + "asked for: the caption already showing there first, then every change before the second the answer "
+        + "covers to, each at the second of that source counted from its own zero, as a palette PNG placed on "
+        + "the canvas or as the screen cleared. The plan says whether there are any to ask for: it answers 409 "
+        + "while they are still being taken from the recording, and 404 where there are none to draw over that "
+        + "source. Opened with the reader's own session only, never with a ticket.";
+
     public const string HowARecordingIsPlayedInABrowser =
         "Plays a recording. Asked with Accept: application/json it answers the plan alone - how the recording "
         + "ended, whether it is transcoded as it plays, and whether seeking is a byte range or a restart. "
@@ -27,6 +37,19 @@ public static class PlaybackSurfaces
         ScrubDelivery.Position,
         "The second of the recording the frame is taken from, counted from where the recording begins. "
         + "Seconds may be fractional, and asking for none takes the first frame.");
+
+    public static readonly QueryInput WhereTheCaptionsStart = QueryInput.Seconds(
+        CaptionDelivery.Position,
+        "The second of the source the ten minutes of captions start at, counted from the source's own zero, as "
+        + "the player's position reads it. Seconds may be fractional, and asking for none starts at the beginning.");
+
+    public static readonly QueryInput WhichFileTheCaptionsArePlacedOn = QueryInput.OneOfThese(
+        CaptionDelivery.Source,
+        "Which of the two files the captions are placed on, asked the way the plan was asked. The seconds of the "
+        + "artefact and of the recording itself differ by what the encode skipped at the head, so a caption is "
+        + "placed on the one being played.",
+        PlaybackSources.Names,
+        PlaybackSources.ArtefactIsCalled);
 
     public static readonly QueryInput WhereThePlayingStarts = QueryInput.SecondsWithNoFixedDefault(
         PlayDelivery.Position,

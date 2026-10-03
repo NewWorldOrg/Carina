@@ -166,6 +166,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getTunerHealth",
                 "getTuners",
                 "getVersion",
+                "getVideoCaptions",
                 "getVideoScrubFrame",
                 "getVideoThumbnail",
                 "impactOfRules",
@@ -563,6 +564,47 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             ["artefact", "recording"],
             source["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task BrPd017ThePlanSaysWhetherCaptionsCanBeDrawnInTheThreeWordsTheDocumentSpells()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode plan = document["components"]!["schemas"]!["PlaybackPlanResponder"]!;
+
+        Assert.EndsWith(
+            "/CaptionStanding",
+            plan["properties"]!["captions"]!["$ref"]!.GetValue<string>(),
+            StringComparison.Ordinal);
+        Assert.Contains("captions", plan["required"]!.AsArray().Select(name => name!.GetValue<string>()), StringComparer.Ordinal);
+        Assert.Equal(
+            ["ready", "coming", "none"],
+            document["components"]!["schemas"]!["CaptionStanding"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task BrPd017TheCaptionsOfARecordingAreDescribedWithWhatACallerSendsAndWhatComesBack()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/videos/{id}/captions"]!["get"]!;
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["from", "id", "source"],
+            operation["parameters"]!.AsArray().Select(parameter => parameter!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["200", "401", "404", "409", "500"],
+            operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["canvas", "untilSec", "cues"],
+            schemas["CaptionWindowResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["atSec", "picture"],
+            schemas["CaptionCueResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["left", "top", "width", "height", "png"],
+            schemas["CaptionPictureResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal("byte", schemas["CaptionPictureResponder"]!["properties"]!["png"]!["format"]!.GetValue<string>());
     }
 
     [Fact]

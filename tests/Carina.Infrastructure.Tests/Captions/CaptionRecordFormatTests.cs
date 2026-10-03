@@ -56,6 +56,17 @@ public sealed class CaptionRecordFormatTests
         Assert.Equal(CaptionRecordFormat.HeaderLength, CaptionRecordFormat.Written(read).Length);
     }
 
+    [Fact]
+    public void WhereTheFilesClockBeganIsReadFromTheHeadAlone()
+    {
+        byte[] written = CaptionRecordFormat.Written(
+            new CaptionRecord(1440, 1080, TimeSpan.FromSeconds(-3.621333), [new CaptionCue(1, Lower)]));
+
+        Assert.Equal(TimeSpan.FromSeconds(-3.621333), CaptionRecordFormat.StartOf(written.AsSpan(0, CaptionRecordFormat.HeaderLength)));
+        Assert.Null(CaptionRecordFormat.StartOf(written.AsSpan(0, CaptionRecordFormat.HeaderLength - 1)));
+        Assert.Null(CaptionRecordFormat.StartOf("CARINACX and then some more bytes"u8));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(7)]

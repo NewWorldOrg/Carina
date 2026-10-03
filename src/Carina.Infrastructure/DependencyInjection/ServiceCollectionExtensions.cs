@@ -298,6 +298,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<CaptionSettings>(provider =>
             provider.GetRequiredService<IOptions<CaptionOptions>>().Value.Read());
         services.TryAddSingleton<CaptionShelf>();
+        services.TryAddSingleton<ICaptionRecords>(provider => provider.GetRequiredService<CaptionShelf>());
         services.TryAddSingleton<ICaptionTranscriber, FfmpegCaptionTranscriber>();
         services.TryAddSingleton<IWatching, TranscodersInUse>();
         services.AddScoped<IScrubFrames, Scrubber>();

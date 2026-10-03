@@ -8,7 +8,7 @@ namespace Carina.Infrastructure.Captions;
 /// A record is written beside its final name and moved over it, so a reader sees the old one or the new
 /// one and never half of either.
 /// </summary>
-public sealed class CaptionShelf(CaptionSettings settings)
+public sealed class CaptionShelf(CaptionSettings settings) : ICaptionRecords
 {
     public const string Unfinished = ".part";
 
@@ -36,9 +36,7 @@ public sealed class CaptionShelf(CaptionSettings settings)
 
     public async Task<CaptionRecord?> ReadAsync(RecordingId id, CancellationToken cancellationToken)
     {
-        string kept = Kept(id);
-
-        if (!File.Exists(kept))
+        if (settings.PathOf(id) is not { } kept || !File.Exists(kept))
         {
             return null;
         }
@@ -46,6 +44,28 @@ public sealed class CaptionShelf(CaptionSettings settings)
         try
         {
             return CaptionRecordFormat.Read(await File.ReadAllBytesAsync(kept, cancellationToken));
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    public async Task<TimeSpan?> StartsAtAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        if (settings.PathOf(id) is not { } kept || !File.Exists(kept))
+        {
+            return null;
+        }
+
+        byte[] head = new byte[CaptionRecordFormat.HeaderLength];
+
+        try
+        {
+            await using FileStream reading = File.OpenRead(kept);
+            int read = await reading.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, cancellationToken);
+
+            return CaptionRecordFormat.StartOf(head.AsSpan(0, read));
         }
         catch (FileNotFoundException)
         {

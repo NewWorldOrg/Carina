@@ -19,6 +19,9 @@ internal static class EncodedArtefact
             definedAt);
 
     public static EncodeJob Made(Recording recording, EncodeProfile profile, DateTime endedAt)
+        => Made(recording, profile, endedAt, null);
+
+    public static EncodeJob Made(Recording recording, EncodeProfile profile, DateTime endedAt, EncodeTimeline? timeline)
     {
         ArgumentNullException.ThrowIfNull(recording);
         ArgumentNullException.ThrowIfNull(profile);
@@ -39,7 +42,7 @@ internal static class EncodedArtefact
             null,
             null,
             null,
-            null,
+            timeline,
             null);
     }
 }
