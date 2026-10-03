@@ -36,6 +36,8 @@ internal sealed class LiveReception
 
     private Task<LiveSupplyStart>? opening;
 
+    private Task carrying = Task.CompletedTask;
+
     private ILiveTransportStream? stream;
 
     private int attached;
@@ -64,6 +66,10 @@ internal sealed class LiveReception
 
     internal ServiceId Service => service;
 
+    /// <summary>
+    /// Ends once this reading has let go of what it reads from: once the supply it asked for has answered
+    /// and, when it was opened, once it has been carried to its end and given back.
+    /// </summary>
     internal Task Life { get; private set; } = Task.CompletedTask;
 
     internal Task Holding { get; private set; } = Task.CompletedTask;
@@ -160,7 +166,13 @@ internal sealed class LiveReception
 
         lock (gate)
         {
-            answering = opening ??= RaiseAsync();
+            if (opening is null)
+            {
+                opening = RaiseAsync();
+                Life = LivedAsync(opening);
+            }
+
+            answering = opening;
         }
 
         return answering.WaitAsync(cancellationToken);
@@ -248,9 +260,27 @@ internal sealed class LiveReception
         Task holding = HoldOpenAsync(bytes);
 
         Holding = holding;
-        Life = CarryAsync(bytes, holding);
+        carrying = CarryAsync(bytes, holding);
 
         return opened;
+    }
+
+    /// <summary>
+    /// Waits for the supply to answer, however it answered, and then for what it handed over to be carried
+    /// to its end.
+    /// </summary>
+    private async Task LivedAsync(Task<LiveSupplyStart> answered)
+    {
+        try
+        {
+            await answered;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        await carrying;
     }
 
     /// <summary>

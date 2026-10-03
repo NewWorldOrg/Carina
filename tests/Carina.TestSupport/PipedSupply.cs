@@ -16,6 +16,8 @@ public sealed class PipedSupply : ILiveSupply
 
     private int givenUpOn;
 
+    private int underWay;
+
     public int Asked => Volatile.Read(ref asked);
 
     public int GivenUpOn => Volatile.Read(ref givenUpOn);
@@ -32,6 +34,13 @@ public sealed class PipedSupply : ILiveSupply
     }
 
     public TaskCompletionSource? HeldUntil { get; set; }
+
+    /// <summary>
+    /// Set, an opening held by <see cref="HeldUntil"/> that its caller gives up on goes on holding the one
+    /// tuner, and answers its caller, until this is completed, as the driver does while it is told to let
+    /// go of a session it was still starting.
+    /// </summary>
+    public TaskCompletionSource? LettingGoOfAGivenUpOpening { get; set; }
 
     public LiveRefusal? Refusing { get; set; }
 
@@ -51,6 +60,8 @@ public sealed class PipedSupply : ILiveSupply
 
         if (HeldUntil is { } held)
         {
+            Interlocked.Increment(ref underWay);
+
             try
             {
                 await held.Task.WaitAsync(cancellationToken);
@@ -59,7 +70,16 @@ public sealed class PipedSupply : ILiveSupply
             {
                 Interlocked.Increment(ref givenUpOn);
 
+                if (LettingGoOfAGivenUpOpening is { } lettingGo)
+                {
+                    await lettingGo.Task;
+                }
+
                 throw;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref underWay);
             }
         }
 
@@ -68,11 +88,11 @@ public sealed class PipedSupply : ILiveSupply
             return LiveSupplyStart.Refused(why, "held back for the test.");
         }
 
-        if (AsIfThereWereOneTuner && Opened.Any(stream => !stream.Disposed))
+        if (AsIfThereWereOneTuner && (Opened.Any(stream => !stream.Disposed) || Volatile.Read(ref underWay) > 0))
         {
             return LiveSupplyStart.Refused(
                 LiveRefusal.NoTunerFree,
-                "the one tuner of the test is held by a stream that has not been let go.");
+                "the one tuner of the test is held by a stream that has not been let go, or by an opening still under way.");
         }
 
         PipedTransportStream stream = new(network, service)
