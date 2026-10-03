@@ -176,6 +176,39 @@ public sealed class CaptionWorklistTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task BrPd016TheRecordingsToTakeAgainAreTheReadyOnesAmongThoseAskedForWithinReachNewestFirst()
+    {
+        OutputRoot alone = Alone();
+        Recording older = await AddAsync(alone, 7221);
+        Recording newer = await AddAsync(alone, 7222);
+        Recording absent = await AddAsync(alone, 7223);
+        Recording notAsked = await AddAsync(alone, 7224);
+        Recording outOfReach = await AddAsync(Alone(), 7225);
+
+        foreach ((Recording recording, int hour) in new[] { (older, 1), (newer, 2), (absent, 3), (notAsked, 4), (outOfReach, 5) })
+        {
+            await SettleAsync(recording.Id, RecordingOutcome.Complete, Now.AddHours(hour));
+        }
+
+        await CaptionAsync(older.Id, CaptionState.Ready, 2, Now.AddHours(6));
+        await CaptionAsync(newer.Id, CaptionState.Ready, 2, Now.AddHours(6));
+        await CaptionAsync(absent.Id, CaptionState.Absent, null, Now.AddHours(6));
+        await CaptionAsync(notAsked.Id, CaptionState.Ready, 2, Now.AddHours(6));
+        await CaptionAsync(outOfReach.Id, CaptionState.Ready, 2, Now.AddHours(6));
+
+        await using CarinaDbContext context = database.Open();
+        CaptionWorklist worklist = new(context, Clock(Now.AddHours(7)));
+        RecordingId[] asked = [older.Id, newer.Id, absent.Id, outOfReach.Id];
+
+        IReadOnlyList<CaptionSubject> all = await worklist.ReadyAmongAsync(asked, [alone], 64, Cancel);
+        IReadOnlyList<CaptionSubject> one = await worklist.ReadyAmongAsync(asked, [alone], 1, Cancel);
+
+        Assert.Equal([newer.Id, older.Id], all.Select(subject => subject.Id));
+        Assert.Equal([newer.Id], one.Select(subject => subject.Id));
+        Assert.Empty(await worklist.ReadyAmongAsync([], [alone], 64, Cancel));
+    }
+
+    [Fact]
     public async Task KeepingCaptionsForARecordingNobodyHasHeardOfSaysSoAndWritesNothing()
     {
         await using CarinaDbContext context = database.Open();

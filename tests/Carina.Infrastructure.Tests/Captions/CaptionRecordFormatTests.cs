@@ -84,7 +84,7 @@ public sealed class CaptionRecordFormatTests
     {
         byte[] written = CaptionRecordFormat.Written(new CaptionRecord(1440, 1080, TimeSpan.Zero, []));
         byte[] otherVersion = [.. written];
-        otherVersion[8] = 2;
+        otherVersion[8] = 3;
 
         Assert.Null(CaptionRecordFormat.Read("not a record of captions at all"u8));
         Assert.Null(CaptionRecordFormat.Read(otherVersion));
@@ -98,6 +98,62 @@ public sealed class CaptionRecordFormatTests
         written[CaptionRecordFormat.HeaderLength + 8 + 1] = 3;
 
         Assert.Null(CaptionRecordFormat.Read(written));
+    }
+
+    [Fact]
+    public void BrPd016TheTextOfTheCaptionsComesBackAsItWasWrittenBesideThePictures()
+    {
+        CaptionRecord written = new(
+            1440,
+            1080,
+            TimeSpan.FromSeconds(-3.621333),
+            [new CaptionCue(-279_000, Lower), new CaptionCue(36_000, null)],
+            [new CaptionLine(-279_000, "合成字幕\nCARINA〓"), new CaptionLine(36_000, null), new CaptionLine((1L << 33) + 5, "字")]);
+
+        byte[] bytes = CaptionRecordFormat.Written(written);
+        CaptionRecord read = Assert.IsType<CaptionRecord>(CaptionRecordFormat.Read(bytes));
+
+        Assert.Equal(CaptionRecordFormat.Version, bytes[8]);
+        Assert.Equal(written.Lines, read.Lines);
+        Assert.Equal([-279_000L, 36_000L], read.Cues.Select(cue => cue.Pts));
+        Assert.True(CaptionRecordFormat.CarriesText(bytes.AsSpan(0, CaptionRecordFormat.HeaderLength)));
+    }
+
+    [Fact]
+    public void BrPd016ARecordWhoseTextWasTakenAndFoundNothingSaysSoRatherThanThatTheTextWasNeverTaken()
+    {
+        CaptionRecord read = Assert.IsType<CaptionRecord>(
+            CaptionRecordFormat.Read(CaptionRecordFormat.Written(new CaptionRecord(720, 480, TimeSpan.Zero, [], []))));
+
+        Assert.NotNull(read.Lines);
+        Assert.Empty(read.Lines);
+    }
+
+    [Fact]
+    public void BrPd016ARecordKeptBeforeTheTextWasTakenIsStillReadAndSaysItCarriesNoText()
+    {
+        byte[] written = CaptionRecordFormat.Written(new CaptionRecord(1440, 1080, TimeSpan.FromSeconds(2.5), [new CaptionCue(1, Lower)]));
+
+        CaptionRecord read = Assert.IsType<CaptionRecord>(CaptionRecordFormat.Read(written));
+
+        Assert.Equal(CaptionRecordFormat.TextlessVersion, written[8]);
+        Assert.Null(read.Lines);
+        Assert.Single(read.Cues);
+        Assert.Equal(TimeSpan.FromSeconds(2.5), CaptionRecordFormat.StartOf(written));
+        Assert.False(CaptionRecordFormat.CarriesText(written.AsSpan(0, CaptionRecordFormat.HeaderLength)));
+    }
+
+    [Fact]
+    public void TextCutShortOrNotWrittenInUtf8IsNotARecord()
+    {
+        byte[] written = CaptionRecordFormat.Written(
+            new CaptionRecord(1440, 1080, TimeSpan.Zero, [], [new CaptionLine(5, "合成")]));
+        byte[] unreadable = [.. written];
+        unreadable[^1] = 0xFF;
+
+        Assert.Null(CaptionRecordFormat.Read(written.AsSpan(0, written.Length - 1)));
+        Assert.Null(CaptionRecordFormat.Read(unreadable));
+        Assert.Null(CaptionRecordFormat.Read([.. written, 0]));
     }
 
     private static void AssertSame(CaptionPlacement expected, CaptionPlacement actual)

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Text;
 
 using Carina.Domain.Captions;
 
@@ -7,15 +8,23 @@ namespace Carina.Infrastructure.Captions;
 /// <summary>
 /// How a <see cref="CaptionRecord"/> is laid out on disk: a header naming the format, the canvas and where
 /// the file's clock begins, then each change as its 90 kHz moment, its placement and its palette PNG, with
-/// an empty placement and no PNG for a screen cleared. Every number is big-endian.
+/// an empty placement and no PNG for a screen cleared, and then the count of text changes and each as its
+/// 90 kHz moment and its UTF-8 text, with no text for a screen cleared. A record with no text is written in
+/// <see cref="TextlessVersion"/>, which ends after the pictures. Every number is big-endian.
 /// </summary>
 public static class CaptionRecordFormat
 {
-    public const byte Version = 1;
+    public const byte Version = 2;
+
+    public const byte TextlessVersion = 1;
 
     public const int HeaderLength = 8 + 1 + 2 + 2 + 8 + 4;
 
     public const int CueHeaderLength = 8 + 2 + 2 + 2 + 2 + 4;
+
+    public const int LineHeaderLength = 8 + 4;
+
+    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     private static readonly byte[] Magic = "CARINACC"u8.ToArray();
 
@@ -23,12 +32,15 @@ public static class CaptionRecordFormat
     {
         ArgumentNullException.ThrowIfNull(record);
 
-        int length = HeaderLength + record.Cues.Sum(cue => CueHeaderLength + (cue.Picture?.Png.Length ?? 0));
+        byte[][]? texts = record.Lines?.Select(line => line.Text is null ? [] : Utf8.GetBytes(line.Text)).ToArray();
+        int length = HeaderLength
+            + record.Cues.Sum(cue => CueHeaderLength + (cue.Picture?.Png.Length ?? 0))
+            + (texts is null ? 0 : 4 + texts.Sum(text => LineHeaderLength + text.Length));
         byte[] written = new byte[length];
         Span<byte> at = written;
 
         Magic.CopyTo(at);
-        at[Magic.Length] = Version;
+        at[Magic.Length] = texts is null ? TextlessVersion : Version;
         at = at[(Magic.Length + 1)..];
         BinaryPrimitives.WriteUInt16BigEndian(at, (ushort)record.Width);
         BinaryPrimitives.WriteUInt16BigEndian(at[2..], (ushort)record.Height);
@@ -41,6 +53,17 @@ public static class CaptionRecordFormat
             at = Cue(at, cue);
         }
 
+        if (record.Lines is { } lines && texts is not null)
+        {
+            BinaryPrimitives.WriteInt32BigEndian(at, lines.Count);
+            at = at[4..];
+
+            for (int index = 0; index < lines.Count; index++)
+            {
+                at = Line(at, lines[index].Pts, texts[index]);
+            }
+        }
+
         return written;
     }
 
@@ -49,7 +72,7 @@ public static class CaptionRecordFormat
     /// </summary>
     public static CaptionRecord? Read(ReadOnlySpan<byte> bytes)
     {
-        if (bytes.Length < HeaderLength || !bytes[..Magic.Length].SequenceEqual(Magic) || bytes[Magic.Length] != Version)
+        if (VersionOf(bytes) is not { } version)
         {
             return null;
         }
@@ -78,8 +101,21 @@ public static class CaptionRecordFormat
             cues.Add(cue);
         }
 
-        return at.IsEmpty ? new CaptionRecord(width, height, TimeSpan.FromTicks(startsAt), cues) : null;
+        if (version == TextlessVersion)
+        {
+            return at.IsEmpty ? new CaptionRecord(width, height, TimeSpan.FromTicks(startsAt), cues) : null;
+        }
+
+        return Lines(ref at) is { } lines && at.IsEmpty
+            ? new CaptionRecord(width, height, TimeSpan.FromTicks(startsAt), cues, lines)
+            : null;
     }
+
+    /// <summary>
+    /// Whether the head of a record says the record carries the text of its captions; false for a record kept
+    /// before the text was taken and for a head this format did not write.
+    /// </summary>
+    public static bool CarriesText(ReadOnlySpan<byte> head) => VersionOf(head) == Version;
 
     /// <summary>
     /// Reads where the file's clock began from the head of a record alone, or answers null when the head is
@@ -87,12 +123,95 @@ public static class CaptionRecordFormat
     /// </summary>
     public static TimeSpan? StartOf(ReadOnlySpan<byte> head)
     {
-        if (head.Length < HeaderLength || !head[..Magic.Length].SequenceEqual(Magic) || head[Magic.Length] != Version)
+        if (VersionOf(head) is null)
         {
             return null;
         }
 
         return TimeSpan.FromTicks(BinaryPrimitives.ReadInt64BigEndian(head[(Magic.Length + 1 + 4)..]));
+    }
+
+    private static byte? VersionOf(ReadOnlySpan<byte> head)
+    {
+        if (head.Length < HeaderLength || !head[..Magic.Length].SequenceEqual(Magic))
+        {
+            return null;
+        }
+
+        return head[Magic.Length] == Version || head[Magic.Length] == TextlessVersion ? head[Magic.Length] : null;
+    }
+
+    private static Span<byte> Line(Span<byte> at, long pts, byte[] text)
+    {
+        BinaryPrimitives.WriteInt64BigEndian(at, pts);
+        BinaryPrimitives.WriteInt32BigEndian(at[8..], text.Length);
+        text.CopyTo(at[LineHeaderLength..]);
+
+        return at[(LineHeaderLength + text.Length)..];
+    }
+
+    private static List<CaptionLine>? Lines(ref ReadOnlySpan<byte> at)
+    {
+        if (at.Length < 4)
+        {
+            return null;
+        }
+
+        int count = BinaryPrimitives.ReadInt32BigEndian(at);
+        at = at[4..];
+
+        if (count < 0)
+        {
+            return null;
+        }
+
+        List<CaptionLine> lines = new(Math.Min(count, at.Length / LineHeaderLength));
+
+        for (int read = 0; read < count; read++)
+        {
+            if (Line(ref at) is not { } line)
+            {
+                return null;
+            }
+
+            lines.Add(line);
+        }
+
+        return lines;
+    }
+
+    private static CaptionLine? Line(ref ReadOnlySpan<byte> at)
+    {
+        if (at.Length < LineHeaderLength)
+        {
+            return null;
+        }
+
+        long pts = BinaryPrimitives.ReadInt64BigEndian(at);
+        int length = BinaryPrimitives.ReadInt32BigEndian(at[8..]);
+
+        if (length < 0 || at.Length - LineHeaderLength < length)
+        {
+            return null;
+        }
+
+        ReadOnlySpan<byte> text = at.Slice(LineHeaderLength, length);
+
+        at = at[(LineHeaderLength + length)..];
+
+        if (length is 0)
+        {
+            return new CaptionLine(pts, null);
+        }
+
+        try
+        {
+            return new CaptionLine(pts, Utf8.GetString(text));
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
     }
 
     private static Span<byte> Cue(Span<byte> at, CaptionCue cue)

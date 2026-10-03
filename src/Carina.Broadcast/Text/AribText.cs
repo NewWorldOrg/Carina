@@ -146,7 +146,7 @@ public static class AribText
         return text.ToString(0, length);
     }
 
-    private static bool IsGraphic(byte code) => (code & 0x7F) is >= 0x21 and <= 0x7E;
+    internal static bool IsGraphic(byte code) => (code & 0x7F) is >= 0x21 and <= 0x7E;
 
     private static void Append(StringBuilder text, GraphicSet set, int row, int cell)
     {
@@ -167,7 +167,7 @@ public static class AribText
         text.Append(UnknownCharacter);
     }
 
-    private static void Append(StringBuilder text, GraphicSet set, ReadOnlySpan<byte> code)
+    internal static void Append(StringBuilder text, GraphicSet set, ReadOnlySpan<byte> code)
     {
         if (AribGraphicSets.IsDrcs(set))
         {
@@ -224,7 +224,7 @@ public static class AribText
         text.Append(mapped == '\0' ? UnknownCharacter : mapped);
     }
 
-    private static int ReadEscape(
+    internal static int ReadEscape(
         ReadOnlySpan<byte> bytes,
         int at,
         GraphicSet[] designated,
@@ -347,7 +347,7 @@ public static class AribText
         return at + 2;
     }
 
-    private static int ReadC1(ReadOnlySpan<byte> bytes, int at)
+    internal static int ReadC1(ReadOnlySpan<byte> bytes, int at)
     {
         switch (bytes[at])
         {

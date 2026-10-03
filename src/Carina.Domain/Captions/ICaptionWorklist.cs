@@ -22,6 +22,16 @@ public interface ICaptionWorklist
     Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// The recordings among <paramref name="among"/> under a root within reach whose captions are ready,
+    /// newest first.
+    /// </summary>
+    Task<IReadOnlyList<CaptionSubject>> ReadyAmongAsync(
+        IReadOnlyCollection<RecordingId> among,
+        IReadOnlyList<OutputRoot> withinReach,
+        int atMost,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Keeps where the captions of a recording stand, and answers false when the recording is no longer
     /// in the ledger.
     /// </summary>

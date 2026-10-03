@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 using Carina.Contracts;
 using Carina.Domain.Captions;
 using Carina.Domain.Events;
@@ -14,6 +16,8 @@ namespace Carina.Infrastructure.Captions;
 /// Takes the captions out of ended recordings one at a time, newest first, and keeps them on the shelf.
 /// A pass does not start the next recording while anything is being recorded or watched, and first puts
 /// back in the queue any recording whose row says its captions are ready while no record of them is kept.
+/// With room left in the pass, it takes again the captions of ready recordings whose record was kept before
+/// their text was taken, leaving them ready meanwhile.
 /// </summary>
 public sealed class CaptionJob(
     IServiceScopeFactory scopes,
@@ -26,6 +30,8 @@ public sealed class CaptionJob(
     TimeProvider clock,
     ILogger<CaptionJob> logger) : BackgroundService
 {
+    private readonly ConcurrentDictionary<RecordingId, int> retakesFailed = new();
+
     private int running;
 
     public async Task<CaptionPass> RunAsync(CancellationToken cancellationToken)
@@ -93,45 +99,28 @@ public sealed class CaptionJob(
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         ICaptionWorklist worklist = scope.ServiceProvider.GetRequiredService<ICaptionWorklist>();
-        int lost = await RequeueLostAsync(worklist, cancellationToken);
+        Requeued requeued = await RequeueLostAsync(worklist, cancellationToken);
         IReadOnlyList<OutputRoot> withinReach = [.. mounts.OutputRoots.Select(mounted => mounted.Root)];
         IReadOnlyList<CaptionSubject> awaiting =
             await worklist.AwaitingAsync(withinReach, settings.AtMostAPass, cancellationToken);
         int outOfReach = await worklist.WaitingOutOfReachAsync(withinReach, cancellationToken);
 
-        int kept = 0;
-        int absent = 0;
-        int failed = 0;
-        bool yielded = false;
+        Tally tally = await TakeEachAsync(worklist, awaiting, false, new Tally(), cancellationToken);
+        IReadOnlyList<CaptionSubject> again = tally.Yielded || awaiting.Count >= settings.AtMostAPass
+            ? []
+            : await TextlessAsync(worklist, requeued.StillReady, withinReach, settings.AtMostAPass - awaiting.Count, cancellationToken);
 
-        foreach (CaptionSubject subject in awaiting)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
+        tally = await TakeEachAsync(worklist, again, true, tally, cancellationToken);
 
-            if (await BusyAsync(worklist, cancellationToken))
-            {
-                yielded = true;
-
-                break;
-            }
-
-            switch (await TakeAsync(worklist, subject, cancellationToken))
-            {
-                case CaptionState.Ready:
-                    kept++;
-                    break;
-                case CaptionState.Absent:
-                    absent++;
-                    break;
-                case CaptionState.Failed:
-                    failed++;
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        CaptionPass pass = CaptionPass.Of(awaiting.Count, kept, absent, failed, outOfReach, yielded, lost);
+        CaptionPass pass = CaptionPass.Of(
+            awaiting.Count + again.Count,
+            tally.Kept,
+            tally.Absent,
+            tally.Failed,
+            outOfReach,
+            tally.Yielded,
+            requeued.Count,
+            again.Count);
 
         if (pass.Settled > 0 || pass.Requeued > 0)
         {
@@ -143,14 +132,67 @@ public sealed class CaptionJob(
         return pass;
     }
 
-    private async Task<int> RequeueLostAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
+    private async Task<Tally> TakeEachAsync(
+        ICaptionWorklist worklist,
+        IReadOnlyList<CaptionSubject> subjects,
+        bool retaking,
+        Tally tally,
+        CancellationToken cancellationToken)
+    {
+        if (tally.Yielded)
+        {
+            return tally;
+        }
+
+        foreach (CaptionSubject subject in subjects)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (await BusyAsync(worklist, cancellationToken))
+            {
+                return tally with { Yielded = true };
+            }
+
+            tally = tally.Counting(await TakeAsync(worklist, subject, retaking, cancellationToken));
+        }
+
+        return tally;
+    }
+
+    /// <summary>
+    /// The recordings whose captions are ready and whose record on the shelf was kept before the text of
+    /// captions was taken, so that they are taken again while they stay ready.
+    /// </summary>
+    private async Task<IReadOnlyList<CaptionSubject>> TextlessAsync(
+        ICaptionWorklist worklist,
+        IReadOnlyList<RecordingId> ready,
+        IReadOnlyList<OutputRoot> withinReach,
+        int atMost,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlySet<string> textless = shelf.Textless();
+        RecordingId[] among =
+        [
+            .. ready.Where(id => textless.Contains(id.Wire)
+                                 && retakesFailed.GetValueOrDefault(id) < CaptionSettings.TriesAtMost),
+        ];
+
+        return among.Length is 0 ? [] : await worklist.ReadyAmongAsync(among, withinReach, atMost, cancellationToken);
+    }
+
+    private async Task<Requeued> RequeueLostAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
     {
         IReadOnlySet<string> shelved = shelf.Shelved();
         int requeued = 0;
+        List<RecordingId> stillReady = [];
 
         foreach (RecordingId id in await worklist.ReadyAsync(cancellationToken))
         {
-            if (!shelved.Contains(id.Wire) && await worklist.CaptionAsync(id, CaptionState.Pending, null, cancellationToken))
+            if (shelved.Contains(id.Wire))
+            {
+                stillReady.Add(id);
+            }
+            else if (await worklist.CaptionAsync(id, CaptionState.Pending, null, cancellationToken))
             {
                 requeued++;
             }
@@ -163,7 +205,7 @@ public sealed class CaptionJob(
                 requeued);
         }
 
-        return requeued;
+        return new Requeued(requeued, stillReady);
     }
 
     private async Task<bool> BusyAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
@@ -178,13 +220,15 @@ public sealed class CaptionJob(
 
         logger.LogInformation(
             "A caption pass read {Read} recording(s): {Kept} kept, {Absent} without captions, {Failed} failed, "
-            + "{OutOfReach} left unread under a root out of reach, {Requeued} put back to be taken again.",
+            + "{OutOfReach} left unread under a root out of reach, {Requeued} put back to be taken again, "
+            + "{Retaken} of those read taken again for their text.",
             pass.Read,
             pass.Kept,
             pass.Absent,
             pass.Failed,
             pass.OutOfReach,
-            pass.Requeued);
+            pass.Requeued,
+            pass.Retaken);
 
         if (pass.Yielded)
         {
@@ -197,15 +241,22 @@ public sealed class CaptionJob(
     private async Task<CaptionState?> TakeAsync(
         ICaptionWorklist worklist,
         CaptionSubject subject,
+        bool retaking,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await TranscribedAsync(worklist, subject, cancellationToken);
+            return retaking
+                ? await RetakenAsync(worklist, subject, cancellationToken)
+                : await TranscribedAsync(worklist, subject, cancellationToken);
         }
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (Exception failure) when (retaking)
+        {
+            return LeftAsItWas(subject.Id, $"it threw {failure.GetType().Name}: {failure.Message}");
         }
         catch (Exception failure)
         {
@@ -242,6 +293,51 @@ public sealed class CaptionJob(
             id.Wire);
 
         shelf.Forget(id);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Takes again the captions of a recording that is ready, for their text. Whatever stops that leaves the
+    /// record kept before and the recording as they were, and is counted for as long as this process runs.
+    /// </summary>
+    private async Task<CaptionState?> RetakenAsync(
+        ICaptionWorklist worklist,
+        CaptionSubject subject,
+        CancellationToken cancellationToken)
+    {
+        if (Mounted(subject.Root) is not { } root || !File.Exists(Path.Combine(root, subject.FileName.Value)))
+        {
+            return LeftAsItWas(subject.Id, "its file is not within reach");
+        }
+
+        CaptionTranscription transcription = await transcriber.TranscribeAsync(
+            Path.Combine(root, subject.FileName.Value),
+            subject.Service,
+            cancellationToken);
+
+        if (transcription.Record is not { } record)
+        {
+            return LeftAsItWas(subject.Id, transcription.Fault is { } fault ? $"{fault}: {transcription.Note}" : "nothing was drawn this time");
+        }
+
+        await shelf.KeepAsync(subject.Id, record, cancellationToken);
+        retakesFailed.TryRemove(subject.Id, out _);
+
+        return await SettledAsync(worklist, subject.Id, CaptionState.Ready, record.Pictures, cancellationToken);
+    }
+
+    private CaptionState? LeftAsItWas(RecordingId id, string why)
+    {
+        int failed = retakesFailed.AddOrUpdate(id, 1, (_, before) => before + 1);
+
+        logger.LogWarning(
+            "The captions of recording {Recording} could not be taken again for their text ({Why}); the record kept "
+            + "before stays and the recording stays ready. That is {Failed} of the {Most} times it is tried while this process runs.",
+            id.Wire,
+            why,
+            failed,
+            CaptionSettings.TriesAtMost);
 
         return null;
     }
@@ -329,4 +425,18 @@ public sealed class CaptionJob(
 
     private string? Mounted(OutputRoot root)
         => mounts.OutputRoots.FirstOrDefault(candidate => candidate.Root.Equals(root))?.Path;
+
+    private sealed record Requeued(int Count, IReadOnlyList<RecordingId> StillReady);
+
+    private sealed record Tally(int Kept = 0, int Absent = 0, int Failed = 0, bool Yielded = false)
+    {
+        public Tally Counting(CaptionState? settled)
+            => settled switch
+            {
+                CaptionState.Ready => this with { Kept = Kept + 1 },
+                CaptionState.Absent => this with { Absent = Absent + 1 },
+                CaptionState.Failed => this with { Failed = Failed + 1 },
+                _ => this,
+            };
+    }
 }

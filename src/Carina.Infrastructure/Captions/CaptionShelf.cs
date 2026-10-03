@@ -95,6 +95,32 @@ public sealed class CaptionShelf(CaptionSettings settings) : ICaptionRecords
             .ToHashSet(StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// The recordings whose record on the shelf was kept before the text of captions was taken.
+    /// </summary>
+    public IReadOnlySet<string> Textless()
+        => Shelved()
+            .Where(id => KeptWithoutText(Path.Combine(settings.WrittenTo!, id + CaptionSettings.Extension)))
+            .ToHashSet(StringComparer.Ordinal);
+
+    private static bool KeptWithoutText(string kept)
+    {
+        byte[] head = new byte[CaptionRecordFormat.HeaderLength];
+
+        try
+        {
+            using FileStream reading = File.OpenRead(kept);
+            int read = reading.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+            ReadOnlySpan<byte> written = head.AsSpan(0, read);
+
+            return CaptionRecordFormat.StartOf(written) is not null && !CaptionRecordFormat.CarriesText(written);
+        }
+        catch (Exception unreadable) when (unreadable is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private static void Unlink(string path)
     {
         if (File.Exists(path))
