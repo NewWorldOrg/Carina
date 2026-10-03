@@ -76,6 +76,28 @@ public sealed class CaptionTranscriptionMaterialTests(ITestOutputHelper output) 
     }
 
     [Fact]
+    public async Task BrPd016CaptionsDrawnOnACanvasWhoseSizeCouldNotBeReadAreAFailureRatherThanKeptMisplaced()
+    {
+        string written = await (SyntheticBroadcast.Of(SyntheticPicture.None) with { Length = Whole, Captions = SyntheticCaptions.ShownThenCleared })
+            .WriteAsync(Path.Combine(room, "pictureless.m2ts"), Cancel);
+
+        CaptionTranscription taken = await Transcriber().TranscribeAsync(written, Service, Cancel);
+
+        Assert.Equal(CaptionFault.CanvasUnread, taken.Fault);
+    }
+
+    [Fact]
+    public async Task BrPd016AFileWhosePictureSizeCannotBeReadAndThatShowsNoCaptionsHasNone()
+    {
+        string written = await (SyntheticBroadcast.Of(SyntheticPicture.None) with { WithCaptions = false })
+            .WriteAsync(Path.Combine(room, "pictureless-uncaptioned.m2ts"), Cancel);
+
+        CaptionTranscription taken = await Transcriber().TranscribeAsync(written, Service, Cancel);
+
+        Assert.True(taken.DrewNothing, $"{taken.Fault} {taken.Note}");
+    }
+
+    [Fact]
     public async Task BrPd017AcrossTheClockComingAroundEveryMomentKeepsGoingForwardsFromBeforeZeroToAfterIt()
     {
         TimeSpan beforeItComesAround = TimeSpan.FromTicks(ComesAround * TimeSpan.TicksPerSecond / Second) - TimeSpan.FromSeconds(5);
