@@ -14,6 +14,10 @@ public static class CaptionWriter
 
     public const byte ActivePositionSet = 0x1C;
 
+    public const byte Time = 0x9D;
+
+    public const byte WaitFor = 0x20;
+
     public const string Japanese = "jpn";
 
     public static byte[] Management(string language = Japanese)

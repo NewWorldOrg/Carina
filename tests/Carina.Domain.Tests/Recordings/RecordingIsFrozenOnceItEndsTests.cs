@@ -25,8 +25,8 @@ public sealed class RecordingIsFrozenOnceItEndsTests
 
         Assert.Equal(
             [
-                "Abort", "Acquire", "Descrambled", "Erased", "Extend", "Illustrate", "Interrupt", "Measure", "Missed",
-                "Note", "Resume", "Settle", "Wrote",
+                "Abort", "Acquire", "Caption", "Descrambled", "Erased", "Extend", "Illustrate", "Interrupt", "Measure",
+                "Missed", "Note", "Resume", "Settle", "Wrote",
             ],
             offered);
         Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Length);
@@ -60,7 +60,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
             .Where(method => !method.IsSpecialName)];
 
     [Fact]
-    public void EveryOneOfThemButThePictureTheErasureAndTheDescramblingRefusesOnceTheRecordingHasEnded()
+    public void EveryOneOfThemButThePictureTheCaptionsTheErasureAndTheDescramblingRefusesOnceTheRecordingHasEnded()
     {
         Recording recording = Settled();
 
@@ -84,10 +84,12 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Throws<InvalidOperationException>(() => recording.Wrote(TimeSpan.FromMinutes(1)));
 
         recording.Illustrate(ThumbnailState.Ready);
+        recording.Caption(CaptionState.Ready, 4, Later);
         recording.Erased(RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1), Later);
         recording.Descrambled(Later);
 
         Assert.Equal(ThumbnailState.Ready, recording.ThumbnailState);
+        Assert.Equal(CaptionState.Ready, recording.CaptionState);
         Assert.Equal(Later, recording.LeftBehindAt);
         Assert.Equal(Later, recording.DescrambledAt);
     }
@@ -155,7 +157,37 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Empty(moved.Except(
             [nameof(Recording.ThumbnailState), nameof(Recording.ThumbnailFault)],
             StringComparer.Ordinal));
-        Assert.Equal(57, before.Count);
+        Assert.Equal(61, before.Count);
+    }
+
+    [Theory]
+    [InlineData(CaptionState.Ready, 7)]
+    [InlineData(CaptionState.Absent, null)]
+    [InlineData(CaptionState.Failed, null)]
+    public void TakingTheCaptionsMovesTheColumnsThatAreTheCaptionsAndNoOthers(CaptionState state, int? pictures)
+    {
+        Recording recording = Settled();
+        IReadOnlyDictionary<string, string> before = Read(recording);
+
+        recording.Caption(state, pictures, Later);
+
+        IReadOnlyDictionary<string, string> after = Read(recording);
+        string[] moved =
+        [
+            .. before.Where(held => !string.Equals(after[held.Key], held.Value, StringComparison.Ordinal))
+                .Select(held => held.Key)
+                .Order(StringComparer.Ordinal),
+        ];
+
+        Assert.NotEmpty(moved);
+        Assert.Empty(moved.Except(
+            [
+                nameof(Recording.CaptionState),
+                nameof(Recording.CaptionsMadeAt),
+                nameof(Recording.CaptionPictures),
+                nameof(Recording.CaptionAttempts),
+            ],
+            StringComparer.Ordinal));
     }
 
     private static Recording Settled()

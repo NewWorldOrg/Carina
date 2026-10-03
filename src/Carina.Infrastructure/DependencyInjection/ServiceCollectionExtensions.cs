@@ -1,5 +1,6 @@
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
+using Carina.Domain.Captions;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
@@ -18,6 +19,7 @@ using Carina.Domain.Streaming;
 using Carina.Domain.Thumbnails;
 using Carina.Domain.Viewing;
 using Carina.Infrastructure.Auth;
+using Carina.Infrastructure.Captions;
 using Carina.Infrastructure.Channels;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
@@ -105,6 +107,11 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IValidateOptions<ThumbnailOptions>, ThumbnailValidation>();
         services.AddOptions<ThumbnailOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
+        services.AddSingleton<IValidateOptions<CaptionOptions>, CaptionValidation>();
+        services.AddOptions<CaptionOptions>()
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
@@ -207,6 +214,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeRestart>();
         services.AddScoped<EncodeIntakeRound>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
+        services.AddScoped<ICaptionWorklist, CaptionWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
@@ -287,6 +295,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ThumbnailSettings>(provider =>
             provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value.Read());
         services.TryAddSingleton<IThumbnailRenderer, FfmpegThumbnailRenderer>();
+        services.TryAddSingleton<CaptionSettings>(provider =>
+            provider.GetRequiredService<IOptions<CaptionOptions>>().Value.Read());
+        services.TryAddSingleton<CaptionShelf>();
+        services.TryAddSingleton<ICaptionTranscriber, FfmpegCaptionTranscriber>();
+        services.TryAddSingleton<IWatching, TranscodersInUse>();
         services.AddScoped<IScrubFrames, Scrubber>();
         services.AddScoped<IDrawnThumbnails, DrawnThumbnails>();
         services.TryAddSingleton(new StreamAttributeSettings());
@@ -345,6 +358,7 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<IMachineCapabilityReader>()));
         services.TryAddSingleton<IOnTheFlyPlayer, OnTheFlyPlayer>();
         services.AddSingleton<ThumbnailJob>();
+        services.AddSingleton<CaptionJob>();
         services.TryAddSingleton<IThumbnailRemaker>(provider =>
             provider.GetRequiredService<ThumbnailJob>());
         services.TryAddSingleton<CollectionSettings>(provider =>
@@ -376,6 +390,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<SupplyWatchJob>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
+        services.AddHostedService(provider => provider.GetRequiredService<CaptionJob>());
         services.AddHostedService(provider =>
             provider.GetRequiredService<ReservationRecalculationHostedService>());
 

@@ -101,7 +101,23 @@ public static class FfmpegLiveInvocation
         ArgumentNullException.ThrowIfNull(service);
         ArgumentOutOfRangeException.ThrowIfLessThan(descriptor, 3);
 
-        return
+        return CaptionOutput(service, Pipe(descriptor));
+    }
+
+    public static IReadOnlyList<string> DeliveryFromTheStart()
+        =>
+        [
+            "-f",
+            "mp4",
+            "-movflags",
+            "empty_moov+default_base_moof+delay_moov",
+            "-frag_duration",
+            RecordedFragmentMicroseconds,
+            Output,
+        ];
+
+    internal static IReadOnlyList<string> CaptionOutput(ServiceId service, string target)
+        =>
         [
             "-filter_complex",
             Drawing(service),
@@ -121,20 +137,7 @@ public static class FfmpegLiveInvocation
             "1",
             "-f",
             "nut",
-            Pipe(descriptor),
-        ];
-    }
-
-    public static IReadOnlyList<string> DeliveryFromTheStart()
-        =>
-        [
-            "-f",
-            "mp4",
-            "-movflags",
-            "empty_moov+default_base_moof+delay_moov",
-            "-frag_duration",
-            RecordedFragmentMicroseconds,
-            Output,
+            target,
         ];
 
     internal static IReadOnlyList<string> Device(LiveEncoder encoder)

@@ -137,6 +137,17 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 AND (thumbnail_fault IS NULL OR thumbnail_fault IN ({Vocabulary<ThumbnailFault>(quoted: true)}))
                 """);
             table.HasCheckConstraint(
+                "ck_recording_captions",
+                $"""
+                caption_state IN ({Vocabulary<CaptionState>(quoted: true)})
+                AND (caption_state = 'Pending' OR recording_outcome IS NOT NULL)
+                AND (caption_state = 'Pending') = (captions_made_at IS NULL)
+                AND (caption_state = 'Ready') = (caption_pictures IS NOT NULL)
+                AND (caption_pictures IS NULL OR caption_pictures > 0)
+                AND (caption_state = 'Failed') = (caption_attempts > 0)
+                AND caption_attempts >= 0
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_tuner",
                 $"""
                 tuner_device_id IS NOT NULL
@@ -391,6 +402,20 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.Property(recording => recording.ThumbnailFault)
             .HasConversion<string>()
             .HasMaxLength(32);
+
+        builder.Property(recording => recording.CaptionState)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .HasDefaultValue(CaptionState.Pending)
+            .HasSentinel(CaptionState.Pending)
+            .IsRequired();
+
+        builder.Property(recording => recording.CaptionsMadeAt);
+        builder.Property(recording => recording.CaptionPictures);
+
+        builder.Property(recording => recording.CaptionAttempts)
+            .HasDefaultValue(0)
+            .IsRequired();
 
         builder.Property(recording => recording.TunerDeviceId)
             .HasConversion(id => id!.Value, value => new TunerDeviceId(value))

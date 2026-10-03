@@ -17,6 +17,7 @@ services:
       - driver-run:/run/carina
       - ${CARINA_RECORDINGS_DIR:-recordings}:/srv/recordings:ro
       - thumbnails:/srv/thumbnails
+      - captions:/srv/captions
       - ${CARINA_ENCODES_DIR:-encodes}:/srv/encodes
       - ${CARINA_KEYS_DIR:-data-protection-keys}:/var/lib/carina/keys
     devices:
@@ -40,6 +41,7 @@ services:
       CARINA_ANONYMOUS_NETWORKS: ${CARINA_ANONYMOUS_NETWORKS:-}
       Integrity__OutputRoots: primary=/srv/recordings
       Thumbnails__WrittenTo: /srv/thumbnails
+      Captions__WrittenTo: /srv/captions
       Encodings__OutputRoots: encodes=/srv/encodes
       Encodings__Prefer: ${CARINA_ENCODINGS_PREFER:-Software}
       Transcoding__Prefer: ${CARINA_TRANSCODING_PREFER:-Software}
@@ -105,6 +107,7 @@ volumes:
   driver-build:
   recordings:
   thumbnails:
+  captions:
   encodes:
   data-protection-keys:
   pgdata:

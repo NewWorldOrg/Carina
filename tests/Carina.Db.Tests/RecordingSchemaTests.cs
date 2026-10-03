@@ -584,6 +584,56 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     }
 
     [Fact]
+    public async Task BrPd016ARowWrittenWithoutSayingAnythingAboutCaptionsHasThemWaiting()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, 40071);
+
+        Assert.Equal(
+            "Pending|0|true|true",
+            await Scalar(
+                connection,
+                $"SELECT caption_state || '|' || caption_attempts || '|' || (captions_made_at IS NULL) || '|' || (caption_pictures IS NULL) FROM recording WHERE id = '{id}'"));
+    }
+
+    [Theory]
+    [InlineData(40072, "'Ready'", Ends, "NULL", 0)]
+    [InlineData(40073, "'Ready'", Ends, "0", 0)]
+    [InlineData(40074, "'Absent'", Ends, "3", 0)]
+    [InlineData(40075, "'Absent'", "NULL", "NULL", 0)]
+    [InlineData(40076, "'Pending'", Ends, "NULL", 0)]
+    [InlineData(40077, "'Failed'", Ends, "NULL", 0)]
+    [InlineData(40078, "'Absent'", Ends, "NULL", 1)]
+    [InlineData(40079, "'Drawing'", Ends, "NULL", 0)]
+    public async Task BrPd016CaptionsThatDoNotAddUpAreRefused(int networkId, string state, string madeAt, string pictures, int attempts)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, networkId, outcome: "'Failed'", size: "0", observedAt: Ends, stoppedAt: Ends, detail: OneFault);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => Execute(
+            connection,
+            $"UPDATE recording SET caption_state = {state}, captions_made_at = {madeAt}, caption_pictures = {pictures}, caption_attempts = {attempts} WHERE id = '{id}'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_captions", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task BrPd016CaptionsAreNeverTakenFromARecordingStillBeingWritten()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, 40080);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => Execute(
+            connection,
+            $"UPDATE recording SET caption_state = 'Absent', captions_made_at = {Ends} WHERE id = '{id}'"));
+
+        Assert.Equal("ck_recording_captions", refusal.ConstraintName);
+
+        await Execute(connection, $"UPDATE recording SET caption_state = 'Failed', captions_made_at = {Ends}, caption_attempts = 3, recording_outcome = 'Failed', file_size_observed = 0, observed_at = {Ends}, stopped_at_actual = {Ends}, outcome_detail = {OneFault} WHERE id = '{id}'");
+    }
+
+    [Fact]
     public async Task AThumbnailStateTheLedgerDoesNotHoldIsRefused()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();

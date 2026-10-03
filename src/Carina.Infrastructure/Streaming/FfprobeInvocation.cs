@@ -13,6 +13,8 @@ public static class FfprobeInvocation
 
     public const string ProgrammeEntries = "program=program_id:stream=codec_type";
 
+    public const string StartEntries = "format=start_time";
+
     public static IReadOnlyList<string> Arguments(StreamSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -26,6 +28,28 @@ public static class FfprobeInvocation
             Format,
             "-show_entries",
             Entries,
+            "-i",
+            source.Value,
+        ];
+    }
+
+    /// <summary>
+    /// Where the file's own clock begins, as ffmpeg reads it: negative when the file begins shortly before
+    /// the 33-bit clock comes around.
+    /// </summary>
+    public static IReadOnlyList<string> Start(StreamSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return
+        [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-of",
+            Format,
+            "-show_entries",
+            StartEntries,
             "-i",
             source.Value,
         ];

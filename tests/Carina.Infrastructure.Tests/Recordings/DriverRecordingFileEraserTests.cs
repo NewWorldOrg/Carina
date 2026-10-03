@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Captions;
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
@@ -23,7 +24,79 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
 
     private readonly string gallery = Directory.CreateTempSubdirectory("carina-erase-pictures-").FullName;
 
-    public void Dispose() => Directory.Delete(gallery, recursive: true);
+    private readonly string shelf = Directory.CreateTempSubdirectory("carina-erase-captions-").FullName;
+
+    public void Dispose()
+    {
+        Directory.Delete(gallery, recursive: true);
+        Directory.Delete(shelf, recursive: true);
+    }
+
+    [Fact]
+    public async Task BrLs001TheCaptionsTakenFromTheRecordingGoWithItAndAreCounted()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        string captions = Captioned(id);
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(3, erased.FilesRemoved);
+        Assert.False(File.Exists(drawn));
+        Assert.False(File.Exists(captions));
+    }
+
+    [Fact]
+    public async Task TheCaptionsOfAnotherRecordingAreLeftWhereTheyAre()
+    {
+        RecordingId asked = RecordingId.New();
+        string neighbour = Captioned(RecordingId.New());
+        Captioned(asked);
+
+        await Eraser().EraseAsync(asked, Primary, Cancel);
+
+        Assert.True(File.Exists(neighbour));
+    }
+
+    [Fact]
+    public async Task WhereNoDirectoryIsConfiguredForCaptionsTheRecordingAndItsPictureStillGo()
+    {
+        RecordingId id = RecordingId.New();
+        Drawn(id);
+
+        RecordingErasure erased = await Built(gallery, null).EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(2, erased.FilesRemoved);
+    }
+
+    [Fact]
+    public async Task CaptionsThatWillNotComeOffTheDiskAreReportedAsLeftBehind()
+    {
+        RecordingId id = RecordingId.New();
+        Directory.CreateDirectory(Path.Combine(shelf, id.Wire + CaptionSettings.Extension, "held"));
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.False(erased.EverythingIsGone);
+        Assert.Equal(ErasureFault.FileLeftBehind, erased.Fault);
+        Assert.Equal(1, erased.FilesLeft);
+    }
+
+    [Fact]
+    public async Task AFileTheOwningProcessCouldNotRemoveCountsTheCaptionsLeftBesideIt()
+    {
+        RecordingId id = RecordingId.New();
+        Drawn(id);
+        Captioned(id);
+        driver.Answer = DriverCall<RecordingErasedDto>.Refused(new DriverProblem(SessionRefusalTitles.FileLeftBehind, []));
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.FileLeftBehind, erased.Fault);
+        Assert.Equal(3, erased.FilesLeft);
+    }
 
     [Fact]
     public async Task TheAppNeverRemovesTheRecordingItselfAndAsksTheProcessThatOwnsTheRootInstead()
@@ -292,14 +365,23 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
         return path;
     }
 
-    private DriverRecordingFileEraser Eraser() => Built(gallery);
+    private string Captioned(RecordingId id)
+    {
+        string path = Path.Combine(shelf, id.Wire + CaptionSettings.Extension);
+        File.WriteAllBytes(path, new byte[16]);
 
-    private DriverRecordingFileEraser EraserWithNowhereForPictures() => Built(null);
+        return path;
+    }
 
-    private DriverRecordingFileEraser Built(string? pictures)
+    private DriverRecordingFileEraser Eraser() => Built(gallery, shelf);
+
+    private DriverRecordingFileEraser EraserWithNowhereForPictures() => Built(null, null);
+
+    private DriverRecordingFileEraser Built(string? pictures, string? captions)
         => new(
             driver,
             survey,
             new ThumbnailSettings { WrittenTo = pictures },
+            new CaptionSettings { WrittenTo = captions },
             NullLogger<DriverRecordingFileEraser>.Instance);
 }
