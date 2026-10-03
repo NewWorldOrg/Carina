@@ -222,10 +222,11 @@ public sealed class OidcSignInTests
         Uri authorize = await probe.AuthorizeUriAsync();
         string code = probe.Idp.Authorize(authorize, new MockIdentityUser("owner"));
 
+        using HttpClient another = probe.Relaying("seen=before");
         using HttpResponseMessage arrived = await probe.CallbackAsync(
             MockIdentityProvider.StateOf(authorize),
             code,
-            probe.Signed);
+            another);
 
         Assert.Empty(probe.Sessions.Sessions);
         Assert.Contains(
