@@ -129,6 +129,28 @@ public sealed class EncodeArtefactPlacerTests
         Assert.Null(second.ArtefactName);
     }
 
+    [Fact(DisplayName = "a job that failed after claiming the name leaves it to the next job of the same recording and profile")]
+    public async Task AJobThatFailedAfterClaimingTheNameLeavesItToTheNextJob()
+    {
+        using var harness = new EncodeHarness();
+        var recording = RecordingId.New();
+        var profile = EncodeProfileId.New();
+        EncodeJob first = harness.Running(recording, profile);
+        harness.WorkFileOf(first, "first");
+        string artefact = harness.ArtefactPathOf(first);
+        File.WriteAllText(artefact, "somebody else's picture");
+
+        Assert.Equal(EncodePlacementOutcome.Collided, await harness.Placer.PlaceAsync(first, Cancel));
+
+        File.Delete(artefact);
+        EncodeJob second = harness.Running(recording, profile);
+        harness.WorkFileOf(second, "second");
+
+        Assert.Equal(EncodePlacementOutcome.Moved, await harness.Placer.PlaceAsync(second, Cancel));
+        Assert.Equal("second", File.ReadAllText(artefact));
+        Assert.Equal(EncodeJobStatus.Completed, second.Status);
+    }
+
     [Fact(DisplayName = "a move that would cross a mount is refused, and the work file stays where it is")]
     public async Task AMoveThatWouldCrossAMountIsRefused()
     {

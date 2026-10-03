@@ -351,6 +351,67 @@ public sealed class EncodeDispatchTests
         Assert.False(owed.IsOwedARemoval, "the work file of a job closed as failed is still owed a removal");
     }
 
+    [Fact(DisplayName = "an artefact placed by a job whose ending the ledger refused is removed, and the row lets go of its name, so the same profile can be made again")]
+    public async Task AnArtefactPlacedByAJobWhoseEndingWasRefusedIsRemoved()
+    {
+        using TempTree room = new();
+        HeldEncodeJobs held = new() { KeepsItsOwnRows = true };
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
+        string artefact = Path.Combine(room.Root, EncodeFileName.Artefact(first.RecordingId, first.ProfileId).Value);
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3, OutputRoots = [new StorageRootPath(EncodeHarness.Primary, room.Root)] },
+            whenRun: claimed => Place(held, claimed, artefact));
+
+        await LookUntilTheEndingIsGivenUpAsync(dispatch);
+
+        EncodeJob closed = held.Jobs.Single(job => job.Id.Equals(first.Id));
+        Assert.Equal(EncodeFailure.EndingNotKept, closed.Failure!.Failure);
+        Assert.False(File.Exists(artefact), "the file nothing names as an artefact is still in the way of making it again");
+        Assert.Equal(Now, closed.NameGivenUpAt);
+    }
+
+    [Fact(DisplayName = "an artefact placed by a job making it again whose ending the ledger refused stays, while the earlier job still names that file")]
+    public async Task AnArtefactAnEarlierJobStillNamesStaysWhenTheEndingOfTheJobMakingItAgainIsRefused()
+    {
+        using TempTree room = new();
+        HeldEncodeJobs held = new() { KeepsItsOwnRows = true };
+        var recording = RecordingId.New();
+        var profile = EncodeProfileId.New();
+        var destination = EncodeDestinationId.New();
+        EncodeFileName name = EncodeFileName.Artefact(recording, profile);
+        EncodeJob made = EncodeJob.Queue(EncodeJobId.New(), recording, profile, destination, EncodeHarness.Primary, EncodeHarness.Queued);
+        made.Start(EncodeHarness.Started);
+        made.Name(name);
+        made.Complete(EncodeHarness.Started);
+        made.GiveUpTheName(Now);
+        EncodeJob again = EncodeJob.QueueAgain(EncodeJobId.New(), recording, profile, destination, EncodeHarness.Primary, EncodeHarness.Queued);
+        held.Jobs.Add(made);
+        held.Jobs.Add(again);
+        held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
+        string artefact = Path.Combine(room.Root, name.Value);
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3, OutputRoots = [new StorageRootPath(EncodeHarness.Primary, room.Root)] },
+            whenRun: claimed => Place(held, claimed, artefact));
+
+        await LookUntilTheEndingIsGivenUpAsync(dispatch);
+
+        Assert.Equal(EncodeFailure.EndingNotKept, held.Jobs.Single(job => job.Id.Equals(again.Id)).Failure!.Failure);
+        Assert.Equal("the picture", File.ReadAllText(artefact));
+    }
+
+    private static void Place(HeldEncodeJobs held, EncodeJob claimed, string artefact)
+    {
+        EncodeFileName name = EncodeFileName.Artefact(claimed.RecordingId, claimed.ProfileId);
+        held.Jobs.Single(job => job.Id.Equals(claimed.Id)).Name(name);
+        claimed.Name(name);
+        File.WriteAllText(artefact, "the picture");
+        claimed.Complete(Now);
+    }
+
     [Fact(DisplayName = "an ending that was itself a failure is closed saying which failure it was")]
     public async Task AnEndingThatWasItselfAFailureIsClosedSayingWhichFailureItWas()
     {
