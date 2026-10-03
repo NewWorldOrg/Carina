@@ -62,7 +62,7 @@ public sealed record QualityRecordingResponder(
         QualityLedgerRow row = reading.Row;
 
         return new QualityRecordingResponder(
-            row.Recording.Value.ToString(),
+            row.Recording.Wire,
             row.Network.Value,
             row.Service.Value,
             row.Kind,
