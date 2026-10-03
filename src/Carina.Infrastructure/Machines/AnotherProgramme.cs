@@ -29,9 +29,10 @@ public sealed record ProgrammeStart(Process? Process, RunningProgramme? Began, s
 }
 
 /// <summary>
-/// Starts another programme. The arguments go over as an array with no shell, and the environment
-/// is built here rather than inherited. A programme started yielding runs under <c>nice</c> at the
-/// lowest scheduling priority.
+/// Starts another programme. The arguments go over as an array with no shell, the environment is
+/// built here rather than inherited, and a programme named without a path is looked for in the
+/// search path written here rather than the one this process inherited. A programme started yielding
+/// runs under <c>nice</c> at the lowest scheduling priority.
 /// </summary>
 public static class AnotherProgramme
 {
@@ -46,7 +47,7 @@ public static class AnotherProgramme
         ArgumentException.ThrowIfNullOrEmpty(programme);
         ArgumentNullException.ThrowIfNull(arguments);
 
-        var start = new ProcessStartInfo(programme)
+        var start = new ProcessStartInfo(Located(programme) ?? programme)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -84,9 +85,9 @@ public static class AnotherProgramme
     {
         ArgumentException.ThrowIfNullOrEmpty(programme);
 
-        if (priority is ProgrammePriority.Yielding && !IsOnThisMachine(programme))
+        if (NotOnThisMachine(programme, priority) is { } absent)
         {
-            return new ProgrammeStart(null, null, Missing(programme, "no such file on the searched path").Complained);
+            return new ProgrammeStart(null, null, Missing(absent, "no such file on the searched path").Complained);
         }
 
         Process? started;
@@ -155,16 +156,38 @@ public static class AnotherProgramme
     }
 
     /// <summary>
-    /// Whether the programme would be found the way the process would find it: as the path it is, or by
-    /// name in the search path a started programme is given.
+    /// Whether the programme is found as the path it is, or by name in the search path a started
+    /// programme is given.
     /// </summary>
-    public static bool IsOnThisMachine(string programme)
+    public static bool IsOnThisMachine(string programme) => Located(programme) is not null;
+
+    /// <summary>
+    /// The file a programme is started from: the path it is, or the first file of that name in the
+    /// search path a started programme is given. Null when there is none.
+    /// </summary>
+    public static string? Located(string programme)
     {
         ArgumentException.ThrowIfNullOrEmpty(programme);
 
-        return programme.Contains('/', StringComparison.Ordinal)
-            ? File.Exists(programme)
-            : SearchedIn.Split(':').Any(directory => File.Exists(Path.Combine(directory, programme)));
+        if (programme.Contains('/', StringComparison.Ordinal))
+        {
+            return File.Exists(programme) ? programme : null;
+        }
+
+        return SearchedIn
+            .Split(':')
+            .Select(directory => Path.Combine(directory, programme))
+            .FirstOrDefault(File.Exists);
+    }
+
+    private static string? NotOnThisMachine(string programme, ProgrammePriority priority)
+    {
+        if (!IsOnThisMachine(programme))
+        {
+            return programme;
+        }
+
+        return priority is ProgrammePriority.Yielding && !IsOnThisMachine(Nice) ? Nice : null;
     }
 
     private static RunningProgramme? Identify(Process started)

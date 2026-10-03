@@ -34,13 +34,25 @@ public sealed class AnotherProgrammeTests : IDisposable
         ProcessStartInfo yielding = AnotherProgramme.Describe("ffmpeg", ["-version"], ProgrammePriority.Yielding);
         ProcessStartInfo ordinary = AnotherProgramme.Describe("ffmpeg", ["-version"], ProgrammePriority.Ordinary);
 
-        Assert.Equal("nice", yielding.FileName);
+        Assert.Equal(AnotherProgramme.Located("nice"), yielding.FileName);
         Assert.Equal(["-n", "19", "ffmpeg", "-version"], yielding.ArgumentList);
-        Assert.Equal("ffmpeg", ordinary.FileName);
+        Assert.Equal(AnotherProgramme.Located("ffmpeg") ?? "ffmpeg", ordinary.FileName);
         Assert.Equal(["-version"], ordinary.ArgumentList);
         Assert.Equal(AnotherProgramme.SearchedIn, yielding.Environment["PATH"]);
         Assert.Single(yielding.Environment);
         Assert.Throws<ArgumentOutOfRangeException>(() => AnotherProgramme.Describe("ffmpeg", [], (ProgrammePriority)3));
+    }
+
+    [Fact(DisplayName = "a programme named without a path is started from the search path written here, rather than looked for again in the one this process inherited")]
+    public void AProgrammeNamedWithoutAPathIsStartedFromTheSearchPathWrittenHere()
+    {
+        string sleep = SearchedFor("sleep");
+        string nice = SearchedFor("nice");
+
+        Assert.Equal(sleep, AnotherProgramme.Describe("sleep", ["1"]).FileName);
+        Assert.Equal(nice, AnotherProgramme.Describe("sleep", ["1"], ProgrammePriority.Yielding).FileName);
+        Assert.Equal(sleep, AnotherProgramme.Located(sleep));
+        Assert.Null(AnotherProgramme.Located("no-such-programme-anywhere"));
     }
 
     [Fact(DisplayName = "a yielding programme is what the id names — nice gives way to the programme rather than sitting beside it")]
@@ -66,16 +78,25 @@ public sealed class AnotherProgrammeTests : IDisposable
         ProgrammeStart yielding = AnotherProgramme.Start(absent, [], ProgrammePriority.Yielding);
         ProgrammeStart ordinary = AnotherProgramme.Start(absent, []);
         ProgrammeStart byName = AnotherProgramme.Start("no-such-programme-anywhere", [], ProgrammePriority.Yielding);
+        ProgrammeStart ordinaryByName = AnotherProgramme.Start("no-such-programme-anywhere", []);
 
         Assert.Null(yielding.Process);
         Assert.Null(yielding.Began);
         Assert.Null(ordinary.Process);
         Assert.Null(byName.Process);
+        Assert.Null(ordinaryByName.Process);
+        Assert.Contains("no such file on the searched path", ordinaryByName.Complained, StringComparison.Ordinal);
         Assert.Contains("could not be started", yielding.Complained, StringComparison.Ordinal);
         Assert.DoesNotContain(tree.Root, yielding.Complained, StringComparison.Ordinal);
         Assert.False(AnotherProgramme.IsOnThisMachine(absent));
         Assert.True(AnotherProgramme.IsOnThisMachine("sleep"));
     }
+
+    private static string SearchedFor(string programme)
+        => AnotherProgramme.SearchedIn
+            .Split(':')
+            .Select(directory => Path.Combine(directory, programme))
+            .First(File.Exists);
 
     private string Standing(string script)
         => StandInProgramme.Written(tree.Under($"programme-{Guid.NewGuid():N}.sh"), script);

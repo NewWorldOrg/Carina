@@ -3,6 +3,7 @@ using Carina.Infrastructure.Configuration;
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Net.Http.Headers;
 
@@ -16,7 +17,7 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly Lock gate = new();
 
-    private readonly List<IHost> raised = [];
+    private readonly List<(IHost Host, CancellationToken Stopped)> raised = [];
 
     public const string ConnectionStringKey = "ConnectionStrings:Carina";
 
@@ -59,17 +60,25 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
     {
         IHost host = base.CreateHost(builder);
 
+        CancellationToken stopped = host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopped;
+
         lock (gate)
         {
-            raised.Add(host);
+            raised.Add((host, stopped));
         }
 
         return host;
     }
 
+    /// <summary>
+    /// Lets go of this host, then stops and lets go of every application raised from it that is still
+    /// running. One that fails to stop does not keep the rest from being stopped, and none is stopped
+    /// twice; what failed is thrown once everything has been let go of.
+    /// </summary>
     public override async ValueTask DisposeAsync()
     {
-        IHost[] running;
+        (IHost Host, CancellationToken Stopped)[] running;
+        List<Exception> failures = [];
 
         lock (gate)
         {
@@ -77,16 +86,54 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
             raised.Clear();
         }
 
-        foreach (IHost host in running)
+        try
         {
-            await host.StopAsync();
-
-            host.Dispose();
+            await base.DisposeAsync();
+        }
+        catch (Exception failure)
+        {
+            failures.Add(failure);
         }
 
-        await base.DisposeAsync();
+        foreach ((IHost host, CancellationToken stopped) in running)
+        {
+            failures.AddRange(await LetGoAsync(host, stopped));
+        }
 
         GC.SuppressFinalize(this);
+
+        if (failures.Count > 0)
+        {
+            throw new AggregateException("Some of the applications raised for the feature tests failed to stop.", failures);
+        }
+    }
+
+    private static async Task<IReadOnlyList<Exception>> LetGoAsync(IHost host, CancellationToken stopped)
+    {
+        List<Exception> failures = [];
+
+        try
+        {
+            if (!stopped.IsCancellationRequested)
+            {
+                await host.StopAsync();
+            }
+        }
+        catch (Exception failure)
+        {
+            failures.Add(failure);
+        }
+
+        try
+        {
+            host.Dispose();
+        }
+        catch (Exception failure)
+        {
+            failures.Add(failure);
+        }
+
+        return failures;
     }
 
     protected override void ConfigureClient(HttpClient client)
