@@ -1,7 +1,10 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Globalization;
+using System.IO.Pipes;
 using System.Runtime.Versioning;
 using System.Text;
+using System.Threading.Channels;
 
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Base;
@@ -22,6 +25,13 @@ public sealed class LiveFragmentMaterialTests : IDisposable
     private const double LongestPieceInSeconds = 0.1;
 
     private static readonly TimeSpan PastTheProbe = TimeSpan.FromSeconds(12);
+
+    private static readonly TimeSpan HoursIntoTheDay = TimeSpan.FromHours(13);
+
+    private static readonly TimeSpan WhenTheClockComesAround =
+        TimeSpan.FromTicks((long)(LivePts.ComesAroundAt * TimeSpan.TicksPerSecond / LivePts.Hertz));
+
+    private static readonly ulong OneFrame = (ulong)(LivePts.Hertz / FrameRate.BroadcastFrames.PerSecond);
 
     private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
 
@@ -55,6 +65,120 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         Assert.True(
             measured.SecondsApart <= LongestPieceInSeconds,
             $"the pieces came {measured.SecondsApart:F4} s apart on average");
+    }
+
+    [Fact(DisplayName = "BR-PD-007: a caption reaches a live viewer on the clock its pictures are carried on, as far after the first picture when the broadcast's clock comes around inside it as when it begins hours into the day")]
+    public async Task BrPd007ACaptionIsOnThePicturesClockWhenTheBroadcastsClockComesAroundInsideIt()
+    {
+        (ulong Picture, IReadOnlyList<ulong> Captions) daytime =
+            await CaptionedLiveAsync(HoursIntoTheDay, PastTheProbe, SyntheticCaptions.ShownThenCleared);
+        (ulong Picture, IReadOnlyList<ulong> Captions) around =
+            await CaptionedLiveAsync(WhenTheClockComesAround - TimeSpan.FromSeconds(5), PastTheProbe, SyntheticCaptions.ShownThenCleared);
+
+        Assert.Equal(2, daytime.Captions.Count);
+        Assert.Equal(daytime.Captions.Count, around.Captions.Count);
+
+        foreach ((ulong inTheDay, ulong comingAround) in daytime.Captions.Zip(around.Captions))
+        {
+            long apart = (long)(comingAround - around.Picture) - (long)(inTheDay - daytime.Picture);
+
+            Assert.True(
+                Math.Abs(apart) <= (long)OneFrame,
+                string.Create(CultureInfo.InvariantCulture, $"the caption came {apart} ticks away from where it came on a clock hours into the day"));
+        }
+    }
+
+    [Fact(DisplayName = "BR-PD-007: captions keep reaching a live viewer after the broadcast's clock comes around part way through what is being watched")]
+    public async Task BrPd007CaptionsKeepComingAfterTheClockComesAroundPartWayThrough()
+    {
+        TimeSpan whole = TimeSpan.FromSeconds(80);
+        TimeSpan aroundAfter = TimeSpan.FromSeconds(70);
+
+        (ulong picture, IReadOnlyList<ulong> carried) =
+            await CaptionedLiveAsync(WhenTheClockComesAround - aroundAfter, whole, SyntheticCaptions.EverySecond);
+
+        Assert.NotEmpty(carried);
+        Assert.All(carried, pts => Assert.True(pts >= picture, $"a caption at {pts} came before the first picture at {picture}"));
+        Assert.True(
+            carried[^1] - carried[0] > (ulong)(aroundAfter.TotalSeconds + 5) * (ulong)LivePts.Hertz,
+            string.Create(CultureInfo.InvariantCulture, $"the captions carried ran from {carried[0]} to {carried[^1]}, and stopped where the clock came around"));
+    }
+
+    private async Task<(ulong Picture, IReadOnlyList<ulong> Captions)> CaptionedLiveAsync(
+        TimeSpan startsAt,
+        TimeSpan length,
+        SyntheticCaptions shown)
+    {
+        string written = await (SyntheticBroadcast.AsMeasured() with
+        {
+            Length = length,
+            Captions = shown,
+            StartsAt = startsAt,
+        }).WriteAsync(Path.Combine(room, string.Create(CultureInfo.InvariantCulture, $"captioned-{startsAt.Ticks}.m2ts")));
+
+        using AnonymousPipeServerStream captions = new(PipeDirection.In, HandleInheritability.Inheritable);
+
+        var start = new ProcessStartInfo(FfmpegProgramme.Default)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        foreach (string argument in (string[])
+                 [
+                     .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.Drawn),
+                     .. FfmpegLiveInvocation.Delivery(),
+                     .. FfmpegLiveInvocation.CaptionDelivery(Service, int.Parse(captions.GetClientHandleAsString(), CultureInfo.InvariantCulture)),
+                 ])
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process running = Process.Start(start)!;
+
+        captions.DisposeLocalCopyOfClientHandle();
+
+        Task feeding = Task.Run(async () =>
+        {
+            await using (FileStream source = File.OpenRead(written))
+            {
+                await source.CopyToAsync(running.StandardInput.BaseStream);
+            }
+
+            running.StandardInput.Close();
+        });
+        Task<string> complaint = running.StandardError.ReadToEndAsync();
+
+        using MemoryStream delivered = new();
+        Task picture = running.StandardOutput.BaseStream.CopyToAsync(delivered);
+        Channel<LiveFrame> drawn = Channel.CreateUnbounded<LiveFrame>();
+
+        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(captions, new CaptionCanvas(Interlaced.Size), drawn.Writer, CancellationToken.None);
+
+        await feeding;
+        await picture;
+        await running.WaitForExitAsync();
+
+        Assert.True(running.ExitCode is 0, await complaint);
+        Assert.Null(fault);
+
+        List<ulong> carried = [];
+
+        while (drawn.Reader.TryRead(out LiveFrame? frame))
+        {
+            if (frame.Channel is LiveChannel.Caption)
+            {
+                carried.Add(frame.Pts.Value);
+            }
+        }
+
+        Fragments measured = Fragments.Of(delivered.ToArray());
+
+        Assert.True(measured.FirstPicture is not null, "the transcoder wrote no picture");
+
+        return (measured.FirstPicture.Value, carried);
     }
 
     private static async Task<byte[]> LiveAsync(string written, LiveProfile profile)
@@ -106,7 +230,8 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         int SoundAlone,
         int Neither,
         bool TheLastCarriedBoth,
-        double SecondsApart)
+        double SecondsApart,
+        ulong? FirstPicture)
     {
         public int Counted => Both + PictureAlone + SoundAlone + Neither;
 
@@ -116,6 +241,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         {
             Dictionary<uint, (string Kind, uint Rate)> tracks = [];
             List<double> pictures = [];
+            ulong? firstPicture = null;
             int both = 0;
             int pictureAlone = 0;
             int soundAlone = 0;
@@ -152,6 +278,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
                     if (track.Kind is Picture)
                     {
                         pictures.Add((double)stamped.DecodedAt / track.Rate);
+                        firstPicture ??= LivePts.Rescaled(stamped.DecodedAt, track.Rate).Value;
                     }
                 }
 
@@ -171,7 +298,8 @@ public sealed class LiveFragmentMaterialTests : IDisposable
                 soundAlone,
                 neither,
                 lastCarriedBoth,
-                pictures.Count > 1 ? (pictures[^1] - pictures[0]) / (pictures.Count - 1) : double.PositiveInfinity);
+                pictures.Count > 1 ? (pictures[^1] - pictures[0]) / (pictures.Count - 1) : double.PositiveInfinity,
+                firstPicture);
         }
 
         private static void Learn(ReadOnlySpan<byte> moov, Dictionary<uint, (string Kind, uint Rate)> tracks)
