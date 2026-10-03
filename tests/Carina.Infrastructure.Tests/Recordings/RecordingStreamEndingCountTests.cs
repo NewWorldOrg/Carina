@@ -155,11 +155,71 @@ public sealed class RecordingStreamEndingCountTests
         Assert.Equal(7, read.CcDroppedPackets);
     }
 
-    private static Recording CountedUntilTheLastPass()
+    [Fact(DisplayName = "a recording already counted at the moment it is judged keeps that count rather than an older one")]
+    public async Task ARecordingAlreadyCountedAtTheMomentItIsJudgedKeepsThatCount()
+    {
+        Recording recording = CountedUntilTheLastPass(Ended);
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+
+        await Supervisor(ledger, Ending(recording, WhatTheSessionEndedWith), new WatchClock(Ended), Weighed())
+            .WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.NotNull(read.Outcome);
+        Assert.Equal(3, read.CcDroppedPackets);
+        Assert.Equal(5, read.ScrambledPackets);
+        Assert.Equal(Ended, read.MeasuredUpdatedAt);
+    }
+
+    [Fact(DisplayName = "a recording recovery finds already counted at that moment keeps that count rather than an older one")]
+    public async Task ARecordingRecoveryFindsAlreadyCountedKeepsThatCount()
+    {
+        Recording recording = CountedUntilTheLastPass(Ended);
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+        SessionSnapshot stopped = Stopped(recording, SessionStopReason.DeviceFailed, WhatTheSessionEndedWith);
+
+        await Recovery(ledger, new WatchedDriver(), new WatchClock(Ended), Weighed())
+            .RecoverAsync(Greeting(), [stopped], Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.NotNull(read.Outcome);
+        Assert.Equal(3, read.CcDroppedPackets);
+        Assert.Equal(Ended, read.MeasuredUpdatedAt);
+    }
+
+    [Fact(DisplayName = "a recording that had not yet named its tuner takes the one the session it ended on was written from")]
+    public async Task ARecordingThatHadNotYetNamedItsTunerTakesTheOneItsLastSessionWasWrittenFrom()
+    {
+        Recording recording = InFlight(deviceId: null);
+        recording.Wrote(TimeSpan.FromMinutes(30));
+        recording.Abort(Airs.AddMinutes(30));
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+
+        await Supervisor(ledger, Ending(recording, WhatTheSessionEndedWith), new WatchClock(Ended), Weighed())
+            .WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.Equal(new TunerDeviceId("adapter1"), read.TunerDeviceId);
+        Assert.Equal(7, read.CcDroppedPackets);
+    }
+
+    private static Recording CountedUntilTheLastPass(DateTime? lastCounted = null)
     {
         Recording recording = InFlight();
         recording.Wrote(TimeSpan.FromMinutes(30));
-        recording.Measure(DropCounters.Counted(3, Packets), DropTimeline.Unlocated, 5, 1, Airs.AddMinutes(29), Airs);
+        recording.Measure(
+            DropCounters.Counted(3, Packets),
+            DropTimeline.Unlocated,
+            5,
+            1,
+            lastCounted ?? Airs.AddMinutes(29),
+            Airs);
         recording.Abort(Airs.AddMinutes(30));
 
         return recording;
