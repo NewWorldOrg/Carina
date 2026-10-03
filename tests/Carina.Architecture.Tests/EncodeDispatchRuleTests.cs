@@ -89,8 +89,8 @@ public sealed class EncodeDispatchRuleTests
         Assert.Equal(1, source.Split("File.Move(").Length - 1);
     }
 
-    [Fact(DisplayName = "the one thing that lets a move write over an artefact is the job itself saying a person asked for it to be made again, and the earlier holder gives the name up before the claim")]
-    public void TheOneThingThatLetsAMoveWriteOverAnArtefactIsThePersonsAsking()
+    [Fact(DisplayName = "two things let a move write over an artefact: the job itself saying a person asked for it to be made again, with the earlier holder giving the name up before the claim, and a checked copy of a standing artefact with a text track of captions put in")]
+    public void TwoThingsLetAMoveWriteOverAnArtefactThePersonsAskingAndATextTrackOfCaptions()
     {
         string placer = File.ReadAllText(Placer);
         string placement = File.ReadAllText(Path.Combine(
@@ -102,6 +102,12 @@ public sealed class EncodeDispatchRuleTests
         Assert.Contains("bool replacing = verdict is EncodePlacementVerdict.Replace;", placer, StringComparison.Ordinal);
         Assert.Contains("job.MakesItAgain && File.Exists(work)", placer, StringComparison.Ordinal);
         Assert.DoesNotContain("overwrite: true", placer, StringComparison.Ordinal);
+        Assert.Equal(1, placer.Split("replacing: true").Length - 1);
+        Assert.Contains("Move(captioned, Path.Combine(room, job.ArtefactName!.Value), replacing: true);", placer, StringComparison.Ordinal);
+        Assert.True(
+            placer.IndexOf("if (!job.StandsAsTheArtefact)", StringComparison.Ordinal) is >= 0 and var stands
+            && stands < placer.IndexOf("replacing: true", StringComparison.Ordinal),
+            "only a standing artefact has a copy with captions put over it");
         Assert.Contains(
             "thisJobBroughtAReplacement ? EncodePlacementVerdict.Replace",
             placement,
@@ -126,11 +132,12 @@ public sealed class EncodeDispatchRuleTests
             EncodeDispatchRules.WhatNamesTheArtefact(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "the encode feature starts a programme in four places — the run, which hands the ledger the programme's identity, the look for the breaks, and the two probes of the source's head and length, each bounded by a deadline and unable to outlive the process by more than that — and nowhere else")]
-    public void TheEncodeFeatureStartsAProgrammeInFourPlacesAndNowhereElse()
+    [Fact(DisplayName = "the encode feature starts a programme in five places — the run, which hands the ledger the programme's identity, the look for the breaks, the two probes of the source's head and length, and the copy that puts a text track of captions in with the probes that check it, each bounded by a deadline and unable to outlive the process by more than that — and nowhere else")]
+    public void TheEncodeFeatureStartsAProgrammeInFivePlacesAndNowhereElse()
     {
         Assert.Equal(
             [
+                "/Carina.Infrastructure/Encodings/CaptionTrackMux.cs AnotherProgramme.SayAsync(",
                 "/Carina.Infrastructure/Encodings/FfmpegChapterRun.cs AnotherProgramme.Start(",
                 "/Carina.Infrastructure/Encodings/FfmpegEncodeRun.cs AnotherProgramme.Start(",
                 "/Carina.Infrastructure/Encodings/FfprobeSourceHead.cs AnotherProgramme.SayAsync(",

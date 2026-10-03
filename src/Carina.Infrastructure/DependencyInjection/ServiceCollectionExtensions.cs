@@ -211,6 +211,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeArtefactPlacer>();
         services.AddScoped<EncodeArtefactSuccession>();
         services.AddScoped<IEncodeAutoRunReader, EncodeAutoRunReader>();
+        services.AddScoped<CaptionTrackMux>();
+        services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
+        services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();
         services.AddScoped<EncodeJobRunner>();
         services.AddScoped<EncodeRestart>();
         services.AddScoped<EncodeIntakeRound>();
@@ -292,6 +295,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<LocalStrayFileEraser>();
         services.TryAddSingleton<IStrayFileEraser, PlacedStrayFileEraser>();
         services.TryAddSingleton<IPlaybackFileStore, LocalPlaybackFileStore>();
+        services.TryAddSingleton<IArtefactOpenings, ArtefactOpenings>();
         services.AddSingleton<IntegrityCheckJob>();
         services.TryAddSingleton<ThumbnailSettings>(provider =>
             provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value.Read());

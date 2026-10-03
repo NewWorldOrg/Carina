@@ -58,7 +58,7 @@ public sealed class EncodeArtefactPlacer(
 
         EncodeFileName candidate = EncodeFileName.Artefact(job.RecordingId, job.ProfileId);
         bool hadAlreadyClaimed = candidate.Equals(job.ArtefactName);
-        string work = Path.Combine(workshop, job.WorkFileName.Value);
+        string work = Path.Combine(workshop, job.FileToPlace.Value);
         string artefact = Path.Combine(room, candidate.Value);
 
         if (job.MakesItAgain && !hadAlreadyClaimed)
@@ -161,7 +161,7 @@ public sealed class EncodeArtefactPlacer(
 
         try
         {
-            File.Move(work, artefact, overwrite: replacing);
+            Move(work, artefact, replacing);
         }
         catch (IOException refusal) when (refusal.HResult is NoSpaceLeft)
         {
@@ -194,14 +194,15 @@ public sealed class EncodeArtefactPlacer(
     {
         IReadOnlyList<EncodeScratchFile> owed = await ledger.ListOwedAsync(job.Id, cancellationToken);
         EncodeScratchFile? workFile = owed.FirstOrDefault(scratch =>
-            scratch.Kind is EncodeScratchKind.WorkFile && scratch.FileName.Equals(job.WorkFileName));
+            scratch.Kind is EncodeScratchKind.WorkFile or EncodeScratchKind.CaptionedWork
+            && scratch.FileName.Equals(job.FileToPlace));
 
         if (workFile is null)
         {
             logger.LogWarning(
                 "Job {Job} placed its artefact from a work file the ledger never recorded: {File}.",
                 job.Id.Wire,
-                job.WorkFileName.Value);
+                job.FileToPlace.Value);
 
             return;
         }
@@ -209,6 +210,39 @@ public sealed class EncodeArtefactPlacer(
         workFile.Settle(EncodeScratchFate.BecameTheArtefact, Now());
         await ledger.SaveAsync(workFile, cancellationToken);
     }
+
+    /// <summary>
+    /// Puts a copy of a standing artefact with a text track of captions put in where the artefact stands, by a
+    /// single rename over it from where the job's work goes. The artefact's name is the job's in the ledger
+    /// already; nothing before the rename touches the artefact, and a rename that cannot be made leaves it as
+    /// it was.
+    /// </summary>
+    public RenameVerdict PutCaptionedInPlace(EncodeJob job, string captioned)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        ArgumentException.ThrowIfNullOrEmpty(captioned);
+
+        if (!job.StandsAsTheArtefact)
+        {
+            throw new InvalidOperationException($"Only an artefact that stands has a text track put into it, and job {job.Id.Wire} stands at {job.Status}.");
+        }
+
+        if (places.WhereTheArtefactGoes(job.OutputRoot) is not { } room || places.WhereTheWorkGoes(job.OutputRoot) is not { } workshop)
+        {
+            return new RenameVerdict(RenameStanding.CannotWriteTo, $"nothing tells this process where output root '{job.OutputRoot.Value}' is mounted");
+        }
+
+        RenameVerdict rename = probe.Probe(workshop, room);
+
+        if (rename.IsARename)
+        {
+            Move(captioned, Path.Combine(room, job.ArtefactName!.Value), replacing: true);
+        }
+
+        return rename;
+    }
+
+    private static void Move(string work, string artefact, bool replacing) => File.Move(work, artefact, overwrite: replacing);
 
     private async Task<EncodePlacementOutcome> RefuseAsync(
         EncodeJob job,

@@ -1,12 +1,14 @@
 using System.Collections.Concurrent;
 
 using Carina.Domain.Base;
+using Carina.Domain.Captions;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Infrastructure.Captions;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Tests.Thumbnails;
@@ -34,6 +36,7 @@ internal sealed class EncodeHarness : IDisposable
     {
         Room = new TempTree();
         Shelf = new TempTree();
+        CaptionShelfRoom = new TempTree();
         Workshop = workingBeside ? null : new TempTree();
         Settings = new EncodeSettings
         {
@@ -51,6 +54,12 @@ internal sealed class EncodeHarness : IDisposable
     public TempTree Room { get; }
 
     public TempTree Shelf { get; }
+
+    public TempTree CaptionShelfRoom { get; }
+
+    public CaptionShelf CaptionShelf => new(new CaptionSettings { WrittenTo = CaptionShelfRoom.Root });
+
+    public CaptionTrackMux CaptionTracks => new(ScratchFiles, Programmes, Clock);
 
     public TempTree? Workshop { get; }
 
@@ -127,6 +136,8 @@ internal sealed class EncodeHarness : IDisposable
         ChapterDetector,
         Chapters,
         Watermarks,
+        CaptionShelf,
+        CaptionTracks,
         Programmes,
         Settings,
         AutoRun,
@@ -332,6 +343,7 @@ internal sealed class EncodeHarness : IDisposable
     {
         Room.Dispose();
         Shelf.Dispose();
+        CaptionShelfRoom.Dispose();
         Workshop?.Dispose();
     }
 }

@@ -72,6 +72,33 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database) : IAsyncL
     }
 
     [Fact]
+    public async Task BrEd2019WhatIsWrittenToPutATextTrackIntoAnArtefactAlreadyMadeIsDeclaredUntilItIsRemoved()
+    {
+        Recording recording = await RecordedAsync();
+        EncodeJob job = await CompletedAsync(await QueuedAsync(recording.Id));
+        EncodeScratchFile captions = await WritingAsync(job, EncodeScratchKind.Captions, job.CaptionTrackFileName);
+        EncodeScratchFile captioned = await WritingAsync(job, EncodeScratchKind.CaptionedWork, job.CaptionedFileName);
+
+        IReadOnlyList<DeclaredFile> declared = await ReadAsync();
+
+        Assert.Contains(new DeclaredFile(Primary, captions.FileName.Value), declared);
+        Assert.Contains(new DeclaredFile(Primary, captioned.FileName.Value), declared);
+
+        await using (CarinaDbContext settling = database.Open())
+        {
+            EncodeScratchLedger ledger = new(settling);
+
+            foreach (EncodeScratchFile owed in await ledger.ListOwedAsync(job.Id, Cancel))
+            {
+                owed.Settle(EncodeScratchFate.Removed, Ended);
+                await ledger.SaveAsync(owed, Cancel);
+            }
+        }
+
+        Assert.Equal([new DeclaredFile(Primary, job.ArtefactName!.Value)], await ReadAsync());
+    }
+
+    [Fact]
     public async Task AFileOfAJobSomebodyCalledOffIsNotDeclaredAnyMore()
     {
         EncodeJob job = await QueuedAsync();
@@ -245,14 +272,16 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database) : IAsyncL
         return job;
     }
 
-    private async Task<EncodeScratchFile> WritingAsync(EncodeJob job)
+    private Task<EncodeScratchFile> WritingAsync(EncodeJob job) => WritingAsync(job, EncodeScratchKind.WorkFile, job.WorkFileName);
+
+    private async Task<EncodeScratchFile> WritingAsync(EncodeJob job, EncodeScratchKind kind, EncodeFileName name)
     {
         EncodeScratchFile scratch = EncodeScratchFile.Record(
             EncodeScratchFileId.New(),
             job.Id,
-            EncodeScratchKind.WorkFile,
+            kind,
             Primary,
-            job.WorkFileName,
+            name,
             Queued);
 
         await using CarinaDbContext writing = database.Open();

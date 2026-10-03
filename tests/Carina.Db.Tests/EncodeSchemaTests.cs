@@ -258,6 +258,34 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal("ck_encode_job_name_given_up", refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "what became of a text track of captions is kept with when the captions it came from were taken, and failures are counted only while it has failed")]
+    public async Task ATextTrackOfCaptionsIsKeptWithWhenItsCaptionsWereTaken()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var recording = Guid.NewGuid();
+        var made = Guid.NewGuid();
+        await JobAsync(connection, made, recording, "'Completed'", Started, Ended, "NULL, NULL, NULL", $"'{recording:N}.{ProfileWire}.mp4'");
+
+        PostgresException alone = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"UPDATE encode_job SET caption_track = 'Added' WHERE id = '{made}'",
+            connection).ExecuteNonQueryAsync());
+        PostgresException unnamed = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"UPDATE encode_job SET caption_track = 'Burnt', caption_track_from = {Ended} WHERE id = '{made}'",
+            connection).ExecuteNonQueryAsync());
+        PostgresException counted = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"UPDATE encode_job SET caption_track = 'Added', caption_track_from = {Ended}, caption_track_attempts = 1 WHERE id = '{made}'",
+            connection).ExecuteNonQueryAsync());
+
+        await using var failing = new NpgsqlCommand(
+            $"UPDATE encode_job SET caption_track = 'Failed', caption_track_from = {Ended}, caption_track_attempts = 2 WHERE id = '{made}'",
+            connection);
+
+        Assert.All([alone, unnamed, counted], refusal => Assert.Equal("ck_encode_job_caption_track", refusal.ConstraintName));
+        Assert.Equal(1, await failing.ExecuteNonQueryAsync());
+    }
+
     [Fact(DisplayName = "a job is written down as replaced only once it completed, named what it made, and ended no later than it was replaced")]
     public async Task AJobIsReplacedOnlyOnceItCompleted()
     {
@@ -507,6 +535,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 "ck_encode_job_alignment",
                 "ck_encode_job_artefact",
                 "ck_encode_job_attempt",
+                "ck_encode_job_caption_track",
                 "ck_encode_job_chapters",
                 "ck_encode_job_failure",
                 "ck_encode_job_headway",

@@ -115,6 +115,14 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
             table.HasCheckConstraint(
                 "ck_encode_job_replaced",
                 "replaced_at IS NULL OR (status = 'Completed' AND artefact_name IS NOT NULL AND replaced_at >= ended_at)");
+            table.HasCheckConstraint(
+                "ck_encode_job_caption_track",
+                $"""
+                (caption_track IS NULL) = (caption_track_from IS NULL)
+                AND (caption_track IS NULL OR caption_track IN ({EncodeVocabulary.Of<EncodeCaptionTrack>()}))
+                AND caption_track_attempts >= 0
+                AND (caption_track_attempts = 0 OR caption_track = 'Failed')
+                """);
         });
 
         builder.Property<uint>(ConcurrencyToken)
@@ -177,6 +185,9 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
         builder.Property(job => job.MakesItAgain).IsRequired();
         builder.Property(job => job.NameGivenUpAt);
         builder.Property(job => job.ReplacedAt);
+        builder.Property(job => job.CaptionTrack).HasConversion<string>().HasMaxLength(32);
+        builder.Property(job => job.CaptionTrackFrom);
+        builder.Property(job => job.CaptionTrackAttempts).HasDefaultValue(0).IsRequired();
 
         builder.ComplexProperty(job => job.Route, route =>
         {
@@ -247,6 +258,8 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
         builder.Ignore(job => job.Standing);
         builder.Ignore(job => job.WorkFileName);
         builder.Ignore(job => job.ChaptersFileName);
+        builder.Ignore(job => job.CaptionTrackFileName);
+        builder.Ignore(job => job.CaptionedFileName);
 
         builder.HasOne<EncodeProfile>()
             .WithMany()
