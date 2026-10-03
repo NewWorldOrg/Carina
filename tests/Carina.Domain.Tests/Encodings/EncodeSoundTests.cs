@@ -15,6 +15,14 @@ public sealed class EncodeSoundTests
         Assert.Equal(SoundPlacement.OneChannelOf(0, SoundChannel.Left), sound.OneChannel);
     }
 
+    [Fact(DisplayName = "a broadcast that put two languages on its main sound beside a second stream is baked from the channel the main language sits on too")]
+    public void TwoLanguagesOnTheMainSoundBesideASecondStreamAreBakedFromTheChannelTheMainOneSitsOn()
+    {
+        EncodeSound sound = EncodeSound.Of(AudioMode.DualMono, 2);
+
+        Assert.Equal(SoundPlacement.OneChannelOf(0, SoundChannel.Left), sound.OneChannel);
+    }
+
     [Fact]
     public void WhatIsBakedIsWhereTheMainSoundIsPlayedFromRatherThanARuleOfItsOwn()
         => Assert.Equal(
@@ -26,7 +34,6 @@ public sealed class EncodeSoundTests
     [InlineData(AudioMode.Mono, 1)]
     [InlineData(AudioMode.Stereo, 1)]
     [InlineData(AudioMode.Surround, 1)]
-    [InlineData(AudioMode.DualMono, 2)]
     [InlineData(AudioMode.Stereo, 2)]
     public void ASoundOnAStreamOfItsOwnIsLeftWhereItIs(AudioMode audio, int sounds)
     {

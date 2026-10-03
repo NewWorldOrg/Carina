@@ -23,12 +23,19 @@ public sealed record SoundArrangement
     private static readonly SoundArrangement TwoChannelsOfOneStream = new(
         [SoundPlacement.OneChannelOf(0, SoundChannel.Left), SoundPlacement.OneChannelOf(0, SoundChannel.Right)]);
 
+    private static readonly SoundArrangement TwoChannelsBesideASecondStream = new(
+        [
+            SoundPlacement.OneChannelOf(0, SoundChannel.Left),
+            SoundPlacement.OneChannelOf(0, SoundChannel.Right),
+            SoundPlacement.WholeStream(1),
+        ]);
+
     private readonly IReadOnlyList<SoundPlacement> placed;
 
     private SoundArrangement(IReadOnlyList<SoundPlacement> placed)
     {
         this.placed = placed;
-        Tracks = SoundTracks.OutOf(placed.Count);
+        Tracks = [.. SoundTracks.InOrder.Take(placed.Count)];
     }
 
     public IReadOnlyList<SoundTrack> Tracks { get; }
@@ -59,6 +66,7 @@ public sealed record SoundArrangement
         => announced switch
         {
             { Audio: AudioMode.DualMono, Sounds: < StreamsOfTheirOwn } => TwoChannelsOfOneStream,
+            { Audio: AudioMode.DualMono } => TwoChannelsBesideASecondStream,
             { Sounds: >= StreamsOfTheirOwn } => TwoStreams,
             _ => TheMainSoundAlone,
         };

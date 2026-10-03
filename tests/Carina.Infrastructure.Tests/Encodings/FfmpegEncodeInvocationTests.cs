@@ -527,12 +527,24 @@ public sealed class FfmpegEncodeInvocationTests
                 HeadSkip,
                 TwoLanguagesOnOneSound));
 
+    [Fact(DisplayName = "two languages on the main sound beside a second stream are baked from the main sound alone, its main language in both ears")]
+    public void TwoLanguagesOnTheMainSoundBesideASecondStreamAreBakedFromTheMainSoundAlone()
+    {
+        string[] arguments =
+        [
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip, EncodeSound.Of(AudioMode.DualMono, 2)),
+        ];
+
+        Assert.Contains("p:1040:a:0", arguments);
+        Assert.DoesNotContain("p:1040:a", arguments);
+        Assert.Contains(FfmpegPlaybackInvocation.TheLeftChannelInBothEars, arguments);
+    }
+
     [Theory(DisplayName = "a sound that stands on a stream of its own is copied over exactly as it was before any language was chosen")]
     [InlineData(AudioMode.Undetermined, ProgrammeSnapshot.SoundsUnannounced)]
     [InlineData(AudioMode.Mono, 1)]
     [InlineData(AudioMode.Stereo, 1)]
     [InlineData(AudioMode.Surround, 1)]
-    [InlineData(AudioMode.DualMono, 2)]
     [InlineData(AudioMode.Stereo, 2)]
     public void ASoundOnAStreamOfItsOwnIsCopiedOverExactlyAsItWas(AudioMode audio, int sounds)
         => Assert.Equal(

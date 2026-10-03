@@ -402,6 +402,67 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task BrPs001AChannelChangeRightAfterGivingUpOnAnOpeningWaitsForThatOpeningToLetTheTunerGo()
+    {
+        TaskCompletionSource lettingGo = await GivenUpOnWhileStillOpeningAsync();
+
+        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(() => supply.GivenUpOn is 1, "the opening nobody waits for any more is given up on");
+
+        lettingGo.SetResult();
+
+        await using ILiveViewing next = Seated(await joining);
+
+        Assert.Equal([AnotherChannel], manager.Keys);
+        Assert.Equal(3, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001WhileAnOpeningGivenUpOnStillHoldsTheTunerTheOtherChannelIsNotAskedForAgain()
+    {
+        TaskCompletionSource lettingGo = await GivenUpOnWhileStillOpeningAsync();
+
+        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(() => supply.GivenUpOn is 1, "the opening nobody waits for any more is given up on");
+        await Eventually.Happens(
+            () =>
+            {
+                clock.Turn(WaitForATunerToComeFree);
+
+                return joining.IsCompleted;
+            },
+            "the viewer is answered once the wait for the tuner runs out");
+
+        Assert.Equal(LiveRefusal.NoTunerFree, (await joining).Refusal);
+        Assert.Equal(2, supply.Asked);
+
+        lettingGo.SetResult();
+    }
+
+    private async Task<TaskCompletionSource> GivenUpOnWhileStillOpeningAsync()
+    {
+        TaskCompletionSource lettingGo = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        supply.AsIfThereWereOneTuner = true;
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        supply.LettingGoOfAGivenUpOpening = lettingGo;
+
+        using CancellationTokenSource givingUp = new();
+
+        Task<LiveJoin> abandoned = manager.JoinAsync(EveryFrame, givingUp.Token);
+
+        await Eventually.Happens(() => supply.Asked is 1, "the first viewer reaches the supply");
+        await givingUp.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => abandoned);
+
+        supply.HeldUntil = null;
+
+        return lettingGo;
+    }
+
+    [Fact]
     public async Task BrPs001AChannelSomebodyIsStillWatchingIsNotGivenUpAndTheOneAskingIsRefusedAtOnce()
     {
         supply.AsIfThereWereOneTuner = true;

@@ -41,9 +41,9 @@ public static class PlayDelivery
     public const string ThePositionsThereAre =
         "A recording is played from a whole number of seconds into it, or from its beginning.";
 
-    public const string TheSoundsThereAre =
-        "A recording is played with the main sound the broadcast carried or with its secondary sound, "
-        + "and with no other.";
+    public static readonly string TheSoundsThereAre =
+        $"A recording is played with one of the sounds {string.Join(", ", SoundTracks.Names)}, "
+        + "or with the main one when none is named, and with no other.";
 
     public const string TheSourcesThereAre =
         "A recording is played from the artefact encoded of it or from the recording itself, and from "
@@ -53,8 +53,8 @@ public static class PlayDelivery
         "A recording handed over as it is carries the one sound it was encoded with, so there is no sound "
         + "to choose. Ask for it without naming a sound.";
 
-    public const string TheBroadcastCarriedTheOneSound =
-        "The broadcast this recording was made from carried one sound, so it has no secondary sound to play.";
+    public const string TheRecordingDoesNotCarryThatSound =
+        "The broadcast this recording was made from did not carry the sound asked for, so there is nothing of it to play.";
 
     public const string TheSoundsCouldNotBeRead = "The sounds this recording carries could not be read";
 
@@ -215,7 +215,7 @@ public static class PlayDelivery
 
         if (chosen.Placement is not { } placement)
         {
-            await RefuseAsync(context, StatusCodes.Status400BadRequest, TheBroadcastCarriedTheOneSound);
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, TheRecordingDoesNotCarryThatSound);
 
             return;
         }

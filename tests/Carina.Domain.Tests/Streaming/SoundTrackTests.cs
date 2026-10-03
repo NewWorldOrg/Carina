@@ -17,9 +17,15 @@ public sealed class SoundTrackTests
     }
 
     [Fact]
+    public void TheThirdSoundIsTheOneAfterTheSecondary()
+    {
+        Assert.Equal(2, SoundTracks.Ordinal(SoundTrack.Third));
+    }
+
+    [Fact]
     public void EverySoundIsNamedAndEveryNameReadsBackAsTheSoundItNames()
     {
-        Assert.Equal(["main", "secondary"], SoundTracks.Names);
+        Assert.Equal(["main", "secondary", "third"], SoundTracks.Names);
 
         Assert.All(
             SoundTracks.InOrder,
