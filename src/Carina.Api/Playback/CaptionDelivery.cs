@@ -21,7 +21,7 @@ public static class CaptionDelivery
 
     public const string Position = "from";
 
-    public const string Source = PlayDelivery.Source;
+    public const string Source = "source";
 
     public const string ThePositionsThereAre =
         "Captions are asked for from a whole or fractional number of seconds into the source, or from its beginning.";
