@@ -80,8 +80,8 @@ public sealed class FfprobeSourceHead(MachineSettings settings, TimeProvider clo
 
     private static TimeSpan? Parsed(string said)
         => double.TryParse(said, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
-            && seconds >= 0
             && double.IsFinite(seconds)
+            && seconds > -EncodeTimeline.OneTurnOfTheClock.TotalSeconds
             ? TimeSpan.FromSeconds(seconds)
             : null;
 }

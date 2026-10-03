@@ -20,25 +20,14 @@ public enum CaptionFlowFault
     APictureThatIsNotAPng = 6,
 }
 
-/// <summary>
-/// Whether the clock the pictures are stamped with comes around at 33 bits, as the live wire carries it,
-/// or is followed through past that, as a recorded file is read on its own timestamps lifted clear of zero.
-/// Either way a picture ffmpeg stamps at the end of a caption that never said how long it lasts is not one
-/// the broadcast sent: it lands the longest display time a subtitle can name after the picture before it.
-/// </summary>
-public enum CaptionClock
-{
-    ComesAround = 1,
-
-    FollowedThrough = 2,
-}
-
 public static class CaptionFrames
 {
     public const int Mouthful = 64 * 1024;
 
     /// <summary>
-    /// The longest a subtitle can say it stays on screen, 2^32 − 1 ms, on the 90 kHz clock.
+    /// The longest a subtitle can say it stays on screen, 2^32 − 1 ms, on the 90 kHz clock. A picture ffmpeg
+    /// stamps at the end of a caption that never said how long it lasts lands this long after the picture
+    /// before it, and is not one the broadcast sent.
     /// </summary>
     public const ulong ShownIndefinitely = (ulong)uint.MaxValue * (LivePts.Hertz / 1000);
 
@@ -55,7 +44,6 @@ public static class CaptionFrames
             return await DrawAsync(
                 pictures,
                 canvas,
-                CaptionClock.ComesAround,
                 (at, picture) => into.TryWrite(picture is null ? LiveCaptions.Cleared(at) : LiveCaptions.Shown(at, picture)),
                 cancellationToken);
         }
@@ -73,18 +61,12 @@ public static class CaptionFrames
     public static async Task<CaptionFlowFault?> DrawAsync(
         Stream pictures,
         CaptionCanvas canvas,
-        CaptionClock clock,
         Func<LivePts, CaptionPicture?, bool> changed,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(pictures);
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(changed);
-
-        if (!Enum.IsDefined(clock))
-        {
-            throw new ArgumentOutOfRangeException(nameof(clock), clock, "A clock either comes around or is followed through.");
-        }
 
         NutFrames frames = new();
         byte[] mouthful = ArrayPool<byte>.Shared.Rent(Mouthful);
@@ -126,7 +108,7 @@ public static class CaptionFrames
         {
             foreach (NutFrame frame in arrived)
             {
-                if (OffTheClock(frame.Pts, last, clock))
+                if (OffTheClock(frame.Pts, last))
                 {
                     continue;
                 }
@@ -152,10 +134,8 @@ public static class CaptionFrames
         }
     }
 
-    private static bool OffTheClock(LivePts at, LivePts? last, CaptionClock clock)
-        => clock is CaptionClock.ComesAround
-            ? at.Value >= LivePts.ComesAroundAt
-            : last is { } before && at.Value >= before.Value + ShownIndefinitely;
+    private static bool OffTheClock(LivePts at, LivePts? last)
+        => last is { } before && at.Value >= before.Value + ShownIndefinitely;
 
     private static CaptionFlowFault? Of(NutFault? fault)
         => fault switch

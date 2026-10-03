@@ -51,6 +51,36 @@ public sealed class FfprobeSourceHeadTests : IDisposable
         Assert.Equal(TimeSpan.FromSeconds(0.5072), reading.HeadSkip);
     }
 
+    [Fact(DisplayName = "a source ffprobe reads as beginning before zero, because its clock comes around just after it begins, is read with its start below zero")]
+    public async Task ASourceReadAsBeginningBeforeZeroIsReadBelowZero()
+    {
+        SourceHeadReading reading = await Reading(standIns.Script(
+            """
+            printf 'best_effort_timestamp_time=-3.092800\n'
+            printf 'start_time=-3.600000\n'
+            """));
+
+        Assert.True(reading.Measured, reading.Note);
+        Assert.Equal(TimeSpan.FromSeconds(-3.6), reading.Start);
+        Assert.Equal(TimeSpan.FromSeconds(0.5072), reading.HeadSkip);
+    }
+
+    [Theory(DisplayName = "a start a whole turn of the clock or more before zero is no start ffprobe reads, and is said nothing about rather than taken")]
+    [InlineData("-95443.717689", false)]
+    [InlineData("-95444", false)]
+    [InlineData("-95443.7", true)]
+    public async Task AStartAWholeTurnOfTheClockBeforeZeroIsSaidNothingAbout(string start, bool taken)
+    {
+        SourceHeadReading reading = await Reading(standIns.Script(
+            $"""
+            printf 'best_effort_timestamp_time=-95443.5\n'
+            printf 'start_time={start}\n'
+            """));
+
+        Assert.Equal(taken, reading.Measured);
+        Assert.Equal(taken ? null : SourceHeadFault.SaidNothing, reading.Fault);
+    }
+
     [Fact(DisplayName = "a picture whose timestamp ffprobe could not work out is passed over for the next, and what it complained about while exiting 0 decides nothing")]
     public async Task APictureWithoutATimestampIsPassedOverAndComplaintsDecideNothing()
     {

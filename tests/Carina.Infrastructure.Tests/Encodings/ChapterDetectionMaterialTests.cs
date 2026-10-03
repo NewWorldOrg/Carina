@@ -4,6 +4,7 @@ using Carina.BroadcastTestSupport;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
+using Carina.Domain.Streaming;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Tests.Integrity;
 
@@ -14,7 +15,7 @@ namespace Carina.Infrastructure.Tests.Encodings;
 /// carries a pod of advertisements, two stretches quiet and dark at once a whole number of grid
 /// steps apart, and is marked there; one carries a single such stretch and is marked nowhere; the
 /// third is the first with the stream's clock started seventeen hours into the day, and is marked in
-/// the same place.
+/// the same place, and so is the fourth, whose clock comes around in the middle of the pod.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
@@ -33,6 +34,9 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
     private static readonly TimeSpan LateInTheDay = TimeSpan.FromSeconds(61200);
 
     private static readonly TimeSpan WhatTheMuxerAddsToTheHead = TimeSpan.FromSeconds(5);
+
+    private static readonly TimeSpan WhenTheClockComesAround =
+        TimeSpan.FromTicks((long)(LivePts.ComesAroundAt * TimeSpan.TicksPerSecond / LivePts.Hertz));
 
     private readonly TempTree tree = new();
 
@@ -72,6 +76,30 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
         EncodeTimeline timeline = await AlignedTo(broadcast);
 
         Assert.InRange(timeline.SourceStart, LateInTheDay, LateInTheDay + WhatTheMuxerAddsToTheHead);
+
+        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, null, Cores, Unwatched, Cancel);
+
+        Assert.Equal(ChapterVerdict.Marked, read.Verdict);
+        Assert.Equal(3, read.Segments.Count);
+        Assert.Equal(1, read.Breaks);
+
+        ChapterSegment gap = Assert.Single(read.Segments, segment => segment.Kind is ChapterKind.Break);
+        Assert.InRange(gap.Starts, opens - Tolerance, opens + Tolerance);
+        Assert.InRange(gap.Ends, closes - Tolerance, closes + Tolerance);
+        Assert.Equal(TimeSpan.Zero, read.Segments[0].Starts);
+        Assert.Equal(timeline.Expected, read.Segments[^1].Ends);
+    }
+
+    [Fact(DisplayName = "the same pod is found in the same place when the stream's clock comes around in the middle of it")]
+    public async Task TheSamePodIsFoundWhenTheClockComesAroundInTheMiddleOfIt()
+    {
+        TimeSpan opens = TimeSpan.FromSeconds(30);
+        TimeSpan closes = TimeSpan.FromSeconds(90);
+        TimeSpan whole = TimeSpan.FromSeconds(130);
+        string broadcast = await BroadcastingFrom(whole, WhenTheClockComesAround - TimeSpan.FromMinutes(1), opens, closes);
+        EncodeTimeline timeline = await AlignedTo(broadcast);
+
+        Assert.InRange(timeline.SourceStart, -TimeSpan.FromMinutes(1), -TimeSpan.FromMinutes(1) + WhatTheMuxerAddsToTheHead);
 
         ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, null, Cores, Unwatched, Cancel);
 

@@ -40,7 +40,7 @@ public sealed record SourceHeadReading
 
     public static SourceHeadReading Read(TimeSpan start, TimeSpan firstPicture)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(start, TimeSpan.Zero, nameof(start));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(start, -EncodeTimeline.OneTurnOfTheClock, nameof(start));
 
         if (firstPicture < start)
         {

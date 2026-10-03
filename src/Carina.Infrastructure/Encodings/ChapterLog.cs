@@ -83,7 +83,7 @@ public sealed class ChapterLog
     }
 
     internal static TimeSpan? Moment(string line, string named)
-        => Number(line, named) is { } seconds && seconds >= 0 ? TimeSpan.FromSeconds(seconds) : null;
+        => Number(line, named) is { } seconds ? TimeSpan.FromSeconds(seconds) : null;
 
     private static double? Scored(string line)
         => Number(line, Changed) is { } score && score >= 0 ? score : null;

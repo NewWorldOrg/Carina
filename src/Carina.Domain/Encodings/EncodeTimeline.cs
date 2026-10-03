@@ -1,14 +1,23 @@
+using Carina.Domain.Streaming;
+
 namespace Carina.Domain.Encodings;
 
 public sealed record EncodeTimeline
 {
     public static readonly TimeSpan MostHeadSkip = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// One turn of the broadcast's 33-bit clock. A source that begins just before the clock comes around
+    /// is read as beginning before zero, and never by as much as one turn.
+    /// </summary>
+    public static readonly TimeSpan OneTurnOfTheClock =
+        TimeSpan.FromTicks((long)(LivePts.ComesAroundAt * TimeSpan.TicksPerSecond / LivePts.Hertz));
+
     public static readonly TimeSpan Tolerance = TimeSpan.FromSeconds(1);
 
     public EncodeTimeline(TimeSpan sourceStart, TimeSpan headSkip, TimeSpan? sourceLength, TimeSpan? artefactLength)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(sourceStart, TimeSpan.Zero, nameof(sourceStart));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sourceStart, -OneTurnOfTheClock, nameof(sourceStart));
         ArgumentOutOfRangeException.ThrowIfLessThan(headSkip, TimeSpan.Zero, nameof(headSkip));
         ArgumentOutOfRangeException.ThrowIfGreaterThan(headSkip, MostHeadSkip, nameof(headSkip));
 

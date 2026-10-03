@@ -19,6 +19,11 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
 
     public const string ConcurrencyToken = "xmin";
 
+    private const long TicksPerMicrosecond = TimeSpan.TicksPerMillisecond / 1000;
+
+    private static readonly long EarliestSourceStartInMicroseconds =
+        (EncodeTimeline.OneTurnOfTheClock.Ticks + TicksPerMicrosecond - 1) / TicksPerMicrosecond;
+
     public void Configure(EntityTypeBuilder<EncodeJob> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -79,7 +84,7 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
                 ((head_skip IS NULL) = (source_start IS NULL))
                 AND (head_skip IS NULL OR status <> 'Queued')
                 AND (head_skip IS NULL OR head_skip BETWEEN interval '0' AND interval '{EncodeTimeline.MostHeadSkip.TotalSeconds:0} seconds')
-                AND (source_start IS NULL OR source_start >= interval '0')
+                AND (source_start IS NULL OR source_start > interval '-{EarliestSourceStartInMicroseconds} microseconds')
                 AND (source_length IS NULL OR (head_skip IS NOT NULL AND source_length > interval '0'))
                 AND (artefact_length IS NULL OR (head_skip IS NOT NULL AND artefact_length >= interval '0'))
                 """);

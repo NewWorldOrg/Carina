@@ -5,6 +5,7 @@ using Carina.BroadcastTestSupport;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Machines;
 
@@ -38,8 +39,30 @@ public sealed class CaptionTimelineMaterialTests
 
     private static readonly TimeSpan CaptionShown = TimeSpan.FromSeconds(SyntheticBroadcast.CaptionShownAtSecond + 0.5);
 
+    private static readonly TimeSpan WhatTheMuxerAddsToTheHead = TimeSpan.FromSeconds(2);
+
+    private static readonly TimeSpan WhenTheClockComesAround =
+        TimeSpan.FromTicks((long)(LivePts.ComesAroundAt * TimeSpan.TicksPerSecond / LivePts.Hertz));
+
     [Fact(DisplayName = "A caption the source shows over a picture is over that same picture in the artefact once the job's caption shift is taken off it, and the artefact is as long as the source had left after its head")]
     public async Task ACaptionIsOverTheSamePictureInTheArtefactOnceTheShiftIsTakenOff()
+    {
+        EncodeTimeline timeline = await CaptionedAndEncodedFromAsync(HoursIntoTheDay);
+
+        Assert.True(timeline.SourceStart >= HoursIntoTheDay, $"the source's clock began at {timeline.SourceStart}, not hours into the day");
+    }
+
+    [Theory(DisplayName = "A source whose clock begins shortly before it comes around is encoded, begins before zero on the timeline, and keeps its captions over the same pictures whether or not the clock comes around inside it")]
+    [InlineData(5)]
+    [InlineData(50)]
+    public async Task ASourceBeginningShortlyBeforeTheClockComesAroundIsEncodedWithItsCaptionsInPlace(int secondsBefore)
+    {
+        EncodeTimeline timeline = await CaptionedAndEncodedFromAsync(WhenTheClockComesAround - TimeSpan.FromSeconds(secondsBefore));
+
+        Assert.InRange(timeline.SourceStart, -TimeSpan.FromSeconds(secondsBefore), -TimeSpan.FromSeconds(secondsBefore) + WhatTheMuxerAddsToTheHead);
+    }
+
+    private static async Task<EncodeTimeline> CaptionedAndEncodedFromAsync(TimeSpan startsAt)
     {
         using EncodeHarness harness = OnThisMachine();
         string broadcast = await new SyntheticBroadcast
@@ -48,7 +71,7 @@ public sealed class CaptionTimelineMaterialTests
             Captions = SyntheticCaptions.ShownThenCleared,
             WithSuperimpose = false,
             Length = Whole,
-            StartsAt = HoursIntoTheDay,
+            StartsAt = startsAt,
             PictureLateBy = SoundAhead,
             QuietBreaks = [CaptionShown],
         }.WriteAsync(harness.Room.Under($"broadcast{SyntheticBroadcast.TransportStream}"), Cancel);
@@ -61,7 +84,6 @@ public sealed class CaptionTimelineMaterialTests
         EncodeTimeline timeline = job.Timeline!;
         string artefact = harness.ArtefactPathOf(job);
 
-        Assert.True(timeline.SourceStart >= HoursIntoTheDay, $"the source's clock began at {timeline.SourceStart}, not hours into the day");
         Assert.InRange(timeline.HeadSkip, SoundAhead, SoundAhead + EncoderDelay);
 
         IReadOnlyList<TimeSpan> statements = await CaptionStatementsAsync(broadcast);
@@ -81,6 +103,8 @@ public sealed class CaptionTimelineMaterialTests
         Assert.InRange(cleared - timeline.CaptionShift, shown - timeline.CaptionShift, made.Length.Value);
         Assert.True(timeline.LengthsAgree, $"the artefact came out {timeline.Drift} from what the source had left");
         Assert.InRange(timeline.Drift!.Value, -OneFrame, OneFrame);
+
+        return timeline;
     }
 
     [Theory(DisplayName = "A broadcast whose sound runs further ahead of its first picture than a run skips is refused as head too far off the file itself, before any encode is started")]

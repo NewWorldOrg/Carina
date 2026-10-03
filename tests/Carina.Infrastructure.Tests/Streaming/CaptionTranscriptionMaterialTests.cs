@@ -238,7 +238,6 @@ public sealed class CaptionTranscriptionMaterialTests(ITestOutputHelper output) 
         CaptionFlowFault? fault = await CaptionFrames.DrawAsync(
             captions,
             new CaptionCanvas(Interlaced.Size),
-            CaptionClock.FollowedThrough,
             (at, shown) =>
             {
                 changes.Add(((long)at.Value, shown is null));

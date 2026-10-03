@@ -22,7 +22,7 @@ public static class ChapterClock
         TimeSpan headSkip,
         TimeSpan artefactLength)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(sourceStart, TimeSpan.Zero, nameof(sourceStart));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sourceStart, -EncodeTimeline.OneTurnOfTheClock, nameof(sourceStart));
         ArgumentOutOfRangeException.ThrowIfLessThan(headSkip, TimeSpan.Zero, nameof(headSkip));
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(artefactLength, TimeSpan.Zero, nameof(artefactLength));
 
