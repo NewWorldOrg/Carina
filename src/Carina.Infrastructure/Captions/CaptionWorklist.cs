@@ -59,7 +59,7 @@ public sealed class CaptionWorklist(CarinaDbContext context, TimeProvider clock)
             .Select(recording => recording.Id)
             .ToListAsync(cancellationToken);
 
-    public async Task CaptionAsync(
+    public async Task<bool> CaptionAsync(
         RecordingId id,
         CaptionState state,
         int? pictures,
@@ -67,14 +67,19 @@ public sealed class CaptionWorklist(CarinaDbContext context, TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(id);
 
-        Recording recording = await context.Set<Recording>()
-                                  .FirstOrDefaultAsync(held => held.Id == id, cancellationToken)
-                              ?? throw new InvalidOperationException(
-                                  $"There is no recording {id.Wire} to keep captions for.");
+        Recording? recording = await context.Set<Recording>()
+            .FirstOrDefaultAsync(held => held.Id == id, cancellationToken);
+
+        if (recording is null)
+        {
+            return false;
+        }
 
         recording.Caption(state, pictures, clock.GetUtcNow().UtcDateTime);
 
         await context.SaveChangesAsync(cancellationToken);
+
+        return true;
     }
 
     private IQueryable<Recording> Waiting()

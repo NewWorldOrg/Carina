@@ -286,6 +286,20 @@ public sealed class CaptionJobTests : IDisposable
     }
 
     [Fact]
+    public async Task ARecordingThatGoesBeforeItIsPutBackIsPassedOverAndThePassGoesOn()
+    {
+        RecordingId gone = RecordingId.New();
+        worklist.Ready.Add(gone);
+        worklist.Gone.Add(gone);
+        CaptionSubject subject = Recorded();
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal(0, pass.Requeued);
+        Assert.Equal([(subject.Id, CaptionState.Absent, (int?)null)], worklist.Written);
+    }
+
+    [Fact]
     public async Task WithNothingOnTheShelfAtAllEveryReadyRecordingIsPutBack()
     {
         RecordingId first = RecordingId.New();
@@ -392,16 +406,16 @@ public sealed class CaptionJobTests : IDisposable
         public Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<RecordingId>>([.. Ready]);
 
-        public Task CaptionAsync(RecordingId id, CaptionState state, int? pictures, CancellationToken cancellationToken)
+        public Task<bool> CaptionAsync(RecordingId id, CaptionState state, int? pictures, CancellationToken cancellationToken)
         {
             if (Gone.Contains(id))
             {
-                throw new InvalidOperationException($"There is no recording {id.Wire} to keep captions for.");
+                return Task.FromResult(false);
             }
 
             Written.Add((id, state, pictures));
 
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
     }
 

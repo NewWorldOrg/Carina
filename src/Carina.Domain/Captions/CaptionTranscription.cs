@@ -13,8 +13,6 @@ public enum CaptionFault
     ClockUnread = 5,
 
     CanvasUnread = 6,
-
-    Threw = 7,
 }
 
 public sealed record CaptionTranscription

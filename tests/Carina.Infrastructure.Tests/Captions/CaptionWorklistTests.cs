@@ -176,12 +176,11 @@ public sealed class CaptionWorklistTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task KeepingCaptionsForARecordingNobodyHasHeardOfIsRefused()
+    public async Task KeepingCaptionsForARecordingNobodyHasHeardOfSaysSoAndWritesNothing()
     {
         await using CarinaDbContext context = database.Open();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => new CaptionWorklist(context, Clock()).CaptionAsync(RecordingId.New(), CaptionState.Absent, null, Cancel));
+        Assert.False(await new CaptionWorklist(context, Clock()).CaptionAsync(RecordingId.New(), CaptionState.Absent, null, Cancel));
     }
 
     [Fact]
@@ -212,7 +211,7 @@ public sealed class CaptionWorklistTests(RepositoryDatabase database)
     {
         await using CarinaDbContext context = database.Open();
 
-        await new CaptionWorklist(context, Clock(at)).CaptionAsync(id, state, pictures, Cancel);
+        Assert.True(await new CaptionWorklist(context, Clock(at)).CaptionAsync(id, state, pictures, Cancel));
     }
 
     private async Task<Recording> ReadAsync(RecordingId id)

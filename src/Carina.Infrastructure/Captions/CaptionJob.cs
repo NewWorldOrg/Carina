@@ -146,24 +146,24 @@ public sealed class CaptionJob(
     private async Task<int> RequeueLostAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
     {
         IReadOnlySet<string> shelved = shelf.Shelved();
-        RecordingId[] lost =
-        [
-            .. (await worklist.ReadyAsync(cancellationToken)).Where(id => !shelved.Contains(id.Wire)),
-        ];
+        int requeued = 0;
 
-        foreach (RecordingId id in lost)
+        foreach (RecordingId id in await worklist.ReadyAsync(cancellationToken))
         {
-            await worklist.CaptionAsync(id, CaptionState.Pending, null, cancellationToken);
+            if (!shelved.Contains(id.Wire) && await worklist.CaptionAsync(id, CaptionState.Pending, null, cancellationToken))
+            {
+                requeued++;
+            }
         }
 
-        if (lost.Length > 0)
+        if (requeued > 0)
         {
             logger.LogWarning(
                 "{Lost} recording(s) said their captions were ready and no record of them was on the shelf, so they are taken again.",
-                lost.Length);
+                requeued);
         }
 
-        return lost.Length;
+        return requeued;
     }
 
     private async Task<bool> BusyAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
@@ -219,28 +219,31 @@ public sealed class CaptionJob(
         }
     }
 
-    private async Task<CaptionState?> FailedAsync(
+    private Task<CaptionState?> FailedAsync(
         ICaptionWorklist worklist,
         RecordingId id,
         CancellationToken cancellationToken)
+        => SettledAsync(worklist, id, CaptionState.Failed, null, cancellationToken);
+
+    private async Task<CaptionState?> SettledAsync(
+        ICaptionWorklist worklist,
+        RecordingId id,
+        CaptionState state,
+        int? pictures,
+        CancellationToken cancellationToken)
     {
-        try
+        if (await worklist.CaptionAsync(id, state, pictures, cancellationToken))
         {
-            await worklist.CaptionAsync(id, CaptionState.Failed, null, cancellationToken);
-
-            return CaptionState.Failed;
+            return state;
         }
-        catch (InvalidOperationException gone)
-        {
-            logger.LogInformation(
-                gone,
-                "Recording {Recording} went while its captions were being taken, so nothing is kept for it.",
-                id.Wire);
 
-            shelf.Forget(id);
+        logger.LogInformation(
+            "Recording {Recording} went while its captions were being taken, so nothing is kept for it.",
+            id.Wire);
 
-            return null;
-        }
+        shelf.Forget(id);
+
+        return null;
     }
 
     private async Task<CaptionState?> TranscribedAsync(
@@ -287,9 +290,8 @@ public sealed class CaptionJob(
         }
 
         await shelf.KeepAsync(subject.Id, record, cancellationToken);
-        await worklist.CaptionAsync(subject.Id, CaptionState.Ready, record.Pictures, cancellationToken);
 
-        return CaptionState.Ready;
+        return await SettledAsync(worklist, subject.Id, CaptionState.Ready, record.Pictures, cancellationToken);
     }
 
     private async Task<CaptionState?> AbsentAsync(
@@ -298,9 +300,8 @@ public sealed class CaptionJob(
         CancellationToken cancellationToken)
     {
         shelf.Forget(id);
-        await worklist.CaptionAsync(id, CaptionState.Absent, null, cancellationToken);
 
-        return CaptionState.Absent;
+        return await SettledAsync(worklist, id, CaptionState.Absent, null, cancellationToken);
     }
 
     private CaptionState? LostMount(CaptionSubject subject)

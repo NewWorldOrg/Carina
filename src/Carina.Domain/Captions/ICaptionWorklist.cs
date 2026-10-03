@@ -21,5 +21,9 @@ public interface ICaptionWorklist
     /// </summary>
     Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken);
 
-    Task CaptionAsync(RecordingId id, CaptionState state, int? pictures, CancellationToken cancellationToken);
+    /// <summary>
+    /// Keeps where the captions of a recording stand, and answers false when the recording is no longer
+    /// in the ledger.
+    /// </summary>
+    Task<bool> CaptionAsync(RecordingId id, CaptionState state, int? pictures, CancellationToken cancellationToken);
 }
