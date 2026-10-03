@@ -142,9 +142,11 @@ public sealed class RecordingStreamSupervisor(
             return;
         }
 
+        RecordingSessionCount? last = RecordingSessionCount.Ending(hello, session);
+
         if (SessionRefusalReading.FilledTheDisk(session))
         {
-            await FailOnAFullDiskAsync(row, now, tally, cancellationToken);
+            await FailOnAFullDiskAsync(row, last, now, tally, cancellationToken);
 
             return;
         }
@@ -157,7 +159,7 @@ public sealed class RecordingStreamSupervisor(
             }
             else
             {
-                await SettleAsync(row, session, now, tally, cancellationToken);
+                await SettleAsync(row, session, last, now, tally, cancellationToken);
             }
 
             return;
@@ -168,6 +170,7 @@ public sealed class RecordingStreamSupervisor(
 
     private async Task FailOnAFullDiskAsync(
         Recording recording,
+        RecordingSessionCount? last,
         DateTime now,
         Tally tally,
         CancellationToken cancellationToken)
@@ -178,6 +181,8 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
+                last?.LastInto(loaded, now);
+
                 foreach (RecordingFault fault in RecordingFaults.OfAFullDisk(weighed))
                 {
                     loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
@@ -300,13 +305,8 @@ public sealed class RecordingStreamSupervisor(
             return;
         }
 
-        RecordingSessionDto reading = RecordingSessionDto.Of(hello, session);
-        DropCounters counters = reading.CcMeasured
-            ? DropCounters.Counted(reading.CcDropped ?? 0, reading.CcTotal ?? 0)
-            : DropCounters.Unmeasured;
-        DropTimeline positions = Placed(reading.Positions);
-        long? scrambled = reading.ScrambledPackets;
-        DateTime opened = session.StartedAt.UtcDateTime;
+        RecordingSessionCount count = RecordingSessionCount.Of(hello, session);
+        DateTime opened = count.Opened;
         RecordingGap? gap = GapBefore(session);
         bool resumed = false;
         bool advanced = false;
@@ -333,7 +333,7 @@ public sealed class RecordingStreamSupervisor(
                     loaded.Missed(gap!);
                 }
 
-                loaded.Measure(counters, positions, scrambled, reading.EovfCount, now, opened);
+                count.Into(loaded, now);
                 bool measured = ReadsDifferently(loaded, countedBefore, placedBefore, scrambledBefore, overflowsBefore);
                 advanced = wrote || measured || missed;
                 resumed = RecordingResumption.CloseAnyOpenBreak(loaded, missed ? gap!.Until : now);
@@ -532,6 +532,7 @@ public sealed class RecordingStreamSupervisor(
     private async Task SettleAsync(
         Recording recording,
         SessionSnapshot session,
+        RecordingSessionCount? last,
         DateTime now,
         Tally tally,
         CancellationToken cancellationToken)
@@ -558,6 +559,8 @@ public sealed class RecordingStreamSupervisor(
                 {
                     loaded.Abort(reached);
                 }
+
+                last?.LastInto(loaded, now);
 
                 RecordingVerdict verdict = CompletionEvaluator.Judge(
                     new RecordingEvidence(
@@ -790,16 +793,6 @@ public sealed class RecordingStreamSupervisor(
            || recording.Positions.AnchorPcr != positions.AnchorPcr
            || !recording.Positions.Buckets.SequenceEqual(positions.Buckets)
            || !recording.Positions.Reanchors.SequenceEqual(positions.Reanchors);
-
-    private static DropTimeline Placed(DropPositionsDto? positions)
-        => positions is null
-            ? DropTimeline.Unlocated
-            : DropTimeline.Rehydrate(
-                positions.AnchorPcr,
-                [.. positions.Buckets.Select(bucket =>
-                    new DropBucket(bucket.Second, bucket.Continuity, bucket.Scrambled))],
-                [.. positions.Reanchors.Select(reanchor =>
-                    new PcrReanchor(reanchor.Second, reanchor.Before, reanchor.After))]);
 
     private sealed class Tally
     {
