@@ -135,6 +135,25 @@ public sealed class CollectionBackOffTests
     public void OnlyAFailureToTuneIsTheTunersBusiness(VisitOutcome outcome, bool reported)
         => Assert.Equal(reported, CollectionBackOff.IsWorthReportingToTheTuner(outcome));
 
+    [Fact]
+    public void AStreamNeverVisitedIsDue()
+        => Assert.True(CollectionBackOff.IsDue(null, At, Settings));
+
+    [Fact]
+    public void AStreamWhoseLastVisitWasInterruptedIsDueStraightAway()
+        => Assert.True(CollectionBackOff.IsDue(Visit(VisitOutcome.Interrupted), At, Settings));
+
+    [Fact]
+    public void AStreamIsNotDueWhileItsWaitLasts()
+        => Assert.False(CollectionBackOff.IsDue(
+            Visit(VisitOutcome.Complete),
+            At + Settings.BetweenVisits - TimeSpan.FromSeconds(1),
+            Settings));
+
+    [Fact]
+    public void AStreamIsDueFromTheMomentItsWaitIsOver()
+        => Assert.True(CollectionBackOff.IsDue(Visit(VisitOutcome.Complete), At + Settings.BetweenVisits, Settings));
+
     private static StreamVisit Visit(VisitOutcome outcome)
         => StreamVisit.Record(
             new NetworkId(32739),

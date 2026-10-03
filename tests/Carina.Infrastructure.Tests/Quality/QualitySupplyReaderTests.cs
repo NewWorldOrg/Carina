@@ -171,14 +171,29 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Single(SupplyWatch.Quiet([read], FiveMinutes, Now));
     }
 
-    [Fact(DisplayName = "a ledger whose visits the sweep all broke off is not one the back-off has made due")]
-    public async Task ALedgerWhoseVisitsTheSweepAllBrokeOffIsNotOneTheBackOffHasMadeDue()
+    [Fact(DisplayName = "a ledger whose visits full tuners all turned away is heard from when the last was turned away")]
+    public async Task ALedgerWhoseVisitsFullTunersAllTurnedAwayIsHeardFromWhenTheLastWasTurnedAway()
     {
         await ClearAsync();
-        await VisitedAsync(VisitOutcome.Interrupted, Airs, 32_736);
-        await VisitedAsync(VisitOutcome.Interrupted, Airs.AddMinutes(1), 32_737);
+        await VisitedAsync(VisitOutcome.Interrupted, Now - FiveMinutes, 61);
+        await VisitedAsync(VisitOutcome.Interrupted, Now - FiveMinutes + TimeSpan.FromSeconds(1), 62);
 
-        Assert.Empty(await ReadAsync());
+        SupplyReading read = Assert.Single(await ReadAsync());
+
+        Assert.Equal(Now - FiveMinutes + TimeSpan.FromSeconds(1), read.LastHeardAt);
+        Assert.Empty(SupplyWatch.Quiet([read], FiveMinutes, Now));
+    }
+
+    [Fact(DisplayName = "a ledger whose visits were all turned away and then nothing was attempted for a sweep's round is quiet")]
+    public async Task ALedgerWhoseVisitsWereAllTurnedAwayAndThenNothingWasAttemptedIsQuiet()
+    {
+        TimeSpan round = new CollectionSettings().LongestBetweenAttempts();
+
+        await ClearAsync();
+        await VisitedAsync(VisitOutcome.Interrupted, Now - round - TimeSpan.FromSeconds(1), 61);
+        await VisitedAsync(VisitOutcome.Interrupted, Now - round, 62);
+
+        Assert.Single(SupplyWatch.Quiet(await ReadAsync(), FiveMinutes, Now));
     }
 
     private async Task<IReadOnlyList<SupplyReading>> ReadAsync(CollectionSettings? settings = null)

@@ -30,6 +30,7 @@ public sealed class CollectionOptionsTests
     {
         CollectionSettings read = Read(
             ("BetweenSweeps", "00:20:00"),
+            ("SoonestAfterASweep", "00:02:00"),
             ("WantedCoverage", "7.00:00:00"),
             ("RevisitsBelow", "2.00:00:00"),
             ("BetweenVisits", "04:00:00"),
@@ -44,6 +45,7 @@ public sealed class CollectionOptionsTests
             ("BetweenSessionChecks", "00:00:20"));
 
         Assert.Equal(TimeSpan.FromMinutes(20), read.BetweenSweeps);
+        Assert.Equal(TimeSpan.FromMinutes(2), read.SoonestAfterASweep);
         Assert.Equal(TimeSpan.FromDays(7), read.WantedCoverage);
         Assert.Equal(TimeSpan.FromDays(2), read.RevisitsBelow);
         Assert.Equal(TimeSpan.FromHours(4), read.BetweenVisits);
@@ -80,6 +82,8 @@ public sealed class CollectionOptionsTests
     [Theory]
     [InlineData("BetweenSweeps", "half an hour")]
     [InlineData("BetweenSweeps", "00:00:00")]
+    [InlineData("SoonestAfterASweep", "00:00:00")]
+    [InlineData("SoonestAfterASweep", "soon")]
     [InlineData("WantedCoverage", "-8.00:00:00")]
     [InlineData("LongestVisit", "00:00:00")]
     [InlineData("BeforeRetrying", "-01:00:00")]

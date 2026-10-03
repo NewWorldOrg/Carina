@@ -62,7 +62,9 @@ public sealed class QualitySupplyReader(CarinaDbContext context, CollectionSetti
 
         foreach (StreamVisit visit in walked)
         {
-            if (CollectionBackOff.NotBefore(visit, settings) is { } due && (soonestDue is null || due < soonestDue))
+            DateTime due = CollectionBackOff.NotBefore(visit, settings) ?? visit.LastAttemptedAt;
+
+            if (soonestDue is null || due < soonestDue)
             {
                 soonestDue = due;
             }

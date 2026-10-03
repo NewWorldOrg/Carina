@@ -25,6 +25,8 @@ public sealed class CollectionOptions
 
     public string? BetweenSweeps { get; set; }
 
+    public string? SoonestAfterASweep { get; set; }
+
     public string? WantedCoverage { get; set; }
 
     public string? RevisitsBelow { get; set; }
@@ -60,6 +62,7 @@ public sealed class CollectionOptions
         IConfigurationSection named = configuration.GetSection(Section);
 
         BetweenSweeps = named[nameof(BetweenSweeps)];
+        SoonestAfterASweep = named[nameof(SoonestAfterASweep)];
         WantedCoverage = named[nameof(WantedCoverage)];
         RevisitsBelow = named[nameof(RevisitsBelow)];
         BetweenVisits = named[nameof(BetweenVisits)];
@@ -88,6 +91,7 @@ public sealed class CollectionOptions
         CollectionSettings read = new()
         {
             BetweenSweeps = Positive(BetweenSweeps, nameof(BetweenSweeps), unset.BetweenSweeps),
+            SoonestAfterASweep = Positive(SoonestAfterASweep, nameof(SoonestAfterASweep), unset.SoonestAfterASweep),
             WantedCoverage = Positive(WantedCoverage, nameof(WantedCoverage), unset.WantedCoverage),
             RevisitsBelow = Positive(RevisitsBelow, nameof(RevisitsBelow), unset.RevisitsBelow),
             BetweenVisits = Waited(BetweenVisits, nameof(BetweenVisits), unset.BetweenVisits),

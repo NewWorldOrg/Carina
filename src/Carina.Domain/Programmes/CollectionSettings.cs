@@ -6,6 +6,12 @@ public sealed record CollectionSettings
 {
     public TimeSpan BetweenSweeps { get; init; } = TimeSpan.FromMinutes(30);
 
+    /// <summary>
+    /// How long after a sweep no other is started ahead of its time, and the closest together two looks at
+    /// whether one should be.
+    /// </summary>
+    public TimeSpan SoonestAfterASweep { get; init; } = TimeSpan.FromMinutes(5);
+
     public TimeSpan WantedCoverage { get; init; } = TimeSpan.FromDays(8);
 
     public TimeSpan RevisitsBelow { get; init; } = TimeSpan.FromDays(3);

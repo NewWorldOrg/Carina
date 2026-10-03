@@ -18,6 +18,10 @@ public sealed class CollectionSettingsTests
         => Assert.Equal(TimeSpan.FromMinutes(3), new CollectionSettings().LongestVisit);
 
     [Fact]
+    public void NoSweepStartsEarlyWithinFiveMinutesOfTheLast()
+        => Assert.Equal(TimeSpan.FromMinutes(5), new CollectionSettings().SoonestAfterASweep);
+
+    [Fact]
     public void TheLongestBetweenAttemptsIsASweepTheWaitsOnFullTunersAndOneVisitListeningAndWriting()
     {
         CollectionSettings settings = new()

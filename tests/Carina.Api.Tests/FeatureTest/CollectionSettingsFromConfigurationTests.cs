@@ -22,6 +22,12 @@ public sealed class CollectionSettingsFromConfigurationTests
         => Assert.Equal(TimeSpan.FromMinutes(5), Served(("BetweenSweeps", "00:05:00")).BetweenSweeps);
 
     [Fact]
+    public void HowSoonASweepMayStartAheadOfItsTimeIsTakenFromTheSettings()
+        => Assert.Equal(
+            TimeSpan.FromMinutes(2),
+            Served(("SoonestAfterASweep", "00:02:00")).SoonestAfterASweep);
+
+    [Fact]
     public void HowFarAheadIsWantedIsTakenFromTheSettings()
         => Assert.Equal(TimeSpan.FromDays(6), Served(("WantedCoverage", "6.00:00:00")).WantedCoverage);
 

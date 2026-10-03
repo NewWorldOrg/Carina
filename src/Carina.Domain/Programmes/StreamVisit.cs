@@ -46,8 +46,8 @@ public sealed class StreamVisit
     public int ConsecutiveUnheard { get; private set; }
 
     /// <summary>
-    /// Whether, once the last visit was written down, every service of the stream reached the wanted
-    /// coverage.
+    /// Whether, once the last visit was written down, every service of the stream that holds a guide
+    /// reached the wanted coverage.
     /// </summary>
     public bool ReachedTheGoal { get; private set; }
 
@@ -107,7 +107,7 @@ public sealed class StreamVisit
     /// <summary>
     /// Writes down a visit's outcome; <paramref name="heardTheSchedule"/> says whether the visit
     /// heard any section of the stream's schedule, and <paramref name="reachedTheGoal"/> whether every
-    /// service of the stream then reached the wanted coverage.
+    /// service of the stream that holds a guide then reached the wanted coverage.
     /// </summary>
     public void Record(
         VisitOutcome outcome,
