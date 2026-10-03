@@ -321,6 +321,20 @@ public sealed class CaptionDeliveryTests
     }
 
     [Fact]
+    public async Task ARecordWhoseHeadReadsAndWhoseBodyDoesNotIsRefusedAsHavingNone()
+    {
+        await using var feature = new CaptionFeature();
+        Recording recording = await feature.CaptionedAsync();
+        string kept = feature.Settings.PathOf(recording.Id)!;
+        byte[] whole = await File.ReadAllBytesAsync(kept);
+        await File.WriteAllBytesAsync(kept, whole[..^3]);
+
+        using HttpResponseMessage answer = await feature.CaptionsAsync(recording, "?source=recording");
+
+        Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
+    }
+
+    [Fact]
     public async Task WithNowhereToKeepCaptionsThereAreNone()
     {
         await using var feature = new CaptionFeature(anywhereToKeepThem: false);

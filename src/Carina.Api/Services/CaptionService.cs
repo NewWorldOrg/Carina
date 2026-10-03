@@ -48,9 +48,16 @@ public sealed class CaptionService(
             return Refused(id, placing.Standing);
         }
 
-        return await records.ReadAsync(id, cancellationToken) is { } record
-            ? ServiceResult<CaptionWindow, CaptionFailure>.Success(CaptionWindow.Of(record, shift, placing.Length, from))
-            : Refused(id, CaptionStanding.Coming);
+        if (await records.ReadAsync(id, cancellationToken) is not { } record)
+        {
+            logger.LogWarning(
+                "The captions kept for recording {Recording} begin as a record of captions and cannot be read as one.",
+                id.Wire);
+
+            return Refused(id, CaptionStanding.None);
+        }
+
+        return ServiceResult<CaptionWindow, CaptionFailure>.Success(CaptionWindow.Of(record, shift, placing.Length, from));
     }
 
     private static ServiceResult<CaptionWindow, CaptionFailure> Refused(RecordingId id, CaptionStanding standing)
