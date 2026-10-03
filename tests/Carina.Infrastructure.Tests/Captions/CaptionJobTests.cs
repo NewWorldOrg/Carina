@@ -312,6 +312,62 @@ public sealed class CaptionJobTests : IDisposable
         Assert.All(worklist.Written, written => Assert.Equal(CaptionState.Pending, written.State));
     }
 
+    [Fact]
+    public async Task BrPd016ARecordKeptBeforeTheTextWasTakenIsTakenAgainWhileTheRecordingStaysReady()
+    {
+        CaptionSubject subject = Retakable();
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(
+            new CaptionRecord(1440, 1080, TimeSpan.FromSeconds(2), Record(2).Cues, [new CaptionLine(0, "字")]));
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal([(subject.Id, CaptionState.Ready, (int?)2)], worklist.Written);
+        Assert.Equal([new CaptionLine(0, "字")], (await new CaptionShelf(Settings()).ReadAsync(subject.Id, Cancel))!.Lines);
+        Assert.Equal((1, 1, 1, 0), (pass.Read, pass.Kept, pass.Retaken, pass.Requeued));
+        Assert.Empty(new CaptionShelf(Settings()).Textless());
+    }
+
+    [Fact]
+    public async Task BrPd016RecordingsWaitingForCaptionsComeBeforeThoseTakenAgainForTheirText()
+    {
+        CaptionSubject waiting = Recorded();
+        CaptionSubject textless = Retakable();
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(Record(1));
+
+        CaptionPass pass = await Job(Settings() with { AtMostAPass = 1 }).RunAsync(Cancel);
+
+        Assert.Equal([waiting.Id], worklist.Written.Select(written => written.Id));
+        Assert.Equal(0, pass.Retaken);
+        Assert.Contains(textless.Id.Wire, new CaptionShelf(Settings()).Textless());
+    }
+
+    [Fact]
+    public async Task BrPd016NothingIsTakenAgainForItsTextWhileSomebodyIsWatching()
+    {
+        Retakable();
+        watching.Anyone = true;
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(worklist.Written);
+        Assert.Empty(transcriber.Asked);
+        Assert.True(pass.Yielded);
+    }
+
+    [Fact]
+    public async Task BrPd016ARecordThatCarriesItsTextIsNotTakenAgain()
+    {
+        CaptionSubject subject = Subject();
+        await new CaptionShelf(Settings()).KeepAsync(subject.Id, new CaptionRecord(1440, 1080, TimeSpan.Zero, [], []), Cancel);
+        worklist.Ready.Add(subject.Id);
+        worklist.Retakable.Add(subject);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(transcriber.Asked);
+        Assert.Equal(0, pass.Read);
+    }
+
     private CaptionSettings Settings() => new() { WrittenTo = shelved };
 
     private CaptionJob Job(CaptionSettings? settings = null)
@@ -347,6 +403,17 @@ public sealed class CaptionJobTests : IDisposable
         return subject;
     }
 
+    private CaptionSubject Retakable()
+    {
+        CaptionSubject subject = Subject();
+        File.WriteAllBytes(Path.Combine(recordings, subject.FileName.Value), new byte[16]);
+        new CaptionShelf(Settings()).KeepAsync(subject.Id, Record(1), Cancel).GetAwaiter().GetResult();
+        worklist.Ready.Add(subject.Id);
+        worklist.Retakable.Add(subject);
+
+        return subject;
+    }
+
     private static CaptionSubject Subject(OutputRoot? root = null)
     {
         RecordingId id = RecordingId.New();
@@ -370,6 +437,8 @@ public sealed class CaptionJobTests : IDisposable
         public bool BeingRecorded { get; set; }
 
         public List<RecordingId> Ready { get; } = [];
+
+        public List<CaptionSubject> Retakable { get; } = [];
 
         public HashSet<RecordingId> Gone { get; } = [];
 
@@ -405,6 +474,14 @@ public sealed class CaptionJobTests : IDisposable
 
         public Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<RecordingId>>([.. Ready]);
+
+        public Task<IReadOnlyList<CaptionSubject>> ReadyAmongAsync(
+            IReadOnlyCollection<RecordingId> among,
+            IReadOnlyList<OutputRoot> withinReach,
+            int atMost,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<CaptionSubject>>(
+                [.. Retakable.Where(subject => among.Contains(subject.Id) && withinReach.Contains(subject.Root)).Take(atMost)]);
 
         public Task<bool> CaptionAsync(RecordingId id, CaptionState state, int? pictures, CancellationToken cancellationToken)
         {

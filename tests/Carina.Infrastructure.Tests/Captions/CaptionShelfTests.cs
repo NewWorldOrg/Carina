@@ -99,6 +99,24 @@ public sealed class CaptionShelfTests : IDisposable
     }
 
     [Fact]
+    public async Task BrPd016TheShelfNamesTheRecordsKeptBeforeTheTextWasTakenAndNoOthers()
+    {
+        RecordingId textless = RecordingId.New();
+        RecordingId withText = RecordingId.New();
+        RecordingId notARecord = RecordingId.New();
+        CaptionShelf shelf = Shelf();
+        await shelf.KeepAsync(textless, Record(1), Cancel);
+        await shelf.KeepAsync(withText, new CaptionRecord(1440, 1080, TimeSpan.Zero, [], [new CaptionLine(1, "字")]), Cancel);
+        await File.WriteAllTextAsync(Path.Combine(Shelved(), notARecord.Wire + ".captions"), "not a record", Cancel);
+
+        Assert.Equal([textless.Wire], shelf.Textless());
+    }
+
+    [Fact]
+    public void AShelfThatWasNeverWrittenToNamesNothingToTakeAgain()
+        => Assert.Empty(Shelf().Textless());
+
+    [Fact]
     public void AShelfThatWasNeverWrittenToNamesNothing()
         => Assert.Empty(Shelf().Shelved());
 

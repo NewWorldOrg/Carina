@@ -9,29 +9,26 @@ namespace Carina.Infrastructure.Captions;
 
 public sealed class CaptionWorklist(CarinaDbContext context, TimeProvider clock) : ICaptionWorklist
 {
-    public async Task<IReadOnlyList<CaptionSubject>> AwaitingAsync(
+    public Task<IReadOnlyList<CaptionSubject>> AwaitingAsync(
+        IReadOnlyList<OutputRoot> withinReach,
+        int atMost,
+        CancellationToken cancellationToken)
+        => NewestAsync(Waiting(), withinReach, atMost, cancellationToken);
+
+    public Task<IReadOnlyList<CaptionSubject>> ReadyAmongAsync(
+        IReadOnlyCollection<RecordingId> among,
         IReadOnlyList<OutputRoot> withinReach,
         int atMost,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(withinReach);
+        ArgumentNullException.ThrowIfNull(among);
 
-        if (atMost < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(atMost), atMost, "A pass takes the captions of at least one recording.");
-        }
+        RecordingId[] asked = [.. among];
+        IQueryable<Recording> ready = context.Set<Recording>()
+            .AsNoTracking()
+            .Where(recording => recording.CaptionState == CaptionState.Ready && asked.Contains(recording.Id));
 
-        OutputRoot[] reachable = [.. withinReach];
-
-        List<Row> rows = await Waiting()
-            .Where(recording => reachable.Contains(recording.OutputRoot))
-            .OrderByDescending(recording => recording.StoppedAtActual)
-            .ThenBy(recording => recording.Id)
-            .Take(atMost)
-            .Select(recording => new Row(recording.Id, recording.OutputRoot, recording.FileName, recording.ServiceId))
-            .ToListAsync(cancellationToken);
-
-        return [.. rows.Select(row => new CaptionSubject(row.Id, row.OutputRoot, row.FileName, row.Service))];
+        return NewestAsync(ready, withinReach, atMost, cancellationToken);
     }
 
     public async Task<int> WaitingOutOfReachAsync(
@@ -80,6 +77,32 @@ public sealed class CaptionWorklist(CarinaDbContext context, TimeProvider clock)
         await context.SaveChangesAsync(cancellationToken);
 
         return true;
+    }
+
+    private static async Task<IReadOnlyList<CaptionSubject>> NewestAsync(
+        IQueryable<Recording> chosen,
+        IReadOnlyList<OutputRoot> withinReach,
+        int atMost,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(withinReach);
+
+        if (atMost < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(atMost), atMost, "A pass takes the captions of at least one recording.");
+        }
+
+        OutputRoot[] reachable = [.. withinReach];
+
+        List<Row> rows = await chosen
+            .Where(recording => reachable.Contains(recording.OutputRoot))
+            .OrderByDescending(recording => recording.StoppedAtActual)
+            .ThenBy(recording => recording.Id)
+            .Take(atMost)
+            .Select(recording => new Row(recording.Id, recording.OutputRoot, recording.FileName, recording.ServiceId))
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(row => new CaptionSubject(row.Id, row.OutputRoot, row.FileName, row.Service))];
     }
 
     private IQueryable<Recording> Waiting()

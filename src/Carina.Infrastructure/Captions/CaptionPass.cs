@@ -11,7 +11,8 @@ public sealed record CaptionPass
         int failed,
         int outOfReach,
         bool yielded,
-        int requeued)
+        int requeued,
+        int retaken)
     {
         AlreadyRunning = alreadyRunning;
         NowhereToKeepThem = nowhereToKeepThem;
@@ -22,6 +23,7 @@ public sealed record CaptionPass
         OutOfReach = outOfReach;
         Yielded = yielded;
         Requeued = requeued;
+        Retaken = retaken;
     }
 
     public bool AlreadyRunning { get; }
@@ -48,11 +50,25 @@ public sealed record CaptionPass
     /// </summary>
     public int Requeued { get; }
 
+    /// <summary>
+    /// How many of the recordings read were ready already and were taken again because their record was
+    /// kept before the text of captions was taken.
+    /// </summary>
+    public int Retaken { get; }
+
     public int Settled => Kept + Absent + Failed;
 
     public int LeftForNextTime => Read - Settled;
 
-    public static CaptionPass Of(int read, int kept, int absent, int failed, int outOfReach, bool yielded, int requeued = 0)
+    public static CaptionPass Of(
+        int read,
+        int kept,
+        int absent,
+        int failed,
+        int outOfReach,
+        bool yielded,
+        int requeued = 0,
+        int retaken = 0)
     {
         Counted(read, nameof(read));
         Counted(kept, nameof(kept));
@@ -60,6 +76,12 @@ public sealed record CaptionPass
         Counted(failed, nameof(failed));
         Counted(outOfReach, nameof(outOfReach));
         Counted(requeued, nameof(requeued));
+        Counted(retaken, nameof(retaken));
+
+        if (retaken > read)
+        {
+            throw new ArgumentOutOfRangeException(nameof(retaken), retaken, $"A pass that read {read} recording(s) took no more than that again.");
+        }
 
         if (kept + absent + failed > read)
         {
@@ -69,12 +91,12 @@ public sealed record CaptionPass
                 $"A pass that read {read} recording(s) settled no more than that, not {kept + absent + failed}.");
         }
 
-        return new CaptionPass(false, false, read, kept, absent, failed, outOfReach, yielded, requeued);
+        return new CaptionPass(false, false, read, kept, absent, failed, outOfReach, yielded, requeued, retaken);
     }
 
-    public static CaptionPass RefusedBecauseOneIsRunning() => new(true, false, 0, 0, 0, 0, 0, false, 0);
+    public static CaptionPass RefusedBecauseOneIsRunning() => new(true, false, 0, 0, 0, 0, 0, false, 0, 0);
 
-    public static CaptionPass RefusedBecauseThereIsNowhereToKeepThem() => new(false, true, 0, 0, 0, 0, 0, false, 0);
+    public static CaptionPass RefusedBecauseThereIsNowhereToKeepThem() => new(false, true, 0, 0, 0, 0, 0, false, 0, 0);
 
     private static void Counted(int counted, string name)
     {
