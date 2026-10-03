@@ -53,6 +53,8 @@ public sealed class ScriptedDriverClient : IDriverClient
 
     public List<TuningParameters> Started { get; } = [];
 
+    public Action<TuningParameters>? Starting { get; set; }
+
     public List<SessionPurpose> Purposes { get; } = [];
 
     public List<SessionId> Stopped { get; } = [];
@@ -91,10 +93,14 @@ public sealed class ScriptedDriverClient : IDriverClient
             : DriverCall<DriverHello>.Reached(
                 new DriverHello(DriverProtocol.Version, InstanceId, [DriverCapabilities.TypedTuning])));
 
+    public int TunerReads { get; private set; }
+
     public Task<DriverCall<IReadOnlyList<TunerSnapshot>>> GetTunersAsync(CancellationToken cancellationToken)
     {
         lock (gate)
         {
+            TunerReads++;
+
             TunerSnapshot[] snapshots = live
                 .Select(entry => new TunerSnapshot(DeviceId, TunerKind.Terrestrial, TunerState.Busy)
                 {
@@ -122,6 +128,8 @@ public sealed class ScriptedDriverClient : IDriverClient
         CancellationToken cancellationToken)
     {
         TuningParameters tuning = TuningOf(request.Tune!);
+
+        Starting?.Invoke(tuning);
 
         lock (gate)
         {

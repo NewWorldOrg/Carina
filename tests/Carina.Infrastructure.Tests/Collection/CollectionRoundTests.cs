@@ -212,7 +212,28 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task AWalkStepsBackWhenEveryTunerStaysBusyInsteadOfBurningThroughThePlan()
+    public async Task TheWaitsOnFullTunersAreSpentOnceAWalkHoweverManyStreamsAreTurnedAway()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 100 };
+        var clock = new HurriedClock();
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+        driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
+
+        await using CarinaDbContext context = database.Open();
+
+        RoundResult walked = await Round(driver, context, clock: clock)
+            .WalkAsync([Stream(network, 1, 22), Stream(network, 2, 24)], Cancel, Cancel);
+
+        Assert.Equal(new RoundResult(0, 0, 0, TurnedAway: 2), walked);
+        Assert.Equal(new CollectionSettings().WhenTunersAreFull.FailureCeiling - 1, clock.Waits.Count);
+        Assert.Equal(new CollectionSettings().WhenTunersAreFull.WaitBeforeTheCeiling(), Sum(clock.Waits));
+        Assert.Equal(100 - (2 * new CollectionSettings().WhenTunersAreFull.FailureCeiling), driver.BusyRefusalsRemaining);
+    }
+
+    [Fact]
+    public async Task EveryStreamTurnedAwayIsWrittenDownAsInterruptedAndCountedAgainstNone()
     {
         int network = NextNetwork();
         var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 100 };
@@ -222,18 +243,145 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
 
         await using CarinaDbContext context = database.Open();
 
-        RoundResult walked = await Round(driver, context, clock: new HurriedClock())
+        await Round(driver, context, clock: new HurriedClock())
             .WalkAsync([Stream(network, 1, 22), Stream(network, 2, 24)], Cancel, Cancel);
 
-        Assert.Equal(new RoundResult(0, 0, 0), walked);
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit[] recorded =
+        [
+            .. (await new StreamVisitRepository(reading).ListAsync(Cancel))
+                .Where(visit => visit.NetworkId.Value == network),
+        ];
+
+        Assert.Equal(2, recorded.Length);
+        Assert.All(recorded, visit => Assert.Equal(VisitOutcome.Interrupted, visit.Outcome));
+        Assert.All(recorded, visit => Assert.Equal(0, visit.ConsecutiveIncomplete));
+    }
+
+    [Fact]
+    public async Task AStreamTurnedAwayDoesNotKeepTheWalkFromTheOnesBehindIt()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+        var clock = new HurriedClock();
+
+        driver.Script(TuningParameters.Terrestrial(22), EveryTunerBusy());
+        driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
+
+        await using CarinaDbContext context = database.Open();
+
+        RoundResult walked = await Round(driver, context, clock: clock)
+            .WalkAsync([Stream(network, 1, 22), Stream(network, 2, 24)], Cancel, Cancel);
+
+        Assert.Equal(new RoundResult(1, 1, 0, TurnedAway: 1), walked);
+        Assert.Single(driver.Started, TuningParameters.Terrestrial(24));
 
         await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<StreamVisit> visits = await new StreamVisitRepository(reading).ListAsync(Cancel);
-        StreamVisit recorded = Assert.Single(visits, visit => visit.NetworkId.Value == network);
+        var visits = new StreamVisitRepository(reading);
 
-        Assert.Equal(VisitOutcome.Interrupted, recorded.Outcome);
-        Assert.Equal(0, recorded.ConsecutiveIncomplete);
+        Assert.Equal(
+            VisitOutcome.Interrupted,
+            (await visits.FindAsync(new NetworkId(network), new TransportStreamId(1), Cancel))!.Outcome);
+        Assert.Equal(
+            VisitOutcome.BasicOnly,
+            (await visits.FindAsync(new NetworkId(network), new TransportStreamId(2), Cancel))!.Outcome);
     }
+
+    [Fact]
+    public async Task OnlyTheStreamsTurnedAwayAreTriedAgainAfterTheWait()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 1 };
+        var clock = new HurriedClock();
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+        driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
+
+        await using CarinaDbContext context = database.Open();
+
+        RoundResult walked = await Round(driver, context, clock: clock)
+            .WalkAsync([Stream(network, 1, 22), Stream(network, 2, 24)], Cancel, Cancel);
+
+        Assert.Equal(new RoundResult(2, 2, 0), walked);
+        Assert.Equal([TuningParameters.Terrestrial(24), TuningParameters.Terrestrial(22)], driver.Started);
+        Assert.Single(clock.Waits);
+    }
+
+    [Fact]
+    public async Task AStreamTurnedAwayKeepsWhatItsLastVisitCounted()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+        CollectionSettings dueAtOnce = new() { BetweenVisits = TimeSpan.Zero };
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context, dueAtOnce).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        driver.BusyRefusalsRemaining = 100;
+
+        await using CarinaDbContext again = database.Open();
+
+        await Round(driver, again, dueAtOnce, new HurriedClock()).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit visit = (await new StreamVisitRepository(reading).FindAsync(
+            new NetworkId(network),
+            new TransportStreamId(1),
+            Cancel))!;
+
+        Assert.Equal(VisitOutcome.Interrupted, visit.Outcome);
+        Assert.Single(visit.Tally);
+    }
+
+    [Fact]
+    public async Task AStreamTheDriverLeftWhileItWasTriedAgainIsWrittenDownOnceAndNotCountedAsTurnedAway()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 2 };
+        using var interruption = new CancellationTokenSource();
+        int asked = 0;
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+        driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
+        driver.Starting = _ =>
+        {
+            asked++;
+
+            if (asked == 3)
+            {
+                interruption.Cancel();
+
+                throw new OperationCanceledException(interruption.Token);
+            }
+        };
+
+        await using CarinaDbContext context = database.Open();
+
+        RoundResult walked = await Round(driver, context, clock: new HurriedClock())
+            .WalkAsync([Stream(network, 1, 22), Stream(network, 2, 24)], interruption.Token, Cancel);
+
+        Assert.Equal(new RoundResult(0, 0, 0, TurnedAway: 1), walked);
+        Assert.Equal(3, asked);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit[] recorded =
+        [
+            .. (await new StreamVisitRepository(reading).ListAsync(Cancel))
+                .Where(visit => visit.NetworkId.Value == network),
+        ];
+
+        Assert.Equal(2, recorded.Length);
+        Assert.All(recorded, visit => Assert.Equal(VisitOutcome.Interrupted, visit.Outcome));
+    }
+
+    private static TimeSpan Sum(IEnumerable<TimeSpan> waits)
+        => waits.Aggregate(TimeSpan.Zero, (total, wait) => total + wait);
+
+    private static ChannelScript EveryTunerBusy()
+        => new() { Refusal = new DriverProblem(SessionRefusalTitles.NoDeviceFree, ["Every usable tuner is busy."]) };
 
     [Fact]
     public async Task AStreamDeclaringAServiceTheCatalogueDoesNotHoldSuggestsARescan()
@@ -533,6 +681,35 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
 
         Assert.Equal(VisitOutcome.Incomplete, visit.Outcome);
         Assert.Equal(0, visit.ConsecutiveUnheard);
+        Assert.True(visit.ReachedTheGoal);
+        Assert.Equal(
+            visit.LastAttemptedAt + new CollectionSettings().BetweenVisits,
+            CollectionBackOff.NotBefore(visit, new CollectionSettings()));
+    }
+
+    [Fact]
+    public async Task AServiceThatHoldsNoGuideDoesNotKeepItsStreamFromTheGoal()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), StayingOpenAfter(LastSegmentOnly(network, 1, carried: 2)));
+
+        await using CarinaDbContext context = database.Open();
+
+        await new ProgrammeRepository(context).AddAsync(Reaching(network, 1049, DateTime.UtcNow.AddDays(9)), Cancel);
+        await Round(driver, context, Lossy).WalkAsync(
+            [Stream(network, 1, 22) with { Services = [new ServiceId(1049), new ServiceId(1433)] }],
+            Cancel,
+            Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit visit = (await new StreamVisitRepository(reading).FindAsync(
+            new NetworkId(network),
+            new TransportStreamId(1),
+            Cancel))!;
+
+        Assert.Equal(VisitOutcome.Incomplete, visit.Outcome);
         Assert.True(visit.ReachedTheGoal);
         Assert.Equal(
             visit.LastAttemptedAt + new CollectionSettings().BetweenVisits,

@@ -224,6 +224,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();
         services.AddScoped<CollectionRound>();
+        services.AddScoped<WalkOpeningLook>();
         services.AddScoped<LogoVisitor>();
         services.AddScoped<LogoWriter>();
         services.AddScoped<LogoRound>();

@@ -45,6 +45,22 @@ public static class GuideCoverage
         => UtcTimes.Optional(coveredUntil, nameof(coveredUntil)) is { } reach
             && reach >= WantedReachFrom(measuredFrom, wanted);
 
+    /// <summary>
+    /// Whether a stream's guide reaches the wanted coverage on every service that holds one. A service
+    /// holding no programme is left out, and a stream on which none holds any has not reached it.
+    /// </summary>
+    public static bool IsMetByEveryServiceHoldingAGuide(
+        IReadOnlyList<DateTime?> coveredUntil,
+        DateTime measuredFrom,
+        TimeSpan wanted)
+    {
+        ArgumentNullException.ThrowIfNull(coveredUntil);
+
+        DateTime?[] held = [.. coveredUntil.Where(until => until is not null)];
+
+        return held.Length > 0 && held.All(until => IsMet(until, measuredFrom, wanted));
+    }
+
     private static DateTime? HeardAt(StreamVisit visit)
         => visit.Outcome is VisitOutcome.Complete or VisitOutcome.BasicOnly or VisitOutcome.Incomplete
             ? visit.LastAttemptedAt
