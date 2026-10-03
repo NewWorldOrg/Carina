@@ -849,6 +849,77 @@ public sealed class ReservationEndpointTests
             data.GetProperty("displaced").EnumerateArray().Select(entry => entry.GetProperty("id").GetGuid()));
     }
 
+    [Fact(DisplayName = "the asked reservation is not named as displaced when a segment reserved alongside takes its seat")]
+    public async Task TheAskedReservationIsNotNamedWhenASegmentReservedAlongsideTakesItsSeat()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001, related: [new RelatedProgramme(ReservationFeature.Network, 1032, 5001, RelationKind.Relayed)]);
+        feature.Announced(5001, serviceId: 1032, startsAt: Noon.AddHours(1), endsAt: Noon.AddHours(2).AddMinutes(30));
+
+        (HttpStatusCode status, JsonElement made) =
+            await feature.PostAsync("/api/reservations", Asking(4001, priority: 50));
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal(2, feature.Reservations.Held.Count);
+        Assert.Equal(
+            ReservationState.Conflict,
+            feature.Reservations.Held.Single(held => held.Id.Value == Identifier(made)).State);
+        Assert.Empty(made.GetProperty("data").GetProperty("displaced").EnumerateArray());
+    }
+
+    [Fact(DisplayName = "reservations displaced at the same start come back in the order of their ids")]
+    public async Task ReservationsDisplacedAtTheSameStartComeBackInTheOrderOfTheirIds()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4003, serviceId: 1040, startsAt: Noon.AddHours(2), endsAt: Noon.AddHours(4));
+        Reservation one = feature.Booked(4001, serviceId: 1024, startsAt: Noon.AddHours(2), priority: 10);
+        Reservation other = feature.Booked(4002, serviceId: 1032, startsAt: Noon.AddHours(2), priority: 10);
+
+        (_, JsonElement made) = await feature.PostAsync(
+            "/api/reservations",
+            Asking(4003, serviceId: 1040, priority: 50));
+
+        Assert.Equal(
+            new[] { one.Id.Value, other.Id.Value }.Order(),
+            made.GetProperty("data").GetProperty("displaced").EnumerateArray()
+                .Select(entry => entry.GetProperty("id").GetGuid()));
+    }
+
+    [Fact(DisplayName = "a reservation left with nowhere to tune by a change is not named as displaced")]
+    public async Task AReservationLeftWithNowhereToTuneByAChangeIsNotNamedAsDisplaced()
+    {
+        await using var feature = new ReservationFeature(seats: 2);
+        Reservation revised = feature.Booked(4001, serviceId: 1024, priority: 50);
+        Reservation stranded = feature.Booked(4002, serviceId: 1032, priority: 10);
+        feature.Tuning.Refuse(1032, TuningRefusal.NoSelectedChannel);
+
+        (_, JsonElement raised) = await feature.PatchAsync(
+            $"/api/reservations/{revised.Id.Value}",
+            new { priority = 90 });
+
+        Assert.True(stranded.ReceptionUnavailable);
+        Assert.Empty(raised.GetProperty("data").GetProperty("displaced").EnumerateArray());
+    }
+
+    [Fact(DisplayName = "cancelling names a reservation that fell in the same recalculation for another reason")]
+    public async Task CancellingNamesAReservationThatFellInTheSameRecalculationForAnotherReason()
+    {
+        await using var feature = new ReservationFeature(seats: 3);
+        feature.Booked(4001, serviceId: 1024, priority: 50);
+        Reservation fell = feature.Booked(4002, serviceId: 1032, priority: 10);
+        Reservation cancelled = feature.Booked(4003, serviceId: 1040, priority: 5);
+        feature.Seating.Capacity = ReservationFeature.Terrestrial(1);
+
+        (HttpStatusCode status, JsonElement answered) =
+            await feature.PostAsync($"/api/reservations/{cancelled.Id.Value}/cancel");
+        JsonElement displaced =
+            Assert.Single(answered.GetProperty("data").GetProperty("displaced").EnumerateArray());
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(fell.Id.Value, displaced.GetProperty("id").GetGuid());
+        Assert.Equal("conflict", Standing(displaced));
+    }
+
     [Fact]
     public async Task ChangingOneMarginLeavesTheOtherWhereItWas()
     {

@@ -823,6 +823,35 @@ public sealed class ReservationSchedulingServiceTests
     }
 
     [Fact]
+    public async Task ARecordingThatKeepsItsSeatIsNotNamedAsDisplacedByAHigherPriority()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = TwoServices();
+
+        Reservation running = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Now.AddMinutes(-10),
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            startAt: Now.AddMinutes(-10),
+            endAt: Now.AddMinutes(50),
+            priority: new Priority(1));
+        ledger.Standing(running);
+
+        Reservation wanting = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            startAt: Now,
+            endAt: Now.AddMinutes(30),
+            priority: new Priority(99));
+
+        SchedulingRun run = await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial))
+            .CreateAsync(wanting, Cancel);
+
+        Assert.Equal(ReservationState.Scheduled, running.State);
+        Assert.Empty(run.Displaced);
+    }
+
+    [Fact]
     public async Task ARecordingWhoseServiceCannotBeTunedAnyMoreKeepsTheTunerItIsRunningOn()
     {
         WatchedWrite write = new();
