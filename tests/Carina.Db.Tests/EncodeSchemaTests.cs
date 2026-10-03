@@ -448,7 +448,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(refusedBy, refusal.ConstraintName);
     }
 
-    [Theory(DisplayName = "where the artefact's clock stands is a start and a head skip together, the skip between nothing and five seconds, lengths only beside them, and only on a job that ran")]
+    [Theory(DisplayName = "where the artefact's clock stands is a start and a head skip together, the start less than one turn of the clock before zero, the skip between nothing and five seconds, lengths only beside them, and only on a job that ran")]
     [InlineData("'Running'", Started, "interval '08:28:19.474078', interval '00:00:00.5072', interval '00:34:57.502489', NULL", null)]
     [InlineData("'Completed'", Started, "interval '08:28:19.474078', interval '00:00:00.5072', interval '00:34:57.502489', interval '00:34:56.7947'", null)]
     [InlineData("'Running'", Started, "interval '0', interval '0', NULL, NULL", null)]
@@ -459,7 +459,9 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
     [InlineData("'Running'", Started, "interval '08:28:19.474078', interval '00:00:05.000001', NULL, NULL", "ck_encode_job_alignment")]
     [InlineData("'Running'", Started, "interval '08:28:19.474078', interval '17:16:10', NULL, NULL", "ck_encode_job_alignment")]
     [InlineData("'Running'", Started, "interval '08:28:19.474078', interval '-00:00:01', NULL, NULL", "ck_encode_job_alignment")]
-    [InlineData("'Running'", Started, "interval '-00:00:01', interval '0', NULL, NULL", "ck_encode_job_alignment")]
+    [InlineData("'Running'", Started, "interval '-00:00:03.6', interval '00:00:00.5072', NULL, NULL", null)]
+    [InlineData("'Running'", Started, "interval '-26:30:43.717688', interval '0', NULL, NULL", null)]
+    [InlineData("'Running'", Started, "interval '-26:30:43.717689', interval '0', NULL, NULL", "ck_encode_job_alignment")]
     [InlineData("'Running'", Started, "NULL, NULL, interval '00:34:57.502489', NULL", "ck_encode_job_alignment")]
     [InlineData("'Running'", Started, "NULL, NULL, NULL, interval '00:34:56.7947'", "ck_encode_job_alignment")]
     [InlineData("'Running'", Started, "interval '0', interval '0', interval '0', NULL", "ck_encode_job_alignment")]

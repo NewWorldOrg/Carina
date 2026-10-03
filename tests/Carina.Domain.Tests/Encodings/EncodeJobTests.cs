@@ -472,6 +472,54 @@ public sealed class EncodeJobTests
         Assert.Equal(name, job.ArtefactName);
     }
 
+    [Fact(DisplayName = "a job that fails or is called off lets go of the name it held, and still says what it was called")]
+    public void AJobThatDoesNotCompleteLetsGoOfTheNameItHeld()
+    {
+        EncodeJob failed = Named();
+        EncodeJob cancelled = Named();
+
+        failed.Fail(EncodeFailure.NotEnoughRoom, "the disk is full", Ended);
+        cancelled.Cancel(Ended);
+
+        Assert.Equal(Ended, failed.NameGivenUpAt);
+        Assert.Equal(Ended, cancelled.NameGivenUpAt);
+        Assert.Equal(EncodeFileName.Artefact(failed.RecordingId, failed.ProfileId), failed.ArtefactName);
+    }
+
+    [Fact(DisplayName = "a job that named nothing has no name to let go of when it fails or is called off")]
+    public void AJobThatNamedNothingHasNoNameToLetGoOf()
+    {
+        EncodeJob failed = Running();
+        EncodeJob cancelled = Waiting();
+
+        failed.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Ended);
+        cancelled.Cancel(Ended);
+
+        Assert.Null(failed.NameGivenUpAt);
+        Assert.Null(cancelled.NameGivenUpAt);
+    }
+
+    [Fact(DisplayName = "a name already given up keeps the moment it was given up when the job then fails")]
+    public void ANameAlreadyGivenUpKeepsTheMomentItWasGivenUp()
+    {
+        EncodeJob job = Named();
+        job.GiveUpTheName(Started);
+
+        job.Fail(EncodeFailure.CapabilityUnavailable, "the rename was refused", Ended);
+
+        Assert.Equal(Started, job.NameGivenUpAt);
+    }
+
+    [Fact(DisplayName = "a job that completes keeps the name it holds")]
+    public void AJobThatCompletesKeepsTheNameItHolds()
+    {
+        EncodeJob job = Named();
+
+        job.Complete(Ended);
+
+        Assert.Null(job.NameGivenUpAt);
+    }
+
     [Fact(DisplayName = "a job that named nothing cannot be read back as having given a name up")]
     public void AJobThatNamedNothingCannotHaveGivenANameUp()
         => Assert.Throws<ArgumentException>(() => EncodeJob.Rehydrate(

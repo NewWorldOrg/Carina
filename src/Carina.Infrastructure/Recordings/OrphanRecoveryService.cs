@@ -64,7 +64,7 @@ public sealed class OrphanRecoveryService(
 
             try
             {
-                await OneAsync(recording, sessions, another, now, tally, cancellationToken);
+                await OneAsync(recording, hello, sessions, another, now, tally, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -87,6 +87,7 @@ public sealed class OrphanRecoveryService(
 
     private async Task OneAsync(
         Recording recording,
+        DriverHello hello,
         IReadOnlyList<SessionSnapshot> sessions,
         bool another,
         DateTime now,
@@ -94,10 +95,11 @@ public sealed class OrphanRecoveryService(
         CancellationToken cancellationToken)
     {
         SessionSnapshot? named = SessionOf(sessions, recording);
+        RecordingSessionCount? last = RecordingSessionCount.Ending(hello, named);
 
         if (SessionRefusalReading.FilledTheDisk(named))
         {
-            await FailOnAFullDiskAsync(recording, now, tally, cancellationToken);
+            await FailOnAFullDiskAsync(recording, last, now, tally, cancellationToken);
 
             return;
         }
@@ -128,7 +130,7 @@ public sealed class OrphanRecoveryService(
                 break;
 
             default:
-                await MarkAsync(recording, another, now, tally, cancellationToken);
+                await MarkAsync(recording, another, last, now, tally, cancellationToken);
 
                 break;
         }
@@ -262,6 +264,7 @@ public sealed class OrphanRecoveryService(
     private async Task MarkAsync(
         Recording recording,
         bool another,
+        RecordingSessionCount? last,
         DateTime now,
         Tally tally,
         CancellationToken cancellationToken)
@@ -274,6 +277,8 @@ public sealed class OrphanRecoveryService(
             recording.Id,
             loaded =>
             {
+                last?.LastInto(loaded, now);
+
                 foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(
                              another,
                              weighed,
@@ -309,6 +314,7 @@ public sealed class OrphanRecoveryService(
     /// </summary>
     private async Task FailOnAFullDiskAsync(
         Recording recording,
+        RecordingSessionCount? last,
         DateTime now,
         Tally tally,
         CancellationToken cancellationToken)
@@ -319,6 +325,8 @@ public sealed class OrphanRecoveryService(
             recording.Id,
             loaded =>
             {
+                last?.LastInto(loaded, now);
+
                 foreach (RecordingFault fault in RecordingFaults.OfAFullDisk(weighed))
                 {
                     loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));

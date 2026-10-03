@@ -133,7 +133,6 @@ public sealed class FfmpegCaptionTranscriber(
             CaptionFlowFault? fault = await CaptionFrames.DrawAsync(
                 running.StandardOutput.BaseStream,
                 canvas,
-                CaptionClock.FollowedThrough,
                 (at, picture) =>
                 {
                     cues.Add(Cue(at, picture));

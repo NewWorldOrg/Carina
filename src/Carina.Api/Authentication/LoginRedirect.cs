@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace Carina.Api.Authentication;
 
 public static class LoginRedirect
@@ -26,7 +29,7 @@ public static class LoginRedirect
             return Home;
         }
 
-        return target;
+        return Escaped(target);
     }
 
     public static string For(string? target)
@@ -34,6 +37,34 @@ public static class LoginRedirect
 
     public static string AfterAFailedSignIn(string? target)
         => $"{For(target)}&{ErrorKey}={TheIdentityProviderFailed}";
+
+    private static string Escaped(string target)
+    {
+        if (target.All(letter => letter is > ' ' and <= '~'))
+        {
+            return target;
+        }
+
+        var escaped = new StringBuilder(target.Length * 3);
+        Span<byte> encoded = stackalloc byte[4];
+
+        foreach (Rune rune in target.EnumerateRunes())
+        {
+            if (rune.Value is > ' ' and <= '~')
+            {
+                escaped.Append((char)rune.Value);
+
+                continue;
+            }
+
+            foreach (byte part in encoded[..rune.EncodeToUtf8(encoded)])
+            {
+                escaped.Append(CultureInfo.InvariantCulture, $"%{part:X2}");
+            }
+        }
+
+        return escaped.ToString();
+    }
 
     private static bool LeadsBackToTheLoginScreen(string target)
         => target.Equals(Path, StringComparison.OrdinalIgnoreCase)

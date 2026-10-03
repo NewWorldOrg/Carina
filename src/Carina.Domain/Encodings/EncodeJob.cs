@@ -43,8 +43,8 @@ public sealed class EncodeJob
     public bool MakesItAgain { get; private set; }
 
     /// <summary>
-    /// When this job let go of the name it holds to a job asked to make the artefact again. What this
-    /// job made is still named here.
+    /// When this job let go of the name it holds: to a job asked to make the artefact again, or by ending
+    /// without completing. The name is still written here.
     /// </summary>
     public DateTime? NameGivenUpAt { get; private set; }
 
@@ -407,6 +407,7 @@ public sealed class EncodeJob
         EndedAt = UtcTimes.Required(at, nameof(at));
         Failure = new EncodeFailureDetail(failure, note, at);
         Programme = null;
+        LetGoOfTheName(at);
     }
 
     public void Cancel(DateTime at)
@@ -419,6 +420,15 @@ public sealed class EncodeJob
         Status = EncodeJobStatus.Cancelled;
         EndedAt = UtcTimes.Required(at, nameof(at));
         Programme = null;
+        LetGoOfTheName(at);
+    }
+
+    private void LetGoOfTheName(DateTime at)
+    {
+        if (ArtefactName is not null && NameGivenUpAt is null)
+        {
+            NameGivenUpAt = at;
+        }
     }
 
     public void Requeue(DateTime at)

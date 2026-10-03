@@ -81,13 +81,43 @@ public sealed class DriverConfigurationTests
     }
 
     [Fact]
-    public void AMissingSettingIsReportedRatherThanDefaulted()
+    public void AMissingSettingWithoutADefaultIsReported()
     {
         DriverConfigurationResult result = Read("""{ "tuner": { "backend": "fake" } }""");
 
-        Assert.Contains(result.Problems, problem => problem.StartsWith("socketPath:"));
         Assert.Contains(result.Problems, problem => problem.StartsWith("outputRoots:"));
         Assert.Contains(result.Problems, problem => problem.StartsWith("devices:"));
+        Assert.DoesNotContain(result.Problems, problem => problem.StartsWith("socketPath:"));
+        Assert.DoesNotContain(result.Problems, problem => problem.StartsWith("shutdownGraceHours:"));
+    }
+
+    [Fact]
+    public void TheSocketAndTheGraceTakeTheirDefaultsWhenLeftOut()
+    {
+        DriverConfigurationResult result = Read(
+            Complete
+                .Replace("\"socketPath\": \"/run/carina/driver.sock\",", string.Empty)
+                .Replace("\"shutdownGraceHours\": 6,", string.Empty)
+        );
+
+        Assert.Empty(result.Problems);
+        Assert.NotNull(result.Configuration);
+        Assert.Equal("/run/carina/driver.sock", result.Configuration.SocketPath);
+        Assert.Equal(6, result.Configuration.ShutdownGraceHours);
+    }
+
+    [Fact]
+    public void AWrittenSocketAndGraceAreKept()
+    {
+        DriverConfigurationResult result = Read(
+            Replace("socketPath", "\"/run/elsewhere/driver.sock\"")
+                .Replace("\"shutdownGraceHours\": 6,", "\"shutdownGraceHours\": 12,")
+        );
+
+        Assert.Empty(result.Problems);
+        Assert.NotNull(result.Configuration);
+        Assert.Equal("/run/elsewhere/driver.sock", result.Configuration.SocketPath);
+        Assert.Equal(12, result.Configuration.ShutdownGraceHours);
     }
 
     [Fact]

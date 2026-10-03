@@ -87,8 +87,10 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
     [Theory]
     [InlineData("/api/tuners", "text/html")]
     [InlineData("/api/events", "text/event-stream")]
-    [InlineData("/recordings/1.ts", "*/*")]
-    [InlineData("/recordings/1.ts", "video/mp2t")]
+    [InlineData("/api/videos/1", "*/*")]
+    [InlineData("/api/videos/1", "video/mp2t")]
+    [InlineData("/programs", "*/*")]
+    [InlineData("/programs", "video/mp2t")]
     public async Task ARequestThatIsNotAScreenIsRefusedRatherThanRedirected(string path, string accept)
     {
         DefaultHttpContext context = Asking("GET", path, accept);
@@ -100,12 +102,14 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
         Assert.False(context.Response.Headers.ContainsKey("Location"));
     }
 
-    [Fact(DisplayName = "BR-AU-020: an API request refused for carrying no session cookie is written down")]
-    public async Task BrAu020AnApiRequestRefusedForCarryingNoSessionCookieIsWrittenDown()
+    [Theory(DisplayName = "BR-AU-020: an API request refused for carrying no session cookie is written down")]
+    [InlineData("/api/tuners", "application/json")]
+    [InlineData("/api/videos/1", "video/mp2t")]
+    public async Task BrAu020AnApiRequestRefusedForCarryingNoSessionCookieIsWrittenDown(string path, string accept)
     {
         var heard = new RecordingLogger();
 
-        await RunAsync(Asking("GET", "/api/tuners"), heard: heard);
+        await RunAsync(Asking("GET", path, accept), heard: heard);
 
         string said = Assert.Single(heard.Lines);
 
@@ -128,7 +132,7 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
 
     [Theory(DisplayName = "BR-AU-020: a screen sent to the login screen, a request outside the API and an open surface are not written down")]
     [InlineData("/programs", "text/html")]
-    [InlineData("/recordings/1.ts", "video/mp2t")]
+    [InlineData("/programs", "application/json")]
     [InlineData("/api/health", "application/json")]
     public async Task BrAu020WhatIsNotAnApiRefusalIsNotWrittenDown(string path, string accept)
     {

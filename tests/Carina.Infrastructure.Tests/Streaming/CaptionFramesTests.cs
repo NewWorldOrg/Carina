@@ -59,11 +59,24 @@ public sealed class CaptionFramesTests
     }
 
     [Fact]
-    public async Task AFrameStampedBeyondTheBroadcastClockIsNotACaptionTheBroadcastSent()
+    public async Task TheClearFfmpegStampsTheLongestDisplayTimeAfterTheLastPictureIsNotCarriedLive()
     {
-        List<LiveFrame> carried = await Carried(Nut((100L, Painted(0, 0)), ((long)LivePts.ComesAroundAt, Blank())));
+        List<LiveFrame> carried = await Carried(Nut((100L, Painted(0, 0)), (100L + (long)CaptionFrames.ShownIndefinitely, Blank())));
 
         Assert.Equal([100UL], carried.Select(frame => frame.Pts.Value));
+    }
+
+    [Fact]
+    public async Task BrPd007ACaptionStampedAfterTheBroadcastClockCameAroundIsStillCarriedLive()
+    {
+        ulong beyond = LivePts.ComesAroundAt + 9_000;
+
+        List<LiveFrame> carried = await Carried(Nut(
+            ((long)LivePts.ComesAroundAt - 9_000, Painted(0, 0)),
+            ((long)beyond, Painted(1, 1)),
+            ((long)beyond + 90_000, Blank())));
+
+        Assert.Equal([LivePts.ComesAroundAt - 9_000, beyond, beyond + 90_000], carried.Select(frame => frame.Pts.Value));
     }
 
     [Fact]
@@ -179,7 +192,7 @@ public sealed class CaptionFramesTests
     }
 
     [Fact]
-    public async Task DrawingTheSamePicturesOnEitherClockSaysTheSameChangesBelowThirtyThreeBits()
+    public async Task CarryingTheCaptionsLiveSaysTheSameChangesAsDrawingThem()
     {
         byte[] nut = Nut((100L, Painted(0, 0)), (200L, Painted(0, 0)), (300L, Painted(2, 1)), (400L, Blank()));
 
@@ -197,7 +210,6 @@ public sealed class CaptionFramesTests
         CaptionFlowFault? fault = await CaptionFrames.DrawAsync(
             new MemoryStream(nut),
             Small,
-            CaptionClock.FollowedThrough,
             (at, picture) =>
             {
                 drawn.Add((at.Value, picture is null));
