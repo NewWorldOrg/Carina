@@ -10,6 +10,10 @@ public enum EncodeScratchKind
     Chapters = 2,
 
     ReplacedArtefact = 3,
+
+    Captions = 4,
+
+    CaptionedWork = 5,
 }
 
 public enum EncodeScratchFate

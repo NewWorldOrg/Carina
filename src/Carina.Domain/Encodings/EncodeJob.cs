@@ -8,6 +8,11 @@ public sealed class EncodeJob
 {
     public const int FirstAttempt = 1;
 
+    /// <summary>
+    /// How many times in a row a text track of captions is tried from the same captions before it is left.
+    /// </summary>
+    public const int CaptionTrackTriesAtMost = 3;
+
     private EncodeJob()
     {
     }
@@ -64,6 +69,22 @@ public sealed class EncodeJob
 
     public ChapterReading? Chapters { get; private set; }
 
+    /// <summary>
+    /// What became of the text track of captions for this job's artefact, or nothing while none was tried.
+    /// </summary>
+    public EncodeCaptionTrack? CaptionTrack { get; private set; }
+
+    /// <summary>
+    /// When the captions the track was tried from were taken: the moment the recording says its captions were
+    /// made. Nothing while no track was tried.
+    /// </summary>
+    public DateTime? CaptionTrackFrom { get; private set; }
+
+    /// <summary>
+    /// How many times in a row the track from those captions failed.
+    /// </summary>
+    public int CaptionTrackAttempts { get; private set; }
+
     public bool HasEnded => EncodeStandings.IsTerminal(Status);
 
     /// <summary>
@@ -82,6 +103,16 @@ public sealed class EncodeJob
     public EncodeFileName WorkFileName => EncodeFileName.Working(RecordingId, Id, Attempt);
 
     public EncodeFileName ChaptersFileName => EncodeFileName.Chapters(RecordingId, Id, Attempt);
+
+    public EncodeFileName CaptionTrackFileName => EncodeFileName.CaptionTrack(RecordingId, Id, Attempt);
+
+    public EncodeFileName CaptionedFileName => EncodeFileName.Captioned(RecordingId, Id, Attempt);
+
+    /// <summary>
+    /// The file a running job places as its artefact: the work file with the text track of captions put in
+    /// when this attempt put one in, and the work file as the encode wrote it otherwise.
+    /// </summary>
+    public EncodeFileName FileToPlace => CaptionTrack is EncodeCaptionTrack.Added ? CaptionedFileName : WorkFileName;
 
     public static EncodeJob Queue(
         EncodeJobId id,
@@ -153,7 +184,10 @@ public sealed class EncodeJob
         ChapterReading? chapters,
         bool makesItAgain = false,
         DateTime? nameGivenUpAt = null,
-        DateTime? replacedAt = null)
+        DateTime? replacedAt = null,
+        EncodeCaptionTrack? captionTrack = null,
+        DateTime? captionTrackFrom = null,
+        int captionTrackAttempts = 0)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(recordingId);
@@ -184,6 +218,16 @@ public sealed class EncodeJob
         if (replacedAt is not null && (status is not EncodeJobStatus.Completed || artefactName is null))
         {
             throw new ArgumentException("Only a job that completed and named what it made is replaced.", nameof(replacedAt));
+        }
+
+        if ((captionTrack is null) != (captionTrackFrom is null))
+        {
+            throw new ArgumentException("A text track of captions is settled with what became of it and when the captions it came from were taken, or not at all.", nameof(captionTrack));
+        }
+
+        if (captionTrackAttempts < 0 || (captionTrackAttempts > 0 && captionTrack is not EncodeCaptionTrack.Failed))
+        {
+            throw new ArgumentOutOfRangeException(nameof(captionTrackAttempts), captionTrackAttempts, "Failures of a text track are counted only while the track has failed.");
         }
 
         if (programme is not null && status is not EncodeJobStatus.Running)
@@ -219,8 +263,57 @@ public sealed class EncodeJob
             Headway = headway,
             Timeline = timeline,
             Chapters = chapters,
+            CaptionTrack = captionTrack is { } track ? Track(track) : null,
+            CaptionTrackFrom = UtcTimes.Optional(captionTrackFrom, nameof(captionTrackFrom)),
+            CaptionTrackAttempts = captionTrackAttempts,
         };
     }
+
+    /// <summary>
+    /// Whether this job's artefact is to have a text track put in from the captions taken from its recording
+    /// at <paramref name="captionsMadeAt"/>: it stands as the recording's artefact, and no track was tried
+    /// from those captions, or it failed fewer times than it is tried.
+    /// </summary>
+    public bool AwaitsCaptionTrack(DateTime captionsMadeAt)
+    {
+        DateTime madeAt = UtcTimes.Required(captionsMadeAt, nameof(captionsMadeAt));
+
+        if (!StandsAsTheArtefact)
+        {
+            return false;
+        }
+
+        return CaptionTrackFrom != madeAt
+            || (CaptionTrack is EncodeCaptionTrack.Failed && CaptionTrackAttempts < CaptionTrackTriesAtMost);
+    }
+
+    /// <summary>
+    /// Writes down what became of the text track tried from the captions taken at <paramref name="from"/>:
+    /// while the job runs, for the artefact it is about to place, or once its artefact
+    /// stands as the recording's.
+    /// </summary>
+    public void Tracked(EncodeCaptionTrack outcome, DateTime from)
+    {
+        EncodeCaptionTrack settled = Track(outcome);
+        DateTime madeAt = UtcTimes.Required(from, nameof(from));
+
+        if (Status is not EncodeJobStatus.Running && !StandsAsTheArtefact)
+        {
+            throw new InvalidOperationException(
+                $"A text track of captions is put into an artefact being made or one that stands, and this job stands at {Status}.");
+        }
+
+        int before = CaptionTrack is EncodeCaptionTrack.Failed && CaptionTrackFrom == madeAt ? CaptionTrackAttempts : 0;
+
+        CaptionTrack = settled;
+        CaptionTrackFrom = madeAt;
+        CaptionTrackAttempts = settled is EncodeCaptionTrack.Failed ? before + 1 : 0;
+    }
+
+    private static EncodeCaptionTrack Track(EncodeCaptionTrack track)
+        => Enum.IsDefined(track)
+            ? track
+            : throw new ArgumentOutOfRangeException(nameof(track), track, "A text track of captions ends in one of the ways named here.");
 
     public void Start(DateTime at)
     {
@@ -444,6 +537,9 @@ public sealed class EncodeJob
         Headway = null;
         Timeline = null;
         Chapters = null;
+        CaptionTrack = null;
+        CaptionTrackFrom = null;
+        CaptionTrackAttempts = 0;
     }
 
     /// <summary>

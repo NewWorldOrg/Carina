@@ -9,7 +9,8 @@ namespace Carina.Infrastructure.Integrity;
 
 /// <summary>
 /// The files encode work claims: what a job still in hand writes on the way and the artefact it is
-/// making, and the artefact a completed job made that stands for a recording the ledger still holds.
+/// making, what is being written to put a text track of captions into an artefact, and the artefact a
+/// completed job made that stands for a recording the ledger still holds.
 /// </summary>
 public sealed class EncodeWorkLedger(CarinaDbContext context) : IEncodeWorkLedger
 {
@@ -18,12 +19,19 @@ public sealed class EncodeWorkLedger(CarinaDbContext context) : IEncodeWorkLedge
         .. Enum.GetValues<EncodeJobStatus>().Where(status => !EncodeStandings.IsTerminal(status)),
     ];
 
+    private static readonly IReadOnlyList<EncodeScratchKind> CaptionTrackWork =
+    [
+        EncodeScratchKind.Captions,
+        EncodeScratchKind.CaptionedWork,
+    ];
+
     public async Task<IReadOnlyList<DeclaredFile>> ListAsync(CancellationToken cancellationToken)
     {
         List<Row> scratch = await (
                 from written in context.Set<EncodeScratchFile>().AsNoTracking()
                 join job in context.Set<EncodeJob>().AsNoTracking() on written.JobId equals job.Id
-                where written.RemovedAt == null && StillInHand.Contains(job.Status)
+                where written.RemovedAt == null
+                      && (StillInHand.Contains(job.Status) || CaptionTrackWork.Contains(written.Kind))
                 select new Row(written.OutputRoot, written.FileName))
             .ToListAsync(cancellationToken);
 

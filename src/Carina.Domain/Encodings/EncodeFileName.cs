@@ -6,9 +6,9 @@ using Carina.Domain.Recordings;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// The name of a file this domain writes under an output root. A work file, and the chapters an
-/// attempt reads, are named for the recording, the job and the attempt; the artefact is named for
-/// the recording and the profile.
+/// The name of a file this domain writes under an output root. A work file, the chapters an attempt
+/// reads, the text of captions a track is made from and the artefact with that track put in are named
+/// for the recording, the job and the attempt; the artefact is named for the recording and the profile.
 /// </summary>
 public sealed class EncodeFileName : CommonValueObject<string>
 {
@@ -19,6 +19,10 @@ public sealed class EncodeFileName : CommonValueObject<string>
     public const string ChaptersExtension = ".chapters";
 
     public const string ArtefactExtension = ".mp4";
+
+    public const string CaptionTrackExtension = ".vtt";
+
+    public const string CaptionedExtension = ".captioned";
 
     private static readonly char[] Separators = ['/', '\\', '\0'];
 
@@ -49,6 +53,12 @@ public sealed class EncodeFileName : CommonValueObject<string>
             $"{recording.Wire}.{job.Wire}.attempt{attempt}{ChaptersExtension}"));
     }
 
+    public static EncodeFileName CaptionTrack(RecordingId recording, EncodeJobId job, int attempt)
+        => Attempted(recording, job, attempt, CaptionTrackExtension);
+
+    public static EncodeFileName Captioned(RecordingId recording, EncodeJobId job, int attempt)
+        => Attempted(recording, job, attempt, CaptionedExtension);
+
     public static EncodeFileName Artefact(RecordingId recording, EncodeProfileId profile)
     {
         ArgumentNullException.ThrowIfNull(recording);
@@ -69,6 +79,17 @@ public sealed class EncodeFileName : CommonValueObject<string>
         ArgumentNullException.ThrowIfNull(job);
 
         return Value.Contains(job.Wire, StringComparison.Ordinal);
+    }
+
+    private static EncodeFileName Attempted(RecordingId recording, EncodeJobId job, int attempt, string extension)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(job);
+        ArgumentOutOfRangeException.ThrowIfLessThan(attempt, EncodeJob.FirstAttempt);
+
+        return new EncodeFileName(string.Create(
+            CultureInfo.InvariantCulture,
+            $"{recording.Wire}.{job.Wire}.attempt{attempt}{extension}"));
     }
 
     private static string Validated(string value)
