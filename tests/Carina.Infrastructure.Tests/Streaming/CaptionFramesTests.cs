@@ -145,6 +145,72 @@ public sealed class CaptionFramesTests
         Assert.True(into.Reader.Completion.IsCompleted);
     }
 
+    [Fact]
+    public async Task BrPd016AClockFollowedThroughKeepsPicturesStampedBeyondThirtyThreeBits()
+    {
+        ulong beyond = LivePts.ComesAroundAt + 9_000;
+
+        List<(ulong At, bool Clears)> drawn = await Drawn(Nut(
+            ((long)LivePts.ComesAroundAt - 9_000, Painted(0, 0)),
+            ((long)beyond, Painted(1, 1)),
+            ((long)beyond + 90_000, Blank())));
+
+        Assert.Equal([(LivePts.ComesAroundAt - 9_000, false), (beyond, false), (beyond + 90_000, true)], drawn);
+    }
+
+    [Fact]
+    public async Task BrPd016TheClearFfmpegStampsTheLongestDisplayTimeAfterTheLastPictureIsNotOneTheBroadcastSent()
+    {
+        List<(ulong At, bool Clears)> drawn = await Drawn(Nut(
+            (900_000L, Painted(0, 0)),
+            (900_000L + (long)CaptionFrames.ShownIndefinitely, Blank())));
+
+        Assert.Equal([(900_000UL, false)], drawn);
+    }
+
+    [Fact]
+    public async Task AClearAJumpShortOfTheLongestDisplayTimeAfterTheLastPictureIsStillKept()
+    {
+        long later = 900_000L + (long)CaptionFrames.ShownIndefinitely - 1;
+
+        List<(ulong At, bool Clears)> drawn = await Drawn(Nut((900_000L, Painted(0, 0)), (later, Blank())));
+
+        Assert.Equal([(900_000UL, false), ((ulong)later, true)], drawn);
+    }
+
+    [Fact]
+    public async Task DrawingTheSamePicturesOnEitherClockSaysTheSameChangesBelowThirtyThreeBits()
+    {
+        byte[] nut = Nut((100L, Painted(0, 0)), (200L, Painted(0, 0)), (300L, Painted(2, 1)), (400L, Blank()));
+
+        List<(ulong At, bool Clears)> followed = await Drawn(nut);
+
+        Assert.Equal(
+            (await Carried(nut)).Select(frame => (frame.Pts.Value, LiveCaptions.Clears(frame))),
+            followed);
+    }
+
+    private static async Task<List<(ulong At, bool Clears)>> Drawn(byte[] nut)
+    {
+        List<(ulong At, bool Clears)> drawn = [];
+
+        CaptionFlowFault? fault = await CaptionFrames.DrawAsync(
+            new MemoryStream(nut),
+            Small,
+            CaptionClock.FollowedThrough,
+            (at, picture) =>
+            {
+                drawn.Add((at.Value, picture is null));
+
+                return true;
+            },
+            CancellationToken.None);
+
+        Assert.Null(fault);
+
+        return drawn;
+    }
+
     private static async Task<List<LiveFrame>> Carried(byte[] nut)
     {
         Channel<LiveFrame> into = Channel.CreateUnbounded<LiveFrame>();
