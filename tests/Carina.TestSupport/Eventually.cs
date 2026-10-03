@@ -6,50 +6,60 @@ public static class Eventually
 
     private static TimeSpan Interval { get; } = TimeSpan.FromMilliseconds(10);
 
-    public static async Task Happens(Func<bool> condition, string what)
+    /// <summary>
+    /// Waits until <paramref name="condition"/> holds. It is looked at once more after the patience
+    /// runs out, so a condition met during the last wait is not taken as one that never was.
+    /// </summary>
+    public static async Task Happens(Func<bool> condition, string what, TimeSpan? patience = null)
     {
         ArgumentNullException.ThrowIfNull(condition);
 
+        TimeSpan allowed = patience ?? Patience;
         long start = Environment.TickCount64;
 
-        while (Environment.TickCount64 - start < Patience.TotalMilliseconds)
+        while (!condition())
         {
-            if (condition())
+            if (Environment.TickCount64 - start >= allowed.TotalMilliseconds)
             {
-                return;
+                throw new TimeoutException($"Did not happen within {allowed.TotalSeconds}s: {what}.");
             }
 
             await Task.Delay(Interval);
         }
-
-        throw new TimeoutException($"Did not happen within {Patience.TotalSeconds}s: {what}.");
     }
 
+    /// <summary>
+    /// Asks <paramref name="attempt"/> until what it yields meets <paramref name="condition"/>. The last
+    /// answer is judged before giving up, so one that arrived during the last wait is not taken as one
+    /// that never did.
+    /// </summary>
     public static async Task<T> Yields<T>(
         Func<Task<T>> attempt,
         Func<T, bool> condition,
         Func<T, string> describe,
-        string what)
+        string what,
+        TimeSpan? patience = null)
     {
         ArgumentNullException.ThrowIfNull(attempt);
         ArgumentNullException.ThrowIfNull(condition);
         ArgumentNullException.ThrowIfNull(describe);
 
+        TimeSpan allowed = patience ?? Patience;
         long start = Environment.TickCount64;
-        T? seen = await attempt();
+        T seen = await attempt();
 
-        while (Environment.TickCount64 - start < Patience.TotalMilliseconds)
+        while (!condition(seen))
         {
-            if (condition(seen))
+            if (Environment.TickCount64 - start >= allowed.TotalMilliseconds)
             {
-                return seen;
+                throw new TimeoutException(
+                    $"Did not happen within {allowed.TotalSeconds}s: {what}. Last seen: {describe(seen)}.");
             }
 
             await Task.Delay(Interval);
             seen = await attempt();
         }
 
-        throw new TimeoutException(
-            $"Did not happen within {Patience.TotalSeconds}s: {what}. Last seen: {describe(seen)}.");
+        return seen;
     }
 }
