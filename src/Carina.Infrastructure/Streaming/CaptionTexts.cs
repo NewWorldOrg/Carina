@@ -6,7 +6,9 @@ namespace Carina.Infrastructure.Streaming;
 /// <summary>
 /// The text of the captions, read statement by statement from the caption stream carried beside the
 /// pictures, as each change on the file's own 90 kHz clock once the lift the moments carry is taken off.
-/// A statement that arrives before a change the last one had waited for replaces that change.
+/// A statement that arrives before a change the last one had waited for cuts that change short: from the
+/// moment it arrives the screen shows what the last statement left once it ran to its end, and then what
+/// this one writes.
 /// </summary>
 public sealed class CaptionTexts(long lift)
 {
@@ -27,16 +29,14 @@ public sealed class CaptionTexts(long lift)
             return;
         }
 
+        string? before = screen.Shown;
         IReadOnlyList<AribCaptionChange> changes = screen.Write(body);
-
-        if (changes.Count is 0)
-        {
-            return;
-        }
-
         long at = (long)frame.Pts.Value - lift;
 
-        lines.RemoveAll(line => line.Pts >= at);
+        if (lines.RemoveAll(line => line.Pts >= at) > 0)
+        {
+            Keep(new CaptionLine(at, before));
+        }
 
         foreach (AribCaptionChange change in changes)
         {
@@ -46,6 +46,11 @@ public sealed class CaptionTexts(long lift)
 
     private void Keep(CaptionLine line)
     {
+        if (lines.Count > 0 && lines[^1].Pts == line.Pts)
+        {
+            lines.RemoveAt(lines.Count - 1);
+        }
+
         if (lines.Count > 0 && string.Equals(lines[^1].Text, line.Text, StringComparison.Ordinal))
         {
             return;

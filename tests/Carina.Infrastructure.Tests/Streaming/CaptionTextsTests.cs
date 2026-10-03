@@ -48,6 +48,19 @@ public sealed class CaptionTextsTests
     }
 
     [Fact]
+    public void BrPd019AStatementThatChangesNothingStillCutsShortTheWaitBeforeIt()
+    {
+        CaptionTexts texts = new(Lift);
+
+        texts.Read(Frame(
+            Lift + (8 * Second),
+            Statement(CaptionWriter.Positioned(7, 2, new AribTextWriter().Kanji("合成").Raw(CaptionWriter.Time, CaptionWriter.WaitFor, 0x40 + 20)))));
+        texts.Read(Frame(Lift + (9 * Second), Statement([CaptionWriter.ClearScreen])));
+
+        Assert.Equal([new CaptionLine(8 * Second, "合成"), new CaptionLine(9 * Second, null)], texts.Lines);
+    }
+
+    [Fact]
     public void BrPd019TheManagementDataAndTheSameTextAgainChangeNothing()
     {
         CaptionTexts texts = new(Lift);

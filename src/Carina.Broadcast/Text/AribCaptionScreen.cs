@@ -81,6 +81,11 @@ public sealed class AribCaptionScreen
     private string? shown;
 
     /// <summary>
+    /// What the screen shows once every statement written so far has run to its end, or null when nothing.
+    /// </summary>
+    public string? Shown => shown;
+
+    /// <summary>
     /// Writes the body of one statement onto the screen and says each change of what it shows.
     /// </summary>
     public IReadOnlyList<AribCaptionChange> Write(ReadOnlySpan<byte> statement)
@@ -336,7 +341,11 @@ public sealed class AribCaptionScreen
                 return;
             }
 
-            sets.CopyTo(designated, 0);
+            for (int slot = 0; slot < designated.Length; slot++)
+            {
+                designated[slot] = sets[slot];
+            }
+
             left = 0;
             right = 2;
         }
@@ -347,7 +356,6 @@ public sealed class AribCaptionScreen
             {
                 return Unreplaceable.ToString();
             }
-
 
             StringBuilder glyph = new();
             AribText.Append(glyph, set, code);
