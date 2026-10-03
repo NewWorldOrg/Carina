@@ -13,7 +13,11 @@ public sealed class SchedulingRun
 {
     private readonly AllocationPlan? plan;
 
-    private SchedulingRun(SchedulingRefusal refusal, AllocationPlan? plan, int seatsLeftOut)
+    private SchedulingRun(
+        SchedulingRefusal refusal,
+        AllocationPlan? plan,
+        int seatsLeftOut,
+        IReadOnlyList<ReservationId> displaced)
     {
         if (seatsLeftOut < 0)
         {
@@ -25,12 +29,18 @@ public sealed class SchedulingRun
 
         Refusal = refusal;
         SeatsLeftOut = seatsLeftOut;
+        Displaced = displaced;
         this.plan = plan;
     }
 
     public SchedulingRefusal Refusal { get; }
 
     public int SeatsLeftOut { get; }
+
+    /// <summary>
+    /// The reservations that held a tuner before this run and contend for one after it.
+    /// </summary>
+    public IReadOnlyList<ReservationId> Displaced { get; }
 
     public bool Settled => Refusal is SchedulingRefusal.None;
 
@@ -42,7 +52,17 @@ public sealed class SchedulingRun
     {
         ArgumentNullException.ThrowIfNull(plan);
 
-        return new SchedulingRun(SchedulingRefusal.None, plan, seatsLeftOut);
+        return new SchedulingRun(SchedulingRefusal.None, plan, seatsLeftOut, []);
+    }
+
+    /// <summary>
+    /// The same run, naming who lost their tuner to it.
+    /// </summary>
+    public SchedulingRun Displacing(IReadOnlyList<ReservationId> displaced)
+    {
+        ArgumentNullException.ThrowIfNull(displaced);
+
+        return new SchedulingRun(Refusal, Plan, SeatsLeftOut, [.. displaced]);
     }
 
     public static SchedulingRun Refused(SchedulingRefusal refusal)
@@ -63,6 +83,6 @@ public sealed class SchedulingRun
                 "A refusal names one of the reasons scheduling stops short.");
         }
 
-        return new SchedulingRun(refusal, null, 0);
+        return new SchedulingRun(refusal, null, 0, []);
     }
 }

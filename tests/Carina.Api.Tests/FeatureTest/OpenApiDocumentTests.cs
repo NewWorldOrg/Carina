@@ -436,6 +436,18 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(properties["quality"]!.ToJsonString(), properties["scrambleQuality"]!.ToJsonString());
     }
 
+    [Fact(DisplayName = "what became of a reservation is described with who was displaced in the shape of who is recorded instead")]
+    public async Task WhatBecameOfAReservationIsDescribedWithWhoWasDisplaced()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode properties = document["components"]!["schemas"]!["ReservationSettlementResponder"]!["properties"]!;
+
+        Assert.Equal(
+            ["reservation", "verdict", "instead", "seatsLeftOut", "displaced"],
+            properties.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(properties["instead"]!.ToJsonString(), properties["displaced"]!.ToJsonString());
+    }
+
     [Fact(DisplayName = "a recording on the quality list is described with its gaps judged in the vocabulary its measures are")]
     public async Task ARecordingOnTheQualityListIsDescribedWithItsGapsJudged()
     {

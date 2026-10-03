@@ -152,6 +152,158 @@ public sealed class ReservationSchedulingServiceTests
     }
 
     [Fact]
+    public async Task RaisingAPriorityNamesTheReservationThatLostItsSeatToIt()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        (Reservation kept, Reservation lost) = await TwoAfterOneSeatAsync(ledger, write);
+
+        SchedulingRun run = await OneSeat(ledger, write)
+            .ReviseAsync(lost, new ReservationRevision { Priority = new Priority(30) }, Cancel);
+
+        Assert.Equal(ReservationState.Scheduled, lost.State);
+        Assert.Equal(ReservationState.Conflict, kept.State);
+        Assert.Equal([kept.Id], run.Displaced);
+    }
+
+    [Fact]
+    public async Task AReservationThatGivesUpItsOwnSeatIsNotNamedAsDisplaced()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        (Reservation kept, Reservation lost) = await TwoAfterOneSeatAsync(ledger, write);
+
+        SchedulingRun run = await OneSeat(ledger, write)
+            .ReviseAsync(kept, new ReservationRevision { Priority = new Priority(5) }, Cancel);
+
+        Assert.Equal(ReservationState.Conflict, kept.State);
+        Assert.Equal(ReservationState.Scheduled, lost.State);
+        Assert.Empty(run.Displaced);
+    }
+
+    [Fact]
+    public async Task ANewReservationThatTakesTheSeatNamesTheOneItTookItFrom()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        ReservationSchedulingService scheduler = OneSeat(ledger, write);
+
+        Reservation standing = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            priority: new Priority(10));
+        Reservation arriving = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            priority: new Priority(50));
+
+        await scheduler.CreateAsync(standing, Cancel);
+        SchedulingRun run = await scheduler.CreateAsync(arriving, Cancel);
+
+        Assert.Equal(ReservationState.Conflict, standing.State);
+        Assert.Equal([standing.Id], run.Displaced);
+    }
+
+    [Fact]
+    public async Task ANewReservationThatLosesTheContestDisplacesNobodyAndIsNotNamedItself()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+
+        ReservationSchedulingService scheduler = OneSeat(ledger, write);
+
+        Reservation standing = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            priority: new Priority(20));
+        Reservation arriving = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            priority: new Priority(10));
+
+        await scheduler.CreateAsync(standing, Cancel);
+        SchedulingRun run = await scheduler.CreateAsync(arriving, Cancel);
+
+        Assert.Equal(ReservationState.Scheduled, standing.State);
+        Assert.Equal(ReservationState.Conflict, arriving.State);
+        Assert.Empty(run.Displaced);
+    }
+
+    [Fact]
+    public async Task ARecalculationThatTakesASeatAwayNamesWhoLostIt()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = TwoServices();
+
+        Reservation kept = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            priority: new Priority(20));
+        Reservation lost = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            priority: new Priority(10));
+
+        ledger.Standing(kept, lost);
+        await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial, TunerKind.Terrestrial))
+            .RecalculateAsync(Cancel);
+
+        SchedulingRun run = await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial))
+            .RecalculateAsync(Cancel);
+
+        Assert.Equal([lost.Id], run.Displaced);
+    }
+
+    [Fact]
+    public async Task AReservationLeftWithNowhereToTuneIsNotNamedAsDisplaced()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = TwoServices();
+
+        Reservation revised = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()));
+        Reservation stranded = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032));
+
+        ledger.Standing(revised, stranded);
+        ReservationSchedulingService scheduler =
+            Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial, TunerKind.Terrestrial));
+        await scheduler.RecalculateAsync(Cancel);
+        directory.Answer(1032, TuningResolution.Refused(TuningRefusal.NoSelectedChannel));
+
+        SchedulingRun run = await scheduler
+            .ReviseAsync(revised, new ReservationRevision { Priority = new Priority(30) }, Cancel);
+
+        Assert.True(stranded.ReceptionUnavailable);
+        Assert.Empty(run.Displaced);
+    }
+
+    [Fact]
+    public async Task AReservationThatComesBackFromNowhereToTuneIntoContentionIsNotNamedAsDisplaced()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new();
+        directory.Answer(1024, Terrestrial27);
+        directory.Answer(1032, TuningResolution.Refused(TuningRefusal.NoSelectedChannel));
+
+        Reservation revised = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            priority: new Priority(20));
+        Reservation stranded = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            priority: new Priority(10));
+
+        ledger.Standing(revised, stranded);
+        ReservationSchedulingService scheduler = Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial));
+        await scheduler.RecalculateAsync(Cancel);
+        directory.Answer(1032, Terrestrial29);
+
+        SchedulingRun run = await scheduler
+            .ReviseAsync(revised, new ReservationRevision { Priority = new Priority(30) }, Cancel);
+
+        Assert.False(stranded.ReceptionUnavailable);
+        Assert.Equal(ReservationState.Conflict, stranded.State);
+        Assert.Empty(run.Displaced);
+    }
+
+    [Fact]
     public async Task NothingIsWrittenWhenTheTunersCannotBeCounted()
     {
         WatchedWrite write = new();
@@ -671,6 +823,35 @@ public sealed class ReservationSchedulingServiceTests
     }
 
     [Fact]
+    public async Task ARecordingThatKeepsItsSeatIsNotNamedAsDisplacedByAHigherPriority()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = TwoServices();
+
+        Reservation running = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Now.AddMinutes(-10),
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            startAt: Now.AddMinutes(-10),
+            endAt: Now.AddMinutes(50),
+            priority: new Priority(1));
+        ledger.Standing(running);
+
+        Reservation wanting = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            startAt: Now,
+            endAt: Now.AddMinutes(30),
+            priority: new Priority(99));
+
+        SchedulingRun run = await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial))
+            .CreateAsync(wanting, Cancel);
+
+        Assert.Equal(ReservationState.Scheduled, running.State);
+        Assert.Empty(run.Displaced);
+    }
+
+    [Fact]
     public async Task ARecordingWhoseServiceCannotBeTunedAnyMoreKeepsTheTunerItIsRunningOn()
     {
         WatchedWrite write = new();
@@ -743,6 +924,36 @@ public sealed class ReservationSchedulingServiceTests
         => new(
             [new TunerSeat("seat0", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)],
             deviceIds);
+
+    private static TuningByService TwoServices()
+    {
+        TuningByService directory = new();
+        directory.Answer(1024, Terrestrial27);
+        directory.Answer(1032, Terrestrial29);
+
+        return directory;
+    }
+
+    private static ReservationSchedulingService OneSeat(HeldReservations ledger, WatchedWrite write)
+        => Scheduler(ledger, TwoServices(), write, Seats(TunerKind.Terrestrial));
+
+    private static async Task<(Reservation Kept, Reservation Lost)> TwoAfterOneSeatAsync(
+        HeldReservations ledger,
+        WatchedWrite write)
+    {
+        Reservation kept = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            priority: new Priority(20));
+        Reservation lost = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            priority: new Priority(10));
+
+        ReservationSchedulingService scheduler = OneSeat(ledger, write);
+        await scheduler.CreateAsync(kept, Cancel);
+        await scheduler.CreateAsync(lost, Cancel);
+
+        return (kept, lost);
+    }
 
     private static TunerCapacity Seats(params TunerKind[] kinds)
         => new(

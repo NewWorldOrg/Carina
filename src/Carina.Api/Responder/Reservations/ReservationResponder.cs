@@ -166,11 +166,16 @@ public sealed record ReservationRefusedResponder(ReservationFailure Refusal, Res
         => new(refusal, primary is null ? null : ReservationPrimaryResponder.Of(primary));
 }
 
+/// <summary>
+/// What became of one reservation when it was made or changed: where it came to stand, the reservations recorded in
+/// its place when it contends, and the reservations that held a tuner before the change and contend for one after it.
+/// </summary>
 public sealed record ReservationSettlementResponder(
     ReservationResponder Reservation,
     AllocationVerdict? Verdict,
     IReadOnlyList<ReservationResponder> Instead,
-    int SeatsLeftOut)
+    int SeatsLeftOut,
+    IReadOnlyList<ReservationResponder> Displaced)
 {
     public static ReservationSettlementResponder Of(ReservationSettlement settlement)
     {
@@ -180,6 +185,7 @@ public sealed record ReservationSettlementResponder(
             ReservationResponder.Of(settlement.Reservation),
             settlement.Verdict,
             [.. settlement.Instead.Select(ReservationResponder.Of)],
-            settlement.SeatsLeftOut);
+            settlement.SeatsLeftOut,
+            [.. settlement.Displaced.Select(ReservationResponder.Of)]);
     }
 }
