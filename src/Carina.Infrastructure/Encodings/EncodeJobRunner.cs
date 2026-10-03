@@ -473,7 +473,7 @@ public sealed class EncodeJobRunner(
     {
         try
         {
-            return await captionTracks.MakeAsync(job, work, record, cancellationToken);
+            return await captionTracks.MakeAsync(job, work, record, CaptionTrackNames.Making(job), cancellationToken);
         }
         catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
         {

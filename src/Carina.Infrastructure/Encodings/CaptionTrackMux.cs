@@ -22,6 +22,32 @@ public sealed record CaptionTrackMade(EncodeCaptionTrack Outcome, string? Captio
 }
 
 /// <summary>
+/// The names the text of captions and the copy with the track put in are written under: the job's own for
+/// the attempt that is making the artefact, and names that also carry a try of their own for an artefact
+/// that stands already, which may be tried more than once.
+/// </summary>
+public sealed record CaptionTrackNames(EncodeFileName Captions, EncodeFileName Captioned)
+{
+    public static CaptionTrackNames Making(EncodeJob job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+
+        return new CaptionTrackNames(job.CaptionTrackFileName, job.CaptionedFileName);
+    }
+
+    public static CaptionTrackNames Tried(EncodeJob job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+
+        EncodeScratchFileId tried = EncodeScratchFileId.New();
+
+        return new CaptionTrackNames(
+            EncodeFileName.CaptionTrack(job.RecordingId, job.Id, job.Attempt, tried),
+            EncodeFileName.Captioned(job.RecordingId, job.Id, job.Attempt, tried));
+    }
+}
+
+/// <summary>
 /// Writes a copy of an artefact with the text of a recording's captions put in as a text track, beside the
 /// work of the job that made the artefact: the text and the copy are written into the ledger as scratch first,
 /// the copy's subtitle track is turned off by default, and the copy is checked against the artefact before it
@@ -39,11 +65,13 @@ public sealed class CaptionTrackMux(EncodeScratchFiles scratch, MachineSettings 
         EncodeJob job,
         string artefact,
         CaptionRecord record,
+        CaptionTrackNames names,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(job);
         ArgumentException.ThrowIfNullOrEmpty(artefact);
         ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(names);
 
         if (record.Lines is not { } lines)
         {
@@ -55,10 +83,10 @@ public sealed class CaptionTrackMux(EncodeScratchFiles scratch, MachineSettings 
             return unmade;
         }
 
-        string? captions = await scratch.RecordAsync(job, EncodeScratchKind.Captions, job.CaptionTrackFileName, cancellationToken);
+        string? captions = await scratch.RecordAsync(job, EncodeScratchKind.Captions, names.Captions, cancellationToken);
         string? captioned = captions is null
             ? null
-            : await scratch.RecordAsync(job, EncodeScratchKind.CaptionedWork, job.CaptionedFileName, cancellationToken);
+            : await scratch.RecordAsync(job, EncodeScratchKind.CaptionedWork, names.Captioned, cancellationToken);
 
         if (captions is null || captioned is null)
         {

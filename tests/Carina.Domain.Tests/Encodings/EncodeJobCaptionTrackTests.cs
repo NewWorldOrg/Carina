@@ -107,6 +107,17 @@ public sealed class EncodeJobCaptionTrackTests
         Assert.Equal($"{job.RecordingId.Wire}.{job.Id.Wire}.attempt1.captioned", job.CaptionedFileName.Value);
     }
 
+    [Fact]
+    public void BrEd2019AnArtefactThatStandsIsTriedUnderNamesOfTheTrySoNoTwoTriesShareOne()
+    {
+        EncodeJob job = Completed();
+        EncodeScratchFileId tried = EncodeScratchFileId.New();
+
+        Assert.Equal($"{job.RecordingId.Wire}.{job.Id.Wire}.attempt1.try{tried.Value:N}.vtt", EncodeFileName.CaptionTrack(job.RecordingId, job.Id, 1, tried).Value);
+        Assert.Equal($"{job.RecordingId.Wire}.{job.Id.Wire}.attempt1.try{tried.Value:N}.captioned", EncodeFileName.Captioned(job.RecordingId, job.Id, 1, tried).Value);
+        Assert.NotEqual(EncodeFileName.Captioned(job.RecordingId, job.Id, 1, tried), EncodeFileName.Captioned(job.RecordingId, job.Id, 1, EncodeScratchFileId.New()));
+    }
+
     private static EncodeJob Rehydrated(EncodeJob job, EncodeCaptionTrack? track, DateTime? from, int attempts)
         => EncodeJob.Rehydrate(
             job.Id,

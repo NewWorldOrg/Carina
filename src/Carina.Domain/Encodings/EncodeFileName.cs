@@ -59,6 +59,19 @@ public sealed class EncodeFileName : CommonValueObject<string>
     public static EncodeFileName Captioned(RecordingId recording, EncodeJobId job, int attempt)
         => Attempted(recording, job, attempt, CaptionedExtension);
 
+    /// <summary>
+    /// The text of captions a track is made from for an artefact that stands already, named also for the try,
+    /// so that no two tries share a name.
+    /// </summary>
+    public static EncodeFileName CaptionTrack(RecordingId recording, EncodeJobId job, int attempt, EncodeScratchFileId tried)
+        => Attempted(recording, job, attempt, Tried(tried) + CaptionTrackExtension);
+
+    /// <summary>
+    /// A standing artefact with a text track of captions put in, named also for the try.
+    /// </summary>
+    public static EncodeFileName Captioned(RecordingId recording, EncodeJobId job, int attempt, EncodeScratchFileId tried)
+        => Attempted(recording, job, attempt, Tried(tried) + CaptionedExtension);
+
     public static EncodeFileName Artefact(RecordingId recording, EncodeProfileId profile)
     {
         ArgumentNullException.ThrowIfNull(recording);
@@ -79,6 +92,13 @@ public sealed class EncodeFileName : CommonValueObject<string>
         ArgumentNullException.ThrowIfNull(job);
 
         return Value.Contains(job.Wire, StringComparison.Ordinal);
+    }
+
+    private static string Tried(EncodeScratchFileId tried)
+    {
+        ArgumentNullException.ThrowIfNull(tried);
+
+        return string.Create(CultureInfo.InvariantCulture, $".try{tried.Value:N}");
     }
 
     private static EncodeFileName Attempted(RecordingId recording, EncodeJobId job, int attempt, string extension)
