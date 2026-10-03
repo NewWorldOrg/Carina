@@ -368,6 +368,41 @@ public sealed class CaptionJobTests : IDisposable
         Assert.Equal(0, pass.Read);
     }
 
+    [Fact]
+    public async Task BrPd016ARetakeThatFailsLeavesTheRecordKeptBeforeAndTheRecordingReadyAndIsTriedThreeTimes()
+    {
+        CaptionSubject subject = Retakable();
+        transcriber.Answer = _ => CaptionTranscription.Failed(CaptionFault.TimedOut, "it took too long");
+        CaptionJob job = Job();
+
+        CaptionPass first = await job.RunAsync(Cancel);
+        await job.RunAsync(Cancel);
+        await job.RunAsync(Cancel);
+        await job.RunAsync(Cancel);
+
+        Assert.Empty(worklist.Written);
+        Assert.Equal(3, transcriber.Asked.Count);
+        Assert.Equal((1, 0, 0, 1), (first.Read, first.Settled, first.Failed, first.LeftForNextTime));
+        Assert.Single((await new CaptionShelf(Settings()).ReadAsync(subject.Id, Cancel))!.Cues);
+        Assert.Contains(subject.Id.Wire, new CaptionShelf(Settings()).Textless());
+    }
+
+    [Fact]
+    public async Task BrPd016ARetakeThatDrawsNothingOrThrowsLeavesTheRecordAsItWas()
+    {
+        CaptionSubject nothing = Retakable();
+        CaptionSubject throwing = Retakable();
+        transcriber.Answer = source => source.Contains(throwing.FileName.Value, StringComparison.Ordinal)
+            ? throw new IOException("the disk went away")
+            : CaptionTranscription.NothingShown();
+
+        await Job().RunAsync(Cancel);
+
+        Assert.Empty(worklist.Written);
+        Assert.Equal(2, new CaptionShelf(Settings()).Textless().Count);
+        Assert.True(new CaptionShelf(Settings()).Holds(nothing.Id));
+    }
+
     private CaptionSettings Settings() => new() { WrittenTo = shelved };
 
     private CaptionJob Job(CaptionSettings? settings = null)

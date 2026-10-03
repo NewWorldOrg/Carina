@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 using Carina.Contracts;
 using Carina.Domain.Captions;
 using Carina.Domain.Events;
@@ -28,6 +30,8 @@ public sealed class CaptionJob(
     TimeProvider clock,
     ILogger<CaptionJob> logger) : BackgroundService
 {
+    private readonly ConcurrentDictionary<RecordingId, int> retakesFailed = new();
+
     private int running;
 
     public async Task<CaptionPass> RunAsync(CancellationToken cancellationToken)
@@ -101,12 +105,12 @@ public sealed class CaptionJob(
             await worklist.AwaitingAsync(withinReach, settings.AtMostAPass, cancellationToken);
         int outOfReach = await worklist.WaitingOutOfReachAsync(withinReach, cancellationToken);
 
-        Tally tally = await TakeEachAsync(worklist, awaiting, new Tally(), cancellationToken);
+        Tally tally = await TakeEachAsync(worklist, awaiting, false, new Tally(), cancellationToken);
         IReadOnlyList<CaptionSubject> again = tally.Yielded || awaiting.Count >= settings.AtMostAPass
             ? []
             : await TextlessAsync(worklist, requeued.StillReady, withinReach, settings.AtMostAPass - awaiting.Count, cancellationToken);
 
-        tally = await TakeEachAsync(worklist, again, tally, cancellationToken);
+        tally = await TakeEachAsync(worklist, again, true, tally, cancellationToken);
 
         CaptionPass pass = CaptionPass.Of(
             awaiting.Count + again.Count,
@@ -131,6 +135,7 @@ public sealed class CaptionJob(
     private async Task<Tally> TakeEachAsync(
         ICaptionWorklist worklist,
         IReadOnlyList<CaptionSubject> subjects,
+        bool retaking,
         Tally tally,
         CancellationToken cancellationToken)
     {
@@ -148,7 +153,7 @@ public sealed class CaptionJob(
                 return tally with { Yielded = true };
             }
 
-            tally = tally.Counting(await TakeAsync(worklist, subject, cancellationToken));
+            tally = tally.Counting(await TakeAsync(worklist, subject, retaking, cancellationToken));
         }
 
         return tally;
@@ -166,7 +171,11 @@ public sealed class CaptionJob(
         CancellationToken cancellationToken)
     {
         IReadOnlySet<string> textless = shelf.Textless();
-        RecordingId[] among = [.. ready.Where(id => textless.Contains(id.Wire))];
+        RecordingId[] among =
+        [
+            .. ready.Where(id => textless.Contains(id.Wire)
+                                 && retakesFailed.GetValueOrDefault(id) < CaptionSettings.TriesAtMost),
+        ];
 
         return among.Length is 0 ? [] : await worklist.ReadyAmongAsync(among, withinReach, atMost, cancellationToken);
     }
@@ -232,15 +241,22 @@ public sealed class CaptionJob(
     private async Task<CaptionState?> TakeAsync(
         ICaptionWorklist worklist,
         CaptionSubject subject,
+        bool retaking,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await TranscribedAsync(worklist, subject, cancellationToken);
+            return retaking
+                ? await RetakenAsync(worklist, subject, cancellationToken)
+                : await TranscribedAsync(worklist, subject, cancellationToken);
         }
         catch (OperationCanceledException)
         {
             throw;
+        }
+        catch (Exception failure) when (retaking)
+        {
+            return LeftAsItWas(subject.Id, $"it threw {failure.GetType().Name}: {failure.Message}");
         }
         catch (Exception failure)
         {
@@ -277,6 +293,51 @@ public sealed class CaptionJob(
             id.Wire);
 
         shelf.Forget(id);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Takes again the captions of a recording that is ready, for their text. Whatever stops that leaves the
+    /// record kept before and the recording as they were, and is counted for as long as this process runs.
+    /// </summary>
+    private async Task<CaptionState?> RetakenAsync(
+        ICaptionWorklist worklist,
+        CaptionSubject subject,
+        CancellationToken cancellationToken)
+    {
+        if (Mounted(subject.Root) is not { } root || !File.Exists(Path.Combine(root, subject.FileName.Value)))
+        {
+            return LeftAsItWas(subject.Id, "its file is not within reach");
+        }
+
+        CaptionTranscription transcription = await transcriber.TranscribeAsync(
+            Path.Combine(root, subject.FileName.Value),
+            subject.Service,
+            cancellationToken);
+
+        if (transcription.Record is not { } record)
+        {
+            return LeftAsItWas(subject.Id, transcription.Fault is { } fault ? $"{fault}: {transcription.Note}" : "nothing was drawn this time");
+        }
+
+        await shelf.KeepAsync(subject.Id, record, cancellationToken);
+        retakesFailed.TryRemove(subject.Id, out _);
+
+        return await SettledAsync(worklist, subject.Id, CaptionState.Ready, record.Pictures, cancellationToken);
+    }
+
+    private CaptionState? LeftAsItWas(RecordingId id, string why)
+    {
+        int failed = retakesFailed.AddOrUpdate(id, 1, (_, before) => before + 1);
+
+        logger.LogWarning(
+            "The captions of recording {Recording} could not be taken again for their text ({Why}); the record kept "
+            + "before stays and the recording stays ready. That is {Failed} of the {Most} times it is tried while this process runs.",
+            id.Wire,
+            why,
+            failed,
+            CaptionSettings.TriesAtMost);
 
         return null;
     }
