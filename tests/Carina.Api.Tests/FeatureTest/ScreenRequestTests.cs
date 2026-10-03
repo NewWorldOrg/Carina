@@ -69,7 +69,7 @@ public sealed class ScreenRequestTests(TestingWebApplicationFactory factory)
         client.DefaultRequestHeaders.Accept.Clear();
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
 
-        using HttpResponseMessage response = await client.GetAsync(new Uri("/recordings/1.ts", UriKind.Relative));
+        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/videos/1", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Null(response.Headers.Location);
