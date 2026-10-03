@@ -22,6 +22,17 @@ public sealed class FfprobeInvocationTests
     }
 
     [Fact]
+    public void BrPd016WhereTheFilesClockBeginsIsAskedForByKeyAndNothingElseIs()
+    {
+        List<string> arguments = [.. FfprobeInvocation.Start(new StreamSource("/srv/recordings/k-1.ts"))];
+
+        Assert.Equal("default=nw=1", arguments[arguments.IndexOf("-of") + 1]);
+        Assert.Equal("format=start_time", arguments[arguments.IndexOf("-show_entries") + 1]);
+        Assert.DoesNotContain("-select_streams", arguments);
+        Assert.Equal(["-i", "/srv/recordings/k-1.ts"], arguments[^2..]);
+    }
+
+    [Fact]
     public void TheProgrammesAreAskedForAsJsonSoThatEachOnesStreamsStayWithIt()
     {
         List<string> arguments = [.. FfprobeInvocation.Programmes(new StreamSource("/srv/recordings/k-1.ts"))];

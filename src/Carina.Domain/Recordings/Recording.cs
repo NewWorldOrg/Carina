@@ -121,6 +121,23 @@ public sealed class Recording
 
     public ThumbnailFault? ThumbnailFault { get; private set; }
 
+    public CaptionState CaptionState { get; private set; } = CaptionState.Pending;
+
+    /// <summary>
+    /// When the captions were last taken from the recording's file, or null while they are waiting to be.
+    /// </summary>
+    public DateTime? CaptionsMadeAt { get; private set; }
+
+    /// <summary>
+    /// How many times the picture on screen changes in the captions kept, or null unless they are ready.
+    /// </summary>
+    public int? CaptionPictures { get; private set; }
+
+    /// <summary>
+    /// How many times in a row taking the captions has failed.
+    /// </summary>
+    public int CaptionAttempts { get; private set; }
+
     public DateTime? MeasuredUpdatedAt { get; private set; }
 
     public string SnapshotName { get; private set; } = string.Empty;
@@ -253,7 +270,11 @@ public sealed class Recording
         DateTime? descrambledAt = null,
         IReadOnlyList<RecordingGap>? gaps = null,
         CarriedCount? carried = null,
-        DateTime? countedSessionOpenedAt = null)
+        DateTime? countedSessionOpenedAt = null,
+        CaptionState captionState = CaptionState.Pending,
+        DateTime? captionsMadeAt = null,
+        int? captionPictures = null,
+        int captionAttempts = 0)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -375,6 +396,8 @@ public sealed class Recording
         RefuseALeftoverThatDoesNotAddUp(outcome, leftBehindAt, filesLeftBehind);
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, leftBehindAt, nameof(leftBehindAt));
         RefuseADescramblingThatDoesNotAddUp(outcome, outcomeDetail, stoppedAtActual, descrambledAt);
+        RefuseCaptionsThatDoNotAddUp(captionState, captionPictures);
+        RefuseCaptionsKeptThatDoNotAddUp(outcome, captionState, captionsMadeAt, captionAttempts);
 
         return new Recording
         {
@@ -426,6 +449,10 @@ public sealed class Recording
             LeftBehindAt = UtcTimes.Optional(leftBehindAt, nameof(leftBehindAt)),
             FilesLeftBehind = filesLeftBehind,
             DescrambledAt = UtcTimes.Optional(descrambledAt, nameof(descrambledAt)),
+            CaptionState = captionState,
+            CaptionsMadeAt = UtcTimes.Optional(captionsMadeAt, nameof(captionsMadeAt)),
+            CaptionPictures = captionPictures,
+            CaptionAttempts = captionAttempts,
             EncodeWhenRecorded = encodeWhenRecorded,
             Interruptions = interruptions,
             Gaps = gaps ?? [],
@@ -521,6 +548,34 @@ public sealed class Recording
         RefuseATimeBeforeTheRecordingBegan(StoppedAtActual!.Value, descrambled, nameof(at));
 
         DescrambledAt = descrambled;
+    }
+
+    /// <summary>
+    /// Keeps where the captions taken from the recording's file stand: waiting, ready with the number of
+    /// changes kept, absent, or failed once more.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording is still being written.</exception>
+    /// <exception cref="ArgumentException">
+    /// The number of changes does not fit the state, or <paramref name="at"/> is not UTC or is before the recording began.
+    /// </exception>
+    public void Caption(CaptionState captionState, int? captionPictures, DateTime at)
+    {
+        if (IsInFlight)
+        {
+            throw new InvalidOperationException(
+                "Captions are taken from a recording once it has ended, never while it is being written.");
+        }
+
+        RefuseCaptionsThatDoNotAddUp(captionState, captionPictures);
+
+        DateTime settled = UtcTimes.Required(at, nameof(at));
+
+        RefuseATimeBeforeTheRecordingBegan(StartedAtActual, settled, nameof(at));
+
+        CaptionState = captionState;
+        CaptionPictures = captionPictures;
+        CaptionsMadeAt = captionState is CaptionState.Pending ? null : settled;
+        CaptionAttempts = captionState is CaptionState.Failed ? CaptionAttempts + 1 : 0;
     }
 
     public void Acquire(TunerDeviceId tunerDeviceId)
@@ -904,6 +959,61 @@ public sealed class Recording
             throw new ArgumentException(
                 $"A picture that is {thumbnailState} was not stopped by anything, so it names no fault.",
                 nameof(thumbnailFault));
+        }
+    }
+
+    private static void RefuseCaptionsThatDoNotAddUp(CaptionState captionState, int? captionPictures)
+    {
+        if (!Enum.IsDefined(captionState))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(captionState),
+                captionState,
+                "Captions are in one of the four states the ledger holds.");
+        }
+
+        if (captionState is CaptionState.Ready != captionPictures is not null)
+        {
+            throw new ArgumentException(
+                "Captions that are ready say how many changes they keep, and nothing else counts any.",
+                nameof(captionPictures));
+        }
+
+        if (captionPictures is < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(captionPictures),
+                captionPictures,
+                "Captions that kept nothing are absent rather than ready.");
+        }
+    }
+
+    private static void RefuseCaptionsKeptThatDoNotAddUp(
+        RecordingOutcome? outcome,
+        CaptionState captionState,
+        DateTime? captionsMadeAt,
+        int captionAttempts)
+    {
+        if (captionState is not CaptionState.Pending && outcome is null)
+        {
+            throw new ArgumentException(
+                "Captions are taken from a recording once it has ended, never while it is being written.",
+                nameof(captionState));
+        }
+
+        if (captionState is CaptionState.Pending != captionsMadeAt is null)
+        {
+            throw new ArgumentException(
+                "Captions that were taken say when, and captions still waiting were not taken.",
+                nameof(captionsMadeAt));
+        }
+
+        if (captionAttempts < 0 || captionState is CaptionState.Failed != captionAttempts > 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(captionAttempts),
+                captionAttempts,
+                "Only captions that failed count the times in a row they failed.");
         }
     }
 

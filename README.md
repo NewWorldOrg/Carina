@@ -120,6 +120,7 @@ health は表示するだけで、unhealthy になっても何も再起動しな
 | `RecordingRetry__BetweenAttempts` | 始め直す間隔。既定は 1 分、上限は 1 日。チャンネルが間を空けている間は、それより前に始め直さない |
 | `RecordingProgress__AtMostEvery` | 録画中に書いた長さやドロップの数が動いたとき、開いている画面へ知らせる最短の間隔。既定は 30 秒、上限は 1 時間。録画の開始・停止・中断・結果はこの間隔を待たずに知らせる |
 | `Thumbnails__WrittenTo` | サムネイルの置き場所。空なら作らない |
+| `Captions__WrittenTo` | 録画から取り出した字幕の置き場所。空なら取り出さない |
 | `Encodings__OutputRoots` | エンコードの成果物を書くルート(`encodes=/srv/encodes`) |
 | `ProgrammeFeed__ConcurrentReaders` | 一括番組表を同時に何本まで配るか。既定は 4 で、超えた要求はその場で断る |
 | `ProgrammeFeed__StatementTimeout` | 一括番組表の 1 文に与える時間。既定は 30 秒、上限は `24.20:31:23.647`。超えたら何も送らず、どこから読み直すかを添えて断る |
@@ -160,7 +161,7 @@ root で起動したイメージは `app` を uid・gid 10001 に降ろして動
 ハードリンクで運ぶので、マウントをまたぐと 1 本も運べない。
 
 番組表を集める間隔、サムネイルやエンコードの回し方、信号品質の保持期間といった調整つまみは
-`Collection:` `Thumbnails:` `Encodings:` `QualitySignal:` `Transcoding:` の各名前空間にある。
+`Collection:` `Thumbnails:` `Captions:` `Encodings:` `QualitySignal:` `Transcoding:` の各名前空間にある。
 **どれも既定のままで動く。**
 
 供給が途絶えたと見なすまでの時間だけは設定ではなく画面から動かす(`PATCH /api/quality/thresholds/supplySilence`、既定は 300 秒)。

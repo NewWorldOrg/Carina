@@ -1,0 +1,20 @@
+using Carina.Domain.Recordings;
+
+namespace Carina.Domain.Captions;
+
+public interface ICaptionWorklist
+{
+    /// <summary>
+    /// The ended recordings under a root within reach whose captions are to be taken, newest first.
+    /// </summary>
+    Task<IReadOnlyList<CaptionSubject>> AwaitingAsync(
+        IReadOnlyList<OutputRoot> withinReach,
+        int atMost,
+        CancellationToken cancellationToken);
+
+    Task<int> WaitingOutOfReachAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken);
+
+    Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken);
+
+    Task CaptionAsync(RecordingId id, CaptionState state, int? pictures, CancellationToken cancellationToken);
+}

@@ -124,9 +124,9 @@ nothing.
   a caller cannot name a file of its own choosing, and it refuses a name that is
   not one of its own, a root it does not declare, a root that holds no file at all
   (which is what a lost mount looks like) and a recording a session is still
-  writing. The app removes only the picture drawn of the recording, which lives on
-  a directory of its own. One call throws away one recording; there is no call that
-  throws away more than one.
+  writing. The app removes only what it made from the recording — the picture drawn
+  of it and the captions taken from it — each on a directory of its own. One call
+  throws away one recording; there is no call that throws away more than one.
 
   A file that no recording owns goes the same way, and only as something the most
   recent ledger check found. The caller names the finding, never a path: the app
@@ -346,10 +346,12 @@ nothing.
   estimated total, cursor paging in place of a page count, or a count that stops
   at a ceiling and answers "more than". None of them is in place.
 
-- **A recording that has ended is frozen except for its picture, what throwing it
-  away left behind and when it was descrambled — as long as it is reached through the
-  aggregate's own methods.** Every public method on `Recording` but three refuses once
-  an outcome is set. `Illustrate` moves the two thumbnail columns and nothing else;
+- **A recording that has ended is frozen except for its picture, its captions, what
+  throwing it away left behind and when it was descrambled — as long as it is reached
+  through the aggregate's own methods.** Every public method on `Recording` but four
+  refuses once an outcome is set. `Illustrate` moves the two thumbnail columns and
+  nothing else; `Caption` moves the four caption columns and nothing else, and refuses
+  anything but waiting while the recording is still being written;
   `Erased` moves the two columns that say a deletion was asked for and left files on
   the disk, and nothing else — a deletion that took everything removes the row, so
   those columns are only ever read on a recording that is still there. `Descrambled`

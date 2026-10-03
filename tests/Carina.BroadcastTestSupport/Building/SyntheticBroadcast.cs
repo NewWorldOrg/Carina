@@ -33,6 +33,8 @@ public enum SyntheticCaptions
     EverySecond = 1,
 
     ShownThenCleared = 2,
+
+    ShownForAWhile = 3,
 }
 
 public sealed record SyntheticBroadcast
@@ -58,6 +60,12 @@ public sealed record SyntheticBroadcast
     public const int CaptionShownAtSecond = 8;
 
     public const int CaptionClearedAtSecond = 9;
+
+    /// <summary>
+    /// How long a caption shown for a while asks to stay on screen, in the tenths of a second the
+    /// broadcast's own wait is counted in.
+    /// </summary>
+    public const int CaptionLastsTenths = 20;
 
     public const int MainTone = 440;
 
@@ -515,10 +523,15 @@ public sealed record SyntheticBroadcast
             SyntheticCaptions.ShownThenCleared when second == CaptionShownAtSecond => Kanji(),
             SyntheticCaptions.ShownThenCleared when second == CaptionClearedAtSecond => [CaptionWriter.ClearScreen],
             SyntheticCaptions.ShownThenCleared => null,
+            SyntheticCaptions.ShownForAWhile when second == CaptionShownAtSecond => ForAWhile(),
+            SyntheticCaptions.ShownForAWhile => null,
             _ => second % 2 is 0 ? Kanji() : Positioned(new AribTextWriter().DesignateAlphanumericToG0().Ascii("CARINA")),
         };
 
     private static byte[] Kanji() => Positioned(new AribTextWriter().Kanji("合成字幕"));
+
+    private static byte[] ForAWhile()
+        => Positioned(new AribTextWriter().Kanji("合成字幕").Raw(CaptionWriter.Time, CaptionWriter.WaitFor, (byte)(0x40 + CaptionLastsTenths)));
 
     private static byte[] Positioned(AribTextWriter text) => CaptionWriter.Positioned(CaptionRow, CaptionColumn, text);
 
