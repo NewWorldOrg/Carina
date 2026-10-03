@@ -540,10 +540,34 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void RejectsAMissingDriverSocketPath()
+    public void AMissingDriverSocketPathTakesTheDefault()
     {
         Dictionary<string, string?> settings = ValidSettings();
         settings.Remove("CARINA_DRIVER_SOCKET");
+        using ServiceProvider provider = Build(settings);
+
+        DriverOptions options = provider.GetRequiredService<IOptions<DriverOptions>>().Value;
+
+        Assert.Equal("/run/carina/driver.sock", options.SocketPath);
+    }
+
+    [Fact]
+    public void AWrittenDriverSocketPathIsKept()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["CARINA_DRIVER_SOCKET"] = "/run/elsewhere/driver.sock";
+        using ServiceProvider provider = Build(settings);
+
+        DriverOptions options = provider.GetRequiredService<IOptions<DriverOptions>>().Value;
+
+        Assert.Equal("/run/elsewhere/driver.sock", options.SocketPath);
+    }
+
+    [Fact]
+    public void RejectsAnEmptyDriverSocketPath()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["CARINA_DRIVER_SOCKET"] = string.Empty;
         using ServiceProvider provider = Build(settings);
 
         OptionsValidationException exception = Assert.Throws<OptionsValidationException>(

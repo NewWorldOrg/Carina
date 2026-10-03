@@ -93,10 +93,11 @@ health は表示するだけで、unhealthy になっても何も再起動しな
 
 | キー | 用途 |
 | --- | --- |
-| `socketPath` | `app` とつなぐ Unix ドメインソケット。`/run/` の下 |
+| `socketPath` | `app` とつなぐ Unix ドメインソケット。`/run/` の下。既定は `/run/carina/driver.sock` |
 | `socketGroupId` | ソケットの所有グループの id。既定は 10001。`app` を動かすグループと同じ値にする |
 | `outputRoots` | 録画の書き出し先。`name` と絶対パスの `path` を 1 つ以上 |
 | `devices` | チューナー。1 つ以上、うち 1 つ以上が `enabled` |
+| `shutdownGraceHours` | 録画中に止められたとき、録画が終わるまで待つ上限の時間。1 から 168 で、既定は 6 |
 
 `devices` の各要素は `id`、`kind`(`terrestrial` か `satellite`)、`enabled`、衛星なら `lnb` を持つ。
 セッションの上限時間や demux のバッファなど、残りのキーは既定のままで動く。
@@ -109,7 +110,7 @@ health は表示するだけで、unhealthy になっても何も再起動しな
 | --- | --- |
 | `CARINA_ROLE` | イメージが起動する役割 |
 | `ConnectionStrings__Carina` | PostgreSQL の接続文字列。既定値は無く、未設定なら起動しない |
-| `CARINA_DRIVER_SOCKET` | `driver` とつなぐソケットのパス。既定値は無く、未設定なら起動しない |
+| `CARINA_DRIVER_SOCKET` | `driver` とつなぐソケットのパス。既定は `/run/carina/driver.sock`。driver の `socketPath` と同じ値にする |
 | `CARINA_DATA_PROTECTION_KEYS` | OIDC の client secret を封じる鍵の置き場(絶対パス)。既定値は無く、未設定なら起動しない。コンテナを作り直しても残る場所を渡す |
 | `CARINA_DB_CONNECTION` | スキーマ適用時の接続文字列 |
 | `CARINA_PUBLIC_ORIGIN` | ブラウザがこのインストールに到達するアドレス(`https://host`) |

@@ -29,6 +29,22 @@ public sealed class DriverShutdownBudgetTests
     }
 
     [Fact]
+    public void AConfigurationWithoutAGraceLingersForSixHours()
+    {
+        DriverConfiguration configuration = DriverConfigurationReader.Read("""
+            {
+              "outputRoots": [{ "name": "primary", "path": "/srv/recordings" }],
+              "tuner": { "backend": "fake" },
+              "devices": [{ "id": "fake-terrestrial", "kind": "terrestrial" }]
+            }
+            """).Configuration!;
+
+        DriverShutdownBudget budget = DriverShutdownBudget.From(configuration);
+
+        Assert.Equal(TimeSpan.FromHours(6), budget.Drain);
+    }
+
+    [Fact]
     public void TheBudgetOutlivesTheLingerCapAlone()
     {
         var budget = DriverShutdownBudget.From(Configuration(6));

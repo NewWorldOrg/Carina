@@ -6,6 +6,8 @@ public sealed class DriverOptions
 {
     public const string SocketPathKey = "CARINA_DRIVER_SOCKET";
 
-    [Required(ErrorMessage = "CARINA_DRIVER_SOCKET must be set to the driver socket path.")]
+    public const string DefaultSocketPath = "/run/carina/driver.sock";
+
+    [Required(ErrorMessage = "CARINA_DRIVER_SOCKET must name the driver socket path when it is set.")]
     public string? SocketPath { get; set; }
 }

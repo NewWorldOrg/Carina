@@ -48,17 +48,21 @@ public sealed record DeviceSettings(
 public sealed record OutputRootSettings(string? Name, string? Path);
 
 public sealed record DriverConfiguration(
-    string? SocketPath,
-    IReadOnlyList<OutputRootSettings>? OutputRoots,
-    int ShutdownGraceHours,
-    TunerSettings? Tuner,
-    IReadOnlyList<DeviceSettings>? Devices,
+    string? SocketPath = DriverConfiguration.DefaultSocketPath,
+    IReadOnlyList<OutputRootSettings>? OutputRoots = null,
+    int ShutdownGraceHours = DriverConfiguration.DefaultShutdownGraceHours,
+    TunerSettings? Tuner = null,
+    IReadOnlyList<DeviceSettings>? Devices = null,
     int SocketGroupId = DriverConfiguration.DefaultSocketGroupId,
     int LiveSessionMinutes = DriverConfiguration.DefaultLiveSessionMinutes,
     int WalkSessionMinutes = DriverConfiguration.DefaultWalkSessionMinutes
 )
 {
     public const string SocketGroupName = "carina";
+
+    public const string DefaultSocketPath = "/run/carina/driver.sock";
+
+    public const int DefaultShutdownGraceHours = 6;
 
     public const int DefaultSocketGroupId = 10001;
 
