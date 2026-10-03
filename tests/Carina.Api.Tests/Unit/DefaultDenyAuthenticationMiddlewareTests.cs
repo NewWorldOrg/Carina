@@ -89,6 +89,8 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
     [InlineData("/api/events", "text/event-stream")]
     [InlineData("/api/videos/1", "*/*")]
     [InlineData("/api/videos/1", "video/mp2t")]
+    [InlineData("/programs", "*/*")]
+    [InlineData("/programs", "video/mp2t")]
     public async Task ARequestThatIsNotAScreenIsRefusedRatherThanRedirected(string path, string accept)
     {
         DefaultHttpContext context = Asking("GET", path, accept);
@@ -130,7 +132,7 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
 
     [Theory(DisplayName = "BR-AU-020: a screen sent to the login screen, a request outside the API and an open surface are not written down")]
     [InlineData("/programs", "text/html")]
-    [InlineData("/favicon.ico", "image/x-icon")]
+    [InlineData("/programs", "application/json")]
     [InlineData("/api/health", "application/json")]
     public async Task BrAu020WhatIsNotAnApiRefusalIsNotWrittenDown(string path, string accept)
     {
