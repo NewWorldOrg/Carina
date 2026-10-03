@@ -81,6 +81,20 @@ public static class CaptionRecordFormat
         return at.IsEmpty ? new CaptionRecord(width, height, TimeSpan.FromTicks(startsAt), cues) : null;
     }
 
+    /// <summary>
+    /// Reads where the file's clock began from the head of a record alone, or answers null when the head is
+    /// not one this format wrote.
+    /// </summary>
+    public static TimeSpan? StartOf(ReadOnlySpan<byte> head)
+    {
+        if (head.Length < HeaderLength || !head[..Magic.Length].SequenceEqual(Magic) || head[Magic.Length] != Version)
+        {
+            return null;
+        }
+
+        return TimeSpan.FromTicks(BinaryPrimitives.ReadInt64BigEndian(head[(Magic.Length + 1 + 4)..]));
+    }
+
     private static Span<byte> Cue(Span<byte> at, CaptionCue cue)
     {
         BinaryPrimitives.WriteInt64BigEndian(at, cue.Pts);

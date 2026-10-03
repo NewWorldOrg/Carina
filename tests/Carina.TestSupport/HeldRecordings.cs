@@ -204,7 +204,11 @@ public sealed class HeldRecordings : IRecordingDirectory
             held.DescrambledAt,
             held.Gaps,
             held.Carried,
-            held.CountedSessionOpenedAt);
+            held.CountedSessionOpenedAt,
+            held.CaptionState,
+            held.CaptionsMadeAt,
+            held.CaptionPictures,
+            held.CaptionAttempts);
 
     private static string Folded(Recording recording)
         => ProgrammeSearchText.Folded(

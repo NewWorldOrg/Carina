@@ -10,6 +10,8 @@ public sealed class PlaybackRuleTests
 
     private const string Picture = "/Carina.Api/Playback/ThumbnailDelivery.cs";
 
+    private const string Captions = "/Carina.Api/Playback/CaptionDelivery.cs";
+
     private const string LiveHandedOver = "/Carina.Api/Live/LiveStreamDelivery.cs";
 
     private const string WhereItIsMapped = "/Carina.Api/Program.cs";
@@ -20,7 +22,7 @@ public sealed class PlaybackRuleTests
     public void TheOnlyPlacesThatSpellTheDeliveryPathAreWhereItIsDeclaredAndWhereTheDocumentDisownsIt()
     {
         Assert.Equal(
-            [WhereTheDocumentSaysItExists, Play, Scrub, Picture, Delivery],
+            [WhereTheDocumentSaysItExists, Captions, Play, Scrub, Picture, Delivery],
             PlaybackRules.FilesSpellingTheDeliveryPath(RepositoryLayout.SourceDirectory));
     }
 
@@ -33,6 +35,17 @@ public sealed class PlaybackRuleTests
         Assert.Contains("image/jpeg", scrub, StringComparison.Ordinal);
         Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, scrub, StringComparison.Ordinal);
         Assert.DoesNotContain("Accept-Ranges", scrub, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCaptionsUnderTheSamePrefixAreJsonAndNotASecondWayToTheBytes()
+    {
+        string captions = File.ReadAllText(Path.Combine(RepositoryLayout.SourceDirectory, Captions.TrimStart('/')));
+
+        Assert.Contains("\"/api/videos/{id}/captions\"", captions, StringComparison.Ordinal);
+        Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, captions, StringComparison.Ordinal);
+        Assert.DoesNotContain("Accept-Ranges", captions, StringComparison.Ordinal);
+        Assert.Empty(PlaybackRules.WhatTranscodesIn(RepositoryLayout.SourceDirectory, Captions));
     }
 
     [Fact]
