@@ -65,6 +65,35 @@ public sealed class CaptionShelfTests : IDisposable
     }
 
     [Fact]
+    public async Task TheShelfNamesTheRecordingsItKeepsARecordForAndNothingElse()
+    {
+        RecordingId first = RecordingId.New();
+        RecordingId second = RecordingId.New();
+        CaptionShelf shelf = Shelf();
+        await shelf.KeepAsync(first, Record(1), Cancel);
+        await shelf.KeepAsync(second, Record(1), Cancel);
+        await File.WriteAllTextAsync(Path.Combine(Shelved(), "beside.jpg"), "x", Cancel);
+        await File.WriteAllTextAsync(Path.Combine(Shelved(), first.Wire + ".captions.part"), "x", Cancel);
+
+        Assert.Equal(new[] { first.Wire, second.Wire }.Order(StringComparer.Ordinal), shelf.Shelved().Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void AShelfThatWasNeverWrittenToNamesNothing()
+        => Assert.Empty(Shelf().Shelved());
+
+    [Fact]
+    public async Task ARecordThatCannotBeMovedIntoPlaceLeavesNothingHalfWrittenBehind()
+    {
+        RecordingId id = RecordingId.New();
+        Directory.CreateDirectory(Path.Combine(Shelved(), id.Wire + ".captions", "in-the-way"));
+
+        await Assert.ThrowsAnyAsync<IOException>(() => Shelf().KeepAsync(id, Record(1), Cancel));
+
+        Assert.False(File.Exists(Path.Combine(Shelved(), id.Wire + ".captions.part")));
+    }
+
+    [Fact]
     public void AShelfWithNoDirectoryRefusesToSayWhereARecordWouldBe()
         => Assert.Throws<InvalidOperationException>(() => new CaptionShelf(new CaptionSettings()).Holds(RecordingId.New()));
 

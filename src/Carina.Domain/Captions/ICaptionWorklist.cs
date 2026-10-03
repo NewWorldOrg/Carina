@@ -16,5 +16,10 @@ public interface ICaptionWorklist
 
     Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The recordings whose row says their captions are ready.
+    /// </summary>
+    Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken);
+
     Task CaptionAsync(RecordingId id, CaptionState state, int? pictures, CancellationToken cancellationToken);
 }

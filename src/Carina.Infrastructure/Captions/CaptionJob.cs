@@ -12,7 +12,8 @@ namespace Carina.Infrastructure.Captions;
 
 /// <summary>
 /// Takes the captions out of ended recordings one at a time, newest first, and keeps them on the shelf.
-/// A pass does not start the next recording while anything is being recorded or watched.
+/// A pass does not start the next recording while anything is being recorded or watched, and first puts
+/// back in the queue any recording whose row says its captions are ready while no record of them is kept.
 /// </summary>
 public sealed class CaptionJob(
     IServiceScopeFactory scopes,
@@ -92,6 +93,7 @@ public sealed class CaptionJob(
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         ICaptionWorklist worklist = scope.ServiceProvider.GetRequiredService<ICaptionWorklist>();
+        int lost = await RequeueLostAsync(worklist, cancellationToken);
         IReadOnlyList<OutputRoot> withinReach = [.. mounts.OutputRoots.Select(mounted => mounted.Root)];
         IReadOnlyList<CaptionSubject> awaiting =
             await worklist.AwaitingAsync(withinReach, settings.AtMostAPass, cancellationToken);
@@ -129,9 +131,9 @@ public sealed class CaptionJob(
             }
         }
 
-        CaptionPass pass = CaptionPass.Of(awaiting.Count, kept, absent, failed, outOfReach, yielded);
+        CaptionPass pass = CaptionPass.Of(awaiting.Count, kept, absent, failed, outOfReach, yielded, lost);
 
-        if (pass.Settled > 0)
+        if (pass.Settled > 0 || pass.Requeued > 0)
         {
             events.Signal(AppEventName.Recordings);
         }
@@ -141,24 +143,48 @@ public sealed class CaptionJob(
         return pass;
     }
 
+    private async Task<int> RequeueLostAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
+    {
+        IReadOnlySet<string> shelved = shelf.Shelved();
+        RecordingId[] lost =
+        [
+            .. (await worklist.ReadyAsync(cancellationToken)).Where(id => !shelved.Contains(id.Wire)),
+        ];
+
+        foreach (RecordingId id in lost)
+        {
+            await worklist.CaptionAsync(id, CaptionState.Pending, null, cancellationToken);
+        }
+
+        if (lost.Length > 0)
+        {
+            logger.LogWarning(
+                "{Lost} recording(s) said their captions were ready and no record of them was on the shelf, so they are taken again.",
+                lost.Length);
+        }
+
+        return lost.Length;
+    }
+
     private async Task<bool> BusyAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
         => watching.Anyone || await worklist.AnyBeingRecordedAsync(cancellationToken);
 
     private void Told(CaptionPass pass)
     {
-        if (pass.Read is 0 && pass.OutOfReach is 0)
+        if (pass.Read is 0 && pass.OutOfReach is 0 && pass.Requeued is 0)
         {
             return;
         }
 
         logger.LogInformation(
             "A caption pass read {Read} recording(s): {Kept} kept, {Absent} without captions, {Failed} failed, "
-            + "{OutOfReach} left unread under a root out of reach.",
+            + "{OutOfReach} left unread under a root out of reach, {Requeued} put back to be taken again.",
             pass.Read,
             pass.Kept,
             pass.Absent,
             pass.Failed,
-            pass.OutOfReach);
+            pass.OutOfReach,
+            pass.Requeued);
 
         if (pass.Yielded)
         {
@@ -181,23 +207,37 @@ public sealed class CaptionJob(
         {
             throw;
         }
-        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        catch (Exception failure)
         {
             logger.LogWarning(
                 failure,
-                "The captions of recording {Recording} could not be kept on the shelf.",
+                "Taking the captions of recording {Recording} threw, which leaves the recording itself untouched "
+                + "and counts as a failure.",
                 subject.Id.Wire);
 
-            await worklist.CaptionAsync(subject.Id, CaptionState.Failed, null, cancellationToken);
+            return await FailedAsync(worklist, subject.Id, cancellationToken);
+        }
+    }
+
+    private async Task<CaptionState?> FailedAsync(
+        ICaptionWorklist worklist,
+        RecordingId id,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await worklist.CaptionAsync(id, CaptionState.Failed, null, cancellationToken);
 
             return CaptionState.Failed;
         }
-        catch (Exception failure)
+        catch (InvalidOperationException gone)
         {
-            logger.LogError(
-                failure,
-                "Taking the captions of recording {Recording} threw, which leaves the recording itself untouched.",
-                subject.Id.Wire);
+            logger.LogInformation(
+                gone,
+                "Recording {Recording} went while its captions were being taken, so nothing is kept for it.",
+                id.Wire);
+
+            shelf.Forget(id);
 
             return null;
         }
@@ -238,9 +278,7 @@ public sealed class CaptionJob(
                 fault,
                 transcription.Note);
 
-            await worklist.CaptionAsync(subject.Id, CaptionState.Failed, null, cancellationToken);
-
-            return CaptionState.Failed;
+            return await FailedAsync(worklist, subject.Id, cancellationToken);
         }
 
         if (transcription.Record is not { } record)

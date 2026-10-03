@@ -241,9 +241,9 @@ public sealed class CaptionJobTests : IDisposable
     }
 
     [Fact]
-    public async Task ATranscriberThatThrowsLeavesTheRecordingWhereItWasAndTheRestOfThePassGoesOn()
+    public async Task BrPd016ATranscriberThatThrowsCountsAsAFailureSoItIsNotTriedForeverAndTheRestOfThePassGoesOn()
     {
-        Recorded();
+        CaptionSubject first = Recorded();
         CaptionSubject second = Recorded();
         int asked = 0;
         transcriber.Answer = _ => Interlocked.Increment(ref asked) is 1
@@ -252,8 +252,50 @@ public sealed class CaptionJobTests : IDisposable
 
         CaptionPass pass = await Job().RunAsync(Cancel);
 
-        Assert.Equal([(second.Id, CaptionState.Absent, (int?)null)], worklist.Written);
-        Assert.Equal((2, 1), (pass.Read, pass.Settled));
+        Assert.Equal([(first.Id, CaptionState.Failed, (int?)null), (second.Id, CaptionState.Absent, (int?)null)], worklist.Written);
+        Assert.Equal((2, 2, 1), (pass.Read, pass.Settled, pass.Failed));
+    }
+
+    [Fact]
+    public async Task ARecordingThatGoesWhileItsCaptionsAreTakenLeavesNoRecordBehind()
+    {
+        CaptionSubject subject = Recorded();
+        worklist.Gone.Add(subject.Id);
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(Record(2));
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.False(new CaptionShelf(Settings()).Holds(subject.Id));
+        Assert.Empty(worklist.Written);
+        Assert.Equal(0, pass.Settled);
+    }
+
+    [Fact]
+    public async Task BrPd016ARecordingThatSaysItsCaptionsAreReadyWithNoRecordOnTheShelfIsPutBackToBeTakenAgain()
+    {
+        RecordingId lost = RecordingId.New();
+        RecordingId kept = RecordingId.New();
+        await new CaptionShelf(Settings()).KeepAsync(kept, Record(1), Cancel);
+        worklist.Ready.AddRange([lost, kept]);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal([(lost, CaptionState.Pending, (int?)null)], worklist.Written);
+        Assert.Equal(1, pass.Requeued);
+        Assert.Equal(["recordings"], events.Signalled);
+    }
+
+    [Fact]
+    public async Task WithNothingOnTheShelfAtAllEveryReadyRecordingIsPutBack()
+    {
+        RecordingId first = RecordingId.New();
+        RecordingId second = RecordingId.New();
+        worklist.Ready.AddRange([first, second]);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal(2, pass.Requeued);
+        Assert.All(worklist.Written, written => Assert.Equal(CaptionState.Pending, written.State));
     }
 
     private CaptionSettings Settings() => new() { WrittenTo = shelved };
@@ -313,6 +355,10 @@ public sealed class CaptionJobTests : IDisposable
 
         public bool BeingRecorded { get; set; }
 
+        public List<RecordingId> Ready { get; } = [];
+
+        public HashSet<RecordingId> Gone { get; } = [];
+
         public int Reads { get; private set; }
 
         public int? AskedFor { get; private set; }
@@ -343,8 +389,16 @@ public sealed class CaptionJobTests : IDisposable
 
         public Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken) => Task.FromResult(BeingRecorded);
 
+        public Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<RecordingId>>([.. Ready]);
+
         public Task CaptionAsync(RecordingId id, CaptionState state, int? pictures, CancellationToken cancellationToken)
         {
+            if (Gone.Contains(id))
+            {
+                throw new InvalidOperationException($"There is no recording {id.Wire} to keep captions for.");
+            }
+
             Written.Add((id, state, pictures));
 
             return Task.CompletedTask;

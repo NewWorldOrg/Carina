@@ -158,6 +158,24 @@ public sealed class CaptionWorklistTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task TheRecordingsWhoseCaptionsAreReadyAreNamedAndNoOthers()
+    {
+        OutputRoot alone = Alone();
+        Recording ready = await AddAsync(alone, 7211);
+        Recording absent = await AddAsync(alone, 7212);
+        await SettleAsync(ready.Id, RecordingOutcome.Complete, Now.AddHours(1));
+        await SettleAsync(absent.Id, RecordingOutcome.Complete, Now.AddHours(1));
+        await CaptionAsync(ready.Id, CaptionState.Ready, 2, Now.AddHours(2));
+        await CaptionAsync(absent.Id, CaptionState.Absent, null, Now.AddHours(2));
+
+        await using CarinaDbContext context = database.Open();
+        IReadOnlyList<RecordingId> named = await new CaptionWorklist(context, Clock()).ReadyAsync(Cancel);
+
+        Assert.Contains(ready.Id, named);
+        Assert.DoesNotContain(absent.Id, named);
+    }
+
+    [Fact]
     public async Task KeepingCaptionsForARecordingNobodyHasHeardOfIsRefused()
     {
         await using CarinaDbContext context = database.Open();

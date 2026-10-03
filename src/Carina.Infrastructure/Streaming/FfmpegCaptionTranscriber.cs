@@ -34,6 +34,14 @@ public sealed class FfmpegCaptionTranscriber(
 
         StreamSource file = new(source);
         StreamAttributeReading reading = await attributes.ReadAsync(file, cancellationToken);
+
+        if (reading.FellBackOn.Contains(StreamAttribute.Resolution))
+        {
+            return CaptionTranscription.Failed(
+                CaptionFault.CanvasUnread,
+                $"the size of the picture could not be read, so the canvas the captions are drawn on is unknown. {reading.Note}");
+        }
+
         CaptionCanvas canvas = new(reading.Attributes.Size);
         ProgrammeStart start = AnotherProgramme.Start(
             machine.Programme,

@@ -10,7 +10,8 @@ public sealed record CaptionPass
         int absent,
         int failed,
         int outOfReach,
-        bool yielded)
+        bool yielded,
+        int requeued)
     {
         AlreadyRunning = alreadyRunning;
         NowhereToKeepThem = nowhereToKeepThem;
@@ -20,6 +21,7 @@ public sealed record CaptionPass
         Failed = failed;
         OutOfReach = outOfReach;
         Yielded = yielded;
+        Requeued = requeued;
     }
 
     public bool AlreadyRunning { get; }
@@ -41,17 +43,23 @@ public sealed record CaptionPass
     /// </summary>
     public bool Yielded { get; }
 
+    /// <summary>
+    /// How many recordings said their captions were ready with no record of them kept, and were put back.
+    /// </summary>
+    public int Requeued { get; }
+
     public int Settled => Kept + Absent + Failed;
 
     public int LeftForNextTime => Read - Settled;
 
-    public static CaptionPass Of(int read, int kept, int absent, int failed, int outOfReach, bool yielded)
+    public static CaptionPass Of(int read, int kept, int absent, int failed, int outOfReach, bool yielded, int requeued = 0)
     {
         Counted(read, nameof(read));
         Counted(kept, nameof(kept));
         Counted(absent, nameof(absent));
         Counted(failed, nameof(failed));
         Counted(outOfReach, nameof(outOfReach));
+        Counted(requeued, nameof(requeued));
 
         if (kept + absent + failed > read)
         {
@@ -61,12 +69,12 @@ public sealed record CaptionPass
                 $"A pass that read {read} recording(s) settled no more than that, not {kept + absent + failed}.");
         }
 
-        return new CaptionPass(false, false, read, kept, absent, failed, outOfReach, yielded);
+        return new CaptionPass(false, false, read, kept, absent, failed, outOfReach, yielded, requeued);
     }
 
-    public static CaptionPass RefusedBecauseOneIsRunning() => new(true, false, 0, 0, 0, 0, 0, false);
+    public static CaptionPass RefusedBecauseOneIsRunning() => new(true, false, 0, 0, 0, 0, 0, false, 0);
 
-    public static CaptionPass RefusedBecauseThereIsNowhereToKeepThem() => new(false, true, 0, 0, 0, 0, 0, false);
+    public static CaptionPass RefusedBecauseThereIsNowhereToKeepThem() => new(false, true, 0, 0, 0, 0, 0, false, 0);
 
     private static void Counted(int counted, string name)
     {

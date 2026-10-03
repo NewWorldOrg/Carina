@@ -20,8 +20,18 @@ public sealed class CaptionShelf(CaptionSettings settings)
         string unfinished = kept + Unfinished;
 
         Directory.CreateDirectory(settings.WrittenTo!);
-        await File.WriteAllBytesAsync(unfinished, CaptionRecordFormat.Written(record), cancellationToken);
-        File.Move(unfinished, kept, overwrite: true);
+
+        try
+        {
+            await File.WriteAllBytesAsync(unfinished, CaptionRecordFormat.Written(record), cancellationToken);
+            File.Move(unfinished, kept, overwrite: true);
+        }
+        catch
+        {
+            Unlink(unfinished);
+
+            throw;
+        }
     }
 
     public async Task<CaptionRecord?> ReadAsync(RecordingId id, CancellationToken cancellationToken)
@@ -45,13 +55,31 @@ public sealed class CaptionShelf(CaptionSettings settings)
 
     public bool Holds(RecordingId id) => File.Exists(Kept(id));
 
-    public void Forget(RecordingId id)
-    {
-        string kept = Kept(id);
+    public void Forget(RecordingId id) => Unlink(Kept(id));
 
-        if (File.Exists(kept))
+    /// <summary>
+    /// The recordings a record is kept for, read off the names on the shelf.
+    /// </summary>
+    public IReadOnlySet<string> Shelved()
+    {
+        if (settings.WrittenTo is not { } shelf || !Directory.Exists(shelf))
         {
-            File.Delete(kept);
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        return Directory.EnumerateFiles(shelf, "*" + CaptionSettings.Extension)
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .Where(name => name.EndsWith(CaptionSettings.Extension, StringComparison.Ordinal))
+            .Select(name => name[..^CaptionSettings.Extension.Length])
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static void Unlink(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
         }
     }
 
