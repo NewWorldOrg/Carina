@@ -381,9 +381,29 @@ public sealed class PlayDeliveryTests
         Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
         Assert.Empty(feature.Player.AskedWith);
         Assert.Equal(
-            PlayDelivery.TheBroadcastCarriedTheOneSound,
+            PlayDelivery.TheRecordingDoesNotCarryThatSound,
             (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
     }
+
+    [Fact]
+    public async Task ARecordingOfABroadcastThatCarriedTwoSoundsOfTheirOwnHasNoThirdOneToAskFor()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.Stereo, sounds: 2);
+        feature.Player.Sounds = 2;
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording, "?sound=third");
+
+        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Empty(feature.Player.AskedWith);
+        Assert.Equal(
+            PlayDelivery.TheRecordingDoesNotCarryThatSound,
+            (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public void TheSoundsARecordingCanBePlayedWithAreNamedInTheRefusal()
+        => Assert.All(SoundTracks.Names, name => Assert.Contains(name, PlayDelivery.TheSoundsThereAre, StringComparison.Ordinal));
 
     [Fact]
     public async Task ARecordingWhoseSoundsCouldNotBeReadIsNotStartedOnAGuess()
@@ -643,7 +663,7 @@ public sealed class PlayDeliveryTests
         Assert.Empty(feature.Player.AskedWith);
         Assert.Equal(1, feature.Player.AskedWhatItCarries);
         Assert.Equal(
-            PlayDelivery.TheBroadcastCarriedTheOneSound,
+            PlayDelivery.TheRecordingDoesNotCarryThatSound,
             (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
     }
 
