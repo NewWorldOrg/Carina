@@ -28,7 +28,7 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-builder.Logging.AddConsoleLinesWithTheirTime();
+builder.Logging.AddConsoleLinesWithTheirTime().KeepRequestLinesOut();
 
 builder.Services
     .AddControllers(options => options.Filters.Add(new ProducesAttribute("application/json")))

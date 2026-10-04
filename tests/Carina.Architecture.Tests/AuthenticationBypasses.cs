@@ -76,6 +76,17 @@ public static class AuthenticationBypasses
         "UseHttpLogging",
     ];
 
+    public static IReadOnlyList<string> ReadingTheRequestPath { get; } =
+    [
+        "Request.Path",
+        "Request.PathBase",
+        "Request.QueryString",
+        "GetDisplayUrl",
+        "GetEncodedUrl",
+        "GetEncodedPathAndQuery",
+        "RawTarget",
+    ];
+
     public static IReadOnlyList<string> OutboundCallers { get; } =
     [
         "HttpClient",

@@ -25,9 +25,9 @@ public sealed class UnhandledFailureMiddleware(
         {
             logger.LogError(
                 failure,
-                "{Method} {Path} ended without an answer of its own.",
+                "{Method} {Route} ended without an answer of its own.",
                 context.Request.Method,
-                context.Request.Path.Value);
+                RouteShape.Of(context));
 
             context.Response.Clear();
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
