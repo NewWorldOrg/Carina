@@ -66,6 +66,63 @@ public sealed class PlaybackTicketRuleSelfCheckTests
         }
     }
 
+    [Fact(DisplayName = "detects a source that would write the path a request came on to a log")]
+    public void DetectsASourceThatWouldWriteTheRequestPathToALog()
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-request-path-");
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Loud.cs"),
+                """
+                namespace Sample;
+                public sealed class Fell(ILogger<Fell> logger)
+                {
+                    public void Said(HttpContext context) => logger.LogError("{Path}", context.Request.Path.Value);
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Url.cs"),
+                """
+                namespace Sample;
+                public static class Fell
+                {
+                    public static void Said(HttpContext context) => Console.Error.WriteLine(context.Request.GetDisplayUrl());
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Held.cs"),
+                """
+                namespace Sample;
+                public sealed class Fell(ILogger<Fell> logger)
+                {
+                    public void Said(HttpRequest request) => logger.LogWarning("{Path}", request.Path);
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Quiet.cs"),
+                """
+                namespace Sample;
+                public static class Matched
+                {
+                    public static bool Api(HttpContext context) => context.Request.Path.StartsWithSegments("/api");
+                }
+                """);
+
+            Assert.Equal(
+                ["Held.cs", "Loud.cs", "Url.cs"],
+                SourceScan.FilesMentioningBoth(
+                    directory.FullName,
+                    AuthenticationBypasses.ReadingTheRequestPath,
+                    AuthenticationBypasses.Logging));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void DetectsASecondReaderOfTheAuthorizationHeader()
     {

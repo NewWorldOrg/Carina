@@ -163,6 +163,16 @@ nothing.
 - **The OIDC client secret is read in the clear in two files only** — where it is
   stored and where it is spent. Neither of them logs, and nothing that answers a
   caller can even name it.
+- **No log names the path a request came on.** A playback ticket can travel in
+  the path of the two surfaces an external player opens, so a line about a
+  request names the pattern of the route it matched, the framework categories
+  that write the path are pinned to warnings after every configured rule has been
+  read, a provider's own included, and a source rule refuses a file on the HTTP
+  surface that both reads the request path and logs. A feature test turns every
+  log up to its finest, for all providers and for one by name, and finds the
+  ticket in no line. **It is a
+  trip wire, not a proof:** a path handed to a helper that logs walks past the
+  source rule.
 - **Configuration is validated at startup** and the process stops with a message
   naming the offending setting. There is no hot reload. Secrets never enter
   committed configuration: placeholders only, real values from the environment.

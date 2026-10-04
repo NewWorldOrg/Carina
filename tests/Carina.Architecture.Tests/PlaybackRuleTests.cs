@@ -59,16 +59,21 @@ public sealed class PlaybackRuleTests
     [Fact]
     public void TheDeliveryIsMappedOutOfTheDocumentAWebClientIsGeneratedFrom()
     {
-        string mapping = Mapping();
-
-        Assert.Contains("VideoDelivery.Path", mapping, StringComparison.Ordinal);
-        Assert.Contains("ExcludeFromDescription()", mapping, StringComparison.Ordinal);
+        Assert.Contains("ExcludeFromDescription()", Mapping("VideoDelivery.Path"), StringComparison.Ordinal);
+        Assert.Contains(
+            "ExcludeFromDescription()",
+            Mapping("VideoDelivery.WithTheTicketInThePath"),
+            StringComparison.Ordinal);
     }
 
     [Fact]
     public void TheDeliveryAnswersBothTheAskingAndTheAskingForHeadersAlone()
     {
-        Assert.Contains("VideoDelivery.Methods", Mapping(), StringComparison.Ordinal);
+        Assert.Contains("VideoDelivery.Methods", Mapping("VideoDelivery.Path"), StringComparison.Ordinal);
+        Assert.Contains(
+            "VideoDelivery.Methods",
+            Mapping("VideoDelivery.WithTheTicketInThePath"),
+            StringComparison.Ordinal);
         Assert.Contains(
             "public static readonly string[] Methods = [HttpMethods.Get, HttpMethods.Head];",
             File.ReadAllText(Path.Combine(RepositoryLayout.SourceDirectory, Delivery.TrimStart('/'))),
@@ -108,12 +113,12 @@ public sealed class PlaybackRuleTests
         Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, handed, StringComparison.Ordinal);
     }
 
-    private static string Mapping()
+    private static string Mapping(string path)
     {
         string program = File.ReadAllText(
             Path.Combine(RepositoryLayout.SourceDirectory, WhereItIsMapped.TrimStart('/')));
 
-        int at = program.IndexOf("app.MapMethods(VideoDelivery.Path", StringComparison.Ordinal);
+        int at = program.IndexOf($"app.MapMethods({path},", StringComparison.Ordinal);
 
         Assert.True(at >= 0, "nothing in the entry point maps the delivery");
 

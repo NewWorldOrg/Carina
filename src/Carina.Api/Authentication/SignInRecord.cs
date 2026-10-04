@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Routing;
@@ -27,7 +28,7 @@ public sealed class SignInRecord(ILogger<SignInRecord> logger, TimeProvider cloc
 
     public const string Unsaid = "-";
 
-    public const string NoRoute = "(no route)";
+    public const string NoRoute = RouteShape.NoRoute;
 
     public const string FetchSite = "Sec-Fetch-Site";
 
@@ -103,10 +104,7 @@ public sealed class SignInRecord(ILogger<SignInRecord> logger, TimeProvider cloc
             ? LogLevel.Warning
             : LogLevel.Information;
 
-    private static string RouteOf(HttpContext context)
-        => context.GetEndpoint() is RouteEndpoint { RoutePattern.RawText: { Length: > 0 } pattern }
-            ? Plain($"/{pattern.TrimStart('/')}", LongestRoute)
-            : NoRoute;
+    private static string RouteOf(HttpContext context) => Plain(RouteShape.Of(context), LongestRoute);
 
     private static string Plain(string? said, int longest)
     {

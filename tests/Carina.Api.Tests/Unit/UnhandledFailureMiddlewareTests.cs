@@ -4,6 +4,8 @@ using Carina.Api.Common;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.Logging;
 
 namespace Carina.Api.Tests.Unit;
@@ -67,6 +69,39 @@ public sealed class UnhandledFailureMiddlewareTests
         Assert.DoesNotContain(LogLevel.Error, logger.Levels);
     }
 
+    [Fact(DisplayName = "a failed request is written down by the shape of its route, so a ticket carried in its path never reaches the log")]
+    public async Task AFailedRequestIsWrittenDownByTheShapeOfItsRoute()
+    {
+        const string ticket = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        DefaultHttpContext context = Context();
+        context.Request.Method = "GET";
+        context.Request.Path = $"/api/videos/0123/with-ticket/{ticket}/a-name.mp4";
+        context.SetEndpoint(new RouteEndpoint(
+            _ => Task.CompletedTask,
+            RoutePatternFactory.Parse("/api/videos/{id}/with-ticket/{ticket}/{*name}"),
+            0,
+            EndpointMetadataCollection.Empty,
+            "with the ticket in the path"));
+
+        await Middleware(_ => throw new InvalidOperationException("no answer of its own")).InvokeAsync(context);
+
+        string said = Assert.Single(logger.Lines);
+
+        Assert.Contains("GET /api/videos/{id}/with-ticket/{ticket}/{*name}", said, StringComparison.Ordinal);
+        Assert.DoesNotContain(ticket, said, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "a failed request that matched no route is written down without its path")]
+    public async Task AFailedRequestThatMatchedNoRouteIsWrittenDownWithoutItsPath()
+    {
+        DefaultHttpContext context = Context();
+        context.Request.Path = "/somewhere/nobody/routed";
+
+        await Middleware(_ => throw new InvalidOperationException("no answer of its own")).InvokeAsync(context);
+
+        Assert.DoesNotContain("/somewhere/nobody/routed", Assert.Single(logger.Lines), StringComparison.Ordinal);
+    }
+
     private static DefaultHttpContext Context()
     {
         var context = new DefaultHttpContext();
@@ -112,6 +147,8 @@ public sealed class UnhandledFailureMiddlewareTests
     {
         public List<LogLevel> Levels { get; } = [];
 
+        public List<string> Lines { get; } = [];
+
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull
             => null;
@@ -124,6 +161,11 @@ public sealed class UnhandledFailureMiddlewareTests
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter)
-            => Levels.Add(logLevel);
+        {
+            ArgumentNullException.ThrowIfNull(formatter);
+
+            Levels.Add(logLevel);
+            Lines.Add(formatter(state, exception));
+        }
     }
 }

@@ -11,6 +11,8 @@ public static class VideoDelivery
 {
     public const string Path = "/api/videos/{id}";
 
+    public const string WithTheTicketInThePath = "/api/videos/{id}/with-ticket/{ticket}/{*name}";
+
     public const string Source = "source";
 
     public static readonly string[] Methods = [HttpMethods.Get, HttpMethods.Head];
