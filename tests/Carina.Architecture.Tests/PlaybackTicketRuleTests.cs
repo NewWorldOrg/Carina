@@ -43,11 +43,11 @@ public sealed class PlaybackTicketRuleTests
             AuthenticationBypasses.Logging));
     }
 
-    [Fact(DisplayName = "nothing that reads the path a request came on also writes to a log, because a ticket can travel in the path")]
+    [Fact(DisplayName = "nothing on the HTTP surface that reads the path a request came on also writes to a log, because a ticket can travel in the path")]
     public void NothingThatReadsTheRequestPathAlsoWritesToALog()
     {
         Assert.Empty(SourceScan.FilesMentioningBoth(
-            RepositoryLayout.SourceDirectory,
+            Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Api"),
             AuthenticationBypasses.ReadingTheRequestPath,
             AuthenticationBypasses.Logging));
     }

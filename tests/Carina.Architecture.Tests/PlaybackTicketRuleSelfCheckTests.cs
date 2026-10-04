@@ -92,6 +92,15 @@ public sealed class PlaybackTicketRuleSelfCheckTests
                 }
                 """);
             File.WriteAllText(
+                Path.Combine(directory.FullName, "Held.cs"),
+                """
+                namespace Sample;
+                public sealed class Fell(ILogger<Fell> logger)
+                {
+                    public void Said(HttpRequest request) => logger.LogWarning("{Path}", request.Path);
+                }
+                """);
+            File.WriteAllText(
                 Path.Combine(directory.FullName, "Quiet.cs"),
                 """
                 namespace Sample;
@@ -102,7 +111,7 @@ public sealed class PlaybackTicketRuleSelfCheckTests
                 """);
 
             Assert.Equal(
-                ["Loud.cs", "Url.cs"],
+                ["Held.cs", "Loud.cs", "Url.cs"],
                 SourceScan.FilesMentioningBoth(
                     directory.FullName,
                     AuthenticationBypasses.ReadingTheRequestPath,
