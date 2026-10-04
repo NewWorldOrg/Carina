@@ -66,23 +66,6 @@ public sealed class QueryInputScanSelfCheckTests
     }
 
     [Fact]
-    public void PlacesTheTicketCarrierReadingOnEverySurfaceItAdmits()
-    {
-        using var tree = new SourceTree();
-        tree.Write(
-            "Authentication/PlaybackTicketCarrier.cs",
-            """
-            public const string QueryKey = "ticket";
-            request.Query[QueryKey];
-            """);
-
-        Assert.Equal(
-            ["/api/live/{networkId:int}-{serviceId:int}/stream ticket", "/api/videos/{id} ticket"],
-            Read(tree));
-        Assert.Empty(QueryInputScan.WhatTheScanCouldNotPlace(tree.Root));
-    }
-
-    [Fact]
     public void ReportsANameSpeltSomewhereItCannotFollow()
     {
         using var tree = new SourceTree();

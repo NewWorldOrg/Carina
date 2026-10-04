@@ -2,36 +2,31 @@ using System.Text;
 
 using Carina.Domain.Auth;
 
-using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Authentication;
 
 public static class PlaybackTicketCarrier
 {
-    public const string QueryKey = "ticket";
-
     private const string Bearer = "Bearer ";
 
     private const string Basic = "Basic ";
 
     private const char Separator = ':';
 
-    /// <summary>The ticket a request carries on its Authorization header, or in its query when it has no such header.</summary>
     public static string? OfferedBy(HttpRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        StringValues header = request.Headers[HeaderNames.Authorization];
-        string? carried = header.Count == 0 ? TheOnly(request.Query[QueryKey]) : OnTheHeader(header);
+        if (request.Headers[HeaderNames.Authorization] is not [string offered])
+        {
+            return null;
+        }
+
+        string? carried = Carried(offered);
 
         return Unguessable.IsOne(carried) ? carried : null;
     }
-
-    private static string? OnTheHeader(StringValues header)
-        => TheOnly(header) is { } offered ? Carried(offered) : null;
-
-    private static string? TheOnly(StringValues values) => values is [string one] ? one : null;
 
     private static string? Carried(string offered)
     {

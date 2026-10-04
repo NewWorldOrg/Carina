@@ -1,8 +1,5 @@
 using System.Text.RegularExpressions;
 
-using Carina.Api.Live;
-using Carina.Api.Playback;
-
 namespace Carina.Api.Tests.FeatureTest;
 
 internal readonly record struct QueryRead(string File, string Surface, string Name)
@@ -13,11 +10,6 @@ internal readonly record struct QueryRead(string File, string Surface, string Na
 internal static partial class QueryInputScan
 {
     private const string RootMarker = "Carina.slnx";
-
-    private static readonly Dictionary<string, string[]> ReadForTheSurfacesItAdmits = new(StringComparer.Ordinal)
-    {
-        ["/Authentication/PlaybackTicketCarrier.cs"] = [VideoDelivery.Path, LiveStreamDelivery.Path],
-    };
 
     public static string ApiDirectory { get; } = Path.Combine(Root(), "src", "Carina.Api");
 
@@ -48,12 +40,8 @@ internal static partial class QueryInputScan
     }
 
     private static IEnumerable<PlacedRead> Reads(SourceFile file)
-        => ReadForTheSurfacesItAdmits.TryGetValue(file.Relative, out string[]? surfaces)
-            ? surfaces.SelectMany(surface => Reads(file, surface))
-            : Reads(file, SurfaceOf(file.Source));
-
-    private static IEnumerable<PlacedRead> Reads(SourceFile file, string? surface)
     {
+        string? surface = SurfaceOf(file.Source);
         Dictionary<string, string> spellings = Constant()
             .Matches(file.Source)
             .ToDictionary(match => match.Groups["name"].Value, match => match.Groups["value"].Value, StringComparer.Ordinal);

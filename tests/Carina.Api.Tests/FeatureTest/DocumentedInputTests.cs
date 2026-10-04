@@ -9,11 +9,9 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
 {
     private static readonly string[] TheOnesTheDocumentDisowns =
     [
-        "/api/live/{networkId:int}-{serviceId:int}/stream ticket",
         "/api/programs/bulk cursor",
         "/api/programs/bulk rows",
         "/api/videos/{id} source",
-        "/api/videos/{id} ticket",
     ];
 
     [Fact]
