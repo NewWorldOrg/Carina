@@ -8,6 +8,8 @@ namespace Carina.Api.Authentication;
 
 public static class PlaybackTicketCarrier
 {
+    public const string InThePath = "ticket";
+
     private const string Bearer = "Bearer ";
 
     private const string Basic = "Basic ";
@@ -18,15 +20,20 @@ public static class PlaybackTicketCarrier
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        if (request.RouteValues.TryGetValue(InThePath, out object? placed))
+        {
+            return Ticket(placed as string);
+        }
+
         if (request.Headers[HeaderNames.Authorization] is not [string offered])
         {
             return null;
         }
 
-        string? carried = Carried(offered);
-
-        return Unguessable.IsOne(carried) ? carried : null;
+        return Ticket(Carried(offered));
     }
+
+    private static string? Ticket(string? carried) => Unguessable.IsOne(carried) ? carried : null;
 
     private static string? Carried(string offered)
     {

@@ -130,6 +130,40 @@ public sealed class PlaybackTicketCarrierTests
         Assert.Null(PlaybackTicketCarrier.OfferedBy(Asking(Basic("a:b", ticket))));
     }
 
+    [Fact(DisplayName = "a player handed a URL with the ticket in its path offers the ticket from the path")]
+    public void APlayerHandedAUrlWithTheTicketInItsPathOffersTheTicketFromThePath()
+    {
+        string ticket = Unguessable.Issue();
+
+        Assert.Equal(ticket, PlaybackTicketCarrier.OfferedBy(InThePath(ticket)));
+    }
+
+    [Fact(DisplayName = "where the path has a place for the ticket, the header is not read, so a second ticket cannot stand in for it")]
+    public void WhereThePathHasAPlaceForTheTicketTheHeaderIsNotRead()
+    {
+        HttpRequest request = InThePath("short");
+        request.Headers[HeaderNames.Authorization] = $"Bearer {Unguessable.Issue()}";
+
+        Assert.Null(PlaybackTicketCarrier.OfferedBy(request));
+    }
+
+    [Theory(DisplayName = "something in the ticket's place in the path that is not the shape of a ticket offers nothing")]
+    [InlineData("")]
+    [InlineData("short")]
+    [InlineData("...........................................")]
+    public void SomethingInTheTicketsPlaceThatIsNotATicketOffersNothing(string carried)
+    {
+        Assert.Null(PlaybackTicketCarrier.OfferedBy(InThePath(carried)));
+    }
+
+    private static HttpRequest InThePath(string ticket)
+    {
+        DefaultHttpContext context = new();
+        context.Request.RouteValues[PlaybackTicketCarrier.InThePath] = ticket;
+
+        return context.Request;
+    }
+
     private static string Basic(string user, string password)
         => $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}"))}";
 

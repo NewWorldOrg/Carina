@@ -11,6 +11,8 @@ public static class LiveStreamDelivery
 {
     public const string Path = "/api/live/{networkId:int}-{serviceId:int}/stream";
 
+    public const string WithTheTicketInThePath = "/api/live/{networkId:int}-{serviceId:int}/with-ticket/{ticket}/{*name}";
+
     public const string MediaType = "video/mp2t";
 
     public const string NoSeeking = "none";

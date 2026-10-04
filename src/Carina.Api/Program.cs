@@ -105,7 +105,18 @@ app.MapGet(
     .WithEffect(EndpointEffect.Reading)
     .Ticketed();
 
+app.MapGet(
+        LiveStreamDelivery.WithTheTicketInThePath,
+        (HttpContext context, int networkId, int serviceId, ILiveSessionManager sessions) =>
+            LiveStreamDelivery.Invoke(context, networkId, serviceId, sessions))
+    .ExcludeFromDescription()
+    .WithEffect(EndpointEffect.Reading)
+    .Ticketed();
+
 app.MapMethods(VideoDelivery.Path, VideoDelivery.Methods, (HttpContext context, string id, PlaybackService playback) =>
+    VideoDelivery.Invoke(context, id, playback)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading).Ticketed();
+
+app.MapMethods(VideoDelivery.WithTheTicketInThePath, VideoDelivery.Methods, (HttpContext context, string id, PlaybackService playback) =>
     VideoDelivery.Invoke(context, id, playback)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading).Ticketed();
 
 app.MapGet(

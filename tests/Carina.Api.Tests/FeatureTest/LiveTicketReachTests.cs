@@ -74,6 +74,67 @@ public sealed class LiveTicketReachTests
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
     }
 
+    [Theory(DisplayName = "a player handed the live ticket in the path is handed the channel, whatever name ends the path")]
+    [InlineData("a-channel%20a-programme.ts")]
+    [InlineData("")]
+    [InlineData("a-name.mp4")]
+    public async Task APlayerHandedTheLiveTicketInThePathIsHandedTheChannel(string name)
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Carrying(probe, null);
+        using HttpResponseMessage opened = await OpenedAsync(
+            player,
+            new Uri($"/api/live/32736-1024/with-ticket/{ticket}/{name}", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
+        Assert.Equal(LiveStreamDelivery.MediaType, opened.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact(DisplayName = "a live ticket in the path opens the channel it was issued for and no other")]
+    public async Task ALiveTicketInThePathOpensTheChannelItWasIssuedForAndNoOther()
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Carrying(probe, null);
+        using HttpResponseMessage refused = await player.GetAsync(
+            new Uri($"/api/live/32736-1025/with-ticket/{ticket}/a-channel.ts", UriKind.Relative),
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+    }
+
+    [Fact(DisplayName = "something that is not the shape of a ticket in the live path is refused without being sent to a sign-in screen")]
+    public async Task SomethingThatIsNotATicketInTheLivePathIsRefused()
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Carrying(probe, ticket);
+        using HttpResponseMessage refused = await player.GetAsync(
+            new Uri("/api/live/32736-1024/with-ticket/short/a-channel.ts", UriKind.Relative),
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+        Assert.Null(refused.Headers.Location);
+    }
+
+    [Fact(DisplayName = "a live ticket in the query is refused, because it shows as the title in a player")]
+    public async Task ALiveTicketInTheQueryIsRefused()
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Carrying(probe, null);
+        using HttpResponseMessage refused = await player.GetAsync(
+            new Uri($"{Exit}?ticket={ticket}", UriKind.Relative),
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+    }
+
     [Fact]
     public async Task ALiveTicketOfferedOnTheWireHandshakeIsRefusedBeforeItBecomesAWebSocket()
     {
@@ -106,7 +167,7 @@ public sealed class LiveTicketReachTests
         Assert.Null(first.Headers.Location);
     }
 
-    private static HttpClient Carrying(AuthProbe probe, string ticket)
+    private static HttpClient Carrying(AuthProbe probe, string? ticket)
     {
         HttpClient player = probe.Wired.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -114,7 +175,10 @@ public sealed class LiveTicketReachTests
             AllowAutoRedirect = false,
         });
 
-        player.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ticket);
+        if (ticket is not null)
+        {
+            player.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ticket);
+        }
 
         return player;
     }
@@ -136,9 +200,11 @@ public sealed class LiveTicketReachTests
 
     private static byte[] Mouthful() => [.. Enumerable.Range(0, 4_000).Select(at => (byte)(at % 251))];
 
-    private async Task<HttpResponseMessage> OpenedAsync(HttpClient player)
+    private Task<HttpResponseMessage> OpenedAsync(HttpClient player) => OpenedAsync(player, Exit);
+
+    private async Task<HttpResponseMessage> OpenedAsync(HttpClient player, Uri at)
     {
-        Task<HttpResponseMessage> opening = player.GetAsync(Exit, HttpCompletionOption.ResponseHeadersRead);
+        Task<HttpResponseMessage> opening = player.GetAsync(at, HttpCompletionOption.ResponseHeadersRead);
 
         while (!opening.IsCompleted)
         {

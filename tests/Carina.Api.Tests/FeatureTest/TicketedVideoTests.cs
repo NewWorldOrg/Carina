@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -28,10 +29,20 @@ internal sealed class TicketedFeature : IAsyncDisposable
     private readonly DirectoryInfo shelved = Directory.CreateTempSubdirectory("carina-ticketed-shelf-");
 
     public TicketedFeature()
+        : this(null)
+    {
+    }
+
+    public TicketedFeature(RecordedStartup? heard)
     {
         WebApplicationFactory<Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
+                if (heard is not null)
+                {
+                    services.AddSingleton<ILoggerProvider>(heard);
+                }
+
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IRecordingDirectory>(Recordings);
                 services.AddSingleton<IEncodeJobRepository>(Jobs);
@@ -47,6 +58,15 @@ internal sealed class TicketedFeature : IAsyncDisposable
                     OutputRoots = [new StorageRootPath(EncodedArtefact.Shelf, shelved.FullName)],
                 });
             }));
+
+        if (heard is not null)
+        {
+            configured = configured.WithWebHostBuilder(builder => builder
+                .UseSetting("Logging:LogLevel:Default", nameof(LogLevel.Trace))
+                .UseSetting("Logging:LogLevel:Microsoft", nameof(LogLevel.Trace))
+                .UseSetting("Logging:LogLevel:Microsoft.AspNetCore", nameof(LogLevel.Trace))
+                .UseSetting("Logging:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics", nameof(LogLevel.Trace)));
+        }
 
         WebApplicationFactory<Program> served = configured.WithTestScheme();
 
