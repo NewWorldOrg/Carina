@@ -75,6 +75,53 @@ public sealed class LiveTicketReachTests
     }
 
     [Fact]
+    public async Task ALiveTicketInTheQueryOpensTheChannelHandedOver()
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Bare(probe);
+        using HttpResponseMessage opened = await OpenedAsync(player, new Uri($"{Exit}?ticket={ticket}", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
+        Assert.Equal(LiveStreamDelivery.MediaType, opened.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Theory]
+    [InlineData("/api/live/sessions")]
+    [InlineData("/api/live/channels")]
+    [InlineData(AppEventStream.Path)]
+    public async Task ALiveTicketInTheQueryOpensNoOtherSurface(string path)
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Bare(probe);
+        using HttpResponseMessage response = await player.GetAsync(
+            new Uri($"{path}?ticket={ticket}", UriKind.Relative),
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    [Fact]
+    public async Task ALiveTicketInTheQueryOfTheWireHandshakeIsRefusedBeforeItBecomesAWebSocket()
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        WebSocketClient client = probe.Wired.Server.CreateWebSocketClient();
+
+        InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.ConnectAsync(
+                new Uri($"{Handshake}&ticket={ticket}"),
+                new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token));
+
+        Assert.Contains("401", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ALiveTicketOfferedOnTheWireHandshakeIsRefusedBeforeItBecomesAWebSocket()
     {
         await using AuthProbe probe = Wiring(out _);
@@ -106,13 +153,16 @@ public sealed class LiveTicketReachTests
         Assert.Null(first.Headers.Location);
     }
 
-    private static HttpClient Carrying(AuthProbe probe, string ticket)
-    {
-        HttpClient player = probe.Wired.CreateClient(new WebApplicationFactoryClientOptions
+    private static HttpClient Bare(AuthProbe probe)
+        => probe.Wired.CreateClient(new WebApplicationFactoryClientOptions
         {
             BaseAddress = new Uri("http://localhost"),
             AllowAutoRedirect = false,
         });
+
+    private static HttpClient Carrying(AuthProbe probe, string ticket)
+    {
+        HttpClient player = Bare(probe);
 
         player.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ticket);
 
@@ -136,9 +186,11 @@ public sealed class LiveTicketReachTests
 
     private static byte[] Mouthful() => [.. Enumerable.Range(0, 4_000).Select(at => (byte)(at % 251))];
 
-    private async Task<HttpResponseMessage> OpenedAsync(HttpClient player)
+    private Task<HttpResponseMessage> OpenedAsync(HttpClient player) => OpenedAsync(player, Exit);
+
+    private async Task<HttpResponseMessage> OpenedAsync(HttpClient player, Uri exit)
     {
-        Task<HttpResponseMessage> opening = player.GetAsync(Exit, HttpCompletionOption.ResponseHeadersRead);
+        Task<HttpResponseMessage> opening = player.GetAsync(exit, HttpCompletionOption.ResponseHeadersRead);
 
         while (!opening.IsCompleted)
         {

@@ -417,6 +417,110 @@ public sealed class TicketedVideoTests
     }
 
     [Fact]
+    public async Task APlayerHandedTheTicketInTheQueryIsAdmittedForTheHeadersAndEverySeek()
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+        string ticket = await feature.TicketForAsync(recording.Id);
+        string path = $"/api/videos/{recording.Id.Wire}?ticket={ticket}";
+
+        using HttpResponseMessage headers = await feature.AsAPlayerAsync(path, null, method: HttpMethod.Head);
+        using HttpResponseMessage whole = await feature.AsAPlayerAsync(path, null, "bytes=0-");
+        using HttpResponseMessage middle = await feature.AsAPlayerAsync(path, null, "bytes=1000-1999");
+
+        Assert.Equal(HttpStatusCode.OK, headers.StatusCode);
+        Assert.Equal(HttpStatusCode.PartialContent, whole.StatusCode);
+        Assert.Equal(feature.Written, await whole.Content.ReadAsByteArrayAsync());
+        Assert.Equal(HttpStatusCode.PartialContent, middle.StatusCode);
+        Assert.Equal(feature.Written[1000..2000], await middle.Content.ReadAsByteArrayAsync());
+        Assert.Equal("no-store, private", whole.Headers.CacheControl?.ToString());
+    }
+
+    [Fact]
+    public async Task TheTicketInTheQueryTravelsBesideTheSourceAsked()
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+        byte[] artefact = feature.Encoded(recording, EncodeCodec.H264, EncodeCodec.H264);
+        string ticket = await feature.TicketForAsync(recording.Id);
+
+        using HttpResponseMessage answer = await feature.AsAPlayerAsync(
+            $"/api/videos/{recording.Id.Wire}?source=artefact&ticket={ticket}",
+            null);
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal(artefact, await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task AGrantEnteredWithTheHeaderReopensWithTheSameTicketInTheQuery()
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+        string ticket = await feature.TicketForAsync(recording.Id);
+
+        using HttpResponseMessage entered = await feature.AsAPlayerAsync($"/api/videos/{recording.Id.Wire}", ticket);
+        using HttpResponseMessage again = await feature.AsAPlayerAsync(
+            $"/api/videos/{recording.Id.Wire}?ticket={ticket}",
+            null);
+
+        Assert.Equal(HttpStatusCode.OK, entered.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+    }
+
+    [Fact]
+    public async Task ATicketInTheQueryThatWasNeverIssuedIsRefusedBeforeAnyByteLeaves()
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+
+        using HttpResponseMessage answer = await feature.AsAPlayerAsync(
+            $"/api/videos/{recording.Id.Wire}?ticket={new string('a', 43)}",
+            null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, answer.StatusCode);
+        Assert.NotEqual(feature.Written, await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Theory]
+    [InlineData("short")]
+    [InlineData("")]
+    public async Task AQueryThatCarriesNoTicketIsRefusedWithoutTheUrlBeingSentAnywhereEvenWhenAScreenIsAsked(string value)
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+        using var asking = new HttpRequestMessage(
+            HttpMethod.Get,
+            new Uri($"/api/videos/{recording.Id.Wire}?ticket={value}", UriKind.Relative));
+        asking.Headers.TryAddWithoutValidation("Accept", "text/html");
+
+        using HttpResponseMessage answer = await feature.Player.SendAsync(asking);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, answer.StatusCode);
+        Assert.Null(answer.Headers.Location);
+        Assert.Empty(await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Theory]
+    [InlineData("/play")]
+    [InlineData("/thumbnail")]
+    [InlineData("/scrub")]
+    [InlineData("/captions")]
+    public async Task TheTicketInTheQueryOpensNothingElseUnderTheSamePrefix(string beneath)
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+        string ticket = await feature.TicketForAsync(recording.Id);
+
+        using HttpResponseMessage answer = await feature.AsAPlayerAsync(
+            $"/api/videos/{recording.Id.Wire}{beneath}?ticket={ticket}",
+            null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, answer.StatusCode);
+        Assert.Null(answer.Headers.Location);
+    }
+
+    [Fact]
     public async Task TheAnswerToATicketIsNeverHeldByAnythingInFront()
     {
         await using var feature = new TicketedFeature();
