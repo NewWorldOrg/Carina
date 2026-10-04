@@ -93,14 +93,14 @@ internal sealed class TicketedFeature : IAsyncDisposable
         return recording;
     }
 
-    public byte[] Encoded(Recording recording, EncodeCodec profileSays, EncodeCodec fileReadAs)
+    public byte[] Encoded(Recording recording, EncodeCodec profileSays, EncodeCodec fileReadAs, string? taggedAs = null)
     {
         EncodeProfile profile = EncodedArtefact.Profile(profileSays, RecordingFeature.Noon.AddHours(-1));
         Profiles.Profiles.Add(profile);
 
         EncodeJob job = EncodedArtefact.Made(recording, profile, RecordingFeature.Noon.AddHours(1));
         Jobs.Jobs.Add(job);
-        Codecs.ReadAs(job.ArtefactName!, fileReadAs);
+        Codecs.ReadAs(job.ArtefactName!, fileReadAs, taggedAs);
 
         byte[] made = [.. Enumerable.Range(0, 900).Select(index => (byte)((index * 7) % 251))];
         File.WriteAllBytes(Path.Combine(shelved.FullName, job.ArtefactName!.Value), made);
@@ -241,6 +241,40 @@ public sealed class TicketedVideoTests
         Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
         Assert.Equal("video/mp4", answer.Content.Headers.ContentType?.MediaType);
         Assert.Equal(artefact, await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Theory(DisplayName = "a player with a ticket is handed an artefact made in H.265, however it is tagged, which no browser's decoding narrows")]
+    [InlineData("", "hvc1")]
+    [InlineData("?source=artefact", "hev1")]
+    public async Task APlayerWithATicketIsHandedAnArtefactMadeInH265(string query, string tag)
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+        byte[] artefact = feature.Encoded(recording, EncodeCodec.H265, EncodeCodec.H265, tag);
+        string ticket = await feature.TicketForAsync(recording.Id);
+
+        using HttpResponseMessage answer = await feature.AsAPlayerAsync(
+            $"/api/videos/{recording.Id.Wire}{query}",
+            ticket);
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal("video/mp4", answer.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(artefact, await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact(DisplayName = "a player with a ticket is not handed an artefact whose file is neither of the two codecs, and gets the recording itself")]
+    public async Task APlayerWithATicketIsNotHandedAnArtefactOfNeitherCodec()
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+        feature.Encoded(recording, EncodeCodec.H265, EncodeCodec.H265);
+        feature.Codecs.Readings[feature.Jobs.Jobs[0].ArtefactName!.Value] = ArtefactCodecReading.Neither("av1");
+        string ticket = await feature.TicketForAsync(recording.Id);
+
+        using HttpResponseMessage answer = await feature.AsAPlayerAsync($"/api/videos/{recording.Id.Wire}", ticket);
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal(feature.Written, await answer.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]

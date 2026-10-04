@@ -23,6 +23,7 @@ public sealed record PlaybackPlanResponder(
     PlaybackRoute Route,
     PlaybackSource Source,
     PlaybackSource? Alternative,
+    IReadOnlyList<PlaybackSource> ExternalPlayerSources,
     PlaybackSeeking? Seeking,
     bool CanSeek,
     bool Transcodes,
@@ -37,6 +38,7 @@ public sealed record PlaybackPlanResponder(
     public static PlaybackPlanResponder Of(
         PlaybackPlan plan,
         PlaybackFile handover,
+        IReadOnlyList<PlaybackSource> externalPlayerSources,
         string mediaType,
         TimeSpan? resumeAt,
         IReadOnlyList<SoundTrack> sounds,
@@ -45,6 +47,7 @@ public sealed record PlaybackPlanResponder(
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(handover);
+        ArgumentNullException.ThrowIfNull(externalPlayerSources);
         ArgumentNullException.ThrowIfNull(sounds);
         ArgumentNullException.ThrowIfNull(chapters);
 
@@ -53,6 +56,7 @@ public sealed record PlaybackPlanResponder(
             plan.Route,
             plan.Source!.Value,
             plan.Alternative,
+            externalPlayerSources,
             plan.Seeking,
             plan.Seeking is PlaybackSeeking.ByRange,
             plan.Transcodes,

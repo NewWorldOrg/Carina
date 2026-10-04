@@ -135,6 +135,7 @@ public sealed class FfmpegEncodeInvocationTests
         string[] onTheCard = encoder is EncodeEncoder.Vaapi ? ["-vaapi_device", FfmpegEncodeInvocation.RenderNode] : [];
         string[] rateControl = encoder is EncodeEncoder.Vaapi ? ["-rc_mode", "CQP", "-qp", "24"] : ["-preset", "medium", "-crf", "22"];
         string[] looking = filter.Length is 0 ? [] : ["-vf", filter];
+        string[] tagged = codec is EncodeCodec.H265 ? ["-tag:v", "hvc1"] : [];
         string[] expected =
         [
             "-nostdin",
@@ -162,6 +163,7 @@ public sealed class FfmpegEncodeInvocationTests
             "-c:v",
             video,
             .. rateControl,
+            .. tagged,
             "-threads",
             "2",
             "-c:a",
@@ -731,6 +733,8 @@ public sealed class FfmpegEncodeInvocationTests
             "CQP",
             "-qp",
             "24",
+            "-tag:v",
+            "hvc1",
             "-c:a",
             "copy",
             "-bsf:a",

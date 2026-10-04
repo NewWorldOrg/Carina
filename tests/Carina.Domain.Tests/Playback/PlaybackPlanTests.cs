@@ -78,7 +78,7 @@ public sealed class PlaybackPlanTests
             RecordingOutcome.Complete,
             OnDisk(4_000_000));
 
-        Assert.Empty(subject.BrowserReady);
+        Assert.Empty(subject.Playable);
         Assert.Equal(PlaybackRoute.OnTheFly, PlaybackPlan.For(subject).Route);
     }
 
@@ -622,6 +622,42 @@ public sealed class PlaybackPlanTests
             RecordingOutcome.Complete,
             OnDisk(recorded),
             [PlaybackFileSearch.Of(Encoded("encoded.mp4", artefact))]);
+
+    [Fact(DisplayName = "an external player is handed the artefact and the recording itself, in that order, where both hold anything")]
+    public void AnExternalPlayerIsHandedTheArtefactAndTheRecordingItselfWhereBothHoldAnything()
+    {
+        PlaybackSubject subject = new(
+            RecordingOutcome.Complete,
+            OnDisk(4_000_000),
+            [PlaybackFileSearch.Of(Encoded("encoded.mp4", 1_000_000))]);
+
+        Assert.Equal([PlaybackSource.Artefact, PlaybackSource.Recording], PlaybackPlan.SourcesHandedOver(subject));
+    }
+
+    [Fact(DisplayName = "an artefact that is gone or holds nothing is not handed over, and neither is a recording that holds nothing")]
+    public void AnArtefactThatIsGoneOrHoldsNothingIsNotHandedOver()
+    {
+        PlaybackSubject nothingButTheRecording = new(
+            RecordingOutcome.Complete,
+            OnDisk(4_000_000),
+            [Gone, PlaybackFileSearch.Of(Encoded("encoded.mp4", 0))]);
+        PlaybackSubject nothingButTheArtefact = new(
+            RecordingOutcome.Truncated,
+            OnDisk(0),
+            [PlaybackFileSearch.Of(Encoded("encoded.mp4", 1_000_000))]);
+
+        Assert.Equal([PlaybackSource.Recording], PlaybackPlan.SourcesHandedOver(nothingButTheRecording));
+        Assert.Equal([PlaybackSource.Artefact], PlaybackPlan.SourcesHandedOver(nothingButTheArtefact));
+        Assert.Empty(PlaybackPlan.SourcesHandedOver(PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, Gone)));
+    }
+
+    [Fact(DisplayName = "a recording still being written hands over nothing, even with its file on the disk")]
+    public void ARecordingStillBeingWrittenHandsOverNothing()
+    {
+        PlaybackSubject subject = new(null, OnDisk(4_000_000), [PlaybackFileSearch.Of(Encoded("encoded.mp4", 1_000_000))]);
+
+        Assert.Empty(PlaybackPlan.SourcesHandedOver(subject));
+    }
 
     private static IEnumerable<PlaybackSubject> EveryShelfAndDisk()
     {

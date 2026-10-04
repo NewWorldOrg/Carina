@@ -5,43 +5,48 @@ namespace Carina.Domain.Tests.Playback;
 
 public sealed class ArtefactCodecReadingTests
 {
-    [Theory]
-    [InlineData(EncodeCodec.H264)]
-    [InlineData(EncodeCodec.H265)]
-    public void AFileReadAsH264IsPlayedByEveryBrowserWhateverItsProfileSaysNow(EncodeCodec profileSays)
+    [Fact(DisplayName = "a file read as H.265 tagged hvc1 says it is tagged the way Safari plays")]
+    public void AFileReadAsH265TaggedHvc1IsTaggedTheWaySafariPlays()
     {
-        Assert.True(ArtefactCodecReading.Of(EncodeCodec.H264).EveryBrowserPlaysIt(profileSays));
+        ArtefactCodecReading reading = ArtefactCodecReading.Of(EncodeCodec.H265, "hvc1");
+
+        Assert.True(reading.Read);
+        Assert.Equal(EncodeCodec.H265, reading.Codec);
+        Assert.Equal("hvc1", reading.Tag);
+        Assert.True(reading.TaggedTheWaySafariPlays);
+        Assert.Contains("hvc1", reading.Note, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(EncodeCodec.H264)]
-    [InlineData(EncodeCodec.H265)]
-    public void AFileReadAsH265IsNotPlayedByEveryBrowserWhateverItsProfileSaysNow(EncodeCodec profileSays)
+    [Theory(DisplayName = "a file tagged anything but hvc1, or not tagged at all, is not tagged the way Safari plays")]
+    [InlineData("hev1")]
+    [InlineData("HVC1")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void AFileTaggedAnythingButHvc1IsNotTaggedTheWaySafariPlays(string? tag)
     {
-        Assert.False(ArtefactCodecReading.Of(EncodeCodec.H265).EveryBrowserPlaysIt(profileSays));
+        ArtefactCodecReading reading = ArtefactCodecReading.Of(EncodeCodec.H265, tag);
+
+        Assert.False(reading.TaggedTheWaySafariPlays);
     }
 
     [Fact]
-    public void AFileReadAsNeitherOfTheTwoIsNotPlayedByEveryBrowserEvenWhenItsProfileSaysH264()
+    public void AFileReadAsNeitherOfTheTwoNamesWhatWasRead()
     {
         ArtefactCodecReading reading = ArtefactCodecReading.Neither("mpeg2video");
 
         Assert.True(reading.Read);
         Assert.Null(reading.Codec);
         Assert.Contains("mpeg2video", reading.Note, StringComparison.Ordinal);
-        Assert.False(reading.EveryBrowserPlaysIt(EncodeCodec.H264));
     }
 
-    [Theory]
-    [InlineData(EncodeCodec.H264, true)]
-    [InlineData(EncodeCodec.H265, false)]
-    public void AFileThatCouldNotBeReadIsJudgedByWhatItsProfileSays(EncodeCodec profileSays, bool plays)
+    [Fact]
+    public void AFileThatCouldNotBeReadNamesNoCodecAndNoTag()
     {
         ArtefactCodecReading reading = ArtefactCodecReading.Unread("the programme exited 1");
 
         Assert.False(reading.Read);
         Assert.Null(reading.Codec);
-        Assert.Equal(plays, reading.EveryBrowserPlaysIt(profileSays));
+        Assert.Null(reading.Tag);
     }
 
     [Fact]

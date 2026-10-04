@@ -74,7 +74,7 @@ public sealed record PlaybackPlan
             return Refused(standing, PlaybackRefusal.StillBeingWritten, null, null);
         }
 
-        ArtefactAtHand encoded = TheArtefactAmongThem(subject.BrowserReady);
+        ArtefactAtHand encoded = TheArtefactAmongThem(subject.Playable);
         bool theArtefactWouldBeAsked = from is PlaybackSource.Artefact && TheArtefactCarriesIt(wanted, carried);
 
         if (theArtefactWouldBeAsked && encoded.File is { } artefact)
@@ -115,11 +115,31 @@ public sealed record PlaybackPlan
             : Refused(standing, PlaybackRefusal.NothingWasWritten, fellBack, alternative);
     }
 
-    private static ArtefactAtHand TheArtefactAmongThem(IReadOnlyList<PlaybackFileSearch> browserReady)
+    /// <summary>
+    /// What can be handed over as it is to the one the subject's artefacts were judged for, in the order
+    /// the sources are named: an artefact on the disk holding anything, and the recording itself where it
+    /// holds anything. A recording still being written hands over neither.
+    /// </summary>
+    public static IReadOnlyList<PlaybackSource> SourcesHandedOver(PlaybackSubject subject)
+    {
+        ArgumentNullException.ThrowIfNull(subject);
+
+        if (subject.Outcome is null)
+        {
+            return [];
+        }
+
+        bool artefact = TheArtefactAmongThem(subject.Playable).File is not null;
+        bool recording = subject.AsRecorded.Found is { HoldsAnything: true };
+
+        return [.. PlaybackSources.InOrder.Where(source => source is PlaybackSource.Artefact ? artefact : recording)];
+    }
+
+    private static ArtefactAtHand TheArtefactAmongThem(IReadOnlyList<PlaybackFileSearch> playable)
     {
         PlaybackFallback? trouble = null;
 
-        foreach (PlaybackFileSearch encoded in browserReady)
+        foreach (PlaybackFileSearch encoded in playable)
         {
             if (encoded.Found is not { } artefact)
             {

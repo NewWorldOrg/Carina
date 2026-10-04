@@ -5,6 +5,7 @@ using System.Text.Json;
 using Carina.Domain.Captions;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
+using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 using Carina.Domain.Viewing;
@@ -56,6 +57,8 @@ internal sealed class CaptionFeature : IAsyncDisposable
                 });
                 services.AddSingleton<IEncodeJobRepository>(Jobs);
                 services.AddSingleton<IEncodeProfileRepository>(Profiles);
+                services.RemoveAll<IArtefactCodecReader>();
+                services.AddSingleton<IArtefactCodecReader>(Codecs);
                 services.RemoveAll<IOnTheFlyPlayer>();
                 services.AddSingleton<IOnTheFlyPlayer>(new HeldOnTheFlyPlayer());
                 services.RemoveAll<IEncodeChapterRepository>();
@@ -82,6 +85,8 @@ internal sealed class CaptionFeature : IAsyncDisposable
     public HeldEncodeJobs Jobs { get; } = new();
 
     public HeldEncodeProfiles Profiles { get; } = new();
+
+    public HeldArtefactCodecs Codecs { get; } = new();
 
     public static CaptionRecord Record(TimeSpan? begins = null)
         => new(
@@ -126,13 +131,19 @@ internal sealed class CaptionFeature : IAsyncDisposable
         return recording;
     }
 
-    public void Encoded(Recording recording, EncodeTimeline? timeline)
+    public void Encoded(Recording recording, EncodeTimeline? timeline, EncodeCodec codec = EncodeCodec.H264, string? taggedAs = null)
     {
-        EncodeProfile profile = EncodedArtefact.Profile(EncodeCodec.H264, RecordingFeature.Noon.AddHours(-1));
+        EncodeProfile profile = EncodedArtefact.Profile(codec, RecordingFeature.Noon.AddHours(-1));
         Profiles.Profiles.Add(profile);
 
         EncodeJob job = EncodedArtefact.Made(recording, profile, RecordingFeature.Noon.AddHours(1), timeline);
         Jobs.Jobs.Add(job);
+
+        if (codec is EncodeCodec.H265)
+        {
+            Codecs.ReadAs(job.ArtefactName!, codec, taggedAs);
+        }
+
         File.WriteAllBytes(Path.Combine(encoded.FullName, job.ArtefactName!.Value), new byte[900]);
     }
 
@@ -198,6 +209,35 @@ public sealed class CaptionDeliveryTests
         Assert.Equal(new byte[] { 0x89, 0x50, 0x4e, 0x47, 10 }, first.GetProperty("png").GetBytesFromBase64());
         Assert.Equal(JsonValueKind.Null, window.GetProperty("cues")[2].GetProperty("picture").ValueKind);
         Assert.Equal("no-store, private", answer.Headers.CacheControl?.ToString());
+    }
+
+    [Theory(DisplayName = "the captions are placed on an artefact made in H.265 only for a browser that says it decodes h265, as its plan is")]
+    [InlineData("?source=artefact&decodes=h265", new[] { 0.0, 4.5, 7.5 })]
+    [InlineData("?source=artefact", new[] { 0.2, 5.0, 8.0 })]
+    public async Task TheCaptionsArePlacedOnAnArtefactInH265OnlyForABrowserThatDecodesH265(string query, double[] moments)
+    {
+        await using var feature = new CaptionFeature();
+        Recording recording = await feature.CaptionedAsync();
+        feature.Encoded(
+            recording,
+            new EncodeTimeline(CaptionFeature.FileBegins, TimeSpan.FromSeconds(0.5), TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(600)),
+            EncodeCodec.H265,
+            "hvc1");
+
+        using HttpResponseMessage answer = await feature.CaptionsAsync(recording, query);
+
+        Assert.Equal(moments, CaptionFeature.Moments(await CaptionFeature.WindowOfAsync(answer)));
+    }
+
+    [Fact(DisplayName = "captions asked for with a decoding that is not one of the two are refused")]
+    public async Task CaptionsAskedForWithADecodingThatIsNotOneOfTheTwoAreRefused()
+    {
+        await using var feature = new CaptionFeature();
+        Recording recording = await feature.CaptionedAsync();
+
+        using HttpResponseMessage answer = await feature.CaptionsAsync(recording, "?decodes=vp9");
+
+        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
     }
 
     [Fact]

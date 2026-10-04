@@ -3,6 +3,7 @@ using System.Globalization;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
+using Carina.Domain.Playback;
 using Carina.Infrastructure.Streaming;
 
 namespace Carina.Infrastructure.Encodings;
@@ -221,6 +222,7 @@ public static class FfmpegEncodeInvocation
                 "CQP",
                 "-qp",
                 profile.VaapiRateControl.Quantiser.ToString(CultureInfo.InvariantCulture),
+                .. Tagging(profile.Codec),
             ]
             :
             [
@@ -230,8 +232,15 @@ public static class FfmpegEncodeInvocation
                 "medium",
                 "-crf",
                 profile.SoftwareRateControl.RateFactor.ToString(CultureInfo.InvariantCulture),
+                .. Tagging(profile.Codec),
             ];
     }
+
+    /// <summary>
+    /// The tag an H.265 picture track is written with. An H.264 track keeps the tag ffmpeg gives it.
+    /// </summary>
+    public static IReadOnlyList<string> Tagging(EncodeCodec codec)
+        => EncodeShapes.Named(codec) is EncodeCodec.H265 ? ["-tag:v", ArtefactCodecReading.TagSafariPlays] : [];
 
     private static string OnTheProcessor(EncodeCodec codec)
         => EncodeShapes.Named(codec) is EncodeCodec.H265 ? "libx265" : "libx264";

@@ -7,10 +7,10 @@ public sealed record PlaybackSubject
     public PlaybackSubject(
         RecordingOutcome? outcome,
         PlaybackFileSearch asRecorded,
-        IEnumerable<PlaybackFileSearch> browserReady)
+        IEnumerable<PlaybackFileSearch> playable)
     {
         ArgumentNullException.ThrowIfNull(asRecorded);
-        ArgumentNullException.ThrowIfNull(browserReady);
+        ArgumentNullException.ThrowIfNull(playable);
 
         if (outcome is not null && !Enum.IsDefined(outcome.Value))
         {
@@ -22,14 +22,17 @@ public sealed record PlaybackSubject
 
         Outcome = outcome;
         AsRecorded = asRecorded;
-        BrowserReady = [.. browserReady];
+        Playable = [.. playable];
     }
 
     public RecordingOutcome? Outcome { get; }
 
     public PlaybackFileSearch AsRecorded { get; }
 
-    public IReadOnlyList<PlaybackFileSearch> BrowserReady { get; }
+    /// <summary>
+    /// The artefacts made of the recording that the one it is handed to plays as they are, newest first.
+    /// </summary>
+    public IReadOnlyList<PlaybackFileSearch> Playable { get; }
 
     public static PlaybackSubject NothingHasBeenEncodedYet(RecordingOutcome? outcome, PlaybackFileSearch asRecorded)
         => new(outcome, asRecorded, []);

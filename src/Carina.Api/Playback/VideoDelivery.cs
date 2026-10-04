@@ -58,7 +58,12 @@ public static class VideoDelivery
         PlaybackService playback)
     {
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
-            await playback.OfferAsync(recordingId, SoundTrack.Main, from, context.RequestAborted);
+            await playback.OfferAsync(
+                recordingId,
+                SoundTrack.Main,
+                from,
+                PlaybackAudience.ExternalPlayer,
+                context.RequestAborted);
 
         if (!offered.IsSuccess)
         {

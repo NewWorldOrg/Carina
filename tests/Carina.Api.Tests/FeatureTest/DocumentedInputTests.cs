@@ -117,6 +117,24 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
             StringComparison.Ordinal);
     }
 
+    [Theory(DisplayName = "the playing and its captions say which picture codings a browser can name, each as a repeat of the name")]
+    [InlineData(PlayDelivery.Path, PlayDelivery.Decodes)]
+    [InlineData(CaptionDelivery.Path, CaptionDelivery.Decodes)]
+    public async Task ThePlayingAndItsCaptionsSayWhichPictureCodingsABrowserCanName(string surface, string name)
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode decodes = Parameter(document, surface, name);
+
+        Assert.Equal("query", decodes["in"]!.GetValue<string>());
+        Assert.Equal("form", decodes["style"]?.GetValue<string>() ?? "form");
+        Assert.True(decodes["explode"]?.GetValue<bool>() ?? true);
+        Assert.Equal("array", decodes["schema"]!["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["h264", "h265"],
+            decodes["schema"]!["items"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Contains("hvc1", decodes["description"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "the scan that keeps every query in the document sees the one that chooses which of the two files is played")]
     public void TheScanSeesTheQueryThatChoosesWhichOfTheTwoFilesIsPlayed()
     {

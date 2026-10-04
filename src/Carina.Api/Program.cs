@@ -126,7 +126,8 @@ app.MapGet(
         PlaybackSurfaces.WhereThePlayingStarts,
         PlaybackSurfaces.WhichProfileThePictureIsEncodedIn,
         PlaybackSurfaces.WhichSoundIsCarried,
-        PlaybackSurfaces.WhichOfTheTwoFilesIsPlayed)
+        PlaybackSurfaces.WhichOfTheTwoFilesIsPlayed,
+        PlaybackSurfaces.WhatThisBrowserDecodes)
     .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(
@@ -139,7 +140,10 @@ app.MapGet(
     .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status200OK, PlayDelivery.Json)
     .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status404NotFound, PlayDelivery.Json)
     .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status409Conflict, PlayDelivery.Json)
-    .Reads(PlaybackSurfaces.WhereTheCaptionsStart, PlaybackSurfaces.WhichFileTheCaptionsArePlacedOn)
+    .Reads(
+        PlaybackSurfaces.WhereTheCaptionsStart,
+        PlaybackSurfaces.WhichFileTheCaptionsArePlacedOn,
+        PlaybackSurfaces.WhatThisBrowserDecodesForItsCaptions)
     .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(

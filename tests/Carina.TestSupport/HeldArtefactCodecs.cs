@@ -7,11 +7,11 @@ public sealed class HeldArtefactCodecs : IArtefactCodecReader
 {
     public Dictionary<string, ArtefactCodecReading> Readings { get; } = new(StringComparer.Ordinal);
 
-    public void ReadAs(EncodeFileName artefact, EncodeCodec codec)
+    public void ReadAs(EncodeFileName artefact, EncodeCodec codec, string? tag = null)
     {
         ArgumentNullException.ThrowIfNull(artefact);
 
-        Readings[artefact.Value] = ArtefactCodecReading.Of(codec);
+        Readings[artefact.Value] = ArtefactCodecReading.Of(codec, tag);
     }
 
     public Task<ArtefactCodecReading> ReadAsync(PlaybackFile file, CancellationToken cancellationToken)

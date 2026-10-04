@@ -5,6 +5,7 @@ using Carina.Api.Responder;
 using Carina.Api.Responder.Playback;
 using Carina.Api.Services;
 using Carina.Domain.Captions;
+using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 
@@ -22,6 +23,8 @@ public static class CaptionDelivery
     public const string Position = "from";
 
     public const string Source = "source";
+
+    public const string Decodes = "decodes";
 
     public const string ThePositionsThereAre =
         "Captions are asked for from a whole or fractional number of seconds into the source, or from its beginning.";
@@ -57,8 +60,21 @@ public static class CaptionDelivery
             return;
         }
 
-        ServiceResult<PlaybackOffer, PlaybackFailure> offered =
-            await playback.OfferAsync(recordingId, SoundTrack.Main, source.Source, context.RequestAborted);
+        AskedDecoding decoding = AskedDecoding.Read(context.Request.Query[Decodes]);
+
+        if (decoding.Answer is DecodingAnswer.NotOneOfThese)
+        {
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, PlayDelivery.TheDecodingsThereAre);
+
+            return;
+        }
+
+        ServiceResult<PlaybackOffer, PlaybackFailure> offered = await playback.OfferAsync(
+            recordingId,
+            SoundTrack.Main,
+            source.Source,
+            decoding.Audience,
+            context.RequestAborted);
 
         if (!offered.IsSuccess)
         {
