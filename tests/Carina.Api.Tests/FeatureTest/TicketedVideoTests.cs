@@ -65,7 +65,14 @@ internal sealed class TicketedFeature : IAsyncDisposable
                 .UseSetting("Logging:LogLevel:Default", nameof(LogLevel.Trace))
                 .UseSetting("Logging:LogLevel:Microsoft", nameof(LogLevel.Trace))
                 .UseSetting("Logging:LogLevel:Microsoft.AspNetCore", nameof(LogLevel.Trace))
-                .UseSetting("Logging:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics", nameof(LogLevel.Trace)));
+                .UseSetting("Logging:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics", nameof(LogLevel.Trace))
+                .UseSetting($"Logging:{typeof(RecordedStartup).FullName}:LogLevel:Default", nameof(LogLevel.Trace))
+                .UseSetting(
+                    $"Logging:{typeof(RecordedStartup).FullName}:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics",
+                    nameof(LogLevel.Trace))
+                .UseSetting(
+                    $"Logging:{typeof(RecordedStartup).FullName}:LogLevel:Microsoft.AspNetCore.Routing.Matching.DfaMatcher",
+                    nameof(LogLevel.Trace)));
         }
 
         WebApplicationFactory<Program> served = configured.WithTestScheme();

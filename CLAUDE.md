@@ -166,9 +166,11 @@ nothing.
 - **No log names the path a request came on.** A playback ticket can travel in
   the path of the two surfaces an external player opens, so a line about a
   request names the pattern of the route it matched, the framework categories
-  that write the path are pinned to warnings whatever is configured, and a source
-  rule refuses a file that both reads the request path and logs. A feature test
-  turns every log up to its finest and finds the ticket in no line. **It is a
+  that write the path are pinned to warnings after every configured rule has been
+  read, a provider's own included, and a source rule refuses a file on the HTTP
+  surface that both reads the request path and logs. A feature test turns every
+  log up to its finest, for all providers and for one by name, and finds the
+  ticket in no line. **It is a
   trip wire, not a proof:** a path handed to a helper that logs walks past the
   source rule.
 - **Configuration is validated at startup** and the process stops with a message

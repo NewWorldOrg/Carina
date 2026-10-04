@@ -33,11 +33,39 @@ public static class LoggingBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(logging);
 
-        foreach (string category in CategoriesThatNameTheRequestPath)
-        {
-            logging.AddFilter(category, LogLevel.Warning);
-        }
+        logging.Services.PostConfigure<LoggerFilterOptions>(KeepRequestLinesOut);
 
         return logging;
     }
+
+    private static void KeepRequestLinesOut(LoggerFilterOptions options)
+    {
+        LoggerFilterRule[] loosening = [.. options.Rules.Where(NamesTheRequestPath)];
+        string?[] providers =
+        [
+            null,
+            .. options.Rules.Select(rule => rule.ProviderName).OfType<string>().Distinct(StringComparer.Ordinal),
+        ];
+
+        foreach (LoggerFilterRule rule in loosening)
+        {
+            options.Rules.Remove(rule);
+            options.Rules.Add(new LoggerFilterRule(rule.ProviderName, rule.CategoryName, AtMostWarnings(rule.LogLevel), rule.Filter));
+        }
+
+        foreach (string? provider in providers)
+        {
+            foreach (string category in CategoriesThatNameTheRequestPath)
+            {
+                options.Rules.Add(new LoggerFilterRule(provider, category, LogLevel.Warning, null));
+            }
+        }
+    }
+
+    private static bool NamesTheRequestPath(LoggerFilterRule rule)
+        => rule.CategoryName is { } category
+           && CategoriesThatNameTheRequestPath.Any(kept => category.StartsWith(kept, StringComparison.OrdinalIgnoreCase));
+
+    private static LogLevel AtMostWarnings(LogLevel? level)
+        => level is { } said && said > LogLevel.Warning ? said : LogLevel.Warning;
 }
