@@ -4,13 +4,15 @@ using System.Globalization;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Playback;
+using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Playback;
 
 /// <summary>
 /// Reads the codec of an artefact's first picture track by asking ffprobe, and keeps what it read for as
-/// long as the file has the same size and the same time it was last written.
+/// long as the file has the same size and the same time it was last written. A file that could not be read
+/// is not asked about again for <see cref="UnreadKeptFor"/>.
 /// </summary>
 public sealed class FfprobeArtefactCodecs(
     IPlaybackFileStore files,
@@ -18,6 +20,8 @@ public sealed class FfprobeArtefactCodecs(
     TimeProvider clock) : IArtefactCodecReader
 {
     public const string Key = "codec_name";
+
+    public static readonly TimeSpan UnreadKeptFor = TimeSpan.FromMinutes(5);
 
     private static readonly IReadOnlyDictionary<string, EncodeCodec> Named = new Dictionary<string, EncodeCodec>(StringComparer.Ordinal)
     {
@@ -39,7 +43,7 @@ public sealed class FfprobeArtefactCodecs(
             "-select_streams",
             "v:0",
             "-of",
-            "default=nw=1",
+            FfprobeLengthInvocation.Format,
             "-show_entries",
             $"stream={Key}",
             "-i",
@@ -63,17 +67,15 @@ public sealed class FfprobeArtefactCodecs(
             return ArtefactCodecReading.Unread("the artefact could not be looked at");
         }
 
-        if (remembered.TryGetValue(path, out Remembered? kept) && kept.Stamp == stamp)
+        DateTimeOffset now = clock.GetUtcNow();
+
+        if (remembered.TryGetValue(path, out Remembered? kept) && kept.Stamp == stamp && kept.HoldsAt(now))
         {
             return kept.Reading;
         }
 
         ArtefactCodecReading reading = await ProbeAsync(path, cancellationToken);
-
-        if (reading.Read)
-        {
-            remembered[path] = new Remembered(stamp, reading);
-        }
+        remembered[path] = new Remembered(stamp, reading, reading.Read ? null : now + UnreadKeptFor);
 
         return reading;
     }
@@ -129,5 +131,8 @@ public sealed class FfprobeArtefactCodecs(
 
     private readonly record struct FileStamp(long Bytes, DateTime WrittenAt);
 
-    private sealed record Remembered(FileStamp Stamp, ArtefactCodecReading Reading);
+    private sealed record Remembered(FileStamp Stamp, ArtefactCodecReading Reading, DateTimeOffset? Until)
+    {
+        public bool HoldsAt(DateTimeOffset now) => Until is not { } until || now < until;
+    }
 }

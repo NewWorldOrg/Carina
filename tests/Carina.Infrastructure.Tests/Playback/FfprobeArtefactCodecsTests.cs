@@ -6,6 +6,7 @@ using Carina.Domain.Machines;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Playback;
+using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -134,14 +135,31 @@ public sealed class FfprobeArtefactCodecsTests : IDisposable
     }
 
     [Fact]
-    public async Task AFileThatCouldNotBeReadIsAskedAgainNextTime()
+    public async Task AFileThatCouldNotBeReadIsNotAskedAgainUntilAWhileHasPassed()
     {
         string asked = standIns.Named("asked");
-        IArtefactCodecReader codecs = Codecs(standIns.Script($"echo x >> '{asked}'; exit 1"));
+        HandTurnedClock clock = new();
+        IArtefactCodecReader codecs = Codecs(standIns.Script($"echo x >> '{asked}'; exit 1"), clock);
         PlaybackFile file = Placed(900);
 
         await codecs.ReadAsync(file, CancellationToken.None);
+        clock.Turn(FfprobeArtefactCodecs.UnreadKeptFor - TimeSpan.FromSeconds(1));
+        ArtefactCodecReading meanwhile = await codecs.ReadAsync(file, CancellationToken.None);
+        clock.Turn(TimeSpan.FromSeconds(1));
         await codecs.ReadAsync(file, CancellationToken.None);
+
+        Assert.False(meanwhile.Read);
+        Assert.Equal(2, File.ReadAllLines(asked).Length);
+    }
+
+    [Fact]
+    public async Task AFileThatCouldNotBeReadIsAskedAgainAsSoonAsItIsReplaced()
+    {
+        string asked = standIns.Named("asked");
+        IArtefactCodecReader codecs = Codecs(standIns.Script($"echo x >> '{asked}'; exit 1"));
+
+        await codecs.ReadAsync(Placed(900), CancellationToken.None);
+        await codecs.ReadAsync(Placed(1_200), CancellationToken.None);
 
         Assert.Equal(2, File.ReadAllLines(asked).Length);
     }
@@ -153,12 +171,12 @@ public sealed class FfprobeArtefactCodecsTests : IDisposable
         return new PlaybackFile(Shelf, Named, bytes);
     }
 
-    private FfprobeArtefactCodecs Codecs(string prober)
+    private FfprobeArtefactCodecs Codecs(string prober, TimeProvider? clock = null)
         => new(
             new LocalPlaybackFileStore(
                 new IntegritySettings(),
                 new EncodeSettings { OutputRoots = [new StorageRootPath(Shelf, shelved.FullName)] },
                 NullLogger<LocalPlaybackFileStore>.Instance),
             new MachineSettings { Prober = prober, LongestRead = TimeSpan.FromSeconds(30) },
-            TimeProvider.System);
+            clock ?? TimeProvider.System);
 }
