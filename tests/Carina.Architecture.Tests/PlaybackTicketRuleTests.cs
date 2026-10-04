@@ -44,7 +44,7 @@ public sealed class PlaybackTicketRuleTests
     }
 
     [Fact]
-    public void TheTicketTravelsOnTheAuthorizationHeaderAndOnlyOneFileReadsIt()
+    public void OnlyOneFileReadsTheAuthorizationHeaderTheTicketTravelsOn()
     {
         Assert.Equal(
             ["Carina.Api/Authentication/PlaybackTicketCarrier.cs"],

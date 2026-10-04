@@ -45,13 +45,47 @@ public sealed class PlaybackTicketCarrierTests
     }
 
     [Fact]
-    public void ATicketInTheQueryStringIsNotOfferedBecauseTheQueryReachesEveryAccessLogInFront()
+    public void APlayerHandedAUrlWithTheTicketInItsQueryOffersIt()
     {
         string ticket = Unguessable.Issue();
-        DefaultHttpContext context = new();
-        context.Request.QueryString = new QueryString($"?ticket={ticket}");
 
-        Assert.Null(PlaybackTicketCarrier.OfferedBy(context.Request));
+        Assert.Equal(ticket, PlaybackTicketCarrier.OfferedBy(InTheQuery($"?source=artefact&ticket={ticket}")));
+    }
+
+    [Fact]
+    public void TheHeaderIsReadBeforeTheQuery()
+    {
+        string carried = Unguessable.Issue();
+        HttpRequest request = Asking($"Bearer {carried}");
+        request.QueryString = new QueryString($"?ticket={Unguessable.Issue()}");
+
+        Assert.Equal(carried, PlaybackTicketCarrier.OfferedBy(request));
+    }
+
+    [Fact]
+    public void AHeaderThatCarriesNoTicketIsNotPassedOverForTheQuery()
+    {
+        HttpRequest request = Asking("Basic not-base64!!");
+        request.QueryString = new QueryString($"?ticket={Unguessable.Issue()}");
+
+        Assert.Null(PlaybackTicketCarrier.OfferedBy(request));
+    }
+
+    [Fact]
+    public void TwoTicketsInTheQueryOfferNothingRatherThanWhicheverWins()
+    {
+        string ticket = Unguessable.Issue();
+
+        Assert.Null(PlaybackTicketCarrier.OfferedBy(InTheQuery($"?ticket={ticket}&ticket={ticket}")));
+    }
+
+    [Theory]
+    [InlineData("?ticket=")]
+    [InlineData("?ticket=short")]
+    [InlineData("?ticket=..........................................%2E")]
+    public void AQueryValueThatIsNotATicketOffersNothing(string query)
+    {
+        Assert.Null(PlaybackTicketCarrier.OfferedBy(InTheQuery(query)));
     }
 
     [Fact]
@@ -132,6 +166,14 @@ public sealed class PlaybackTicketCarrierTests
 
     private static string Basic(string user, string password)
         => $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}"))}";
+
+    private static HttpRequest InTheQuery(string query)
+    {
+        DefaultHttpContext context = new();
+        context.Request.QueryString = new QueryString(query);
+
+        return context.Request;
+    }
 
     private static HttpRequest Asking(string authorization)
     {
