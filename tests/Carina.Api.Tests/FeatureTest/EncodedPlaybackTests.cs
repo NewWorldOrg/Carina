@@ -256,6 +256,55 @@ public sealed class EncodedPlaybackTests
         Assert.Null(Header(picture, PlaybackHeaders.FellBack));
     }
 
+    [Fact(DisplayName = "an artefact made in H.264 is still played as it is after its profile was changed to H.265")]
+    public async Task AnArtefactMadeInH264IsStillPlayedAsItIsAfterItsProfileWasChangedToH265()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        byte[] artefact = feature.Encoded(recording, EncodeCodec.H265, fileReadAs: EncodeCodec.H264);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+        JsonElement asked = (await PlayFeature.PlanOfAsync(
+            await feature.PlanAsync(recording, "?source=artefact"))).GetProperty("data");
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?source=artefact");
+
+        Assert.Equal("direct", read.GetProperty("route").GetString());
+        Assert.Equal("artefact", read.GetProperty("source").GetString());
+        Assert.Equal("recording", read.GetProperty("alternative").GetString());
+        Assert.Equal("artefact", asked.GetProperty("source").GetString());
+        Assert.Equal("direct", Header(picture, PlaybackHeaders.Route));
+        Assert.Equal(artefact, await picture.Content.ReadAsByteArrayAsync());
+        Assert.Null(feature.Player.Handed);
+    }
+
+    [Fact(DisplayName = "the plan of a recording asked for as it was recorded names the artefact made in H.264 as the other one after its profile was changed to H.265")]
+    public async Task ThePlanAskedForTheRecordingNamesTheArtefactMadeInH264AfterItsProfileWasChangedToH265()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, EncodeCodec.H265, fileReadAs: EncodeCodec.H264);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(
+            await feature.PlanAsync(recording, "?source=recording"))).GetProperty("data");
+
+        Assert.Equal("recording", read.GetProperty("source").GetString());
+        Assert.Equal("artefact", read.GetProperty("alternative").GetString());
+    }
+
+    [Fact(DisplayName = "an artefact whose file is H.265 is left to the transcoder even when its profile says H.264 now")]
+    public async Task AnArtefactWhoseFileIsH265IsLeftToTheTranscoderEvenWhenItsProfileSaysH264Now()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, EncodeCodec.H264, fileReadAs: EncodeCodec.H265);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal("onTheFly", read.GetProperty("route").GetString());
+        Assert.Equal("recording", read.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
+    }
+
     [Fact]
     public async Task NothingSaysAPlanFellBackWhenTheArtefactItNamesIsThere()
     {

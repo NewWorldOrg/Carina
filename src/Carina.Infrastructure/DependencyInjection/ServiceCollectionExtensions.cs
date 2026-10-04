@@ -296,6 +296,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IStrayFileEraser, PlacedStrayFileEraser>();
         services.TryAddSingleton<IPlaybackFileStore, LocalPlaybackFileStore>();
         services.TryAddSingleton<IArtefactOpenings, ArtefactOpenings>();
+        services.TryAddSingleton<IArtefactCodecReader>(provider => new FfprobeArtefactCodecs(
+            provider.GetRequiredService<IPlaybackFileStore>(),
+            provider.GetRequiredService<MachineSettings>(),
+            provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton<IntegrityCheckJob>();
         services.TryAddSingleton<ThumbnailSettings>(provider =>
             provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value.Read());
