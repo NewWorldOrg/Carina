@@ -5,6 +5,7 @@ using System.Text.Json;
 
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
+using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.TestSupport;
 
@@ -24,6 +25,8 @@ internal sealed class TicketedFeature : IAsyncDisposable
 
     private readonly DirectoryInfo mounted = Directory.CreateTempSubdirectory("carina-ticketed-");
 
+    private readonly DirectoryInfo shelved = Directory.CreateTempSubdirectory("carina-ticketed-shelf-");
+
     public TicketedFeature()
     {
         WebApplicationFactory<Program> configured = factory
@@ -31,11 +34,17 @@ internal sealed class TicketedFeature : IAsyncDisposable
             {
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IRecordingDirectory>(Recordings);
-                services.AddSingleton<IEncodeJobRepository>(new HeldEncodeJobs());
-                services.AddSingleton<IEncodeProfileRepository>(new HeldEncodeProfiles());
+                services.AddSingleton<IEncodeJobRepository>(Jobs);
+                services.AddSingleton<IEncodeProfileRepository>(Profiles);
+                services.RemoveAll<IArtefactCodecReader>();
+                services.AddSingleton<IArtefactCodecReader>(Codecs);
                 services.AddSingleton(new IntegritySettings
                 {
                     OutputRoots = [new StorageRootPath(Root, mounted.FullName)],
+                });
+                services.AddSingleton(new EncodeSettings
+                {
+                    OutputRoots = [new StorageRootPath(EncodedArtefact.Shelf, shelved.FullName)],
                 });
             }));
 
@@ -53,6 +62,12 @@ internal sealed class TicketedFeature : IAsyncDisposable
     public HttpClient Player { get; }
 
     public HeldRecordings Recordings { get; } = new();
+
+    public HeldEncodeJobs Jobs { get; } = new();
+
+    public HeldEncodeProfiles Profiles { get; } = new();
+
+    public HeldArtefactCodecs Codecs { get; } = new();
 
     public byte[] Written { get; } = [.. Enumerable.Range(0, 4_000).Select(index => (byte)(index % 251))];
 
@@ -76,6 +91,21 @@ internal sealed class TicketedFeature : IAsyncDisposable
         Recordings.Recordings.Add(recording);
 
         return recording;
+    }
+
+    public byte[] Encoded(Recording recording, EncodeCodec profileSays, EncodeCodec fileReadAs)
+    {
+        EncodeProfile profile = EncodedArtefact.Profile(profileSays, RecordingFeature.Noon.AddHours(-1));
+        Profiles.Profiles.Add(profile);
+
+        EncodeJob job = EncodedArtefact.Made(recording, profile, RecordingFeature.Noon.AddHours(1));
+        Jobs.Jobs.Add(job);
+        Codecs.ReadAs(job.ArtefactName!, fileReadAs);
+
+        byte[] made = [.. Enumerable.Range(0, 900).Select(index => (byte)((index * 7) % 251))];
+        File.WriteAllBytes(Path.Combine(shelved.FullName, job.ArtefactName!.Value), made);
+
+        return made;
     }
 
     public async Task<HttpResponseMessage> AskForATicketAsync(
@@ -129,6 +159,7 @@ internal sealed class TicketedFeature : IAsyncDisposable
         Player.Dispose();
         await factory.DisposeAsync();
         mounted.Delete(recursive: true);
+        shelved.Delete(recursive: true);
     }
 }
 
@@ -193,6 +224,23 @@ public sealed class TicketedVideoTests
         using HttpResponseMessage answer = await feature.AskForATicketAsync(RecordingId.New());
 
         Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
+    }
+
+    [Fact(DisplayName = "a player with a ticket asking for the artefact is handed the file made in H.264 after its profile was changed to H.265")]
+    public async Task APlayerAskingForTheArtefactIsHandedTheFileMadeInH264AfterItsProfileWasChangedToH265()
+    {
+        await using var feature = new TicketedFeature();
+        Recording recording = feature.Ended();
+        byte[] artefact = feature.Encoded(recording, EncodeCodec.H265, EncodeCodec.H264);
+        string ticket = await feature.TicketForAsync(recording.Id);
+
+        using HttpResponseMessage answer = await feature.AsAPlayerAsync(
+            $"/api/videos/{recording.Id.Wire}?source=artefact",
+            ticket);
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal("video/mp4", answer.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(artefact, await answer.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]

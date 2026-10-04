@@ -41,6 +41,8 @@ internal sealed class PlaybackFeature : IAsyncDisposable
                 });
                 services.AddSingleton<IEncodeJobRepository>(Jobs);
                 services.AddSingleton<IEncodeProfileRepository>(Profiles);
+                services.RemoveAll<IArtefactCodecReader>();
+                services.AddSingleton<IArtefactCodecReader>(new HeldArtefactCodecs());
 
                 if (files is not null)
                 {

@@ -33,6 +33,7 @@ public sealed class PlaybackService(
     IEncodeJobRepository jobs,
     IEncodeProfileRepository profiles,
     IArtefactOpenings reads,
+    IArtefactCodecReader codecs,
     ILogger<PlaybackService> logger)
 {
     public async Task<ServiceResult<PlaybackOffer, PlaybackFailure>> OfferAsync(
@@ -124,8 +125,10 @@ public sealed class PlaybackService(
         foreach (EncodeJob job in made)
         {
             EncodeProfile? asked = defined.FirstOrDefault(profile => profile.Id.Equals(job.ProfileId));
+            RecordingFileName artefact = new(job.ArtefactName!.Value);
+            PlaybackFileSearch onDisk = files.Find(job.OutputRoot, artefact);
 
-            if (asked is null || !EncodeShapes.EveryBrowserPlays(asked.Codec))
+            if (asked is null || !await EveryBrowserPlaysAsync(job, asked, onDisk, cancellationToken))
             {
                 logger.LogInformation(
                     "The artefact job {Job} made of recording {Recording} is not one a browser plays as it is, "
@@ -136,13 +139,36 @@ public sealed class PlaybackService(
                 continue;
             }
 
-            var artefact = new RecordingFileName(job.ArtefactName!.Value);
-
-            browserReady.Add(files.Find(job.OutputRoot, artefact));
+            browserReady.Add(onDisk);
             whoMadeIt.TryAdd(new ArtefactOnDisk(job.OutputRoot, artefact), job.Id);
         }
 
         return new EncodedArtefacts(browserReady, whoMadeIt);
+    }
+
+    private async Task<bool> EveryBrowserPlaysAsync(
+        EncodeJob job,
+        EncodeProfile asked,
+        PlaybackFileSearch onDisk,
+        CancellationToken cancellationToken)
+    {
+        if (onDisk.Found is not { HoldsAnything: true } file)
+        {
+            return EncodeShapes.EveryBrowserPlays(asked.Codec);
+        }
+
+        ArtefactCodecReading reading = await codecs.ReadAsync(file, cancellationToken);
+
+        if (!reading.Read)
+        {
+            logger.LogWarning(
+                "The codec of the artefact job {Job} made could not be read from its file ({Why}), "
+                + "so it is judged by what its profile says now.",
+                job.Id.Wire,
+                reading.Note);
+        }
+
+        return reading.EveryBrowserPlaysIt(asked.Codec);
     }
 
     private static ServiceResult<PlaybackOffer, PlaybackFailure> Nothing(RecordingId id, PlaybackRefusal refusal)

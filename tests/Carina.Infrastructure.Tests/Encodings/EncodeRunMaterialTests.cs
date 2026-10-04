@@ -2,10 +2,15 @@ using System.Runtime.Versioning;
 
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Encodings;
+using Carina.Domain.Integrity;
 using Carina.Domain.Machines;
+using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Machines;
+using Carina.Infrastructure.Playback;
+
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Encodings;
 
@@ -47,6 +52,7 @@ public sealed class EncodeRunMaterialTests
         Assert.InRange(made.Length!.Value, source.Length!.Value - Tolerance, source.Length.Value + Tolerance);
         Assert.Contains(harness.RunnerLog.Said, line => line.Contains("100% of the way through", StringComparison.Ordinal));
         Assert.Equal(["h264", "aac"], await CodecsOfAsync(artefact));
+        Assert.Equal(EncodeCodec.H264, (await CodecReadFromAsync(job, artefact)).Codec);
 
         EncodeTimeline timeline = job.Timeline!;
         Assert.NotNull(timeline);
@@ -98,6 +104,18 @@ public sealed class EncodeRunMaterialTests
             Assert.Equal(EncodeFailure.CapabilityUnavailable, job.Failure!.Failure);
         }
     }
+
+    private static Task<ArtefactCodecReading> CodecReadFromAsync(EncodeJob job, string artefact)
+        => new FfprobeArtefactCodecs(
+                new LocalPlaybackFileStore(
+                    new IntegritySettings(),
+                    new EncodeSettings { OutputRoots = [new StorageRootPath(job.OutputRoot, Path.GetDirectoryName(artefact)!)] },
+                    NullLogger<LocalPlaybackFileStore>.Instance),
+                new MachineSettings(),
+                TimeProvider.System)
+            .ReadAsync(
+                new PlaybackFile(job.OutputRoot, new RecordingFileName(job.ArtefactName!.Value), new FileInfo(artefact).Length),
+                Cancel);
 
     private static EncodeHarness OnThisMachine()
     {

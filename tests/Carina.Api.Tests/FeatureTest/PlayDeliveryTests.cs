@@ -148,6 +148,8 @@ internal sealed class PlayFeature : IAsyncDisposable
                 });
                 services.AddSingleton<IEncodeJobRepository>(Jobs);
                 services.AddSingleton<IEncodeProfileRepository>(Profiles);
+                services.RemoveAll<IArtefactCodecReader>();
+                services.AddSingleton<IArtefactCodecReader>(Codecs);
                 services.RemoveAll<IEncodeChapterRepository>();
                 services.AddSingleton<IEncodeChapterRepository>(Chapters);
                 services.AddSingleton<IPlaybackPositionRepository>(Positions);
@@ -173,6 +175,8 @@ internal sealed class PlayFeature : IAsyncDisposable
     public HeldEncodeJobs Jobs { get; } = new();
 
     public HeldEncodeProfiles Profiles { get; } = new();
+
+    public HeldArtefactCodecs Codecs { get; } = new();
 
     public HeldEncodeChapters Chapters { get; } = new();
 
@@ -233,7 +237,8 @@ internal sealed class PlayFeature : IAsyncDisposable
         EncodeCodec codec = EncodeCodec.H264,
         int minutesLater = 0,
         int bytes = 900,
-        bool onDisk = true)
+        bool onDisk = true,
+        EncodeCodec? fileReadAs = null)
     {
         EncodeProfile profile = EncodedArtefact.Profile(codec, RecordingFeature.Noon.AddHours(-1));
         Profiles.Profiles.Add(profile);
@@ -243,6 +248,11 @@ internal sealed class PlayFeature : IAsyncDisposable
             profile,
             RecordingFeature.Noon.AddHours(1).AddMinutes(minutesLater));
         Jobs.Jobs.Add(job);
+
+        if (fileReadAs is { } read)
+        {
+            Codecs.ReadAs(job.ArtefactName!, read);
+        }
 
         byte[] made = [.. Enumerable.Range(0, bytes).Select(index => (byte)((index * 3) % 251))];
 
