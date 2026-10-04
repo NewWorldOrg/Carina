@@ -80,13 +80,31 @@ public static class PlaybackSurfaces
     public static readonly QueryInput WhichOfTheTwoFilesIsPlayed = QueryInput.OneOfThese(
         PlayDelivery.Source,
         "Which of the two files a recording can be played from is played. Asking for the artefact hands over "
-        + "the one encoded of this recording where there is one a browser plays, and transcodes the recording "
-        + "itself while playing where there is not; asking for none does the same, as it always did. Asking "
+        + "the one encoded of this recording where there is one the browser plays - H.264, or H.265 tagged hvc1 "
+        + "where the browser says it decodes h265 - and transcodes the recording itself while playing where there "
+        + "is not; asking for none does the same, as it always did. Asking "
         + "for the recording transcodes the recording itself while playing even where an artefact was made of "
         + "it, and is refused where the recording is no longer on the disk rather than quietly handing over "
         + "the artefact. Either way the transcoder is shared with live channels, so a recording asked for as "
         + "it was recorded takes one of the few pictures this machine transcodes at once. The plan names the "
-        + "one it plays and the other one it could be asked for.",
+        + "one it plays and the other one it could be asked for, and apart from both the files an external "
+        + "player is handed, which no browser's decoding narrows.",
         PlaybackSources.Names,
         PlaybackSources.ArtefactIsCalled);
+
+    public static readonly QueryInput WhatThisBrowserDecodes = QueryInput.SomeOfThese(
+        PlayDelivery.Decodes,
+        "The picture codings the browser asking says it decodes, each named once. H.264 is always taken to be "
+        + "decoded. Naming h265 lets an artefact encoded in H.265 and tagged hvc1 be handed over as it is; one "
+        + "tagged hev1 is still transcoded while playing. Naming none decodes H.264 alone, as it always did, and "
+        + "naming anything else is refused. The picture and the captions are asked for with what the plan was "
+        + "asked with, so that all three settle on the same file.",
+        AskedDecoding.Names);
+
+    public static readonly QueryInput WhatThisBrowserDecodesForItsCaptions = QueryInput.SomeOfThese(
+        CaptionDelivery.Decodes,
+        "The picture codings the browser says it decodes, named as the plan was asked with, so that the captions "
+        + "are placed on the file the plan settled on: naming h265 lets that be an artefact encoded in H.265 and "
+        + "tagged hvc1.",
+        AskedDecoding.Names);
 }

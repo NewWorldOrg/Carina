@@ -53,20 +53,49 @@ public sealed record QueryInput
             [.. values]);
     }
 
-    public OpenApiParameter Parameter() => new()
+    /// <summary>
+    /// A query naming any of the values, each as a repeat of the name.
+    /// </summary>
+    public static QueryInput SomeOfThese(string name, string says, IReadOnlyList<string> values)
     {
-        Name = Name,
-        In = ParameterLocation.Query,
-        Required = false,
-        Description = Says,
-        Schema = new OpenApiSchema
+        ArgumentNullException.ThrowIfNull(values);
+
+        return new QueryInput(name, says, JsonSchemaType.Array, null, null, [.. values]);
+    }
+
+    public OpenApiParameter Parameter() => Shape is JsonSchemaType.Array
+        ? new OpenApiParameter
         {
-            Type = Shape,
-            Format = Format,
-            Default = Ordinarily?.DeepClone(),
-            Enum = OneOf is null ? null : [.. OneOf.Select(value => (JsonNode)value)],
-        },
-    };
+            Name = Name,
+            In = ParameterLocation.Query,
+            Required = false,
+            Description = Says,
+            Style = ParameterStyle.Form,
+            Explode = true,
+            Schema = new OpenApiSchema
+            {
+                Type = JsonSchemaType.Array,
+                Items = new OpenApiSchema
+                {
+                    Type = JsonSchemaType.String,
+                    Enum = [.. OneOf!.Select(value => (JsonNode)value)],
+                },
+            },
+        }
+        : new OpenApiParameter
+        {
+            Name = Name,
+            In = ParameterLocation.Query,
+            Required = false,
+            Description = Says,
+            Schema = new OpenApiSchema
+            {
+                Type = Shape,
+                Format = Format,
+                Default = Ordinarily?.DeepClone(),
+                Enum = OneOf is null ? null : [.. OneOf.Select(value => (JsonNode)value)],
+            },
+        };
 }
 
 public static class QueryInputs

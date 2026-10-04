@@ -30,12 +30,12 @@ public sealed class FfprobeArtefactCodecsTests : IDisposable
     }
 
     [Fact]
-    public void TheFirstPictureTrackIsAskedForItsCodecByKey()
+    public void TheFirstPictureTrackIsAskedForItsCodecAndItsTagByKey()
     {
         string[] arguments = [.. FfprobeArtefactCodecs.Arguments("/srv/encodes/a.mp4")];
 
         Assert.Equal("v:0", arguments[arguments.IndexOf("-select_streams") + 1]);
-        Assert.Equal("stream=codec_name", arguments[arguments.IndexOf("-show_entries") + 1]);
+        Assert.Equal("stream=codec_name,codec_tag_string", arguments[arguments.IndexOf("-show_entries") + 1]);
         Assert.Equal("default=nw=1", arguments[arguments.IndexOf("-of") + 1]);
         Assert.Equal("/srv/encodes/a.mp4", arguments[arguments.IndexOf("-i") + 1]);
     }
@@ -50,6 +50,19 @@ public sealed class FfprobeArtefactCodecsTests : IDisposable
 
         Assert.True(reading.Read);
         Assert.Equal(codec, reading.Codec);
+    }
+
+    [Theory(DisplayName = "the tag of the picture track is read beside its codec")]
+    [InlineData("hvc1", true)]
+    [InlineData("hev1", false)]
+    public async Task TheTagOfThePictureTrackIsReadBesideItsCodec(string tag, bool asSafariPlays)
+    {
+        ArtefactCodecReading reading = await Codecs(standIns.Script($"printf 'codec_name=hevc\\ncodec_tag_string={tag}\\n'"))
+            .ReadAsync(Placed(900), CancellationToken.None);
+
+        Assert.Equal(EncodeCodec.H265, reading.Codec);
+        Assert.Equal(tag, reading.Tag);
+        Assert.Equal(asSafariPlays, reading.TaggedTheWaySafariPlays);
     }
 
     [Fact]

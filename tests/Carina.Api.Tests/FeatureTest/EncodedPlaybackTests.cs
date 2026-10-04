@@ -305,6 +305,85 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
     }
 
+    [Fact(DisplayName = "an artefact made in H.265 and tagged hvc1 is handed over as it is to a browser that says it decodes h265")]
+    public async Task AnArtefactInH265TaggedHvc1IsHandedOverToABrowserThatSaysItDecodesH265()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        byte[] artefact = feature.Encoded(recording, EncodeCodec.H265, fileReadAs: EncodeCodec.H265, taggedAs: "hvc1");
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(
+            await feature.PlanAsync(recording, "?decodes=h265"))).GetProperty("data");
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?source=artefact&decodes=h265");
+
+        Assert.Equal("direct", read.GetProperty("route").GetString());
+        Assert.Equal("artefact", read.GetProperty("source").GetString());
+        Assert.Equal("recording", read.GetProperty("alternative").GetString());
+        Assert.Equal(["artefact", "recording"], ExternalPlayerSources(read));
+        Assert.Equal("direct", Header(picture, PlaybackHeaders.Route));
+        Assert.Equal(artefact, await picture.Content.ReadAsByteArrayAsync());
+        Assert.Null(feature.Player.Handed);
+    }
+
+    [Theory(DisplayName = "a browser that does not say it decodes h265 has an artefact made in H.265 transcoded, and the plan still names it for external players")]
+    [InlineData("")]
+    [InlineData("?decodes=h264")]
+    public async Task ABrowserThatDoesNotSayItDecodesH265HasTheArtefactTranscoded(string query)
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, EncodeCodec.H265, fileReadAs: EncodeCodec.H265, taggedAs: "hvc1");
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording, query))).GetProperty("data");
+
+        Assert.Equal("onTheFly", read.GetProperty("route").GetString());
+        Assert.Equal("recording", read.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
+        Assert.Equal(["artefact", "recording"], ExternalPlayerSources(read));
+    }
+
+    [Fact(DisplayName = "an artefact made in H.265 and tagged hev1 is transcoded even for a browser that says it decodes h265")]
+    public async Task AnArtefactInH265TaggedHev1IsTranscodedEvenForABrowserThatDecodesH265()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, EncodeCodec.H265, fileReadAs: EncodeCodec.H265, taggedAs: "hev1");
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(
+            await feature.PlanAsync(recording, "?decodes=h264&decodes=h265"))).GetProperty("data");
+
+        Assert.Equal("onTheFly", read.GetProperty("route").GetString());
+        Assert.Equal(["artefact", "recording"], ExternalPlayerSources(read));
+    }
+
+    [Fact(DisplayName = "the plan of a recording with nothing encoded names only the recording itself for external players")]
+    public async Task ThePlanOfARecordingWithNothingEncodedNamesOnlyTheRecordingForExternalPlayers()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal(["recording"], ExternalPlayerSources(read));
+    }
+
+    [Theory(DisplayName = "a decoding that is not one of the two is refused, for the plan and for the picture alike")]
+    [InlineData("?decodes=av1")]
+    [InlineData("?decodes=h265&decodes=H264")]
+    public async Task ADecodingThatIsNotOneOfTheTwoIsRefused(string query)
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+
+        using HttpResponseMessage plan = await feature.PlanAsync(recording, query);
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, query);
+
+        Assert.Equal(HttpStatusCode.BadRequest, plan.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, picture.StatusCode);
+        Assert.Equal(PlayDelivery.TheDecodingsThereAre, (await PlayFeature.PlanOfAsync(plan)).GetProperty("message").GetString());
+    }
+
     [Fact]
     public async Task NothingSaysAPlanFellBackWhenTheArtefactItNamesIsThere()
     {
@@ -667,4 +746,7 @@ public sealed class EncodedPlaybackTests
 
     private static string? Header(HttpResponseMessage answer, string named)
         => answer.Headers.TryGetValues(named, out IEnumerable<string>? values) ? values.Single() : null;
+
+    private static string[] ExternalPlayerSources(JsonElement plan)
+        => [.. plan.GetProperty("externalPlayerSources").EnumerateArray().Select(source => source.GetString()!)];
 }

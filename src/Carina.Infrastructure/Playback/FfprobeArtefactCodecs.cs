@@ -10,7 +10,7 @@ using Carina.Infrastructure.Machines;
 namespace Carina.Infrastructure.Playback;
 
 /// <summary>
-/// Reads the codec of an artefact's first picture track by asking ffprobe, and keeps what it read for as
+/// Reads the codec and the tag of an artefact's first picture track by asking ffprobe, and keeps what it read for as
 /// long as the file has the same size and the same time it was last written. A file that could not be read
 /// is not asked about again for <see cref="UnreadKeptFor"/>.
 /// </summary>
@@ -20,6 +20,8 @@ public sealed class FfprobeArtefactCodecs(
     TimeProvider clock) : IArtefactCodecReader
 {
     public const string Key = "codec_name";
+
+    public const string TagKey = "codec_tag_string";
 
     public static readonly TimeSpan UnreadKeptFor = TimeSpan.FromMinutes(5);
 
@@ -45,7 +47,7 @@ public sealed class FfprobeArtefactCodecs(
             "-of",
             FfprobeLengthInvocation.Format,
             "-show_entries",
-            $"stream={Key}",
+            $"stream={Key},{TagKey}",
             "-i",
             artefact,
         ];
@@ -101,17 +103,16 @@ public sealed class FfprobeArtefactCodecs(
                 $"the programme exited {said.ExitCode}: {said.Complained}"));
         }
 
-        string? codec = FfprobeRecords.From(said.Said)
-            .Select(record => record.Value(Key))
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        FfprobeRecord? track = FfprobeRecords.From(said.Said)
+            .FirstOrDefault(record => !string.IsNullOrWhiteSpace(record.Value(Key)));
 
-        if (codec is null)
+        if (track?.Value(Key) is not { } codec)
         {
             return ArtefactCodecReading.Unread($"the programme exited 0 and named no '{Key}' of a picture track");
         }
 
         return Named.TryGetValue(codec, out EncodeCodec known)
-            ? ArtefactCodecReading.Of(known)
+            ? ArtefactCodecReading.Of(known, track.Value(TagKey))
             : ArtefactCodecReading.Neither(codec);
     }
 

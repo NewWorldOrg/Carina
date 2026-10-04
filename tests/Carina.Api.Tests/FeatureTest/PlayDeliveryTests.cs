@@ -238,7 +238,8 @@ internal sealed class PlayFeature : IAsyncDisposable
         int minutesLater = 0,
         int bytes = 900,
         bool onDisk = true,
-        EncodeCodec? fileReadAs = null)
+        EncodeCodec? fileReadAs = null,
+        string? taggedAs = null)
     {
         EncodeProfile profile = EncodedArtefact.Profile(codec, RecordingFeature.Noon.AddHours(-1));
         Profiles.Profiles.Add(profile);
@@ -251,7 +252,7 @@ internal sealed class PlayFeature : IAsyncDisposable
 
         if (fileReadAs is { } read)
         {
-            Codecs.ReadAs(job.ArtefactName!, read);
+            Codecs.ReadAs(job.ArtefactName!, read, taggedAs);
         }
 
         byte[] made = [.. Enumerable.Range(0, bytes).Select(index => (byte)((index * 3) % 251))];

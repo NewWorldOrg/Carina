@@ -590,7 +590,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         JsonNode schemas = document["components"]!["schemas"]!;
 
         Assert.Equal(
-            ["from", "id", "source"],
+            ["decodes", "from", "id", "source"],
             operation["parameters"]!.AsArray().Select(parameter => parameter!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
             ["200", "401", "404", "409", "500"],

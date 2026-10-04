@@ -29,6 +29,8 @@ public static class PlayDelivery
 
     public const string Source = "source";
 
+    public const string Decodes = "decodes";
+
     public const string Json = "application/json";
 
     public const string NoSeeking = "none";
@@ -48,6 +50,9 @@ public static class PlayDelivery
     public const string TheSourcesThereAre =
         "A recording is played from the artefact encoded of it or from the recording itself, and from "
         + "nothing else.";
+
+    public const string TheDecodingsThereAre =
+        "A browser says it decodes h264 or h265, by naming each, and names nothing else.";
 
     public const string NothingToChooseFrom =
         "A recording handed over as it is carries the one sound it was encoded with, so there is no sound "
@@ -122,18 +127,28 @@ public static class PlayDelivery
             return;
         }
 
+        AskedDecoding decoding = AskedDecoding.Read(context.Request.Query[Decodes]);
+
+        if (decoding.Answer is DecodingAnswer.NotOneOfThese)
+        {
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, TheDecodingsThereAre);
+
+            return;
+        }
+
         TimeSpan? leftOffAt = await WhereTheWatchingGotToAsync(context, recordingId, positions);
         TimeSpan from = asked.Named ?? leftOffAt ?? TimeSpan.Zero;
 
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
-            await playback.OfferAsync(recordingId, sound.Track, source.Source, context.RequestAborted);
+            await playback.OfferAsync(recordingId, sound.Track, source.Source, decoding.Audience, context.RequestAborted);
 
         if (!offered.IsSuccess)
         {
             if (AsksForThePlan(context.Request)
                 && source.Source is PlaybackSource.Artefact
                 && sound.Track is not SoundTrack.Main
-                && await WhatIsStillWithinReachAsync(playback, recordingId, context.RequestAborted) is { } narrowed)
+                && await WhatIsStillWithinReachAsync(playback, recordingId, decoding.Audience, context.RequestAborted)
+                    is { } narrowed)
             {
                 PlaybackHeaders.Say(context.Response, narrowed.Plan);
 
@@ -141,6 +156,7 @@ public static class PlayDelivery
                     context,
                     narrowed.Plan,
                     narrowed.Handover,
+                    narrowed.ExternalPlayerSources,
                     leftOffAt,
                     TheMainSoundAlone,
                     await MarkedAsync(narrowed, chapters, context.RequestAborted),
@@ -176,6 +192,7 @@ public static class PlayDelivery
                 context,
                 plan,
                 handover,
+                offered.Data!.ExternalPlayerSources,
                 leftOffAt,
                 offering.Tracks,
                 await MarkedAsync(offered.Data!, chapters, context.RequestAborted),
@@ -271,10 +288,11 @@ public static class PlayDelivery
     private static async Task<PlaybackOffer?> WhatIsStillWithinReachAsync(
         PlaybackService playback,
         RecordingId recording,
+        PlaybackAudience audience,
         CancellationToken cancellationToken)
     {
         ServiceResult<PlaybackOffer, PlaybackFailure> asItWasEncoded =
-            await playback.OfferAsync(recording, SoundTrack.Main, PlaybackSource.Artefact, cancellationToken);
+            await playback.OfferAsync(recording, SoundTrack.Main, PlaybackSource.Artefact, audience, cancellationToken);
 
         return asItWasEncoded.IsSuccess && !asItWasEncoded.Data!.Plan.Transcodes
             ? asItWasEncoded.Data
@@ -285,6 +303,7 @@ public static class PlayDelivery
         HttpContext context,
         PlaybackPlan plan,
         PlaybackFile handover,
+        IReadOnlyList<PlaybackSource> externalPlayerSources,
         TimeSpan? leftOffAt,
         IReadOnlyList<SoundTrack> sounds,
         IReadOnlyList<PlaybackChapterResponder> chapters,
@@ -297,6 +316,7 @@ public static class PlayDelivery
                 PlaybackPlanResponder.Of(
                     plan,
                     handover,
+                    externalPlayerSources,
                     MediaTypeOf(plan, handover),
                     leftOffAt,
                     sounds,
