@@ -57,13 +57,28 @@ public sealed class PlaybackService(
         PlaybackFileSearch onDisk = files.Find(recording.OutputRoot, recording.FileName);
         var announced = new AnnouncedSound(recording.SnapshotAudio, recording.SnapshotSounds);
         EncodedArtefacts encoded = await EncodedAsync(id, cancellationToken);
+        IReadOnlyList<PlaybackFileSearch> playable = encoded.PlayedBy(audience);
+        IReadOnlyList<PlaybackFileSearch> handedToPlayers = audience == PlaybackAudience.ExternalPlayer
+            ? playable
+            : encoded.PlayedBy(PlaybackAudience.ExternalPlayer);
         PlaybackPlan plan = PlaybackPlan.For(
-            new PlaybackSubject(recording.Outcome, onDisk, encoded.PlayedBy(audience, id, logger)),
+            new PlaybackSubject(recording.Outcome, onDisk, playable),
             wanted,
             SoundArrangement.Of(announced),
             from);
         IReadOnlyList<PlaybackSource> external = PlaybackPlan.SourcesHandedOver(
-            new PlaybackSubject(recording.Outcome, onDisk, encoded.PlayedBy(PlaybackAudience.ExternalPlayer, id, logger)));
+            new PlaybackSubject(recording.Outcome, onDisk, handedToPlayers));
+
+        foreach (EncodedArtefact left in encoded.LeftOutBy(audience))
+        {
+            logger.LogInformation(
+                "The artefact job {Job} made of recording {Recording} is not one {Audience} plays as it is "
+                + "({Codec}), so it is left out of what playback is offered.",
+                left.Job.Id.Wire,
+                id.Wire,
+                audience.IsBrowser ? "this browser" : "an external player",
+                left.Reading.Note);
+        }
 
         if (plan.FellBack is { } fellBack)
         {
@@ -203,30 +218,11 @@ public sealed class PlaybackService(
     {
         public static readonly EncodedArtefacts None = new([]);
 
-        public IReadOnlyList<PlaybackFileSearch> PlayedBy(PlaybackAudience audience, RecordingId id, ILogger logger)
-        {
-            List<PlaybackFileSearch> played = [];
+        public IReadOnlyList<PlaybackFileSearch> PlayedBy(PlaybackAudience audience)
+            => [.. Found.Where(artefact => audience.Plays(artefact.Reading, artefact.ProfileSays)).Select(artefact => artefact.OnDisk)];
 
-            foreach (EncodedArtefact artefact in Found)
-            {
-                if (audience.Plays(artefact.Reading, artefact.ProfileSays))
-                {
-                    played.Add(artefact.OnDisk);
-
-                    continue;
-                }
-
-                logger.LogInformation(
-                    "The artefact job {Job} made of recording {Recording} is not one {Audience} plays as it is "
-                    + "({Codec}), so it is left out of what playback is offered.",
-                    artefact.Job.Id.Wire,
-                    id.Wire,
-                    audience.IsBrowser ? "this browser" : "an external player",
-                    artefact.Reading.Note);
-            }
-
-            return played;
-        }
+        public IEnumerable<EncodedArtefact> LeftOutBy(PlaybackAudience audience)
+            => Found.Where(artefact => !audience.Plays(artefact.Reading, artefact.ProfileSays));
 
         public EncodeJobId? Made(PlaybackPlan plan)
         {

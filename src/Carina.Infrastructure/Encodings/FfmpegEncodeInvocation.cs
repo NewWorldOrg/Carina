@@ -237,8 +237,7 @@ public static class FfmpegEncodeInvocation
     }
 
     /// <summary>
-    /// The tag an H.265 picture track is written with, so that Safari plays it; ffmpeg would tag it
-    /// <c>hev1</c>. An H.264 track keeps the tag ffmpeg gives it.
+    /// The tag an H.265 picture track is written with. An H.264 track keeps the tag ffmpeg gives it.
     /// </summary>
     public static IReadOnlyList<string> Tagging(EncodeCodec codec)
         => EncodeShapes.Named(codec) is EncodeCodec.H265 ? ["-tag:v", ArtefactCodecReading.TagSafariPlays] : [];

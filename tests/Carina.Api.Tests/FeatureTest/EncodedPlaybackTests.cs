@@ -514,6 +514,30 @@ public sealed class EncodedPlaybackTests
         Assert.Equal("programme", chapter.GetProperty("kind").GetString());
     }
 
+    [Theory(DisplayName = "with an earlier artefact in H.264 and a later one in H.265, a browser is handed the newest one it decodes, with the chapters that artefact's job marked")]
+    [InlineData("?decodes=h265", 1_300, 45d)]
+    [InlineData("", 700, 30d)]
+    public async Task ABrowserIsHandedTheNewestArtefactItDecodesWithItsOwnChapters(string query, long bytes, double endsAt)
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, EncodeCodec.H264, bytes: 700, fileReadAs: EncodeCodec.H264);
+        feature.Encoded(recording, EncodeCodec.H265, minutesLater: 90, bytes: 1_300, fileReadAs: EncodeCodec.H265, taggedAs: "hvc1");
+        await feature.MarkedAsync(
+            feature.Jobs.Jobs[0],
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(30), ChapterKind.Break));
+        await feature.MarkedAsync(
+            feature.Jobs.Jobs[1],
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(45), ChapterKind.Programme));
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording, query))).GetProperty("data");
+        JsonElement chapter = Assert.Single(read.GetProperty("chapters").EnumerateArray());
+
+        Assert.Equal("direct", read.GetProperty("route").GetString());
+        Assert.Equal(bytes, read.GetProperty("bytes").GetInt64());
+        Assert.Equal(endsAt, chapter.GetProperty("endsAtSec").GetDouble());
+    }
+
     [Fact]
     public async Task ThePlanOfAnArtefactWhoseRunMarkedNothingCarriesAnEmptyListRatherThanNoField()
     {
