@@ -565,7 +565,8 @@ belongs.
 The render node is the exception, because a machine that has one is the normal
 case and the transcoder is meant to find it without being configured. `task up`
 reads the host through `docker/dri-env.sh` and hands `/dev/dri` to `app` when it
-is there, along with the owning groups of `card0` and `renderD128` as numbers
+is there, along with the owning groups of `card0` and of the render node
+`CARINA_RENDER_NODE` names (`renderD128` unless told otherwise) as numbers
 measured on that host — the render node's group is numbered differently from one
 distribution to the next and is often absent from the container's own
 `/etc/group`, so a name would resolve to something other than the device. A host

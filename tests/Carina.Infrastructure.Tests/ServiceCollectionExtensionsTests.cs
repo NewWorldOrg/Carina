@@ -6,6 +6,7 @@ using Carina.Domain.DriverStatus;
 using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
+using Carina.Domain.Machines;
 using Carina.Domain.Migration;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -437,6 +438,37 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Equal("/srv/thumbnails", read.WrittenTo);
         Assert.Equal(1280, read.Width);
         Assert.True(read.DrawsAnything);
+    }
+
+    [Fact]
+    public void ReadsWhichRenderNodeTheCardIsOpenedThrough()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Machine:RenderNode"] = "/dev/dri/renderD129";
+        using ServiceProvider provider = Build(settings);
+
+        Assert.Equal("/dev/dri/renderD129", provider.GetRequiredService<MachineSettings>().RenderNode);
+    }
+
+    [Fact]
+    public void AMachineToldNoRenderNodeOpensTheFirstOne()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Equal("/dev/dri/renderD128", provider.GetRequiredService<MachineSettings>().RenderNode);
+    }
+
+    [Fact]
+    public void RejectsARenderNodeThatIsNotAnAbsolutePath()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Machine:RenderNode"] = "renderD129";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<MachineOptions>>().Value);
+
+        Assert.Contains("Machine:RenderNode", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
