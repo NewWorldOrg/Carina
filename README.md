@@ -123,6 +123,7 @@ health は表示するだけで、unhealthy になっても何も再起動しな
 | `Thumbnails__WrittenTo` | サムネイルの置き場所。空なら作らない |
 | `Captions__WrittenTo` | 録画から取り出した字幕の置き場所。空なら取り出さない |
 | `Encodings__OutputRoots` | エンコードの成果物を書くルート(`encodes=/srv/encodes`) |
+| `Machine__RenderNode` | VAAPI で使う GPU の描画ノード(絶対パス)。既定は `/dev/dri/renderD128`。GPU が 2 枚あればノードも 2 つ並ぶので、どちらを使うかをここで選ぶ。エンコード・ライブ・録画再生のその場の変換・GPU の能力の確かめが、すべてこのノードを使う |
 | `ProgrammeFeed__ConcurrentReaders` | 一括番組表を同時に何本まで配るか。既定は 4 で、超えた要求はその場で断る |
 | `ProgrammeFeed__StatementTimeout` | 一括番組表の 1 文に与える時間。既定は 30 秒、上限は `24.20:31:23.647`。超えたら何も送らず、どこから読み直すかを添えて断る |
 | `Auth__SessionAbsoluteLifetime` | ログインしてからその席が終わるまでの長さ。既定は 30 日、上限は 365 日 |
@@ -150,10 +151,13 @@ root で起動したイメージは `app` を uid・gid 10001 に降ろして動
 | `CARINA_ENCODES_DIR` | エンコードの成果物を書くホスト側のディレクトリ。未設定なら Docker のボリューム |
 | `CARINA_KEYS_DIR` | client secret を封じる鍵を置くホスト側のディレクトリ。未設定なら Docker のボリューム |
 | `CARINA_DRI` | 映像処理装置のディレクトリ(`/dev/dri`)。未設定なら何も渡さない |
-| `CARINA_DRI_VIDEO_GID` / `CARINA_DRI_RENDER_GID` | `card0` / `renderD128` の所有グループの番号 |
+| `CARINA_RENDER_NODE` | `app` の `Machine__RenderNode` に渡す描画ノード。既定は `/dev/dri/renderD128` |
+| `CARINA_DRI_VIDEO_GID` / `CARINA_DRI_RENDER_GID` | `card0` / `CARINA_RENDER_NODE` のノードの所有グループの番号 |
 | `CARINA_ENCODINGS_PREFER` | 録画をあとからエンコードするときの変換器(`Software` / `Vaapi`)。既定は `Software` |
 
 `task up` は起動のたびに `docker/dri-env.sh` でホストを見て、装置が在れば渡す。
+描画ノードは `CARINA_RENDER_NODE`(シェルの環境変数、無ければ `.env`)のものを見て、その所有グループを `app` に足す。
+`driver` は GPU を使わないので、装置は渡さない。
 渡すことと使うことは別で、ハードウェアで変換させるなら `.env` に書く(`.env.example` に雛形がある)。
 送りながら観るほうが `CARINA_TRANSCODING_PREFER=Vaapi`、あとからのエンコードが `CARINA_ENCODINGS_PREFER=Vaapi` で、
 装置は 1 つなので、後者は観ている人がいる間、次の仕事を始めずに待つ。

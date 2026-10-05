@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Carina.Domain.Channels;
+using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -18,6 +19,7 @@ public static class FfmpegPlaybackInvocation
         LiveProfile profile,
         StreamAttributes attributes,
         LiveEncoder encoder,
+        MachineSettings machine,
         StreamSource source,
         TimeSpan from,
         SoundPlacement sound)
@@ -25,6 +27,8 @@ public static class FfmpegPlaybackInvocation
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(attributes);
+        ArgumentNullException.ThrowIfNull(machine);
+        ArgumentException.ThrowIfNullOrEmpty(machine.RenderNode);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(sound);
         ArgumentOutOfRangeException.ThrowIfLessThan(from, TimeSpan.Zero);
@@ -43,7 +47,7 @@ public static class FfmpegPlaybackInvocation
             "-hide_banner",
             "-loglevel",
             "error",
-            .. FfmpegLiveInvocation.Device(encoder),
+            .. FfmpegLiveInvocation.Device(encoder, machine.RenderNode),
             "-fflags",
             "discardcorrupt",
             "-ss",

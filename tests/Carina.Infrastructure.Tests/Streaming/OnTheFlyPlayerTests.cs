@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
+using Carina.Domain.Machines;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
@@ -34,6 +35,8 @@ public sealed class OnTheFlyPlayerTests : IDisposable
     private static readonly RecordingFileName Named = new("a1b2c3.ts");
 
     private static readonly ServiceId Service = new(1040);
+
+    private const string RenderNode = "/dev/dri/renderD129";
 
     private static readonly SoundPlacement TheWholeFirstStream = SoundPlacement.WholeStream(0);
 
@@ -587,6 +590,22 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Path.Combine(standIns.Room, Named.Value),
             [.. Enumerable.Range(0, bytes).Select(at => (byte)((at * 7) % 251))]);
 
+    [Fact]
+    public async Task TheCardIsOpenedThroughTheRenderNodeTheMachineIsSetTo()
+    {
+        Recorded(40_000);
+        string said = standIns.Named("arguments");
+
+        await using IOnTheFlyViewing viewing = await Running(
+            Player($"printf '%s\\n' \"$@\" > {said}; echo ready", encoder: LiveEncoder.Vaapi),
+            TimeSpan.Zero,
+            null);
+
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.Equal(RenderNode, handed[Array.IndexOf(handed, "-vaapi_device") + 1]);
+    }
+
     private OnTheFlyPlayer Player(
         string body,
         int atOnce = 2,
@@ -611,6 +630,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Store(),
             new Measured(),
             new AlreadyChosen(encoder),
+            new MachineSettings { RenderNode = RenderNode },
             clock ?? TimeProvider.System);
     }
 

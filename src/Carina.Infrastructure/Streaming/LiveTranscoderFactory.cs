@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -7,6 +8,7 @@ public sealed class LiveTranscoderFactory(
     LiveTranscodeSettings settings,
     ITranscodeBudget budget,
     ILiveEncoderSelector selector,
+    MachineSettings machine,
     TimeProvider clock) : ILiveTranscoderFactory
 {
     public async Task<LiveTranscoderStart> StartAsync(
@@ -63,7 +65,7 @@ public sealed class LiveTranscoderFactory(
         LiveTranscoderStart started = TranscoderProcess.Start(
             settings,
             [
-                .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder, captions, sound),
+                .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder, machine, captions, sound),
                 .. FfmpegLiveInvocation.Delivery(),
                 .. drawn is null ? [] : FfmpegLiveInvocation.CaptionDelivery(service, drawn.Descriptor),
             ],

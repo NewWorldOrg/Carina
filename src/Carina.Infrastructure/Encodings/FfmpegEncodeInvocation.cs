@@ -10,8 +10,6 @@ namespace Carina.Infrastructure.Encodings;
 
 public static class FfmpegEncodeInvocation
 {
-    public const string RenderNode = MachineSettings.TheRenderNode;
-
     private const string SquarePixels = "setsar=1";
 
     private const string FullHd = "scale=1920:1080:flags=bicubic";
@@ -33,6 +31,7 @@ public static class FfmpegEncodeInvocation
 
     /// <summary>
     /// The arguments for one run. The core cap is written for the decoder, the filters and the encoder.
+    /// The card is opened through the render node the machine is set to, and only when it is what encodes.
     /// Chapters to bake into the artefact come in as a second input, after the recording; with none,
     /// no argument is added.
     /// </summary>
@@ -40,6 +39,7 @@ public static class FfmpegEncodeInvocation
         ServiceId service,
         EncodeProfile profile,
         EncodeEncoder encoder,
+        MachineSettings machine,
         string source,
         int cores,
         TimeSpan headSkip,
@@ -49,6 +49,8 @@ public static class FfmpegEncodeInvocation
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(sound);
+        ArgumentNullException.ThrowIfNull(machine);
+        ArgumentException.ThrowIfNullOrEmpty(machine.RenderNode);
         ArgumentException.ThrowIfNullOrEmpty(source);
         ArgumentOutOfRangeException.ThrowIfLessThan(cores, 1);
 
@@ -74,7 +76,7 @@ public static class FfmpegEncodeInvocation
             "-y",
             "-filter_threads",
             threads,
-            .. Device(encoder),
+            .. Device(encoder, machine.RenderNode),
             "-threads",
             threads,
             "-i",
@@ -112,8 +114,8 @@ public static class FfmpegEncodeInvocation
     internal static IReadOnlyList<string> BakingChapters(string? chapters)
         => string.IsNullOrEmpty(chapters) ? [] : ["-map_chapters", ChaptersInput];
 
-    internal static IReadOnlyList<string> Device(EncodeEncoder encoder)
-        => EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
+    internal static IReadOnlyList<string> Device(EncodeEncoder encoder, string renderNode)
+        => EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi ? ["-vaapi_device", renderNode] : [];
 
     internal static IReadOnlyList<string> Mapping(ServiceId service, EncodeSound sound)
     {

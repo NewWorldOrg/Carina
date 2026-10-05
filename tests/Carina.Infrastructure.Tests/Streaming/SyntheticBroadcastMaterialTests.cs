@@ -7,6 +7,7 @@ using Carina.BroadcastTestSupport;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Encodings;
@@ -25,6 +26,8 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
     private static readonly TimeSpan PastTheProbe = TimeSpan.FromSeconds(12);
 
     private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
+
+    private static readonly MachineSettings Machine = new();
 
     private static readonly SoundPlacement TheWholeFirstStream = SoundPlacement.WholeStream(0);
 
@@ -287,7 +290,7 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
             UseShellExecute = false,
         };
 
-        foreach (string argument in FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.Drawn)
+        foreach (string argument in FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.Drawn)
             .Concat(FfmpegLiveInvocation.Delivery())
             .Concat(FfmpegLiveInvocation.CaptionDelivery(Service, int.Parse(captions.GetClientHandleAsString(), CultureInfo.InvariantCulture))))
         {
@@ -471,6 +474,7 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
                     LiveProfile.Hd30,
                     Interlaced,
                     LiveEncoder.Software,
+                    Machine,
                     new StreamSource(written),
                     TimeSpan.Zero,
                     TheWholeFirstStream),
@@ -502,6 +506,7 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
                     LiveProfile.Hd30,
                     Interlaced,
                     LiveEncoder.Software,
+                    Machine,
                     new StreamSource(written),
                     TimeSpan.Zero,
                     TheWholeFirstStream),
@@ -575,6 +580,7 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
                     Service,
                     Standard,
                     EncodeEncoder.Software,
+                    Machine,
                     written,
                     1,
                     TimeSpan.Zero,
@@ -622,6 +628,7 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
                     Service,
                     Sized(resolution),
                     EncodeEncoder.Software,
+                    Machine,
                     written,
                     1,
                     TimeSpan.Zero,
@@ -662,6 +669,7 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
                     LiveProfile.Hd30,
                     Interlaced,
                     LiveEncoder.Software,
+                    Machine,
                     new StreamSource(written),
                     TimeSpan.Zero,
                     sound),
@@ -756,6 +764,7 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
                     LiveProfile.Hd30,
                     Interlaced,
                     LiveEncoder.Software,
+                    Machine,
                     CaptionOutlet.None,
                     sound),
                 .. FfmpegLiveInvocation.Delivery(),

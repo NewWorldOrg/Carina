@@ -1,5 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 
@@ -16,6 +17,10 @@ public sealed class FfmpegPlaybackInvocationTests
     private static readonly StreamSource Recorded = new("/srv/recordings/a1b2c3.ts");
 
     private static readonly ServiceId Service = new(1040);
+
+    private const string RenderNode = "/dev/dri/renderD129";
+
+    private static readonly MachineSettings Machine = new() { RenderNode = RenderNode };
 
     private static readonly SoundPlacement TheWholeFirstStream = SoundPlacement.WholeStream(0);
 
@@ -51,7 +56,7 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void NothingAskedForBecauseTheLiveInputCannotBeRewoundIsAskedForOfAFileThatCan()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
         Assert.Contains("nobuffer", live);
@@ -109,6 +114,7 @@ public sealed class FfmpegPlaybackInvocationTests
             LiveProfile.Hd30,
             Interlaced,
             LiveEncoder.Software,
+            Machine,
             CaptionOutlet.None,
             TheWholeSecondStream);
 
@@ -128,6 +134,7 @@ public sealed class FfmpegPlaybackInvocationTests
                 LiveProfile.Hd30,
                 Interlaced,
                 LiveEncoder.Software,
+                Machine,
                 CaptionOutlet.None,
                 placement),
         ];
@@ -224,7 +231,7 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void ALiveViewerIsGivenTheSoundBuiltTheSameWayAPlayedRecordingIs()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None);
         IReadOnlyList<string> playing = Arguments(TimeSpan.Zero);
 
         Assert.Equal("aac", After(live, "-c:a"));
@@ -236,7 +243,7 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void APlayedRecordingCarriesTheSameOneSoundALiveViewerIsGiven()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
         Assert.Equal(Mapped(live), Mapped(playing));
@@ -246,7 +253,7 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void ThePictureIsBuiltTheSameWayItIsBuiltForALiveViewer()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
         Assert.Equal(After(live, "-vf"), After(playing, "-vf"));
@@ -308,13 +315,53 @@ public sealed class FfmpegPlaybackInvocationTests
             LiveProfile.Hd30,
             Interlaced,
             LiveEncoder.Vaapi,
+            Machine,
             Recorded,
             TimeSpan.FromMinutes(1),
             TheWholeFirstStream);
 
-        Assert.Equal(FfmpegLiveInvocation.RenderNode, After(arguments, "-vaapi_device"));
+        Assert.Equal(RenderNode, After(arguments, "-vaapi_device"));
         Assert.True(Where(arguments, "-vaapi_device") < Where(arguments, "-i"));
         Assert.Contains("h264_vaapi", arguments);
+    }
+
+    [Fact]
+    public void TheProcessorEncodingOpensNoCard()
+        => Assert.DoesNotContain(
+            "-vaapi_device",
+            FfmpegPlaybackInvocation.Arguments(
+                Service,
+                LiveProfile.Hd30,
+                Interlaced,
+                LiveEncoder.Software,
+                Machine,
+                Recorded,
+                TimeSpan.Zero,
+                TheWholeFirstStream));
+
+    [Theory]
+    [InlineData(LiveEncoder.Software)]
+    [InlineData(LiveEncoder.Vaapi)]
+    public void NoCommandIsBuiltWithoutARenderNodeToOpenTheCardThrough(LiveEncoder encoder)
+    {
+        Assert.Throws<ArgumentNullException>(() => FfmpegPlaybackInvocation.Arguments(
+            Service,
+            LiveProfile.Hd30,
+            Interlaced,
+            encoder,
+            null!,
+            Recorded,
+            TimeSpan.Zero,
+            TheWholeFirstStream));
+        Assert.Throws<ArgumentException>(() => FfmpegPlaybackInvocation.Arguments(
+            Service,
+            LiveProfile.Hd30,
+            Interlaced,
+            encoder,
+            Machine with { RenderNode = string.Empty },
+            Recorded,
+            TimeSpan.Zero,
+            TheWholeFirstStream));
     }
 
     [Fact]
@@ -334,6 +381,7 @@ public sealed class FfmpegPlaybackInvocationTests
             LiveProfile.Hd30,
             Interlaced,
             LiveEncoder.Software,
+            Machine,
             Recorded,
             TimeSpan.Zero,
             TheWholeFirstStream));
@@ -342,6 +390,7 @@ public sealed class FfmpegPlaybackInvocationTests
             null!,
             Interlaced,
             LiveEncoder.Software,
+            Machine,
             Recorded,
             TimeSpan.Zero,
             TheWholeFirstStream));
@@ -350,6 +399,7 @@ public sealed class FfmpegPlaybackInvocationTests
             LiveProfile.Hd30,
             Interlaced,
             LiveEncoder.Software,
+            Machine,
             null!,
             TimeSpan.Zero,
             TheWholeFirstStream));
@@ -358,6 +408,7 @@ public sealed class FfmpegPlaybackInvocationTests
             LiveProfile.Hd30,
             Interlaced,
             (LiveEncoder)99,
+            Machine,
             Recorded,
             TimeSpan.Zero,
             TheWholeFirstStream));
@@ -394,6 +445,7 @@ public sealed class FfmpegPlaybackInvocationTests
             LiveProfile.Hd30,
             Interlaced,
             LiveEncoder.Software,
+            Machine,
             Recorded,
             from,
             sound);

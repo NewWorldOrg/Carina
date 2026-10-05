@@ -147,6 +147,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<MachineOptions>, MachineValidation>();
+        services.AddOptions<MachineOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<AuthOptions>, AuthValidation>();
         services.AddOptions<AuthOptions>()
             .Configure(options => options.ReadFrom(configuration))
@@ -333,7 +338,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ILiveDepartureLedger, LiveDepartureLedger>();
         services.TryAddScoped<ISoundOnAir, SoundOnAir>();
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
-        services.TryAddSingleton(new MachineSettings());
+        services.TryAddSingleton<MachineSettings>(provider =>
+            provider.GetRequiredService<IOptions<MachineOptions>>().Value.Read());
         services.TryAddSingleton<QualitySignalSettings>(provider =>
             provider.GetRequiredService<IOptions<QualitySignalOptions>>().Value.Read());
         services.TryAddSingleton<EncodeSettings>(provider =>

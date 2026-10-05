@@ -418,6 +418,16 @@ nothing.
   document by a rule of its own. Headers, cookies and bodies are outside it, and a
   test says so.
 
+- **The card is opened through one render node, the one `Machine:RenderNode`
+  names.** Encoding, live viewing, playback transcoded on the fly and the probe
+  that finds out what the card can do all take it from `MachineSettings`, so a
+  machine with two cards cannot find one usable and then open the other. The
+  default node is named once, as the default of that setting:
+  `RenderNodeConventionRuleTests` refuses the constant anywhere else, a render
+  node written out as a literal, and a flag that opens the card in any file but
+  the three argument builders that are handed the settings. **A trip wire, not a
+  proof:** a node assembled from pieces walks past, and a self-check says so.
+
 - **A stop the driver was asked for exits 0; anything else exits 70.** Coming
   back is the supervisor's half of the deal, which is why `on-failure` is the one
   restart policy the driver must never be given.
@@ -565,7 +575,8 @@ belongs.
 The render node is the exception, because a machine that has one is the normal
 case and the transcoder is meant to find it without being configured. `task up`
 reads the host through `docker/dri-env.sh` and hands `/dev/dri` to `app` when it
-is there, along with the owning groups of `card0` and `renderD128` as numbers
+is there, along with the owning groups of `card0` and of the render node
+`CARINA_RENDER_NODE` names (`renderD128` unless told otherwise) as numbers
 measured on that host — the render node's group is numbered differently from one
 distribution to the next and is often absent from the container's own
 `/etc/group`, so a name would resolve to something other than the device. A host

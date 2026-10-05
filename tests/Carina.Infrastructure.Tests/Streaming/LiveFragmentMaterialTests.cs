@@ -9,6 +9,7 @@ using System.Threading.Channels;
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 
@@ -34,6 +35,8 @@ public sealed class LiveFragmentMaterialTests : IDisposable
     private static readonly ulong OneFrame = (ulong)(LivePts.Hertz / FrameRate.BroadcastFrames.PerSecond);
 
     private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
+
+    private static readonly MachineSettings Machine = new();
 
     private static readonly StreamAttributes Interlaced = new(
         new VideoSize(1440, 1080),
@@ -128,7 +131,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
 
         foreach (string argument in (string[])
                  [
-                     .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.Drawn),
+                     .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.Drawn),
                      .. FfmpegLiveInvocation.Delivery(),
                      .. FfmpegLiveInvocation.CaptionDelivery(Service, int.Parse(captions.GetClientHandleAsString(), CultureInfo.InvariantCulture)),
                  ])
@@ -193,7 +196,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
 
         foreach (string argument in (string[])
                  [
-                     .. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Software, CaptionOutlet.None),
+                     .. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None),
                      .. FfmpegLiveInvocation.Delivery(),
                  ])
         {

@@ -1,4 +1,5 @@
 using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
 using Carina.Infrastructure.Encodings;
 
 namespace Carina.Infrastructure.Tests.Encodings;
@@ -6,6 +7,8 @@ namespace Carina.Infrastructure.Tests.Encodings;
 public sealed class FfmpegProgressTests
 {
     private static readonly EncodeSound AsItStands = EncodeSound.EveryStreamAsItStands;
+
+    private static readonly MachineSettings Machine = new();
 
     /// <summary>
     /// What ffmpeg 6.1.6 writes to <c>-progress pipe:1</c>: the first block carries N/A throughout, and
@@ -157,6 +160,7 @@ public sealed class FfmpegProgressTests
             new Domain.Channels.ServiceId(1040),
             AProfile(),
             EncodeEncoder.Software,
+            Machine,
             "/srv/recordings/0f8c.ts",
             2,
             TimeSpan.Zero,

@@ -12,8 +12,6 @@ public static class FfmpegLiveInvocation
 
     public const string Output = "pipe:1";
 
-    public const string RenderNode = MachineSettings.TheRenderNode;
-
     public const string Font = "Noto Sans CJK JP";
 
     public const string DrawnCaptions = "[c]";
@@ -37,12 +35,15 @@ public static class FfmpegLiveInvocation
         LiveProfile profile,
         StreamAttributes attributes,
         LiveEncoder encoder,
+        MachineSettings machine,
         CaptionOutlet captions,
         SoundPlacement? sound = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(attributes);
+        ArgumentNullException.ThrowIfNull(machine);
+        ArgumentException.ThrowIfNullOrEmpty(machine.RenderNode);
 
         if (!Enum.IsDefined(encoder))
         {
@@ -71,7 +72,7 @@ public static class FfmpegLiveInvocation
             "-fflags",
             "nobuffer",
             "-copyts",
-            .. Device(encoder),
+            .. Device(encoder, machine.RenderNode),
             .. Decoding(attributes, captions),
             "-i",
             Input,
@@ -148,8 +149,8 @@ public static class FfmpegLiveInvocation
             target,
         ];
 
-    internal static IReadOnlyList<string> Device(LiveEncoder encoder)
-        => encoder is LiveEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
+    internal static IReadOnlyList<string> Device(LiveEncoder encoder, string renderNode)
+        => encoder is LiveEncoder.Vaapi ? ["-vaapi_device", renderNode] : [];
 
     internal static IReadOnlyList<string> Decoding(StreamAttributes attributes, CaptionOutlet captions)
         => captions is CaptionOutlet.Drawn

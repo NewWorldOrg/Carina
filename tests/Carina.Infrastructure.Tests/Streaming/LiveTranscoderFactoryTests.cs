@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
@@ -20,6 +21,10 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         AudioMode.Stereo);
 
     private static readonly ServiceId Service = new(1040);
+
+    private const string RenderNode = "/dev/dri/renderD129";
+
+    private static readonly MachineSettings Machine = new() { RenderNode = RenderNode };
 
     private readonly StandIns standIns = new();
 
@@ -42,7 +47,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         string[] handed = File.ReadAllLines(said);
 
         Assert.Equal(
-            [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None), .. FfmpegLiveInvocation.Delivery()],
+            [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None), .. FfmpegLiveInvocation.Delivery()],
             handed);
     }
 
@@ -78,6 +83,23 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
 
         Assert.Equal(LiveEncoder.Vaapi, running.Encoder.Encoder);
         Assert.Contains("h264_vaapi", File.ReadAllLines(said));
+    }
+
+    [Fact]
+    public async Task TheCardIsOpenedThroughTheRenderNodeTheMachineIsSetTo()
+    {
+        string said = standIns.Named("arguments");
+
+        await using ILiveTranscoder running = await Started(
+            standIns.Script($"printf '%s\\n' \"$@\" > {said}; cat > /dev/null"),
+            LiveEncoder.Vaapi);
+
+        await running.Input.DisposeAsync();
+        await running.Completion;
+
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.Equal(RenderNode, handed[Array.IndexOf(handed, "-vaapi_device") + 1]);
     }
 
     [Fact]
@@ -300,7 +322,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
 
         Assert.Equal(
             [
-                .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.Drawn),
+                .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.Drawn),
                 .. FfmpegLiveInvocation.Delivery(),
                 .. FfmpegLiveInvocation.CaptionDelivery(Service, int.Parse(descriptor, CultureInfo.InvariantCulture)),
             ],
@@ -479,7 +501,12 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
             StopGrace = grace ?? TimeSpan.FromSeconds(2),
         };
 
-        var factory = new LiveTranscoderFactory(settings, budget, new AlreadyChosen(encoder), clock ?? TimeProvider.System);
+        var factory = new LiveTranscoderFactory(
+            settings,
+            budget,
+            new AlreadyChosen(encoder),
+            Machine,
+            clock ?? TimeProvider.System);
 
         return factory.StartAsync(
             Service,

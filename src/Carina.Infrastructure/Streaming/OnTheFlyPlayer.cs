@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Machines;
 using Carina.Domain.Playback;
 using Carina.Domain.Streaming;
 
@@ -11,6 +12,7 @@ public sealed class OnTheFlyPlayer(
     IPlaybackFileStore files,
     IStreamAttributeReader attributes,
     ILiveEncoderSelector selector,
+    MachineSettings machine,
     TimeProvider clock) : IOnTheFlyPlayer
 {
     public const int FirstChunk = 64 * 1024;
@@ -97,6 +99,7 @@ public sealed class OnTheFlyPlayer(
                     opening,
                     read.Attributes,
                     chosen.Encoder,
+                    machine,
                     source,
                     from,
                     sound),

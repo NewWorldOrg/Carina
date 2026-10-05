@@ -394,6 +394,28 @@ public sealed class EncodeJobRunnerTests
         Assert.Contains(harness.RunnerLog.Warnings, line => line.Contains("TheCardIsOutOfReach", StringComparison.Ordinal));
     }
 
+    [Fact(DisplayName = "a run on the card opens it through the render node the machine is set to")]
+    public async Task ARunOnTheCardOpensItThroughTheRenderNodeTheMachineIsSetTo()
+    {
+        using var harness = new EncodeHarness();
+        harness.Settings = harness.Settings with { Prefer = EncodeEncoder.Vaapi };
+        harness.Machine.Can = MachineCapabilities.Of(
+            CardStanding.Usable,
+            [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard, Faculty.DecodeAribCaptions],
+            "the card answered");
+        string arguments = harness.Room.Under("arguments");
+        harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
+        harness.Programmes = harness.Programmes with { RenderNode = "/dev/dri/renderD129" };
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Completed, ended);
+        string[] handed = File.ReadAllLines(arguments);
+        Assert.Contains("h264_vaapi", handed);
+        Assert.Equal("/dev/dri/renderD129", handed[Array.IndexOf(handed, "-vaapi_device") + 1]);
+    }
+
     [Fact(DisplayName = "the programme is handed the recording as one argument and the work file as the last, and nothing a broadcaster wrote")]
     public async Task TheProgrammeIsHandedTheRecordingAndTheWorkFileAsArguments()
     {
