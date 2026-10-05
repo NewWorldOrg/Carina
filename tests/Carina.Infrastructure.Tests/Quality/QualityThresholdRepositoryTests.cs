@@ -91,7 +91,7 @@ public sealed class QualityThresholdRepositoryTests(RepositoryDatabase database)
         await ClearAsync();
 
         QualityThresholdMeasurement measurement =
-            QualityThresholdMeasurement.Of(18_600, 328, 24, At.AddDays(-7), At, At.AddMinutes(5));
+            QualityThresholdMeasurement.Of(19_500, 240, 18, At.AddDays(-7), At, At.AddMinutes(5));
 
         await using (CarinaDbContext writing = database.Open())
         {
@@ -100,7 +100,7 @@ public sealed class QualityThresholdRepositoryTests(RepositoryDatabase database)
             await repository.SaveAsync(
                 QualityThreshold.Rehydrate(
                     QualityThresholdKey.CarrierToNoiseFloor,
-                    Threshold.Of(15_000, 18_600, provisional: false, 328, At),
+                    Threshold.Of(15_000, 19_500, provisional: false, 240, At),
                     null,
                     byHand: false,
                     measurement),
@@ -139,7 +139,7 @@ public sealed class QualityThresholdRepositoryTests(RepositoryDatabase database)
                     QualityThresholdChangeId.New(),
                     QualityThresholdKey.CarrierToNoiseFloor,
                     15_000,
-                    18_600,
+                    19_500,
                     At,
                     null,
                     QualityThresholdChangeCause.Measurement),

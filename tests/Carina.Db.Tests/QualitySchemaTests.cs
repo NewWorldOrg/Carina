@@ -188,8 +188,8 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
             INSERT INTO quality_threshold (
                 threshold_key, default_value, current_value, provisional, observations, updated_at, by_hand,
                 measured_value, measured_sessions, measured_sessions_dropped, measured_from, measured_until, measured_at)
-            VALUES ('CarrierToNoiseFloor', 15000, 18600, false, 328, {Taken}, true,
-                18600, 328, 24, {Taken}, {Taken}, {Taken})
+            VALUES ('CarrierToNoiseFloor', 15000, 19500, false, 240, {Taken}, true,
+                19500, 240, 18, {Taken}, {Taken}, {Taken})
             """,
             connection).ExecuteNonQueryAsync());
         PostgresException partial = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
@@ -205,8 +205,8 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
             INSERT INTO quality_threshold (
                 threshold_key, default_value, current_value, provisional, observations, updated_at, by_hand,
                 measured_value, measured_sessions, measured_sessions_dropped, measured_from, measured_until, measured_at)
-            VALUES ('CarrierToNoiseFloor', 15000, 19000, false, 328, {Taken}, false,
-                18600, 328, 24, {Taken}, {Taken}, {Taken})
+            VALUES ('CarrierToNoiseFloor', 15000, 19000, false, 240, {Taken}, false,
+                19500, 240, 18, {Taken}, {Taken}, {Taken})
             """,
             connection).ExecuteNonQueryAsync());
 

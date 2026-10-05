@@ -86,7 +86,7 @@ public sealed class QualityThresholdChangeTests
                 QualityThresholdChangeId.New(),
                 QualityThresholdKey.CarrierToNoiseFloor,
                 15_000,
-                18_600,
+                19_500,
                 At,
                 null,
                 QualityThresholdChangeCause.Measurement).Cause);

@@ -41,35 +41,35 @@ public sealed class QualityThresholdTests
     public void ALevelSetByHandIsNeverOneThatStandsOnAMeasurement()
         => Assert.Throws<ArgumentException>(() => QualityThreshold.Rehydrate(
             QualityThresholdKey.CarrierToNoiseFloor,
-            Threshold.Of(15_000, 18_600, provisional: false, 328, Declared),
+            Threshold.Of(15_000, 19_500, provisional: false, 240, Declared),
             null,
             byHand: true,
-            Measured(18_600)));
+            Measured(19_500)));
 
     [Fact(DisplayName = "BR-QD-023: a level that is not provisional is the measurement it stands on")]
     public void ALevelThatIsNotProvisionalIsTheMeasurementItStandsOn()
     {
         Assert.Throws<ArgumentException>(() => QualityThreshold.Rehydrate(
             QualityThresholdKey.CarrierToNoiseFloor,
-            Threshold.Of(15_000, 18_600, provisional: false, 328, Declared),
+            Threshold.Of(15_000, 19_500, provisional: false, 240, Declared),
             null,
             byHand: false,
             null));
         Assert.Throws<ArgumentException>(() => QualityThreshold.Rehydrate(
             QualityThresholdKey.CarrierToNoiseFloor,
-            Threshold.Of(15_000, 18_600, provisional: false, 328, Declared),
+            Threshold.Of(15_000, 19_500, provisional: false, 240, Declared),
             null,
             byHand: false,
             Measured(19_000)));
 
         QualityThreshold measured = QualityThreshold.Rehydrate(
             QualityThresholdKey.CarrierToNoiseFloor,
-            Threshold.Of(15_000, 18_600, provisional: false, 328, Declared),
+            Threshold.Of(15_000, 19_500, provisional: false, 240, Declared),
             null,
             byHand: false,
-            Measured(18_600));
+            Measured(19_500));
 
-        Assert.Equal(18_600, measured.Measurement!.Value);
+        Assert.Equal(19_500, measured.Measurement!.Value);
         Assert.False(measured.ByHand);
     }
 
@@ -83,5 +83,5 @@ public sealed class QualityThresholdTests
             Measured(0.99)));
 
     private static QualityThresholdMeasurement Measured(double value)
-        => QualityThresholdMeasurement.Of(value, 328, 24, Declared.AddDays(-7), Declared, Declared);
+        => QualityThresholdMeasurement.Of(value, 240, 18, Declared.AddDays(-7), Declared, Declared);
 }

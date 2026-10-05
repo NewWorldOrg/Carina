@@ -70,10 +70,10 @@ public sealed class QualityThresholdStandingTests
     [Fact(DisplayName = "BR-QD-023: a level says where it came from: shipped, measured or set by hand")]
     public void ALevelSaysWhereItCameFrom()
     {
-        QualityThresholdMeasurement measurement = QualityThresholdMeasurement.Of(18_600, 328, 24, At.AddDays(-7), At, At);
+        QualityThresholdMeasurement measurement = QualityThresholdMeasurement.Of(19_500, 240, 18, At.AddDays(-7), At, At);
         QualityThreshold measured = QualityThreshold.Rehydrate(
             QualityThresholdKey.CarrierToNoiseFloor,
-            Threshold.Of(15_000, 18_600, provisional: false, 328, At),
+            Threshold.Of(15_000, 19_500, provisional: false, 240, At),
             null,
             byHand: false,
             measurement);

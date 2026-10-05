@@ -9,11 +9,11 @@ public sealed class QualityThresholdMeasurementTests
     [Fact(DisplayName = "BR-QD-023: a measurement keeps its value, how many sessions it stood on and the span they were taken over")]
     public void AMeasurementKeepsWhatItStoodOn()
     {
-        QualityThresholdMeasurement measurement = QualityThresholdMeasurement.Of(18_600, 328, 24, At.AddDays(-7), At, At);
+        QualityThresholdMeasurement measurement = QualityThresholdMeasurement.Of(19_500, 240, 18, At.AddDays(-7), At, At);
 
-        Assert.Equal(18_600, measurement.Value);
-        Assert.Equal(328, measurement.Sessions);
-        Assert.Equal(24, measurement.SessionsDropped);
+        Assert.Equal(19_500, measurement.Value);
+        Assert.Equal(240, measurement.Sessions);
+        Assert.Equal(18, measurement.SessionsDropped);
         Assert.Equal(At.AddDays(-7), measurement.From);
         Assert.Equal(At, measurement.Until);
         Assert.Equal(At, measurement.MeasuredAt);

@@ -233,10 +233,10 @@ public sealed class QualityThresholdEndpointTests
         await feature.Thresholds.SaveAsync(
             QualityThreshold.Rehydrate(
                 QualityThresholdKey.CarrierToNoiseFloor,
-                Threshold.Of(15_000, 18_600, provisional: false, 328, QualityFeature.Noon),
+                Threshold.Of(15_000, 19_500, provisional: false, 240, QualityFeature.Noon),
                 null,
                 byHand: false,
-                QualityThresholdMeasurement.Of(18_600, 328, 24, from, QualityFeature.Noon, QualityFeature.Noon)),
+                QualityThresholdMeasurement.Of(19_500, 240, 18, from, QualityFeature.Noon, QualityFeature.Noon)),
             CancellationToken.None);
 
         JsonElement measured = Named((await feature.GetAsync("/api/quality/thresholds")).Body, "carrierToNoiseFloor");
@@ -244,10 +244,10 @@ public sealed class QualityThresholdEndpointTests
 
         Assert.Equal("measured", measured.GetProperty("source").GetString());
         Assert.False(measured.GetProperty("provisional").GetBoolean());
-        Assert.Equal(328, measured.GetProperty("observations").GetInt64());
-        Assert.Equal(18_600, measurement.GetProperty("value").GetDouble());
-        Assert.Equal(328, measurement.GetProperty("sessions").GetInt64());
-        Assert.Equal(24, measurement.GetProperty("sessionsDropped").GetInt64());
+        Assert.Equal(240, measured.GetProperty("observations").GetInt64());
+        Assert.Equal(19_500, measurement.GetProperty("value").GetDouble());
+        Assert.Equal(240, measurement.GetProperty("sessions").GetInt64());
+        Assert.Equal(18, measurement.GetProperty("sessionsDropped").GetInt64());
         Assert.Equal(from, measurement.GetProperty("from").GetDateTime());
         Assert.Equal(QualityFeature.Noon, measurement.GetProperty("until").GetDateTime());
         Assert.Equal(QualityFeature.Noon, measurement.GetProperty("measuredAt").GetDateTime());
@@ -262,10 +262,10 @@ public sealed class QualityThresholdEndpointTests
         await feature.Thresholds.SaveAsync(
             QualityThreshold.Rehydrate(
                 QualityThresholdKey.CarrierToNoiseFloor,
-                Threshold.Of(15_000, 18_600, provisional: false, 328, QualityFeature.Noon),
+                Threshold.Of(15_000, 19_500, provisional: false, 240, QualityFeature.Noon),
                 null,
                 byHand: false,
-                QualityThresholdMeasurement.Of(18_600, 328, 24, from, QualityFeature.Noon, QualityFeature.Noon)),
+                QualityThresholdMeasurement.Of(19_500, 240, 18, from, QualityFeature.Noon, QualityFeature.Noon)),
             CancellationToken.None);
 
         JsonElement byHand = (await feature.PatchAsync(
@@ -274,7 +274,7 @@ public sealed class QualityThresholdEndpointTests
 
         Assert.Equal("byHand", byHand.GetProperty("source").GetString());
         Assert.Equal(20_000, byHand.GetProperty("currentValue").GetDouble());
-        Assert.Equal(18_600, byHand.GetProperty("measurement").GetProperty("value").GetDouble());
+        Assert.Equal(19_500, byHand.GetProperty("measurement").GetProperty("value").GetDouble());
 
         (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(
             "/api/quality/thresholds/carrierToNoiseFloor",
@@ -283,9 +283,9 @@ public sealed class QualityThresholdEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal("measured", released.GetProperty("source").GetString());
-        Assert.Equal(18_600, released.GetProperty("currentValue").GetDouble());
+        Assert.Equal(19_500, released.GetProperty("currentValue").GetDouble());
         Assert.Equal(
-            [(20_000d, QualityThresholdChangeCause.Hand), (18_600d, QualityThresholdChangeCause.Hand)],
+            [(20_000d, QualityThresholdChangeCause.Hand), (19_500d, QualityThresholdChangeCause.Hand)],
             feature.Changes.Changes.Select(change => (change.NextValue, change.Cause)));
         Assert.Equal([AppEventName.Quality, AppEventName.Quality], feature.Events.Signalled);
     }

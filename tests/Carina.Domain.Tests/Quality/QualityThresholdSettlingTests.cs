@@ -9,17 +9,17 @@ public sealed class QualityThresholdSettlingTests
     private static readonly DateTime At = new(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc);
 
     private static readonly QualityThresholdMeasurement Measurement =
-        QualityThresholdMeasurement.Of(18_600, 328, 24, Earlier.AddDays(-7), Earlier, Earlier);
+        QualityThresholdMeasurement.Of(19_500, 240, 18, Earlier.AddDays(-7), Earlier, Earlier);
 
     [Fact(DisplayName = "BR-QD-023: a level measured over the shipped one is taken, stops being provisional, and the change says it was measured")]
     public void ALevelMeasuredOverTheShippedOneIsTaken()
     {
         QualityThresholdSettled settled = QualityThresholdSettling.Measured(Shipped(), Measurement);
 
-        Assert.Equal(18_600, settled.Threshold.Setting.Current);
+        Assert.Equal(19_500, settled.Threshold.Setting.Current);
         Assert.Equal(15_000, settled.Threshold.Setting.Default);
         Assert.False(settled.Threshold.Setting.Provisional);
-        Assert.Equal(328, settled.Threshold.Setting.Observations);
+        Assert.Equal(240, settled.Threshold.Setting.Observations);
         Assert.Equal(Measurement.MeasuredAt, settled.Threshold.Setting.UpdatedAt);
         Assert.False(settled.Threshold.ByHand);
         Assert.Equal(Measurement, settled.Threshold.Measurement);
@@ -27,7 +27,7 @@ public sealed class QualityThresholdSettlingTests
         QualityThresholdChange change = Assert.IsType<QualityThresholdChange>(settled.Change);
 
         Assert.Equal(15_000, change.PreviousValue);
-        Assert.Equal(18_600, change.NextValue);
+        Assert.Equal(19_500, change.NextValue);
         Assert.Equal(QualityThresholdChangeCause.Measurement, change.Cause);
         Assert.Equal(Measurement.MeasuredAt, change.ChangedAt);
     }
@@ -36,7 +36,7 @@ public sealed class QualityThresholdSettlingTests
     public void AMeasurementThatLandsOnTheValueInForceRecordsNoChange()
     {
         QualityThresholdStanding measured = Standing(QualityThresholdSettling.Measured(Shipped(), Measurement).Threshold);
-        QualityThresholdMeasurement again = QualityThresholdMeasurement.Of(18_600, 300, 20, At.AddDays(-7), At, At);
+        QualityThresholdMeasurement again = QualityThresholdMeasurement.Of(19_500, 300, 20, At.AddDays(-7), At, At);
 
         QualityThresholdSettled settled = QualityThresholdSettling.Measured(measured, again);
 
@@ -74,7 +74,7 @@ public sealed class QualityThresholdSettlingTests
 
         QualityThresholdChange change = Assert.IsType<QualityThresholdChange>(settled.Change);
 
-        Assert.Equal(18_600, change.PreviousValue);
+        Assert.Equal(19_500, change.PreviousValue);
         Assert.Equal(20_000, change.NextValue);
         Assert.Equal(QualityThresholdChangeCause.Hand, change.Cause);
         Assert.Equal(At, change.ChangedAt);
@@ -88,15 +88,15 @@ public sealed class QualityThresholdSettlingTests
 
         QualityThresholdSettled settled = QualityThresholdSettling.Released(byHand, At);
 
-        Assert.Equal(18_600, settled.Threshold.Setting.Current);
+        Assert.Equal(19_500, settled.Threshold.Setting.Current);
         Assert.False(settled.Threshold.ByHand);
         Assert.False(settled.Threshold.Setting.Provisional);
-        Assert.Equal(328, settled.Threshold.Setting.Observations);
+        Assert.Equal(240, settled.Threshold.Setting.Observations);
 
         QualityThresholdChange change = Assert.IsType<QualityThresholdChange>(settled.Change);
 
         Assert.Equal(20_000, change.PreviousValue);
-        Assert.Equal(18_600, change.NextValue);
+        Assert.Equal(19_500, change.NextValue);
         Assert.Equal(QualityThresholdChangeCause.Hand, change.Cause);
     }
 
