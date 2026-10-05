@@ -31,7 +31,7 @@ if [ -c "${card}" ]; then
 fi
 
 if [ -c "${render}" ]; then
-    echo "CARINA_DRI_RENDER_GID=$(stat -c %g "${render}")"
+    echo "CARINA_DRI_RENDER_GID=$(stat -L -c %g "${render}")"
 else
     echo "${render} is not a render node on this host; app is not given its group and encodes on the processor." >&2
 fi
