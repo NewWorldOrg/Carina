@@ -15,9 +15,15 @@ public sealed class QualityThresholdChangeConfiguration : IEntityTypeConfigurati
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.ToTable(TableName, table => table.HasCheckConstraint(
-            "ck_quality_threshold_change_key",
-            $"threshold_key IN ({QualityVocabulary.Of<QualityThresholdKey>()})"));
+        builder.ToTable(TableName, table =>
+        {
+            table.HasCheckConstraint(
+                "ck_quality_threshold_change_key",
+                $"threshold_key IN ({QualityVocabulary.Of<QualityThresholdKey>()})");
+            table.HasCheckConstraint(
+                "ck_quality_threshold_change_cause",
+                $"cause IN ({QualityVocabulary.Of<QualityThresholdChangeCause>()})");
+        });
 
         builder.HasKey(change => change.Id);
 
@@ -37,6 +43,11 @@ public sealed class QualityThresholdChangeConfiguration : IEntityTypeConfigurati
 
         builder.Property(change => change.ChangedBy)
             .HasMaxLength(QualityThresholdChange.ChangedByMaxLength);
+
+        builder.Property(change => change.Cause)
+            .HasConversion<string>()
+            .HasMaxLength(QualityVocabulary.NameLength)
+            .IsRequired();
 
         builder.HasIndex(change => new { change.Key, change.ChangedAt })
             .HasDatabaseName(HistoryIndexName);

@@ -208,4 +208,147 @@ public sealed class QualityThresholdEndpointTests
         Assert.Empty(feature.Events.Signalled);
     }
 
+    [Fact(DisplayName = "BR-QD-023: every level says where it came from, and a shipped one stands on no measurement")]
+    public async Task EveryLevelSaysWhereItCameFrom()
+    {
+        await using var feature = new QualityFeature();
+
+        JsonElement items = (await feature.GetAsync("/api/quality/thresholds")).Body
+            .GetProperty("data")
+            .GetProperty("items");
+
+        Assert.All(items.EnumerateArray(), item =>
+        {
+            Assert.Equal("shipped", item.GetProperty("source").GetString());
+            Assert.Equal(JsonValueKind.Null, item.GetProperty("measurement").ValueKind);
+        });
+    }
+
+    [Fact(DisplayName = "BR-QD-023: a measured level answers with the measurement it stands on")]
+    public async Task AMeasuredLevelAnswersWithTheMeasurementItStandsOn()
+    {
+        await using var feature = new QualityFeature();
+        DateTime from = QualityFeature.Noon.AddDays(-7);
+
+        await feature.Thresholds.SaveAsync(
+            QualityThreshold.Rehydrate(
+                QualityThresholdKey.CarrierToNoiseFloor,
+                Threshold.Of(15_000, 19_500, provisional: false, 240, QualityFeature.Noon),
+                null,
+                byHand: false,
+                QualityThresholdMeasurement.Of(19_500, 240, 18, from, QualityFeature.Noon, QualityFeature.Noon)),
+            CancellationToken.None);
+
+        JsonElement measured = Named((await feature.GetAsync("/api/quality/thresholds")).Body, "carrierToNoiseFloor");
+        JsonElement measurement = measured.GetProperty("measurement");
+
+        Assert.Equal("measured", measured.GetProperty("source").GetString());
+        Assert.False(measured.GetProperty("provisional").GetBoolean());
+        Assert.Equal(240, measured.GetProperty("observations").GetInt64());
+        Assert.Equal(19_500, measurement.GetProperty("value").GetDouble());
+        Assert.Equal(240, measurement.GetProperty("sessions").GetInt64());
+        Assert.Equal(18, measurement.GetProperty("sessionsDropped").GetInt64());
+        Assert.Equal(from, measurement.GetProperty("from").GetDateTime());
+        Assert.Equal(QualityFeature.Noon, measurement.GetProperty("until").GetDateTime());
+        Assert.Equal(QualityFeature.Noon, measurement.GetProperty("measuredAt").GetDateTime());
+    }
+
+    [Fact(DisplayName = "BR-QD-023: a level set by hand says so, and letting go of it returns it to the measurement and records the change")]
+    public async Task ALevelSetByHandSaysSoAndLettingGoReturnsItToTheMeasurement()
+    {
+        await using var feature = new QualityFeature();
+        DateTime from = QualityFeature.Noon.AddDays(-7);
+
+        await feature.Thresholds.SaveAsync(
+            QualityThreshold.Rehydrate(
+                QualityThresholdKey.CarrierToNoiseFloor,
+                Threshold.Of(15_000, 19_500, provisional: false, 240, QualityFeature.Noon),
+                null,
+                byHand: false,
+                QualityThresholdMeasurement.Of(19_500, 240, 18, from, QualityFeature.Noon, QualityFeature.Noon)),
+            CancellationToken.None);
+
+        JsonElement byHand = (await feature.PatchAsync(
+            "/api/quality/thresholds/carrierToNoiseFloor",
+            new { value = 20_000.0 })).Body.GetProperty("data");
+
+        Assert.Equal("byHand", byHand.GetProperty("source").GetString());
+        Assert.Equal(20_000, byHand.GetProperty("currentValue").GetDouble());
+        Assert.Equal(19_500, byHand.GetProperty("measurement").GetProperty("value").GetDouble());
+
+        (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(
+            "/api/quality/thresholds/carrierToNoiseFloor",
+            new { byHand = false });
+        JsonElement released = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("measured", released.GetProperty("source").GetString());
+        Assert.Equal(19_500, released.GetProperty("currentValue").GetDouble());
+        Assert.Equal(
+            [(20_000d, QualityThresholdChangeCause.Hand), (19_500d, QualityThresholdChangeCause.Hand)],
+            feature.Changes.Changes.Select(change => (change.NextValue, change.Cause)));
+        Assert.Equal([AppEventName.Quality, AppEventName.Quality], feature.Events.Signalled);
+    }
+
+    [Fact(DisplayName = "BR-QD-023: letting go of a level nobody set by hand changes nothing and tells the screens nothing")]
+    public async Task LettingGoOfALevelNobodySetByHandChangesNothing()
+    {
+        await using var feature = new QualityFeature();
+
+        (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(
+            "/api/quality/thresholds/lockRate",
+            new { byHand = false });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("shipped", body.GetProperty("data").GetProperty("source").GetString());
+        Assert.Empty(feature.Changes.Changes);
+        Assert.Empty(feature.Thresholds.Thresholds);
+        Assert.Empty(feature.Events.Signalled);
+    }
+
+    [Fact(DisplayName = "BR-QD-023: a value and letting go sent together are refused")]
+    public async Task AValueAndLettingGoSentTogetherAreRefused()
+    {
+        await using var feature = new QualityFeature();
+
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await feature.PatchAsync("/api/quality/thresholds/lockRate", new { value = 0.95, byHand = false })).Status);
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            (await feature.PatchAsync("/api/quality/thresholds/lockRate", new { byHand = true })).Status);
+        Assert.Empty(feature.Changes.Changes);
+    }
+
+    [Fact(DisplayName = "BR-QD-023: letting go of a level that would fall under the warning level beside it is refused, and nothing moves")]
+    public async Task LettingGoOfALevelThatWouldFallUnderTheWarningLevelIsRefused()
+    {
+        await using var feature = new QualityFeature();
+
+        await feature.PatchAsync("/api/quality/thresholds/packetsLostUnwatchable", new { value = 0.5 });
+        await feature.PatchAsync("/api/quality/thresholds/packetsLostWarning", new { value = 0.3 });
+
+        (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(
+            "/api/quality/thresholds/packetsLostUnwatchable",
+            new { byHand = false });
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.False(body.GetProperty("status").GetBoolean());
+        Assert.Equal(
+            0.5,
+            feature.Thresholds.Thresholds.Single(threshold => threshold.Key == QualityThresholdKey.PacketsLostUnwatchable)
+                .Setting.Current);
+        Assert.Equal(2, feature.Changes.Changes.Count);
+    }
+
+    [Fact(DisplayName = "BR-QD-023: a level is moved only after every other writer of the levels has had its turn")]
+    public async Task ALevelIsMovedOnlyAfterEveryOtherWriterHasHadItsTurn()
+    {
+        await using var feature = new QualityFeature();
+
+        await feature.PatchAsync("/api/quality/thresholds/lockRate", new { value = 0.95 });
+        await feature.PatchAsync("/api/quality/thresholds/lockRate", new { byHand = false });
+
+        Assert.Equal(2, feature.Thresholds.TurnsTaken);
+    }
 }

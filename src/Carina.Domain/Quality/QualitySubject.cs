@@ -11,11 +11,13 @@ public enum QualitySubjectKind
     TransportStream = 4,
 
     Guide = 5,
+
+    Reception = 6,
 }
 
 public sealed record QualitySubject
 {
-    public const int KeyMaxLength = 64;
+    public const int KeyMaxLength = 80;
 
     private QualitySubject(QualitySubjectKind kind, string key)
     {
@@ -33,7 +35,7 @@ public sealed record QualitySubject
     {
         if (!Enum.IsDefined(kind))
         {
-            throw new ArgumentOutOfRangeException(nameof(kind), kind, "A subject is one of the five things this domain watches.");
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "A subject is one of the six things this domain watches.");
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(key);

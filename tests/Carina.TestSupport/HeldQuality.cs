@@ -86,6 +86,15 @@ public sealed class HeldQualityThresholds : IQualityThresholdRepository
 {
     public List<QualityThreshold> Thresholds { get; } = [];
 
+    public int TurnsTaken { get; private set; }
+
+    public Task TakeTurnAsync(CancellationToken cancellationToken)
+    {
+        TurnsTaken++;
+
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<QualityThreshold>> ListAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<QualityThreshold>>([.. Thresholds.OrderBy(threshold => threshold.Key)]);
 
@@ -128,6 +137,19 @@ public sealed class HeldQualitySignals : IQualitySignalReader
     public List<QualitySignalWindow> Windows { get; } = [];
 
     public List<QualityPeriod> Asked { get; } = [];
+
+    public List<ReceptionFigures> Receptions { get; } = [];
+
+    public List<QualityPeriod> ReceptionsAsked { get; } = [];
+
+    public Task<IReadOnlyList<ReceptionFigures>> ReceptionsAsync(QualityPeriod period, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(period);
+
+        ReceptionsAsked.Add(period);
+
+        return Task.FromResult<IReadOnlyList<ReceptionFigures>>([.. Receptions]);
+    }
 
     public Task<IReadOnlyList<SignalFigures>> FiguresAsync(QualityPeriod period, CancellationToken cancellationToken)
     {

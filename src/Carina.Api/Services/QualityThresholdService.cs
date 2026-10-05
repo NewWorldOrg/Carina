@@ -30,59 +30,108 @@ public sealed class QualityThresholdService(
         QualityThresholdKey key,
         double value,
         CancellationToken cancellationToken)
-    {
-        IReadOnlyList<QualityThresholdStanding> standings = await StandingsAsync(cancellationToken);
-        QualityThresholdStanding standing = standings.First(held => held.Key == key);
-
-        if (!standing.Shape.Holds(value))
-        {
-            return ServiceResult<QualityThresholdBook, QualityThresholdFailure>.Failure(
-                QualitySaying.OutOfRange(standing.Shape),
-                QualityThresholdFailure.OutOfRange);
-        }
-
-        if (!QualityThresholdStanding.Ordered(key, value, standings))
-        {
-            return ServiceResult<QualityThresholdBook, QualityThresholdFailure>.Failure(
-                QualitySaying.OutOfOrder(key),
-                QualityThresholdFailure.OutOfOrder);
-        }
-
-        DateTime at = clock.GetUtcNow().UtcDateTime;
-        double previous = standing.Setting.Current;
-
-        QualityThreshold revised = QualityThreshold.Rehydrate(
+        => await SettleAsync(
             key,
-            Threshold.Of(standing.Setting.Default, value, standing.Setting.Provisional, standing.Setting.Observations, at),
-            standing.UpdatedBy);
-
-        QualityThresholdChange recorded = QualityThresholdChange.Record(
-            QualityThresholdChangeId.New(),
-            key,
-            previous,
-            value,
-            at,
-            null);
-
-        await writes.AllOrNothingAsync(
-            async token =>
+            (standing, standings, at) =>
             {
-                await thresholds.SaveAsync(revised, token);
-                await changes.AddAsync(recorded, token);
+                if (!standing.Shape.Holds(value))
+                {
+                    return Refused(QualitySaying.OutOfRange(standing.Shape), QualityThresholdFailure.OutOfRange);
+                }
 
-                return recorded;
+                return QualityThresholdStanding.Ordered(key, value, standings)
+                    ? Settling.To(QualityThresholdSettling.ByHand(standing, value, at))
+                    : Refused(QualitySaying.OutOfOrder(key), QualityThresholdFailure.OutOfOrder);
             },
             cancellationToken);
 
-        events.Signal(AppEventName.Quality);
+    public async Task<ServiceResult<QualityThresholdBook, QualityThresholdFailure>> ReleaseAsync(
+        QualityThresholdKey key,
+        CancellationToken cancellationToken)
+        => await SettleAsync(
+            key,
+            (standing, standings, at) =>
+            {
+                QualityThresholdSettled released = QualityThresholdSettling.Released(standing, at);
 
-        return ServiceResult<QualityThresholdBook, QualityThresholdFailure>.Success(new QualityThresholdBook(
-            new QualityThresholdStanding(key, standing.Shape, revised.Setting, true, revised.UpdatedBy),
-            recorded));
+                return QualityThresholdStanding.Ordered(key, released.Threshold.Setting.Current, standings)
+                    ? Settling.To(released)
+                    : Refused(QualitySaying.OutOfOrder(key), QualityThresholdFailure.OutOfOrder);
+            },
+            cancellationToken);
+
+    private static Settling Refused(string saying, QualityThresholdFailure failure) => new(null, saying, failure);
+
+    private async Task<ServiceResult<QualityThresholdBook, QualityThresholdFailure>> SettleAsync(
+        QualityThresholdKey key,
+        Func<QualityThresholdStanding, IReadOnlyList<QualityThresholdStanding>, DateTime, Settling> settle,
+        CancellationToken cancellationToken)
+    {
+        Outcome outcome = await writes.AllOrNothingAsync(
+            async token =>
+            {
+                await thresholds.TakeTurnAsync(token);
+
+                IReadOnlyList<QualityThresholdStanding> standings = await StandingsAsync(token);
+                QualityThresholdStanding standing = standings.First(held => held.Key == key);
+                Settling settling = settle(standing, standings, clock.GetUtcNow().UtcDateTime);
+
+                return settling.Settled is { } settled
+                    ? new Outcome(await KeepAsync(standing, settled, token), settling)
+                    : new Outcome(null, settling);
+            },
+            cancellationToken);
+
+        if (outcome.Book is not { } book)
+        {
+            return ServiceResult<QualityThresholdBook, QualityThresholdFailure>.Failure(
+                outcome.Settling.Saying!,
+                outcome.Settling.Failure);
+        }
+
+        if (outcome.Settling.Settled?.Change is not null)
+        {
+            events.Signal(AppEventName.Quality);
+        }
+
+        return ServiceResult<QualityThresholdBook, QualityThresholdFailure>.Success(book);
+    }
+
+    private async Task<QualityThresholdBook> KeepAsync(
+        QualityThresholdStanding standing,
+        QualityThresholdSettled settled,
+        CancellationToken cancellationToken)
+    {
+        if (settled.Change is not { } recorded)
+        {
+            return new QualityThresholdBook(
+                standing,
+                (await changes.ListAsync(cancellationToken)).FirstOrDefault(change => change.Key == standing.Key));
+        }
+
+        await thresholds.SaveAsync(settled.Threshold, cancellationToken);
+        await changes.AddAsync(recorded, cancellationToken);
+
+        return new QualityThresholdBook(
+            standing with
+            {
+                Setting = settled.Threshold.Setting,
+                Stored = true,
+                ByHand = settled.Threshold.ByHand,
+                Measurement = settled.Threshold.Measurement,
+            },
+            recorded);
     }
 
     private async Task<IReadOnlyList<QualityThresholdStanding>> StandingsAsync(CancellationToken cancellationToken)
         => QualityThresholdStanding.Over(
             await thresholds.ListAsync(cancellationToken),
             clock.GetUtcNow().UtcDateTime);
+
+    private sealed record Settling(QualityThresholdSettled? Settled, string? Saying, QualityThresholdFailure Failure)
+    {
+        public static Settling To(QualityThresholdSettled settled) => new(settled, null, default);
+    }
+
+    private sealed record Outcome(QualityThresholdBook? Book, Settling Settling);
 }

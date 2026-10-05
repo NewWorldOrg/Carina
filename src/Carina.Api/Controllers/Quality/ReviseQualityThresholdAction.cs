@@ -32,17 +32,17 @@ public sealed class ReviseQualityThresholdAction(QualityThresholdService thresho
             return NotFound(BaseResponder<QualityThresholdResponder>.Error(QualitySaying.NoSuchThreshold()));
         }
 
-        if (request is not { Value: { } value })
+        return request switch
         {
-            return BadRequest(BaseResponder<QualityThresholdResponder>.Error(
-                "A threshold is moved by naming the value it moves to."));
-        }
+            { Value: { } value, ByHand: null or true } => Answered(await thresholds.ReviseAsync(named, value, cancellationToken)),
+            { Value: null, ByHand: false } => Answered(await thresholds.ReleaseAsync(named, cancellationToken)),
+            _ => BadRequest(BaseResponder<QualityThresholdResponder>.Error(
+                "A threshold is moved by naming the value it moves to, or let go of by saying it is no longer set by hand.")),
+        };
+    }
 
-        ServiceResult<QualityThresholdBook, QualityThresholdFailure> revised =
-            await thresholds.ReviseAsync(named, value, cancellationToken);
-
-        return revised.IsSuccess
+    private IActionResult Answered(ServiceResult<QualityThresholdBook, QualityThresholdFailure> revised)
+        => revised.IsSuccess
             ? Ok(BaseResponder<QualityThresholdResponder>.Success(QualityThresholdResponder.Of(revised.Data!)))
             : BadRequest(BaseResponder<QualityThresholdResponder>.Error(revised.ErrorMessage!));
-    }
 }

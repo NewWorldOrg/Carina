@@ -22,6 +22,28 @@ public sealed record QualityThresholdChangeResponder(
     }
 }
 
+public sealed record QualityThresholdMeasurementResponder(
+    double Value,
+    long Sessions,
+    long SessionsDropped,
+    DateTime From,
+    DateTime Until,
+    DateTime MeasuredAt)
+{
+    public static QualityThresholdMeasurementResponder Of(QualityThresholdMeasurement measurement)
+    {
+        ArgumentNullException.ThrowIfNull(measurement);
+
+        return new QualityThresholdMeasurementResponder(
+            measurement.Value,
+            measurement.Sessions,
+            measurement.SessionsDropped,
+            measurement.From,
+            measurement.Until,
+            measurement.MeasuredAt);
+    }
+}
+
 public sealed record QualityThresholdResponder(
     QualityThresholdKey Key,
     QualityMetric? Metric,
@@ -35,7 +57,9 @@ public sealed record QualityThresholdResponder(
     bool Stored,
     DateTime? UpdatedAt,
     string? UpdatedBy,
-    QualityThresholdChangeResponder? LastChange)
+    QualityThresholdChangeResponder? LastChange,
+    QualityThresholdSource Source,
+    QualityThresholdMeasurementResponder? Measurement)
 {
     public static QualityThresholdResponder Of(QualityThresholdBook book)
     {
@@ -56,7 +80,9 @@ public sealed record QualityThresholdResponder(
             standing.Stored,
             standing.Stored ? standing.Setting.UpdatedAt : null,
             standing.UpdatedBy,
-            book.LastChange is { } change ? QualityThresholdChangeResponder.Of(change) : null);
+            book.LastChange is { } change ? QualityThresholdChangeResponder.Of(change) : null,
+            standing.Source,
+            standing.Measurement is { } measurement ? QualityThresholdMeasurementResponder.Of(measurement) : null);
     }
 }
 

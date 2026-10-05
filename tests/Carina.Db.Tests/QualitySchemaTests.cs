@@ -178,6 +178,80 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_threshold_standing", refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "BR-QD-023: a threshold set by hand never claims to stand on a measurement, and one that does carries it whole")]
+    public async Task AThresholdSetByHandNeverClaimsToStandOnAMeasurement()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException byHand = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"""
+            INSERT INTO quality_threshold (
+                threshold_key, default_value, current_value, provisional, observations, updated_at, by_hand,
+                measured_value, measured_sessions, measured_sessions_dropped, measured_from, measured_until, measured_at)
+            VALUES ('CarrierToNoiseFloor', 15000, 19500, false, 240, {Taken}, true,
+                19500, 240, 18, {Taken}, {Taken}, {Taken})
+            """,
+            connection).ExecuteNonQueryAsync());
+        PostgresException partial = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"""
+            INSERT INTO quality_threshold (
+                threshold_key, default_value, current_value, provisional, observations, updated_at, by_hand,
+                measured_value)
+            VALUES ('BitErrorRateCeiling', 0.0001, 0.0001, true, 0, {Taken}, false, 0.002)
+            """,
+            connection).ExecuteNonQueryAsync());
+        PostgresException apart = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"""
+            INSERT INTO quality_threshold (
+                threshold_key, default_value, current_value, provisional, observations, updated_at, by_hand,
+                measured_value, measured_sessions, measured_sessions_dropped, measured_from, measured_until, measured_at)
+            VALUES ('CarrierToNoiseFloor', 15000, 19000, false, 240, {Taken}, false,
+                19500, 240, 18, {Taken}, {Taken}, {Taken})
+            """,
+            connection).ExecuteNonQueryAsync());
+
+        Assert.Equal("ck_quality_threshold_source", byHand.ConstraintName);
+        Assert.Equal("ck_quality_threshold_measurement", partial.ConstraintName);
+        Assert.Equal("ck_quality_threshold_source", apart.ConstraintName);
+    }
+
+    [Fact(DisplayName = "BR-QV-002: a change made before anything said what made it was made by hand, and nothing else is named")]
+    public async Task AChangeMadeBeforeAnythingSaidWhatMadeItWasMadeByHand()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        var id = Guid.NewGuid();
+        await ThresholdChangeAsync(connection, id, "LockRate");
+
+        await using var reading = new NpgsqlCommand(
+            $"SELECT cause FROM quality_threshold_change WHERE id = '{id}'",
+            connection);
+
+        Assert.Equal("Hand", await reading.ExecuteScalarAsync());
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"""
+            INSERT INTO quality_threshold_change (id, threshold_key, previous_value, next_value, changed_at, cause)
+            VALUES ('{Guid.NewGuid()}', 'LockRate', 0.99, 0.95, {Taken}, 'Somebody')
+            """,
+            connection).ExecuteNonQueryAsync());
+
+        Assert.Equal("ck_quality_threshold_change_cause", refusal.ConstraintName);
+    }
+
+    [Fact(DisplayName = "BR-QD-024: a channel on a tuner is a subject of its own, named at full length")]
+    public async Task AChannelOnATunerIsASubjectOfItsOwn()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await IncidentAsync(
+            connection,
+            state: "Detected",
+            breached: "CarrierToNoiseFloor",
+            subjectKind: "Reception",
+            subject: $"65535-65535@{new string('a', 64)}");
+    }
+
     [Fact(DisplayName = "a threshold that moves leaves a record of what it moved from")]
     public async Task AThresholdThatMovesLeavesARecordOfWhatItMovedFrom()
     {

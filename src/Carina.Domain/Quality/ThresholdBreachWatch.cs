@@ -99,6 +99,46 @@ public static class ThresholdBreachWatch
     }
 
     /// <summary>
+    /// Names each channel whose signal usually read beyond a level on a tuner, once for each reading taken of it,
+    /// unless the tuner itself is already named for the same level. Lock rate is the tuner's alone.
+    /// </summary>
+    public static IReadOnlyList<ThresholdBreach> ReceivedByChannel(
+        IReadOnlyList<ReceptionFigures> figures,
+        IReadOnlyList<QualityThresholdStanding> thresholds,
+        IReadOnlyList<ThresholdBreach> byTuner)
+    {
+        ArgumentNullException.ThrowIfNull(figures);
+        ArgumentNullException.ThrowIfNull(thresholds);
+        ArgumentNullException.ThrowIfNull(byTuner);
+
+        List<ThresholdBreach> found = [];
+
+        foreach (QualityThresholdKey key in QualitySignalSurvey.Keys.Where(key => key is not QualityThresholdKey.LockRate))
+        {
+            QualityThresholdStanding level = thresholds.FirstOrDefault(held => held.Key == key)
+                                             ?? throw new ArgumentException(
+                                                 $"A signal reading is held against the level kept under {key}, and none was handed over.",
+                                                 nameof(thresholds));
+            ThresholdBand band = ThresholdBand.Of(level.Shape.Sense, key, level.Setting);
+
+            found.AddRange(figures
+                .Where(reception => !reception.Figures.NothingWasTaken
+                                    && !TunerNamed(byTuner, key, reception.Figures.Tuner.Value))
+                .Select(reception => (reception.Subject, Verdict: ThresholdEvaluator.Judge(
+                    QualitySignalSurvey.Observed(key, reception.Figures),
+                    band)))
+                .Where(read => read.Verdict.Breached is not null)
+                .Select(read => new ThresholdBreach(
+                    read.Verdict.Breached!.Value,
+                    read.Subject,
+                    read.Verdict.Observed!.Value,
+                    read.Verdict.Applied)));
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// Opens each breach that has no incident standing for the same level on the same subject, and resolves each
     /// standing one the reading no longer names.
     /// </summary>
@@ -162,6 +202,11 @@ public static class ThresholdBreachWatch
 
         return new ThresholdBreach(worst.Breached!.Value, subject, worst.Observed!.Value, worst.Applied);
     }
+
+    private static bool TunerNamed(IReadOnlyList<ThresholdBreach> byTuner, QualityThresholdKey key, string tuner)
+        => byTuner.Any(breach => breach.Breached == key
+                                 && breach.Subject.Kind is QualitySubjectKind.Tuner
+                                 && breach.Subject.Key == tuner);
 
     private static bool Watched(QualityIncident incident)
         => incident is { Owner: QualityIncidentOwner.Quality, HasSettled: false }

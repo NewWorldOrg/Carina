@@ -1,4 +1,7 @@
+using System.Globalization;
+
 using Carina.Contracts;
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Quality;
@@ -35,6 +38,17 @@ public sealed record SignalFigures(
 
 public sealed record QualitySignalRead(QualityThresholdKey Key, QualityReading Reading, DateTime? LastTakenAt);
 
+/// <summary>
+/// What was read of one channel on one tuner over a period.
+/// </summary>
+public sealed record ReceptionFigures(NetworkId Network, ServiceId Service, SignalFigures Figures)
+{
+    public QualitySubject Subject
+        => QualitySubject.Of(
+            QualitySubjectKind.Reception,
+            string.Create(CultureInfo.InvariantCulture, $"{Network.Value}-{Service.Value}@{Figures.Tuner.Value}"));
+}
+
 public interface IQualitySignalReader
 {
     Task<IReadOnlyList<SignalFigures>> FiguresAsync(QualityPeriod period, CancellationToken cancellationToken);
@@ -42,6 +56,8 @@ public interface IQualitySignalReader
     Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(QualityTrendFrame frame, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(QualityPeriod period, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ReceptionFigures>> ReceptionsAsync(QualityPeriod period, CancellationToken cancellationToken);
 }
 
 public static class QualitySignalSurvey
@@ -93,6 +109,27 @@ public static class QualitySignalSurvey
             .. byTuner
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => pair.Value.Done(new TunerDeviceId(pair.Key))),
+        ];
+    }
+
+    /// <summary>
+    /// Gathers what each channel read on each tuner, apart from every other channel and tuner.
+    /// </summary>
+    public static IReadOnlyList<ReceptionFigures> ByReception(IReadOnlyList<QualitySignalWindow> windows)
+    {
+        ArgumentNullException.ThrowIfNull(windows);
+
+        return
+        [
+            .. windows
+                .GroupBy(window => (Tuner: window.Tuner.Value, Network: window.Network.Value, Service: window.Service.Value))
+                .OrderBy(reception => reception.Key.Tuner, StringComparer.Ordinal)
+                .ThenBy(reception => reception.Key.Network)
+                .ThenBy(reception => reception.Key.Service)
+                .Select(reception => new ReceptionFigures(
+                    new NetworkId(reception.Key.Network),
+                    new ServiceId(reception.Key.Service),
+                    Figures([.. reception]).Single())),
         ];
     }
 
@@ -249,15 +286,13 @@ public static class QualitySignalSurvey
         return held;
     }
 
-    private readonly record struct Weighed(double Reading, long Weight);
-
     private sealed class Gathering
     {
         private readonly SortedSet<string> notRead = new(StringComparer.Ordinal);
 
-        private readonly List<Weighed> carrierToNoise = [];
+        private readonly List<WeighedReading> carrierToNoise = [];
 
-        private readonly List<Weighed> bitErrorRates = [];
+        private readonly List<WeighedReading> bitErrorRates = [];
 
         private int? coldest;
 
@@ -295,12 +330,12 @@ public static class QualitySignalSurvey
 
             if (window.CarrierToNoiseAverage is { } figure)
             {
-                carrierToNoise.Add(new Weighed(figure, weight));
+                carrierToNoise.Add(new WeighedReading(figure, weight));
             }
 
             if (window.BitErrorRateAverage is { } rate)
             {
-                bitErrorRates.Add(new Weighed(rate, weight));
+                bitErrorRates.Add(new WeighedReading(rate, weight));
             }
         }
 
@@ -328,32 +363,10 @@ public static class QualitySignalSurvey
                 Unmeasured,
                 Unreachable,
                 coldest,
-                Usual(carrierToNoise.OrderBy(weighed => weighed.Reading)),
+                UsualReadings.Of(carrierToNoise.OrderBy(weighed => weighed.Reading)),
                 worst,
-                Usual(bitErrorRates.OrderByDescending(weighed => weighed.Reading)),
+                UsualReadings.Of(bitErrorRates.OrderByDescending(weighed => weighed.Reading)),
                 [.. notRead],
                 latest);
-
-        /// <summary>
-        /// The first reading, counted from the worst, at which more than half of the weight has been passed.
-        /// </summary>
-        private static double? Usual(IOrderedEnumerable<Weighed> worstFirst)
-        {
-            Weighed[] ordered = [.. worstFirst];
-            long whole = ordered.Sum(weighed => weighed.Weight);
-            long passed = 0;
-
-            foreach (Weighed weighed in ordered)
-            {
-                passed += weighed.Weight;
-
-                if (passed * 2 > whole)
-                {
-                    return weighed.Reading;
-                }
-            }
-
-            return null;
-        }
     }
 }

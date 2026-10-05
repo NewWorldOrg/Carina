@@ -24,6 +24,25 @@ public sealed class QualityThresholdConfiguration : IEntityTypeConfiguration<Qua
                 observations >= 0
                 AND (provisional OR observations > 0)
                 """);
+            table.HasCheckConstraint(
+                "ck_quality_threshold_measurement",
+                """
+                (measured_value IS NULL) = (measured_sessions IS NULL)
+                AND (measured_value IS NULL) = (measured_sessions_dropped IS NULL)
+                AND (measured_value IS NULL) = (measured_from IS NULL)
+                AND (measured_value IS NULL) = (measured_until IS NULL)
+                AND (measured_value IS NULL) = (measured_at IS NULL)
+                AND (measured_sessions IS NULL OR measured_sessions > 0)
+                AND (measured_sessions_dropped IS NULL
+                    OR (measured_sessions_dropped >= 0 AND measured_sessions_dropped <= measured_sessions))
+                AND (measured_from IS NULL OR measured_from <= measured_until)
+                """);
+            table.HasCheckConstraint(
+                "ck_quality_threshold_source",
+                """
+                (NOT by_hand OR provisional)
+                AND (provisional OR current_value = measured_value)
+                """);
         });
 
         builder.HasKey(threshold => threshold.Key);
@@ -46,5 +65,9 @@ public sealed class QualityThresholdConfiguration : IEntityTypeConfiguration<Qua
 
         builder.Property(threshold => threshold.UpdatedBy)
             .HasMaxLength(QualityThreshold.UpdatedByMaxLength);
+
+        builder.Property(threshold => threshold.ByHand).IsRequired();
+
+        builder.Ignore(threshold => threshold.Measurement);
     }
 }
