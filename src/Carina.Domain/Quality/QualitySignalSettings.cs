@@ -14,6 +14,10 @@ public sealed record QualitySignalSettings
 
     public TimeSpan EvaluateCandidatesOver { get; init; } = TimeSpan.FromDays(7);
 
+    public TimeSpan BeforeFirstThresholdMeasure { get; init; } = TimeSpan.FromMinutes(10);
+
+    public TimeSpan BetweenThresholdMeasures { get; init; } = TimeSpan.FromHours(24);
+
     public IReadOnlyDictionary<QualityWindow, TimeSpan?> KeepWindowsFor { get; init; } =
         new Dictionary<QualityWindow, TimeSpan?>
         {

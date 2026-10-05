@@ -84,6 +84,74 @@ public sealed class QualityThresholdRepositoryTests(RepositoryDatabase database)
         Assert.Equal(0.0007, held.Setting.Current);
     }
 
+    [Fact(DisplayName = "BR-QD-023: a measured level keeps the measurement it stands on, and a level set by hand says so")]
+    public async Task AMeasuredLevelKeepsTheMeasurementItStandsOn()
+    {
+        await ClearAsync();
+
+        QualityThresholdMeasurement measurement =
+            QualityThresholdMeasurement.Of(18_600, 328, 24, At.AddDays(-7), At, At.AddMinutes(5));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            var repository = new QualityThresholdRepository(writing);
+
+            await repository.SaveAsync(
+                QualityThreshold.Rehydrate(
+                    QualityThresholdKey.CarrierToNoiseFloor,
+                    Threshold.Of(15_000, 18_600, provisional: false, 328, At),
+                    null,
+                    byHand: false,
+                    measurement),
+                Cancel);
+            await repository.SaveAsync(
+                QualityThreshold.Rehydrate(
+                    QualityThresholdKey.BitErrorRateCeiling,
+                    Threshold.Of(0.0001, 0.003, provisional: true, 0, At),
+                    null,
+                    byHand: true,
+                    null),
+                Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<QualityThreshold> held = await new QualityThresholdRepository(reading).ListAsync(Cancel);
+        QualityThreshold measured = held.Single(threshold => threshold.Key == QualityThresholdKey.CarrierToNoiseFloor);
+        QualityThreshold byHand = held.Single(threshold => threshold.Key == QualityThresholdKey.BitErrorRateCeiling);
+
+        Assert.Equal(measurement, measured.Measurement);
+        Assert.False(measured.ByHand);
+        Assert.False(measured.Setting.Provisional);
+        Assert.True(byHand.ByHand);
+        Assert.Null(byHand.Measurement);
+    }
+
+    [Fact(DisplayName = "BR-QV-002: a change keeps whether a hand or a measurement made it")]
+    public async Task AChangeKeepsWhetherAHandOrAMeasurementMadeIt()
+    {
+        await ClearAsync();
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new QualityThresholdChangeRepository(writing).AddAsync(
+                QualityThresholdChange.Record(
+                    QualityThresholdChangeId.New(),
+                    QualityThresholdKey.CarrierToNoiseFloor,
+                    15_000,
+                    18_600,
+                    At,
+                    null,
+                    QualityThresholdChangeCause.Measurement),
+                Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Equal(
+            QualityThresholdChangeCause.Measurement,
+            Assert.Single(await new QualityThresholdChangeRepository(reading).ListAsync(Cancel)).Cause);
+    }
+
     private static QualityThresholdChange Change(QualityThresholdKey key, double previous, double next, DateTime at)
         => QualityThresholdChange.Record(QualityThresholdChangeId.New(), key, previous, next, at, null);
 

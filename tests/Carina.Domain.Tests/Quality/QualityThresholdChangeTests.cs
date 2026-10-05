@@ -73,4 +73,30 @@ public sealed class QualityThresholdChangeTests
     [Fact]
     public void AnEmptyChangeIdIsRefused()
         => Assert.Throws<ArgumentException>(() => new QualityThresholdChangeId(Guid.Empty));
+
+    [Fact(DisplayName = "BR-QV-002: a change says whether a hand or a measurement made it, and a hand unless told otherwise")]
+    public void AChangeSaysWhetherAHandOrAMeasurementMadeIt()
+    {
+        Assert.Equal(
+            QualityThresholdChangeCause.Hand,
+            QualityThresholdChange.Record(QualityThresholdChangeId.New(), QualityThresholdKey.LockRate, 0.99, 0.95, At, null).Cause);
+        Assert.Equal(
+            QualityThresholdChangeCause.Measurement,
+            QualityThresholdChange.Record(
+                QualityThresholdChangeId.New(),
+                QualityThresholdKey.CarrierToNoiseFloor,
+                15_000,
+                18_600,
+                At,
+                null,
+                QualityThresholdChangeCause.Measurement).Cause);
+        Assert.Throws<ArgumentOutOfRangeException>(() => QualityThresholdChange.Record(
+            QualityThresholdChangeId.New(),
+            QualityThresholdKey.LockRate,
+            0.99,
+            0.95,
+            At,
+            null,
+            (QualityThresholdChangeCause)99));
+    }
 }

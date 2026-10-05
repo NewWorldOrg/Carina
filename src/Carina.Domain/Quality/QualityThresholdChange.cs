@@ -22,14 +22,17 @@ public sealed class QualityThresholdChange
 
     public string? ChangedBy { get; private set; }
 
+    public QualityThresholdChangeCause Cause { get; private set; }
+
     public static QualityThresholdChange Record(
         QualityThresholdChangeId id,
         QualityThresholdKey key,
         double previousValue,
         double nextValue,
         DateTime changedAt,
-        string? changedBy)
-        => Rehydrate(id, key, previousValue, nextValue, changedAt, changedBy);
+        string? changedBy,
+        QualityThresholdChangeCause cause = QualityThresholdChangeCause.Hand)
+        => Rehydrate(id, key, previousValue, nextValue, changedAt, changedBy, cause);
 
     public static QualityThresholdChange Rehydrate(
         QualityThresholdChangeId id,
@@ -37,13 +40,19 @@ public sealed class QualityThresholdChange
         double previousValue,
         double nextValue,
         DateTime changedAt,
-        string? changedBy)
+        string? changedBy,
+        QualityThresholdChangeCause cause = QualityThresholdChangeCause.Hand)
     {
         ArgumentNullException.ThrowIfNull(id);
 
         if (!Enum.IsDefined(key))
         {
             throw new ArgumentOutOfRangeException(nameof(key), key, "A threshold is kept under one of the keys this domain names.");
+        }
+
+        if (!Enum.IsDefined(cause))
+        {
+            throw new ArgumentOutOfRangeException(nameof(cause), cause, "A threshold is moved by a hand or by a measurement.");
         }
 
         Measured(previousValue, nameof(previousValue));
@@ -63,6 +72,7 @@ public sealed class QualityThresholdChange
             NextValue = nextValue,
             ChangedAt = UtcTimes.Required(changedAt, nameof(changedAt)),
             ChangedBy = changedBy,
+            Cause = cause,
         };
     }
 

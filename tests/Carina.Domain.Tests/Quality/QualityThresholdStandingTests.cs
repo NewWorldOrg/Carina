@@ -66,4 +66,33 @@ public sealed class QualityThresholdStandingTests
         Assert.False(QualityThresholdStanding.Ordered(QualityThresholdKey.PacketsLostUnwatchable, 0.00001, standings));
         Assert.True(QualityThresholdStanding.Ordered(QualityThresholdKey.PacketsLostUnwatchable, 0.002, standings));
     }
+
+    [Fact(DisplayName = "BR-QD-023: a level says where it came from: shipped, measured or set by hand")]
+    public void ALevelSaysWhereItCameFrom()
+    {
+        QualityThresholdMeasurement measurement = QualityThresholdMeasurement.Of(18_600, 328, 24, At.AddDays(-7), At, At);
+        QualityThreshold measured = QualityThreshold.Rehydrate(
+            QualityThresholdKey.CarrierToNoiseFloor,
+            Threshold.Of(15_000, 18_600, provisional: false, 328, At),
+            null,
+            byHand: false,
+            measurement);
+        QualityThreshold byHand = QualityThreshold.Rehydrate(
+            QualityThresholdKey.BitErrorRateCeiling,
+            Threshold.Of(0.0001, 0.001, provisional: true, 0, At),
+            null,
+            byHand: true,
+            null);
+
+        IReadOnlyList<QualityThresholdStanding> standings = QualityThresholdStanding.Over([measured, byHand], At);
+
+        Assert.Equal(QualityThresholdSource.Measured, Of(standings, QualityThresholdKey.CarrierToNoiseFloor).Source);
+        Assert.Equal(measurement, Of(standings, QualityThresholdKey.CarrierToNoiseFloor).Measurement);
+        Assert.Equal(QualityThresholdSource.ByHand, Of(standings, QualityThresholdKey.BitErrorRateCeiling).Source);
+        Assert.Null(Of(standings, QualityThresholdKey.BitErrorRateCeiling).Measurement);
+        Assert.Equal(QualityThresholdSource.Shipped, Of(standings, QualityThresholdKey.LockRate).Source);
+    }
+
+    private static QualityThresholdStanding Of(IReadOnlyList<QualityThresholdStanding> standings, QualityThresholdKey key)
+        => standings.First(standing => standing.Key == key);
 }

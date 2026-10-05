@@ -48,26 +48,41 @@ public sealed class QualityThresholdService(
                 QualityThresholdFailure.OutOfOrder);
         }
 
-        DateTime at = clock.GetUtcNow().UtcDateTime;
-        double previous = standing.Setting.Current;
+        return ServiceResult<QualityThresholdBook, QualityThresholdFailure>.Success(await KeepAsync(
+            standing,
+            QualityThresholdSettling.ByHand(standing, value, clock.GetUtcNow().UtcDateTime),
+            cancellationToken));
+    }
 
-        QualityThreshold revised = QualityThreshold.Rehydrate(
-            key,
-            Threshold.Of(standing.Setting.Default, value, standing.Setting.Provisional, standing.Setting.Observations, at),
-            standing.UpdatedBy);
+    public async Task<ServiceResult<QualityThresholdBook>> ReleaseAsync(
+        QualityThresholdKey key,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<QualityThresholdStanding> standings = await StandingsAsync(cancellationToken);
+        QualityThresholdStanding standing = standings.First(held => held.Key == key);
 
-        QualityThresholdChange recorded = QualityThresholdChange.Record(
-            QualityThresholdChangeId.New(),
-            key,
-            previous,
-            value,
-            at,
-            null);
+        return ServiceResult<QualityThresholdBook>.Success(await KeepAsync(
+            standing,
+            QualityThresholdSettling.Released(standing, clock.GetUtcNow().UtcDateTime),
+            cancellationToken));
+    }
+
+    private async Task<QualityThresholdBook> KeepAsync(
+        QualityThresholdStanding standing,
+        QualityThresholdSettled settled,
+        CancellationToken cancellationToken)
+    {
+        if (settled.Change is not { } recorded)
+        {
+            return new QualityThresholdBook(
+                standing,
+                (await changes.ListAsync(cancellationToken)).FirstOrDefault(change => change.Key == standing.Key));
+        }
 
         await writes.AllOrNothingAsync(
             async token =>
             {
-                await thresholds.SaveAsync(revised, token);
+                await thresholds.SaveAsync(settled.Threshold, token);
                 await changes.AddAsync(recorded, token);
 
                 return recorded;
@@ -76,9 +91,15 @@ public sealed class QualityThresholdService(
 
         events.Signal(AppEventName.Quality);
 
-        return ServiceResult<QualityThresholdBook, QualityThresholdFailure>.Success(new QualityThresholdBook(
-            new QualityThresholdStanding(key, standing.Shape, revised.Setting, true, revised.UpdatedBy),
-            recorded));
+        return new QualityThresholdBook(
+            standing with
+            {
+                Setting = settled.Threshold.Setting,
+                Stored = true,
+                ByHand = settled.Threshold.ByHand,
+                Measurement = settled.Threshold.Measurement,
+            },
+            recorded);
     }
 
     private async Task<IReadOnlyList<QualityThresholdStanding>> StandingsAsync(CancellationToken cancellationToken)

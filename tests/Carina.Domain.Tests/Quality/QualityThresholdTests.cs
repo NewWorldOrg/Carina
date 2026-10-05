@@ -36,4 +36,52 @@ public sealed class QualityThresholdTests
         => Assert.Throws<ArgumentOutOfRangeException>(() => QualityThreshold.Declare(
             (QualityThresholdKey)99,
             Threshold.Provisionally(1, observations: 0, Declared)));
+
+    [Fact(DisplayName = "BR-QD-023: a level set by hand is never one that stands on a measurement")]
+    public void ALevelSetByHandIsNeverOneThatStandsOnAMeasurement()
+        => Assert.Throws<ArgumentException>(() => QualityThreshold.Rehydrate(
+            QualityThresholdKey.CarrierToNoiseFloor,
+            Threshold.Of(15_000, 18_600, provisional: false, 328, Declared),
+            null,
+            byHand: true,
+            Measured(18_600)));
+
+    [Fact(DisplayName = "BR-QD-023: a level that is not provisional is the measurement it stands on")]
+    public void ALevelThatIsNotProvisionalIsTheMeasurementItStandsOn()
+    {
+        Assert.Throws<ArgumentException>(() => QualityThreshold.Rehydrate(
+            QualityThresholdKey.CarrierToNoiseFloor,
+            Threshold.Of(15_000, 18_600, provisional: false, 328, Declared),
+            null,
+            byHand: false,
+            null));
+        Assert.Throws<ArgumentException>(() => QualityThreshold.Rehydrate(
+            QualityThresholdKey.CarrierToNoiseFloor,
+            Threshold.Of(15_000, 18_600, provisional: false, 328, Declared),
+            null,
+            byHand: false,
+            Measured(19_000)));
+
+        QualityThreshold measured = QualityThreshold.Rehydrate(
+            QualityThresholdKey.CarrierToNoiseFloor,
+            Threshold.Of(15_000, 18_600, provisional: false, 328, Declared),
+            null,
+            byHand: false,
+            Measured(18_600));
+
+        Assert.Equal(18_600, measured.Measurement!.Value);
+        Assert.False(measured.ByHand);
+    }
+
+    [Fact(DisplayName = "BR-QD-023: only the signal levels carry a measurement")]
+    public void OnlyTheSignalLevelsCarryAMeasurement()
+        => Assert.Throws<ArgumentException>(() => QualityThreshold.Rehydrate(
+            QualityThresholdKey.LockRate,
+            Threshold.Of(0.99, 0.99, provisional: true, 0, Declared),
+            null,
+            byHand: false,
+            Measured(0.99)));
+
+    private static QualityThresholdMeasurement Measured(double value)
+        => QualityThresholdMeasurement.Of(value, 328, 24, Declared.AddDays(-7), Declared, Declared);
 }

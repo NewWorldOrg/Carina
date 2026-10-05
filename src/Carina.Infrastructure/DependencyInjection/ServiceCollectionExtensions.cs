@@ -209,6 +209,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SupplyWatchRound>();
         services.TryAddSingleton<ISupplyStandingBoard, SupplyStandingBoard>();
         services.AddScoped<QualitySignalRollupRound>();
+        services.AddScoped<QualityThresholdMeasureRound>();
         services.AddScoped<CandidateScoreRound>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
@@ -404,6 +405,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<SignalSampleJob>();
         services.AddHostedService<QualitySignalRollupJob>();
         services.AddHostedService<SupplyWatchJob>();
+        services.AddHostedService<QualityThresholdMeasureJob>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
         services.AddHostedService(provider => provider.GetRequiredService<CaptionJob>());

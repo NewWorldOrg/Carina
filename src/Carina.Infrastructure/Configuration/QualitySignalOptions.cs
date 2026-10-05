@@ -29,6 +29,10 @@ public sealed class QualitySignalOptions
 
     public string? EvaluateCandidatesOver { get; set; }
 
+    public string? BeforeFirstThresholdMeasure { get; set; }
+
+    public string? BetweenThresholdMeasures { get; set; }
+
     public void ReadFrom(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -43,6 +47,8 @@ public sealed class QualitySignalOptions
         KeepMinuteWindowsFor = named[nameof(KeepMinuteWindowsFor)];
         KeepHourWindowsFor = named[nameof(KeepHourWindowsFor)];
         EvaluateCandidatesOver = named[nameof(EvaluateCandidatesOver)];
+        BeforeFirstThresholdMeasure = named[nameof(BeforeFirstThresholdMeasure)];
+        BetweenThresholdMeasures = named[nameof(BetweenThresholdMeasures)];
     }
 
     public QualitySignalSettings Read()
@@ -71,6 +77,14 @@ public sealed class QualitySignalOptions
                 EvaluateCandidatesOver,
                 nameof(EvaluateCandidatesOver),
                 unset.EvaluateCandidatesOver),
+            BeforeFirstThresholdMeasure = Positive(
+                BeforeFirstThresholdMeasure,
+                nameof(BeforeFirstThresholdMeasure),
+                unset.BeforeFirstThresholdMeasure),
+            BetweenThresholdMeasures = Positive(
+                BetweenThresholdMeasures,
+                nameof(BetweenThresholdMeasures),
+                unset.BetweenThresholdMeasures),
         };
 
         return Agreeing(read);

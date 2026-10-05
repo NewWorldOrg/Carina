@@ -5,8 +5,17 @@ public sealed record QualityThresholdStanding(
     QualityThresholdShape Shape,
     Threshold Setting,
     bool Stored,
-    string? UpdatedBy)
+    string? UpdatedBy,
+    bool ByHand = false,
+    QualityThresholdMeasurement? Measurement = null)
 {
+    public QualityThresholdSource Source => (ByHand, Setting.Provisional) switch
+    {
+        (true, _) => QualityThresholdSource.ByHand,
+        (false, false) => QualityThresholdSource.Measured,
+        (false, true) => QualityThresholdSource.Shipped,
+    };
+
     public static QualityThresholdStanding AsShipped(QualityThresholdKey key, DateTime at)
         => new(key, QualityThresholdShapes.Of(key), QualityThresholdShapes.AsShipped(key, at), false, null);
 
@@ -19,7 +28,14 @@ public sealed record QualityThresholdStanding(
         return
         [
             .. QualityThresholdShapes.Consulted.Select(shape => stored.TryGetValue(shape.Key, out QualityThreshold? threshold)
-                ? new QualityThresholdStanding(shape.Key, shape, threshold.Setting, true, threshold.UpdatedBy)
+                ? new QualityThresholdStanding(
+                    shape.Key,
+                    shape,
+                    threshold.Setting,
+                    true,
+                    threshold.UpdatedBy,
+                    threshold.ByHand,
+                    threshold.Measurement)
                 : AsShipped(shape.Key, at)),
         ];
     }

@@ -249,15 +249,13 @@ public static class QualitySignalSurvey
         return held;
     }
 
-    private readonly record struct Weighed(double Reading, long Weight);
-
     private sealed class Gathering
     {
         private readonly SortedSet<string> notRead = new(StringComparer.Ordinal);
 
-        private readonly List<Weighed> carrierToNoise = [];
+        private readonly List<WeighedReading> carrierToNoise = [];
 
-        private readonly List<Weighed> bitErrorRates = [];
+        private readonly List<WeighedReading> bitErrorRates = [];
 
         private int? coldest;
 
@@ -295,12 +293,12 @@ public static class QualitySignalSurvey
 
             if (window.CarrierToNoiseAverage is { } figure)
             {
-                carrierToNoise.Add(new Weighed(figure, weight));
+                carrierToNoise.Add(new WeighedReading(figure, weight));
             }
 
             if (window.BitErrorRateAverage is { } rate)
             {
-                bitErrorRates.Add(new Weighed(rate, weight));
+                bitErrorRates.Add(new WeighedReading(rate, weight));
             }
         }
 
@@ -328,32 +326,10 @@ public static class QualitySignalSurvey
                 Unmeasured,
                 Unreachable,
                 coldest,
-                Usual(carrierToNoise.OrderBy(weighed => weighed.Reading)),
+                UsualReadings.Of(carrierToNoise.OrderBy(weighed => weighed.Reading)),
                 worst,
-                Usual(bitErrorRates.OrderByDescending(weighed => weighed.Reading)),
+                UsualReadings.Of(bitErrorRates.OrderByDescending(weighed => weighed.Reading)),
                 [.. notRead],
                 latest);
-
-        /// <summary>
-        /// The first reading, counted from the worst, at which more than half of the weight has been passed.
-        /// </summary>
-        private static double? Usual(IOrderedEnumerable<Weighed> worstFirst)
-        {
-            Weighed[] ordered = [.. worstFirst];
-            long whole = ordered.Sum(weighed => weighed.Weight);
-            long passed = 0;
-
-            foreach (Weighed weighed in ordered)
-            {
-                passed += weighed.Weight;
-
-                if (passed * 2 > whole)
-                {
-                    return weighed.Reading;
-                }
-            }
-
-            return null;
-        }
     }
 }
