@@ -33,6 +33,8 @@ public sealed class CaptionTranscriptionMaterialTests(ITestOutputHelper output) 
 
     private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
 
+    private static readonly MachineSettings Machine = new();
+
     private static readonly TimeSpan Whole = TimeSpan.FromSeconds(12);
 
     private static readonly StreamAttributes Interlaced = new(
@@ -234,7 +236,7 @@ public sealed class CaptionTranscriptionMaterialTests(ITestOutputHelper output) 
             UseShellExecute = false,
         };
 
-        foreach (string argument in FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.Drawn)
+        foreach (string argument in FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.Drawn)
             .Concat(FfmpegLiveInvocation.Delivery())
             .Concat(FfmpegLiveInvocation.CaptionDelivery(Service, int.Parse(captions.GetClientHandleAsString(), CultureInfo.InvariantCulture))))
         {

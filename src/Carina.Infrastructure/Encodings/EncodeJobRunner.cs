@@ -236,6 +236,7 @@ public sealed class EncodeJobRunner(
                     recording.ServiceId,
                     profile,
                     encoder,
+                    programmes,
                     source.FullName,
                     cores,
                     headSkip,
