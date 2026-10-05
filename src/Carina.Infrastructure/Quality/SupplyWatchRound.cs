@@ -181,15 +181,21 @@ public sealed class SupplyWatchRound(
                                ?? throw new InvalidOperationException(
                                    "The span a breach is looked for over is one a period can be read across.");
 
+        IReadOnlyList<ThresholdBreach> byTuner = ThresholdBreachWatch.Received(
+            await signals.FiguresAsync(looked, cancellationToken),
+            levels,
+            cannotLock);
+
         return
         [
             .. ThresholdBreachWatch.Recorded(
                 await ledger.ReadAsync(looked, cancellationToken),
                 QualityThresholdStanding.Bands(levels)),
-            .. ThresholdBreachWatch.Received(
-                await signals.FiguresAsync(looked, cancellationToken),
+            .. byTuner,
+            .. ThresholdBreachWatch.ReceivedByChannel(
+                await signals.ReceptionsAsync(looked, cancellationToken),
                 levels,
-                cannotLock),
+                byTuner),
         ];
     }
 

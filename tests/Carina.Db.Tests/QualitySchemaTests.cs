@@ -239,6 +239,19 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_threshold_change_cause", refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "BR-QD-024: a channel on a tuner is a subject of its own, named at full length")]
+    public async Task AChannelOnATunerIsASubjectOfItsOwn()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await IncidentAsync(
+            connection,
+            state: "Detected",
+            breached: "CarrierToNoiseFloor",
+            subjectKind: "Reception",
+            subject: $"65535-65535@{new string('a', 64)}");
+    }
+
     [Fact(DisplayName = "a threshold that moves leaves a record of what it moved from")]
     public async Task AThresholdThatMovesLeavesARecordOfWhatItMovedFrom()
     {

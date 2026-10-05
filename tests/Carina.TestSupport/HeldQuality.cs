@@ -129,6 +129,19 @@ public sealed class HeldQualitySignals : IQualitySignalReader
 
     public List<QualityPeriod> Asked { get; } = [];
 
+    public List<ReceptionFigures> Receptions { get; } = [];
+
+    public List<QualityPeriod> ReceptionsAsked { get; } = [];
+
+    public Task<IReadOnlyList<ReceptionFigures>> ReceptionsAsync(QualityPeriod period, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(period);
+
+        ReceptionsAsked.Add(period);
+
+        return Task.FromResult<IReadOnlyList<ReceptionFigures>>([.. Receptions]);
+    }
+
     public Task<IReadOnlyList<SignalFigures>> FiguresAsync(QualityPeriod period, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(period);

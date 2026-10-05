@@ -332,6 +332,58 @@ public sealed class ThresholdBreachWatchTests
         Assert.Empty(plan.ToResolve);
     }
 
+    [Fact(DisplayName = "BR-QD-024: a channel that usually read beyond a signal level on a tuner names the channel and the tuner, and one within it is no breach")]
+    public void AChannelThatUsuallyReadBeyondASignalLevelOnATunerNamesTheChannelAndTheTuner()
+    {
+        IReadOnlyList<ThresholdBreach> breaches = ThresholdBreachWatch.ReceivedByChannel(
+            [
+                Reception(1_024, "adapter0", carrierToNoise: 30_000, bitErrors: 0),
+                Reception(2_048, "adapter0", carrierToNoise: 9_000, bitErrors: 0.01),
+            ],
+            Levels,
+            []);
+
+        Assert.Equal(
+            [
+                (QualityThresholdKey.CarrierToNoiseFloor, "32736-2048@adapter0", 9_000d),
+                (QualityThresholdKey.BitErrorRateCeiling, "32736-2048@adapter0", 0.01),
+            ],
+            breaches.Select(breach => (breach.Breached, breach.Subject.Key, breach.Observed)));
+        Assert.All(breaches, breach => Assert.Equal(QualitySubjectKind.Reception, breach.Subject.Kind));
+        Assert.All(breaches, breach => Assert.Equal(Level(breach.Breached), breach.Applied));
+    }
+
+    [Fact(DisplayName = "BR-QD-024: a channel on a tuner already named for the same level is not named again, and is for another level")]
+    public void AChannelOnATunerAlreadyNamedForTheSameLevelIsNotNamedAgain()
+    {
+        IReadOnlyList<ThresholdBreach> breaches = ThresholdBreachWatch.ReceivedByChannel(
+            [
+                Reception(2_048, "adapter0", carrierToNoise: 9_000, bitErrors: 0.01),
+                Reception(2_048, "adapter1", carrierToNoise: 9_000, bitErrors: 0),
+            ],
+            Levels,
+            [Breach(QualityThresholdKey.CarrierToNoiseFloor, TheTuner, 9_000)]);
+
+        Assert.Equal(
+            [
+                (QualityThresholdKey.CarrierToNoiseFloor, "32736-2048@adapter1"),
+                (QualityThresholdKey.BitErrorRateCeiling, "32736-2048@adapter0"),
+            ],
+            breaches.Select(breach => (breach.Breached, breach.Subject.Key)));
+    }
+
+    [Fact(DisplayName = "BR-QD-024: a channel is never named for its lock rate")]
+    public void AChannelIsNeverNamedForItsLockRate()
+        => Assert.Empty(ThresholdBreachWatch.ReceivedByChannel(
+            [
+                new ReceptionFigures(
+                    new NetworkId(32_736),
+                    new ServiceId(2_048),
+                    Figures("adapter0", samples: 100, locked: 10, carrierToNoise: 30_000, bitErrors: 0)),
+            ],
+            Levels,
+            []));
+
     private static Threshold Level(QualityThresholdKey key) => Levels.First(level => level.Key == key).Setting;
 
     private static ThresholdBreach Breach(QualityThresholdKey key, QualitySubject subject, double observed)
@@ -375,4 +427,10 @@ public sealed class ThresholdBreachWatchTests
             bitErrors,
             [],
             Noon);
+
+    private static ReceptionFigures Reception(int service, string tuner, int carrierToNoise, double bitErrors)
+        => new(
+            new NetworkId(32_736),
+            new ServiceId(service),
+            Figures(tuner, samples: 100, locked: 100, carrierToNoise, bitErrors));
 }

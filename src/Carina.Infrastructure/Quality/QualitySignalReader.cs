@@ -11,6 +11,11 @@ public sealed class QualitySignalReader(
         CancellationToken cancellationToken)
         => QualitySignalSurvey.Figures(await WindowsAsync(period, cancellationToken));
 
+    public async Task<IReadOnlyList<ReceptionFigures>> ReceptionsAsync(
+        QualityPeriod period,
+        CancellationToken cancellationToken)
+        => QualitySignalSurvey.ByReception(await WindowsAsync(period, cancellationToken));
+
     public async Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(
         QualityPeriod period,
         CancellationToken cancellationToken)

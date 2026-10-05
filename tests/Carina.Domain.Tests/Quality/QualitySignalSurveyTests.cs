@@ -328,6 +328,38 @@ public sealed class QualitySignalSurveyTests
         Assert.Null(figure.BitErrorRateUsual);
     }
 
+    [Fact(DisplayName = "BR-QD-024: what each channel read on each tuner is gathered apart, at what it usually read")]
+    public void WhatEachChannelReadOnEachTunerIsGatheredApart()
+    {
+        TunerDeviceId other = new("adapter4.frontend0");
+        IReadOnlyList<QualitySignalWindow> windows =
+        [
+            QualitySignalWindow.Of(Sample(Noon, Read(30_000, 0))),
+            QualitySignalWindow.Of(Sample(Noon.AddSeconds(10), Read(31_000, 0))),
+            QualitySignalWindow.Of(Sample(Noon.AddSeconds(20), Read(12_000, 20_000), service: 2_048)),
+            QualitySignalWindow.Of(Sample(Noon.AddSeconds(30), Read(13_000, 30_000), service: 2_048)),
+            QualitySignalWindow.Of(Sample(Noon.AddSeconds(40), Read(25_000, 0), other, service: 2_048)),
+        ];
+
+        IReadOnlyList<ReceptionFigures> figures = QualitySignalSurvey.ByReception(windows);
+
+        Assert.Equal(
+            [
+                ("adapter3.frontend0", 1_024, 31_000d, 0d),
+                ("adapter3.frontend0", 2_048, 13_000d, 0.02),
+                ("adapter4.frontend0", 2_048, 25_000d, 0d),
+            ],
+            figures.Select(one => (
+                one.Figures.Tuner.Value,
+                one.Service.Value,
+                one.Figures.CarrierToNoiseUsual!.Value,
+                one.Figures.BitErrorRateUsual!.Value)));
+        Assert.All(figures, one => Assert.Equal(32736, one.Network.Value));
+        Assert.Equal(
+            QualitySubject.Of(QualitySubjectKind.Reception, "32736-2048@adapter4.frontend0"),
+            figures[2].Subject);
+    }
+
     private static SignalSample Read(int carrierToNoise, long errorBits)
         => SignalSample.WithLock(
             Noon,
@@ -362,7 +394,7 @@ public sealed class QualitySignalSurveyTests
     private static QualitySignalRead Read(QualityThresholdKey key, IReadOnlyList<SignalFigures> figures)
         => QualitySignalSurvey.Read(figures, [Tuner], Levels).Single(one => one.Key == key);
 
-    private static QualitySignalSample Sample(DateTime at, SignalSample signal, TunerDeviceId? tuner = null)
+    private static QualitySignalSample Sample(DateTime at, SignalSample signal, TunerDeviceId? tuner = null, int service = 1024)
         => QualitySignalSample.Rehydrate(
             "instance-a",
             SessionId.Parse("live-1"),
@@ -370,6 +402,6 @@ public sealed class QualitySignalSurveyTests
             SessionPurpose.Live,
             tuner ?? Tuner,
             new NetworkId(32736),
-            new ServiceId(1024),
+            new ServiceId(service),
             signal);
 }
