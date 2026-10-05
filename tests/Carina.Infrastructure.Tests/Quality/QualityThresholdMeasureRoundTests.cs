@@ -120,6 +120,32 @@ public sealed class QualityThresholdMeasureRoundTests
         Assert.Equal(0, pass.Measured);
     }
 
+    [Fact(DisplayName = "BR-QD-023: a level set by hand while the sessions are being read is not overwritten by the measurement")]
+    public async Task ALevelSetByHandWhileTheSessionsAreBeingReadIsNotOverwritten()
+    {
+        await SessionsAsync(dropped: 12, kept: 12);
+
+        QualityThresholdMeasureRound round = new(
+            thresholds,
+            changes,
+            new SessionsReadWhileAHandMovesALevel(sessions, thresholds),
+            samples,
+            new UnguardedWrites(),
+            events,
+            new QualitySignalSettings(),
+            clock,
+            NullLogger<QualityThresholdMeasureRound>.Instance);
+
+        await round.RunAsync(Cancel);
+
+        QualityThreshold carrierToNoise = Held(QualityThresholdKey.CarrierToNoiseFloor);
+
+        Assert.True(carrierToNoise.ByHand);
+        Assert.Equal(12_000, carrierToNoise.Setting.Current);
+        Assert.Equal(20_000, carrierToNoise.Measurement!.Value);
+        Assert.Equal(2, thresholds.TurnsTaken);
+    }
+
     private QualityThreshold Held(QualityThresholdKey key) => thresholds.Thresholds.Single(threshold => threshold.Key == key);
 
     private QualityThresholdMeasureRound Round()
@@ -179,5 +205,39 @@ public sealed class QualityThresholdMeasureRoundTests
                 started.AddSeconds(10),
                 [new LayerBitErrorCounts(1, errorBits, 1_000_000)],
                 started.AddSeconds(10))));
+    }
+
+    private sealed class SessionsReadWhileAHandMovesALevel(
+        HeldQualitySessionMeasurements inner,
+        HeldQualityThresholds thresholds) : IQualitySessionMeasurementRepository
+    {
+        public Task<QualitySessionMeasurement?> FindAsync(
+            string driverInstanceId,
+            SessionId session,
+            CancellationToken cancellationToken)
+            => inner.FindAsync(driverInstanceId, session, cancellationToken);
+
+        public Task<IReadOnlyList<QualitySessionMeasurement>> ListOpenAsync(CancellationToken cancellationToken)
+            => inner.ListOpenAsync(cancellationToken);
+
+        public async Task<IReadOnlyList<QualitySessionMeasurement>> ListStartedBetweenAsync(
+            DateTime from,
+            DateTime until,
+            CancellationToken cancellationToken)
+        {
+            await thresholds.SaveAsync(
+                QualityThreshold.Rehydrate(
+                    QualityThresholdKey.CarrierToNoiseFloor,
+                    Threshold.Of(15_000, 12_000, provisional: true, 0, Now),
+                    null,
+                    byHand: true,
+                    null),
+                cancellationToken);
+
+            return await inner.ListStartedBetweenAsync(from, until, cancellationToken);
+        }
+
+        public Task SaveAsync(QualitySessionMeasurement measurement, CancellationToken cancellationToken)
+            => inner.SaveAsync(measurement, cancellationToken);
     }
 }

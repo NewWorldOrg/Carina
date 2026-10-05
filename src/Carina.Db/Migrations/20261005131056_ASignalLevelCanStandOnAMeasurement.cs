@@ -27,6 +27,8 @@ public partial class ASignalLevelCanStandOnAMeasurement : Migration
             nullable: false,
             defaultValue: false);
 
+        migrationBuilder.Sql("UPDATE quality_threshold SET by_hand = true, provisional = true;");
+
         migrationBuilder.AddColumn<DateTime>(
             name: "measured_at",
             table: "quality_threshold",

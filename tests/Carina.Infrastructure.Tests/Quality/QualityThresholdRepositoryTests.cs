@@ -3,6 +3,7 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Carina.Infrastructure.Tests.Quality;
 
@@ -150,6 +151,27 @@ public sealed class QualityThresholdRepositoryTests(RepositoryDatabase database)
         Assert.Equal(
             QualityThresholdChangeCause.Measurement,
             Assert.Single(await new QualityThresholdChangeRepository(reading).ListAsync(Cancel)).Cause);
+    }
+
+    [Fact(DisplayName = "BR-QD-023: a writer of the levels holds its turn until its transaction ends, and the next one waits for it")]
+    public async Task AWriterOfTheLevelsHoldsItsTurnUntilItsTransactionEnds()
+    {
+        await using CarinaDbContext first = database.Open();
+        await using CarinaDbContext second = database.Open();
+        await using IDbContextTransaction holding =
+            await first.Database.BeginTransactionAsync(Cancel);
+
+        await new QualityThresholdRepository(first).TakeTurnAsync(Cancel);
+
+        await using IDbContextTransaction waiting =
+            await second.Database.BeginTransactionAsync(Cancel);
+        Task next = new QualityThresholdRepository(second).TakeTurnAsync(Cancel);
+
+        Assert.NotSame(next, await Task.WhenAny(next, Task.Delay(TimeSpan.FromMilliseconds(300), Cancel)));
+
+        await holding.CommitAsync(Cancel);
+        await next.WaitAsync(TimeSpan.FromSeconds(10), Cancel);
+        await waiting.CommitAsync(Cancel);
     }
 
     private static QualityThresholdChange Change(QualityThresholdKey key, double previous, double next, DateTime at)

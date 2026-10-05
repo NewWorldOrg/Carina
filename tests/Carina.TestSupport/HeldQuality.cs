@@ -86,6 +86,15 @@ public sealed class HeldQualityThresholds : IQualityThresholdRepository
 {
     public List<QualityThreshold> Thresholds { get; } = [];
 
+    public int TurnsTaken { get; private set; }
+
+    public Task TakeTurnAsync(CancellationToken cancellationToken)
+    {
+        TurnsTaken++;
+
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<QualityThreshold>> ListAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<QualityThreshold>>([.. Thresholds.OrderBy(threshold => threshold.Key)]);
 

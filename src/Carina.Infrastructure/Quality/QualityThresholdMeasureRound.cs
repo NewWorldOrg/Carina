@@ -24,9 +24,9 @@ public sealed class QualityThresholdMeasureRound(
     {
         DateTime now = clock.GetUtcNow().UtcDateTime;
         DateTime from = now - settings.KeepSamplesFor;
-        IReadOnlyList<QualityThresholdStanding> standings =
-            QualityThresholdStanding.Over(await thresholds.ListAsync(cancellationToken), now);
-        double droppedFrom = standings.First(standing => standing.Key == QualityThresholdKey.PacketsLostWarning).Setting.Current;
+        double droppedFrom = QualityThresholdStanding.Over(await thresholds.ListAsync(cancellationToken), now)
+            .First(standing => standing.Key == QualityThresholdKey.PacketsLostWarning)
+            .Setting.Current;
         IReadOnlyList<SessionSignal> read = SignalThresholdMeasure.Read(
             await sessions.ListStartedBetweenAsync(from, now, cancellationToken),
             await samples.ListTakenBetweenAsync(from, now, cancellationToken));
@@ -40,11 +40,8 @@ public sealed class QualityThresholdMeasureRound(
                 continue;
             }
 
-            QualityThresholdSettled settled = QualityThresholdSettling.Measured(
-                standings.First(standing => standing.Key == key),
-                measurement);
+            QualityThresholdSettled settled = await KeepAsync(key, measurement, cancellationToken);
 
-            await KeepAsync(settled, cancellationToken);
             measured++;
             moved += settled.Change is null ? 0 : 1;
         }
@@ -64,10 +61,20 @@ public sealed class QualityThresholdMeasureRound(
         return new QualityThresholdMeasurePass(measured, moved);
     }
 
-    private async Task KeepAsync(QualityThresholdSettled settled, CancellationToken cancellationToken)
+    private async Task<QualityThresholdSettled> KeepAsync(
+        QualityThresholdKey key,
+        QualityThresholdMeasurement measurement,
+        CancellationToken cancellationToken)
         => await writes.AllOrNothingAsync(
             async token =>
             {
+                await thresholds.TakeTurnAsync(token);
+
+                QualityThresholdSettled settled = QualityThresholdSettling.Measured(
+                    QualityThresholdStanding.Over(await thresholds.ListAsync(token), measurement.MeasuredAt)
+                        .First(standing => standing.Key == key),
+                    measurement);
+
                 await thresholds.SaveAsync(settled.Threshold, token);
 
                 if (settled.Change is { } change)

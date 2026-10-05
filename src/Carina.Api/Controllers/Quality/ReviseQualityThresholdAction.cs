@@ -41,9 +41,6 @@ public sealed class ReviseQualityThresholdAction(QualityThresholdService thresho
         };
     }
 
-    private OkObjectResult Answered(ServiceResult<QualityThresholdBook> released)
-        => Ok(BaseResponder<QualityThresholdResponder>.Success(QualityThresholdResponder.Of(released.Data!)));
-
     private IActionResult Answered(ServiceResult<QualityThresholdBook, QualityThresholdFailure> revised)
         => revised.IsSuccess
             ? Ok(BaseResponder<QualityThresholdResponder>.Success(QualityThresholdResponder.Of(revised.Data!)))

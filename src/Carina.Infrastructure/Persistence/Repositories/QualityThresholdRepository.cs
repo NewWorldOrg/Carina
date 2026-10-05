@@ -6,6 +6,13 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class QualityThresholdRepository(CarinaDbContext context) : IQualityThresholdRepository
 {
+    public const long WriterLock = 5_243_197_610_102;
+
+    private static readonly string TakeTurnSql = $"SELECT pg_advisory_xact_lock({WriterLock})";
+
+    public async Task TakeTurnAsync(CancellationToken cancellationToken)
+        => await context.Database.ExecuteSqlRawAsync(TakeTurnSql, cancellationToken);
+
     public async Task<IReadOnlyList<QualityThreshold>> ListAsync(CancellationToken cancellationToken)
         => await context.Set<QualityThreshold>()
             .AsNoTracking()

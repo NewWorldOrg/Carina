@@ -319,4 +319,36 @@ public sealed class QualityThresholdEndpointTests
             (await feature.PatchAsync("/api/quality/thresholds/lockRate", new { byHand = true })).Status);
         Assert.Empty(feature.Changes.Changes);
     }
+
+    [Fact(DisplayName = "BR-QD-023: letting go of a level that would fall under the warning level beside it is refused, and nothing moves")]
+    public async Task LettingGoOfALevelThatWouldFallUnderTheWarningLevelIsRefused()
+    {
+        await using var feature = new QualityFeature();
+
+        await feature.PatchAsync("/api/quality/thresholds/packetsLostUnwatchable", new { value = 0.5 });
+        await feature.PatchAsync("/api/quality/thresholds/packetsLostWarning", new { value = 0.3 });
+
+        (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(
+            "/api/quality/thresholds/packetsLostUnwatchable",
+            new { byHand = false });
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.False(body.GetProperty("status").GetBoolean());
+        Assert.Equal(
+            0.5,
+            feature.Thresholds.Thresholds.Single(threshold => threshold.Key == QualityThresholdKey.PacketsLostUnwatchable)
+                .Setting.Current);
+        Assert.Equal(2, feature.Changes.Changes.Count);
+    }
+
+    [Fact(DisplayName = "BR-QD-023: a level is moved only after every other writer of the levels has had its turn")]
+    public async Task ALevelIsMovedOnlyAfterEveryOtherWriterHasHadItsTurn()
+    {
+        await using var feature = new QualityFeature();
+
+        await feature.PatchAsync("/api/quality/thresholds/lockRate", new { value = 0.95 });
+        await feature.PatchAsync("/api/quality/thresholds/lockRate", new { byHand = false });
+
+        Assert.Equal(2, feature.Thresholds.TurnsTaken);
+    }
 }
