@@ -57,6 +57,19 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
                 asked.Contains(EF.Property<int>(match, ProgrammeConfiguration.BroadcastDayOfWeek)));
         }
 
+        foreach (string mark in Spelt(search.Marks))
+        {
+            found = found.Where(match => EF.Property<string[]>(match, ProgrammeConfiguration.Marks).Contains(mark));
+        }
+
+        if (search.ExcludedMarks.Count > 0)
+        {
+            string[] leftOut = Spelt(search.ExcludedMarks);
+
+            found = found.Where(match =>
+                !EF.Property<string[]>(match, ProgrammeConfiguration.Marks).Any(mark => leftOut.Contains(mark)));
+        }
+
         if (search.Channels.Count > 0)
         {
             found = OnAnyOf(found, search.Channels);
@@ -98,6 +111,9 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
 
         return new PaginatedList<ProgrammeMatch>(page, total, search.Page, search.PerPage);
     }
+
+    private static string[] Spelt(IReadOnlyList<ProgrammeMark> marks)
+        => [.. marks.Select(mark => mark.ToString())];
 
     private static IQueryable<ProgrammeMatch> InAGenreAsked(
         IQueryable<ProgrammeMatch> found,

@@ -24,16 +24,22 @@ public sealed record MigrationRuleConversion
 
     public const string Channel = "channel";
 
+    public const string Mark = "mark";
+
+    public const string ExcludeMark = "excludeMark";
+
     private MigrationRuleConversion(
         string name,
         RuleQuery? query,
         MigrationRefusal? refusal,
-        bool narrowedByDay)
+        bool narrowedByDay,
+        bool markWordsReplaced)
     {
         Name = name;
         Query = query;
         Refusal = refusal;
         NarrowedByDay = narrowedByDay;
+        MarkWordsReplaced = markWordsReplaced;
     }
 
     public string Name { get; }
@@ -46,12 +52,16 @@ public sealed record MigrationRuleConversion
 
     public bool NarrowedByDay { get; }
 
+    public bool MarkWordsReplaced { get; }
+
     public static MigrationRuleConversion Of(SourceRule rule, IReadOnlySet<ServiceKey> inReach)
     {
         ArgumentNullException.ThrowIfNull(rule);
         ArgumentNullException.ThrowIfNull(inReach);
 
         SourceRuleTerms terms = rule.Terms;
+        SourceRuleWords keyword = SourceRuleWords.Read(terms.Keyword);
+        SourceRuleWords excluded = SourceRuleWords.Read(terms.Excluded);
 
         if (terms.Services.Any(service => !inReach.Contains(service)))
         {
@@ -73,7 +83,7 @@ public sealed record MigrationRuleConversion
             return Cannot(rule, MigrationRefusal.NoSuchFeature);
         }
 
-        if (Wanted(terms) && terms.ExcludedFields != terms.Fields)
+        if (excluded.Words.Count > 0 && terms.ExcludedFields != terms.Fields)
         {
             return Cannot(rule, MigrationRefusal.Inexpressible);
         }
@@ -90,12 +100,17 @@ public sealed record MigrationRuleConversion
             return Cannot(rule, MigrationRefusal.Inexpressible);
         }
 
-        if (Asked(terms, system) is not { } query)
+        if (Asked(terms, system, keyword, excluded) is not { } query)
         {
             return Cannot(rule, MigrationRefusal.Inexpressible);
         }
 
-        return new MigrationRuleConversion(name, query, null, Narrows(terms.Days));
+        return new MigrationRuleConversion(
+            name,
+            query,
+            null,
+            Narrows(terms.Days),
+            keyword.Marks.Count + excluded.Marks.Count > 0);
     }
 
     public static int RulesNarrowedByDay(SourceLedger ledger, IReadOnlySet<ServiceKey> inReach)
@@ -110,6 +125,13 @@ public sealed record MigrationRuleConversion
         }
 
         return found;
+    }
+
+    public static int RulesWithMarkWordsReplaced(SourceLedger ledger, IReadOnlySet<ServiceKey> inReach)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+
+        return ledger.Rules.Count(rule => Of(rule, inReach).MarkWordsReplaced);
     }
 
     private static bool Narrows(int days) => SourceWeek.Named(days) is { Count: > 0 };
@@ -130,105 +152,122 @@ public sealed record MigrationRuleConversion
             _ => null,
         };
 
-    private static RuleQuery? Asked(SourceRuleTerms terms, TuneSystem system)
+    private static RuleQuery? Asked(
+        SourceRuleTerms terms,
+        TuneSystem system,
+        SourceRuleWords keyword,
+        SourceRuleWords excluded)
     {
-        List<string> said = [];
-        string keyword = terms.Keyword.Trim();
-        string excluded = terms.Excluded.Trim();
-
-        if (keyword.Length > 0)
-        {
-            said.Add($"{Keyword}={Uri.EscapeDataString(keyword)}");
-        }
-
-        if (excluded.Length > 0)
-        {
-            said.Add($"{Exclude}={Uri.EscapeDataString(excluded)}");
-        }
-
-        if (Looking(terms) is not { } fields)
+        if (Looking(terms, keyword, excluded) is not { } fields
+            || SourceWeek.Named(terms.Days) is not { } days
+            || terms.Services.Count > ProgrammeSearch.MostChannels)
         {
             return null;
         }
 
-        foreach (ProgrammeField field in fields)
+        ProgrammeConditions conditions = new()
         {
-            said.Add($"{Fields}={field}");
-        }
+            Exclude = excluded.Spelt,
+            Fields = fields,
+            Genres = [.. terms.Genres.Where(genre => genre.SubGenre is null).Select(genre => genre.Genre)],
+            SubGenres = [.. terms.Genres.SelectMany(Under)],
+            Days = days,
+            Marks = keyword.Marks,
+            ExcludedMarks = excluded.Marks,
+            System = system,
+            Channels = [.. terms.Services.Select(service => new ProgrammeService(service.Network.Value, service.Service.Value))],
+        };
 
-        foreach (SourceRuleGenre genre in terms.Genres)
-        {
-            if (genre.Genre > ProgrammeSearch.HighestGenre)
-            {
-                return null;
-            }
-
-            if (genre.SubGenre is not { } sort)
-            {
-                said.Add($"{Genre}={genre.Genre.ToString(CultureInfo.InvariantCulture)}");
-
-                continue;
-            }
-
-            if (sort > ProgrammeSearch.HighestSubGenre)
-            {
-                return null;
-            }
-
-            said.Add(
-                $"{SubGenre}={genre.Genre.ToString(CultureInfo.InvariantCulture)}"
-                + $"-{sort.ToString(CultureInfo.InvariantCulture)}");
-        }
-
-        if (SourceWeek.Named(terms.Days) is not { } days)
+        if (ProgrammeSearch.For(keyword.Spelt, null, null, conditions: conditions) is null)
         {
             return null;
         }
 
-        foreach (DayOfWeek day in days)
-        {
-            said.Add($"{Day}={day}");
-        }
-
-        if (system is not TuneSystem.Unspecified)
-        {
-            said.Add($"{Type}={system}");
-        }
-
-        if (terms.Services.Count > ProgrammeSearch.MostChannels)
-        {
-            return null;
-        }
-
-        foreach (ServiceKey service in terms.Services)
-        {
-            said.Add($"{Channel}={service.Network.Value.ToString(CultureInfo.InvariantCulture)}"
-                + $"-{service.Service.Value.ToString(CultureInfo.InvariantCulture)}");
-        }
-
-        if (said.Count is 0)
-        {
-            return null;
-        }
-
-        string joined = string.Join('&', said);
+        string joined = string.Join('&', Said(terms, conditions, keyword));
 
         return joined.Length > RuleQuery.MaxLength ? null : new RuleQuery(joined);
     }
 
-    private static IReadOnlyList<ProgrammeField>? Looking(SourceRuleTerms terms)
+    private static IEnumerable<ProgrammeGenre> Under(SourceRuleGenre genre)
     {
-        bool searching = terms.Keyword.Trim().Length > 0 || Wanted(terms);
+        if (genre.SubGenre is { } sort)
+        {
+            yield return new ProgrammeGenre(genre.Genre, sort);
+        }
+    }
+
+    private static IEnumerable<string> Said(SourceRuleTerms terms, ProgrammeConditions conditions, SourceRuleWords keyword)
+    {
+        if (keyword.Words.Count > 0)
+        {
+            yield return $"{Keyword}={Uri.EscapeDataString(keyword.Spelt)}";
+        }
+
+        if (!string.IsNullOrEmpty(conditions.Exclude))
+        {
+            yield return $"{Exclude}={Uri.EscapeDataString(conditions.Exclude)}";
+        }
+
+        foreach (ProgrammeField field in conditions.Fields ?? [])
+        {
+            yield return $"{Fields}={field}";
+        }
+
+        foreach (SourceRuleGenre genre in terms.Genres)
+        {
+            yield return Filed(genre);
+        }
+
+        foreach (DayOfWeek day in conditions.Days ?? [])
+        {
+            yield return $"{Day}={day}";
+        }
+
+        foreach (ProgrammeMark mark in conditions.Marks ?? [])
+        {
+            yield return $"{Mark}={mark}";
+        }
+
+        foreach (ProgrammeMark mark in conditions.ExcludedMarks ?? [])
+        {
+            yield return $"{ExcludeMark}={mark}";
+        }
+
+        if (conditions.System is { } system and not TuneSystem.Unspecified)
+        {
+            yield return $"{Type}={system}";
+        }
+
+        foreach (ProgrammeService service in conditions.Channels ?? [])
+        {
+            yield return string.Create(CultureInfo.InvariantCulture, $"{Channel}={service.NetworkId}-{service.ServiceId}");
+        }
+    }
+
+    private static string Filed(SourceRuleGenre genre)
+        => genre.SubGenre is { } sort
+            ? string.Create(CultureInfo.InvariantCulture, $"{SubGenre}={genre.Genre}-{sort}")
+            : string.Create(CultureInfo.InvariantCulture, $"{Genre}={genre.Genre}");
+
+    private static IReadOnlyList<ProgrammeField>? Looking(
+        SourceRuleTerms terms,
+        SourceRuleWords keyword,
+        SourceRuleWords excluded)
+    {
+        if (keyword.Words.Count is 0 && excluded.Words.Count is 0)
+        {
+            return [];
+        }
 
         return (terms.Fields.HasFlag(SourceRuleFields.Title), terms.Fields.HasFlag(SourceRuleFields.Summary)) switch
         {
             (true, true) => [],
             (true, false) => [ProgrammeField.Title],
             (false, true) => [ProgrammeField.Description],
-            _ => searching ? null : [],
+            _ => null,
         };
     }
 
     private static MigrationRuleConversion Cannot(SourceRule rule, MigrationRefusal refusal)
-        => new(MigrationNote.Of(rule.Name), null, MigrationRefusals.Named(refusal), false);
+        => new(MigrationNote.Of(rule.Name), null, MigrationRefusals.Named(refusal), false, false);
 }

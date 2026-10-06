@@ -33,6 +33,8 @@ public sealed class Programme
 
     public bool IsShadow { get; private set; }
 
+    public IReadOnlyList<ProgrammeMark> Marks => ProgrammeMarks.In(Name, Summary);
+
     public IReadOnlyList<ProgrammeGenre> Genres { get; private set; } = [];
 
     public IReadOnlyList<ProgrammeItem> Items { get; private set; } = [];

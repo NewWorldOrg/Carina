@@ -67,6 +67,7 @@ public static class ProgrammeSearchMatching
             && search.Words.All(word => Carries(match, word, search.Fields))
             && !search.ExcludedWords.Any(word => Leaves(match, word, search.Fields))
             && InAGenreAsked(match, search)
+            && CarriesTheMarksAsked(match, search)
             && (search.Days.Count == 0 || search.Days.Contains(BroadcastDay.Of(match.StartsAt)))
             && (search.Channels.Count == 0 || On(match, search.Channels))
             && (search.Services is not { } within || On(match, within))
@@ -79,6 +80,18 @@ public static class ProgrammeSearchMatching
         => (search.Genres.Count == 0 && search.SubGenres.Count == 0)
             || match.Genres.Any(genre => search.Genres.Contains(genre.Kind))
             || search.SubGenres.Any(named => match.Genres.Contains(named));
+
+    private static bool CarriesTheMarksAsked(ProgrammeMatch match, ProgrammeSearch search)
+    {
+        if (search.Marks.Count == 0 && search.ExcludedMarks.Count == 0)
+        {
+            return true;
+        }
+
+        IReadOnlyList<ProgrammeMark> carried = match.Marks;
+
+        return search.Marks.All(carried.Contains) && !carried.Any(search.ExcludedMarks.Contains);
+    }
 
     private static (int, int, int, DateTime) Key(ProgrammeMatch match)
         => (match.NetworkId.Value, match.ServiceId.Value, match.EventId.Value, match.StartsAt);

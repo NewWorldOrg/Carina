@@ -129,6 +129,7 @@ internal static class MigrationFixtures
             ],
             0,
             0,
+            0,
             0);
     }
 

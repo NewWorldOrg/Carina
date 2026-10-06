@@ -113,6 +113,17 @@ public sealed class CarrySaidTests
     }
 
     [Fact]
+    public void HowManyRulesCrossedOverWithTheirMarkWordsReplacedIsSaid()
+    {
+        string said = CarrySaid.Of(Report(MigrationPass.Rehearsal));
+
+        Assert.Contains(
+            "Carried and diminished, MarkWords: 1 rows.",
+            said,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WhatARunForRealWouldMeetIsSaidByTheRehearsalThatDidNotMeetIt()
     {
         string said = CarrySaid.Of(Report(
@@ -233,5 +244,6 @@ public sealed class CarrySaidTests
             [MigrationRuleProposal.Rehydrate(Run, 3, null, true)],
             1,
             2,
+            1,
             1);
 }

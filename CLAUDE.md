@@ -239,6 +239,13 @@ walks past it.
   through both sides of the folding, and the same programmes and searches go
   through both arms of the matching.
 
+  The marks a programme carries — the ARIB symbols for a new series, a repeat, a
+  last episode and the rest — are a second stored generated column, `marks`, read
+  from the same name and summary in both tables. `ProgrammeMarks` is that column
+  written out in C#, and the store builds the column from the same table of
+  symbols; a database test sends every mark's symbol, and symbols that are not
+  marks, through both.
+
   Folding in C# needs the runtime's Unicode tables (with `InvariantGlobalization`
   on, `String.Normalize` silently returns its input). The driver folds nothing,
   so it and its tests keep the invariant tables and a rule names the pair. Both

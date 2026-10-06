@@ -318,6 +318,22 @@ public sealed class MigrationCarriageTests
     }
 
     [Fact]
+    public async Task TheRulesThatCrossedOverWithTheirMarkWordsReplacedAreCountedAmongWhatArrivedChanged()
+    {
+        SourceLedger ledger = Ledger(rules:
+        [
+            Rule(3, keyword: "[新]"),
+            Rule(4, keyword: "\U0001F21Fhill"),
+            Rule(5, keyword: "hill"),
+        ]);
+
+        MigrationCarried carried = await CarriedAsync(MigrationPass.ForReal, ledger);
+
+        Assert.Equal(2, carried.Aftermath.RulesWithMarkWordsReplaced);
+        Assert.Contains(bench.Rules.Rules, rule => rule.Query.Value == "mark=New");
+    }
+
+    [Fact]
     public async Task ARehearsalMakesNoRuleAndStillSaysWhatItWouldHaveMade()
     {
         SourceLedger ledger = Ledger(rules: [Rule(3)]);

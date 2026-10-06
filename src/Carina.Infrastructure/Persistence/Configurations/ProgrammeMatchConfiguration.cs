@@ -17,6 +17,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
 
         builder.HasNoKey();
         builder.ToSqlQuery(BothLayers);
+        builder.Ignore(match => match.Marks);
 
         builder.Property(match => match.NetworkId)
             .HasConversion(id => id.Value, value => new NetworkId(value))
@@ -76,6 +77,9 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
 
         builder.Property<int>(ProgrammeConfiguration.BroadcastDayOfWeek)
             .HasColumnName(ProgrammeConfiguration.BroadcastDayOfWeek);
+
+        builder.Property<string[]>(ProgrammeConfiguration.Marks)
+            .HasColumnName(ProgrammeConfiguration.Marks);
     }
 
     public const string BothLayers = """
@@ -101,6 +105,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
             layered.searchable,
             layered.genre_kinds,
             layered.broadcast_dow,
+            layered.marks,
             layered.is_archived
         FROM (
             SELECT
@@ -125,6 +130,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 searchable,
                 genre_kinds,
                 broadcast_dow,
+                marks,
                 false AS is_archived
             FROM programme
             UNION ALL
@@ -150,6 +156,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 kept.searchable,
                 kept.genre_kinds,
                 kept.broadcast_dow,
+                kept.marks,
                 true
             FROM archived_programme AS kept
         ) AS layered

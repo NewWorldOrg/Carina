@@ -25,6 +25,8 @@ public sealed class ProgrammeMatch
 
     public bool IsShadow { get; private set; }
 
+    public IReadOnlyList<ProgrammeMark> Marks => ProgrammeMarks.In(Name, Summary);
+
     public bool HasSubtitles { get; private set; }
 
     public AudioMode Audio { get; private set; }

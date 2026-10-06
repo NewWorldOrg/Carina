@@ -100,6 +100,38 @@ public sealed class MigrationRuleQueryReadsBackTests
     }
 
     [Fact]
+    public void TheMarkWordsARuleWasConvertedFromReadBackAsTheMarksAndTheWordsBesideThem()
+    {
+        SourceRule rule = new(
+            3,
+            "brand new",
+            true,
+            new SourceRuleTerms(
+                "[新]hill",
+                "再",
+                SourceRuleFields.Title | SourceRuleFields.Summary,
+                SourceRuleFields.Title | SourceRuleFields.Summary,
+                [SourceBroadcastKind.Terrestrial],
+                [],
+                [new SourceRuleGenre(7, 0)],
+                SourceWeek.EveryDay),
+            SourceRuleReach.Plain);
+
+        MigrationRuleConversion carried = MigrationRuleConversion.Of(
+            rule,
+            RescannedService.InReach(Rescanned()));
+
+        ProgrammeSearch read = Assert.IsType<ProgrammeSearch>(
+            ProgrammeSearchQuery.Read(carried.Query?.Value));
+
+        Assert.Equal(["hill"], read.Words);
+        Assert.Empty(read.ExcludedWords);
+        Assert.Equal([ProgrammeMark.New], read.Marks);
+        Assert.Equal([ProgrammeMark.Rerun], read.ExcludedMarks);
+        Assert.Equal([new ProgrammeGenre(7, 0)], read.SubGenres);
+    }
+
+    [Fact]
     public void AKeywordCarryingTheCharactersOfAQueryReadsBackWhole()
     {
         MigrationRuleConversion carried = MigrationRuleConversion.Of(

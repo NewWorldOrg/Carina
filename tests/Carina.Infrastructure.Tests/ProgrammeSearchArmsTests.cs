@@ -99,6 +99,38 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             network,
             string.Empty,
             new ProgrammeConditions { Channels = [new ProgrammeService(network, 1)] }),
+        ["a mark asked for"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Marks = [ProgrammeMark.New] }),
+        ["two marks both of which are needed"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Marks = [ProgrammeMark.New, ProgrammeMark.Rerun] }),
+        ["a mark in the archive"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Marks = [ProgrammeMark.Final] }),
+        ["a mark left out"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { ExcludedMarks = [ProgrammeMark.Rerun] }),
+        ["a mark asked for and another left out"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Marks = [ProgrammeMark.New], ExcludedMarks = [ProgrammeMark.Rerun] }),
+        ["a mark beside a word"] = network => Ask(
+            network,
+            "アニメ",
+            new ProgrammeConditions { Marks = [ProgrammeMark.New] }),
+        ["a mark nothing carries"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Marks = [ProgrammeMark.Weather] }),
+        ["a mark left out while the words are looked for in the title alone"] = network => Ask(
+            network,
+            "アニメ",
+            new ProgrammeConditions { Fields = [ProgrammeField.Title], ExcludedMarks = [ProgrammeMark.Rerun] }),
         ["a per cent sign that came in as a word"] = network => Ask(network, "100%"),
         ["a full width per cent sign"] = network => Ask(network, "夏％"),
         ["an underscore"] = network => Ask(network, "夏＿"),
@@ -183,6 +215,37 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
         Assert.Equal(Spelt(stored), Spelt(read));
         Assert.Contains("ﾆｭｰｽ100017時", Spelt(read));
         Assert.Contains("ニュース10001７時", Spelt(read));
+    }
+
+    [Fact]
+    public async Task TheStoreTakesTheProgrammesByTheMarksTheyCarryRatherThanByTheLettersTheyFoldInto()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        await BroadcastAsync(context, network);
+        var repository = new ProgrammeSearchRepository(context);
+
+        PaginatedList<ProgrammeMatch> brandNew = await repository.SearchAsync(
+            Asked["a mark asked for"](network),
+            At,
+            Cancel);
+        PaginatedList<ProgrammeMatch> notAgain = await repository.SearchAsync(
+            Asked["a mark asked for and another left out"](network),
+            At,
+            Cancel);
+        PaginatedList<ProgrammeMatch> both = await repository.SearchAsync(
+            Asked["two marks both of which are needed"](network),
+            At,
+            Cancel);
+        PaginatedList<ProgrammeMatch> archived = await repository.SearchAsync(
+            Asked["a mark in the archive"](network),
+            At,
+            Cancel);
+
+        Assert.Equal(["\U0001F21Fアニメ", "\U0001F21F\U0001F21Eアニメ"], Spelt(brandNew).Order(StringComparer.Ordinal));
+        Assert.Equal(["\U0001F21Fアニメ"], Spelt(notAgain));
+        Assert.Equal(["\U0001F21F\U0001F21Eアニメ"], Spelt(both));
+        Assert.Equal(["\U0001F221ドラマ"], Spelt(archived));
     }
 
     [Fact]
@@ -273,12 +336,17 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
                 $"n{network}",
                 At.AddHours(4).AddMinutes(30),
                 At.AddHours(5)),
+            Held(network, Listed, 22, "\U0001F21Fアニメ", $"n{network}", []),
+            Held(network, Listed, 23, "\U0001F21F\U0001F21Eアニメ", $"n{network}", []),
+            Held(network, Listed, 24, "アニメ", $"\U0001F21E n{network}", []),
+            Held(network, Listed, 25, "新番組 [新]", $"再会 n{network}", []),
         ];
         ArchivedProgramme[] kept =
         [
             Kept(network, Listed, 20, "ニュース100017時 再放送", $"n{network}", At.AddDays(-3)),
             Kept(network, Listed, 21, "夏の絶景 再放送", $"n{network}", At.AddDays(-2)),
             Kept(network, Listed, 1, "この名前は表に出ない", $"n{network}", At),
+            Kept(network, Listed, 26, "\U0001F221ドラマ", $"n{network}", At.AddDays(-1)),
         ];
         var programmes = new ProgrammeRepository(context);
 
