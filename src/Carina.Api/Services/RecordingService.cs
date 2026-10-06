@@ -44,7 +44,11 @@ public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake
 
 public sealed record RecordingSeen(Recording Recording, EncodeStanding Encode, QualityBands Quality);
 
-public sealed record RecordingPage(PaginatedList<Recording> Found, EncodeStandingBoard Encoding, QualityBands Quality);
+public sealed record RecordingPage(
+    PaginatedList<Recording> Found,
+    EncodeStandingBoard Encoding,
+    QualityBands Quality,
+    RecordingCursor? Next = null);
 
 public sealed record RecordingStopAsked(RecordingSeen Seen, RecordingStopReason Reason, DateTime AskedAt);
 
@@ -68,12 +72,12 @@ public sealed class RecordingService(
         CancellationToken cancellationToken)
     {
         QualityBands bands = await BandsAsync(cancellationToken);
-        PaginatedList<Recording> found = await recordings.ListAsync(query, bands, cancellationToken);
+        RecordingListing listed = await recordings.ListAsync(query, bands, cancellationToken);
         EncodeStandingBoard standings = await encoding.ReadAsync(
-            [.. found.Items.Select(recording => recording.Id)],
+            [.. listed.Found.Items.Select(recording => recording.Id)],
             cancellationToken);
 
-        return ServiceResult<RecordingPage>.Success(new RecordingPage(found, standings, bands));
+        return ServiceResult<RecordingPage>.Success(new RecordingPage(listed.Found, standings, bands, listed.Next));
     }
 
     public async Task<ServiceResult<RecordingSeen, RecordingFailure>> DetailAsync(

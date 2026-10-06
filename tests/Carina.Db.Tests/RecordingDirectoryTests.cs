@@ -6,6 +6,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -197,6 +198,112 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         PaginatedList<Recording> found = await ListAsync(Query(network, sort: RecordingSort.ProgrammeStartsAt));
 
         Assert.Equal([early.Id, late.Id], found.Items.Select(recording => recording.Id).ToArray());
+    }
+
+    [Fact(DisplayName = "D-11: walking by the next position reaches every recording once, newest first and the same start by id")]
+    public async Task WalkingByTheNextPositionReachesEveryRecordingOnceNewestFirst()
+    {
+        int network = await StockedAsync(0);
+        List<Recording> stocked = [];
+
+        foreach (int eventId in Enumerable.Range(1, 4))
+        {
+            stocked.Add(await AddAsync(network, eventId, startedAt: Noon));
+        }
+
+        stocked.Add(await AddAsync(network, 5, startedAt: Noon.AddMinutes(-10)));
+        stocked.Add(await AddAsync(network, 6, startedAt: Noon.AddMinutes(10)));
+
+        IReadOnlyList<RecordingId> walked = await WalkAsync(Query(network, descending: true, perPage: 2));
+
+        Assert.Equal(
+            stocked
+                .OrderByDescending(recording => recording.StartedAtActual)
+                .ThenByDescending(recording => recording.Id.Value, ByTheOrderTheDatabaseReadsThem.Comparer)
+                .Select(recording => recording.Id),
+            walked);
+    }
+
+    [Theory(DisplayName = "D-11: walking oldest first, or by when the programme starts, reaches every recording once too")]
+    [InlineData(RecordingSort.StartedAt, false)]
+    [InlineData(RecordingSort.ProgrammeStartsAt, false)]
+    [InlineData(RecordingSort.ProgrammeStartsAt, true)]
+    public async Task WalkingInTheOtherOrdersReachesEveryRecordingOnceToo(RecordingSort sort, bool descending)
+    {
+        int network = await StockedAsync(0);
+        List<Recording> stocked = [];
+
+        foreach (int eventId in Enumerable.Range(1, 5))
+        {
+            stocked.Add(await AddAsync(
+                network,
+                eventId,
+                startedAt: Noon.AddMinutes(eventId % 2),
+                programmeStartsAt: Noon.AddHours(eventId % 3)));
+        }
+
+        IReadOnlyList<RecordingId> walked = await WalkAsync(Query(network, sort: sort, descending: descending, perPage: 2));
+
+        Assert.Equal(5, walked.Count);
+        Assert.Equal(stocked.Select(recording => recording.Id).Order(ById).ToArray(), walked.Order(ById).ToArray());
+    }
+
+    [Fact(DisplayName = "D-11: a recording thrown away while the list is walked neither skips nor repeats another")]
+    public async Task ARecordingThrownAwayWhileTheListIsWalkedNeitherSkipsNorRepeatsAnother()
+    {
+        int network = await StockedAsync(0);
+
+        foreach (int eventId in Enumerable.Range(1, 6))
+        {
+            await AddAsync(network, eventId, outcome: RecordingOutcome.Complete);
+        }
+
+        RecordingListing first = await ListingAsync(Query(network, descending: true, perPage: 2));
+        RecordingId thrownAway = first.Found.Items[0].Id;
+
+        await using (CarinaDbContext context = Context())
+        {
+            Assert.Equal(RecordingDiscard.Discarded, await new RecordingDirectory(context).DiscardAsync(thrownAway, CancellationToken.None));
+        }
+
+        IReadOnlyList<RecordingId> rest = await WalkAsync(Query(
+            network,
+            descending: true,
+            perPage: 2,
+            after: first.Next));
+
+        Assert.Equal(4, rest.Count);
+        Assert.DoesNotContain(first.Found.Items[1].Id, rest);
+        Assert.Equal(6, first.Found.Items.Count + rest.Count);
+    }
+
+    [Fact(DisplayName = "D-11: a page reached by a position is numbered as the page its first recording falls on, and the last names no next")]
+    public async Task APageReachedByAPositionIsNumberedAsThePageItsFirstRecordingFallsOn()
+    {
+        int network = await StockedAsync(5);
+
+        RecordingListing first = await ListingAsync(Query(network, descending: true, perPage: 2));
+        RecordingListing second = await ListingAsync(Query(network, descending: true, perPage: 2, after: first.Next));
+        RecordingListing third = await ListingAsync(Query(network, descending: true, perPage: 2, after: second.Next));
+
+        Assert.Equal([1, 2, 3], new[] { first, second, third }.Select(listing => listing.Found.CurrentPage));
+        Assert.All(new[] { first, second, third }, listing => Assert.Equal(5, listing.Found.Total));
+        Assert.All(new[] { first, second, third }, listing => Assert.Equal(3, listing.Found.LastPage));
+        Assert.Single(third.Found.Items);
+        Assert.Null(third.Next);
+    }
+
+    [Fact(DisplayName = "D-11: a page asked for by its number names the position after its last recording too")]
+    public async Task APageAskedForByItsNumberNamesThePositionAfterItsLastRecordingToo()
+    {
+        int network = await StockedAsync(5);
+
+        RecordingListing numbered = await ListingAsync(Query(network, descending: true, perPage: 2, page: 2));
+        RecordingListing walked = await ListingAsync(Query(network, descending: true, perPage: 2, after: numbered.Next));
+
+        Assert.NotNull(numbered.Next);
+        Assert.Equal(3, walked.Found.CurrentPage);
+        Assert.Single(walked.Found.Items);
     }
 
     [Fact]
@@ -539,7 +646,8 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         RecordingSort sort = RecordingSort.StartedAt,
         bool descending = false,
         int? page = null,
-        int? perPage = null)
+        int? perPage = null,
+        RecordingCursor? after = null)
     {
         RecordingQuery? query = RecordingQuery.For(
             from,
@@ -556,7 +664,8 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
                 Drops = drops,
                 Channels = channels ?? [.. Enumerable.Range(1024, 8).Select(service =>
                     new ProgrammeService(network, service))],
-            });
+            },
+            after);
 
         return query ?? throw new InvalidOperationException("The query this test asks for is one the guard takes.");
     }
@@ -566,11 +675,44 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
     private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
 
     private async Task<PaginatedList<Recording>> ListAsync(RecordingQuery query)
+        => (await ListingAsync(query)).Found;
+
+    private async Task<RecordingListing> ListingAsync(RecordingQuery query)
     {
         await using CarinaDbContext context = Context();
 
         return await new RecordingDirectory(context).ListAsync(query, AsShipped, CancellationToken.None);
     }
+
+    private async Task<IReadOnlyList<RecordingId>> WalkAsync(RecordingQuery query)
+    {
+        List<RecordingId> walked = [];
+        RecordingQuery asked = query;
+
+        while (true)
+        {
+            RecordingListing listing = await ListingAsync(asked);
+            walked.AddRange(listing.Found.Items.Select(recording => recording.Id));
+
+            if (listing.Next is not { } next)
+            {
+                return walked;
+            }
+
+            asked = RecordingQuery.For(
+                query.From,
+                query.To,
+                query.Sort,
+                query.Descending,
+                null,
+                query.PerPage,
+                new RecordingConditions { Channels = query.Channels },
+                next) ?? throw new InvalidOperationException("The position a page named is one the guard takes.");
+        }
+    }
+
+    private static readonly IComparer<RecordingId> ById =
+        Comparer<RecordingId>.Create((left, right) => ByTheOrderTheDatabaseReadsThem.Comparer.Compare(left.Value, right.Value));
 
     private async Task FloodAsync(int network, int rows)
     {

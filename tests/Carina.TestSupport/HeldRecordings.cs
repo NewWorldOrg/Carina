@@ -14,7 +14,7 @@ public sealed class HeldRecordings : IRecordingDirectory
 
     public Action? WhenDiscarding { get; set; }
 
-    public Task<PaginatedList<Recording>> ListAsync(
+    public Task<RecordingListing> ListAsync(
         RecordingQuery query,
         QualityBands bands,
         CancellationToken cancellationToken)
@@ -65,25 +65,42 @@ public sealed class HeldRecordings : IRecordingDirectory
         }
 
         Recording[] matched = [.. found];
-        IOrderedEnumerable<Recording> ordered = (query.Sort, query.Descending) switch
-        {
-            (RecordingSort.ProgrammeStartsAt, false) => matched.OrderBy(recording => recording.ProgrammeStartsAt),
-            (RecordingSort.ProgrammeStartsAt, true) => matched.OrderByDescending(recording => recording.ProgrammeStartsAt),
-            (_, true) => matched.OrderByDescending(recording => recording.StartedAtActual),
-            _ => matched.OrderBy(recording => recording.StartedAtActual),
-        };
+        IEnumerable<Recording> onwards = query.After is { } after
+            ? matched.Where(recording => Compared(recording, after) > 0)
+            : matched;
+        Recording[] remaining = [.. onwards];
+        int ahead = query.After is null ? (query.Page - 1) * query.PerPage : matched.Length - remaining.Length;
+        IEnumerable<Recording> ordered = remaining.Order(Comparer<Recording>.Create((left, right) => InOrder(left, right, query)));
 
-        return Task.FromResult(new PaginatedList<Recording>(
-            [
-                .. ordered
-                    .ThenBy(recording => recording.Id.Value, ByTheOrderTheDatabaseReadsThem.Comparer)
-                    .Skip((query.Page - 1) * query.PerPage)
-                    .Take(query.PerPage)
-                    .Select(Apart),
-            ],
+        return Task.FromResult(RecordingListing.Of(
+            [.. (query.After is null ? ordered.Skip(ahead) : ordered).Take(query.PerPage + 1).Select(Apart)],
             matched.Length,
-            query.Page,
-            query.PerPage));
+            ahead,
+            query));
+    }
+
+    private static int InOrder(Recording left, Recording right, RecordingQuery query)
+    {
+        int compared = RecordingCursor.KeyOf(left, query.Sort).CompareTo(RecordingCursor.KeyOf(right, query.Sort));
+
+        if (compared is 0)
+        {
+            compared = ByTheOrderTheDatabaseReadsThem.Comparer.Compare(left.Id.Value, right.Id.Value);
+        }
+
+        return query.Descending ? -compared : compared;
+    }
+
+    private static int Compared(Recording recording, RecordingCursor after)
+    {
+        int compared = RecordingCursor.KeyOf(recording, after.Sort).CompareTo(after.Key);
+
+        if (compared is 0)
+        {
+            compared = ByTheOrderTheDatabaseReadsThem.Comparer.Compare(recording.Id.Value, after.Id.Value);
+        }
+
+        return after.Descending ? -compared : compared;
     }
 
     public Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)

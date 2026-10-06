@@ -84,7 +84,7 @@ public sealed class RecordingSearchEndpointTests
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(["data", "message", "status"], Named(body));
-        Assert.Equal(["currentPage", "items", "lastPage", "perPage", "total"], Named(data));
+        Assert.Equal(["currentPage", "items", "lastPage", "next", "perPage", "total"], Named(data));
     }
 
     [Theory]

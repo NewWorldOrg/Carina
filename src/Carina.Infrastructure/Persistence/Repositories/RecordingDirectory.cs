@@ -15,7 +15,7 @@ public sealed class RecordingDirectory(CarinaDbContext context) : IRecordingDire
 {
     private const int MostAttemptsAtANote = 3;
 
-    public async Task<PaginatedList<Recording>> ListAsync(
+    public async Task<RecordingListing> ListAsync(
         RecordingQuery query,
         QualityBands bands,
         CancellationToken cancellationToken)
@@ -66,21 +66,17 @@ public sealed class RecordingDirectory(CarinaDbContext context) : IRecordingDire
         }
 
         int total = await found.CountAsync(cancellationToken);
-        IOrderedQueryable<Recording> ordered = (query.Sort, query.Descending) switch
-        {
-            (RecordingSort.ProgrammeStartsAt, false) => found.OrderBy(recording => recording.ProgrammeStartsAt),
-            (RecordingSort.ProgrammeStartsAt, true) => found.OrderByDescending(recording => recording.ProgrammeStartsAt),
-            (_, true) => found.OrderByDescending(recording => recording.StartedAtActual),
-            _ => found.OrderBy(recording => recording.StartedAtActual),
-        };
+        IQueryable<Recording> onwards = query.After is { } after ? Beyond(found, after) : found;
+        int ahead = query.After is null
+            ? (query.Page - 1) * query.PerPage
+            : total - await onwards.CountAsync(cancellationToken);
+        IQueryable<Recording> ordered = Ordered(onwards, query.Sort, query.Descending);
 
-        List<Recording> page = await ordered
-            .ThenBy(recording => recording.Id)
-            .Skip((query.Page - 1) * query.PerPage)
-            .Take(query.PerPage)
+        List<Recording> read = await (query.After is null ? ordered.Skip(ahead) : ordered)
+            .Take(query.PerPage + 1)
             .ToListAsync(cancellationToken);
 
-        return new PaginatedList<Recording>(page, total, query.Page, query.PerPage);
+        return RecordingListing.Of(read, total, ahead, query);
     }
 
     public async Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
@@ -177,6 +173,41 @@ public sealed class RecordingDirectory(CarinaDbContext context) : IRecordingDire
         return await context.Set<Recording>().AnyAsync(recording => recording.Id == id, cancellationToken)
             ? RecordingDiscard.StillRecording
             : RecordingDiscard.NoSuchRecording;
+    }
+
+    private static IOrderedQueryable<Recording> Ordered(IQueryable<Recording> found, RecordingSort sort, bool descending)
+        => (sort, descending) switch
+        {
+            (RecordingSort.ProgrammeStartsAt, false) => found
+                .OrderBy(recording => recording.ProgrammeStartsAt)
+                .ThenBy(recording => recording.Id),
+            (RecordingSort.ProgrammeStartsAt, true) => found
+                .OrderByDescending(recording => recording.ProgrammeStartsAt)
+                .ThenByDescending(recording => recording.Id),
+            (_, true) => found
+                .OrderByDescending(recording => recording.StartedAtActual)
+                .ThenByDescending(recording => recording.Id),
+            _ => found
+                .OrderBy(recording => recording.StartedAtActual)
+                .ThenBy(recording => recording.Id),
+        };
+
+    private static IQueryable<Recording> Beyond(IQueryable<Recording> found, RecordingCursor after)
+    {
+        DateTime key = after.Key;
+        RecordingId id = after.Id;
+
+        return (after.Sort, after.Descending) switch
+        {
+            (RecordingSort.ProgrammeStartsAt, false) => found.Where(recording =>
+                EF.Functions.GreaterThan(ValueTuple.Create(recording.ProgrammeStartsAt, recording.Id), ValueTuple.Create(key, id))),
+            (RecordingSort.ProgrammeStartsAt, true) => found.Where(recording =>
+                EF.Functions.LessThan(ValueTuple.Create(recording.ProgrammeStartsAt, recording.Id), ValueTuple.Create(key, id))),
+            (_, true) => found.Where(recording =>
+                EF.Functions.LessThan(ValueTuple.Create(recording.StartedAtActual, recording.Id), ValueTuple.Create(key, id))),
+            _ => found.Where(recording =>
+                EF.Functions.GreaterThan(ValueTuple.Create(recording.StartedAtActual, recording.Id), ValueTuple.Create(key, id))),
+        };
     }
 
     private static IQueryable<Recording> EndedAnyOf(

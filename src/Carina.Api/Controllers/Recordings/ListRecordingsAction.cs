@@ -30,9 +30,12 @@ public sealed class ListRecordingsAction(RecordingService recordings) : Controll
         [FromQuery] bool descending,
         [FromQuery] int? page,
         [FromQuery] int? perPage,
+        [FromQuery] string? after,
         CancellationToken cancellationToken)
     {
-        RecordingQuery? asked = ProgrammeServiceText.Every(channel) is { } channels
+        RecordingCursor? carryingOn = RecordingCursor.Read(after);
+
+        RecordingQuery? asked = ProgrammeServiceText.Every(channel) is { } channels && (after is null || carryingOn is not null)
             ? RecordingQuery.For(
                 from?.UtcDateTime,
                 to?.UtcDateTime,
@@ -47,7 +50,8 @@ public sealed class ListRecordingsAction(RecordingService recordings) : Controll
                     Outcomes = outcome,
                     Drops = drops,
                     Channels = channels,
-                })
+                },
+                carryingOn)
             : null;
 
         if (asked is null)
@@ -61,7 +65,9 @@ public sealed class ListRecordingsAction(RecordingService recordings) : Controll
     }
 
     private static string Refusal
-        => "A page is asked for by a page number of at least 1, and a page size above "
+        => "A page is asked for by a page number of at least 1, or by the next a page before it answered with, "
+            + "which carries on in the order and direction that page was asked for and is never sent beside a page "
+            + "number. A page size above "
             + $"{RecordingQuery.MostPerPage} is cut down to it and answered as the size that was used. "
             + $"A span runs forwards and reaches back at most {RecordingQuery.LongestSpan.TotalDays:0} days, "
             + $"at most {RecordingQuery.MostChannels} channels are named as network-service, "

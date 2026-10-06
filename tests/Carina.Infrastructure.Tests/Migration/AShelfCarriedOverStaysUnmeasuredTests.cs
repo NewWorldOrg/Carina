@@ -154,14 +154,14 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
     {
         await using CarinaDbContext reading = database.Open();
 
-        return await new RecordingDirectory(reading).ListAsync(
+        return (await new RecordingDirectory(reading).ListAsync(
             RecordingQuery.For(
                 null,
                 null,
                 perPage: RecordingQuery.MostPerPage,
                 conditions: new RecordingConditions { Drops = drops })!,
             ShippedBands(),
-            Cancel);
+            Cancel)).Found;
     }
 
     private async Task<IReadOnlyList<QualityLedgerRow>> ReadLedgerAsync()
