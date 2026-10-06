@@ -21,6 +21,8 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Configuration/DriverConfigurationReader.cs File.Delete",
         "/Carina.Driver/Descrambling/AribB25Library.cs NativeLibrary",
         "/Carina.Driver/Descrambling/PcscLibrary.cs NativeLibrary",
+        "/Carina.Driver/Descrambling/SectionCollector.cs .CopyTo(",
+        "/Carina.Driver/Descrambling/TransportStreamDescrambler.cs .CopyTo(",
         "/Carina.Driver/Ipc/DriverSocket.cs File.Delete",
         "/Carina.Driver/Ipc/DriverSocket.cs File.SetUnixFileMode",
         "/Carina.Driver/Ipc/StorageViews.cs File.Delete",
