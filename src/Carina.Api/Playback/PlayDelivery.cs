@@ -154,9 +154,7 @@ public static class PlayDelivery
 
                 await TellAsync(
                     context,
-                    narrowed.Plan,
-                    narrowed.Handover,
-                    narrowed.ExternalPlayerSources,
+                    narrowed,
                     leftOffAt,
                     TheMainSoundAlone,
                     await MarkedAsync(narrowed, chapters, context.RequestAborted),
@@ -190,9 +188,7 @@ public static class PlayDelivery
 
             await TellAsync(
                 context,
-                plan,
-                handover,
-                offered.Data!.ExternalPlayerSources,
+                offered.Data!,
                 leftOffAt,
                 offering.Tracks,
                 await MarkedAsync(offered.Data!, chapters, context.RequestAborted),
@@ -301,9 +297,7 @@ public static class PlayDelivery
 
     private static async Task TellAsync(
         HttpContext context,
-        PlaybackPlan plan,
-        PlaybackFile handover,
-        IReadOnlyList<PlaybackSource> externalPlayerSources,
+        PlaybackOffer offer,
         TimeSpan? leftOffAt,
         IReadOnlyList<SoundTrack> sounds,
         IReadOnlyList<PlaybackChapterResponder> chapters,
@@ -314,14 +308,15 @@ public static class PlayDelivery
         await context.Response.WriteAsJsonAsync(
             BaseResponder<PlaybackPlanResponder>.Success(
                 PlaybackPlanResponder.Of(
-                    plan,
-                    handover,
-                    externalPlayerSources,
-                    MediaTypeOf(plan, handover),
+                    offer.Plan,
+                    offer.Handover,
+                    offer.ExternalPlayerSources,
+                    MediaTypeOf(offer.Plan, offer.Handover),
                     leftOffAt,
                     sounds,
                     chapters,
-                    captions)),
+                    captions,
+                    offer.ArtefactCodec)),
             context.RequestAborted);
     }
 

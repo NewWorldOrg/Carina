@@ -33,7 +33,8 @@ public sealed record PlaybackPlanResponder(
     double? ResumeAtSec,
     IReadOnlyList<SoundTrack> Sounds,
     IReadOnlyList<PlaybackChapterResponder> Chapters,
-    CaptionStanding Captions)
+    CaptionStanding Captions,
+    EncodeCodec? ArtefactCodec)
 {
     public static PlaybackPlanResponder Of(
         PlaybackPlan plan,
@@ -43,7 +44,8 @@ public sealed record PlaybackPlanResponder(
         TimeSpan? resumeAt,
         IReadOnlyList<SoundTrack> sounds,
         IReadOnlyList<PlaybackChapterResponder> chapters,
-        CaptionStanding captions)
+        CaptionStanding captions,
+        EncodeCodec? artefactCodec)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(handover);
@@ -66,6 +68,7 @@ public sealed record PlaybackPlanResponder(
             resumeAt?.TotalSeconds,
             sounds,
             chapters,
-            captions);
+            captions,
+            artefactCodec);
     }
 }
