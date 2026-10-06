@@ -38,16 +38,16 @@ public sealed class TestingWebApplicationFactoryTests
     [Fact(DisplayName = "an application a reshaped host already let go of is not stopped again with the root")]
     public async Task AnApplicationAReshapedHostAlreadyLetGoOfIsNotStoppedAgain()
     {
-        StopCount stops = new();
         TestingWebApplicationFactory root = new();
-        WebApplicationFactory<Program> counted = Reshaped(root, new CountsStops(stops));
-        _ = counted.Services;
+        WebApplicationFactory<Program> reshaped = Reshaped(root, new CountsStops(new StopCount()));
+        _ = reshaped.Services;
 
-        await counted.DisposeAsync();
-        int stoppedWithItsOwnHost = stops.Count;
+        await reshaped.DisposeAsync();
+        int stoppedWithItsOwnHost = root.StopsAsked;
         await root.DisposeAsync();
 
-        Assert.Equal(stoppedWithItsOwnHost, stops.Count);
+        Assert.Equal(1, stoppedWithItsOwnHost);
+        Assert.Equal(stoppedWithItsOwnHost, root.StopsAsked);
     }
 
     private static WebApplicationFactory<Program> Reshaped(WebApplicationFactory<Program> from, IHostedService watching)

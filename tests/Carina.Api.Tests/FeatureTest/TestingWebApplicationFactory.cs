@@ -19,6 +19,8 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
 
     private readonly List<(IHost Host, CancellationToken Stopped)> raised = [];
 
+    private int stopsAsked;
+
     public const string ConnectionStringKey = "ConnectionStrings:Carina";
 
     public const string DatabaseNoResolverIsAskedAbout =
@@ -35,6 +37,12 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
         TrustedProxies.NetworksKey,
         AnonymousNetworks.Key,
     ];
+
+    /// <summary>
+    /// How many times this host, or one reshaped from it, asked an application raised from it to stop. The
+    /// stop an application then makes of itself, once its entry point sees it is stopping, is not counted.
+    /// </summary>
+    public int StopsAsked => Volatile.Read(ref stopsAsked);
 
     public string DriverSocketPath { get; init; } =
         Path.Combine(Path.GetTempPath(), "carina-feature-tests", "no-driver.sock");
@@ -58,7 +66,7 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override IHost CreateHost(IHostBuilder builder)
     {
-        IHost host = base.CreateHost(builder);
+        IHost host = new Raised(base.CreateHost(builder), () => Interlocked.Increment(ref stopsAsked));
 
         CancellationToken stopped = host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopped;
 
@@ -134,6 +142,34 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
         }
 
         return failures;
+    }
+
+    private sealed class Raised(IHost host, Action stopAsked) : IHost, IAsyncDisposable
+    {
+        public IServiceProvider Services => host.Services;
+
+        public Task StartAsync(CancellationToken cancellationToken = default) => host.StartAsync(cancellationToken);
+
+        public Task StopAsync(CancellationToken cancellationToken = default)
+        {
+            stopAsked();
+
+            return host.StopAsync(cancellationToken);
+        }
+
+        public void Dispose() => host.Dispose();
+
+        public async ValueTask DisposeAsync()
+        {
+            if (host is IAsyncDisposable disposable)
+            {
+                await disposable.DisposeAsync();
+
+                return;
+            }
+
+            host.Dispose();
+        }
     }
 
     protected override void ConfigureClient(HttpClient client)
