@@ -125,6 +125,21 @@ public sealed class TransportStreamDescramblerTests
     }
 
     [Fact]
+    public void AProgrammeListedInTwoPartsOfThePatIsTakenFromTheLaterPart()
+    {
+        SyntheticScrambledStream stream = new SyntheticScrambledStream()
+            .PatPart(0, 1, (1, OtherPmtPid))
+            .PatPart(1, 1, (1, PmtPid))
+            .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null)])
+            .Ecm(EcmPid, FirstEcm)
+            .Scrambled(VideoPid, FirstEcm, odd: true, seed: 25);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection _);
+
+        Assert.Equal(stream.Output, descrambler.Descramble(stream.Input));
+    }
+
+    [Fact]
     public void APidNoPmtNamesIsUnscrambledWithTheOnlyEcmTheStreamCarries()
     {
         SyntheticScrambledStream stream = Settled().Scrambled(0x0555, FirstEcm, odd: true, seed: 20);

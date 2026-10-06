@@ -20,11 +20,14 @@ internal sealed class SyntheticScrambledStream
 
     public int PacketCount => input.Count;
 
-    public SyntheticScrambledStream Pat(params (int Programme, int PmtPid)[] programmes)
+    public SyntheticScrambledStream Pat(params (int Programme, int PmtPid)[] programmes) =>
+        PatPart(0, 0, programmes);
+
+    public SyntheticScrambledStream PatPart(int sectionNumber, int lastSectionNumber, params (int Programme, int PmtPid)[] programmes)
     {
         byte[] body = [.. programmes.SelectMany(entry => Be16(entry.Programme).Concat(Be16(0xE000 | entry.PmtPid)))];
 
-        return Section(0x0000, LongSection(ProgramMap.PatTableId, 0x7FE0, body));
+        return Section(0x0000, LongSection(ProgramMap.PatTableId, 0x7FE0, body, sectionNumber, lastSectionNumber));
     }
 
     public SyntheticScrambledStream Pmt(
@@ -179,7 +182,7 @@ internal sealed class SyntheticScrambledStream
     private static byte[] CaDescriptor(int caSystemId, int ecmPid) =>
         [0x09, 0x04, .. Be16(caSystemId), .. Be16(0xE000 | ecmPid)];
 
-    private static byte[] LongSection(byte tableId, int extension, byte[] body)
+    private static byte[] LongSection(byte tableId, int extension, byte[] body, int sectionNumber = 0, int lastSectionNumber = 0)
     {
         int sectionLength = 5 + body.Length + 4;
         byte[] withoutCrc =
@@ -189,8 +192,8 @@ internal sealed class SyntheticScrambledStream
             (byte)(sectionLength & 0xFF),
             .. Be16(extension),
             0xC1,
-            0x00,
-            0x00,
+            (byte)sectionNumber,
+            (byte)lastSectionNumber,
             .. body,
         ];
         byte[] crc = new byte[4];

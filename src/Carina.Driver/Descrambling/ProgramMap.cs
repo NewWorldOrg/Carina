@@ -82,7 +82,13 @@ public sealed class ProgramMap(int caSystemId)
         }
 
         patSections[section[6]] = listed;
-        pmtPids = patSections.Values.SelectMany(part => part).ToDictionary();
+        Dictionary<int, int> merged = [];
+        foreach ((int programme, int pid) in patSections.OrderBy(part => part.Key).SelectMany(part => part.Value))
+        {
+            merged[programme] = pid;
+        }
+
+        pmtPids = merged;
 
         foreach (int gone in programs.Keys.Where(programme => !pmtPids.ContainsKey(programme)).ToList())
         {
