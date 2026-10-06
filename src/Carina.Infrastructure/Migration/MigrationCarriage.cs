@@ -138,7 +138,8 @@ public sealed class MigrationCarriage(
                 rulesCarried.Length,
                 MigrationTextLoss.RowsPastRestoring(
                     recordingsCarried.Concat(rulesCarried.Select(rule => rule.Name))),
-                MigrationRuleConversion.RulesNarrowedByDay(ledger, inReach)),
+                MigrationRuleConversion.RulesNarrowedByDay(ledger, inReach),
+                MigrationRuleConversion.RulesWithMarkWordsReplaced(ledger, inReach)),
             standing,
             queueing.Standing,
             carrying);

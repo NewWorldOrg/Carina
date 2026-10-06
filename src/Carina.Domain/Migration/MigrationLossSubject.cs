@@ -7,6 +7,8 @@ public enum MigrationLossSubject
     EnclosedCharacters = 2,
 
     DayBoundary = 3,
+
+    MarkWords = 4,
 }
 
 public static class MigrationLossSubjects

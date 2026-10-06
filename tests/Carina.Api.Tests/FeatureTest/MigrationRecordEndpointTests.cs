@@ -122,11 +122,35 @@ public sealed class MigrationRecordEndpointTests
         JsonElement[] losses = [.. body.GetProperty("data").GetProperty("losses").EnumerateArray()];
 
         Assert.Equal(
-            ["dayBoundary", "duplicateAvoidance", "enclosedCharacters"],
+            ["dayBoundary", "duplicateAvoidance", "enclosedCharacters", "markWords"],
             losses.Select(one => one.GetProperty("subject").GetString()).Order(StringComparer.Ordinal));
         Assert.All(
             losses,
             one => Assert.Equal(JsonValueKind.Number, one.GetProperty("affected").ValueKind));
+    }
+
+    [Fact]
+    public async Task ARecordWrittenBeforeTheMarkWordsWereCountedIsAnsweredWithTheLinesItHas()
+    {
+        await using var feature = new MigrationFeature();
+        MigrationReport written = MigrationFeature.Carried(MigrationPass.ForReal);
+        feature.Records.Kept = MigrationReport.Read(
+            written.Run,
+            written.Tallies,
+            written.Details,
+            [.. written.Losses.Where(loss => loss.Subject is not MigrationLossSubject.MarkWords)],
+            written.Standings,
+            written.ChannelProposals,
+            written.RuleProposals);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(Record);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            ["dayBoundary", "duplicateAvoidance", "enclosedCharacters"],
+            body.GetProperty("data").GetProperty("losses").EnumerateArray()
+                .Select(one => one.GetProperty("subject").GetString())
+                .Order(StringComparer.Ordinal));
     }
 
     [Fact]
