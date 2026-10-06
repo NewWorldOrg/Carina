@@ -85,7 +85,13 @@ check_corresponding_sources() {
 }
 
 main() {
-    local nuget ubuntu
+    local nuget ubuntu role
+
+    for role in app migrate driver; do
+        [ -f "${doc}/nuget/${role}.tsv" ] || fail "the image holds no index of the NuGet packages ${role} carries"
+    done
+    [ -n "$(find "${doc}/dotnet" -type f -print -quit 2>/dev/null)" ] \
+        || fail "the image holds no notice of the runtime packs the driver was compiled with"
 
     nuget="$(carried_nuget)"
     [ -n "${nuget}" ] || fail "no NuGet package index is in ${doc}/nuget"

@@ -66,7 +66,7 @@ copy_notice_files() {
 }
 
 carries_license_text() {
-    find "$1" -type f \( -iname 'licen[cs]e*' -o -iname 'copying*' \) | grep -q .
+    [ -n "$(find "$1" -type f \( -iname 'licen[cs]e*' -o -iname 'copying*' \) -print -quit)" ]
 }
 
 write_package() {
@@ -81,12 +81,15 @@ write_package() {
     local license_type
     license_type="$(sed -n 's:.*<license type="\([a-z]*\)".*:\1:p' "${nuspec}" | sed -n 1p)"
 
+    local declared_file=""
+
     mkdir -p "${destination}"
     copy_notice_files "${source}" "${destination}"
 
     if [ "${license_type}" = file ]; then
         mkdir -p "${destination}/$(dirname "${expression}")"
         cp "${source}/${expression}" "${destination}/${expression}"
+        declared_file="${expression}"
         expression="its own license file"
     elif [ "${license_type}" != expression ]; then
         expression=""
@@ -94,7 +97,7 @@ write_package() {
 
     if [ -f "${here}/nuget/${id}.txt" ]; then
         cp "${here}/nuget/${id}.txt" "${destination}/LICENSE"
-    elif ! carries_license_text "${destination}"; then
+    elif [ -z "${declared_file}" ] && ! carries_license_text "${destination}"; then
         [ -n "${expression}" ] \
             || fail "${id} ${version} carries no license text and declares no license expression: put its license at docker/notices/nuget/${id}.txt"
         [ -f "${here}/spdx/${expression}.txt" ] \
@@ -122,20 +125,24 @@ write_runtime_pack() {
 }
 
 main() {
-    local package
+    local package carried packs
+
+    [ -f "${manifest}" ] || fail "${manifest} is not there to read what ${role} carries"
+    carried="$(carried_packages)"
+    packs="$(runtime_packs)"
 
     mkdir -p "${out}/nuget"
     : > "${index}"
 
-    for package in $(carried_packages); do
+    for package in ${carried}; do
         write_package "${package}"
     done
 
-    for package in $(runtime_packs); do
+    for package in ${packs}; do
         write_runtime_pack "${package}"
     done
 
-    echo "${role} carries $(wc -l < "${index}") NuGet packages and $(runtime_packs | wc -l) runtime packs"
+    echo "${role} carries $(wc -l < "${index}") NuGet packages and $(echo "${packs}" | grep -c .) runtime packs"
 }
 
 main
