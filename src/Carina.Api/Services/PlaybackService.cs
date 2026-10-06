@@ -26,7 +26,8 @@ public sealed record PlaybackOffer(
     ServiceId Service,
     AnnouncedSound Announced,
     EncodeJobId? Artefact,
-    IReadOnlyList<PlaybackSource> ExternalPlayerSources);
+    IReadOnlyList<PlaybackSource> ExternalPlayerSources,
+    EncodeCodec? ArtefactCodec);
 
 public sealed class PlaybackService(
     IRecordingDirectory recordings,
@@ -96,7 +97,8 @@ public sealed class PlaybackService(
                 recording.ServiceId,
                 announced,
                 encoded.Made(plan),
-                external))
+                external,
+                encoded.CodecFor(audience)))
             : Nothing(id, plan.Refusal!.Value);
     }
 
@@ -223,6 +225,11 @@ public sealed class PlaybackService(
 
         public IEnumerable<EncodedArtefact> LeftOutBy(PlaybackAudience audience)
             => Found.Where(artefact => !audience.Plays(artefact.Reading, artefact.ProfileSays));
+
+        public EncodeCodec? CodecFor(PlaybackAudience audience)
+            => (Found.FirstOrDefault(artefact => audience.Plays(artefact.Reading, artefact.ProfileSays)
+                    && artefact.OnDisk.Found is { HoldsAnything: true })
+                ?? Found.FirstOrDefault())?.Reading.Codec;
 
         public EncodeJobId? Made(PlaybackPlan plan)
         {
