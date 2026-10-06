@@ -9,3 +9,4 @@ artifacts/
 tests/
 TestResults/
 *.md
+!THIRD-PARTY-NOTICES.md

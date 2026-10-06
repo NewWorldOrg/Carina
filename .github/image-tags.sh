@@ -5,7 +5,7 @@ readonly dockerfile=Dockerfile
 readonly driver_stage=driver-build
 readonly app_stage=app-build
 readonly both_sides="Dockerfile .dockerignore Directory.Build.props Directory.Packages.props docker/entrypoint.sh"
-readonly app_side_only="patches docker/fonts.conf LICENSE"
+readonly app_side_only="patches docker/fonts.conf docker/notices LICENSE THIRD-PARTY-NOTICES.md"
 readonly digits=12
 
 fail() {

@@ -272,7 +272,6 @@ driver がライブ録画を書き込むルートそのもので、移行が運�
 
 `ffmpeg` はディストリビューションのパッケージではなく、イメージの中でソースから作る。
 字幕を絵にするデコーダを持つパッケージが無いため。VAAPI には `intel-media-va-driver` も要る。
-同梱物のライセンスと、`ffmpeg`・x264 の対応するソースはイメージの `/usr/share/doc/carina/` にあり、一覧は `THIRD-PARTY-NOTICES.md` にある。
 
 ## イメージのタグ
 
@@ -289,7 +288,7 @@ app だけの変更では `app-sha-*` だけが動くので、`driver` は前の
 
 - driver 側は `Carina.Driver` とそれが参照するプロジェクト、app 側は `Carina.Api`・`Carina.Db` とそれらが参照するプロジェクト
 - `Carina.Contracts`、`Dockerfile`、`Directory.Build.props`、`Directory.Packages.props`、`docker/entrypoint.sh` の変更は両方のタグを動かす
-- 試験、文書、CI の定義、開発用の compose の変更はどちらのタグも動かさない
+- 試験、イメージに入らない文書、CI の定義、開発用の compose の変更はどちらのタグも動かさない
 - 一度出たタグは上書きされない
 
 どちらの側に何が入るかは `.github/image-tags.sh inputs driver`(または `app`)が答える。
@@ -316,3 +315,7 @@ driver は呼び出し元を認証しない。
 ## ライセンス
 
 AGPL-3.0-only。著作権者は NewWorldOrg。詳細は `LICENSE` を参照。
+
+イメージに同梱した他のソフトウェアとそのライセンスは `THIRD-PARTY-NOTICES.md` に載せている。
+イメージの中では、`LICENSE`・`THIRD-PARTY-NOTICES.md`・同梱物のライセンス全文と、GPL の部品(`ffmpeg`・x264)の対応するソースが `/usr/share/doc/carina/` にある。
+.NET のランタイムのライセンスは `/usr/share/dotnet/` にある。
