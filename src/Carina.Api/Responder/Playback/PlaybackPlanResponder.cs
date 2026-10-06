@@ -18,6 +18,8 @@ public sealed record PlaybackChapterResponder(double StartsAtSec, double EndsAtS
     }
 }
 
+public sealed record PlaybackArtefactFileResponder(EncodeCodec Codec);
+
 public sealed record PlaybackPlanResponder(
     PlaybackStanding Standing,
     PlaybackRoute Route,
@@ -34,7 +36,7 @@ public sealed record PlaybackPlanResponder(
     IReadOnlyList<SoundTrack> Sounds,
     IReadOnlyList<PlaybackChapterResponder> Chapters,
     CaptionStanding Captions,
-    EncodeCodec? ArtefactCodec)
+    PlaybackArtefactFileResponder? ArtefactFile)
 {
     public static PlaybackPlanResponder Of(
         PlaybackPlan plan,
@@ -69,6 +71,6 @@ public sealed record PlaybackPlanResponder(
             sounds,
             chapters,
             captions,
-            artefactCodec);
+            artefactCodec is { } codec ? new PlaybackArtefactFileResponder(codec) : null);
     }
 }

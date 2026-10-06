@@ -20,7 +20,7 @@ public sealed class ArtefactCodecInThePlanTests
 
         JsonElement read = await PlanAsync(feature, recording);
 
-        Assert.Equal(named, read.GetProperty("artefactCodec").GetString());
+        Assert.Equal(named, read.GetProperty("artefactFile").GetProperty("codec").GetString());
     }
 
     [Fact(DisplayName = "BR-PD-009: an artefact in H.265 a browser cannot play is still named, while the recording is transcoded")]
@@ -33,7 +33,7 @@ public sealed class ArtefactCodecInThePlanTests
         JsonElement read = await PlanAsync(feature, recording);
 
         Assert.True(read.GetProperty("transcodes").GetBoolean());
-        Assert.Equal("h265", read.GetProperty("artefactCodec").GetString());
+        Assert.Equal("h265", read.GetProperty("artefactFile").GetProperty("codec").GetString());
     }
 
     [Fact(DisplayName = "BR-PD-009: the artefact is named when the recording itself is asked for")]
@@ -46,7 +46,7 @@ public sealed class ArtefactCodecInThePlanTests
         JsonElement read = await PlanAsync(feature, recording, "?source=recording");
 
         Assert.Equal("recording", read.GetProperty("source").GetString());
-        Assert.Equal("h264", read.GetProperty("artefactCodec").GetString());
+        Assert.Equal("h264", read.GetProperty("artefactFile").GetProperty("codec").GetString());
     }
 
     [Fact(DisplayName = "BR-PD-009: an artefact whose file could not be read is named by no codec rather than by its profile")]
@@ -58,7 +58,7 @@ public sealed class ArtefactCodecInThePlanTests
 
         JsonElement read = await PlanAsync(feature, recording);
 
-        Assert.Equal(JsonValueKind.Null, read.GetProperty("artefactCodec").ValueKind);
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("artefactFile").ValueKind);
     }
 
     [Fact(DisplayName = "BR-PD-009: a recording with no artefact is named by no codec")]
@@ -69,7 +69,7 @@ public sealed class ArtefactCodecInThePlanTests
 
         JsonElement read = await PlanAsync(feature, recording);
 
-        Assert.Equal(JsonValueKind.Null, read.GetProperty("artefactCodec").ValueKind);
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("artefactFile").ValueKind);
     }
 
     private static async Task<JsonElement> PlanAsync(PlayFeature feature, Recording recording, string query = "")
