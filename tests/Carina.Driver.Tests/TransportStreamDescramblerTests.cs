@@ -22,9 +22,9 @@ public sealed class TransportStreamDescramblerTests
 
     private static readonly byte[] FirstEcm = Encoding.ASCII.GetBytes("synthetic ecm one");
 
-    private static readonly byte[] SecondEcm = Encoding.ASCII.GetBytes("synthetic ecm two");
+    private static readonly byte[] SecondEcm = Encoding.ASCII.GetBytes("second synthetic ecm");
 
-    private static readonly byte[] OtherEcm = Encoding.ASCII.GetBytes("synthetic other ecm");
+    private static readonly byte[] OtherEcm = Encoding.ASCII.GetBytes("another synthetic ecm");
 
     [Fact]
     public void ScrambledPacketsBeforeTheFirstEcmAreHeldAndUnscrambledWithItsKeys()
@@ -113,6 +113,23 @@ public sealed class TransportStreamDescramblerTests
     public void APidNoPmtNamesIsUnscrambledWithTheOnlyEcmTheStreamCarries()
     {
         SyntheticScrambledStream stream = Settled().Scrambled(0x0555, FirstEcm, odd: true, seed: 20);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection _);
+
+        Assert.Equal(stream.Output, descrambler.Descramble(stream.Input));
+    }
+
+    [Fact]
+    public void APacketOfAProgrammeWhosePmtHasNotArrivedWaitsForItsOwnEcm()
+    {
+        SyntheticScrambledStream stream = new SyntheticScrambledStream()
+            .Pat((1, PmtPid), (2, OtherPmtPid))
+            .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null)])
+            .Ecm(EcmPid, FirstEcm)
+            .Scrambled(OtherVideoPid, OtherEcm, odd: false, seed: 23)
+            .Pmt(OtherPmtPid, 2, OtherEcmPid, [(OtherVideoPid, null)])
+            .Ecm(OtherEcmPid, OtherEcm)
+            .Scrambled(VideoPid, FirstEcm, odd: false, seed: 24);
 
         using TransportStreamDescrambler descrambler = Open(out FakeCardConnection _);
 

@@ -43,7 +43,7 @@ public sealed class ProgramMap(int caSystemId)
     public bool IsEcm(int pid) => ecmPids.Contains(pid);
 
     /// <summary>
-    /// The ECM a PID is unlocked by: the one its PMT names, else the stream's only ECM when it carries exactly one.
+    /// The ECM a PID is unlocked by: the one its PMT names, else, once every PMT has been read, the stream's only ECM when it carries exactly one.
     /// </summary>
     public int? EcmFor(int pid)
     {
@@ -52,7 +52,7 @@ public sealed class ProgramMap(int caSystemId)
             return ecm;
         }
 
-        return ecmPids.Count is 1 ? ecmPids.First() : null;
+        return Complete && ecmPids.Count is 1 ? ecmPids.First() : null;
     }
 
     public void ReadPat(ReadOnlySpan<byte> section)
