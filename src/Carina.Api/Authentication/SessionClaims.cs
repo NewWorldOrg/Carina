@@ -12,6 +12,8 @@ public static class SessionClaims
 
     public const string Device = "carina:device";
 
+    public const string DisplayName = "carina:display-name";
+
     public static ClaimsPrincipal Principal(AuthSession session, string scheme)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -24,6 +26,7 @@ public static class SessionClaims
                 new Claim(Session, session.Handle.Value),
                 new Claim(Method, session.Method.ToString()),
                 new Claim(Device, session.DeviceLabel),
+                new Claim(DisplayName, session.DisplayName),
             ],
             scheme);
 
@@ -55,6 +58,18 @@ public static class SessionClaims
         string? carried = principal.FindFirstValue(Method);
 
         return Enum.TryParse(carried, ignoreCase: false, out AuthMethod method) ? method : null;
+    }
+
+    /// <summary>
+    /// The display name of whoever the session signed in as, or null for a principal no session made.
+    /// </summary>
+    public static string? DisplayNameOf(ClaimsPrincipal principal)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        string? carried = principal.FindFirstValue(DisplayName);
+
+        return string.IsNullOrEmpty(carried) ? null : carried;
     }
 
     public static string? DeviceOf(ClaimsPrincipal principal)

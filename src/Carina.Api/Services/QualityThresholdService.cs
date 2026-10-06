@@ -29,6 +29,7 @@ public sealed class QualityThresholdService(
     public async Task<ServiceResult<QualityThresholdBook, QualityThresholdFailure>> ReviseAsync(
         QualityThresholdKey key,
         double value,
+        string? by,
         CancellationToken cancellationToken)
         => await SettleAsync(
             key,
@@ -40,19 +41,20 @@ public sealed class QualityThresholdService(
                 }
 
                 return QualityThresholdStanding.Ordered(key, value, standings)
-                    ? Settling.To(QualityThresholdSettling.ByHand(standing, value, at))
+                    ? Settling.To(QualityThresholdSettling.ByHand(standing, value, at, by))
                     : Refused(QualitySaying.OutOfOrder(key), QualityThresholdFailure.OutOfOrder);
             },
             cancellationToken);
 
     public async Task<ServiceResult<QualityThresholdBook, QualityThresholdFailure>> ReleaseAsync(
         QualityThresholdKey key,
+        string? by,
         CancellationToken cancellationToken)
         => await SettleAsync(
             key,
             (standing, standings, at) =>
             {
-                QualityThresholdSettled released = QualityThresholdSettling.Released(standing, at);
+                QualityThresholdSettled released = QualityThresholdSettling.Released(standing, at, by);
 
                 return QualityThresholdStanding.Ordered(key, released.Threshold.Setting.Current, standings)
                     ? Settling.To(released)
@@ -117,6 +119,7 @@ public sealed class QualityThresholdService(
             {
                 Setting = settled.Threshold.Setting,
                 Stored = true,
+                UpdatedBy = settled.Threshold.UpdatedBy,
                 ByHand = settled.Threshold.ByHand,
                 Measurement = settled.Threshold.Measurement,
             },

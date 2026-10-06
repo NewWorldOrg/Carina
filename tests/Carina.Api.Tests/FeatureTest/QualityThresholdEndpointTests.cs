@@ -290,6 +290,30 @@ public sealed class QualityThresholdEndpointTests
         Assert.Equal([AppEventName.Quality, AppEventName.Quality], feature.Events.Signalled);
     }
 
+    [Fact(DisplayName = "BR-QV-002: setting a level by hand and letting go of it name the signed-in person on the level and on the change")]
+    public async Task SettingALevelByHandAndLettingGoOfItNameTheSignedInPerson()
+    {
+        await using var feature = new QualityFeature();
+
+        JsonElement byHand = (await feature.PatchAsync(
+            "/api/quality/thresholds/packetsLostWarning",
+            new { value = 0.0005 })).Body.GetProperty("data");
+
+        Assert.Equal(TestAuthenticationHandler.TesterDisplayName, byHand.GetProperty("updatedBy").GetString());
+        Assert.Equal(
+            TestAuthenticationHandler.TesterDisplayName,
+            byHand.GetProperty("lastChange").GetProperty("changedBy").GetString());
+
+        JsonElement released = (await feature.PatchAsync(
+            "/api/quality/thresholds/packetsLostWarning",
+            new { byHand = false })).Body.GetProperty("data");
+
+        Assert.Equal(TestAuthenticationHandler.TesterDisplayName, released.GetProperty("updatedBy").GetString());
+        Assert.Equal(
+            [TestAuthenticationHandler.TesterDisplayName, TestAuthenticationHandler.TesterDisplayName],
+            feature.Changes.Changes.Select(change => change.ChangedBy));
+    }
+
     [Fact(DisplayName = "BR-QD-023: letting go of a level nobody set by hand changes nothing and tells the screens nothing")]
     public async Task LettingGoOfALevelNobodySetByHandChangesNothing()
     {

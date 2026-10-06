@@ -21,7 +21,7 @@ public sealed class QualityThresholdServiceTests
             new HandTurnedClock(new DateTimeOffset(Now)));
 
         await Assert.ThrowsAsync<TimeoutException>(() =>
-            service.ReviseAsync(QualityThresholdKey.PacketsLostWarning, 0.0005, CancellationToken.None));
+            service.ReviseAsync(QualityThresholdKey.PacketsLostWarning, 0.0005, "someone", CancellationToken.None));
 
         Assert.Empty(thresholds.Thresholds);
     }
