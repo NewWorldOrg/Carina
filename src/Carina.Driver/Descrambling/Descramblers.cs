@@ -6,11 +6,11 @@ namespace Carina.Driver.Descrambling;
 
 public sealed class Descramblers : IDescramblerFactory
 {
-    private readonly AribB25Library library;
+    private readonly PcscLibrary library;
 
     private readonly ILogger? logger;
 
-    private Descramblers(AribB25Library library, ILogger? logger)
+    private Descramblers(PcscLibrary library, ILogger? logger)
     {
         this.library = library;
         this.logger = logger;
@@ -30,7 +30,7 @@ public sealed class Descramblers : IDescramblerFactory
 
     public static IDescramblerFactory Probe(ILogger? logger)
     {
-        AribB25Library? library = AribB25Library.Load(out string whyNot);
+        PcscLibrary? library = PcscLibrary.Load(out string whyNot);
         if (library is null)
         {
             logger?.LogWarning(
@@ -45,7 +45,7 @@ public sealed class Descramblers : IDescramblerFactory
 
         try
         {
-            CardDescrambler.Open(library).Dispose();
+            TheCard(library).Dispose();
 
             logger?.LogInformation(
                 "A card answered the reader, so this driver unscrambles what it records and says so in its greeting."
@@ -68,7 +68,7 @@ public sealed class Descramblers : IDescramblerFactory
     {
         try
         {
-            return CardDescrambler.Open(library);
+            return new TransportStreamDescrambler(TheCard(library), logger);
         }
         catch (DescramblingException error)
         {
@@ -79,5 +79,21 @@ public sealed class Descramblers : IDescramblerFactory
 
             return null;
         }
+    }
+
+    private static ConditionalAccessCard TheCard(PcscLibrary library)
+    {
+        ISmartCardService service;
+
+        try
+        {
+            service = library.Open();
+        }
+        catch (SmartCardException refused)
+        {
+            throw new DescramblingException(refused.Message);
+        }
+
+        return ConditionalAccessCard.Open(service);
     }
 }
