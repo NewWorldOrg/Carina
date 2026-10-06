@@ -1,9 +1,9 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Pipes;
 
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Streaming;
 
@@ -55,32 +55,10 @@ internal static class TranscoderProcess
 
     internal static ProcessLaunch Launch(string programme, IReadOnlyList<string> arguments)
     {
-        var start = new ProcessStartInfo(programme)
-        {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
+        ProgrammeStart start = AnotherProgramme.StartFed(programme, arguments);
 
-        foreach (string argument in arguments)
-        {
-            start.ArgumentList.Add(argument);
-        }
-
-        Process? started;
-
-        try
-        {
-            started = Process.Start(start);
-        }
-        catch (Win32Exception failure)
-        {
-            return new ProcessLaunch(null, $"'{programme}' could not be started on this machine: {failure.Message}");
-        }
-
-        return started is null
-            ? new ProcessLaunch(null, $"'{programme}' started no process of its own.")
-            : new ProcessLaunch(started, string.Empty);
+        return start.Process is { } started
+            ? new ProcessLaunch(started, string.Empty)
+            : new ProcessLaunch(null, start.Complained);
     }
 }
