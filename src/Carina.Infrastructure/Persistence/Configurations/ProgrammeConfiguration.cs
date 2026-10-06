@@ -35,6 +35,7 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
         builder.HasKey(programme => new { programme.NetworkId, programme.ServiceId, programme.EventId });
 
         builder.Ignore(programme => programme.Id);
+        builder.Ignore(programme => programme.Marks);
 
         builder.Property(programme => programme.NetworkId)
             .HasConversion(id => id.Value, value => new NetworkId(value))
@@ -139,6 +140,10 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
             .HasColumnName(BroadcastDayOfWeek)
             .HasComputedColumnSql(BroadcastDayOfWeekSql, stored: true);
 
+        builder.Property<string[]>(Marks)
+            .HasColumnName(Marks)
+            .HasComputedColumnSql(MarksSql, stored: true);
+
         builder.HasIndex(programme => programme.Revision).IsUnique();
 
         builder.HasIndex(programme => programme.StartsAt);
@@ -151,6 +156,8 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
 
     public const string BroadcastDayOfWeek = "broadcast_dow";
 
+    public const string Marks = "marks";
+
     public const int SearchableStatisticsTarget = 1000;
 
     public const string SearchableSql =
@@ -159,6 +166,19 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
     public static readonly string GenreKindsSql = GenreKindsSqlOver("genres");
 
     public static readonly string BroadcastDayOfWeekSql = BroadcastDayOfWeekSqlOver("start_at");
+
+    public static readonly string MarksSql = MarksSqlOver("name", "summary");
+
+    public static string MarksSqlOver(string name, string summary)
+        => "array_remove(ARRAY["
+            + string.Join(
+                ", ",
+                ProgrammeMarks.Symbols.Select(symbol => string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"CASE WHEN strpos({name}, chr({symbol.CodePoint})) > 0"
+                        + $" OR strpos({summary}, chr({symbol.CodePoint})) > 0"
+                        + $" THEN '{symbol.Mark}' END")))
+            + "]::text[], NULL)";
 
     public static string BroadcastDayOfWeekSqlOver(string column)
         => string.Create(

@@ -34,6 +34,10 @@ public sealed record ProgrammeConditions
     public TuneSystem? System { get; init; }
 
     public IReadOnlyList<ProgrammeService>? Channels { get; init; }
+
+    public IReadOnlyList<ProgrammeMark>? Marks { get; init; }
+
+    public IReadOnlyList<ProgrammeMark>? ExcludedMarks { get; init; }
 }
 
 public sealed class ProgrammeSearch
@@ -67,6 +71,8 @@ public sealed class ProgrammeSearch
         IReadOnlyList<int> genres,
         IReadOnlyList<ProgrammeGenre> subGenres,
         IReadOnlyList<DayOfWeek> days,
+        IReadOnlyList<ProgrammeMark> marks,
+        IReadOnlyList<ProgrammeMark> excludedMarks,
         TuneSystem? system,
         IReadOnlyList<ProgrammeService> channels,
         IReadOnlyList<ProgrammeService>? services,
@@ -85,6 +91,8 @@ public sealed class ProgrammeSearch
         Genres = genres;
         SubGenres = subGenres;
         Days = days;
+        Marks = marks;
+        ExcludedMarks = excludedMarks;
         System = system;
         Channels = channels;
         Services = services;
@@ -110,6 +118,10 @@ public sealed class ProgrammeSearch
     public IReadOnlyList<ProgrammeGenre> SubGenres { get; }
 
     public IReadOnlyList<DayOfWeek> Days { get; }
+
+    public IReadOnlyList<ProgrammeMark> Marks { get; }
+
+    public IReadOnlyList<ProgrammeMark> ExcludedMarks { get; }
 
     public TuneSystem? System { get; }
 
@@ -137,6 +149,8 @@ public sealed class ProgrammeSearch
             && Genres.Count is 0
             && SubGenres.Count is 0
             && Days.Count is 0
+            && Marks.Count is 0
+            && ExcludedMarks.Count is 0
             && Channels.Count is 0
             && System is null
             && From is null
@@ -161,6 +175,8 @@ public sealed class ProgrammeSearch
             || GenresIn(beside.Genres) is not { } genres
             || SubGenresIn(beside.SubGenres) is not { } subGenres
             || DaysIn(beside.Days) is not { } days
+            || MarksIn(beside.Marks) is not { } marks
+            || MarksIn(beside.ExcludedMarks) is not { } excludedMarks
             || ListingGuards.NoMoreThan(beside.Channels, MostChannels) is not { } channels)
         {
             return null;
@@ -194,6 +210,8 @@ public sealed class ProgrammeSearch
             genres,
             subGenres,
             days,
+            marks,
+            excludedMarks,
             beside.System is TuneSystem.Unspecified ? null : beside.System,
             channels,
             null,
@@ -226,6 +244,8 @@ public sealed class ProgrammeSearch
             Genres,
             SubGenres,
             Days,
+            Marks,
+            ExcludedMarks,
             System,
             Channels,
             services,
@@ -249,6 +269,8 @@ public sealed class ProgrammeSearch
             Genres,
             SubGenres,
             Days,
+            Marks,
+            ExcludedMarks,
             System,
             Channels,
             Services,
@@ -313,6 +335,16 @@ public sealed class ProgrammeSearch
         return asked.Any(genre => genre.Kind is < 0 or > HighestGenre || genre.Sort is < 0 or > HighestSubGenre)
             ? null
             : [.. asked.Distinct()];
+    }
+
+    private static IReadOnlyList<ProgrammeMark>? MarksIn(IReadOnlyList<ProgrammeMark>? asked)
+    {
+        if (asked is null || asked.Count == 0)
+        {
+            return [];
+        }
+
+        return asked.Any(mark => !Enum.IsDefined(mark)) ? null : [.. asked.Distinct().Order()];
     }
 
     private static IReadOnlyList<DayOfWeek>? DaysIn(IReadOnlyList<DayOfWeek>? asked)

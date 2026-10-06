@@ -52,6 +52,8 @@ public sealed class ProgrammeSearchTests
                 Days = [],
                 Channels = [],
                 Fields = [],
+                Marks = [],
+                ExcludedMarks = [],
             }));
         Assert.Null(ProgrammeSearch.For(
             null,
@@ -104,6 +106,81 @@ public sealed class ProgrammeSearchTests
             null,
             null,
             conditions: new ProgrammeConditions { Days = [DayOfWeek.Monday] }));
+
+    [Fact]
+    public void AMarkOnItsOwnIsEnoughToAskWith()
+        => Assert.Equal(
+            [ProgrammeMark.New],
+            ProgrammeSearch.For(
+                null,
+                null,
+                null,
+                conditions: new ProgrammeConditions { Marks = [ProgrammeMark.New] })!.Marks);
+
+    [Fact]
+    public void AMarkToLeaveOutOnItsOwnIsEnoughToAskWith()
+        => Assert.Equal(
+            [ProgrammeMark.Rerun],
+            ProgrammeSearch.For(
+                null,
+                null,
+                null,
+                conditions: new ProgrammeConditions { ExcludedMarks = [ProgrammeMark.Rerun] })!.ExcludedMarks);
+
+    [Fact]
+    public void TheSameMarkNamedTwiceIsTheOneMark()
+    {
+        ProgrammeSearch asked = ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions
+            {
+                Marks = [ProgrammeMark.New, ProgrammeMark.New],
+                ExcludedMarks = [ProgrammeMark.Rerun, ProgrammeMark.Rerun],
+            })!;
+
+        Assert.Equal([ProgrammeMark.New], asked.Marks);
+        Assert.Equal([ProgrammeMark.Rerun], asked.ExcludedMarks);
+    }
+
+    [Fact]
+    public void AMarkTheTableDoesNotHoldIsRefusedRatherThanPassedOn()
+    {
+        Assert.Null(ProgrammeSearch.For(
+            "news",
+            null,
+            null,
+            conditions: new ProgrammeConditions { Marks = [(ProgrammeMark)0] }));
+        Assert.Null(ProgrammeSearch.For(
+            "news",
+            null,
+            null,
+            conditions: new ProgrammeConditions { ExcludedMarks = [(ProgrammeMark)99] }));
+    }
+
+    [Fact]
+    public void TheSameMarkAskedForAndLeftOutIsASearchThatFindsNothingRatherThanARefusal()
+        => Assert.NotNull(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Marks = [ProgrammeMark.New], ExcludedMarks = [ProgrammeMark.New] }));
+
+    [Fact]
+    public void TheMarksAskedForStayWithTheSearchWhereverItIsNarrowedTo()
+    {
+        ProgrammeSearch asked = ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Marks = [ProgrammeMark.New], ExcludedMarks = [ProgrammeMark.Rerun] })!;
+
+        ProgrammeSearch narrowed = asked.Over([Channel]).Except([Channel]);
+
+        Assert.Equal([ProgrammeMark.New], narrowed.Marks);
+        Assert.Equal([ProgrammeMark.Rerun], narrowed.ExcludedMarks);
+    }
 
     [Fact]
     public void NamingAllSevenDaysNarrowsNothingAndIsRefusedOnItsOwn()

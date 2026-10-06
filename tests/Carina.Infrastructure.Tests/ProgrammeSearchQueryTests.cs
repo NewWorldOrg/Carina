@@ -16,6 +16,8 @@ public sealed class ProgrammeSearchQueryTests
         [ProgrammeSearchQuery.Genre] = "8",
         [ProgrammeSearchQuery.SubGenre] = "8-2",
         [ProgrammeSearchQuery.Day] = "monday",
+        [ProgrammeSearchQuery.Mark] = "new",
+        [ProgrammeSearchQuery.ExcludeMark] = "Rerun",
         [ProgrammeSearchQuery.Type] = "isdbT",
         [ProgrammeSearchQuery.Channel] = "4-1049",
         [ProgrammeSearchQuery.From] = "2026-08-18T00:00:00Z",
@@ -105,6 +107,8 @@ public sealed class ProgrammeSearchQueryTests
         Assert.Equal([8], read.Genres);
         Assert.Equal([new ProgrammeGenre(8, 2)], read.SubGenres);
         Assert.Equal([DayOfWeek.Monday], read.Days);
+        Assert.Equal([ProgrammeMark.New], read.Marks);
+        Assert.Equal([ProgrammeMark.Rerun], read.ExcludedMarks);
         Assert.Equal(TuneSystem.IsdbT, read.System);
         Assert.Equal([new ProgrammeService(4, 1049)], read.Channels);
         Assert.Equal(new DateTime(2026, 8, 18, 0, 0, 0, DateTimeKind.Utc), read.From);
@@ -148,6 +152,10 @@ public sealed class ProgrammeSearchQueryTests
     [InlineData("keyword=news&subgenre=8-99")]
     [InlineData("keyword=news&day=someday")]
     [InlineData("keyword=news&day=9")]
+    [InlineData("keyword=news&mark=newSeries")]
+    [InlineData("keyword=news&mark=")]
+    [InlineData("keyword=news&mark=99")]
+    [InlineData("keyword=news&excludeMark=rebroadcast")]
     [InlineData("keyword=news&type=vhf")]
     [InlineData("keyword=news&channel=not-a-channel")]
     [InlineData("keyword=news&channel=4-99999")]
@@ -187,6 +195,24 @@ public sealed class ProgrammeSearchQueryTests
     }
 
     [Fact]
+    public void MarksAskedForAndLeftOutAreGatheredFromEveryValue()
+    {
+        ProgrammeSearch read = ProgrammeSearchQuery.Read(
+            "mark=new&mark=premiere&excludeMark=rerun&excludeMark=final")!;
+
+        Assert.Equal([ProgrammeMark.New, ProgrammeMark.Premiere], read.Marks);
+        Assert.Equal([ProgrammeMark.Rerun, ProgrammeMark.Final], read.ExcludedMarks);
+        Assert.Empty(read.Words);
+    }
+
+    [Fact]
+    public void TheRuleCarriedOverWithAMarkAndALetterReadsWhenBothAreMarks()
+    {
+        Assert.Null(ProgrammeSearchQuery.Read("keyword=%5B%E6%96%B0%5D&exclude=%E5%86%8D&subgenre=7-0&type=IsdbT"));
+        Assert.NotNull(ProgrammeSearchQuery.Read("mark=New&excludeMark=Rerun&subgenre=7-0&type=IsdbT"));
+    }
+
+    [Fact]
     public void ABroadcastTypeNobodyNamedLeavesTheSearchWithoutOne()
     {
         Assert.Null(ProgrammeSearchQuery.Read("keyword=news")!.System);
@@ -199,5 +225,5 @@ public sealed class ProgrammeSearchQueryTests
             ? "nothing"
             : string.Create(
                 CultureInfo.InvariantCulture,
-                $"{string.Join(',', search.Words)}|{string.Join(',', search.ExcludedWords)}|{string.Join(',', search.Fields)}|{string.Join(',', search.Genres)}|{string.Join(',', search.SubGenres)}|{string.Join(',', search.Days)}|{search.System}|{string.Join(',', search.Channels)}|{search.From}|{search.To}|{search.Sort}|{search.Descending}|{search.Page}|{search.PerPage}");
+                $"{string.Join(',', search.Words)}|{string.Join(',', search.ExcludedWords)}|{string.Join(',', search.Fields)}|{string.Join(',', search.Genres)}|{string.Join(',', search.SubGenres)}|{string.Join(',', search.Days)}|{string.Join(',', search.Marks)}|{string.Join(',', search.ExcludedMarks)}|{search.System}|{string.Join(',', search.Channels)}|{search.From}|{search.To}|{search.Sort}|{search.Descending}|{search.Page}|{search.PerPage}");
 }

@@ -115,6 +115,8 @@ public sealed class RuleEndpointTests
     [InlineData("channel=32736-1024")]
     [InlineData("type=IsdbT")]
     [InlineData("exclude=river&keyword=hill")]
+    [InlineData("mark=New")]
+    [InlineData("excludeMark=Rerun")]
     public async Task AQueryThatNarrowsSomethingIsWrittenSoTheRefusalIsNotSimplyTurningEverythingAway(string query)
     {
         await using var feature = new RuleFeature();
@@ -358,6 +360,41 @@ public sealed class RuleEndpointTests
                 .ToArray());
         Assert.Empty(feature.Rules.Rules);
         Assert.Empty(feature.Reservations.Held);
+    }
+
+    [Fact]
+    public async Task APreviewTakesTheProgrammesByTheMarksTheyCarryRatherThanByTheLettersInTheirNames()
+    {
+        await using var feature = new RuleFeature();
+        feature.Announced(1, "\U0001F21Fhill walking");
+        feature.Announced(2, "新 hill walking [新]");
+        feature.Announced(3, "\U0001F21F\U0001F21Ehill walking");
+        feature.Announced(4, "hill walking 再");
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            "/api/rules/preview",
+            new { query = "mark=New&excludeMark=Rerun" });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            ["\U0001F21Fhill walking"],
+            body.GetProperty("data").GetProperty("takes").EnumerateArray()
+                .Select(take => take.GetProperty("name").GetString() ?? string.Empty)
+                .ToArray());
+    }
+
+    [Theory]
+    [InlineData("mark=Newer")]
+    [InlineData("excludeMark=")]
+    [InlineData("keyword=hill&exclude=再")]
+    public async Task AMarkTheGuideDoesNotKnowOrALetterLeftOutOnItsOwnIsRefused(string query)
+    {
+        await using var feature = new RuleFeature();
+
+        (HttpStatusCode status, _) = await feature.PostAsync("/api/rules", new { name = "marked", query });
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Empty(feature.Rules.Rules);
     }
 
     [Fact]

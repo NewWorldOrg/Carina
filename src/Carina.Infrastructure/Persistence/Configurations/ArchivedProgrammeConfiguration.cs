@@ -89,6 +89,10 @@ public sealed class ArchivedProgrammeConfiguration : IEntityTypeConfiguration<Ar
             .HasColumnName(ProgrammeConfiguration.BroadcastDayOfWeek)
             .HasComputedColumnSql(ProgrammeConfiguration.BroadcastDayOfWeekSql, stored: true);
 
+        builder.Property<string[]>(ProgrammeConfiguration.Marks)
+            .HasColumnName(ProgrammeConfiguration.Marks)
+            .HasComputedColumnSql(ProgrammeConfiguration.MarksSql, stored: true);
+
         builder.HasIndex(programme => programme.EndsAt)
             .IncludeProperties(
                 programme => new

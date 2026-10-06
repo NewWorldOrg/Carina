@@ -21,6 +21,10 @@ public static class ProgrammeSearchQuery
 
     public const string Day = "day";
 
+    public const string Mark = "mark";
+
+    public const string ExcludeMark = "excludeMark";
+
     public const string Type = "type";
 
     public const string Channel = "channel";
@@ -45,6 +49,8 @@ public static class ProgrammeSearchQuery
         new(Genre, typeof(int), true),
         new(SubGenre, typeof(string), true),
         new(Day, typeof(DayOfWeek), true),
+        new(Mark, typeof(ProgrammeMark), true),
+        new(ExcludeMark, typeof(ProgrammeMark), true),
         new(Type, typeof(TuneSystem), false),
         new(Channel, typeof(string), true),
         new(From, typeof(DateTimeOffset), false),
@@ -63,6 +69,8 @@ public static class ProgrammeSearchQuery
             || Numbers(All(asked, Genre)) is not { } genres
             || SubGenres(All(asked, SubGenre)) is not { } subGenres
             || Every<DayOfWeek>(All(asked, Day)) is not { } days
+            || Every<ProgrammeMark>(All(asked, Mark)) is not { } marks
+            || Every<ProgrammeMark>(All(asked, ExcludeMark)) is not { } excludedMarks
             || ProgrammeServiceText.Every(All(asked, Channel)) is not { } channels)
         {
             return null;
@@ -94,6 +102,8 @@ public static class ProgrammeSearchQuery
                 Genres = genres,
                 SubGenres = subGenres,
                 Days = days,
+                Marks = marks,
+                ExcludedMarks = excludedMarks,
                 System = system,
                 Channels = channels,
             });
