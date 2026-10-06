@@ -211,9 +211,9 @@ walks past it.
   standard allows between two clock readings, and exists only for breaks nobody
   declared.
 - **The driver announces progress every thirty seconds** while anything is being
-  recorded, and the app wakes on it and writes the counts into the ledger while
-  the recording runs, so a recording that dies part way through is not
-  indistinguishable from a perfect one.
+  recorded; the app wakes on it and writes the counts into the ledger as the
+  recording runs, so one that dies part way through can be told from a perfect
+  one.
 - **The clock the positions are measured against is the one the recorded service
   carries, and the driver cannot yet know which that is.** Measurement runs on
   the whole multiplex and follows the first programme clock it hears, handing
