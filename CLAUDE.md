@@ -427,6 +427,13 @@ move that side's tag and leave the other where it was. A tag already in the
 registry is never pushed again, because a driver left running on it would have its
 image changed underneath it.
 
+`THIRD-PARTY-NOTICES.md` is checked by the image build. `docker/notices/nuget.sh`
+writes the license of every NuGet package the driver, app and migrate programs
+carry into the image, and `docker/notices/check.sh` fails the build when the NuGet
+table or the table of Ubuntu packages added to the base image differs from what
+the image holds, or when a package listed under a GPL license has no source
+package beside it. A package added on either side needs its row.
+
 ## Development environment
 
 `compose.yml` brings up `app`, `driver` and `db` on the repository mounted at

@@ -297,11 +297,12 @@ compose の `app` は `/srv/recordings` を読み取り専用でしか持たず�
 - WebSocket(`/api/live/ws`)と SSE(`/api/events`)は、切らずにバッファせず流す
 - `Range` ヘッダはそのまま通す(録画の再生とシークに使う)
 
+外部プレイヤー用の URL(`/api/videos/{id}/with-ticket/…` と `/api/live/{nid}-{sid}/with-ticket/…`)はパスに再生用のトークンを含み、トークンは発行から 30 秒で失効するが、一度使えば同じ URL でその録画・チャンネルを 2 時間開ける。
+前段のプロキシでアクセスログを取るなら、パスを残さない設定にする。
+
 `ffmpeg` は、ディストリビューションのパッケージではなく、イメージの中でソースからビルドする。
 字幕を画像として描くデコーダを持つパッケージが無いためである。
 VAAPI 用に `intel-media-va-driver` も入れている。
-同梱物のライセンスと `ffmpeg` の対応するソースは、イメージの `/usr/share/doc/carina/` にある。
-同梱物の一覧は `THIRD-PARTY-NOTICES.md` にある。
 
 ## イメージのタグ
 
@@ -320,7 +321,7 @@ app だけの変更では `app-sha-*` だけが変わる。
 - driver 側は、`Carina.Driver` とそれが参照するプロジェクトを指す
 - app 側は、`Carina.Api`・`Carina.Db` とそれらが参照するプロジェクトを指す
 - `Carina.Contracts`、`Dockerfile`、`Directory.Build.props`、`Directory.Packages.props`、`docker/entrypoint.sh` を変えると、両方のタグが変わる
-- 試験、文書、CI の定義、開発用の compose を変えても、どちらのタグも変わらない
+- 試験、イメージに入らない文書、CI の定義、開発用の compose を変えても、どちらのタグも変わらない
 - 一度公開したタグは上書きしない
 
 どちらの側に何が入るかは、`.github/image-tags.sh inputs driver`(または `app`)で確かめられる。
@@ -348,3 +349,7 @@ task restart:driver   # コード変更の反映
 
 ライセンスは AGPL-3.0-only で、著作権者は NewWorldOrg である。
 詳細は `LICENSE` にある。
+
+イメージに同梱した他のソフトウェアとそのライセンスは、`THIRD-PARTY-NOTICES.md` に載せている。
+イメージの中では、`LICENSE`・`THIRD-PARTY-NOTICES.md`・同梱物のライセンス全文と、GPL の部品(`ffmpeg`・x264)の対応するソースが `/usr/share/doc/carina/` にある。
+.NET のランタイムのライセンスは `/usr/share/dotnet/` にある。

@@ -70,6 +70,21 @@ COPY src/ src/
 RUN dotnet publish src/Carina.Api/Carina.Api.csproj -c Release --no-restore -o /out/app \
     && dotnet publish src/Carina.Db/Carina.Db.csproj -c Release --no-restore -o /out/db
 
+FROM driver-build AS driver-notices
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends jq \
+    && rm -rf /var/lib/apt/lists/*
+COPY docker/notices/ /notices/
+RUN /notices/nuget.sh /out/notices driver src/Carina.Driver/obj/project.assets.json
+
+FROM app-build AS app-notices
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends jq \
+    && rm -rf /var/lib/apt/lists/*
+COPY docker/notices/ /notices/
+RUN /notices/nuget.sh /out/notices app /out/app/Carina.Api.deps.json \
+    && /notices/nuget.sh /out/notices migrate /out/db/Carina.Db.deps.json
+
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS develop
 RUN apt-get update \
     && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 \
@@ -85,18 +100,23 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libpcsclite1 \
     && rm -rf /var/lib/apt/lists/*
 
-FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime-base
 
-RUN apt-get update \
+FROM runtime-base AS runtime
+
+RUN sed 's/^Types: deb$/Types: deb-src/' /etc/apt/sources.list.d/ubuntu.sources > /etc/apt/sources.list.d/ubuntu-src.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 libpcsclite1 \
+    && mkdir -p /usr/share/doc/carina/x264/source \
+    && cd /usr/share/doc/carina/x264/source \
+    && apt-get source --download-only "x264=$(dpkg-query -W -f '${source:Version}' libx264-164)" \
+    && rm /etc/apt/sources.list.d/ubuntu-src.sources \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f
 COPY docker/fonts.conf /etc/fonts/local.conf
 
 COPY --from=ffmpeg-build /out/ffmpeg/bin/ /usr/local/bin/
 COPY --from=ffmpeg-build /out/ffmpeg/lib/ /usr/local/lib/
-COPY --from=ffmpeg-build /out/notices/ /usr/share/doc/carina/
-COPY LICENSE /usr/share/doc/carina/LICENSE
 RUN ldconfig
 
 RUN groupadd --gid 10001 carina \
@@ -110,6 +130,14 @@ COPY --from=app-build /out/db ./db
 COPY docker/entrypoint.sh /usr/local/bin/carina
 
 RUN chmod 0755 /usr/local/bin/carina
+
+COPY --from=ffmpeg-build /out/notices/ /usr/share/doc/carina/
+COPY --from=driver-notices /out/notices/ /usr/share/doc/carina/
+COPY --from=app-notices /out/notices/ /usr/share/doc/carina/
+COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/doc/carina/
+RUN --mount=type=bind,from=app-notices,source=/notices,target=/run/notices \
+    --mount=type=bind,from=runtime-base,source=/var/lib/dpkg/status,target=/run/base-dpkg-status \
+    /run/notices/check.sh /run/base-dpkg-status
 
 ENV CARINA_ROLE=app \
     CARINA_DRIVER_SOCKET=/run/carina/driver.sock \
