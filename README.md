@@ -322,9 +322,12 @@ app だけの変更では `app-sha-*` だけが変わる。
 - app 側は、`Carina.Api`・`Carina.Db` とそれらが参照するプロジェクトを指す
 - `Carina.Contracts`、`Dockerfile`、`Directory.Build.props`、`Directory.Packages.props`、`docker/entrypoint.sh` を変えると、両方のタグが変わる
 - 試験、イメージに入らない文書、CI の定義、開発用の compose を変えても、どちらのタグも変わらない
-- 一度公開したタグは上書きしない
+- 一度公開したタグは上書きしない(`*-latest` を除く)
 
 どちらの側に何が入るかは、`.github/image-tags.sh inputs driver`(または `app`)で確かめられる。
+
+`v0.1.0` のようなバージョンのタグを push すると、CI はイメージを作り直さず、そのコミットの `driver-sha-*` と `app-sha-*` に `driver-v0.1.0` と `app-v0.1.0` のタグを足す。
+`driver-latest` と `app-latest` は、最も新しいバージョンのタグと同じイメージを指す。
 
 ## driver の操作
 

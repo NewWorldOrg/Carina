@@ -417,7 +417,9 @@ GitHub Actions runs, on push and pull request to `master`, the build with warnin
 as errors, the format check, the test jobs above and the image-tag check. A second
 workflow builds the image and renders the compose file; it stays out of the way of
 draft pull requests, and on `master` publishes the image under the tags the README
-describes.
+describes. A third, on a `v*` tag, builds nothing: it refuses a tag that is not the
+version `Directory.Build.props` declares, and gives the images that commit was
+already published under the release's tags.
 
 `.github/image-tags.sh` derives the driver and app sides of the image from the
 stages of the `Dockerfile` and the project references they publish rather than
@@ -425,7 +427,8 @@ from a list, and refuses to answer when something that goes into the image belon
 to neither side. Its `prove` runs on every push: a change to one side alone must
 move that side's tag and leave the other where it was. A tag already in the
 registry is never pushed again, because a driver left running on it would have its
-image changed underneath it.
+image changed underneath it. `driver-latest` and `app-latest` are the exception, and
+follow the newest release.
 
 `THIRD-PARTY-NOTICES.md` is checked by the image build. `docker/notices/nuget.sh`
 writes the license of every NuGet package the driver, app and migrate programs
