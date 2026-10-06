@@ -20,6 +20,7 @@ public static partial class MeasurementRules
 
     public static readonly IReadOnlyList<string> AllowedToTakeTheStreamApart =
     [
+        "Carina.Driver/Descrambling/TransportStreamDescrambler.cs",
         "Carina.Driver/Sessions/TunerSession.cs",
         "Carina.Driver/Transport/ContinuityCounterTracker.cs",
         "Carina.Driver/Transport/TsPacketReader.cs",
