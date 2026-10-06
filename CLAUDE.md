@@ -435,7 +435,8 @@ to neither side. Its `prove` runs on every push: a change to one side alone must
 move that side's tag and leave the other where it was. A tag already in the
 registry is never pushed again, because a driver left running on it would have its
 image changed underneath it. `driver-latest` and `app-latest` are the exception, and
-follow the newest release.
+follow the newest release that is not a prerelease; `.github/release-latest.sh` makes
+that call and its `prove` runs on every push.
 
 `THIRD-PARTY-NOTICES.md` is checked by the image build. `docker/notices/nuget.sh`
 writes the license of every NuGet package the driver, app and migrate programs

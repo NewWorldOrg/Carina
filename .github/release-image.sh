@@ -41,10 +41,10 @@ else
   esac
 fi
 
-newest="$(git tag --list 'v*' --sort=-version:refname | sed -n 1p)"
+takes_latest="$(git tag --list 'v*' | "$(dirname "$0")/release-latest.sh" answer "${release}")"
 
-if [ "${release}" = "${newest}" ]; then
+if [ "${takes_latest}" = yes ]; then
   name "${repository}:${prefix}latest"
 else
-  echo "${release} is older than ${newest}, so ${repository}:${prefix}latest stays where it is."
+  echo "${takes_latest}, so ${repository}:${prefix}latest stays where it is."
 fi
