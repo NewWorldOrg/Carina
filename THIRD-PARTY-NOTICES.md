@@ -37,3 +37,7 @@ The image carries the components below beside Carina itself.
 The corresponding source of the FFmpeg binaries is in the image at
 `/usr/share/doc/carina/ffmpeg/source/`: the release archive as downloaded, the
 patch applied to it, and the configure options.
+
+The corresponding source of x264 is in the image at
+`/usr/share/doc/carina/x264/source/`: the Ubuntu source package of the installed
+version of `libx264-164`.

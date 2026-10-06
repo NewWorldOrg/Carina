@@ -87,8 +87,13 @@ RUN apt-get update \
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 
-RUN apt-get update \
+RUN sed 's/^Types: deb$/Types: deb-src/' /etc/apt/sources.list.d/ubuntu.sources > /etc/apt/sources.list.d/ubuntu-src.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 libpcsclite1 \
+    && mkdir -p /usr/share/doc/carina/x264/source \
+    && cd /usr/share/doc/carina/x264/source \
+    && apt-get source --download-only "x264=$(dpkg-query -W -f '${source:Version}' libx264-164)" \
+    && rm /etc/apt/sources.list.d/ubuntu-src.sources \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f
 COPY docker/fonts.conf /etc/fonts/local.conf

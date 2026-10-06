@@ -272,7 +272,7 @@ driver がライブ録画を書き込むルートそのもので、移行が運�
 
 `ffmpeg` はディストリビューションのパッケージではなく、イメージの中でソースから作る。
 字幕を絵にするデコーダを持つパッケージが無いため。VAAPI には `intel-media-va-driver` も要る。
-同梱物のライセンスと `ffmpeg` の対応するソースはイメージの `/usr/share/doc/carina/` にあり、一覧は `THIRD-PARTY-NOTICES.md` にある。
+同梱物のライセンスと、`ffmpeg`・x264 の対応するソースはイメージの `/usr/share/doc/carina/` にあり、一覧は `THIRD-PARTY-NOTICES.md` にある。
 
 ## イメージのタグ
 
