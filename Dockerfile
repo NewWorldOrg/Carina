@@ -1,22 +1,5 @@
 ARG DOTNET_VERSION=10.0
 
-FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS card-build
-ARG ARIBB25_TAG=v0.2.9
-ARG ARIBB25_COMMIT=a2225c6f3b92092f2e8a62b21f2990e44b561658
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ca-certificates cmake g++ gcc git make pkg-config libpcsclite-dev \
-    && rm -rf /var/lib/apt/lists/*
-WORKDIR /src
-RUN git clone --depth 1 --branch "${ARIBB25_TAG}" \
-        https://github.com/tsukumijima/libaribb25.git libaribb25 \
-    && test "$(git -C libaribb25 rev-parse HEAD)" = "${ARIBB25_COMMIT}" \
-    && cmake -S libaribb25 -B build -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build -j"$(nproc)" \
-    && mkdir -p /out/card /out/notices/libaribb25 \
-    && cp -P build/libaribb25.so* /out/card/ \
-    && cp libaribb25/LICENSE libaribb25/NOTICE /out/notices/libaribb25/
-
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS ffmpeg-build
 ARG ARIBCAPTION_TAG=v1.1.2
 ARG ARIBCAPTION_COMMIT=c64c23b8905ba514b87c9789269e9f66f949ffe0
@@ -101,8 +84,6 @@ FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS driver-develop
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpcsclite1 \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=card-build /out/card/ /usr/local/lib/
-RUN ldconfig
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 
@@ -112,10 +93,8 @@ RUN apt-get update \
     && fc-cache -f
 COPY docker/fonts.conf /etc/fonts/local.conf
 
-COPY --from=card-build /out/card/ /usr/local/lib/
 COPY --from=ffmpeg-build /out/ffmpeg/bin/ /usr/local/bin/
 COPY --from=ffmpeg-build /out/ffmpeg/lib/ /usr/local/lib/
-COPY --from=card-build /out/notices/ /usr/share/doc/carina/
 COPY --from=ffmpeg-build /out/notices/ /usr/share/doc/carina/
 COPY LICENSE /usr/share/doc/carina/LICENSE
 RUN ldconfig

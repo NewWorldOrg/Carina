@@ -279,7 +279,7 @@ driver がライブ録画を書き込むルートそのもので、移行が運�
 - WebSocket(`/api/live/ws`)と SSE(`/api/events`)は切らず、溜めずに流す
 - `Range` は素通しにする(録画の再生とシーク)
 
-`ffmpeg` と `libaribb25` は配布物のパッケージではなくイメージの中でソースから作る。
+`ffmpeg` は配布物のパッケージではなくイメージの中でソースから作る。
 字幕を絵にするデコーダを持つパッケージが無いため。VAAPI には `intel-media-va-driver` も要る。
 同梱物のライセンスと `ffmpeg` の対応するソースはイメージの `/usr/share/doc/carina/` にあり、一覧は `THIRD-PARTY-NOTICES.md` にある。
 
