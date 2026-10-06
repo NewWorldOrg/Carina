@@ -92,6 +92,21 @@ public sealed class TransportStreamDescramblerTests
     }
 
     [Fact]
+    public void ANewEcmIsReadEvenWhenItsPacketRepeatsTheContinuityCounter()
+    {
+        SyntheticScrambledStream stream = Settled()
+            .Scrambled(VideoPid, FirstEcm, odd: true, seed: 14)
+            .RepeatCounter(EcmPid)
+            .Ecm(EcmPid, SecondEcm)
+            .Scrambled(VideoPid, SecondEcm, odd: true, seed: 15);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection card);
+
+        Assert.Equal(stream.Output, descrambler.Descramble(stream.Input));
+        Assert.Equal([FirstEcm, SecondEcm], card.EcmBodies);
+    }
+
+    [Fact]
     public void EveryProgrammeIsUnscrambledWithTheEcmItsPmtNamesAndAStreamsOwnEcmComesFirst()
     {
         SyntheticScrambledStream stream = new SyntheticScrambledStream()

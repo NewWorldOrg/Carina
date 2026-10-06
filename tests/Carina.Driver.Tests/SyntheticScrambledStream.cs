@@ -107,6 +107,13 @@ internal sealed class SyntheticScrambledStream
         return this;
     }
 
+    public SyntheticScrambledStream RepeatCounter(int pid)
+    {
+        counters[pid] = (counters.GetValueOrDefault(pid) + 15) & 15;
+
+        return this;
+    }
+
     public SyntheticScrambledStream Clear(int pid, int seed)
     {
         byte[] packet = ClearPacket(pid, seed, -1, scrambling: 0);
