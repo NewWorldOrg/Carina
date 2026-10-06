@@ -327,7 +327,8 @@ app だけの変更では `app-sha-*` だけが変わる。
 どちらの側に何が入るかは、`.github/image-tags.sh inputs driver`(または `app`)で確かめられる。
 
 `v0.1.0` のようなバージョンのタグを push すると、CI はイメージを作り直さず、そのコミットの `driver-sha-*` と `app-sha-*` に `driver-v0.1.0` と `app-v0.1.0` のタグを足す。
-`driver-latest` と `app-latest` は、最も新しいバージョンのタグと同じイメージを指す。
+`driver-latest` と `app-latest` は、prerelease(`v0.2.0-rc.1` のように `-` を含むもの)を除いた最も新しいバージョンのタグと同じイメージを指す。
+prerelease のタグを push したときは、`driver-v0.2.0-rc.1` のようなそのバージョンのタグだけが足される。
 
 ## driver の操作
 
