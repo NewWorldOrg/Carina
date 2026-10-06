@@ -189,6 +189,19 @@ public sealed class ConditionalAccessCardTests
     }
 
     [Fact]
+    public void AShortAnswerThatRefusesIsStillARefusal()
+    {
+        FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection card);
+        using ConditionalAccessCard opened = ConditionalAccessCard.Open(service);
+        card.Override = sent => sent[1] is 0x34 ? [0x00, 0x00, 0x00, 0x34, 0xA1, 0x02, 0x90, 0x00] : null;
+
+        EcmAnswer answer = opened.Answer(SyntheticEcm);
+
+        Assert.False(answer.Granted);
+        Assert.Equal(0xA102, answer.ReturnCode);
+    }
+
+    [Fact]
     public void AnAnswerThatDoesNotEndCompletedIsAFailure()
     {
         FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection card);

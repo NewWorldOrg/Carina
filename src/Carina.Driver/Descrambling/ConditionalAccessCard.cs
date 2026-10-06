@@ -166,13 +166,15 @@ public sealed class ConditionalAccessCard : IDisposable
             ObjectDisposedException.ThrowIf(disposed, this);
 
             byte[] answer = TransmitOnce(command, "an ECM");
-            ReadOnlySpan<byte> payload = Payload(answer, EcmAnswerLength, "an ECM");
+            ReadOnlySpan<byte> payload = Payload(answer, ReturnCodeOffset + 2, "an ECM");
             ushort returnCode = BinaryPrimitives.ReadUInt16BigEndian(payload[ReturnCodeOffset..]);
 
             if (!GrantingCodes.Contains(returnCode))
             {
                 return new EcmAnswer(returnCode, null);
             }
+
+            payload = Payload(answer, EcmAnswerLength, "an ECM that unlocked its keys");
 
             return new EcmAnswer(
                 returnCode,
