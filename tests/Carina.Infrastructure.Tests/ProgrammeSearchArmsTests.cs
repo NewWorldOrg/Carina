@@ -103,10 +103,14 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             network,
             string.Empty,
             new ProgrammeConditions { Marks = [ProgrammeMark.New] }),
-        ["two marks either of which is enough"] = network => Ask(
+        ["two marks both of which are needed"] = network => Ask(
             network,
             string.Empty,
-            new ProgrammeConditions { Marks = [ProgrammeMark.New, ProgrammeMark.Final] }),
+            new ProgrammeConditions { Marks = [ProgrammeMark.New, ProgrammeMark.Rerun] }),
+        ["a mark in the archive"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Marks = [ProgrammeMark.Final] }),
         ["a mark left out"] = network => Ask(
             network,
             string.Empty,
@@ -229,14 +233,19 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             Asked["a mark asked for and another left out"](network),
             At,
             Cancel);
-        PaginatedList<ProgrammeMatch> eitherEnd = await repository.SearchAsync(
-            Asked["two marks either of which is enough"](network),
+        PaginatedList<ProgrammeMatch> both = await repository.SearchAsync(
+            Asked["two marks both of which are needed"](network),
+            At,
+            Cancel);
+        PaginatedList<ProgrammeMatch> archived = await repository.SearchAsync(
+            Asked["a mark in the archive"](network),
             At,
             Cancel);
 
         Assert.Equal(["\U0001F21Fアニメ", "\U0001F21F\U0001F21Eアニメ"], Spelt(brandNew).Order(StringComparer.Ordinal));
         Assert.Equal(["\U0001F21Fアニメ"], Spelt(notAgain));
-        Assert.Contains("\U0001F221ドラマ", Spelt(eitherEnd));
+        Assert.Equal(["\U0001F21F\U0001F21Eアニメ"], Spelt(both));
+        Assert.Equal(["\U0001F221ドラマ"], Spelt(archived));
     }
 
     [Fact]

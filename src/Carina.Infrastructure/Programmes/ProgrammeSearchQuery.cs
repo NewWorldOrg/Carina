@@ -69,8 +69,8 @@ public static class ProgrammeSearchQuery
             || Numbers(All(asked, Genre)) is not { } genres
             || SubGenres(All(asked, SubGenre)) is not { } subGenres
             || Every<DayOfWeek>(All(asked, Day)) is not { } days
-            || Every<ProgrammeMark>(All(asked, Mark)) is not { } marks
-            || Every<ProgrammeMark>(All(asked, ExcludeMark)) is not { } excludedMarks
+            || Named<ProgrammeMark>(All(asked, Mark)) is not { } marks
+            || Named<ProgrammeMark>(All(asked, ExcludeMark)) is not { } excludedMarks
             || ProgrammeServiceText.Every(All(asked, Channel)) is not { } channels)
         {
             return null;
@@ -122,6 +122,25 @@ public static class ProgrammeSearchQuery
             }
 
             carried.Add(read);
+        }
+
+        return carried;
+    }
+
+    private static IReadOnlyList<TKind>? Named<TKind>(IReadOnlyList<string> texts)
+        where TKind : struct, Enum
+    {
+        var carried = new List<TKind>(texts.Count);
+
+        foreach (string text in texts)
+        {
+            if (Enum.GetNames<TKind>().FirstOrDefault(name => string.Equals(name, text, StringComparison.OrdinalIgnoreCase))
+                is not { } name)
+            {
+                return null;
+            }
+
+            carried.Add(Enum.Parse<TKind>(name));
         }
 
         return carried;

@@ -26,13 +26,13 @@ public sealed class ProgrammeMarkMatchingTests
         => Assert.False(Matches("新番組 [新]", "新", Asking(marks: [ProgrammeMark.New])));
 
     [Fact]
-    public void AnyOneOfTheMarksAskedForIsEnough()
+    public void EveryMarkAskedForHasToBeCarriedAsEveryWordAskedForDoes()
     {
-        ProgrammeSearch asked = Asking(marks: [ProgrammeMark.New, ProgrammeMark.Premiere]);
+        ProgrammeSearch asked = Asking(marks: [ProgrammeMark.New, ProgrammeMark.Captioned]);
 
-        Assert.True(Matches("\U0001F220アニメ", string.Empty, asked));
-        Assert.True(Matches("\U0001F21Fアニメ", string.Empty, asked));
-        Assert.False(Matches("\U0001F221アニメ", string.Empty, asked));
+        Assert.True(Matches("\U0001F21Fアニメ", "\U0001F211", asked));
+        Assert.False(Matches("\U0001F21Fアニメ", string.Empty, asked));
+        Assert.False(Matches("\U0001F211アニメ", string.Empty, asked));
     }
 
     [Fact]

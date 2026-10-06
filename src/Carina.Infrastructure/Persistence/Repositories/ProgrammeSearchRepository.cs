@@ -57,12 +57,9 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
                 asked.Contains(EF.Property<int>(match, ProgrammeConfiguration.BroadcastDayOfWeek)));
         }
 
-        if (search.Marks.Count > 0)
+        foreach (string mark in Spelt(search.Marks))
         {
-            string[] carried = Spelt(search.Marks);
-
-            found = found.Where(match =>
-                EF.Property<string[]>(match, ProgrammeConfiguration.Marks).Any(mark => carried.Contains(mark)));
+            found = found.Where(match => EF.Property<string[]>(match, ProgrammeConfiguration.Marks).Contains(mark));
         }
 
         if (search.ExcludedMarks.Count > 0)
