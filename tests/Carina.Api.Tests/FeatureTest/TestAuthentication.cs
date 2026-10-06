@@ -2,6 +2,8 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 
+using Carina.Api.Authentication;
+
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -21,6 +23,8 @@ internal sealed class TestAuthenticationHandler(
 
     public const string Tester = "tester";
 
+    public const string TesterDisplayName = "Tester";
+
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (Request.Headers.Authorization is not [string offered]
@@ -33,6 +37,7 @@ internal sealed class TestAuthenticationHandler(
             [
                 new Claim(ClaimTypes.Name, Tester),
                 new Claim(ClaimTypes.NameIdentifier, Tester),
+                new Claim(SessionClaims.DisplayName, TesterDisplayName),
             ],
             SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);

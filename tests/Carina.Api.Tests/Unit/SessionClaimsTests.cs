@@ -46,6 +46,26 @@ public sealed class SessionClaimsTests
         Assert.Equal("a device", SessionClaims.DeviceOf(principal));
     }
 
+    [Fact(DisplayName = "the principal carries the display name of whoever its session signed in as")]
+    public void ThePrincipalCarriesTheDisplayNameOfWhoeverItsSessionSignedInAs()
+    {
+        AuthSession session = AuthSession.Start(
+            SessionId.Issue(),
+            new Subject("a-subject"),
+            "someone@example.org",
+            AuthMethod.Oidc,
+            "a device",
+            At);
+
+        ClaimsPrincipal principal = SessionClaims.Principal(session, SessionAuthenticationHandler.SchemeName);
+
+        Assert.Equal("someone@example.org", SessionClaims.DisplayNameOf(principal));
+    }
+
+    [Fact]
+    public void APrincipalWithNoSessionNamesNoDisplayName()
+        => Assert.Null(SessionClaims.DisplayNameOf(new ClaimsPrincipal(new ClaimsIdentity())));
+
     [Fact]
     public void APrincipalWithNoSessionNamesNoDevice()
     {

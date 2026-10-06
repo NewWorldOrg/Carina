@@ -8,29 +8,29 @@ public sealed record QualityThresholdSettled(QualityThreshold Threshold, Quality
 public static class QualityThresholdSettling
 {
     /// <summary>
-    /// Sets a level by hand. The measurement it may stand beside is kept, and no later one moves it.
+    /// Sets a level by hand, naming who set it. The measurement it may stand beside is kept, and no later one moves it.
     /// </summary>
-    public static QualityThresholdSettled ByHand(QualityThresholdStanding standing, double value, DateTime at)
+    public static QualityThresholdSettled ByHand(QualityThresholdStanding standing, double value, DateTime at, string? by)
     {
         ArgumentNullException.ThrowIfNull(standing);
 
         QualityThreshold revised = QualityThreshold.Rehydrate(
             standing.Key,
             Threshold.Of(standing.Setting.Default, value, provisional: true, 0, at),
-            standing.UpdatedBy,
+            by,
             byHand: true,
             standing.Measurement);
 
         return new QualityThresholdSettled(
             revised,
-            Change(standing, value, at, QualityThresholdChangeCause.Hand));
+            Change(standing, value, at, by, QualityThresholdChangeCause.Hand));
     }
 
     /// <summary>
-    /// Lets go of a level set by hand, back to the measurement it stands beside or, without one, the shipped value.
-    /// A level nobody set by hand is left as it is.
+    /// Lets go of a level set by hand, back to the measurement it stands beside or, without one, the shipped value,
+    /// naming who let go of it. A level nobody set by hand is left as it is.
     /// </summary>
-    public static QualityThresholdSettled Released(QualityThresholdStanding standing, DateTime at)
+    public static QualityThresholdSettled Released(QualityThresholdStanding standing, DateTime at, string? by)
     {
         ArgumentNullException.ThrowIfNull(standing);
 
@@ -44,13 +44,13 @@ public static class QualityThresholdSettling
             : Threshold.Of(standing.Setting.Default, standing.Setting.Default, provisional: true, 0, at);
 
         return new QualityThresholdSettled(
-            QualityThreshold.Rehydrate(standing.Key, setting, standing.UpdatedBy, byHand: false, standing.Measurement),
-            Change(standing, setting.Current, at, QualityThresholdChangeCause.Hand));
+            QualityThreshold.Rehydrate(standing.Key, setting, by, byHand: false, standing.Measurement),
+            Change(standing, setting.Current, at, by, QualityThresholdChangeCause.Hand));
     }
 
     /// <summary>
     /// Keeps a new measurement, and takes its value unless the level was set by hand. A change is recorded only
-    /// when the value in force moved.
+    /// when the value in force moved. A level the measurement decides names nobody as its updater.
     /// </summary>
     public static QualityThresholdSettled Measured(QualityThresholdStanding standing, QualityThresholdMeasurement measurement)
     {
@@ -72,10 +72,10 @@ public static class QualityThresholdSettling
             measurement.MeasuredAt);
         QualityThresholdChange? change = standing.Setting.Current.Equals(measurement.Value)
             ? null
-            : Change(standing, measurement.Value, measurement.MeasuredAt, QualityThresholdChangeCause.Measurement);
+            : Change(standing, measurement.Value, measurement.MeasuredAt, null, QualityThresholdChangeCause.Measurement);
 
         return new QualityThresholdSettled(
-            QualityThreshold.Rehydrate(standing.Key, setting, standing.UpdatedBy, byHand: false, measurement),
+            QualityThreshold.Rehydrate(standing.Key, setting, null, byHand: false, measurement),
             change);
     }
 
@@ -86,6 +86,7 @@ public static class QualityThresholdSettling
         QualityThresholdStanding standing,
         double next,
         DateTime at,
+        string? by,
         QualityThresholdChangeCause cause)
         => QualityThresholdChange.Record(
             QualityThresholdChangeId.New(),
@@ -93,6 +94,6 @@ public static class QualityThresholdSettling
             standing.Setting.Current,
             next,
             at,
-            null,
+            by,
             cause);
 }

@@ -1,10 +1,11 @@
+using Carina.Domain.Auth;
 using Carina.Domain.Base;
 
 namespace Carina.Domain.Quality;
 
 public sealed class QualityThresholdChange
 {
-    public const int ChangedByMaxLength = 128;
+    public const int ChangedByMaxLength = AuthSession.LongestDisplayName;
 
     private QualityThresholdChange()
     {

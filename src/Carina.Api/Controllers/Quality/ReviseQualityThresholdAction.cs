@@ -32,10 +32,12 @@ public sealed class ReviseQualityThresholdAction(QualityThresholdService thresho
             return NotFound(BaseResponder<QualityThresholdResponder>.Error(QualitySaying.NoSuchThreshold()));
         }
 
+        string? by = SessionClaims.DisplayNameOf(User);
+
         return request switch
         {
-            { Value: { } value, ByHand: null or true } => Answered(await thresholds.ReviseAsync(named, value, cancellationToken)),
-            { Value: null, ByHand: false } => Answered(await thresholds.ReleaseAsync(named, cancellationToken)),
+            { Value: { } value, ByHand: null or true } => Answered(await thresholds.ReviseAsync(named, value, by, cancellationToken)),
+            { Value: null, ByHand: false } => Answered(await thresholds.ReleaseAsync(named, by, cancellationToken)),
             _ => BadRequest(BaseResponder<QualityThresholdResponder>.Error(
                 "A threshold is moved by naming the value it moves to, or let go of by saying it is no longer set by hand.")),
         };
