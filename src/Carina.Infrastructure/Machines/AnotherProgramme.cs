@@ -82,6 +82,15 @@ public static class AnotherProgramme
         => Start(programme, arguments, ProgrammePriority.Ordinary);
 
     public static ProgrammeStart Start(string programme, IReadOnlyList<string> arguments, ProgrammePriority priority)
+        => Start(programme, priority, () => Describe(programme, arguments, priority));
+
+    /// <summary>
+    /// Starts a programme the caller goes on to write to on its standard input.
+    /// </summary>
+    public static ProgrammeStart StartFed(string programme, IReadOnlyList<string> arguments)
+        => Start(programme, ProgrammePriority.Ordinary, () => Fed(Describe(programme, arguments)));
+
+    private static ProgrammeStart Start(string programme, ProgrammePriority priority, Func<ProcessStartInfo> described)
     {
         ArgumentException.ThrowIfNullOrEmpty(programme);
 
@@ -94,7 +103,7 @@ public static class AnotherProgramme
 
         try
         {
-            started = Process.Start(Describe(programme, arguments, priority));
+            started = Process.Start(described());
         }
         catch (Win32Exception failure)
         {
@@ -178,6 +187,13 @@ public static class AnotherProgramme
             .Split(':')
             .Select(directory => Path.Combine(directory, programme))
             .FirstOrDefault(File.Exists);
+    }
+
+    private static ProcessStartInfo Fed(ProcessStartInfo start)
+    {
+        start.RedirectStandardInput = true;
+
+        return start;
     }
 
     private static string? NotOnThisMachine(string programme, ProgrammePriority priority)

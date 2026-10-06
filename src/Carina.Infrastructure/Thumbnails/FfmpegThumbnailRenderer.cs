@@ -1,8 +1,8 @@
-using System.ComponentModel;
 using System.Diagnostics;
 
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Thumbnails;
 
@@ -85,36 +85,11 @@ public sealed class FfmpegThumbnailRenderer(ThumbnailSettings settings, TimeProv
         bool keepingWhatItWrote,
         CancellationToken cancellationToken)
     {
-        var start = new ProcessStartInfo(settings.Programme)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
+        ProgrammeStart start = AnotherProgramme.Start(settings.Programme, arguments);
 
-        foreach (string argument in arguments)
+        if (start.Process is not { } started)
         {
-            start.ArgumentList.Add(argument);
-        }
-
-        Process? started;
-
-        try
-        {
-            started = Process.Start(start);
-        }
-        catch (Win32Exception failure)
-        {
-            return ThumbnailRender.Failed(
-                ThumbnailFault.ProgrammeMissing,
-                $"'{settings.Programme}' could not be started on this machine: {failure.Message}");
-        }
-
-        if (started is null)
-        {
-            return ThumbnailRender.Failed(
-                ThumbnailFault.ProgrammeMissing,
-                $"'{settings.Programme}' started no process of its own.");
+            return ThumbnailRender.Failed(ThumbnailFault.ProgrammeMissing, start.Complained);
         }
 
         using Process running = started;

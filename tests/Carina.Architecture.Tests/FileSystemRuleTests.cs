@@ -62,15 +62,9 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Programmes/ProgrammeSearchQuery.cs .Replace(",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
         "/Carina.Infrastructure/Scanning/TableHarvest.cs .CopyTo(",
-        "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
-        "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
         "/Carina.Infrastructure/Streaming/LiveHandedOverReading.cs .CopyTo(",
         "/Carina.Infrastructure/Streaming/NutFrames.cs .CopyTo(",
-        "/Carina.Infrastructure/Streaming/TranscoderProcess.cs Process.Start",
-        "/Carina.Infrastructure/Streaming/TranscoderProcess.cs ProcessStartInfo",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Directory.CreateDirectory",
-        "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
-        "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
     ];
 
     [Fact]
@@ -129,19 +123,13 @@ public sealed class FileSystemRuleTests
             Inventory.Where(entry => entry.Contains("/Migration/", StringComparison.Ordinal)).ToArray());
     }
 
-    [Fact]
-    public void TheOnlyPlacesThatStartAProgrammeOfTheirOwnAreTheOnesThatAskFfmpegSomething()
+    [Fact(DisplayName = "the only place that starts a programme is the one that gives it an environment of its own")]
+    public void TheOnlyPlaceThatStartsAProgrammeIsTheOneThatGivesItAnEnvironmentOfItsOwn()
     {
         Assert.Equal(
             [
                 "/Carina.Infrastructure/Machines/AnotherProgramme.cs Process.Start",
                 "/Carina.Infrastructure/Machines/AnotherProgramme.cs ProcessStartInfo",
-                "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
-                "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
-                "/Carina.Infrastructure/Streaming/TranscoderProcess.cs Process.Start",
-                "/Carina.Infrastructure/Streaming/TranscoderProcess.cs ProcessStartInfo",
-                "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
-                "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
             ],
             Inventory.Where(entry => entry.Contains("Process", StringComparison.Ordinal)).ToArray());
     }
@@ -149,14 +137,9 @@ public sealed class FileSystemRuleTests
     [Fact]
     public void WhatReadsAStreamsAttributesReadsAndWritesNoFileOfItsOwn()
     {
-        Assert.Equal(
-            [
-                "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
-                "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
-            ],
-            Inventory
-                .Where(entry => entry.Contains("FfprobeStreamAttributeReader", StringComparison.Ordinal))
-                .ToArray());
+        Assert.DoesNotContain(
+            Inventory,
+            entry => entry.Contains("FfprobeStreamAttributeReader", StringComparison.Ordinal));
     }
 
     private static bool OpensSomething(string entry)
@@ -202,8 +185,6 @@ public sealed class FileSystemRuleTests
         Assert.Equal(
             [
                 "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Directory.CreateDirectory",
-                "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
-                "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
             ],
             Inventory.Where(entry => entry.Contains("/Thumbnails/", StringComparison.Ordinal)).ToArray());
     }

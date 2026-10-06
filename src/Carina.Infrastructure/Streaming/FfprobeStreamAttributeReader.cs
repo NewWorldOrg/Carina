@@ -1,8 +1,8 @@
-using System.ComponentModel;
 using System.Diagnostics;
 
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Streaming;
 
@@ -44,36 +44,11 @@ public sealed class FfprobeStreamAttributeReader(StreamAttributeSettings setting
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
-        var start = new ProcessStartInfo(settings.Programme)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
+        ProgrammeStart start = AnotherProgramme.Start(settings.Programme, arguments);
 
-        foreach (string argument in arguments)
+        if (start.Process is not { } started)
         {
-            start.ArgumentList.Add(argument);
-        }
-
-        Process? started;
-
-        try
-        {
-            started = Process.Start(start);
-        }
-        catch (Win32Exception failure)
-        {
-            return FfprobeAnswer.Unanswered(
-                StreamProbeFault.ProgrammeMissing,
-                $"'{settings.Programme}' could not be started on this machine: {failure.Message}");
-        }
-
-        if (started is null)
-        {
-            return FfprobeAnswer.Unanswered(
-                StreamProbeFault.ProgrammeMissing,
-                $"'{settings.Programme}' started no process of its own.");
+            return FfprobeAnswer.Unanswered(StreamProbeFault.ProgrammeMissing, start.Complained);
         }
 
         using Process running = started;
