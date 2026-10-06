@@ -25,7 +25,7 @@ public sealed class SectionCollector
     {
         ArgumentNullException.ThrowIfNull(whole);
 
-        if (counter == lastCounter)
+        if (counter == lastCounter && !unitStart)
         {
             return;
         }
