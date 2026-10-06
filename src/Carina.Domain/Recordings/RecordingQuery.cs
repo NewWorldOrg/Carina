@@ -60,7 +60,8 @@ public sealed class RecordingQuery
         RecordingSort sort,
         bool descending,
         int page,
-        int perPage)
+        int perPage,
+        RecordingCursor? after)
     {
         Keyword = keyword;
         Standing = standing;
@@ -73,6 +74,7 @@ public sealed class RecordingQuery
         Descending = descending;
         Page = page;
         PerPage = perPage;
+        After = after;
     }
 
     public RecordingKeyword Keyword { get; }
@@ -97,6 +99,11 @@ public sealed class RecordingQuery
 
     public int PerPage { get; }
 
+    /// <summary>
+    /// The place the page carries on from, in place of a page number.
+    /// </summary>
+    public RecordingCursor? After { get; }
+
     public static RecordingQuery? For(
         DateTime? from,
         DateTime? to,
@@ -104,7 +111,8 @@ public sealed class RecordingQuery
         bool descending = false,
         int? page = null,
         int? perPage = null,
-        RecordingConditions? conditions = null)
+        RecordingConditions? conditions = null,
+        RecordingCursor? after = null)
     {
         RecordingConditions beside = conditions ?? new RecordingConditions();
 
@@ -145,6 +153,11 @@ public sealed class RecordingQuery
             return null;
         }
 
+        if (after is not null && (page is not null || after.Sort != sort || after.Descending != descending))
+        {
+            return null;
+        }
+
         return new RecordingQuery(
             keyword,
             beside.Standing,
@@ -156,6 +169,7 @@ public sealed class RecordingQuery
             sort,
             descending,
             page ?? 1,
-            ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage));
+            ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage),
+            after);
     }
 }

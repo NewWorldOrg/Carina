@@ -191,7 +191,8 @@ public sealed record RecordingListResponder(
     int Total,
     int CurrentPage,
     int LastPage,
-    int PerPage)
+    int PerPage,
+    string? Next)
 {
     public static RecordingListResponder Of(RecordingPage page)
     {
@@ -207,6 +208,7 @@ public sealed record RecordingListResponder(
             found.Total,
             found.CurrentPage,
             found.LastPage,
-            found.PerPage);
+            found.PerPage,
+            page.Next?.Wire);
     }
 }

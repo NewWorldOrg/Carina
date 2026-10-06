@@ -38,7 +38,7 @@ public interface IRecordingDirectory
         DateTime at,
         CancellationToken cancellationToken);
 
-    Task<PaginatedList<Recording>> ListAsync(
+    Task<RecordingListing> ListAsync(
         RecordingQuery query,
         QualityBands bands,
         CancellationToken cancellationToken);
