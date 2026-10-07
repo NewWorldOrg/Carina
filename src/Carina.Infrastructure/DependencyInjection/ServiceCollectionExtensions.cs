@@ -40,6 +40,7 @@ using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Scanning;
+using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Streaming;
 using Carina.Infrastructure.Thumbnails;
 
@@ -189,6 +190,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPlaybackPositionRepository, PlaybackPositionRepository>();
         services.AddScoped<ILearningExtractionRepository, LearningExtractionRepository>();
         services.AddScoped<ILearningDataRepository, LearningDataRepository>();
+        services.AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>();
         services.AddScoped<IMigrationRecordRepository, MigrationRecordRepository>();
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
         services.AddScoped<IEncodeDestinationRepository, EncodeDestinationRepository>();
@@ -220,6 +222,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeArtefactPlacer>();
         services.AddScoped<EncodeArtefactSuccession>();
         services.AddScoped<IEncodeAutoRunReader, EncodeAutoRunReader>();
+        services.AddScoped<ILearningSwitch, LearningSwitch>();
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
         services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();

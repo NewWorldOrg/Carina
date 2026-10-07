@@ -97,6 +97,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         "/api/quality/incidents",
         "/api/quality/supply-health",
         "/api/quality/trends",
+        "/api/segments/settings",
         AppEventStream.Path,
     ];
 

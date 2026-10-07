@@ -305,6 +305,7 @@ public sealed class ChannelSchemaTests
                 "scan_run_attempt",
                 "segment_extraction",
                 "segment_learning_data",
+                "segment_settings",
                 "service_reach_config",
                 "station_logo",
                 "stream_visit",

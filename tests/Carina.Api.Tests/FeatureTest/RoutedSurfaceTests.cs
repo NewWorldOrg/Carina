@@ -178,6 +178,24 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 .ToArray());
     }
 
+    [Fact(DisplayName = "the segment surfaces are the two the settings are read and changed through, and changing them discards nothing")]
+    public void TheSegmentSurfacesAreTheTwoTheSettingsAreReadAndChangedThrough()
+    {
+        RoutedSurface[] segments =
+        [
+            .. Inventory()
+                .Where(surface => surface.Pattern.StartsWith("/api/segments", StringComparison.Ordinal))
+                .OrderBy(surface => surface.ToString(), StringComparer.Ordinal),
+        ];
+
+        Assert.Equal(
+            ["GET /api/segments/settings", "PATCH /api/segments/settings"],
+            segments.Select(surface => surface.ToString()).ToArray());
+        Assert.Equal(
+            [EndpointEffect.Reading, EndpointEffect.Changing],
+            segments.Select(surface => surface.Effect).ToArray());
+    }
+
     [Fact]
     public void TheReservationSurfacesAreTheNineAReservationIsMadeChangedThrownAwayAndAccountedForThrough()
     {
