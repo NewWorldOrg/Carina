@@ -238,7 +238,7 @@ public sealed class LearningFollowJob(
 
         foreach (Follow follow in stopping)
         {
-            await Ended(follow);
+            await EndedAsync(follow);
             follow.Stopping.Dispose();
             await ChangedAsync(follow.Recording.Id, LearningExtractionState.Following, found => found.Pause(Now()), cancellationToken);
         }
@@ -332,12 +332,12 @@ public sealed class LearningFollowJob(
 
         foreach (Follow follow in stopping)
         {
-            await Ended(follow);
+            await EndedAsync(follow);
             follow.Stopping.Dispose();
         }
     }
 
-    private static async Task Ended(Follow follow)
+    private static async Task EndedAsync(Follow follow)
         => await follow.Running.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
 
     private static async Task<ProgrammeCopy> CopyAsync(ILearningWorklist worklist, Recording recording, CancellationToken cancellationToken)
