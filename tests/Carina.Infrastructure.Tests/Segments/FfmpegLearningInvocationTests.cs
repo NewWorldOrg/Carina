@@ -9,7 +9,9 @@ namespace Carina.Infrastructure.Tests.Segments;
 
 public sealed class FfmpegLearningInvocationTests
 {
-    private static readonly IReadOnlyList<string> Arguments = FfmpegLearningInvocation.Arguments(new ServiceId(1040));
+    private static readonly TimeSpan HoursIntoTheDay = TimeSpan.FromTicks(512_345_678_910);
+
+    private static readonly IReadOnlyList<string> Arguments = FfmpegLearningInvocation.Arguments(new ServiceId(1040), HoursIntoTheDay);
 
     private static string Graph => Arguments[Arguments.ToList().IndexOf("-filter_complex") + 1];
 
@@ -19,7 +21,8 @@ public sealed class FfmpegLearningInvocationTests
         Assert.Equal(["-i", "pipe:0"], Following(Arguments, "-i", 1));
         Assert.Contains("-nostdin", Arguments);
         Assert.Contains("-copyts", Arguments);
-        Assert.Contains("-start_at_zero", Arguments);
+        Assert.DoesNotContain("-start_at_zero", Arguments);
+        Assert.DoesNotContain("-output_ts_offset", Arguments);
         Assert.Equal(["-threads", "1"], Following(Arguments, "-threads", 1));
         Assert.Equal(["-filter_threads", "1"], Following(Arguments, "-filter_threads", 1));
         Assert.Equal(["-filter_complex_threads", "1"], Following(Arguments, "-filter_complex_threads", 1));
@@ -27,6 +30,51 @@ public sealed class FfmpegLearningInvocationTests
         Assert.Equal(["-fps_mode", "passthrough"], Following(Arguments, "-fps_mode", 1));
         Assert.Equal(["-f", "matroska", "pipe:1"], Arguments.TakeLast(3));
         Assert.True(Arguments.ToList().IndexOf("-copyts") < Arguments.ToList().IndexOf("-i"));
+    }
+
+    [Fact(DisplayName = "the clock is moved once, on the input, by the lift less where the file begins, to the microsecond")]
+    public void TheClockIsMovedOnceOnTheInput()
+    {
+        Assert.Single(Arguments, argument => argument is "-itsoffset");
+        Assert.True(Arguments.ToList().IndexOf("-itsoffset") < Arguments.ToList().IndexOf("-i"));
+        Assert.Equal(["-itsoffset", "48765.432109"], Following(Arguments, "-itsoffset", 1));
+        Assert.Equal(TimeSpan.FromSeconds(100_000), FfmpegLearningInvocation.Lift);
+    }
+
+    [Fact(DisplayName = "the picture is decoded at half its size, asked of the picture's decoder alone, before the input")]
+    public void ThePictureIsDecodedAtHalfItsSize()
+    {
+        Assert.Equal(["-lowres:v", "1"], Following(Arguments, "-lowres:v", 1));
+        Assert.True(Arguments.ToList().IndexOf("-lowres:v") < Arguments.ToList().IndexOf("-i"));
+        Assert.DoesNotContain("-lowres", Arguments);
+    }
+
+    [Theory(DisplayName = "a moment ffmpeg reads is put on the recording's own time by taking off where the file begins, once, whether the file begins hours into the day, before zero because its clock comes around just after it begins, or with its clock coming around inside it")]
+    [InlineData(51234.567891, 12.345678)]
+    [InlineData(-2.6, 0.0)]
+    [InlineData(-2.6, 5.0)]
+    [InlineData(-59.5, 3600.25)]
+    [InlineData(95_433.717688, 0.0)]
+    [InlineData(95_433.717688, 30.0)]
+    [InlineData(95_433.717688, 7200.5)]
+    public void AMomentReadIsPutOnTheRecordingsOwnTime(double fileBegins, double intoTheRecording)
+    {
+        TimeSpan begins = TimeSpan.FromSeconds(fileBegins);
+        TimeSpan read = begins + TimeSpan.FromSeconds(intoTheRecording);
+
+        TimeSpan onTheRecording = FfmpegLearningInvocation.OnTheRecording(read + MovedBy(begins));
+
+        Assert.InRange(onTheRecording.TotalSeconds, intoTheRecording - 1e-6, intoTheRecording + 1e-6);
+        Assert.True(read + MovedBy(begins) > TimeSpan.Zero, "nothing ffmpeg hands back falls below zero");
+    }
+
+    [Fact(DisplayName = "a file read as beginning a whole turn of the clock away from zero, either side, is refused")]
+    public void AFileBeginningAWholeTurnAwayIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegLearningInvocation.Arguments(new ServiceId(1040), -EncodeTimeline.OneTurnOfTheClock));
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegLearningInvocation.Arguments(new ServiceId(1040), EncodeTimeline.OneTurnOfTheClock));
+        _ = FfmpegLearningInvocation.Arguments(new ServiceId(1040), -EncodeTimeline.OneTurnOfTheClock + TimeSpan.FromTicks(1));
+        _ = FfmpegLearningInvocation.Arguments(new ServiceId(1040), EncodeTimeline.OneTurnOfTheClock - TimeSpan.FromTicks(1));
     }
 
     [Fact(DisplayName = "the programme's first picture and first sound are taken by its service id")]
@@ -59,6 +107,14 @@ public sealed class FfmpegLearningInvocationTests
     [Fact(DisplayName = "nothing asks for the card")]
     public void NothingAsksForTheCard()
         => Assert.DoesNotContain(Arguments, argument => argument.Contains("vaapi", StringComparison.Ordinal) || argument.Contains("hwaccel", StringComparison.Ordinal));
+
+    private static TimeSpan MovedBy(TimeSpan fileBegins)
+    {
+        IReadOnlyList<string> arguments = FfmpegLearningInvocation.Arguments(new ServiceId(1040), fileBegins);
+        string offset = Following(arguments, "-itsoffset", 1)[1];
+
+        return TimeSpan.FromTicks((long)(decimal.Parse(offset, NumberStyles.Float, CultureInfo.InvariantCulture) * TimeSpan.TicksPerSecond));
+    }
 
     private static IReadOnlyList<string> Following(IReadOnlyList<string> arguments, string option, int after)
     {
