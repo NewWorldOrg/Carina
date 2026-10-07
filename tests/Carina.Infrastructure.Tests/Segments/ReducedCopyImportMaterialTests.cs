@@ -26,7 +26,8 @@ namespace Carina.Infrastructure.Tests.Segments;
 /// Makes a reduced copy of a broadcast synthesised with the ffmpeg the application runs, in the shape the
 /// copies were made in, imports it, and holds what was kept against what following the same broadcast
 /// keeps: the quiet and the dark at the same moments, fingerprints differing in fewer than a tenth of their
-/// bits, frames as bright, and outlines of the corners alike. The copy's sound is encoded at a rate this
+/// bits, the two channels as alike and their difference as loud, frames as bright, and outlines of the
+/// corners alike. The copy's sound is encoded at a rate this
 /// ffmpeg's own Opus encoder carries without loss worth the name, so what is measured is the import.
 /// </summary>
 [SupportedOSPlatform("linux")]
@@ -88,6 +89,9 @@ public sealed class ReducedCopyImportMaterialTests : IDisposable
         AssertSameMoments(followed.DarkMiddles(), imported.DarkMiddles(), "dark");
         Assert.True(Disagreeing(followed, imported) < 0.1, FormattableString.Invariant($"{Disagreeing(followed, imported):0.000} of the fingerprint bits disagree"));
         Assert.True(BrightnessApart(followed, imported) < 2, FormattableString.Invariant($"the frames are {BrightnessApart(followed, imported):0.00} steps of grey apart"));
+        Assert.InRange(followed.Likeness(), 0.6, 0.95);
+        Assert.True(LikenessApart(followed, imported) < 0.03, FormattableString.Invariant($"the channels are {LikenessApart(followed, imported):0.000} apart in how alike they are"));
+        Assert.True(DifferenceApart(followed, imported) < 1, FormattableString.Invariant($"the difference of the channels is {DifferenceApart(followed, imported):0.00} steps apart in how loud it is"));
         Assert.True(OutlinesApart(followed, imported) < 0.1, FormattableString.Invariant($"{OutlinesApart(followed, imported):0.000} of the corners' outline bits disagree"));
         Assert.Equal(before, Hashed(copy.Directory));
     }
@@ -247,6 +251,17 @@ public sealed class ReducedCopyImportMaterialTests : IDisposable
         return apart.Average();
     }
 
+    private static double LikenessApart(Taken followed, Taken imported)
+        => Paired(followed, imported)
+            .Where(pair => pair.Followed.Likeness is not null && pair.Imported.Likeness is not null)
+            .Average(pair => Math.Abs(pair.Followed.Likeness!.Value - pair.Imported.Likeness!.Value));
+
+    private static double DifferenceApart(Taken followed, Taken imported)
+        => Paired(followed, imported).Average(pair => Math.Abs(pair.Followed.Difference - pair.Imported.Difference));
+
+    private static IEnumerable<(ChannelDifference Followed, ChannelDifference Imported)> Paired(Taken followed, Taken imported)
+        => followed.Channels.Zip(imported.Channels).Where(pair => pair.First.Likeness is not null || pair.Second.Likeness is not null);
+
     private static double OutlinesApart(Taken followed, Taken imported)
     {
         int pictures = Math.Min(followed.Outlines.Count, imported.Outlines.Count);
@@ -398,6 +413,7 @@ public sealed class ReducedCopyImportMaterialTests : IDisposable
         LearningExtraction Record,
         IReadOnlyList<LearningDataBlock> Blocks,
         IReadOnlyList<uint> Fingerprints,
+        IReadOnlyList<ChannelDifference> Channels,
         IReadOnlyList<(double At, byte Loudness)> Loudness,
         IReadOnlyList<(double At, byte Brightness)> Frames,
         IReadOnlyList<byte[]> Outlines)
@@ -405,6 +421,7 @@ public sealed class ReducedCopyImportMaterialTests : IDisposable
         public static Taken Of(LearningExtraction record, IReadOnlyList<LearningDataBlock> blocks)
         {
             List<uint> fingerprints = [];
+            List<ChannelDifference> channels = [];
             List<(double, byte)> loudness = [];
             List<(double, byte)> frames = [];
             List<byte[]> outlines = [];
@@ -414,6 +431,7 @@ public sealed class ReducedCopyImportMaterialTests : IDisposable
                 Assert.True(block.TryRead(out LearningDataPart? part), $"the {block.Kind} of chunk {block.Chunk} could not be read back");
 
                 fingerprints.AddRange(part.Fingerprints.ToArray());
+                channels.AddRange(part.Channels.ToArray());
                 loudness.AddRange(part.Loudness.ToArray().Select((reading, index) => (part.Starts.TotalSeconds + (index * 0.02), reading)));
                 outlines.AddRange(part.CornerOutlines.ToArray().Chunk(CornerOutline.Bytes));
 
@@ -423,8 +441,11 @@ public sealed class ReducedCopyImportMaterialTests : IDisposable
                 }
             }
 
-            return new Taken(record, blocks, fingerprints, [.. loudness.OrderBy(reading => reading.Item1)], [.. frames.OrderBy(frame => frame.Item1)], outlines);
+            return new Taken(record, blocks, fingerprints, channels, [.. loudness.OrderBy(reading => reading.Item1)], [.. frames.OrderBy(frame => frame.Item1)], outlines);
         }
+
+        public double Likeness()
+            => Channels.Where(reading => reading.Likeness is not null).Average(reading => reading.Likeness!.Value);
 
         public List<double> QuietMiddles()
             => [.. Runs([.. Loudness.Select(reading => (reading.At, reading.Loudness >= Quiet))], 0.02).Where(run => run.Count >= 5).Select(run => run.Middle)];
