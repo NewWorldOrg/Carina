@@ -62,6 +62,37 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
         Assert.Equal(SegmentSettingsConfiguration.SingleRowCheck, refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "hands switching learning at once on a table that holds no row all get through, and one of them stands")]
+    public async Task HandsSwitchingAtOnceAllGetThroughAndOneOfThemStands()
+    {
+        await ClearAsync();
+
+        const int Hands = 8;
+        using var gate = new Barrier(Hands);
+        SegmentSettings[] switching =
+        [
+            .. Enumerable.Range(0, Hands).Select(hand => SegmentSettings.LearningSwitched(hand % 2 is 0, Noon.AddMinutes(hand))),
+        ];
+
+        await Task.WhenAll(switching.Select(settings => Task.Run(async () =>
+        {
+            await using CarinaDbContext writing = database.Open();
+            await writing.Database.OpenConnectionAsync(Cancel);
+            gate.SignalAndWait(Cancel);
+
+            await new SegmentSettingsRepository(writing).SaveAsync(settings, Cancel);
+        })));
+
+        await using CarinaDbContext reading = database.Open();
+        SegmentSettings? held = await new SegmentSettingsRepository(reading).ReadAsync(Cancel);
+
+        Assert.NotNull(held);
+        Assert.Equal(1, await reading.Set<SegmentSettings>().CountAsync(Cancel));
+        Assert.Contains(
+            (held.Learning, held.LearningChangedAt),
+            switching.Select(settings => (settings.Learning, settings.LearningChangedAt)));
+    }
+
     [Fact(DisplayName = "switching learning off and on again leaves every row of the learning data where it was")]
     public async Task SwitchingLearningLeavesEveryRowOfTheLearningData()
     {
