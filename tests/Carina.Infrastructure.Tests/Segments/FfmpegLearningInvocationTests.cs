@@ -41,6 +41,14 @@ public sealed class FfmpegLearningInvocationTests
         Assert.Equal(TimeSpan.FromSeconds(100_000), FfmpegLearningInvocation.Lift);
     }
 
+    [Fact(DisplayName = "the picture is decoded at half its size, asked of the picture's decoder alone, before the input")]
+    public void ThePictureIsDecodedAtHalfItsSize()
+    {
+        Assert.Equal(["-lowres:v", "1"], Following(Arguments, "-lowres:v", 1));
+        Assert.True(Arguments.ToList().IndexOf("-lowres:v") < Arguments.ToList().IndexOf("-i"));
+        Assert.DoesNotContain("-lowres", Arguments);
+    }
+
     [Theory(DisplayName = "a moment ffmpeg reads is put on the recording's own time by taking off where the file begins, once, whether the file begins hours into the day, before zero because its clock comes around just after it begins, or with its clock coming around inside it")]
     [InlineData(42227.955144, 12.345678)]
     [InlineData(-2.6, 0.0)]

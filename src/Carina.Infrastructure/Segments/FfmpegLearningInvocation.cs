@@ -7,10 +7,11 @@ namespace Carina.Infrastructure.Segments;
 
 /// <summary>
 /// The arguments for the run that decodes a recording fed on its standard input into what its
-/// learning data is made from, and nothing more: the programme's first picture shrunk to grey 64 by
-/// 36 at every frame, and to grey 480 by 270 at the first frame of each second, and its first sound
-/// at 8 kHz in two channels of 16-bit samples. All three go into Matroska on the standard output,
-/// every block carrying the recording's own time lifted by <see cref="Lift"/>. One thread, and no card.
+/// learning data is made from, and nothing more: the programme's first picture, decoded at half its
+/// size, shrunk to grey 64 by 36 at every frame, and to grey 480 by 270 at the first frame of each
+/// second, and its first sound at 8 kHz in two channels of 16-bit samples. All three go into Matroska
+/// on the standard output, every block carrying the recording's own time lifted by
+/// <see cref="Lift"/>. One thread, and no card.
 /// </summary>
 public static class FfmpegLearningInvocation
 {
@@ -56,6 +57,8 @@ public static class FfmpegLearningInvocation
             "-copyts",
             "-itsoffset",
             Offset(fileBegins),
+            "-lowres:v",
+            "1",
             "-i",
             Fed,
             "-filter_complex",
