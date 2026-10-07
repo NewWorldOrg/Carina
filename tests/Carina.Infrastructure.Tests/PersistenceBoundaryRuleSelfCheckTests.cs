@@ -8,6 +8,7 @@ using Carina.Infrastructure.Tests.Fixtures.Quality;
 using Carina.Infrastructure.Tests.Fixtures.Recordings;
 using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.Infrastructure.Tests.Fixtures.Rules;
+using Carina.Infrastructure.Tests.Fixtures.Segments;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -47,6 +48,8 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                 trace.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
             modelBuilder.Entity<CarryLog>(log =>
                 log.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
+            modelBuilder.Entity<LessonTrace>(trace =>
+                trace.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
         }
     }
 
@@ -128,6 +131,16 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
+    [Fact(DisplayName = "detects learning data that holds a foreign key into the recording ledger")]
+    public void DetectsLearningDataThatHoldsAForeignKeyIntoTheRecordingLedger()
+    {
+        using ViolatingDbContext context = Violating();
+
+        Assert.Contains(
+            "lesson_trace -> tape_entry",
+            PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
+    }
+
     [Fact]
     public void LeavesForeignKeysInsideTheReservationAggregateAlone()
     {
@@ -139,6 +152,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                 "burn_job -> tape_entry",
                 "carry_log -> tape_entry",
                 "guide_entry -> channel_lineup",
+                "lesson_trace -> tape_entry",
                 "recording_job -> guide_entry",
                 "signal_trace -> tape_entry",
                 "tape_entry -> booking",
@@ -153,7 +167,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
         using ViolatingDbContext context = Violating();
 
         Assert.DoesNotContain(
-            new[] { "booking", "burn_job", "guide_entry", "signal_trace", "tape_entry" },
+            new[] { "booking", "burn_job", "guide_entry", "lesson_trace", "signal_trace", "tape_entry" },
             table => FamilyPrefixes.Any(prefix => table.StartsWith(prefix, StringComparison.Ordinal)));
         Assert.Equal(
             [
@@ -161,6 +175,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                 "burn_job -> tape_entry",
                 "carry_log -> tape_entry",
                 "guide_entry -> channel_lineup",
+                "lesson_trace -> tape_entry",
                 "recording_job -> guide_entry",
                 "signal_trace -> tape_entry",
                 "tape_entry -> booking",

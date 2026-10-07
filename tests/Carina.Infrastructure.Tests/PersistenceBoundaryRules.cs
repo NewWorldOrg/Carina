@@ -15,6 +15,7 @@ public enum PersistenceFamily
     Quality,
     Migration,
     Viewing,
+    Segments,
 }
 
 public static class PersistenceBoundaryRules
@@ -33,6 +34,7 @@ public static class PersistenceBoundaryRules
             ["Quality"] = PersistenceFamily.Quality,
             ["Migration"] = PersistenceFamily.Migration,
             ["Viewing"] = PersistenceFamily.Viewing,
+            ["Segments"] = PersistenceFamily.Segments,
             ["Auth"] = PersistenceFamily.Unrelated,
         };
 
@@ -92,6 +94,11 @@ public static class PersistenceBoundaryRules
         }
 
         if (declaring is PersistenceFamily.Migration || principal is PersistenceFamily.Migration)
+        {
+            return declaring != principal;
+        }
+
+        if (declaring is PersistenceFamily.Segments || principal is PersistenceFamily.Segments)
         {
             return declaring != principal;
         }

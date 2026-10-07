@@ -242,6 +242,36 @@ public sealed class PersistenceBoundaryRuleTests
             StringComparer.Ordinal);
     }
 
+    [Fact(DisplayName = "the learning data is two tables, and none of them holds a key into another domain")]
+    public void TheLearningDataIsTwoTablesAndNoneOfThemHoldsAKeyIntoAnotherDomain()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            ["segment_extraction", "segment_learning_data"],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Segments));
+
+        Assert.Empty(context.Model
+            .GetEntityTypes()
+            .Where(entityType => entityType.GetTableName() is { } table && table.StartsWith("segment_", StringComparison.Ordinal))
+            .SelectMany(entityType => entityType.GetForeignKeys()));
+    }
+
+    [Theory(DisplayName = "the learning data reaches the recording it was taken from by value, not by key")]
+    [InlineData("segment_extraction")]
+    [InlineData("segment_learning_data")]
+    public void TheLearningDataReachesTheRecordingByValue(string table)
+    {
+        using CarinaDbContext context = Carina();
+
+        IEntityType learning = context.Model.GetEntityTypes().Single(entityType => entityType.GetTableName() == table);
+
+        Assert.Contains("recording_id", learning.GetProperties().Select(property => property.GetColumnName()), StringComparer.Ordinal);
+        Assert.DoesNotContain(
+            context.Model.GetEntityTypes().SelectMany(entityType => entityType.GetForeignKeys()),
+            key => key.DeclaringEntityType == learning || key.PrincipalEntityType == learning);
+    }
+
     [Fact]
     public void WhatCouldNotBeMigratedIsNeverCountedByAnotherDomain()
     {

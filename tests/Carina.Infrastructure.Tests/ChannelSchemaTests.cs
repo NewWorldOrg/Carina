@@ -303,6 +303,8 @@ public sealed class ChannelSchemaTests
                 "satellite_transport_stream",
                 "scan_run",
                 "scan_run_attempt",
+                "segment_extraction",
+                "segment_learning_data",
                 "service_reach_config",
                 "station_logo",
                 "stream_visit",
