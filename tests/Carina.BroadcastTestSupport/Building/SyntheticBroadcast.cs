@@ -126,6 +126,13 @@ public sealed record SyntheticBroadcast
     /// </summary>
     public bool Watermarked { get; init; }
 
+    /// <summary>
+    /// Sounds two streams of pink noise, the right channel partly the left, swelling and fading four times a
+    /// second, rather than one steady tone: a sound whose fingerprint changes from one window to the next the
+    /// way speech and music change it.
+    /// </summary>
+    public bool Murmuring { get; init; }
+
     public IReadOnlyList<(TimeSpan From, TimeSpan Until)> Unbranded { get; init; } = [];
 
     public string Programme { get; init; } = FfmpegProgramme.Default;
@@ -288,6 +295,11 @@ public sealed record SyntheticBroadcast
             throw new InvalidOperationException("A plain picture and a watermark both need a picture to paint.");
         }
 
+        if (Murmuring && (CarriesASoundEncodedAhead || Sound is SyntheticSound.TwoLanguages))
+        {
+            throw new InvalidOperationException("A murmur is the one sound of a broadcast whose sound this run encodes itself.");
+        }
+
         List<string> arguments = [.. Preamble()];
         int inputs = 0;
         int? picture = null;
@@ -310,7 +322,7 @@ public sealed record SyntheticBroadcast
         }
         else
         {
-            arguments.AddRange(["-f", "lavfi", "-i", Tone(440)]);
+            arguments.AddRange(["-f", "lavfi", "-i", Murmuring ? Murmur() : Tone(MainTone)]);
             sounds.Add(inputs++);
 
             if (Sound is SyntheticSound.TwoLanguages)
@@ -514,6 +526,12 @@ public sealed record SyntheticBroadcast
                 $"between(t\\,{from.TotalSeconds:0.###}\\,{(from + QuietBreakLasts).TotalSeconds:0.###})")));
 
     private static string Tone(int hertz) => Invariant($"sine=frequency={hertz}:sample_rate={DualMonoAdts.SampleRate}");
+
+    private static string Murmur()
+        => Invariant($"anoisesrc=color=pink:seed=7:amplitude=0.4:sample_rate={DualMonoAdts.SampleRate}:nb_samples=64[left];")
+           + Invariant($"anoisesrc=color=pink:seed=8:amplitude=0.4:sample_rate={DualMonoAdts.SampleRate}:nb_samples=64[other];")
+           + "[left][other]join=inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR,pan=stereo|c0=c0|c1=0.6*c0+0.4*c1,"
+           + "volume=eval=frame:volume=0.55+0.45*sin(2*PI*4*t)[out0]";
 
     private static string Invariant(FormattableString text) => FormattableString.Invariant(text);
 

@@ -155,6 +155,21 @@ public sealed class SyntheticBroadcastTests
         }.Arguments(null, null, "o"));
     }
 
+    [Fact(DisplayName = "a murmuring broadcast sounds two streams of pink noise swelling and fading in place of the steady tone, and only as its one sound encoded on the way")]
+    public void AMurmuringBroadcastSoundsNoiseInPlaceOfTheTone()
+    {
+        IReadOnlyList<string> murmuring = (SyntheticBroadcast.AsMeasured() with { Murmuring = true }).Arguments("side.ts", null, "out.ts");
+        string sound = murmuring[murmuring.ToList().IndexOf("-i", murmuring.ToList().IndexOf("-i") + 1) + 1];
+
+        Assert.StartsWith("anoisesrc=color=pink:seed=7:", sound, StringComparison.Ordinal);
+        Assert.Contains("anoisesrc=color=pink:seed=8:", sound, StringComparison.Ordinal);
+        Assert.Contains("volume=eval=frame:volume=0.55+0.45*sin(2*PI*4*t)[out0]", sound, StringComparison.Ordinal);
+        Assert.DoesNotContain(murmuring, argument => argument.StartsWith("sine=", StringComparison.Ordinal));
+        Assert.Contains("sine=frequency=440:sample_rate=48000", SyntheticBroadcast.AsMeasured().Arguments("side.ts", null, "out.ts"));
+        Assert.Throws<InvalidOperationException>(() => (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguages) with { Murmuring = true }).Arguments("side.ts", null, "o"));
+        Assert.Throws<InvalidOperationException>(() => (SyntheticBroadcast.Sounding(SyntheticSound.DualMono) with { Murmuring = true }).Arguments("side.ts", "dual.aac", "o"));
+    }
+
     [Fact]
     public void TheSideInformationAndTheSoundFileAreHandedOverExactlyWhenTheyAreCalledFor()
     {
