@@ -22,6 +22,14 @@ public sealed class ExtractionVersionTests
         Assert.Equal(2, (int)ExtractionOrigin.ReducedCopy);
     }
 
+    [Fact(DisplayName = "the current version made from a reduced copy is the version of the calculations, read from a reduced copy")]
+    public void TheCurrentVersionFromAReducedCopyIsTheCalculationsReadFromTheCopy()
+    {
+        Assert.Equal(
+            new ExtractionVersion(LearningData.ExtractionVersion, ExtractionOrigin.ReducedCopy),
+            ExtractionVersion.CurrentFromReducedCopy);
+    }
+
     [Fact(DisplayName = "a version is counted from one, and comes from one of the places data is made from")]
     public void AVersionIsCountedFromOne()
     {
