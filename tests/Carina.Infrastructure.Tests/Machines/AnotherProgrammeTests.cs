@@ -70,6 +70,22 @@ public sealed class AnotherProgrammeTests : IDisposable
         Assert.Equal("19", lines[1].Trim());
     }
 
+    [Fact(DisplayName = "a programme fed on its standard input can be started yielding, and reads what it is fed at the lowest priority")]
+    public async Task AFedProgrammeCanBeStartedYielding()
+    {
+        string script = Standing("nice; cat");
+
+        ProgrammeStart start = AnotherProgramme.StartFed(script, [], ProgrammePriority.Yielding);
+        using Process running = start.Process!;
+        await running.StandardInput.WriteAsync("fed");
+        running.StandardInput.Close();
+        string said = await running.StandardOutput.ReadToEndAsync();
+        await running.WaitForExitAsync();
+
+        Assert.Equal("19\nfed", said.Trim());
+        Assert.Equal(running.Id, start.Began?.ProcessId);
+    }
+
     [Fact(DisplayName = "a programme that is not on this machine is missing whether it is started yielding or not, and the note says so without the path")]
     public void AProgrammeNotOnThisMachineIsMissingEitherWay()
     {
@@ -79,12 +95,14 @@ public sealed class AnotherProgrammeTests : IDisposable
         ProgrammeStart ordinary = AnotherProgramme.Start(absent, []);
         ProgrammeStart byName = AnotherProgramme.Start("no-such-programme-anywhere", [], ProgrammePriority.Yielding);
         ProgrammeStart ordinaryByName = AnotherProgramme.Start("no-such-programme-anywhere", []);
+        ProgrammeStart fed = AnotherProgramme.StartFed(absent, [], ProgrammePriority.Yielding);
 
         Assert.Null(yielding.Process);
         Assert.Null(yielding.Began);
         Assert.Null(ordinary.Process);
         Assert.Null(byName.Process);
         Assert.Null(ordinaryByName.Process);
+        Assert.Null(fed.Process);
         Assert.Contains("no such file on the searched path", ordinaryByName.Complained, StringComparison.Ordinal);
         Assert.Contains("could not be started", yielding.Complained, StringComparison.Ordinal);
         Assert.DoesNotContain(tree.Root, yielding.Complained, StringComparison.Ordinal);

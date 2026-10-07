@@ -88,7 +88,13 @@ public static class AnotherProgramme
     /// Starts a programme the caller goes on to write to on its standard input.
     /// </summary>
     public static ProgrammeStart StartFed(string programme, IReadOnlyList<string> arguments)
-        => Start(programme, ProgrammePriority.Ordinary, () => Fed(Describe(programme, arguments)));
+        => StartFed(programme, arguments, ProgrammePriority.Ordinary);
+
+    /// <summary>
+    /// Starts a programme the caller goes on to write to on its standard input, at the priority given.
+    /// </summary>
+    public static ProgrammeStart StartFed(string programme, IReadOnlyList<string> arguments, ProgrammePriority priority)
+        => Start(programme, priority, () => Fed(Describe(programme, arguments, priority)));
 
     private static ProgrammeStart Start(string programme, ProgrammePriority priority, Func<ProcessStartInfo> described)
     {
