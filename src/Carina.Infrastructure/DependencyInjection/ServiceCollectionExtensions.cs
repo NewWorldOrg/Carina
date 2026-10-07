@@ -190,6 +190,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPlaybackPositionRepository, PlaybackPositionRepository>();
         services.AddScoped<ILearningExtractionRepository, LearningExtractionRepository>();
         services.AddScoped<ILearningDataRepository, LearningDataRepository>();
+        services.AddScoped<ILearningDataAmountReader, LearningDataAmountReader>();
         services.AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>();
         services.AddScoped<IMigrationRecordRepository, MigrationRecordRepository>();
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();

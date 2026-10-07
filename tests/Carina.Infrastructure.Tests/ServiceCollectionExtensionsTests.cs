@@ -392,6 +392,16 @@ public sealed class ServiceCollectionExtensionsTests
             scope.ServiceProvider.GetRequiredService<ILearningDataRepository>());
     }
 
+    [Fact(DisplayName = "registers what reads how much learning data is kept")]
+    public void RegistersWhatReadsHowMuchLearningDataIsKept()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<LearningDataAmountReader>(
+            scope.ServiceProvider.GetRequiredService<ILearningDataAmountReader>());
+    }
+
     [Fact(DisplayName = "registers where the segment settings are kept and the switch that says whether learning is on")]
     public void RegistersTheSegmentSettingsAndTheLearningSwitch()
     {

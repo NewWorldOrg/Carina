@@ -1,4 +1,5 @@
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -270,6 +271,16 @@ public sealed class PersistenceBoundaryRuleTests
         Assert.DoesNotContain(
             context.Model.GetEntityTypes().SelectMany(entityType => entityType.GetForeignKeys()),
             key => key.DeclaringEntityType == learning || key.PrincipalEntityType == learning);
+    }
+
+    [Fact(DisplayName = "the room the learning data takes is measured over every segment table, and over no other")]
+    public void TheRoomTheLearningDataTakesIsMeasuredOverEverySegmentTable()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Segments),
+            LearningDataAmountReader.MeasuredTables(context.Model));
     }
 
     [Fact]

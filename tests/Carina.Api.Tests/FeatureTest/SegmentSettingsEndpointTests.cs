@@ -162,7 +162,6 @@ public sealed class SegmentSettingsEndpointTests
     [InlineData("""{"learning":null}""")]
     [InlineData("""{"learning":"true"}""")]
     [InlineData("""{"learning":1}""")]
-    [InlineData("""{"skipThreshold":0.8}""")]
     [InlineData("null")]
     public async Task AChangeThatNamesNothingOrNamesLearningWronglyIsRefused(string json)
     {
@@ -172,6 +171,20 @@ public sealed class SegmentSettingsEndpointTests
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
         Assert.Contains("learning", body.GetProperty("message").GetString()!, StringComparison.Ordinal);
+        Assert.Equal(0, feature.Settings.Saves);
+    }
+
+    [Theory(DisplayName = "a change naming a setting this cannot change is refused naming it, even beside learning")]
+    [InlineData("""{"learning":true,"other":1}""", "other")]
+    [InlineData("""{"skipThreshold":0.8}""", "skipThreshold")]
+    public async Task AChangeNamingASettingThisCannotChangeIsRefused(string json, string named)
+    {
+        await using var feature = new SegmentSettingsFeature();
+
+        (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(json);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains(named, body.GetProperty("message").GetString()!, StringComparison.Ordinal);
         Assert.Equal(0, feature.Settings.Saves);
     }
 

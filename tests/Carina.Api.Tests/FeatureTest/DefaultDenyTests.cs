@@ -7,6 +7,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Scans;
+using Carina.Domain.Segments;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Hosting;
@@ -35,6 +36,7 @@ internal sealed class SeamProbe : IAsyncDisposable
             services.AddSingleton<IQualityLedgerReader>(Ledger);
             services.AddSingleton<IQualityThresholdRepository>(Thresholds);
             services.AddSingleton<IQualityThresholdChangeRepository>(Changes);
+            services.AddSingleton<ILearningDataAmountReader>(LearningData);
         }));
 
         Client = credentialled ? wired.CreateAuthenticatedClient() : wired.WithTestScheme().CreateClient();
@@ -61,6 +63,8 @@ internal sealed class SeamProbe : IAsyncDisposable
     public HeldQualityThresholds Thresholds { get; } = new();
 
     public HeldQualityThresholdChanges Changes { get; } = new();
+
+    public HeldLearningDataAmount LearningData { get; } = new();
 
     public static SeamProbe CarryingNoCredentials() => new(credentialled: false);
 
@@ -98,6 +102,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         "/api/quality/supply-health",
         "/api/quality/trends",
         "/api/segments/settings",
+        "/api/segments/status",
         AppEventStream.Path,
     ];
 

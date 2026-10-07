@@ -159,6 +159,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getRule",
                 "getScan",
                 "getSegmentSettings",
+                "getSegmentStatus",
                 "getService",
                 "getServiceLogo",
                 "getSessions",

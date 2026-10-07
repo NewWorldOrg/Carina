@@ -178,8 +178,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 .ToArray());
     }
 
-    [Fact(DisplayName = "the segment surfaces are the two the settings are read and changed through, and changing them discards nothing")]
-    public void TheSegmentSurfacesAreTheTwoTheSettingsAreReadAndChangedThrough()
+    [Fact(DisplayName = "the segment surfaces are the settings read and changed and the status read, and none of them discards anything")]
+    public void TheSegmentSurfacesAreTheSettingsAndTheStatus()
     {
         RoutedSurface[] segments =
         [
@@ -189,10 +189,10 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         ];
 
         Assert.Equal(
-            ["GET /api/segments/settings", "PATCH /api/segments/settings"],
+            ["GET /api/segments/settings", "GET /api/segments/status", "PATCH /api/segments/settings"],
             segments.Select(surface => surface.ToString()).ToArray());
         Assert.Equal(
-            [EndpointEffect.Reading, EndpointEffect.Changing],
+            [EndpointEffect.Reading, EndpointEffect.Reading, EndpointEffect.Changing],
             segments.Select(surface => surface.Effect).ToArray());
     }
 
