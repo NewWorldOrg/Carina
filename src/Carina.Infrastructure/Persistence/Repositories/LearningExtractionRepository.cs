@@ -15,7 +15,6 @@ public sealed class LearningExtractionRepository(CarinaDbContext context) : ILea
         ArgumentNullException.ThrowIfNull(recordingId);
 
         return await context.Set<LearningExtraction>()
-            .AsNoTracking()
             .FirstOrDefaultAsync(extraction => extraction.RecordingId == recordingId, cancellationToken);
     }
 
@@ -27,7 +26,6 @@ public sealed class LearningExtractionRepository(CarinaDbContext context) : ILea
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
 
         return await context.Set<LearningExtraction>()
-            .AsNoTracking()
             .Where(extraction => extraction.State == state)
             .OrderByDescending(extraction => extraction.Programme.RecordingStartedAt)
             .ThenBy(extraction => extraction.RecordingId)
@@ -41,14 +39,7 @@ public sealed class LearningExtractionRepository(CarinaDbContext context) : ILea
 
         context.Add(extraction);
 
-        try
-        {
-            await context.SaveChangesAsync(cancellationToken);
-        }
-        finally
-        {
-            context.Entry(extraction).State = EntityState.Detached;
-        }
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<LearningExtractionWrite> SaveAsync(
@@ -63,13 +54,17 @@ public sealed class LearningExtractionRepository(CarinaDbContext context) : ILea
         {
             await context.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception) when (IsAnotherReading(exception))
-        {
-            return LearningExtractionWrite.AnotherIsReading;
-        }
-        finally
+        catch (DbUpdateConcurrencyException)
         {
             context.Entry(extraction).State = EntityState.Detached;
+
+            throw new LearningExtractionMovedMeanwhileException(extraction.RecordingId);
+        }
+        catch (DbUpdateException exception) when (IsAnotherReading(exception))
+        {
+            context.Entry(extraction).State = EntityState.Detached;
+
+            return LearningExtractionWrite.AnotherIsReading;
         }
 
         return LearningExtractionWrite.Written;

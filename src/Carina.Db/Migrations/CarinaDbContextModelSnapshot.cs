@@ -3592,6 +3592,12 @@ namespace Carina.Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Failure", "Carina.Domain.Segments.LearningExtraction.Failure#ExtractionFailureDetail", b1 =>
                         {
                             b1.Property<string>("Failure")

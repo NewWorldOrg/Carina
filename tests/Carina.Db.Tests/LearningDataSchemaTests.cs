@@ -115,17 +115,18 @@ public sealed class LearningDataSchemaTests(MigratedScratchDatabase database)
     {
         RecordingId recording = RecordingId.New();
         var gap = new LearningDataGap(TimeSpan.FromSeconds(12.5), TimeSpan.FromSeconds(30));
-        LearningExtraction extraction = LearningExtraction.Following(recording, Copy(Noon, "架空の番組"), Reduced, Noon);
+        await AddAsync(LearningExtraction.Following(recording, Copy(Noon, "架空の番組"), Reduced, Noon));
 
-        await AddAsync(extraction);
+        LearningExtractionWrite written = await ChangeAsync(recording, extraction =>
+        {
+            extraction.Opened(new ExtractionSound(1, TimeSpan.FromMilliseconds(-120)), Noon.AddMinutes(1));
+            extraction.Missed(gap, Noon.AddMinutes(2));
+            extraction.Reached(TimeSpan.FromMinutes(25), Noon.AddMinutes(3));
+            extraction.Fail(ExtractionFailure.TimingMismatch, "the times do not line up", Noon.AddMinutes(4));
+            extraction.Retry(Noon.AddMinutes(5));
+        });
 
-        extraction.Opened(new ExtractionSound(1, TimeSpan.FromMilliseconds(-120)), Noon.AddMinutes(1));
-        extraction.Missed(gap, Noon.AddMinutes(2));
-        extraction.Reached(TimeSpan.FromMinutes(25), Noon.AddMinutes(3));
-        extraction.Fail(ExtractionFailure.TimingMismatch, "the times do not line up", Noon.AddMinutes(4));
-        extraction.Retry(Noon.AddMinutes(5));
-
-        Assert.Equal(LearningExtractionWrite.Written, await SaveAsync(extraction));
+        Assert.Equal(LearningExtractionWrite.Written, written);
 
         LearningExtraction? kept = await FoundAsync(recording);
 
@@ -213,35 +214,64 @@ public sealed class LearningDataSchemaTests(MigratedScratchDatabase database)
     [Fact(DisplayName = "only one recording is read at a time")]
     public async Task OnlyOneRecordingIsReadAtATime()
     {
-        LearningExtraction first = LearningExtraction.Waiting(RecordingId.New(), Copy(Noon, "架空の番組"), Noon);
-        LearningExtraction second = LearningExtraction.Waiting(RecordingId.New(), Copy(Noon, "架空の番組"), Noon);
-        await AddAsync(first);
-        await AddAsync(second);
+        RecordingId first = RecordingId.New();
+        RecordingId second = RecordingId.New();
+        await AddAsync(LearningExtraction.Waiting(first, Copy(Noon, "架空の番組"), Noon));
+        await AddAsync(LearningExtraction.Waiting(second, Copy(Noon, "架空の番組"), Noon));
 
-        first.Read(ExtractionVersion.Current, Noon.AddMinutes(1));
-        second.Read(ExtractionVersion.Current, Noon.AddMinutes(1));
-
-        Assert.Equal(LearningExtractionWrite.Written, await SaveAsync(first));
-        Assert.Equal(LearningExtractionWrite.AnotherIsReading, await SaveAsync(second));
-        Assert.Equal(LearningExtractionState.Waiting, (await FoundAsync(second.RecordingId))!.State);
+        Assert.Equal(
+            LearningExtractionWrite.Written,
+            await ChangeAsync(first, extraction => extraction.Read(ExtractionVersion.Current, Noon.AddMinutes(1))));
+        Assert.Equal(
+            LearningExtractionWrite.AnotherIsReading,
+            await ChangeAsync(second, extraction => extraction.Read(ExtractionVersion.Current, Noon.AddMinutes(1))));
+        Assert.Equal(LearningExtractionState.Waiting, (await FoundAsync(second))!.State);
 
         await using (NpgsqlConnection connection = await database.OpenAsync())
         {
             PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-                () => UpdateAsync(connection, second.RecordingId, "state = 'Reading', version_number = 1, version_origin = 'RecordingFile'"));
+                () => UpdateAsync(connection, second, "state = 'Reading', version_number = 1, version_origin = 'RecordingFile'"));
 
             Assert.Equal("ux_segment_extraction_reading", refusal.ConstraintName);
         }
 
-        first.Finish(Noon.AddMinutes(2));
-        Assert.Equal(LearningExtractionWrite.Written, await SaveAsync(first));
+        Assert.Equal(
+            LearningExtractionWrite.Written,
+            await ChangeAsync(first, extraction => extraction.Finish(Noon.AddMinutes(2))));
+        Assert.Equal(
+            LearningExtractionWrite.Written,
+            await ChangeAsync(second, extraction => extraction.Read(ExtractionVersion.Current, Noon.AddMinutes(3))));
+        Assert.Equal(
+            LearningExtractionWrite.Written,
+            await ChangeAsync(second, extraction => extraction.Finish(Noon.AddMinutes(4))));
+    }
 
-        LearningExtraction next = (await FoundAsync(second.RecordingId))!;
-        next.Read(ExtractionVersion.Current, Noon.AddMinutes(3));
-        Assert.Equal(LearningExtractionWrite.Written, await SaveAsync(next));
+    [Fact(DisplayName = "of two writers who read the same extraction, the one who saves second is refused")]
+    public async Task OfTwoWritersTheOneWhoSavesSecondIsRefused()
+    {
+        RecordingId recording = RecordingId.New();
+        await AddAsync(LearningExtraction.Following(recording, Copy(Noon, "架空の番組"), ExtractionVersion.Current, Noon));
 
-        next.Finish(Noon.AddMinutes(4));
-        Assert.Equal(LearningExtractionWrite.Written, await SaveAsync(next));
+        await using CarinaDbContext followingContext = Context();
+        await using CarinaDbContext switchingContext = Context();
+        var following = new LearningExtractionRepository(followingContext);
+        var switching = new LearningExtractionRepository(switchingContext);
+        LearningExtraction followed = (await following.FindAsync(recording, CancellationToken.None))!;
+        LearningExtraction switched = (await switching.FindAsync(recording, CancellationToken.None))!;
+
+        switched.Pause(Noon.AddMinutes(2));
+        Assert.Equal(LearningExtractionWrite.Written, await switching.SaveAsync(switched, CancellationToken.None));
+
+        followed.Reached(TimeSpan.FromMinutes(5), Noon.AddMinutes(3));
+        LearningExtractionMovedMeanwhileException refusal = await Assert.ThrowsAsync<LearningExtractionMovedMeanwhileException>(
+            () => following.SaveAsync(followed, CancellationToken.None));
+
+        LearningExtraction? kept = await FoundAsync(recording);
+
+        Assert.Equal(recording, refusal.RecordingId);
+        Assert.NotNull(kept);
+        Assert.Equal(LearningExtractionState.Waiting, kept.State);
+        Assert.Equal(TimeSpan.Zero, kept.ReadThrough);
     }
 
     [Fact(DisplayName = "extractions are listed by state, the most recently recorded first")]
@@ -317,11 +347,15 @@ public sealed class LearningDataSchemaTests(MigratedScratchDatabase database)
         await new LearningExtractionRepository(context).AddAsync(extraction, CancellationToken.None);
     }
 
-    private async Task<LearningExtractionWrite> SaveAsync(LearningExtraction extraction)
+    private async Task<LearningExtractionWrite> ChangeAsync(RecordingId recording, Action<LearningExtraction> change)
     {
         await using CarinaDbContext context = Context();
+        var repository = new LearningExtractionRepository(context);
+        LearningExtraction extraction = (await repository.FindAsync(recording, CancellationToken.None))!;
 
-        return await new LearningExtractionRepository(context).SaveAsync(extraction, CancellationToken.None);
+        change(extraction);
+
+        return await repository.SaveAsync(extraction, CancellationToken.None);
     }
 
     private async Task<LearningExtraction?> FoundAsync(RecordingId recording)

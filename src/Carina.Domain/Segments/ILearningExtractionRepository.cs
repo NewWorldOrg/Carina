@@ -27,5 +27,9 @@ public interface ILearningExtractionRepository
 
     Task AddAsync(LearningExtraction extraction, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Writes the extraction as it stands.
+    /// </summary>
+    /// <exception cref="LearningExtractionMovedMeanwhileException">The row changed since it was read.</exception>
     Task<LearningExtractionWrite> SaveAsync(LearningExtraction extraction, CancellationToken cancellationToken);
 }

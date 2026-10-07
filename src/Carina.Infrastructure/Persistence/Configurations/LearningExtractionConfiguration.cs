@@ -16,6 +16,8 @@ public sealed class LearningExtractionConfiguration : IEntityTypeConfiguration<L
 
     public const string ReadingIndexName = "ux_segment_extraction_reading";
 
+    public const string ConcurrencyToken = "xmin";
+
     private const string Waiting = nameof(LearningExtractionState.Waiting);
 
     private const string Reading = nameof(LearningExtractionState.Reading);
@@ -72,6 +74,12 @@ public sealed class LearningExtractionConfiguration : IEntityTypeConfiguration<L
                 """);
             table.HasCheckConstraint("ck_segment_extraction_times", "updated_at >= created_at");
         });
+
+        builder.Property<uint>(ConcurrencyToken)
+            .HasColumnName(ConcurrencyToken)
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
 
         builder.HasKey(extraction => extraction.RecordingId);
 
