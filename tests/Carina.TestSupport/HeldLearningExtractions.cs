@@ -7,8 +7,8 @@ namespace Carina.TestSupport;
 
 /// <summary>
 /// The records of taking the learning data out, held in memory the way the table holds them: every
-/// read hands back a copy of the row as it stands, and a copy saved after the row changed since it
-/// was read is refused.
+/// read hands back a copy of the row as it stands, a copy saved after the row changed since it was
+/// read is refused, and a copy that would read a recording while another is read is not written.
 /// </summary>
 public sealed class HeldLearningExtractions : ILearningExtractionRepository
 {
@@ -112,6 +112,12 @@ public sealed class HeldLearningExtractions : ILearningExtractionRepository
                 Refused++;
 
                 throw new LearningExtractionMovedMeanwhileException(extraction.RecordingId);
+            }
+
+            if (extraction.State is LearningExtractionState.Reading
+                && rows.Any(held => !held.Key.Equals(extraction.RecordingId) && held.Value.Row.State is LearningExtractionState.Reading))
+            {
+                return Task.FromResult(LearningExtractionWrite.AnotherIsReading);
             }
 
             rows[extraction.RecordingId] = (Copied(extraction), current + 1);

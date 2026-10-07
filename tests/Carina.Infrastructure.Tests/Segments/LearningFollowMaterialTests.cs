@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 using Carina.BroadcastTestSupport;
@@ -22,7 +23,8 @@ namespace Carina.Infrastructure.Tests.Segments;
 /// Follows broadcasts synthesised with the ffmpeg the application runs and reads back what was kept:
 /// stretches made quiet and dark at known moments must be found where they are on the recording's own
 /// time, through a recording carried on after a gap, a sound that turns mono and back, a picture that
-/// changes size, and a file still being written while it is read.
+/// changes size, and a file still being written while it is read. A recording that has ended is read
+/// from its head to its end without waiting there.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
@@ -45,6 +47,8 @@ public sealed class LearningFollowMaterialTests : IDisposable
     private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
 
     private static readonly TimeSpan Patience = TimeSpan.FromMinutes(3);
+
+    private static readonly TimeSpan LongerThanAChunk = TimeSpan.FromSeconds(LearningData.ChunkSeconds + 20);
 
     private readonly string room = Directory.CreateTempSubdirectory("carina-follow-").FullName;
 
@@ -125,6 +129,34 @@ public sealed class LearningFollowMaterialTests : IDisposable
         AssertBreaks(followed, first, [(first, 4), (second, 4), (third, 4)]);
     }
 
+    [Fact(DisplayName = "a recording that has ended is read from its head to its end without waiting there, holds every kind for every ten minutes of it, and its file is left as it was")]
+    public async Task ARecordingThatHasEndedIsReadToItsEnd()
+    {
+        Part part = await WriteAsync(
+            "ended",
+            new SyntheticBroadcast
+            {
+                Picture = SyntheticPicture.StandardDefinition,
+                Plain = true,
+                WithCaptions = false,
+                WithSuperimpose = false,
+                Length = LongerThanAChunk,
+            });
+        (long Length, string Hash) before = await FingerprintAsync(part.Source);
+
+        Followed read = await FollowAsync(part.Source, recorded: true);
+
+        int chunks = (int)Math.Ceiling(LongerThanAChunk.TotalSeconds / LearningData.ChunkSeconds);
+        Assert.Equal(LearningExtractionState.Done, read.Record.State);
+        Assert.InRange(read.Record.ReadThrough.TotalSeconds, LongerThanAChunk.TotalSeconds - 0.5, LongerThanAChunk.TotalSeconds + 0.5);
+        Assert.Equal(2, chunks);
+        Assert.All(
+            LearningDataChunk.Kinds,
+            kind => Assert.Equal(Enumerable.Range(0, chunks), read.Blocks.Where(block => block.Kind == kind).Select(block => block.Chunk)));
+        Assert.Equal(LearningDataChunk.Kinds.Count * chunks, read.Blocks.Count);
+        Assert.Equal(before, await FingerprintAsync(part.Source));
+    }
+
     [Fact(DisplayName = "a programme the recording does not carry fails the reading for want of a stream")]
     public async Task AProgrammeTheRecordingDoesNotCarryFailsForWantOfAStream()
     {
@@ -178,10 +210,18 @@ public sealed class LearningFollowMaterialTests : IDisposable
         followed.Ended();
     }
 
+    private static async Task<(long Length, string Hash)> FingerprintAsync(string path)
+    {
+        await using FileStream file = File.OpenRead(path);
+
+        return (file.Length, Convert.ToHexString(await SHA256.HashDataAsync(file)));
+    }
+
     private static async Task<Followed> FollowAsync(
         string source,
         Func<FollowedRecording, Task>? alongside = null,
-        ServiceId? service = null)
+        ServiceId? service = null,
+        bool recorded = false)
     {
         HeldLearningExtractions extractions = new();
         HeldLearningData data = new();
@@ -190,15 +230,17 @@ public sealed class LearningFollowMaterialTests : IDisposable
             .AddSingleton<ILearningDataRepository>(data)
             .BuildServiceProvider();
         Recording recording = Made(Mounted, 7501, Now);
-        FollowedRecording followed = new(recording.Id, source, service ?? Service, ExtractionVersion.Current);
+        FollowedRecording followed = recorded
+            ? FollowedRecording.Recorded(recording.Id, source, service ?? Service, ExtractionVersion.Current)
+            : new(recording.Id, source, service ?? Service, ExtractionVersion.Current);
         FfmpegLearningFollower follower = new(
             new MachineSettings(),
-            new LearningFollowSettings { WhileCaughtUp = TimeSpan.FromMilliseconds(20) },
+            new LearningFollowSettings { WhileCaughtUp = recorded ? Patience : TimeSpan.FromMilliseconds(20) },
             new LearningRecords(provider.GetRequiredService<IServiceScopeFactory>()),
             TimeProvider.System,
             NullLogger<FfmpegLearningFollower>.Instance);
 
-        await extractions.AddAsync(LearningExtraction.Following(recording.Id, ProgrammeCopy.Of(recording, null), ExtractionVersion.Current, Now), CancellationToken.None);
+        await extractions.AddAsync(Held(recording, recorded), CancellationToken.None);
 
         if (alongside is null)
         {
@@ -214,6 +256,20 @@ public sealed class LearningFollowMaterialTests : IDisposable
         LearningExtraction record = extractions.Row(recording.Id) ?? throw new InvalidOperationException("The record went.");
 
         return Followed.Of(record, data.Of(recording.Id));
+    }
+
+    private static LearningExtraction Held(Recording recording, bool recorded)
+    {
+        if (!recorded)
+        {
+            return LearningExtraction.Following(recording.Id, ProgrammeCopy.Of(recording, null), ExtractionVersion.Current, Now);
+        }
+
+        LearningExtraction waiting = LearningExtraction.Waiting(recording.Id, ProgrammeCopy.Of(recording, null), Now);
+
+        waiting.Read(ExtractionVersion.Current, Now);
+
+        return waiting;
     }
 
     private static void AssertBreaks(Followed followed, Part zero, IReadOnlyList<(Part Part, double At)> breaks)

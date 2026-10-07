@@ -16,8 +16,9 @@ namespace Carina.Infrastructure.Segments;
 /// Follows a recording with one ffmpeg started yielding: the file is read once, from its head, and
 /// handed to ffmpeg on its standard input; at the end of a file still being written the follow waits
 /// <see cref="LearningFollowSettings.WhileCaughtUp"/> and reads on, and once the recording has ended
-/// and the file is read to its end the standard input is closed. What ffmpeg hands back
-/// (<see cref="FfmpegLearningInvocation"/>) is read by a <see cref="MatroskaReader"/> and placed by a
+/// and the file is read to its end the standard input is closed. A recording that had ended before it
+/// was read is read the same way, and its record is held reading rather than following. What ffmpeg
+/// hands back (<see cref="FfmpegLearningInvocation"/>) is read by a <see cref="MatroskaReader"/> and placed by a
 /// <see cref="LearningDataTimeline"/>, every chunk is kept as soon as it is whole, and the record goes
 /// as far as the chunk with the gaps no later block can reach. The record ends done when the
 /// recording was read to its end, partial when the recording went or its file could no longer be
@@ -351,7 +352,7 @@ public sealed class FfmpegLearningFollower(
         await ProgressAsync(follow, TimeSpan.Zero, [], (record, at) => record.Fail(failure.Failure, failure.Reason, at), cancellationToken);
 
         logger.LogWarning(
-            "The learning data of recording {Recording} could not be taken while it was recorded ({Failure}): {Reason}",
+            "The learning data of recording {Recording} could not be taken ({Failure}): {Reason}",
             follow.Recording.Id.Wire,
             failure.Failure,
             failure.Reason);
@@ -462,7 +463,7 @@ public sealed class FfmpegLearningFollower(
         }
 
         private bool Owns(LearningExtraction record)
-            => record.State is LearningExtractionState.Following
+            => record.State == Recording.Held
                && Equals(record.Version, Recording.Version)
                && record.ReadThrough == Through
                && record.Gaps.Count == gaps;

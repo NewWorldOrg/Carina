@@ -191,6 +191,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILearningExtractionRepository, LearningExtractionRepository>();
         services.AddScoped<ILearningDataRepository, LearningDataRepository>();
         services.AddScoped<ILearningDataAmountReader, LearningDataAmountReader>();
+        services.AddScoped<ILearningBacklog, LearningBacklogReader>();
         services.AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>();
         services.AddScoped<IMigrationRecordRepository, MigrationRecordRepository>();
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
@@ -225,6 +226,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeAutoRunReader, EncodeAutoRunReader>();
         services.AddScoped<ILearningSwitch, LearningSwitch>();
         services.AddScoped<ILearningWorklist, LearningWorklist>();
+        services.AddScoped<IOccupancyReader, OccupancyReader>();
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
         services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();
@@ -388,6 +390,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<LearningRecords>();
         services.TryAddSingleton<ILearningFollower, FfmpegLearningFollower>();
         services.AddSingleton<LearningFollowJob>();
+        services.TryAddSingleton(LearningBacklogSettings.Default);
+        services.AddSingleton<LearningBacklogJob>();
         services.TryAddSingleton<IThumbnailRemaker>(provider =>
             provider.GetRequiredService<ThumbnailJob>());
         services.TryAddSingleton<CollectionSettings>(provider =>
@@ -422,6 +426,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
         services.AddHostedService(provider => provider.GetRequiredService<CaptionJob>());
         services.AddHostedService(provider => provider.GetRequiredService<LearningFollowJob>());
+        services.AddHostedService(provider => provider.GetRequiredService<LearningBacklogJob>());
         services.AddHostedService(provider =>
             provider.GetRequiredService<ReservationRecalculationHostedService>());
 

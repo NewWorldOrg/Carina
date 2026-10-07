@@ -102,21 +102,25 @@ public sealed class LearningFollowJobTests : IDisposable
         Assert.Equal([recording.Id], job.Following);
     }
 
-    [Fact(DisplayName = "at the first look a record left following or reading a recording that ended or went waits to be read")]
-    public async Task AtTheFirstLookARecordLeftRunningForAnEndedRecordingWaits()
+    [Fact(DisplayName = "at the first look a record left following a recording that ended or went waits to be read, and one left reading is left to the reading")]
+    public async Task AtTheFirstLookARecordLeftFollowingAnEndedRecordingWaits()
     {
         await harness.LearningAsync(true);
         Recording ended = harness.Recording(eventId: 7302);
         End(ended);
         Recording gone = harness.Recording(eventId: 7303);
         harness.Worklist.Recordings.Remove(gone);
+        Recording read = harness.Recording(eventId: 7311);
+        End(read);
         harness.Records.Hold(Left(ended, LearningExtractionState.Following));
-        harness.Records.Hold(Left(gone, LearningExtractionState.Reading));
+        harness.Records.Hold(Left(gone, LearningExtractionState.Following));
+        harness.Records.Hold(Left(read, LearningExtractionState.Reading));
 
         LearningLook look = await harness.Job().LookAsync(Cancel);
 
         Assert.Equal(LearningExtractionState.Waiting, harness.Records.Row(ended.Id)?.State);
         Assert.Equal(LearningExtractionState.Waiting, harness.Records.Row(gone.Id)?.State);
+        Assert.Equal(LearningExtractionState.Reading, harness.Records.Row(read.Id)?.State);
         Assert.Equal(2, look.Recovered);
         Assert.Empty(harness.Follower.Asked);
     }
