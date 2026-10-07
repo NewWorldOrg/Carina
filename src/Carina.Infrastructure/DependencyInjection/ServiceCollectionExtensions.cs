@@ -118,6 +118,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<LearningOptions>, LearningValidation>();
+        services.AddOptions<LearningOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<CollectionOptions>, CollectionValidation>();
         services.AddOptions<CollectionOptions>()
             .Configure(options => options.ReadFrom(configuration))
@@ -391,6 +396,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ILearningFollower, FfmpegLearningFollower>();
         services.AddSingleton<LearningFollowJob>();
         services.TryAddSingleton(LearningBacklogSettings.Default);
+        services.TryAddSingleton<LearningImportSettings>(provider =>
+            provider.GetRequiredService<IOptions<LearningOptions>>().Value.Read());
+        services.TryAddSingleton<IReducedCopyImporter, FfmpegReducedCopyImporter>();
+        services.TryAddSingleton<ReducedCopyImports>();
         services.AddSingleton<LearningBacklogJob>();
         services.TryAddSingleton<IThumbnailRemaker>(provider =>
             provider.GetRequiredService<ThumbnailJob>());

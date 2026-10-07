@@ -20,6 +20,7 @@ services:
       - captions:/srv/captions
       - ${CARINA_ENCODES_DIR:-encodes}:/srv/encodes
       - ${CARINA_KEYS_DIR:-data-protection-keys}:/var/lib/carina/keys
+      - ${CARINA_LEARNING_IMPORT_DIR:-learning-import}:/srv/learning-import:ro
     devices:
       - ${CARINA_DRI:-/dev/null}:${CARINA_DRI:-/dev/null}
     group_add:
@@ -42,6 +43,7 @@ services:
       Integrity__OutputRoots: primary=/srv/recordings
       Thumbnails__WrittenTo: /srv/thumbnails
       Captions__WrittenTo: /srv/captions
+      Learning__ImportFrom: /srv/learning-import
       Encodings__OutputRoots: encodes=/srv/encodes
       Encodings__Prefer: ${CARINA_ENCODINGS_PREFER:-Software}
       Transcoding__Prefer: ${CARINA_TRANSCODING_PREFER:-Software}
@@ -111,4 +113,5 @@ volumes:
   captions:
   encodes:
   data-protection-keys:
+  learning-import:
   pgdata:
