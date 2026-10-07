@@ -470,7 +470,7 @@ public sealed class LearningExtractionTests
         Assert.Throws<InvalidOperationException>(() => In(LearningExtractionState.Following).ReadAwaited(Current, Noon, Later));
     }
 
-    [Fact(DisplayName = "a record waits to be imported from a reduced copy when it waits, failed reading the file, failed importing with a try left, was left partway reading the file, or was made by other calculations")]
+    [Fact(DisplayName = "a record waits to be imported from a reduced copy when it waits, failed reading the file, failed importing with a try left, was left partway reading the file, or was made from a reduced copy by other calculations")]
     public void ARecordWaitsToBeImportedWhenItShould()
     {
         LearningExtraction outOfTries = In(LearningExtractionState.Failed);
@@ -488,8 +488,22 @@ public sealed class LearningExtractionTests
         Assert.True(outOfTries.AwaitsImport(Reduced));
         Assert.True(failedImporting.AwaitsImport(Reduced));
         Assert.True(In(LearningExtractionState.Partial).AwaitsImport(Reduced));
-        Assert.True(In(LearningExtractionState.Done).AwaitsImport(NewerReduced));
         Assert.True(Imported(extraction => extraction.Finish(Noon)).AwaitsImport(NewerReduced));
+    }
+
+    [Fact(DisplayName = "data read from the recording's own file is kept over a reduced copy of any version, and data made from a reduced copy is replaced by one of another version")]
+    public void DataReadFromTheFileIsKeptOverAReducedCopy()
+    {
+        ExtractionVersion older = new(LearningData.ExtractionVersion - 1, ExtractionOrigin.RecordingFile);
+        LearningExtraction fromTheFile = Rehydrated(LearningExtractionState.Done, older, null, 0);
+        LearningExtraction fromAnOlderCopy = Rehydrated(LearningExtractionState.Done, new ExtractionVersion(older.Number, ExtractionOrigin.ReducedCopy), null, 0);
+
+        Assert.False(fromTheFile.AwaitsImport(Reduced));
+        Assert.False(fromTheFile.AwaitsImport(NewerReduced));
+        Assert.False(In(LearningExtractionState.Done).AwaitsImport(NewerReduced));
+        Assert.Throws<InvalidOperationException>(() => fromTheFile.Import(Reduced, Later));
+        Assert.Equal((LearningExtractionState.Done, older), (fromTheFile.State, fromTheFile.Version));
+        Assert.True(fromAnOlderCopy.AwaitsImport(Reduced));
     }
 
     [Fact(DisplayName = "a record does not wait to be imported while it is followed or read, once done by the calculations of the copy either way, left partway importing, or out of tries importing")]
@@ -514,7 +528,6 @@ public sealed class LearningExtractionTests
     [Theory(DisplayName = "a record that waits to be imported is read from the head with the version of the copy, its failures still counted")]
     [InlineData(LearningExtractionState.Waiting)]
     [InlineData(LearningExtractionState.Failed)]
-    [InlineData(LearningExtractionState.Done)]
     [InlineData(LearningExtractionState.Partial)]
     public void ARecordThatWaitsToBeImportedIsReadFromTheHead(LearningExtractionState state)
     {
@@ -526,6 +539,18 @@ public sealed class LearningExtractionTests
         Assert.Equal(
             (LearningExtractionState.Reading, NewerReduced, TimeSpan.Zero, failures, Later),
             (extraction.State, extraction.Version, extraction.ReadThrough, extraction.Failures, extraction.UpdatedAt));
+    }
+
+    [Fact(DisplayName = "data made from a reduced copy by other calculations is read from the head with the version of the copy")]
+    public void DataMadeFromAReducedCopyIsImportedAgain()
+    {
+        LearningExtraction extraction = Imported(done => done.Finish(Noon));
+
+        extraction.Import(NewerReduced, Later);
+
+        Assert.Equal(
+            (LearningExtractionState.Reading, NewerReduced, TimeSpan.Zero, Later),
+            (extraction.State, extraction.Version, extraction.ReadThrough, extraction.UpdatedAt));
     }
 
     [Fact(DisplayName = "a record that does not wait to be imported is not, a copy is imported only with a version made from a reduced copy, and either way the record stays as it was")]
