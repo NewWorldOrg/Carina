@@ -48,6 +48,8 @@ public sealed class LearningExtraction
 
     public bool CanRetry => State is LearningExtractionState.Failed && Failures <= MostRetries;
 
+    private bool MadeFromAReducedCopy => Version?.Origin is ExtractionOrigin.ReducedCopy;
+
     public static LearningExtraction Following(
         RecordingId recordingId,
         ProgrammeCopy programme,
@@ -175,6 +177,40 @@ public sealed class LearningExtraction
         }
 
         Read(current, at);
+    }
+
+    /// <summary>
+    /// Whether the learning data waits to be imported from a reduced copy of the recording with
+    /// <paramref name="reduced"/>: the record waits, failed reading the file, failed importing with a try
+    /// left, was left partway reading the file, or holds data made by other calculations than
+    /// <paramref name="reduced"/>.
+    /// </summary>
+    public bool AwaitsImport(ExtractionVersion reduced)
+    {
+        FromAReducedCopy(reduced);
+
+        return State switch
+        {
+            LearningExtractionState.Waiting => true,
+            LearningExtractionState.Failed => CanRetry || !MadeFromAReducedCopy,
+            LearningExtractionState.Done => Version!.Number != reduced.Number,
+            LearningExtractionState.Partial => !MadeFromAReducedCopy || Version!.Number != reduced.Number,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Reads from its head, with <paramref name="reduced"/>, a reduced copy of a recording whose learning
+    /// data <see cref="AwaitsImport"/>.
+    /// </summary>
+    public void Import(ExtractionVersion reduced, DateTime at)
+    {
+        if (!AwaitsImport(reduced))
+        {
+            throw new InvalidOperationException($"An extraction that is {State} does not wait to be imported.");
+        }
+
+        Restart(LearningExtractionState.Reading, reduced, UtcTimes.Required(at, nameof(at)));
     }
 
     public void Opened(ExtractionSound sound, DateTime at)
@@ -318,6 +354,16 @@ public sealed class LearningExtraction
         return state is LearningExtractionState.Done or LearningExtractionState.Partial && failures > 0
             ? "An extraction that read through counts no failures."
             : null;
+    }
+
+    private static void FromAReducedCopy(ExtractionVersion version)
+    {
+        ArgumentNullException.ThrowIfNull(version);
+
+        if (version.Origin is not ExtractionOrigin.ReducedCopy)
+        {
+            throw new ArgumentException("A reduced copy is imported with a version made from a reduced copy.", nameof(version));
+        }
     }
 
     private static string? Unordered(IReadOnlyList<LearningDataGap> gaps)

@@ -134,6 +134,66 @@ internal sealed class HeldReader(LearningRecords records, DateTime at) : ILearni
         => released.GetOrAdd(id, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
 }
 
+/// <summary>
+/// An importer that reads nothing: it remembers the copies it was asked to import, and an import lasts until
+/// it is released or stopped, when it settles the record as read to the end, or as failed when asked to.
+/// </summary>
+internal sealed class HeldImporter(LearningRecords records, DateTime at) : IReducedCopyImporter
+{
+    public static readonly TimeSpan ImportsAtOnce = TimeSpan.FromMinutes(25);
+
+    private readonly ConcurrentDictionary<RecordingId, TaskCompletionSource> released = new();
+
+    public ConcurrentQueue<ReducedCopy> Asked { get; } = new();
+
+    public ConcurrentQueue<RecordingId> Stopped { get; } = new();
+
+    public bool ReleasesAtOnce { get; set; }
+
+    public bool Fails { get; set; }
+
+    public void Release(RecordingId id) => Released(id).TrySetResult();
+
+    public async Task ImportAsync(ReducedCopy copy, CancellationToken cancellationToken)
+    {
+        Asked.Enqueue(copy);
+
+        try
+        {
+            while (!ReleasesAtOnce && !Released(copy.Id).Task.IsCompleted)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Stopped.Enqueue(copy.Id);
+
+            throw;
+        }
+
+        await records.ChangeAsync(copy.Id, Settle, CancellationToken.None);
+    }
+
+    private bool Settle(LearningExtraction record)
+    {
+        if (Fails)
+        {
+            record.Fail(ExtractionFailure.StreamMissing, "no picture", at);
+
+            return true;
+        }
+
+        record.Reached(ImportsAtOnce, at);
+        record.Finish(at);
+
+        return true;
+    }
+
+    private TaskCompletionSource Released(RecordingId id)
+        => released.GetOrAdd(id, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+}
+
 internal sealed class HeldCaptionRecords : ICaptionRecords
 {
     public Dictionary<RecordingId, CaptionRecord> Kept { get; } = [];
@@ -178,6 +238,8 @@ internal sealed class LearningBacklogHarness : IDisposable
 {
     private readonly TempTree tree = new();
 
+    private readonly TempTree copies = new();
+
     private readonly ServiceProvider provider;
 
     public LearningBacklogHarness()
@@ -198,6 +260,7 @@ internal sealed class LearningBacklogHarness : IDisposable
 
         Store = new LearningRecords(provider.GetRequiredService<IServiceScopeFactory>());
         Reader = new HeldReader(Store, Now);
+        Importer = new HeldImporter(Store, Now);
     }
 
     public HeldLearningExtractions Records { get; } = new();
@@ -220,12 +283,22 @@ internal sealed class LearningBacklogHarness : IDisposable
 
     public HeldReader Reader { get; }
 
+    public HeldImporter Importer { get; }
+
+    public TempTree Copies => copies;
+
     public IntegritySettings Mounts => new() { OutputRoots = [new StorageRootPath(Mounted, tree.Root)] };
 
-    public LearningBacklogJob Job(LearningBacklogSettings? settings = null)
+    public LearningBacklogJob Job(LearningBacklogSettings? settings = null, LearningImportSettings? import = null)
         => new(
             provider.GetRequiredService<IServiceScopeFactory>(),
             Reader,
+            new ReducedCopyImports(
+                import ?? new LearningImportSettings { ImportFrom = copies.Root },
+                Importer,
+                Store,
+                new StillClock(Now),
+                NullLogger<ReducedCopyImports>.Instance),
             Store,
             Captions,
             Mounts,
@@ -276,10 +349,23 @@ internal sealed class LearningBacklogHarness : IDisposable
 
     public string Source(Recording recording) => tree.Under(recording.FileName.Value);
 
+    /// <summary>
+    /// A reduced copy on the shelf the import reads, of the recording given or of one with no row.
+    /// </summary>
+    public CopyDescription Copied(string name, Recording? of = null, params string[] leftOut)
+    {
+        CopyDescription description = of is null ? new CopyDescription() : new CopyDescription { Id = of.Id };
+
+        ReducedCopies.Write(copies.Root, name, description, leftOut);
+
+        return description;
+    }
+
     public void Dispose()
     {
         provider.Dispose();
         tree.Dispose();
+        copies.Dispose();
     }
 
     private sealed class StillClock(DateTime at) : TimeProvider

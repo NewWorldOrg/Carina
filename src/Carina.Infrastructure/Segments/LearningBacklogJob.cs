@@ -12,26 +12,29 @@ namespace Carina.Infrastructure.Segments;
 /// <summary>
 /// What one look at the recordings that have ended did: how many records it put back after a start,
 /// what stood in the way of spare time when it was not, how many recordings it gave whether captions
-/// are shown, which recording it began to read, which reading it stopped because learning was switched
-/// off, how many recordings waiting to be read it passed over because their file was out of reach, and
-/// which recording is being read when it was done.
+/// are shown, which recording it began to import from a reduced copy, which recording it began to read,
+/// which reading or import it stopped because learning was switched off, how many recordings waiting to
+/// be read it passed over because their file was out of reach, and which recording is being read or
+/// imported when it was done.
 /// </summary>
 public sealed record LearningBacklogLook(
     int Recovered,
     SpareTimeVerdict? Verdict,
     int Captioned,
+    RecordingId? Importing,
     RecordingId? Began,
     RecordingId? Stopped,
     int OutOfReach,
     RecordingId? Reading)
 {
-    public bool SaysAnything => Recovered > 0 || Captioned > 0 || Began is not null || Stopped is not null;
+    public bool SaysAnything => Recovered > 0 || Captioned > 0 || Importing is not null || Began is not null || Stopped is not null;
 }
 
 /// <summary>
-/// Reads the learning data out of the recordings that have ended, one at a time and the most recently
-/// started first, from the head of each file to its end, and gives the recordings whose captions are ready
-/// whether captions are shown in each second. It looks after
+/// Imports the learning data of recordings from their reduced copies (<see cref="ReducedCopyImports"/>), and
+/// reads it out of the recordings that have ended, one at a time — a copy or a recording, the copies first and
+/// the most recently started recording first — from the head of each file to its end, and gives the
+/// recordings whose captions are ready whether captions are shown in each second. It looks after
 /// <see cref="LearningBacklogSettings.BeforeFirstLook"/>, then every
 /// <see cref="LearningBacklogSettings.BetweenLooks"/>, or every
 /// <see cref="LearningBacklogSettings.WhileReading"/> while a recording is read. A look that finds no
@@ -40,14 +43,15 @@ public sealed record LearningBacklogLook(
 /// once its record is written, so a write that fails is made again at the next look. Nothing begins outside
 /// <see cref="SpareTime"/>, which is judged again before each recording; a recording begun is read to its
 /// end even when recording or watching starts meanwhile, but switching learning off stops it within a
-/// look, keeping what it wrote and putting its record back to waiting. A recording whose file is out of
-/// reach is passed over and keeps waiting, and one whose row or file goes while it is read is read no
-/// further and ends partway. Stopping the process stops the reading and leaves its record for the next
-/// start. No recording's file is removed.
+/// look, keeping what it wrote and putting its record back to waiting; an import is stopped the same way.
+/// A recording whose file is out of reach is passed over and keeps waiting, and one whose row or file goes
+/// while it is read is read no further and ends partway. Stopping the process stops the reading and leaves
+/// its record for the next start. No recording's file, and nothing in a reduced copy, is removed.
 /// </summary>
 public sealed class LearningBacklogJob(
     IServiceScopeFactory scopes,
     ILearningFollower follower,
+    ReducedCopyImports imports,
     LearningRecords records,
     ICaptionRecords captions,
     IntegritySettings mounts,
@@ -59,7 +63,7 @@ public sealed class LearningBacklogJob(
 
     private Run? run;
 
-    public RecordingId? Reading => run?.Recording.Id;
+    public RecordingId? Reading => run?.Id;
 
     public async Task<LearningBacklogLook> LookAsync(CancellationToken cancellationToken)
     {
@@ -79,14 +83,15 @@ public sealed class LearningBacklogJob(
 
         if (verdict is not SpareTimeVerdict.Spare)
         {
-            return new LearningBacklogLook(putBack, verdict, 0, null, stopped, 0, null);
+            return new LearningBacklogLook(putBack, verdict, 0, null, null, stopped, 0, null);
         }
 
         ILearningBacklog backlog = scope.ServiceProvider.GetRequiredService<ILearningBacklog>();
         int captioned = await CaptionEachAsync(backlog, cancellationToken);
-        (RecordingId? began, int outOfReach) = await BeginNextAsync(scope, backlog, cancellationToken);
+        RecordingId? importing = await BeginImportAsync(cancellationToken);
+        (RecordingId? began, int outOfReach) = importing is null ? await BeginNextAsync(scope, backlog, cancellationToken) : (null, 0);
 
-        return new LearningBacklogLook(putBack, verdict, captioned, began, stopped, outOfReach, Reading);
+        return new LearningBacklogLook(putBack, verdict, captioned, importing, began, stopped, outOfReach, Reading);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -145,23 +150,28 @@ public sealed class LearningBacklogJob(
         Run running,
         CancellationToken cancellationToken)
     {
-        RecordingId id = running.Recording.Id;
+        RecordingId id = running.Id;
 
         if (!await scope.ServiceProvider.GetRequiredService<ILearningSwitch>().IsOnAsync(cancellationToken))
         {
             bool letGo = await StopReadingAsync(running, cancellationToken);
 
-            return new LearningBacklogLook(0, SpareTimeVerdict.LearningOff, 0, null, letGo ? id : null, 0, Reading);
+            return new LearningBacklogLook(0, SpareTimeVerdict.LearningOff, 0, null, null, letGo ? id : null, 0, Reading);
+        }
+
+        if (running.Followed is not { } followed)
+        {
+            return new LearningBacklogLook(0, null, 0, null, null, null, 0, id);
         }
 
         RecordingStanding? standing = await scope.ServiceProvider.GetRequiredService<ILearningWorklist>().StandingAsync(id, cancellationToken);
 
-        if (standing is null || !File.Exists(running.Recording.Source))
+        if (standing is null || !File.Exists(followed.Source))
         {
-            running.Recording.Went();
+            followed.Went();
         }
 
-        return new LearningBacklogLook(0, null, 0, null, null, 0, id);
+        return new LearningBacklogLook(0, null, 0, null, null, null, 0, id);
     }
 
     private async Task<int> CaptionEachAsync(ILearningBacklog backlog, CancellationToken cancellationToken)
@@ -205,6 +215,21 @@ public sealed class LearningBacklogJob(
             cancellationToken);
 
         return true;
+    }
+
+    private async Task<RecordingId?> BeginImportAsync(CancellationToken cancellationToken)
+    {
+        if (await imports.ClaimNextAsync(cancellationToken) is not { } copy)
+        {
+            return null;
+        }
+
+        CancellationTokenSource stopping = new();
+        Task importing = Task.Run(() => imports.ImportAsync(copy, stopping.Token), CancellationToken.None);
+
+        run = new Run(copy.Id, null, stopping, importing);
+
+        return copy.Id;
     }
 
     private async Task<(RecordingId? Began, int OutOfReach)> BeginNextAsync(
@@ -307,7 +332,7 @@ public sealed class LearningBacklogJob(
         CancellationTokenSource stopping = new();
         Task running = Task.Run(() => follower.FollowAsync(read, stopping.Token), CancellationToken.None);
 
-        run = new Run(read, stopping, running);
+        run = new Run(recording.Id, read, stopping, running);
     }
 
     /// <summary>
@@ -323,7 +348,7 @@ public sealed class LearningBacklogJob(
 
         bool letGo = await LetGoOfAsync(ended, cancellationToken);
 
-        return letGo && ended.Stopping.IsCancellationRequested ? ended.Recording.Id : null;
+        return letGo && ended.Stopping.IsCancellationRequested ? ended.Id : null;
     }
 
     private async Task<bool> StopReadingAsync(Run running, CancellationToken cancellationToken)
@@ -343,7 +368,7 @@ public sealed class LearningBacklogJob(
     {
         bool stopped = ended.Stopping.IsCancellationRequested;
         ExtractionChange change = await ChangeReadingAsync(
-            ended.Recording.Id,
+            ended.Id,
             stopped ? found => found.Pause(Now()) : found => found.Fail(ExtractionFailure.Other, LeftUnsettled, Now()),
             cancellationToken);
 
@@ -417,7 +442,7 @@ public sealed class LearningBacklogJob(
     {
         if (ended.Task.Exception is { } failure)
         {
-            logger.LogError(failure, "Reading recording {Recording} for its learning data failed.", ended.Recording.Id.Wire);
+            logger.LogError(failure, "Reading recording {Recording} for its learning data failed.", ended.Id.Wire);
         }
 
         if (!settled)
@@ -429,11 +454,11 @@ public sealed class LearningBacklogJob(
         {
             logger.LogInformation(
                 "Learning was switched off, so the reading of recording {Recording} stopped; what it kept stays, and its record waits to be read.",
-                ended.Recording.Id.Wire);
+                ended.Id.Wire);
         }
         else
         {
-            logger.LogWarning("Reading recording {Recording} ended and left its record reading, so it is taken as failed.", ended.Recording.Id.Wire);
+            logger.LogWarning("Reading recording {Recording} ended and left its record reading, so it is taken as failed.", ended.Id.Wire);
         }
     }
 
@@ -446,15 +471,16 @@ public sealed class LearningBacklogJob(
 
         logger.LogInformation(
             "A look for recordings to read for their learning data put back {Recovered} record(s) left reading, gave {Captioned} "
-            + "recording(s) whether captions are shown, began reading {Began}, stopped reading {Stopped}, passed over {OutOfReach} "
-            + "recording(s) out of reach, and leaves {Reading} being read.",
+            + "recording(s) whether captions are shown, began importing {Importing}, began reading {Began}, stopped reading {Stopped}, "
+            + "passed over {OutOfReach} recording(s) out of reach, and leaves {Reading} being read.",
             look.Recovered,
             look.Captioned,
+            look.Importing?.Wire ?? "none",
             look.Began?.Wire ?? "none",
             look.Stopped?.Wire ?? "none",
             look.OutOfReach,
             look.Reading?.Wire ?? "none");
     }
 
-    private sealed record Run(FollowedRecording Recording, CancellationTokenSource Stopping, Task Task);
+    private sealed record Run(RecordingId Id, FollowedRecording? Followed, CancellationTokenSource Stopping, Task Task);
 }

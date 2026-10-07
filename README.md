@@ -119,6 +119,7 @@ pcscd は起動し直すたびにソケットを作り直すので、ソケッ�
 | `RecordingProgress__AtMostEvery` | 録画中に書いた長さやドロップの数が変わったとき、開いている画面に知らせる最短の間隔。既定は 30 秒、上限は 1 時間。録画の開始・停止・中断・結果は、この間隔を待たずに知らせる |
 | `Thumbnails__WrittenTo` | サムネイルの保存先。空なら作らない |
 | `Captions__WrittenTo` | 録画から取り出した字幕の保存先。空なら取り出さない |
+| `Learning__ImportFrom` | 録画を縮めたデータ(形 `anime-material-v1`、1 本につきディレクトリ 1 つ)を置いたディレクトリ(絶対パス)。空なら取り込まない。CM・OP・ED の学習が入のとき、空いている時間に 1 本ずつ学習に使うデータとして取り込む。中のファイルは書き換えも削除もしない |
 | `Encodings__OutputRoots` | エンコード済みファイルの保存先(`encodes=/srv/encodes`) |
 | `Encodings__Prefer` | 録画をあとからエンコードするときの変換器(`Software` / `Vaapi`)。既定は `Software` |
 | `Transcoding__Prefer` | ライブと録画再生をその場で変換するときの変換器(`Software` / `Vaapi`)。既定は `Software` |
@@ -156,6 +157,7 @@ root で起動したイメージは、`app` を uid・gid 10001 に切り替え�
 | `CARINA_RECORDINGS_DIR` | 録画を保存するホスト側のディレクトリ。未設定なら Docker のボリューム |
 | `CARINA_ENCODES_DIR` | エンコード済みファイルを保存するホスト側のディレクトリ。未設定なら Docker のボリューム |
 | `CARINA_KEYS_DIR` | client secret を暗号化する鍵を置くホスト側のディレクトリ。未設定なら Docker のボリューム |
+| `CARINA_LEARNING_IMPORT_DIR` | `app` の `Learning__ImportFrom` に読み取り専用で渡す、縮めたデータを置いたホスト側のディレクトリ。未設定なら空の Docker のボリューム |
 | `CARINA_DRI` | GPU の装置のディレクトリ(`/dev/dri`)。未設定なら何も渡さない |
 | `CARINA_RENDER_NODE` | `app` の `Machine__RenderNode` に渡す描画ノード。既定は `/dev/dri/renderD128` |
 | `CARINA_DRI_VIDEO_GID` / `CARINA_DRI_RENDER_GID` | `card0` / `CARINA_RENDER_NODE` のノードの所有グループの番号 |

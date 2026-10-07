@@ -18,6 +18,8 @@ public sealed class LearningExtractionTests
 
     private static readonly ExtractionVersion Reduced = new(LearningData.ExtractionVersion, ExtractionOrigin.ReducedCopy);
 
+    private static readonly ExtractionVersion NewerReduced = new(LearningData.ExtractionVersion + 1, ExtractionOrigin.ReducedCopy);
+
     private static readonly IReadOnlyDictionary<string, Action<LearningExtraction>> Moves =
         new Dictionary<string, Action<LearningExtraction>>(StringComparer.Ordinal)
         {
@@ -468,6 +470,78 @@ public sealed class LearningExtractionTests
         Assert.Throws<InvalidOperationException>(() => In(LearningExtractionState.Following).ReadAwaited(Current, Noon, Later));
     }
 
+    [Fact(DisplayName = "a record waits to be imported from a reduced copy when it waits, failed reading the file, failed importing with a try left, was left partway reading the file, or was made by other calculations")]
+    public void ARecordWaitsToBeImportedWhenItShould()
+    {
+        LearningExtraction outOfTries = In(LearningExtractionState.Failed);
+        LearningExtraction failedImporting = Imported(extraction => extraction.Fail(ExtractionFailure.Other, "it stopped", Noon));
+
+        for (int failure = 0; failure < LearningExtraction.MostRetries; failure++)
+        {
+            outOfTries.ReadAwaited(Current, Noon, Later);
+            outOfTries.Fail(ExtractionFailure.Other, "it stopped", Later);
+        }
+
+        Assert.False(outOfTries.CanRetry);
+        Assert.True(In(LearningExtractionState.Waiting).AwaitsImport(Reduced));
+        Assert.True(In(LearningExtractionState.Failed).AwaitsImport(Reduced));
+        Assert.True(outOfTries.AwaitsImport(Reduced));
+        Assert.True(failedImporting.AwaitsImport(Reduced));
+        Assert.True(In(LearningExtractionState.Partial).AwaitsImport(Reduced));
+        Assert.True(In(LearningExtractionState.Done).AwaitsImport(NewerReduced));
+        Assert.True(Imported(extraction => extraction.Finish(Noon)).AwaitsImport(NewerReduced));
+    }
+
+    [Fact(DisplayName = "a record does not wait to be imported while it is followed or read, once done by the calculations of the copy either way, left partway importing, or out of tries importing")]
+    public void ARecordDoesNotWaitToBeImportedWhenItShouldNot()
+    {
+        LearningExtraction outOfTries = Imported(extraction => extraction.Fail(ExtractionFailure.Other, "it stopped", Noon));
+
+        for (int failure = 0; failure < LearningExtraction.MostRetries; failure++)
+        {
+            outOfTries.Import(Reduced, Later);
+            outOfTries.Fail(ExtractionFailure.Other, "it stopped", Later);
+        }
+
+        Assert.False(In(LearningExtractionState.Following).AwaitsImport(Reduced));
+        Assert.False(In(LearningExtractionState.Reading).AwaitsImport(Reduced));
+        Assert.False(In(LearningExtractionState.Done).AwaitsImport(Reduced));
+        Assert.False(Imported(extraction => extraction.Finish(Noon)).AwaitsImport(Reduced));
+        Assert.False(Imported(extraction => extraction.FinishPartway(Noon)).AwaitsImport(Reduced));
+        Assert.False(outOfTries.AwaitsImport(Reduced));
+    }
+
+    [Theory(DisplayName = "a record that waits to be imported is read from the head with the version of the copy, its failures still counted")]
+    [InlineData(LearningExtractionState.Waiting)]
+    [InlineData(LearningExtractionState.Failed)]
+    [InlineData(LearningExtractionState.Done)]
+    [InlineData(LearningExtractionState.Partial)]
+    public void ARecordThatWaitsToBeImportedIsReadFromTheHead(LearningExtractionState state)
+    {
+        LearningExtraction extraction = In(state);
+        int failures = extraction.Failures;
+
+        extraction.Import(NewerReduced, Later);
+
+        Assert.Equal(
+            (LearningExtractionState.Reading, NewerReduced, TimeSpan.Zero, failures, Later),
+            (extraction.State, extraction.Version, extraction.ReadThrough, extraction.Failures, extraction.UpdatedAt));
+    }
+
+    [Fact(DisplayName = "a record that does not wait to be imported is not, a copy is imported only with a version made from a reduced copy, and either way the record stays as it was")]
+    public void ARecordThatDoesNotWaitToBeImportedIsNot()
+    {
+        LearningExtraction done = In(LearningExtractionState.Done);
+        LearningExtraction waiting = In(LearningExtractionState.Waiting);
+
+        Assert.Throws<InvalidOperationException>(() => done.Import(Reduced, Later));
+        Assert.Throws<InvalidOperationException>(() => In(LearningExtractionState.Reading).Import(Reduced, Later));
+        Assert.Throws<ArgumentException>(() => waiting.Import(Current, Later));
+        Assert.Throws<ArgumentException>(() => waiting.AwaitsImport(Current));
+        Assert.Equal((LearningExtractionState.Done, Noon), (done.State, done.UpdatedAt));
+        Assert.Equal((LearningExtractionState.Waiting, Noon), (waiting.State, waiting.UpdatedAt));
+    }
+
     [Theory(DisplayName = "on starting the app, what was following or reading follows again from the head while the recording goes on")]
     [MemberData(nameof(Running))]
     public void OnStartingWhatWasRunningFollowsAgainWhileTheRecordingGoesOn(LearningExtractionState state)
@@ -578,6 +652,16 @@ public sealed class LearningExtractionTests
             Programme(),
             Noon,
             Noon);
+
+    private static LearningExtraction Imported(Action<LearningExtraction> settle)
+    {
+        LearningExtraction extraction = LearningExtraction.Waiting(RecordingId.New(), Programme(), Noon);
+
+        extraction.Import(Reduced, Noon);
+        settle(extraction);
+
+        return extraction;
+    }
 
     private static LearningExtraction In(LearningExtractionState state)
     {

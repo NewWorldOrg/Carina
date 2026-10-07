@@ -442,6 +442,33 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Same(LearningBacklogSettings.Default, provider.GetRequiredService<LearningBacklogSettings>());
     }
 
+    [Fact(DisplayName = "registers the import of reduced copies beside the reading of recordings that have ended, from the directory configured")]
+    public void RegistersTheImportOfReducedCopies()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Learning:ImportFrom"] = "/srv/reduced";
+        using ServiceProvider provider = Build(settings);
+        using ServiceProvider unset = Build(ValidSettings());
+
+        Assert.IsType<FfmpegReducedCopyImporter>(provider.GetRequiredService<IReducedCopyImporter>());
+        Assert.NotNull(provider.GetRequiredService<ReducedCopyImports>());
+        Assert.Equal("/srv/reduced", provider.GetRequiredService<LearningImportSettings>().ImportFrom);
+        Assert.Null(unset.GetRequiredService<LearningImportSettings>().ImportFrom);
+    }
+
+    [Fact(DisplayName = "a directory to import reduced copies from that is not absolute stops the process naming the setting")]
+    public void RejectsAnImportDirectoryThatIsNotAbsolute()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Learning:ImportFrom"] = "reduced";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<LearningOptions>>().Value);
+
+        Assert.Contains("Learning:ImportFrom", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ReadsWhereTheOutputRootsAreMountedIntoThisProcess()
     {

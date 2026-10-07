@@ -20,6 +20,8 @@ public sealed record ExtractionVersion
 
     public static ExtractionVersion Current { get; } = new(LearningData.ExtractionVersion, ExtractionOrigin.RecordingFile);
 
+    public static ExtractionVersion CurrentFromReducedCopy { get; } = new(LearningData.ExtractionVersion, ExtractionOrigin.ReducedCopy);
+
     public int Number { get; }
 
     public ExtractionOrigin Origin { get; }
