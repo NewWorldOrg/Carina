@@ -13,6 +13,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Domain.Scans;
+using Carina.Domain.Segments;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Collection;
@@ -376,6 +377,18 @@ public sealed class ServiceCollectionExtensionsTests
 
         Assert.IsType<MigrationRecordRepository>(
             scope.ServiceProvider.GetRequiredService<IMigrationRecordRepository>());
+    }
+
+    [Fact]
+    public void RegistersWhereTheLearningDataAndHowFarItWasTakenAreKept()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<LearningExtractionRepository>(
+            scope.ServiceProvider.GetRequiredService<ILearningExtractionRepository>());
+        Assert.IsType<LearningDataRepository>(
+            scope.ServiceProvider.GetRequiredService<ILearningDataRepository>());
     }
 
     [Fact]

@@ -15,6 +15,7 @@ using Carina.Domain.Quality;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Domain.Scans;
+using Carina.Domain.Segments;
 using Carina.Domain.Streaming;
 using Carina.Domain.Thumbnails;
 using Carina.Domain.Viewing;
@@ -186,6 +187,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeWorkLedger, EncodeWorkLedger>();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
         services.AddScoped<IPlaybackPositionRepository, PlaybackPositionRepository>();
+        services.AddScoped<ILearningExtractionRepository, LearningExtractionRepository>();
+        services.AddScoped<ILearningDataRepository, LearningDataRepository>();
         services.AddScoped<IMigrationRecordRepository, MigrationRecordRepository>();
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
         services.AddScoped<IEncodeDestinationRepository, EncodeDestinationRepository>();
