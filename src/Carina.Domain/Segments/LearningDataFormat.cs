@@ -6,159 +6,217 @@ using System.IO.Compression;
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// The bytes a <see cref="LearningDataChunk"/> is kept in: a header of the shape's
-/// <see cref="Version"/>, the chunk's index and its frame clock (numerator, denominator, first
-/// frame in ticks), then one section for each kind of data in a fixed order — fingerprints,
-/// loudness, channel differences, frame lights, corner outlines — each naming its kind, how many
-/// readings it holds and how many bytes follow, the readings compressed with Brotli. A reading of
-/// two values is kept as all the first values, then all the second. Numbers are little-endian.
-/// Bytes in any other shape are not read.
+/// The bytes one kind of the learning data of one chunk is kept in: the shape's
+/// <see cref="Version"/>, the kind and the chunk's index; for the frame lights alone the frame
+/// clock (numerator, denominator, first frame in ticks); then how many readings follow, how many
+/// bytes they take, and the readings compressed with Brotli. A reading of two values is kept as all
+/// the first values, then all the second. Numbers are little-endian. Bytes in any other shape, or of
+/// another kind than the one asked for, are not read.
 /// </summary>
 public static class LearningDataFormat
 {
     public const ushort Version = 1;
 
-    private const int HeaderBytes = sizeof(ushort) + (3 * sizeof(int)) + sizeof(long);
+    private const int HeaderBytes = sizeof(ushort) + 1 + sizeof(int);
 
-    private const int SectionHeaderBytes = 1 + (2 * sizeof(int));
+    private const int ClockBytes = (2 * sizeof(int)) + sizeof(long);
+
+    private const int ReadingsHeaderBytes = 2 * sizeof(int);
 
     private const int Quality = 9;
 
     private const int WindowBits = 22;
 
-    private enum Kind : byte
-    {
-        Fingerprints = 1,
-        Loudness = 2,
-        Channels = 3,
-        Frames = 4,
-        CornerOutlines = 5,
-    }
+    public static byte[] Write(LearningDataChunk chunk, LearningDataKind kind) => Write(LearningDataPart.Of(chunk, kind));
 
-    public static byte[] Write(LearningDataChunk chunk)
+    public static byte[] Write(LearningDataPart part)
     {
-        ArgumentNullException.ThrowIfNull(chunk);
+        ArgumentNullException.ThrowIfNull(part);
 
         ArrayBufferWriter<byte> written = new();
         Span<byte> header = written.GetSpan(HeaderBytes);
 
         BinaryPrimitives.WriteUInt16LittleEndian(header, Version);
-        BinaryPrimitives.WriteInt32LittleEndian(header[2..], chunk.Index);
-        BinaryPrimitives.WriteInt32LittleEndian(header[6..], chunk.Clock.Numerator);
-        BinaryPrimitives.WriteInt32LittleEndian(header[10..], chunk.Clock.Denominator);
-        BinaryPrimitives.WriteInt64LittleEndian(header[14..], chunk.Clock.FirstFrameAt.Ticks);
+        header[2] = (byte)part.Kind;
+        BinaryPrimitives.WriteInt32LittleEndian(header[3..], part.Index);
         written.Advance(HeaderBytes);
 
-        Section(written, Kind.Fingerprints, chunk.Fingerprints.Length, FingerprintBytes(chunk.Fingerprints));
-        Section(written, Kind.Loudness, chunk.Loudness.Length, chunk.Loudness);
-        Section(written, Kind.Channels, chunk.Channels.Length, ChannelBytes(chunk.Channels));
-        Section(written, Kind.Frames, chunk.Frames.Length, FrameBytes(chunk.Frames));
-        Section(written, Kind.CornerOutlines, chunk.Outlines, chunk.CornerOutlines);
+        if (part.Clock is FrameClock clock)
+        {
+            Span<byte> clocked = written.GetSpan(ClockBytes);
+            BinaryPrimitives.WriteInt32LittleEndian(clocked, clock.Numerator);
+            BinaryPrimitives.WriteInt32LittleEndian(clocked[4..], clock.Denominator);
+            BinaryPrimitives.WriteInt64LittleEndian(clocked[8..], clock.FirstFrameAt.Ticks);
+            written.Advance(ClockBytes);
+        }
+
+        WriteReadings(written, part.Count, Readings(part));
 
         return written.WrittenSpan.ToArray();
     }
 
-    public static bool TryRead(ReadOnlySpan<byte> bytes, [NotNullWhen(true)] out LearningDataChunk? chunk)
+    public static bool TryRead(ReadOnlySpan<byte> bytes, LearningDataKind kind, [NotNullWhen(true)] out LearningDataPart? part)
     {
-        chunk = null;
+        part = null;
 
-        if (bytes.Length < HeaderBytes || BinaryPrimitives.ReadUInt16LittleEndian(bytes) != Version)
+        if (!LearningDataChunk.Kinds.Contains(kind)
+            || bytes.Length < HeaderBytes
+            || BinaryPrimitives.ReadUInt16LittleEndian(bytes) != Version
+            || bytes[2] != (byte)kind)
         {
             return false;
         }
 
-        int index = BinaryPrimitives.ReadInt32LittleEndian(bytes[2..]);
-        int numerator = BinaryPrimitives.ReadInt32LittleEndian(bytes[6..]);
-        int denominator = BinaryPrimitives.ReadInt32LittleEndian(bytes[10..]);
-        long firstFrameTicks = BinaryPrimitives.ReadInt64LittleEndian(bytes[14..]);
-
-        if (FrameClock.Fault(numerator, denominator, TimeSpan.FromTicks(firstFrameTicks)) is not null)
-        {
-            return false;
-        }
-
-        FrameClock clock = FrameClock.Of(numerator, denominator, TimeSpan.FromTicks(firstFrameTicks));
+        int index = BinaryPrimitives.ReadInt32LittleEndian(bytes[3..]);
         ReadOnlySpan<byte> rest = bytes[HeaderBytes..];
+        FrameClock? clock = null;
 
-        if (!TrySection(ref rest, Kind.Fingerprints, SoundFingerprint.PerChunk, sizeof(uint), out byte[] fingerprints)
-            || !TrySection(ref rest, Kind.Loudness, SoundLoudness.PerChunk, 1, out byte[] loudness)
-            || !TrySection(ref rest, Kind.Channels, ChannelDifference.PerChunk, 2, out byte[] channels)
-            || !TrySection(ref rest, Kind.Frames, clock.MostFramesIn(LearningData.ChunkSeconds), 2, out byte[] frames)
-            || !TrySection(ref rest, Kind.CornerOutlines, CornerOutline.PerChunk, CornerOutline.Bytes, out byte[] outlines)
-            || !rest.IsEmpty)
+        if (index is < 0 or > LearningData.LastChunk
+            || (kind is LearningDataKind.FrameLights && !TryReadClock(ref rest, index, out clock)))
         {
             return false;
         }
 
-        string? fault = LearningDataChunk.Fault(
-            index,
-            clock,
-            fingerprints.Length / sizeof(uint),
-            loudness.Length,
-            channels.Length / 2,
-            frames.Length / 2,
-            outlines.Length);
-
-        if (fault is not null)
+        if (!TryReadReadings(ref rest, Most(kind, clock), BytesEach(kind), out byte[] readings) || !rest.IsEmpty)
         {
             return false;
         }
 
-        chunk = LearningDataChunk.Of(
-            index,
-            clock,
-            Fingerprints(fingerprints),
-            loudness,
-            Channels(channels),
-            Frames(frames),
-            outlines);
+        part = LearningDataPart.Read(kind, index, clock, readings);
 
         return true;
     }
 
-    private static void Section(ArrayBufferWriter<byte> written, Kind kind, int count, ReadOnlySpan<byte> readings)
+    internal static uint[] Fingerprints(byte[] bytes)
+    {
+        uint[] fingerprints = new uint[bytes.Length / sizeof(uint)];
+
+        for (int at = 0; at < fingerprints.Length; at++)
+        {
+            fingerprints[at] = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(at * sizeof(uint)));
+        }
+
+        return fingerprints;
+    }
+
+    internal static ChannelDifference[] Channels(byte[] bytes)
+    {
+        int count = bytes.Length / 2;
+        ChannelDifference[] channels = new ChannelDifference[count];
+
+        for (int at = 0; at < count; at++)
+        {
+            channels[at] = new ChannelDifference(bytes[at], bytes[count + at]);
+        }
+
+        return channels;
+    }
+
+    internal static FrameLight[] Frames(byte[] bytes)
+    {
+        int count = bytes.Length / 2;
+        FrameLight[] frames = new FrameLight[count];
+
+        for (int at = 0; at < count; at++)
+        {
+            frames[at] = new FrameLight(bytes[at], bytes[count + at]);
+        }
+
+        return frames;
+    }
+
+    private static byte[] Readings(LearningDataPart part) => part.Kind switch
+    {
+        LearningDataKind.SoundFingerprints => FingerprintBytes(part.Fingerprints),
+        LearningDataKind.Loudness => part.Loudness.ToArray(),
+        LearningDataKind.ChannelDifferences => ChannelBytes(part.Channels),
+        LearningDataKind.FrameLights => FrameBytes(part.Frames),
+        _ => part.CornerOutlines.ToArray(),
+    };
+
+    private static int Most(LearningDataKind kind, FrameClock? clock) => kind switch
+    {
+        LearningDataKind.SoundFingerprints => SoundFingerprint.PerChunk,
+        LearningDataKind.Loudness => SoundLoudness.PerChunk,
+        LearningDataKind.ChannelDifferences => ChannelDifference.PerChunk,
+        LearningDataKind.FrameLights => clock?.MostFramesIn(LearningData.ChunkSeconds) ?? 0,
+        _ => CornerOutline.PerChunk,
+    };
+
+    private static int BytesEach(LearningDataKind kind) => kind switch
+    {
+        LearningDataKind.SoundFingerprints => sizeof(uint),
+        LearningDataKind.Loudness => 1,
+        LearningDataKind.ChannelDifferences or LearningDataKind.FrameLights => 2,
+        _ => CornerOutline.Bytes,
+    };
+
+    private static void WriteReadings(ArrayBufferWriter<byte> written, int count, ReadOnlySpan<byte> readings)
     {
         byte[] compressed = new byte[BrotliEncoder.GetMaxCompressedLength(readings.Length)];
 
         if (!BrotliEncoder.TryCompress(readings, compressed, out int length, Quality, WindowBits))
         {
-            throw new InvalidOperationException($"The {kind} of a chunk could not be compressed.");
+            throw new InvalidOperationException("The readings of a chunk could not be compressed.");
         }
 
-        Span<byte> header = written.GetSpan(SectionHeaderBytes);
-        header[0] = (byte)kind;
-        BinaryPrimitives.WriteInt32LittleEndian(header[1..], count);
-        BinaryPrimitives.WriteInt32LittleEndian(header[5..], length);
-        written.Advance(SectionHeaderBytes);
+        Span<byte> header = written.GetSpan(ReadingsHeaderBytes);
+        BinaryPrimitives.WriteInt32LittleEndian(header, count);
+        BinaryPrimitives.WriteInt32LittleEndian(header[4..], length);
+        written.Advance(ReadingsHeaderBytes);
         written.Write(compressed.AsSpan(0, length));
     }
 
-    private static bool TrySection(ref ReadOnlySpan<byte> rest, Kind kind, int most, int bytesEach, out byte[] readings)
+    private static bool TryReadClock(ref ReadOnlySpan<byte> rest, int index, [NotNullWhen(true)] out FrameClock? clock)
     {
-        readings = [];
+        clock = null;
 
-        if (rest.Length < SectionHeaderBytes || rest[0] != (byte)kind)
+        if (rest.Length < ClockBytes)
         {
             return false;
         }
 
-        int count = BinaryPrimitives.ReadInt32LittleEndian(rest[1..]);
-        int length = BinaryPrimitives.ReadInt32LittleEndian(rest[5..]);
+        int numerator = BinaryPrimitives.ReadInt32LittleEndian(rest);
+        int denominator = BinaryPrimitives.ReadInt32LittleEndian(rest[4..]);
+        TimeSpan firstFrameAt = TimeSpan.FromTicks(BinaryPrimitives.ReadInt64LittleEndian(rest[8..]));
 
-        if (count < 0 || count > most || length < 0 || length > rest.Length - SectionHeaderBytes)
+        if (FrameClock.Fault(numerator, denominator, firstFrameAt) is not null || firstFrameAt < LearningData.ChunkStarts(index))
+        {
+            return false;
+        }
+
+        clock = FrameClock.Of(numerator, denominator, firstFrameAt);
+        rest = rest[ClockBytes..];
+
+        return true;
+    }
+
+    private static bool TryReadReadings(ref ReadOnlySpan<byte> rest, int most, int bytesEach, out byte[] readings)
+    {
+        readings = [];
+
+        if (rest.Length < ReadingsHeaderBytes)
+        {
+            return false;
+        }
+
+        int count = BinaryPrimitives.ReadInt32LittleEndian(rest);
+        int length = BinaryPrimitives.ReadInt32LittleEndian(rest[4..]);
+
+        if (count < 0 || count > most || length < 0 || length > rest.Length - ReadingsHeaderBytes)
         {
             return false;
         }
 
         byte[] expanded = new byte[count * bytesEach];
 
-        if (!BrotliDecoder.TryDecompress(rest.Slice(SectionHeaderBytes, length), expanded, out int expandedLength)
+        if (!BrotliDecoder.TryDecompress(rest.Slice(ReadingsHeaderBytes, length), expanded, out int expandedLength)
             || expandedLength != expanded.Length)
         {
             return false;
         }
 
-        rest = rest[(SectionHeaderBytes + length)..];
+        rest = rest[(ReadingsHeaderBytes + length)..];
         readings = expanded;
 
         return true;
@@ -176,18 +234,6 @@ public static class LearningDataFormat
         return bytes;
     }
 
-    private static uint[] Fingerprints(byte[] bytes)
-    {
-        uint[] fingerprints = new uint[bytes.Length / sizeof(uint)];
-
-        for (int at = 0; at < fingerprints.Length; at++)
-        {
-            fingerprints[at] = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(at * sizeof(uint)));
-        }
-
-        return fingerprints;
-    }
-
     private static byte[] ChannelBytes(ReadOnlySpan<ChannelDifference> channels)
     {
         byte[] bytes = new byte[channels.Length * 2];
@@ -201,19 +247,6 @@ public static class LearningDataFormat
         return bytes;
     }
 
-    private static ChannelDifference[] Channels(byte[] bytes)
-    {
-        int count = bytes.Length / 2;
-        ChannelDifference[] channels = new ChannelDifference[count];
-
-        for (int at = 0; at < count; at++)
-        {
-            channels[at] = new ChannelDifference(bytes[at], bytes[count + at]);
-        }
-
-        return channels;
-    }
-
     private static byte[] FrameBytes(ReadOnlySpan<FrameLight> frames)
     {
         byte[] bytes = new byte[frames.Length * 2];
@@ -225,18 +258,5 @@ public static class LearningDataFormat
         }
 
         return bytes;
-    }
-
-    private static FrameLight[] Frames(byte[] bytes)
-    {
-        int count = bytes.Length / 2;
-        FrameLight[] frames = new FrameLight[count];
-
-        for (int at = 0; at < count; at++)
-        {
-            frames[at] = new FrameLight(bytes[at], bytes[count + at]);
-        }
-
-        return frames;
     }
 }

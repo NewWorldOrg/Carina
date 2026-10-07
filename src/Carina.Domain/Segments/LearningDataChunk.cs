@@ -5,10 +5,20 @@ namespace Carina.Domain.Segments;
 /// for <see cref="LearningData.ChunkSeconds"/>: fingerprints, loudness and channel differences at
 /// their fixed steps from <see cref="Starts"/>, the light of every frame from the one
 /// <see cref="Clock"/> starts at, and the corner outline of every second. The last chunk of a
-/// recording may hold fewer of each, and no chunk holds more than its length takes.
+/// recording may hold fewer of each, and no chunk holds more than its length takes. Each of
+/// <see cref="Kinds"/> is kept on its own as a <see cref="LearningDataPart"/>.
 /// </summary>
 public sealed class LearningDataChunk
 {
+    public static readonly IReadOnlyList<LearningDataKind> Kinds =
+    [
+        LearningDataKind.SoundFingerprints,
+        LearningDataKind.Loudness,
+        LearningDataKind.ChannelDifferences,
+        LearningDataKind.FrameLights,
+        LearningDataKind.CornerOutlines,
+    ];
+
     private readonly uint[] fingerprints;
 
     private readonly byte[] loudness;
@@ -90,7 +100,7 @@ public sealed class LearningDataChunk
 
     internal static string? Fault(int index, FrameClock clock, int fingerprints, int loudness, int channels, int frames, int outlineBytes)
     {
-        if (index is < 0 or > int.MaxValue / LearningData.ChunkSeconds)
+        if (index is < 0 or > LearningData.LastChunk)
         {
             return "A chunk is counted from zero, and no further than a count of seconds reaches.";
         }

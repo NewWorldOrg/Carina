@@ -51,8 +51,8 @@ public sealed class LearningDataCollectorTests
     [Fact(DisplayName = "the chunks are the same to the bit however the sound, the frames and the pictures are cut into pieces and interleaved")]
     public void TheChunksAreTheSameHoweverThePiecesAreCut()
     {
-        List<byte[]> staged = [.. Chunks.Select(LearningDataFormat.Write)];
-        List<byte[]> pieced = [.. Collected(Recording.Value, new Cutting(1, 40_001, (3 * FrameLight.Pixels) + 1, (2 * WatermarkFrame.Pixels) + 1)).Select(LearningDataFormat.Write)];
+        List<byte[]> staged = Written(Chunks);
+        List<byte[]> pieced = Written(Collected(Recording.Value, new Cutting(1, 40_001, (3 * FrameLight.Pixels) + 1, (2 * WatermarkFrame.Pixels) + 1)));
 
         Assert.Equal(staged, pieced);
     }
@@ -176,6 +176,9 @@ public sealed class LearningDataCollectorTests
             collector.Finish(),
         ];
     }
+
+    private static List<byte[]> Written(List<LearningDataChunk> chunks)
+        => [.. chunks.SelectMany(chunk => LearningDataChunk.Kinds.Select(kind => LearningDataFormat.Write(chunk, kind)))];
 
     private static List<LearningDataChunk> Fed(Func<byte[], IReadOnlyList<LearningDataChunk>> feed, long bytes, Action<long, Span<byte>> fill)
     {
