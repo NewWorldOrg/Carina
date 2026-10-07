@@ -7,10 +7,38 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 /// <summary>
 /// Reads the recordings that have ended for the reading of their learning data. Which records wait to be
-/// read is <see cref="LearningExtraction.AwaitsReading"/> written out in the query.
+/// read is <see cref="LearningExtraction.AwaitsReading"/> written out in <see cref="Awaiting"/>, the one
+/// query both the reading and the count of what waits are made from.
 /// </summary>
 public sealed class LearningBacklogReader(CarinaDbContext context) : ILearningBacklog
 {
+    /// <summary>
+    /// The recordings that have ended and whose learning data waits to be read from their files with
+    /// <see cref="ExtractionVersion.Current"/>: those with no record, and those whose record waits.
+    /// </summary>
+    public static IQueryable<Recording> Awaiting(CarinaDbContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        int number = ExtractionVersion.Current.Number;
+        ExtractionOrigin origin = ExtractionVersion.Current.Origin;
+        IQueryable<LearningExtraction> records = context.Set<LearningExtraction>().AsNoTracking();
+
+        return context.Set<Recording>()
+            .AsNoTracking()
+            .Where(recording => recording.Outcome != null
+                                && (!records.Any(record => record.RecordingId == recording.Id)
+                                    || records.Any(record => record.RecordingId == recording.Id
+                                                             && (record.State == LearningExtractionState.Waiting
+                                                                 || (record.State == LearningExtractionState.Failed
+                                                                     && record.Failures <= LearningExtraction.MostRetries)
+                                                                 || ((record.State == LearningExtractionState.Done
+                                                                      || record.State == LearningExtractionState.Partial)
+                                                                     && (record.Version!.Number != number || record.Version.Origin != origin))
+                                                                 || (record.State == LearningExtractionState.Partial
+                                                                     && record.UpdatedAt < recording.StoppedAtActual)))));
+    }
+
     public async Task<IReadOnlyList<BackloggedRecording>> AwaitingAsync(
         IReadOnlyList<OutputRoot> withinReach,
         int atMost,
@@ -20,25 +48,19 @@ public sealed class LearningBacklogReader(CarinaDbContext context) : ILearningBa
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(atMost);
 
         OutputRoot[] reachable = [.. withinReach];
-        int number = ExtractionVersion.Current.Number;
-        ExtractionOrigin origin = ExtractionVersion.Current.Origin;
-
-        return await (
-                from recording in context.Set<Recording>().AsNoTracking()
-                where recording.Outcome != null && reachable.Contains(recording.OutputRoot)
-                join kept in context.Set<LearningExtraction>().AsNoTracking()
-                    on recording.Id equals kept.RecordingId into records
-                from record in records.DefaultIfEmpty()
-                where record == null
-                      || record.State == LearningExtractionState.Waiting
-                      || (record.State == LearningExtractionState.Failed && record.Failures <= LearningExtraction.MostRetries)
-                      || ((record.State == LearningExtractionState.Done || record.State == LearningExtractionState.Partial)
-                          && (record.Version!.Number != number || record.Version.Origin != origin))
-                      || (record.State == LearningExtractionState.Partial && record.UpdatedAt < recording.StoppedAtActual)
-                orderby recording.StartedAtActual descending, recording.Id
-                select new BackloggedRecording(recording, record))
+        List<Recording> recordings = await Awaiting(context)
+            .Where(recording => reachable.Contains(recording.OutputRoot))
+            .OrderByDescending(recording => recording.StartedAtActual)
+            .ThenBy(recording => recording.Id)
             .Take(atMost)
             .ToListAsync(cancellationToken);
+        RecordingId[] ids = [.. recordings.Select(recording => recording.Id)];
+        Dictionary<RecordingId, LearningExtraction> records = await context.Set<LearningExtraction>()
+            .AsNoTracking()
+            .Where(record => ids.Contains(record.RecordingId))
+            .ToDictionaryAsync(record => record.RecordingId, cancellationToken);
+
+        return [.. recordings.Select(recording => new BackloggedRecording(recording, records.GetValueOrDefault(recording.Id)))];
     }
 
     public async Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int atMost, CancellationToken cancellationToken)

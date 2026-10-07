@@ -53,11 +53,12 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
 
         await ThrowAwayAsync(read.Id);
         await ThrowAwayAsync(partway.Id);
+        LearningDataAmount after = await ReadAsync();
 
-        Assert.Equal(kept, await ReadAsync());
+        Assert.Equal((kept.Recordings, kept.Duration, kept.Bytes), (after.Recordings, after.Duration, after.Bytes));
     }
 
-    [Fact(DisplayName = "an ended recording with no record, or with one still waiting, is waiting to be read")]
+    [Fact(DisplayName = "an ended recording with no record, or with one that waits to be read from the file, is waiting to be read")]
     public async Task AnEndedRecordingWithNoRecordOrAWaitingOneIsWaiting()
     {
         LearningDataAmount before = await ReadAsync();
@@ -65,14 +66,16 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
         await EndedAsync();
         Recording waiting = await EndedAsync();
         Recording failed = await EndedAsync();
+        Recording spent = await EndedAsync();
         Recording done = await EndedAsync();
         await AddAsync(waiting.Id, LearningExtractionState.Waiting, TimeSpan.Zero);
         await AddAsync(failed.Id, LearningExtractionState.Failed, TimeSpan.Zero);
+        await AddAsync(spent.Id, LearningExtractionState.Failed, TimeSpan.Zero, LearningExtraction.MostRetries + 1);
         await AddAsync(done.Id, LearningExtractionState.Done, TimeSpan.FromMinutes(30));
 
         LearningDataAmount after = await ReadAsync();
 
-        Assert.Equal(before.Waiting + 2, after.Waiting);
+        Assert.Equal(before.Waiting + 3, after.Waiting);
         Assert.Equal(before.Recordings + 1, after.Recordings);
     }
 
@@ -131,7 +134,7 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
             AudioMode.Stereo,
             null);
 
-    private static LearningExtraction Extraction(RecordingId recording, LearningExtractionState state, TimeSpan readThrough)
+    private static LearningExtraction Extraction(RecordingId recording, LearningExtractionState state, TimeSpan readThrough, int failures)
     {
         bool failed = state is LearningExtractionState.Failed;
         ExtractionVersion? version = state is LearningExtractionState.Waiting ? null : ExtractionVersion.Current;
@@ -144,7 +147,7 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
             [],
             null,
             failed ? Unreadable : null,
-            failed ? 1 : 0,
+            failed ? failures : 0,
             Copy(Noon),
             Noon,
             Noon);
@@ -200,10 +203,10 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
         return begun;
     }
 
-    private async Task AddAsync(RecordingId recording, LearningExtractionState state, TimeSpan readThrough)
+    private async Task AddAsync(RecordingId recording, LearningExtractionState state, TimeSpan readThrough, int failures = 1)
     {
         await using CarinaDbContext writing = database.Open();
-        await new LearningExtractionRepository(writing).AddAsync(Extraction(recording, state, readThrough), Cancel);
+        await new LearningExtractionRepository(writing).AddAsync(Extraction(recording, state, readThrough, failures), Cancel);
     }
 
     private async Task ThrowAwayAsync(RecordingId recording)

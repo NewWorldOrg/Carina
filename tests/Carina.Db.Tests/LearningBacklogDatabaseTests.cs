@@ -24,10 +24,11 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
 
     private int nextEvent = 8_000;
 
-    [Fact(DisplayName = "the recordings waiting to be read are the ended ones the record says wait or that have none, under the roots named, the most recently started first")]
+    [Fact(DisplayName = "the recordings waiting to be read are the ended ones the record says wait or that have none, under the roots named, the most recently started first, and as many as the figures count")]
     public async Task TheRecordingsWaitingAreThoseTheRecordSaysWait()
     {
         OutputRoot root = new($"backlog-{Guid.NewGuid():N}");
+        int countedBefore = await CountedWaitingAsync();
         List<(Recording Recording, LearningExtraction? Record)> kept = [];
 
         foreach ((LearningExtractionState State, ExtractionVersion Version, int Failures, TimeSpan SettledAfterTheStart) shape in Shapes())
@@ -59,6 +60,8 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         Assert.All(awaiting.Skip(1), next => Assert.Equal(next.Recording.Id, next.Record?.RecordingId));
         Assert.DoesNotContain(awaiting, next => next.Recording.Id.Equals(beingWritten.Id) || next.Recording.Id.Equals(elsewhere.Id));
         Assert.Equal(expected[..2], (await AwaitingAsync(root, 2)).Select(next => next.Recording.Id));
+        Assert.Equal(awaiting.Count + 1, await CountedWaitingAsync() - countedBefore);
+        Assert.Single(await AwaitingAsync(elsewhere.OutputRoot, 100));
     }
 
     [Fact(DisplayName = "a record read or partway is given whether captions are shown once the captions are ready, and again once either changes")]
@@ -235,6 +238,13 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         await using CarinaDbContext context = Context();
 
         return await new LearningBacklogReader(context).AwaitingAsync([root], atMost, Cancel);
+    }
+
+    private async Task<int> CountedWaitingAsync()
+    {
+        await using CarinaDbContext context = Context();
+
+        return (await new LearningDataAmountReader(context).ReadAsync(Cancel)).Waiting;
     }
 
     private async Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int atMost)

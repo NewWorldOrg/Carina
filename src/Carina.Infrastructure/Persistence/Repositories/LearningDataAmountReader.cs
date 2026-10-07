@@ -1,4 +1,3 @@
-using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
 using Microsoft.EntityFrameworkCore;
@@ -50,13 +49,7 @@ public sealed class LearningDataAmountReader(CarinaDbContext context) : ILearnin
                 $"SELECT COALESCE(sum(pg_total_relation_size(to_regclass(name))), 0)::bigint AS \"Value\" FROM unnest({tables}) AS name")
             .SingleAsync(cancellationToken);
 
-        int waiting = await context.Set<Recording>()
-            .AsNoTracking()
-            .Where(recording => recording.Outcome != null)
-            .CountAsync(
-                recording => !extractions.Any(extraction => extraction.RecordingId == recording.Id
-                    && extraction.State != LearningExtractionState.Waiting),
-                cancellationToken);
+        int waiting = await LearningBacklogReader.Awaiting(context).CountAsync(cancellationToken);
 
         return new LearningDataAmount(recordings, duration, bytes, waiting);
     }
