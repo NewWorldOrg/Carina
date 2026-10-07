@@ -224,6 +224,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeArtefactSuccession>();
         services.AddScoped<IEncodeAutoRunReader, EncodeAutoRunReader>();
         services.AddScoped<ILearningSwitch, LearningSwitch>();
+        services.AddScoped<ILearningWorklist, LearningWorklist>();
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
         services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();
@@ -383,6 +384,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IOnTheFlyPlayer, OnTheFlyPlayer>();
         services.AddSingleton<ThumbnailJob>();
         services.AddSingleton<CaptionJob>();
+        services.TryAddSingleton(LearningFollowSettings.Default);
+        services.TryAddSingleton<LearningRecords>();
+        services.TryAddSingleton<ILearningFollower, FfmpegLearningFollower>();
+        services.AddSingleton<LearningFollowJob>();
         services.TryAddSingleton<IThumbnailRemaker>(provider =>
             provider.GetRequiredService<ThumbnailJob>());
         services.TryAddSingleton<CollectionSettings>(provider =>
@@ -416,6 +421,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
         services.AddHostedService(provider => provider.GetRequiredService<CaptionJob>());
+        services.AddHostedService(provider => provider.GetRequiredService<LearningFollowJob>());
         services.AddHostedService(provider =>
             provider.GetRequiredService<ReservationRecalculationHostedService>());
 

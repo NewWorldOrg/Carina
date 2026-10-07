@@ -12,6 +12,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Broadcast/Sections/SectionAssembler.cs .CopyTo(",
         "/Carina.Domain/Programmes/ProgrammeSearchText.cs .Replace(",
         "/Carina.Domain/Segments/CornerReader.cs .CopyTo(",
+        "/Carina.Domain/Segments/LearningDataTimeline.cs .CopyTo(",
         "/Carina.Domain/Segments/PictureReader.cs .CopyTo(",
         "/Carina.Domain/Segments/SoundSpectrum.cs .CopyTo(",
         "/Carina.Domain/Streaming/LiveCaptions.cs .CopyTo(",

@@ -53,6 +53,7 @@ public sealed class RecordingFenceRuleTests
                 "/Carina.Infrastructure/Recordings/ProgramExtensionFollower.cs",
                 "/Carina.Infrastructure/Recordings/RecordingRetries.cs",
                 "/Carina.Infrastructure/Recordings/RecordingRound.cs",
+                "/Carina.Infrastructure/Segments/LearningWorklist.cs",
             ],
             RecordingFenceRules.HoldersOfTheReadOnlyGuidePort(RepositoryLayout.SourceDirectory));
     }

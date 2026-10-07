@@ -414,6 +414,20 @@ public sealed class ServiceCollectionExtensionsTests
             scope.ServiceProvider.GetRequiredService<ILearningSwitch>());
     }
 
+    [Fact(DisplayName = "registers the follow of recordings being written for their learning data alongside the other hosted services, with what it reaches for")]
+    public void RegistersTheLearningFollowAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<LearningFollowJob>()));
+        Assert.IsType<FfmpegLearningFollower>(provider.GetRequiredService<ILearningFollower>());
+        Assert.IsType<LearningWorklist>(scope.ServiceProvider.GetRequiredService<ILearningWorklist>());
+        Assert.Same(LearningFollowSettings.Default, provider.GetRequiredService<LearningFollowSettings>());
+    }
+
     [Fact]
     public void ReadsWhereTheOutputRootsAreMountedIntoThisProcess()
     {
