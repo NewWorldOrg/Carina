@@ -242,13 +242,13 @@ public sealed class PersistenceBoundaryRuleTests
             StringComparer.Ordinal);
     }
 
-    [Fact(DisplayName = "the learning data is two tables, and none of them holds a key into another domain")]
-    public void TheLearningDataIsTwoTablesAndNoneOfThemHoldsAKeyIntoAnotherDomain()
+    [Fact(DisplayName = "the segment tables are the learning data and the settings, and none of them holds a key into another domain")]
+    public void TheSegmentTablesAreTheLearningDataAndTheSettingsAndNoneOfThemHoldsAKeyIntoAnotherDomain()
     {
         using CarinaDbContext context = Carina();
 
         Assert.Equal(
-            ["segment_extraction", "segment_learning_data"],
+            ["segment_extraction", "segment_learning_data", "segment_settings"],
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Segments));
 
         Assert.Empty(context.Model

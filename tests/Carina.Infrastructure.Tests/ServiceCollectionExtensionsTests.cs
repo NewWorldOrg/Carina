@@ -30,6 +30,7 @@ using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Scanning;
+using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
 
@@ -389,6 +390,18 @@ public sealed class ServiceCollectionExtensionsTests
             scope.ServiceProvider.GetRequiredService<ILearningExtractionRepository>());
         Assert.IsType<LearningDataRepository>(
             scope.ServiceProvider.GetRequiredService<ILearningDataRepository>());
+    }
+
+    [Fact(DisplayName = "registers where the segment settings are kept and the switch that says whether learning is on")]
+    public void RegistersTheSegmentSettingsAndTheLearningSwitch()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<SegmentSettingsRepository>(
+            scope.ServiceProvider.GetRequiredService<ISegmentSettingsRepository>());
+        Assert.IsType<LearningSwitch>(
+            scope.ServiceProvider.GetRequiredService<ILearningSwitch>());
     }
 
     [Fact]
