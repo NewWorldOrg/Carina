@@ -182,8 +182,8 @@ public sealed class LearningExtraction
     /// <summary>
     /// Whether the learning data waits to be imported from a reduced copy of the recording with
     /// <paramref name="reduced"/>: the record waits, failed reading the file, failed importing with a try
-    /// left, was left partway reading the file, or holds data made by other calculations than
-    /// <paramref name="reduced"/>.
+    /// left, was left partway reading the file, or holds data made from a reduced copy by other
+    /// calculations than <paramref name="reduced"/>. Data read from the file is not imported over.
     /// </summary>
     public bool AwaitsImport(ExtractionVersion reduced)
     {
@@ -193,7 +193,7 @@ public sealed class LearningExtraction
         {
             LearningExtractionState.Waiting => true,
             LearningExtractionState.Failed => CanRetry || !MadeFromAReducedCopy,
-            LearningExtractionState.Done => Version!.Number != reduced.Number,
+            LearningExtractionState.Done => MadeFromAReducedCopy && Version!.Number != reduced.Number,
             LearningExtractionState.Partial => !MadeFromAReducedCopy || Version!.Number != reduced.Number,
             _ => false,
         };
