@@ -31,9 +31,8 @@ public sealed record CaptionWindow
     public IReadOnlyList<PlacedCaption> Captions { get; }
 
     /// <summary>
-    /// Places a record on a source whose zero is <paramref name="shift"/> on the file's own clock. A change
-    /// before the source's zero is moved up to it, and one after <paramref name="length"/>, when the source
-    /// says how long it is, is left out.
+    /// Places a record on a source whose zero is <paramref name="shift"/> on the file's own clock, as
+    /// <see cref="Placed"/> does, and keeps the window of it starting at <paramref name="from"/>.
     /// </summary>
     public static CaptionWindow Of(CaptionRecord record, TimeSpan shift, TimeSpan? length, TimeSpan from)
     {
@@ -45,13 +44,7 @@ public sealed record CaptionWindow
         }
 
         TimeSpan until = from + Covers;
-        PlacedCaption[] placed =
-        [
-            .. record.Cues
-                .Select(cue => new PlacedCaption(cue.At - shift > TimeSpan.Zero ? cue.At - shift : TimeSpan.Zero, cue.Picture))
-                .Where(caption => length is not { } lasts || caption.At <= lasts)
-                .OrderBy(caption => caption.At),
-        ];
+        IReadOnlyList<PlacedCaption> placed = Placed(record, shift, length);
 
         PlacedCaption? showing = placed.LastOrDefault(caption => caption.At <= from);
         IEnumerable<PlacedCaption> ahead = placed.Where(caption => caption.At > from && caption.At < until);
@@ -61,5 +54,23 @@ public sealed record CaptionWindow
             record.Height,
             until,
             [.. showing is { Picture: not null } ? [showing] : Array.Empty<PlacedCaption>(), .. ahead]);
+    }
+
+    /// <summary>
+    /// Every change of a record placed on a source whose zero is <paramref name="shift"/> on the file's own
+    /// clock, in order. A change before the source's zero is moved up to it, and one after
+    /// <paramref name="length"/>, when the source says how long it is, is left out.
+    /// </summary>
+    public static IReadOnlyList<PlacedCaption> Placed(CaptionRecord record, TimeSpan shift, TimeSpan? length)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        return
+        [
+            .. record.Cues
+                .Select(cue => new PlacedCaption(cue.At - shift > TimeSpan.Zero ? cue.At - shift : TimeSpan.Zero, cue.Picture))
+                .Where(caption => length is not { } lasts || caption.At <= lasts)
+                .OrderBy(caption => caption.At),
+        ];
     }
 }

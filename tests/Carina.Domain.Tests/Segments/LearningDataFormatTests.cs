@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Compression;
 
 using Carina.Domain.Segments;
 
@@ -42,7 +43,8 @@ public sealed class LearningDataFormatTests
         Assert.Equal(3, (byte)LearningDataKind.ChannelDifferences);
         Assert.Equal(4, (byte)LearningDataKind.FrameLights);
         Assert.Equal(5, (byte)LearningDataKind.CornerOutlines);
-        Assert.Equal(Enum.GetValues<LearningDataKind>(), LearningDataChunk.Kinds);
+        Assert.Equal(6, (byte)LearningDataKind.CaptionPresence);
+        Assert.Equal(Enum.GetValues<LearningDataKind>(), [.. LearningDataChunk.Kinds, LearningDataKind.CaptionPresence]);
     }
 
     [Theory(DisplayName = "one kind of a chunk written and read back holds that kind of the chunk and nothing else")]
@@ -163,6 +165,33 @@ public sealed class LearningDataFormatTests
         Assert.False(LearningDataFormat.TryRead(LearningDataFormat.Write(ThreeSeconds.Value, LearningDataKind.Loudness), unknown, out _));
     }
 
+    [Fact(DisplayName = "whether captions are shown is written and read back, second by second, and is no kind a chunk is cut into")]
+    public void WhetherCaptionsAreShownReadsBackAsWritten()
+    {
+        byte[] seconds = [.. Enumerable.Range(0, LearningData.ChunkSeconds).Select(second => second % 7 < 3 ? CaptionPresence.Shown : CaptionPresence.Hidden)];
+        LearningDataPart written = LearningDataPart.OfCaptions(3, seconds);
+
+        byte[] bytes = LearningDataFormat.Write(written);
+
+        Assert.True(LearningDataFormat.TryRead(bytes, LearningDataKind.CaptionPresence, out LearningDataPart? read));
+        AssertHolds(written, read);
+        Assert.Equal(seconds, read.Captions.ToArray());
+        Assert.Equal((byte)LearningDataKind.CaptionPresence, bytes[KindAt]);
+        Assert.Equal(3, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(IndexAt)));
+        Assert.False(LearningDataFormat.TryRead(bytes, LearningDataKind.Loudness, out _));
+        Assert.False(LearningDataFormat.TryRead(LearningDataFormat.Write(ThreeSeconds.Value, LearningDataKind.Loudness), LearningDataKind.CaptionPresence, out _));
+        Assert.Throws<ArgumentOutOfRangeException>(() => LearningDataPart.Of(ThreeSeconds.Value, LearningDataKind.CaptionPresence));
+        Assert.True(bytes.Length < LearningData.ChunkSeconds / 4);
+    }
+
+    [Fact(DisplayName = "a second that is neither shown nor hidden, or more seconds than a chunk holds, are not read")]
+    public void WhetherCaptionsAreShownOutOfShapeIsNotRead()
+    {
+        Assert.True(LearningDataFormat.TryRead(Captions([0, 1, 1]), LearningDataKind.CaptionPresence, out _));
+        Assert.False(LearningDataFormat.TryRead(Captions([0, 1, 2]), LearningDataKind.CaptionPresence, out _));
+        Assert.False(LearningDataFormat.TryRead(Captions(new byte[LearningData.ChunkSeconds + 1]), LearningDataKind.CaptionPresence, out _));
+    }
+
     [Fact(DisplayName = "a quiet, dark, plain chunk is kept in a small share of the bytes its readings take")]
     public void AQuietChunkIsKeptSmall()
     {
@@ -210,6 +239,21 @@ public sealed class LearningDataFormatTests
         return Assert.Single(collector.Finish());
     }
 
+    private static byte[] Captions(byte[] seconds)
+    {
+        byte[] compressed = new byte[BrotliEncoder.GetMaxCompressedLength(seconds.Length)];
+        Assert.True(BrotliEncoder.TryCompress(seconds, compressed, out int length));
+        byte[] bytes = new byte[IndexAt + sizeof(int) + (2 * sizeof(int)) + length];
+
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes, LearningDataFormat.Version);
+        bytes[KindAt] = (byte)LearningDataKind.CaptionPresence;
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(IndexAt + sizeof(int)), seconds.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(IndexAt + (2 * sizeof(int))), length);
+        compressed.AsSpan(0, length).CopyTo(bytes.AsSpan(IndexAt + (3 * sizeof(int))));
+
+        return bytes;
+    }
+
     private static void AssertHolds(LearningDataPart expected, LearningDataPart? actual)
     {
         Assert.NotNull(actual);
@@ -222,5 +266,6 @@ public sealed class LearningDataFormatTests
         Assert.Equal(expected.Channels.ToArray(), actual.Channels.ToArray());
         Assert.Equal(expected.Frames.ToArray(), actual.Frames.ToArray());
         Assert.Equal(expected.CornerOutlines.ToArray(), actual.CornerOutlines.ToArray());
+        Assert.Equal(expected.Captions.ToArray(), actual.Captions.ToArray());
     }
 }

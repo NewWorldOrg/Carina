@@ -11,4 +11,5 @@ public enum LearningDataKind : byte
     ChannelDifferences = 3,
     FrameLights = 4,
     CornerOutlines = 5,
+    CaptionPresence = 6,
 }
