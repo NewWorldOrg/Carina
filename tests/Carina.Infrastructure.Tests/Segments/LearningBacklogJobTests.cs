@@ -226,6 +226,56 @@ public sealed class LearningBacklogJobTests : IDisposable
         Assert.Null(harness.Records.Row(unmounted.Id));
     }
 
+    [Fact(DisplayName = "more recordings out of reach than a look takes at once are passed over, and an older one whose file is there is read")]
+    public async Task MoreRecordingsOutOfReachThanALookTakesArePassedOver()
+    {
+        await harness.LearningAsync(true);
+        Recording older = harness.Ended(600, 7630);
+
+        for (int unreachable = 0; unreachable <= LearningBacklogSettings.Default.AtMostALook; unreachable++)
+        {
+            harness.Ended(500 - unreachable, 7700 + unreachable, withAFile: false);
+        }
+
+        LearningBacklogLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal((older.Id, LearningBacklogSettings.Default.AtMostALook + 1), (look.Began, look.OutOfReach));
+    }
+
+    [Fact(DisplayName = "a recording that failed is not read, its file or no")]
+    public async Task ARecordingThatFailedIsNotRead()
+    {
+        await harness.LearningAsync(true);
+        Recording failed = harness.Ended(40, 7631, failed: true);
+
+        LearningBacklogLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal((null, 0), (look.Began, look.OutOfReach));
+        Assert.Null(harness.Records.Row(failed.Id));
+    }
+
+    [Fact(DisplayName = "a record done or partway before them is given whether captions are shown, though more whose captions are not kept than a look takes come first")]
+    public async Task CaptionsNotKeptDoNotHoldBackTheRest()
+    {
+        await harness.LearningAsync(true);
+        Recording older = harness.Ended(600, 7632);
+        older.Caption(CaptionState.Ready, 2, Now.AddMinutes(-30));
+        harness.Records.Hold(Read(older, TimeSpan.FromSeconds(60)));
+        harness.Captions.Kept[older.Id] = new CaptionRecord(1440, 1080, TimeSpan.Zero, [Cue(2, shown: true)]);
+
+        for (int lost = 0; lost <= LearningBacklogSettings.Default.AtMostALook; lost++)
+        {
+            Recording newer = harness.Ended(500 - lost, 7800 + lost);
+            newer.Caption(CaptionState.Ready, 2, Now.AddMinutes(-30));
+            harness.Records.Hold(Read(newer, TimeSpan.FromSeconds(60)));
+        }
+
+        LearningBacklogLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal(1, look.Captioned);
+        Assert.Contains(harness.Data.Of(older.Id), block => block.Kind is LearningDataKind.CaptionPresence);
+    }
+
     [Fact(DisplayName = "a record waiting, failed with a try left, done another way or left partway before the end is read again from the head")]
     public async Task ARecordThatWaitsIsReadAgain()
     {

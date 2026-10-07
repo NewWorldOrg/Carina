@@ -27,19 +27,21 @@ internal sealed class HeldLearningBacklog(
 {
     public Task<IReadOnlyList<BackloggedRecording>> AwaitingAsync(
         IReadOnlyList<OutputRoot> withinReach,
+        int skip,
         int atMost,
         CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<BackloggedRecording>>(
         [
             .. worklist.Recordings
-                .Where(recording => !recording.IsInFlight && withinReach.Contains(recording.OutputRoot))
+                .Where(recording => recording.Outcome is not (null or RecordingOutcome.Failed) && withinReach.Contains(recording.OutputRoot))
                 .Select(recording => new BackloggedRecording(recording, records.Row(recording.Id)))
                 .Where(next => next.Record?.AwaitsReading(ExtractionVersion.Current, next.Recording.StoppedAtActual) ?? true)
                 .OrderByDescending(next => next.Recording.StartedAtActual)
+                .Skip(skip)
                 .Take(atMost),
         ]);
 
-    public Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int atMost, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int skip, int atMost, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<LearningExtraction>>(
         [
             .. records.All()
@@ -47,6 +49,7 @@ internal sealed class HeldLearningBacklog(
                 .Select(record => (Record: record, Recording: worklist.Recordings.FirstOrDefault(recording => recording.Id.Equals(record.RecordingId))))
                 .Where(pair => pair.Recording is { CaptionState: CaptionState.Ready, CaptionsMadeAt: { } made } && !Captioned(pair.Record, made))
                 .OrderByDescending(pair => pair.Recording!.StartedAtActual)
+                .Skip(skip)
                 .Take(atMost)
                 .Select(pair => pair.Record),
         ]);
@@ -236,13 +239,21 @@ internal sealed class LearningBacklogHarness : IDisposable
     /// A recording that ended <paramref name="startedMinutesAgo"/> minutes after it started, with its file
     /// unless asked otherwise.
     /// </summary>
-    public Recording Ended(int startedMinutesAgo, int eventId, bool withAFile = true, OutputRoot? root = null)
+    public Recording Ended(int startedMinutesAgo, int eventId, bool withAFile = true, OutputRoot? root = null, bool failed = false)
     {
         Recording recording = Made(root ?? Mounted, eventId, Now.AddMinutes(-startedMinutesAgo));
         DateTime stopped = Now.AddMinutes(-startedMinutesAgo + 1);
 
-        recording.Abort(stopped);
-        recording.Settle(RecordingOutcome.Complete, 1_000_000, stopped);
+        if (failed)
+        {
+            recording.Note(new OutcomeDetail(RecordingFault.DriverLost, null, string.Empty, stopped));
+            recording.Settle(RecordingOutcome.Failed, 0, stopped);
+        }
+        else
+        {
+            recording.Abort(stopped);
+            recording.Settle(RecordingOutcome.Complete, 1_000_000, stopped);
+        }
 
         if (withAFile)
         {

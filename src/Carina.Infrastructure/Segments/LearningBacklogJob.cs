@@ -169,25 +169,45 @@ public sealed class LearningBacklogJob(
 
     private async Task<int> CaptionEachAsync(ILearningBacklog backlog, CancellationToken cancellationToken)
     {
+        HashSet<RecordingId> seen = [];
         int captioned = 0;
+        int passedOver = 0;
 
-        foreach (LearningExtraction record in await backlog.UncaptionedAsync(settings.AtMostALook, cancellationToken))
+        while (true)
         {
-            if (await captions.ReadAsync(record.RecordingId, cancellationToken) is not { } taken)
+            IReadOnlyList<LearningExtraction> page = await backlog.UncaptionedAsync(passedOver, settings.AtMostALook, cancellationToken);
+            LearningExtraction[] fresh = [.. page.Where(record => seen.Add(record.RecordingId))];
+
+            foreach (LearningExtraction record in fresh)
             {
-                continue;
+                bool kept = await CaptionAsync(record, cancellationToken);
+
+                captioned += kept ? 1 : 0;
+                passedOver += kept ? 0 : 1;
             }
 
-            await records.KeepPartsAsync(
-                record.RecordingId,
-                [.. CaptionPresence.Parts(taken, record.ReadThrough).OrderByDescending(part => part.Index)],
-                ExtractionVersion.Current,
-                Now(),
-                cancellationToken);
-            captioned++;
+            if (page.Count < settings.AtMostALook || fresh.Length is 0)
+            {
+                return captioned;
+            }
+        }
+    }
+
+    private async Task<bool> CaptionAsync(LearningExtraction record, CancellationToken cancellationToken)
+    {
+        if (await captions.ReadAsync(record.RecordingId, cancellationToken) is not { } taken)
+        {
+            return false;
         }
 
-        return captioned;
+        await records.KeepPartsAsync(
+            record.RecordingId,
+            [.. CaptionPresence.Parts(taken, record.ReadThrough).OrderByDescending(part => part.Index)],
+            ExtractionVersion.Current,
+            Now(),
+            cancellationToken);
+
+        return true;
     }
 
     private async Task<(RecordingId? Began, int OutOfReach)> BeginNextAsync(
@@ -196,37 +216,63 @@ public sealed class LearningBacklogJob(
         CancellationToken cancellationToken)
     {
         ILearningWorklist worklist = scope.ServiceProvider.GetRequiredService<ILearningWorklist>();
-        IReadOnlyList<BackloggedRecording> awaiting = await backlog.AwaitingAsync(
-            [.. mounts.OutputRoots.Select(mounted => mounted.Root)],
-            settings.AtMostALook,
-            cancellationToken);
+        IReadOnlyList<OutputRoot> withinReach = [.. mounts.OutputRoots.Select(mounted => mounted.Root)];
         int outOfReach = 0;
+        int looked = 0;
 
-        foreach (BackloggedRecording next in awaiting)
+        while (true)
         {
-            if (Source(next.Recording) is not { } source || !File.Exists(source))
-            {
-                outOfReach++;
+            IReadOnlyList<BackloggedRecording> page = await backlog.AwaitingAsync(withinReach, looked, settings.AtMostALook, cancellationToken);
 
-                continue;
+            foreach (BackloggedRecording next in page)
+            {
+                if (Source(next.Recording) is not { } source || !File.Exists(source))
+                {
+                    outOfReach++;
+
+                    continue;
+                }
+
+                if (await BeganAsync(worklist, next, source, cancellationToken) is { } claimed)
+                {
+                    return (claimed ? next.Recording.Id : null, outOfReach);
+                }
             }
 
-            ExtractionChange claimed = await ClaimAsync(worklist, next, cancellationToken);
-
-            if (claimed is ExtractionChange.Written)
+            if (page.Count < settings.AtMostALook)
             {
+                return (null, outOfReach);
+            }
+
+            looked += page.Count;
+        }
+    }
+
+    /// <summary>
+    /// True when the reading of the recording began, false when another recording is recorded as being
+    /// read, and null when the recording no longer waits.
+    /// </summary>
+    private async Task<bool?> BeganAsync(
+        ILearningWorklist worklist,
+        BackloggedRecording next,
+        string source,
+        CancellationToken cancellationToken)
+    {
+        switch (await ClaimAsync(worklist, next, cancellationToken))
+        {
+            case ExtractionChange.Written:
                 Begin(next.Recording, source);
 
-                return (next.Recording.Id, outOfReach);
-            }
+                return true;
+            case ExtractionChange.AnotherIsReading:
+                logger.LogWarning(
+                    "Recording {Recording} was not read for its learning data, because another recording is recorded as being read.",
+                    next.Recording.Id.Wire);
 
-            if (claimed is ExtractionChange.AnotherIsReading)
-            {
-                break;
-            }
+                return false;
+            default:
+                return null;
         }
-
-        return (null, outOfReach);
     }
 
     private async Task<ExtractionChange> ClaimAsync(

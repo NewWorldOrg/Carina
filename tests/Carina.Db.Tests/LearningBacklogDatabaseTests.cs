@@ -24,7 +24,7 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
 
     private int nextEvent = 8_000;
 
-    [Fact(DisplayName = "the recordings waiting to be read are the ended ones the record says wait or that have none, under the roots named, the most recently started first, and as many as the figures count")]
+    [Fact(DisplayName = "the recordings waiting to be read are the ended ones the record says wait or that have none, under the roots named, the most recently started first, a page at a time, and as many as the figures count")]
     public async Task TheRecordingsWaitingAreThoseTheRecordSaysWait()
     {
         OutputRoot root = new($"backlog-{Guid.NewGuid():N}");
@@ -43,6 +43,9 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         Recording unread = await RecordedAsync(root, Noon.AddMinutes(5));
         Recording beingWritten = await RecordedAsync(root, Noon.AddMinutes(6), ended: false);
         Recording elsewhere = await RecordedAsync(new OutputRoot($"elsewhere-{Guid.NewGuid():N}"), Noon.AddMinutes(7));
+        Recording failed = await RecordedAsync(root, Noon.AddMinutes(8), failed: true);
+        Recording failedWaiting = await RecordedAsync(root, Noon.AddMinutes(9), failed: true);
+        await AddAsync(LearningExtraction.Waiting(failedWaiting.Id, ProgrammeCopy.Of(failedWaiting, null), Noon));
         kept.Add((unread, null));
 
         IReadOnlyList<BackloggedRecording> awaiting = await AwaitingAsync(root, 100);
@@ -58,8 +61,10 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         Assert.Equal(expected, awaiting.Select(next => next.Recording.Id));
         Assert.Null(awaiting[0].Record);
         Assert.All(awaiting.Skip(1), next => Assert.Equal(next.Recording.Id, next.Record?.RecordingId));
-        Assert.DoesNotContain(awaiting, next => next.Recording.Id.Equals(beingWritten.Id) || next.Recording.Id.Equals(elsewhere.Id));
+        Assert.DoesNotContain(awaiting, next => new[] { beingWritten, elsewhere, failed, failedWaiting }.Any(left => left.Id.Equals(next.Recording.Id)));
         Assert.Equal(expected[..2], (await AwaitingAsync(root, 2)).Select(next => next.Recording.Id));
+        Assert.Equal(expected[2..5], (await AwaitingAsync(root, 3, skip: 2)).Select(next => next.Recording.Id));
+        Assert.Empty(await AwaitingAsync(root, 3, skip: expected.Length));
         Assert.Equal(awaiting.Count + 1, await CountedWaitingAsync() - countedBefore);
         Assert.Single(await AwaitingAsync(elsewhere.OutputRoot, 100));
     }
@@ -99,7 +104,7 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         Assert.Equal(
             [ready.Id, partway.Id, retaken.Id, reread.Id],
             uncaptioned.Select(record => record.RecordingId).Where(id => new[] { ready, partway, given, retaken, reread, without, pending, nothingRead, waiting }.Any(recording => recording.Id.Equals(id))));
-        Assert.Single(await UncaptionedAsync(1));
+        Assert.Equal([retaken.Id, reread.Id], (await UncaptionedAsync(2, skip: 2)).Select(record => record.RecordingId));
     }
 
     [Fact(DisplayName = "whether captions are shown is kept and read back as a kind of learning data of its own")]
@@ -175,7 +180,8 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         OutputRoot root,
         DateTime startedAt,
         bool ended = true,
-        (CaptionState State, DateTime At)? captions = null)
+        (CaptionState State, DateTime At)? captions = null,
+        bool failed = false)
     {
         RecordingId id = RecordingId.New();
         Recording recording = Recording.Begin(
@@ -198,7 +204,12 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
             BroadcastGroupRole.Standalone,
             startedAt);
 
-        if (ended)
+        if (failed)
+        {
+            recording.Note(new OutcomeDetail(RecordingFault.RefusedByDiskPrecheck, null, string.Empty, startedAt.AddMinutes(1)));
+            recording.Settle(RecordingOutcome.Failed, 0, startedAt.AddMinutes(1));
+        }
+        else if (ended)
         {
             recording.Wrote(TimeSpan.FromMinutes(30));
             recording.Abort(startedAt.AddMinutes(30));
@@ -233,11 +244,11 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         await new LearningDataRepository(context).KeepAsync(block, Cancel);
     }
 
-    private async Task<IReadOnlyList<BackloggedRecording>> AwaitingAsync(OutputRoot root, int atMost)
+    private async Task<IReadOnlyList<BackloggedRecording>> AwaitingAsync(OutputRoot root, int atMost, int skip = 0)
     {
         await using CarinaDbContext context = Context();
 
-        return await new LearningBacklogReader(context).AwaitingAsync([root], atMost, Cancel);
+        return await new LearningBacklogReader(context).AwaitingAsync([root], skip, atMost, Cancel);
     }
 
     private async Task<int> CountedWaitingAsync()
@@ -247,10 +258,10 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         return (await new LearningDataAmountReader(context).ReadAsync(Cancel)).Waiting;
     }
 
-    private async Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int atMost)
+    private async Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int atMost, int skip = 0)
     {
         await using CarinaDbContext context = Context();
 
-        return await new LearningBacklogReader(context).UncaptionedAsync(atMost, Cancel);
+        return await new LearningBacklogReader(context).UncaptionedAsync(skip, atMost, Cancel);
     }
 }

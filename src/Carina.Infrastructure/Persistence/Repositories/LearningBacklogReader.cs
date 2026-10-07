@@ -13,8 +13,9 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 public sealed class LearningBacklogReader(CarinaDbContext context) : ILearningBacklog
 {
     /// <summary>
-    /// The recordings that have ended and whose learning data waits to be read from their files with
-    /// <see cref="ExtractionVersion.Current"/>: those with no record, and those whose record waits.
+    /// The recordings that have ended other than in failure, which leaves no file to read, and whose
+    /// learning data waits to be read from their files with <see cref="ExtractionVersion.Current"/>: those
+    /// with no record, and those whose record waits.
     /// </summary>
     public static IQueryable<Recording> Awaiting(CarinaDbContext context)
     {
@@ -27,6 +28,7 @@ public sealed class LearningBacklogReader(CarinaDbContext context) : ILearningBa
         return context.Set<Recording>()
             .AsNoTracking()
             .Where(recording => recording.Outcome != null
+                                && recording.Outcome != RecordingOutcome.Failed
                                 && (!records.Any(record => record.RecordingId == recording.Id)
                                     || records.Any(record => record.RecordingId == recording.Id
                                                              && (record.State == LearningExtractionState.Waiting
@@ -41,10 +43,12 @@ public sealed class LearningBacklogReader(CarinaDbContext context) : ILearningBa
 
     public async Task<IReadOnlyList<BackloggedRecording>> AwaitingAsync(
         IReadOnlyList<OutputRoot> withinReach,
+        int skip,
         int atMost,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(withinReach);
+        ArgumentOutOfRangeException.ThrowIfNegative(skip);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(atMost);
 
         OutputRoot[] reachable = [.. withinReach];
@@ -52,6 +56,7 @@ public sealed class LearningBacklogReader(CarinaDbContext context) : ILearningBa
             .Where(recording => reachable.Contains(recording.OutputRoot))
             .OrderByDescending(recording => recording.StartedAtActual)
             .ThenBy(recording => recording.Id)
+            .Skip(skip)
             .Take(atMost)
             .ToListAsync(cancellationToken);
         RecordingId[] ids = [.. recordings.Select(recording => recording.Id)];
@@ -63,8 +68,9 @@ public sealed class LearningBacklogReader(CarinaDbContext context) : ILearningBa
         return [.. recordings.Select(recording => new BackloggedRecording(recording, records.GetValueOrDefault(recording.Id)))];
     }
 
-    public async Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int atMost, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int skip, int atMost, CancellationToken cancellationToken)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(skip);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(atMost);
 
         return await (
@@ -81,6 +87,7 @@ public sealed class LearningBacklogReader(CarinaDbContext context) : ILearningBa
                                                                         && block.WrittenAt >= record.UpdatedAt)
                 orderby recording.StartedAtActual descending, record.RecordingId
                 select record)
+            .Skip(skip)
             .Take(atMost)
             .ToListAsync(cancellationToken);
     }

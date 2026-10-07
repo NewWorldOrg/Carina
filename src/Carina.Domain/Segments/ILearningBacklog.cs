@@ -13,19 +13,22 @@ public sealed record BackloggedRecording(Recording Recording, LearningExtraction
 public interface ILearningBacklog
 {
     /// <summary>
-    /// The recordings that have ended under the output roots named and whose learning data waits to be
-    /// read from their files with <see cref="ExtractionVersion.Current"/>: those with no record, and those
-    /// whose record <see cref="LearningExtraction.AwaitsReading"/>. The most recently started first.
+    /// The recordings that have ended under the output roots named, other than those that failed and so
+    /// have no file to read, whose learning data waits to be read from their files with
+    /// <see cref="ExtractionVersion.Current"/>: those with no record, and those whose record
+    /// <see cref="LearningExtraction.AwaitsReading"/>. The most recently started first, past the first
+    /// <paramref name="skip"/> of them.
     /// </summary>
     Task<IReadOnlyList<BackloggedRecording>> AwaitingAsync(
         IReadOnlyList<OutputRoot> withinReach,
+        int skip,
         int atMost,
         CancellationToken cancellationToken);
 
     /// <summary>
     /// The records done or left partway, with something read, of recordings whose captions are ready,
     /// that keep no first chunk of whether captions are shown written since both the captions and the
-    /// record last changed. The most recently started first.
+    /// record last changed. The most recently started first, past the first <paramref name="skip"/> of them.
     /// </summary>
-    Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int atMost, CancellationToken cancellationToken);
+    Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int skip, int atMost, CancellationToken cancellationToken);
 }
