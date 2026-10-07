@@ -34,8 +34,10 @@ public sealed record LearningBacklogLook(
 /// whether captions are shown in each second. It looks after
 /// <see cref="LearningBacklogSettings.BeforeFirstLook"/>, then every
 /// <see cref="LearningBacklogSettings.BetweenLooks"/>, or every
-/// <see cref="LearningBacklogSettings.WhileReading"/> while a recording is read. The first look puts the
-/// records a reading left when the process last stopped back to waiting. Nothing begins outside
+/// <see cref="LearningBacklogSettings.WhileReading"/> while a recording is read. A look that finds no
+/// reading of its own first puts back to waiting the records left reading — by the process that last
+/// stopped, or by a reading whose record could not be written as it ended. A reading is let go only
+/// once its record is written, so a write that fails is made again at the next look. Nothing begins outside
 /// <see cref="SpareTime"/>, which is judged again before each recording; a recording begun is read to its
 /// end even when recording or watching starts meanwhile, but switching learning off stops it within a
 /// look, keeping what it wrote and putting its record back to waiting. A recording whose file is out of
@@ -57,23 +59,19 @@ public sealed class LearningBacklogJob(
 
     private Run? run;
 
-    private bool recovered;
-
     public RecordingId? Reading => run?.Recording.Id;
 
     public async Task<LearningBacklogLook> LookAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
-        int putBack = recovered ? 0 : await RecoverAsync(cancellationToken);
-
-        recovered = true;
-
-        await ReapAsync(cancellationToken);
+        RecordingId? stopped = await ReapAsync(cancellationToken);
 
         if (run is { } running)
         {
-            return await WatchAsync(scope, running, putBack, cancellationToken);
+            return await WatchAsync(scope, running, cancellationToken);
         }
+
+        int putBack = await RecoverAsync(cancellationToken);
 
         DateTime now = Now();
         Occupancy occupancy = await scope.ServiceProvider.GetRequiredService<IOccupancyReader>().ReadAsync(now, cancellationToken);
@@ -81,14 +79,14 @@ public sealed class LearningBacklogJob(
 
         if (verdict is not SpareTimeVerdict.Spare)
         {
-            return new LearningBacklogLook(putBack, verdict, 0, null, null, 0, null);
+            return new LearningBacklogLook(putBack, verdict, 0, null, stopped, 0, null);
         }
 
         ILearningBacklog backlog = scope.ServiceProvider.GetRequiredService<ILearningBacklog>();
         int captioned = await CaptionEachAsync(backlog, cancellationToken);
         (RecordingId? began, int outOfReach) = await BeginNextAsync(scope, backlog, cancellationToken);
 
-        return new LearningBacklogLook(putBack, verdict, captioned, began, null, outOfReach, Reading);
+        return new LearningBacklogLook(putBack, verdict, captioned, began, stopped, outOfReach, Reading);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -131,12 +129,12 @@ public sealed class LearningBacklogJob(
 
         foreach (LearningExtraction left in await records.ListAsync(LearningExtractionState.Reading, LearningFollowJob.MostRecoveredAtOnce, cancellationToken))
         {
-            bool putBackHere = await ChangedAsync(
+            ExtractionChange change = await ChangeReadingAsync(
                 left.RecordingId,
                 found => found.Recover(false, ExtractionVersion.Current, Now()),
                 cancellationToken);
 
-            putBack += putBackHere ? 1 : 0;
+            putBack += change is ExtractionChange.Written ? 1 : 0;
         }
 
         return putBack;
@@ -145,16 +143,15 @@ public sealed class LearningBacklogJob(
     private async Task<LearningBacklogLook> WatchAsync(
         AsyncServiceScope scope,
         Run running,
-        int putBack,
         CancellationToken cancellationToken)
     {
         RecordingId id = running.Recording.Id;
 
         if (!await scope.ServiceProvider.GetRequiredService<ILearningSwitch>().IsOnAsync(cancellationToken))
         {
-            await StopReadingAsync(running, cancellationToken);
+            bool letGo = await StopReadingAsync(running, cancellationToken);
 
-            return new LearningBacklogLook(putBack, SpareTimeVerdict.LearningOff, 0, null, id, 0, null);
+            return new LearningBacklogLook(0, SpareTimeVerdict.LearningOff, 0, null, letGo ? id : null, 0, Reading);
         }
 
         RecordingStanding? standing = await scope.ServiceProvider.GetRequiredService<ILearningWorklist>().StandingAsync(id, cancellationToken);
@@ -164,7 +161,7 @@ public sealed class LearningBacklogJob(
             running.Recording.Went();
         }
 
-        return new LearningBacklogLook(putBack, null, 0, null, null, 0, id);
+        return new LearningBacklogLook(0, null, 0, null, null, 0, id);
     }
 
     private async Task<int> CaptionEachAsync(ILearningBacklog backlog, CancellationToken cancellationToken)
@@ -313,44 +310,53 @@ public sealed class LearningBacklogJob(
         run = new Run(read, stopping, running);
     }
 
-    private async Task ReapAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Lets go of a reading that has ended, once its record is written; the recording it was stopped
+    /// for, when it was stopped.
+    /// </summary>
+    private async Task<RecordingId?> ReapAsync(CancellationToken cancellationToken)
     {
         if (run is not { Task.IsCompleted: true } ended)
         {
-            return;
+            return null;
+        }
+
+        bool letGo = await LetGoOfAsync(ended, cancellationToken);
+
+        return letGo && ended.Stopping.IsCancellationRequested ? ended.Recording.Id : null;
+    }
+
+    private async Task<bool> StopReadingAsync(Run running, CancellationToken cancellationToken)
+    {
+        await running.Stopping.CancelAsync();
+        await EndedAsync(running);
+
+        return await LetGoOfAsync(running, cancellationToken);
+    }
+
+    /// <summary>
+    /// Puts the record of a reading that has ended back to waiting when the reading was stopped, or takes
+    /// it as failed when the reading ended leaving it reading, and lets the reading go once that is
+    /// written. A record that kept moving is left for the next look.
+    /// </summary>
+    private async Task<bool> LetGoOfAsync(Run ended, CancellationToken cancellationToken)
+    {
+        bool stopped = ended.Stopping.IsCancellationRequested;
+        ExtractionChange change = await ChangeReadingAsync(
+            ended.Recording.Id,
+            stopped ? found => found.Pause(Now()) : found => found.Fail(ExtractionFailure.Other, LeftUnsettled, Now()),
+            cancellationToken);
+
+        if (change is ExtractionChange.KeptMoving)
+        {
+            return false;
         }
 
         run = null;
         ended.Stopping.Dispose();
+        Told(ended, stopped, change is ExtractionChange.Written);
 
-        if (ended.Task.Exception is { } failure)
-        {
-            logger.LogError(failure, "Reading recording {Recording} for its learning data failed.", ended.Recording.Id.Wire);
-        }
-
-        bool unsettled = await ChangedAsync(
-            ended.Recording.Id,
-            found => found.Fail(ExtractionFailure.Other, LeftUnsettled, Now()),
-            cancellationToken);
-
-        if (unsettled)
-        {
-            logger.LogWarning("Reading recording {Recording} ended and left its record reading, so it is taken as failed.", ended.Recording.Id.Wire);
-        }
-    }
-
-    private async Task StopReadingAsync(Run running, CancellationToken cancellationToken)
-    {
-        run = null;
-
-        await running.Stopping.CancelAsync();
-        await EndedAsync(running);
-        running.Stopping.Dispose();
-        await ChangedAsync(running.Recording.Id, found => found.Pause(Now()), cancellationToken);
-
-        logger.LogInformation(
-            "Learning was switched off, so the reading of recording {Recording} stopped; what it kept stays, and its record waits to be read.",
-            running.Recording.Id.Wire);
+        return true;
     }
 
     private async Task LetGoAsync()
@@ -367,9 +373,8 @@ public sealed class LearningBacklogJob(
         running.Stopping.Dispose();
     }
 
-    private async Task<bool> ChangedAsync(RecordingId id, Action<LearningExtraction> change, CancellationToken cancellationToken)
-    {
-        ExtractionChange changed = await records.ChangeAsync(
+    private async Task<ExtractionChange> ChangeReadingAsync(RecordingId id, Action<LearningExtraction> change, CancellationToken cancellationToken)
+        => await records.ChangeAsync(
             id,
             record =>
             {
@@ -383,9 +388,6 @@ public sealed class LearningBacklogJob(
                 return true;
             },
             cancellationToken);
-
-        return changed is ExtractionChange.Written;
-    }
 
     private static async Task EndedAsync(Run running)
         => await running.Task.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
@@ -409,6 +411,30 @@ public sealed class LearningBacklogJob(
         }
 
         return true;
+    }
+
+    private void Told(Run ended, bool stopped, bool settled)
+    {
+        if (ended.Task.Exception is { } failure)
+        {
+            logger.LogError(failure, "Reading recording {Recording} for its learning data failed.", ended.Recording.Id.Wire);
+        }
+
+        if (!settled)
+        {
+            return;
+        }
+
+        if (stopped)
+        {
+            logger.LogInformation(
+                "Learning was switched off, so the reading of recording {Recording} stopped; what it kept stays, and its record waits to be read.",
+                ended.Recording.Id.Wire);
+        }
+        else
+        {
+            logger.LogWarning("Reading recording {Recording} ended and left its record reading, so it is taken as failed.", ended.Recording.Id.Wire);
+        }
     }
 
     private void Told(LearningBacklogLook look)

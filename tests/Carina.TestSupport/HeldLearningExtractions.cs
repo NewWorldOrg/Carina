@@ -23,6 +23,11 @@ public sealed class HeldLearningExtractions : ILearningExtractionRepository
     /// </summary>
     public Func<RecordingId, bool>? MovesBeforeSaving { get; set; }
 
+    /// <summary>
+    /// Asked before each save; when it says so, the save cannot reach the store.
+    /// </summary>
+    public Func<RecordingId, bool>? FailsSaving { get; set; }
+
     public int Refused { get; private set; }
 
     public int Saves { get; private set; }
@@ -97,6 +102,11 @@ public sealed class HeldLearningExtractions : ILearningExtractionRepository
     public Task<LearningExtractionWrite> SaveAsync(LearningExtraction extraction, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(extraction);
+
+        if (FailsSaving?.Invoke(extraction.RecordingId) ?? false)
+        {
+            throw new InvalidOperationException("The store could not be reached.");
+        }
 
         bool moves = MovesBeforeSaving?.Invoke(extraction.RecordingId) ?? false;
 
