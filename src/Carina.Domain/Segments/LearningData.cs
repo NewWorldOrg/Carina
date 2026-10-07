@@ -6,7 +6,7 @@ namespace Carina.Domain.Segments;
 /// </summary>
 public static class LearningData
 {
-    public const int ExtractionVersion = 1;
+    public const int ExtractionVersion = 2;
 
     public const int ChunkSeconds = 600;
 
