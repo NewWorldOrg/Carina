@@ -13,7 +13,7 @@ public sealed record LearningFollowSettings
 
     public TimeSpan BetweenLooks { get; init; } = TimeSpan.FromSeconds(5);
 
-    public TimeSpan WhileCaughtUp { get; init; } = TimeSpan.FromSeconds(1);
+    public TimeSpan WhileCaughtUp { get; init; } = TimeSpan.FromSeconds(5);
 
     public int ReadBytes { get; init; } = 1 << 20;
 
