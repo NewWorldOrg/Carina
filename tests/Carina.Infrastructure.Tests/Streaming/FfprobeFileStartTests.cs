@@ -9,7 +9,7 @@ public sealed class FfprobeFileStartTests
     [Fact(DisplayName = "where the file's clock begins is read by its key, hours into the day or before zero")]
     public void WhereTheFilesClockBeginsIsReadByItsKey()
     {
-        Assert.Equal(TimeSpan.FromSeconds(42227.955144), FfprobeFileStart.Of(Said(0, "start_time=42227.955144\n")));
+        Assert.Equal(TimeSpan.FromSeconds(51234.567891), FfprobeFileStart.Of(Said(0, "start_time=51234.567891\n")));
         Assert.Equal(TimeSpan.FromSeconds(-2.6), FfprobeFileStart.Of(Said(0, "duration=10.0\nstart_time=-2.600000\n")));
     }
 

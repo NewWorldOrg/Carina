@@ -9,7 +9,7 @@ namespace Carina.Infrastructure.Tests.Segments;
 
 public sealed class FfmpegLearningInvocationTests
 {
-    private static readonly TimeSpan HoursIntoTheDay = TimeSpan.FromTicks(422_279_551_440);
+    private static readonly TimeSpan HoursIntoTheDay = TimeSpan.FromTicks(512_345_678_910);
 
     private static readonly IReadOnlyList<string> Arguments = FfmpegLearningInvocation.Arguments(new ServiceId(1040), HoursIntoTheDay);
 
@@ -37,7 +37,7 @@ public sealed class FfmpegLearningInvocationTests
     {
         Assert.Single(Arguments, argument => argument is "-itsoffset");
         Assert.True(Arguments.ToList().IndexOf("-itsoffset") < Arguments.ToList().IndexOf("-i"));
-        Assert.Equal(["-itsoffset", "57772.044856"], Following(Arguments, "-itsoffset", 1));
+        Assert.Equal(["-itsoffset", "48765.432109"], Following(Arguments, "-itsoffset", 1));
         Assert.Equal(TimeSpan.FromSeconds(100_000), FfmpegLearningInvocation.Lift);
     }
 
@@ -50,7 +50,7 @@ public sealed class FfmpegLearningInvocationTests
     }
 
     [Theory(DisplayName = "a moment ffmpeg reads is put on the recording's own time by taking off where the file begins, once, whether the file begins hours into the day, before zero because its clock comes around just after it begins, or with its clock coming around inside it")]
-    [InlineData(42227.955144, 12.345678)]
+    [InlineData(51234.567891, 12.345678)]
     [InlineData(-2.6, 0.0)]
     [InlineData(-2.6, 5.0)]
     [InlineData(-59.5, 3600.25)]
