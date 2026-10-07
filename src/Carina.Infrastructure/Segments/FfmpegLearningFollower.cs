@@ -7,6 +7,7 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Machines;
+using Carina.Infrastructure.Streaming;
 
 using Microsoft.Extensions.Logging;
 
@@ -17,14 +18,18 @@ namespace Carina.Infrastructure.Segments;
 /// handed to ffmpeg on its standard input; at the end of a file still being written the follow waits
 /// <see cref="LearningFollowSettings.WhileCaughtUp"/> and reads on, and once the recording has ended
 /// and the file is read to its end the standard input is closed. A recording that had ended before it
-/// was read is read the same way, and its record is held reading rather than following. What ffmpeg
+/// was read is read the same way, and its record is held reading rather than following. Before ffmpeg
+/// starts, where the file's own clock begins is read from its head the way the captions of a recording
+/// are put on it (<see cref="FfprobeFileStart"/>), once a file still being written holds
+/// <see cref="LearningFollowSettings.HeadBytes"/>, and that is the recording's time zero. What ffmpeg
 /// hands back (<see cref="FfmpegLearningInvocation"/>) is read by a <see cref="MatroskaReader"/> and placed by a
 /// <see cref="LearningDataTimeline"/>, every chunk is kept as soon as it is whole, and the record goes
 /// as far as the chunk with the gaps no later block can reach. The record ends done when the
 /// recording was read to its end, partial when the recording went or its file could no longer be
-/// read, and failed when ffmpeg is missing, did not find the programme's picture or sound, or broke
-/// off. Only the tail of what ffmpeg says on its error stream is kept, as the reason for a failure.
-/// A follow whose record something else has changed stops and leaves it as it is.
+/// read, and failed when ffmpeg or ffprobe is missing, where the file begins could not be read, or
+/// ffmpeg did not find the programme's picture or sound, or broke off. Only the tail of what ffmpeg
+/// says on its error stream is kept, as the reason for a failure. A follow whose record something
+/// else has changed stops and leaves it as it is.
 /// </summary>
 public sealed class FfmpegLearningFollower(
     MachineSettings machine,
@@ -78,15 +83,32 @@ public sealed class FfmpegLearningFollower(
 
         if (opened is null)
         {
-            await SettleAsync(follow, new Decoded(false, null, FeedEnd.Unreadable, 0, string.Empty), cancellationToken);
+            await SettleAsync(follow, Undecoded(FeedEnd.Unreadable), cancellationToken);
 
             return;
         }
 
         await using FileStream file = opened;
+
+        if (await HeadWrittenAsync(follow.Recording, cancellationToken) is { } headless)
+        {
+            await SettleAsync(follow, Undecoded(headless), cancellationToken);
+
+            return;
+        }
+
+        FileClock begins = await BeginsAsync(follow.Recording.Source, cancellationToken);
+
+        if (begins.Failure is { } unread)
+        {
+            await FailAsync(follow, unread, cancellationToken);
+
+            return;
+        }
+
         ProgrammeStart start = AnotherProgramme.StartFed(
             machine.Programme,
-            FfmpegLearningInvocation.Arguments(follow.Recording.Service),
+            FfmpegLearningInvocation.Arguments(follow.Recording.Service, begins.Start),
             ProgrammePriority.Yielding);
 
         if (start.Process is not { } running)
@@ -98,9 +120,62 @@ public sealed class FfmpegLearningFollower(
 
         using Process decoder = running;
 
-        logger.LogInformation("Recording {Recording} is followed for its learning data.", follow.Recording.Id.Wire);
+        logger.LogInformation(
+            "Recording {Recording} is followed for its learning data, its file's clock beginning at {Begins}.",
+            follow.Recording.Id.Wire,
+            begins.Start);
 
         await SettleAsync(follow, await DecodedAsync(follow, file, decoder, cancellationToken), cancellationToken);
+    }
+
+    private static Decoded Undecoded(FeedEnd fed) => new(false, null, fed, 0, string.Empty);
+
+    private async Task<FeedEnd?> HeadWrittenAsync(FollowedRecording recording, CancellationToken cancellationToken)
+    {
+        while (!recording.HasGone)
+        {
+            bool ended = recording.HasEnded;
+            long? written = Written(recording.Source);
+
+            if (written is null)
+            {
+                return FeedEnd.Unreadable;
+            }
+
+            if (ended || written >= settings.HeadBytes)
+            {
+                return null;
+            }
+
+            await Task.Delay(settings.WhileCaughtUp, clock, cancellationToken);
+        }
+
+        return FeedEnd.Gone;
+    }
+
+    private static long? Written(string source)
+    {
+        try
+        {
+            return new FileInfo(source).Length;
+        }
+        catch (Exception unreadable) when (unreadable is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private async Task<FileClock> BeginsAsync(string source, CancellationToken cancellationToken)
+    {
+        ProgrammeSaid said = await FfprobeFileStart.AskAsync(machine, source, clock, cancellationToken);
+
+        return said switch
+        {
+            { Fault: ProgrammeFault.ProgrammeMissing } => FileClock.Unread(ExtractionFailure.FfmpegMissing, said.Complained),
+            { Fault: ProgrammeFault.TimedOut } => FileClock.Unread(ExtractionFailure.Other, $"ffprobe did not say where the file begins: {said.Complained}"),
+            { ExitCode: not 0 } => FileClock.Unread(ExtractionFailure.Other, $"ffprobe exited {said.ExitCode}: {said.Complained}"),
+            _ => FileClock.Of(FfprobeFileStart.Of(said)),
+        };
     }
 
     private static FileStream? Opened(string source)
@@ -409,6 +484,16 @@ public sealed class FfmpegLearningFollower(
 
     private sealed record Decoded(bool Whole, Exception? Refused, FeedEnd Fed, int ExitCode, string Complained);
 
+    private sealed record FileClock(TimeSpan Start, ExtractionFailureDetail? Failure)
+    {
+        public static FileClock Of(TimeSpan? begins)
+            => begins is { } start && start > -EncodeTimeline.OneTurnOfTheClock && start < EncodeTimeline.OneTurnOfTheClock
+                ? new FileClock(start, null)
+                : Unread(ExtractionFailure.TimingMismatch, $"ffprobe named no '{FfprobeFileStart.Key}' this could be read as where the file begins");
+
+        public static FileClock Unread(ExtractionFailure failure, string reason) => new(TimeSpan.Zero, new ExtractionFailureDetail(failure, reason));
+    }
+
     private sealed class TakenOverException : Exception
     {
     }
@@ -499,18 +584,19 @@ public sealed class FfmpegLearningFollower(
         {
             LearningDataTimeline timeline = Timeline
                 ?? throw new LearningDataUnplaceableException(ExtractionFailure.Other, "A block came before the tracks were described.");
+            TimeSpan onTheRecording = FfmpegLearningInvocation.OnTheRecording(at);
 
             if (track == frames)
             {
-                Ready.AddRange(timeline.See(at, payload));
+                Ready.AddRange(timeline.See(onTheRecording, payload));
             }
             else if (track == pictures)
             {
-                Ready.AddRange(timeline.Glimpse(at, payload));
+                Ready.AddRange(timeline.Glimpse(onTheRecording, payload));
             }
             else if (track == sound)
             {
-                Ready.AddRange(timeline.Hear(at, Samples(payload)));
+                Ready.AddRange(timeline.Hear(onTheRecording, Samples(payload)));
             }
         }
 
