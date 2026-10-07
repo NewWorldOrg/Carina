@@ -54,11 +54,14 @@ public sealed record ReducedCopyRead(ReducedCopy? Copy, string? Refusal);
 /// it, and those rows give the copy of the programme. The programme ends when the guide said, or else when
 /// its reservation said once that end had been announced. Where the copy starts on the recording's own time
 /// is where the programme's first picture or first sound began, whichever came first, after the file's
-/// clock began, both as the probe of the file read them. Nothing in the directory is written.
+/// clock began, both as the probe of the file read them; a time further than <see cref="FurthestSeconds"/>
+/// from zero is no time a file's clock holds. Nothing in the directory is written.
 /// </summary>
 public static class ReducedCopyReader
 {
     public const long LargestDescription = 1 << 20;
+
+    public const decimal FurthestSeconds = 1_000_000;
 
     private static readonly string[] Required =
     [
@@ -151,9 +154,13 @@ public static class ReducedCopyReader
             : null;
 
     private static decimal? Seconds(JsonElement? row, string name)
-        => row is { } held && Field(held, name)?.GetString() is { } written
-            ? decimal.Parse(written, NumberStyles.Float, CultureInfo.InvariantCulture)
-            : null;
+        => row is { } held && Field(held, name)?.GetString() is { } written ? Seconds(written) : null;
+
+    private static decimal Seconds(string written)
+        => decimal.TryParse(written, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal seconds) && Math.Abs(seconds) <= FurthestSeconds
+            ? seconds
+            : throw new InvalidDataException(
+                $"its {ReducedCopy.Probe} gives the time '{written}', which is not a number of seconds within {FurthestSeconds} of zero");
 
     private static ProgrammeCopy Copied(JsonElement recording, JsonElement? programme, JsonElement? reservation)
     {

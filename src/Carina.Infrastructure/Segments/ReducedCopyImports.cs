@@ -10,7 +10,8 @@ namespace Carina.Infrastructure.Segments;
 /// (<see cref="ReducedCopyReader"/>) of a recording whose record <see cref="LearningExtraction.AwaitsImport"/>,
 /// or that has no record yet and is given one waiting with the copy of its programme. Claiming it puts its
 /// record reading, unless another recording is being read. Each directory is looked at once a start: a copy
-/// that is not imported is said so with why, and one already holding its data, or imported, is passed over
+/// that is not imported, or whose reading broke off in any way, is said so with why and the look goes on to
+/// the next, and one already holding its data, or imported, is passed over
 /// until the next start; a copy whose import was stopped is looked at again. Once nothing is left to import,
 /// how many were imported and how many were not since the start is said once. Nothing under the directory
 /// is written.
@@ -49,7 +50,7 @@ public sealed class ReducedCopyImports(
 
         foreach (string directory in directories.Where(Unseen))
         {
-            ReducedCopyRead read = ReducedCopyReader.Read(directory);
+            ReducedCopyRead read = Read(directory);
 
             if (read.Copy is not { } copy)
             {
@@ -95,6 +96,18 @@ public sealed class ReducedCopyImports(
             imported += kept ? 1 : 0;
             notImported += kept ? 0 : 1;
             toldSince = false;
+        }
+    }
+
+    private static ReducedCopyRead Read(string directory)
+    {
+        try
+        {
+            return ReducedCopyReader.Read(directory);
+        }
+        catch (Exception unexpected) when (unexpected is not OperationCanceledException)
+        {
+            return new ReducedCopyRead(null, $"it could not be read: {unexpected.Message}");
         }
     }
 

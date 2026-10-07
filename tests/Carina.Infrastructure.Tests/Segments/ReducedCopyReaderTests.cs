@@ -180,6 +180,21 @@ public sealed class ReducedCopyReaderTests : IDisposable
         Assert.False(string.IsNullOrWhiteSpace(read.Refusal));
     }
 
+    [Theory(DisplayName = "a copy whose probe gives a time no file's clock could hold, or one that cannot be read as a number, is not imported, and says why")]
+    [InlineData("1e30", "1000.900000")]
+    [InlineData("1e13", "1000.900000")]
+    [InlineData("1000.500000", "1e13")]
+    [InlineData("-1e13", "1000.900000")]
+    [InlineData("1000.500000", "soon")]
+    public void ACopyWhoseProbeGivesATimeOutOfReachIsNotImported(string file, string picture)
+    {
+        ReducedCopyRead read = ReducedCopyReader.Read(
+            ReducedCopies.Write(shelf.Root, "far", new CopyDescription { FileBegins = file, PictureBegins = picture, SoundBegins = picture }));
+
+        Assert.Null(read.Copy);
+        Assert.Contains(ReducedCopy.Probe, read.Refusal, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "descriptions too large to be what the copy says of itself are not read")]
     public void DescriptionsTooLargeAreNotRead()
     {

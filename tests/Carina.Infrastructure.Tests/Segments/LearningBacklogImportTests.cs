@@ -141,6 +141,24 @@ public sealed class LearningBacklogImportTests : IDisposable
         Assert.Null(harness.Records.Row(other.Id));
     }
 
+    [Fact(DisplayName = "a copy whose probe gives a time no file's clock could hold is not imported, and the look goes on to the next copy")]
+    public async Task ACopyWithATimeOutOfReachIsPassedOver()
+    {
+        await harness.LearningAsync(true);
+        harness.Importer.ReleasesAtOnce = true;
+        CopyDescription vast = new() { FileBegins = "1e30" };
+        CopyDescription far = new() { PictureBegins = "1e13", SoundBegins = "1e13" };
+        ReducedCopies.Write(harness.Copies.Root, "a-vast", vast);
+        ReducedCopies.Write(harness.Copies.Root, "b-far", far);
+        CopyDescription whole = harness.Copied("c-whole");
+
+        LearningBacklogLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal(whole.Id, look.Importing);
+        Assert.Null(harness.Records.Row(vast.Id));
+        Assert.Null(harness.Records.Row(far.Id));
+    }
+
     [Fact(DisplayName = "a copy that failed to import is not tried again until the next start, and is tried again then")]
     public async Task ACopyThatFailedIsTriedAgainAtTheNextStart()
     {
