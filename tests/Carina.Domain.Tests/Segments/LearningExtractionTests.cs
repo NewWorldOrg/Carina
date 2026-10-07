@@ -397,6 +397,77 @@ public sealed class LearningExtractionTests
         Assert.Equal(LearningExtractionState.Waiting, extraction.State);
     }
 
+    [Fact(DisplayName = "an ended recording's record waits to be read when it is waiting, failed with a try left, or made another way")]
+    public void AnEndedRecordingsRecordWaitsToBeReadWhenItShould()
+    {
+        LearningExtraction failed = In(LearningExtractionState.Failed);
+        LearningExtraction reduced = LearningExtraction.Waiting(RecordingId.New(), Programme(), Noon);
+        reduced.Read(Reduced, Noon);
+        reduced.FinishPartway(Noon);
+
+        Assert.True(In(LearningExtractionState.Waiting).AwaitsReading(Current, Noon));
+        Assert.True(failed.AwaitsReading(Current, Noon));
+        Assert.True(In(LearningExtractionState.Done).AwaitsReading(Newer, Noon));
+        Assert.True(In(LearningExtractionState.Partial).AwaitsReading(Newer, Noon));
+        Assert.True(reduced.AwaitsReading(Current, Noon));
+    }
+
+    [Fact(DisplayName = "an ended recording's record does not wait to be read when it is read, being read, done the way it is done now, or out of tries")]
+    public void AnEndedRecordingsRecordDoesNotWaitWhenItShouldNot()
+    {
+        LearningExtraction spent = In(LearningExtractionState.Reading);
+
+        for (int failure = 0; failure < LearningExtraction.MostRetries; failure++)
+        {
+            spent.Fail(ExtractionFailure.Other, "it stopped", Later);
+            spent.ReadAwaited(Current, Noon, Later);
+        }
+
+        spent.Fail(ExtractionFailure.Other, "it stopped", Later);
+
+        Assert.False(In(LearningExtractionState.Following).AwaitsReading(Current, Noon));
+        Assert.False(In(LearningExtractionState.Reading).AwaitsReading(Current, Noon));
+        Assert.False(In(LearningExtractionState.Done).AwaitsReading(Current, Noon));
+        Assert.False(In(LearningExtractionState.Partial).AwaitsReading(Current, Noon));
+        Assert.False(spent.AwaitsReading(Current, Noon));
+    }
+
+    [Fact(DisplayName = "a record left partway before its recording ended waits to be read from the file, and one left partway after does not")]
+    public void ARecordLeftPartwayBeforeItsRecordingEndedWaits()
+    {
+        LearningExtraction partway = In(LearningExtractionState.Partial);
+
+        Assert.True(partway.AwaitsReading(Current, Noon.AddSeconds(1)));
+        Assert.False(partway.AwaitsReading(Current, Noon));
+        Assert.False(partway.AwaitsReading(Current, null));
+    }
+
+    [Theory(DisplayName = "a record that waits to be read is read from the head with the version asked for")]
+    [InlineData(LearningExtractionState.Waiting)]
+    [InlineData(LearningExtractionState.Failed)]
+    [InlineData(LearningExtractionState.Done)]
+    [InlineData(LearningExtractionState.Partial)]
+    public void ARecordThatWaitsIsReadFromTheHead(LearningExtractionState state)
+    {
+        LearningExtraction extraction = In(state);
+
+        extraction.ReadAwaited(Newer, Noon, Later);
+
+        Assert.Equal(
+            (LearningExtractionState.Reading, Newer, TimeSpan.Zero, Later),
+            (extraction.State, extraction.Version, extraction.ReadThrough, extraction.UpdatedAt));
+    }
+
+    [Fact(DisplayName = "a record that does not wait to be read is not read, and stays as it was")]
+    public void ARecordThatDoesNotWaitIsNotRead()
+    {
+        LearningExtraction done = In(LearningExtractionState.Done);
+
+        Assert.Throws<InvalidOperationException>(() => done.ReadAwaited(Current, Noon, Later));
+        Assert.Equal((LearningExtractionState.Done, Noon), (done.State, done.UpdatedAt));
+        Assert.Throws<InvalidOperationException>(() => In(LearningExtractionState.Following).ReadAwaited(Current, Noon, Later));
+    }
+
     [Theory(DisplayName = "on starting the app, what was following or reading follows again from the head while the recording goes on")]
     [MemberData(nameof(Running))]
     public void OnStartingWhatWasRunningFollowsAgainWhileTheRecordingGoesOn(LearningExtractionState state)

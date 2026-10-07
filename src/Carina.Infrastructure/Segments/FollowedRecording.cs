@@ -6,8 +6,8 @@ namespace Carina.Infrastructure.Segments;
 
 /// <summary>
 /// A recording being followed for its learning data: which one, the file it is read from, the
-/// programme in it, the version its data is made with, and what the follow has been told since —
-/// that the recording has ended, or that it has gone.
+/// programme in it, the version its data is made with, the state its record stands in while it is
+/// read, and what the follow has been told since — that the recording has ended, or that it has gone.
 /// </summary>
 public sealed class FollowedRecording(RecordingId id, string source, ServiceId service, ExtractionVersion version)
 {
@@ -27,9 +27,24 @@ public sealed class FollowedRecording(RecordingId id, string source, ServiceId s
 
     public ExtractionVersion Version { get; } = version ?? throw new ArgumentNullException(nameof(version));
 
+    public LearningExtractionState Held { get; private init; } = LearningExtractionState.Following;
+
     public bool HasEnded => Volatile.Read(ref told) is HasEndedMark;
 
     public bool HasGone => Volatile.Read(ref told) is HasGoneMark;
+
+    /// <summary>
+    /// A recording that has already ended, read from the head of its file to the end without waiting
+    /// there, its record reading.
+    /// </summary>
+    public static FollowedRecording Recorded(RecordingId id, string source, ServiceId service, ExtractionVersion version)
+    {
+        FollowedRecording recorded = new(id, source, service, version) { Held = LearningExtractionState.Reading };
+
+        recorded.Ended();
+
+        return recorded;
+    }
 
     public void Ended() => Interlocked.CompareExchange(ref told, HasEndedMark, StillRecording);
 

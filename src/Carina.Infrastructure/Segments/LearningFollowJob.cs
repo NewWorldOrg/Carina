@@ -24,9 +24,9 @@ public sealed record LearningLook(int Recovered, int Began, int Stopped, int Wai
 /// Follows every recording being written under an output root this process can read, one follow
 /// each, for its learning data. It looks after <see cref="LearningFollowSettings.BeforeFirstLook"/>,
 /// then every <see cref="LearningFollowSettings.BetweenLooks"/> and whenever the driver tells of a
-/// recording's progress. The first look puts back the records a follow or a reading left running when
-/// the process last stopped: a recording still being written is followed again from its head, and
-/// one that has ended or gone waits to be read. While learning is off nothing is followed: a
+/// recording's progress. The first look puts back the records a follow left running when the process
+/// last stopped: a recording still being written is followed again from its head, and one that has
+/// ended or gone waits to be read. While learning is off nothing is followed: a
 /// recording being written gets a waiting record with the copy of its programme, and the follows
 /// running when learning was switched off are stopped, their chunks kept and their records put back
 /// to waiting. While learning is on, a recording being written whose file is there is followed from
@@ -117,39 +117,23 @@ public sealed class LearningFollowJob(
     {
         int putBack = 0;
 
-        foreach (LearningExtractionState state in new[] { LearningExtractionState.Following, LearningExtractionState.Reading })
+        foreach (LearningExtraction left in await records.ListAsync(LearningExtractionState.Following, MostRecoveredAtOnce, cancellationToken))
         {
-            foreach (LearningExtraction left in await records.ListAsync(state, MostRecoveredAtOnce, cancellationToken))
+            if (await worklist.StandingAsync(left.RecordingId, cancellationToken) is RecordingStanding.InFlight)
             {
-                RecordingStanding? standing = await worklist.StandingAsync(left.RecordingId, cancellationToken);
-
-                if (standing is RecordingStanding.InFlight && state is LearningExtractionState.Following)
-                {
-                    continue;
-                }
-
-                ExtractionChange change = await records.ChangeAsync(
-                    left.RecordingId,
-                    record => Recovered(record, state, standing is RecordingStanding.InFlight),
-                    cancellationToken);
-
-                putBack += change is ExtractionChange.Written ? 1 : 0;
+                continue;
             }
+
+            bool putBackHere = await ChangedAsync(
+                left.RecordingId,
+                LearningExtractionState.Following,
+                record => record.Recover(false, ExtractionVersion.Current, Now()),
+                cancellationToken);
+
+            putBack += putBackHere ? 1 : 0;
         }
 
         return putBack;
-    }
-
-    private bool Recovered(LearningExtraction record, LearningExtractionState state, bool stillRecording)
-    {
-        if (record.State != state)
-        {
-            return false;
-        }
-
-        record.Recover(stillRecording, ExtractionVersion.Current, Now());
-
-        return true;
     }
 
     private async Task<int> FollowEachAsync(

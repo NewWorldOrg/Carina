@@ -428,6 +428,20 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Same(LearningFollowSettings.Default, provider.GetRequiredService<LearningFollowSettings>());
     }
 
+    [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]
+    public void RegistersTheLearningBacklogAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<LearningBacklogJob>()));
+        Assert.IsType<LearningBacklogReader>(scope.ServiceProvider.GetRequiredService<ILearningBacklog>());
+        Assert.IsType<OccupancyReader>(scope.ServiceProvider.GetRequiredService<IOccupancyReader>());
+        Assert.Same(LearningBacklogSettings.Default, provider.GetRequiredService<LearningBacklogSettings>());
+    }
+
     [Fact]
     public void ReadsWhereTheOutputRootsAreMountedIntoThisProcess()
     {

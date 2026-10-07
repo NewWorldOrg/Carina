@@ -59,7 +59,7 @@ public static class LearningDataFormat
     {
         part = null;
 
-        if (!LearningDataChunk.Kinds.Contains(kind)
+        if (!Enum.IsDefined(kind)
             || bytes.Length < HeaderBytes
             || BinaryPrimitives.ReadUInt16LittleEndian(bytes) != Version
             || bytes[2] != (byte)kind)
@@ -77,7 +77,9 @@ public static class LearningDataFormat
             return false;
         }
 
-        if (!TryReadReadings(ref rest, Most(kind, clock), BytesEach(kind), out byte[] readings) || !rest.IsEmpty)
+        if (!TryReadReadings(ref rest, Most(kind, clock), BytesEach(kind), out byte[] readings)
+            || !rest.IsEmpty
+            || (kind is LearningDataKind.CaptionPresence && LearningDataPart.CaptionsFault(index, readings) is not null))
         {
             return false;
         }
@@ -131,7 +133,8 @@ public static class LearningDataFormat
         LearningDataKind.Loudness => part.Loudness.ToArray(),
         LearningDataKind.ChannelDifferences => ChannelBytes(part.Channels),
         LearningDataKind.FrameLights => FrameBytes(part.Frames),
-        _ => part.CornerOutlines.ToArray(),
+        LearningDataKind.CornerOutlines => part.CornerOutlines.ToArray(),
+        _ => part.Captions.ToArray(),
     };
 
     private static int Most(LearningDataKind kind, FrameClock? clock) => kind switch
@@ -140,13 +143,14 @@ public static class LearningDataFormat
         LearningDataKind.Loudness => SoundLoudness.PerChunk,
         LearningDataKind.ChannelDifferences => ChannelDifference.PerChunk,
         LearningDataKind.FrameLights => clock?.MostFramesIn(LearningData.ChunkSeconds) ?? 0,
-        _ => CornerOutline.PerChunk,
+        LearningDataKind.CornerOutlines => CornerOutline.PerChunk,
+        _ => CaptionPresence.PerChunk,
     };
 
     private static int BytesEach(LearningDataKind kind) => kind switch
     {
         LearningDataKind.SoundFingerprints => sizeof(uint),
-        LearningDataKind.Loudness => 1,
+        LearningDataKind.Loudness or LearningDataKind.CaptionPresence => 1,
         LearningDataKind.ChannelDifferences or LearningDataKind.FrameLights => 2,
         _ => CornerOutline.Bytes,
     };

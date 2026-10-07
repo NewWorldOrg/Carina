@@ -14,6 +14,8 @@ public enum ExtractionChange
     Missing = 3,
 
     KeptMoving = 4,
+
+    AnotherIsReading = 5,
 }
 
 /// <summary>
@@ -21,7 +23,7 @@ public enum ExtractionChange
 /// the data itself, each call in a scope of its own. A change to a record reads the row afresh,
 /// applies the change and writes it; when the row changed after it was read, it is read again and
 /// the change applied again, up to <see cref="Attempts"/> times. A change that declines the row as it
-/// stands writes nothing.
+/// stands writes nothing, and so does one that would read a recording while another is read.
 /// </summary>
 public sealed class LearningRecords(IServiceScopeFactory scopes)
 {
@@ -74,9 +76,9 @@ public sealed class LearningRecords(IServiceScopeFactory scopes)
                 return ExtractionChange.Declined;
             }
 
-            if (await SavedAsync(records, record, cancellationToken))
+            if (await SavedAsync(records, record, cancellationToken) is { } saved)
             {
-                return ExtractionChange.Written;
+                return saved;
             }
         }
 
@@ -104,20 +106,42 @@ public sealed class LearningRecords(IServiceScopeFactory scopes)
         }
     }
 
-    private static async Task<bool> SavedAsync(
+    /// <summary>
+    /// Keeps each part, in place of the one already kept for the same recording, kind and chunk, in the
+    /// order given.
+    /// </summary>
+    public async Task KeepPartsAsync(
+        RecordingId id,
+        IReadOnlyList<LearningDataPart> parts,
+        ExtractionVersion version,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        ILearningDataRepository data = scope.ServiceProvider.GetRequiredService<ILearningDataRepository>();
+
+        foreach (LearningDataPart part in parts)
+        {
+            await data.KeepAsync(LearningDataBlock.Of(id, part, version, at), cancellationToken);
+        }
+    }
+
+    private static async Task<ExtractionChange?> SavedAsync(
         ILearningExtractionRepository records,
         LearningExtraction record,
         CancellationToken cancellationToken)
     {
         try
         {
-            await records.SaveAsync(record, cancellationToken);
-
-            return true;
+            return await records.SaveAsync(record, cancellationToken) is LearningExtractionWrite.AnotherIsReading
+                ? ExtractionChange.AnotherIsReading
+                : ExtractionChange.Written;
         }
         catch (LearningExtractionMovedMeanwhileException)
         {
-            return false;
+            return null;
         }
     }
 
