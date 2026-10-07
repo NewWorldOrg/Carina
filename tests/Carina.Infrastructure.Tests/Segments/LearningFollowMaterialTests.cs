@@ -22,8 +22,9 @@ namespace Carina.Infrastructure.Tests.Segments;
 /// <summary>
 /// Follows broadcasts synthesised with the ffmpeg the application runs and reads back what was kept:
 /// stretches made quiet and dark at known moments must be found where they are on the recording's own
-/// time, through a recording carried on after a gap, a sound that turns mono and back, a picture that
-/// changes size, and a file still being written while it is read. A recording that has ended is read
+/// time, counted from where the file begins, through a recording carried on after a gap, a sound that
+/// turns mono and back, a picture that changes size, another programme in the same file whose clock
+/// begins ahead, and a file still being written while it is read. A recording that has ended is read
 /// from its head to its end without waiting there.
 /// </summary>
 [SupportedOSPlatform("linux")]
@@ -43,6 +44,8 @@ public sealed class LearningFollowMaterialTests : IDisposable
     private const byte Dark = 30;
 
     private const int ShortestBreakReadings = 5;
+
+    private const double OtherProgrammeAheadBy = 0.5;
 
     private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
 
@@ -66,6 +69,43 @@ public sealed class LearningFollowMaterialTests : IDisposable
         Assert.InRange(followed.Record.ReadThrough.TotalSeconds, 19.5, 20.5);
         Assert.NotNull(followed.Record.Sound);
         AssertBreaks(followed, part, [(part, 5), (part, 13)]);
+    }
+
+    [Fact(DisplayName = "in a file carrying another programme whose clock begins ahead of this one's, stretches made quiet and dark are found where they are from where the file begins, and the stretch before this programme's sound begins is kept as a gap")]
+    public async Task InAFileWhereAnotherProgrammeBeginsAheadTheBreaksAreFoundFromWhereTheFileBegins()
+    {
+        Part ahead = await WriteAsync(
+            "ahead",
+            new SyntheticBroadcast
+            {
+                ProgramNumber = SyntheticBroadcast.SomeProgramNumber + 1,
+                Plain = true,
+                WithCaptions = false,
+                WithSuperimpose = false,
+                Length = TimeSpan.FromSeconds(14),
+            });
+        Part behind = await WriteAsync(
+            "behind",
+            new SyntheticBroadcast
+            {
+                WithCaptions = false,
+                WithSuperimpose = false,
+                Length = TimeSpan.FromSeconds(12),
+                StartsAt = At(OtherProgrammeAheadBy),
+                QuietBreaks = [At(5)],
+            });
+        (Part carried, double soundStart) = await CarriedTogetherAsync("together", ahead, behind);
+
+        Followed followed = await FollowAsync(carried.Source);
+
+        Assert.True(
+            soundStart - carried.FormatStart >= OtherProgrammeAheadBy - 0.1,
+            FormattableString.Invariant($"the file begins at {carried.FormatStart:0.000}s and this programme's sound at {soundStart:0.000}s, too close to tell the two apart"));
+        Assert.Equal(LearningExtractionState.Done, followed.Record.State);
+        LearningDataGap head = Assert.Single(followed.Record.Gaps);
+        Assert.Equal(TimeSpan.Zero, head.From);
+        Assert.InRange(head.Until.TotalSeconds, soundStart - carried.FormatStart - Tolerance, soundStart - carried.FormatStart + Tolerance);
+        AssertBreaks(followed, carried, [(carried, 5)]);
     }
 
     [Fact(DisplayName = "a file still being written is read on as it grows, and gives what the whole file gives")]
@@ -183,6 +223,38 @@ public sealed class LearningFollowMaterialTests : IDisposable
 
         return new Part(source, Seconds(probed.RootElement.GetProperty("format").GetProperty("start_time")), video);
     }
+
+    private async Task<(Part Carried, double SoundStart)> CarriedTogetherAsync(string name, Part ahead, Part behind)
+    {
+        string together = Path.Combine(room, name + SyntheticBroadcast.TransportStream);
+
+        await RunAsync(
+            "ffmpeg",
+            [
+                "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-copyts",
+                "-i", ahead.Source, "-i", behind.Source,
+                "-map", "0:v", "-map", "0:a", "-map", "1:v", "-map", "1:a", "-c", "copy",
+                "-program", FormattableString.Invariant($"program_num={SyntheticBroadcast.SomeProgramNumber + 1}:st=0:st=1"),
+                "-program", FormattableString.Invariant($"program_num={SyntheticBroadcast.SomeProgramNumber}:st=2:st=3"),
+                "-mpegts_copyts", "1", "-mpegts_m2ts_mode", "0", "-f", "mpegts", together,
+            ]);
+        using JsonDocument probed = JsonDocument.Parse(await RunAsync(
+            "ffprobe",
+            ["-v", "error", "-show_entries", "format=start_time:program=program_id:stream=codec_type,start_time", "-of", "json", together]));
+        List<JsonElement> streams = [.. probed.RootElement.GetProperty("programs").EnumerateArray()
+            .Where(programme => programme.GetProperty("program_id").GetInt32() == SyntheticBroadcast.SomeProgramNumber)
+            .SelectMany(programme => programme.GetProperty("streams").EnumerateArray())];
+
+        return (
+            new Part(together, Seconds(probed.RootElement.GetProperty("format").GetProperty("start_time")), Start(streams, "video")),
+            Start(streams, "audio"));
+    }
+
+    private static double Start(IEnumerable<JsonElement> streams, string kind)
+        => streams
+            .Where(stream => stream.GetProperty("codec_type").GetString() == kind)
+            .Select(stream => Seconds(stream.GetProperty("start_time")))
+            .Single();
 
     private string Joined(string name, params Part[] parts)
     {

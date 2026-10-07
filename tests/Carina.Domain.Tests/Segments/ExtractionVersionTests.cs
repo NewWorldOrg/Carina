@@ -11,6 +11,13 @@ public sealed class ExtractionVersionTests
         Assert.Equal(ExtractionOrigin.RecordingFile, ExtractionVersion.Current.Origin);
     }
 
+    [Fact(DisplayName = "data whose time zero is where the file begins and whose picture was decoded at half its size is the second version, apart from what the first one made")]
+    public void DataFromWhereTheFileBeginsIsTheSecondVersion()
+    {
+        Assert.Equal(2, ExtractionVersion.Current.Number);
+        Assert.NotEqual(new ExtractionVersion(1, ExtractionOrigin.RecordingFile), ExtractionVersion.Current);
+    }
+
     [Fact(DisplayName = "data made from a reduced copy is told apart from data made from the file by the same calculations")]
     public void DataFromAReducedCopyIsToldApart()
     {

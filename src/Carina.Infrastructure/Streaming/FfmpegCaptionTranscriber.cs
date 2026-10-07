@@ -21,7 +21,7 @@ public sealed class FfmpegCaptionTranscriber(
     IStreamAttributeReader attributes,
     TimeProvider clock) : ICaptionTranscriber
 {
-    public const string StartKey = "start_time";
+    public const string StartKey = FfprobeFileStart.Key;
 
     private const long Lift = (long)FfmpegCaptionInvocation.ClockLiftedBySeconds * LivePts.Hertz;
 
@@ -83,36 +83,13 @@ public sealed class FfmpegCaptionTranscriber(
                 $"the size of the picture could not be read, so the canvas the captions were drawn on is unknown. {reading.Note}");
         }
 
-        ProgrammeSaid said = await AnotherProgramme.SayAsync(
-            machine.Prober,
-            FfprobeInvocation.Start(file),
-            machine.LongestRead,
-            clock,
-            cancellationToken);
+        ProgrammeSaid said = await FfprobeFileStart.AskAsync(machine, file.Value, clock, cancellationToken);
 
-        return Begins(said) is { } begins
+        return FfprobeFileStart.Of(said) is { } begins
             ? CaptionTranscription.Transcribed(new CaptionRecord(canvas.Size.Width, canvas.Size.Height, begins, drawn.Cues, drawn.Lines))
             : CaptionTranscription.Failed(
                 CaptionFault.ClockUnread,
                 said.ExitCode is 0 ? $"the programme named no '{StartKey}' this could be read as where the file begins" : said.Complained);
-    }
-
-    private static TimeSpan? Begins(ProgrammeSaid said)
-    {
-        if (said.ExitCode is not 0)
-        {
-            return null;
-        }
-
-        string? named = said.Said
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(line => line.StartsWith(StartKey + "=", StringComparison.Ordinal))
-            .Select(line => line[(StartKey.Length + 1)..])
-            .FirstOrDefault();
-
-        return double.TryParse(named, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds) && double.IsFinite(seconds)
-            ? TimeSpan.FromSeconds(seconds)
-            : null;
     }
 
     private static CaptionCue Cue(LivePts at, CaptionPicture? picture)
