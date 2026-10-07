@@ -34,6 +34,8 @@ public static class FfmpegLearningInvocation
             "1",
             "-filter_threads",
             "1",
+            "-filter_complex_threads",
+            "1",
             "-copyts",
             "-start_at_zero",
             "-i",

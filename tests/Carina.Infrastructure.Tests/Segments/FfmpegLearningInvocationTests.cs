@@ -22,6 +22,8 @@ public sealed class FfmpegLearningInvocationTests
         Assert.Contains("-start_at_zero", Arguments);
         Assert.Equal(["-threads", "1"], Following(Arguments, "-threads", 1));
         Assert.Equal(["-filter_threads", "1"], Following(Arguments, "-filter_threads", 1));
+        Assert.Equal(["-filter_complex_threads", "1"], Following(Arguments, "-filter_complex_threads", 1));
+        Assert.True(Arguments.ToList().IndexOf("-filter_complex_threads") < Arguments.ToList().IndexOf("-filter_complex"));
         Assert.Equal(["-fps_mode", "passthrough"], Following(Arguments, "-fps_mode", 1));
         Assert.Equal(["-f", "matroska", "pipe:1"], Arguments.TakeLast(3));
         Assert.True(Arguments.ToList().IndexOf("-copyts") < Arguments.ToList().IndexOf("-i"));
