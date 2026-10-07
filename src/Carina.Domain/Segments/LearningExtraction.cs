@@ -131,6 +131,52 @@ public sealed class LearningExtraction
         Restart(LearningExtractionState.Reading, version, when);
     }
 
+    /// <summary>
+    /// Whether the learning data of a recording that ended at <paramref name="recordingEnded"/> waits to be
+    /// read from its file: the record waits, failed with a try left, or holds data made another way than
+    /// <paramref name="current"/> or left partway before the recording ended.
+    /// </summary>
+    public bool AwaitsReading(ExtractionVersion current, DateTime? recordingEnded)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+
+        return State switch
+        {
+            LearningExtractionState.Waiting => true,
+            LearningExtractionState.Failed => CanRetry,
+            LearningExtractionState.Done => Version != current,
+            LearningExtractionState.Partial => Version != current || UpdatedAt < recordingEnded,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Reads from its head, with <paramref name="current"/>, a recording whose learning data
+    /// <see cref="AwaitsReading"/>.
+    /// </summary>
+    public void ReadAwaited(ExtractionVersion current, DateTime? recordingEnded, DateTime at)
+    {
+        if (!AwaitsReading(current, recordingEnded))
+        {
+            throw new InvalidOperationException($"An extraction that is {State} does not wait to be read.");
+        }
+
+        switch (State)
+        {
+            case LearningExtractionState.Failed:
+                Retry(at);
+                break;
+            case LearningExtractionState.Done:
+                Outdate(current, at);
+                break;
+            case LearningExtractionState.Partial:
+                Reopen(at);
+                break;
+        }
+
+        Read(current, at);
+    }
+
     public void Opened(ExtractionSound sound, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(sound);
