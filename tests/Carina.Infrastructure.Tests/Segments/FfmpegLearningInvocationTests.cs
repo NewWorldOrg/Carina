@@ -81,7 +81,7 @@ public sealed class FfmpegLearningInvocationTests
     public void TheFirstPictureAndSoundAreTakenByServiceId()
     {
         Assert.StartsWith("[0:p:1040:v:0]split=2", Graph, StringComparison.Ordinal);
-        Assert.Contains(";[0:p:1040:a:0]aresample", Graph, StringComparison.Ordinal);
+        Assert.Contains(";[0:p:1040:a:0]pan=stereo|", Graph, StringComparison.Ordinal);
         Assert.Equal(["-map", "[f]", "-map", "[c]", "-map", "[a]"], Following(Arguments, "-map", 5));
         Assert.Equal(["-c:v", "rawvideo", "-c:a", "pcm_s16le"], Following(Arguments, "-c:v", 3));
     }
@@ -102,6 +102,17 @@ public sealed class FfmpegLearningInvocationTests
             Graph,
             StringComparison.Ordinal);
         Assert.Contains("select=isnan(prev_selected_t)+gte(floor(t)\\,floor(prev_selected_t)+1)", Graph, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "the sound is folded to two channels by name before it is resampled, so channels a corrupt packet decodes into without names become silence instead of stopping ffmpeg")]
+    public void TheSoundIsFoldedToTwoChannelsByNameBeforeItIsResampled()
+    {
+        Assert.Contains(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"pan=stereo|FL=FL+0.707*FC+0.707*BL+0.707*SL|FR=FR+0.707*FC+0.707*BR+0.707*SR,aresample={SoundReader.SampleRate},"),
+            Graph,
+            StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "nothing asks for the card")]

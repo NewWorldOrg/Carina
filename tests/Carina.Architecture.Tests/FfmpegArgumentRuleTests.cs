@@ -30,6 +30,7 @@ public sealed class FfmpegArgumentRuleTests
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs string.Join(",
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs {ordinal}",
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs {programNumber}",
+        "/Carina.Infrastructure/Segments/FfmpegLearningInvocation.cs {Stereo}",
         "/Carina.Infrastructure/Segments/FfmpegLearningInvocation.cs {programNumber}",
         "/Carina.Infrastructure/Segments/FfmpegReducedCopyInvocation.cs {copy.PathOf(file)}",
         "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {programNumber}",
