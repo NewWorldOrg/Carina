@@ -27,6 +27,15 @@ public static class FfmpegLearningInvocation
 
     private const string Microseconds = "0.000000";
 
+    /// <summary>
+    /// Two channels from whatever the decoder hands over, by name: a stereo sound is kept as it is,
+    /// the centre and the back of a surround sound are folded in at -3 dB, a mono sound goes to both
+    /// sides, and a frame a corrupt packet decodes into channels with no names at all comes out as
+    /// silence instead of stopping ffmpeg, which <c>aresample</c> alone does when it cannot tell how
+    /// to fold such channels down.
+    /// </summary>
+    private const string Stereo = "pan=stereo|FL=FL+0.707*FC+0.707*BL+0.707*SL|FR=FR+0.707*FC+0.707*BR+0.707*SR";
+
     public static readonly TimeSpan Lift = TimeSpan.FromSeconds(ClockLiftedBySeconds);
 
     /// <summary>
@@ -64,7 +73,7 @@ public static class FfmpegLearningInvocation
             "-filter_complex",
             string.Create(
                 CultureInfo.InvariantCulture,
-                $"[0:p:{programNumber}:v:0]split=2[frames][seconds];[frames]scale=64:36:flags=area,format=gray[f];[seconds]select=isnan(prev_selected_t)+gte(floor(t)\\,floor(prev_selected_t)+1),scale=480:270:flags=area,format=gray[c];[0:p:{programNumber}:a:0]aresample=8000,aformat=sample_fmts=s16:channel_layouts=stereo[a]"),
+                $"[0:p:{programNumber}:v:0]split=2[frames][seconds];[frames]scale=64:36:flags=area,format=gray[f];[seconds]select=isnan(prev_selected_t)+gte(floor(t)\\,floor(prev_selected_t)+1),scale=480:270:flags=area,format=gray[c];[0:p:{programNumber}:a:0]{Stereo},aresample=8000,aformat=sample_fmts=s16:channel_layouts=stereo[a]"),
             "-map",
             "[f]",
             "-map",
