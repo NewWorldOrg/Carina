@@ -103,6 +103,7 @@ public sealed class LearningBacklogImportTests : IDisposable
 
         Assert.Equal(recording.Id, after.Began);
         Assert.Equal((LearningExtractionState.Reading, ExtractionVersion.Current), (harness.Records.Row(recording.Id)?.State, harness.Records.Row(recording.Id)?.Version));
+        await Eventually.Happens(() => !harness.Reader.Asked.IsEmpty, "the reader was asked to read the recording");
         Assert.Equal(recording.Id, Assert.Single(harness.Reader.Asked).Id);
     }
 
