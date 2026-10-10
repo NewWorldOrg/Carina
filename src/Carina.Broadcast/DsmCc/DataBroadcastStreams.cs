@@ -18,31 +18,31 @@ public static class DataBroadcastStreams
         ArgumentNullException.ThrowIfNull(table);
 
         var found = new List<DataBroadcastStream>();
+        var defects = new List<DataBroadcastStreamDefect>();
 
         foreach (ElementaryStream stream in table.Streams)
         {
-            if (Read(stream) is { } carried)
+            if (Read(stream, defects) is { } carried)
             {
                 found.Add(carried);
             }
         }
 
-        return new DataBroadcastService(found);
+        return new DataBroadcastService(found, defects);
     }
 
-    private static DataBroadcastStream? Read(ElementaryStream stream)
+    private static DataBroadcastStream? Read(ElementaryStream stream, List<DataBroadcastStreamDefect> defects)
     {
-        if (stream.StreamType != DsmCcSectionsStreamType)
+        Descriptor? component = stream.Descriptors.WithTag(DescriptorTags.DataComponent);
+
+        if (stream.StreamType != DsmCcSectionsStreamType || component is null)
         {
             return null;
         }
 
-        Descriptor? identifier = stream.Descriptors.WithTag(DescriptorTags.StreamIdentifier);
-        Descriptor? component = stream.Descriptors.WithTag(DescriptorTags.DataComponent);
-
-        if (identifier is null || identifier.Payload.IsEmpty || component is null || component.Payload.Length < DataComponentIdSize)
+        if (component.Payload.Length < DataComponentIdSize)
         {
-            return null;
+            return Refuse(stream, DataBroadcastDefect.MalformedDataComponent, defects);
         }
 
         ReadOnlySpan<byte> payload = component.Payload.Span;
@@ -52,6 +52,32 @@ public static class DataBroadcastStreams
             return null;
         }
 
-        return new DataBroadcastStream(stream.Pid, identifier.Payload.Span[0], BxmlInfo.Read(payload[DataComponentIdSize..]));
+        Descriptor? identifier = stream.Descriptors.WithTag(DescriptorTags.StreamIdentifier);
+
+        if (identifier is null || identifier.Payload.IsEmpty)
+        {
+            DataBroadcastDefect defect = identifier is null
+                ? DataBroadcastDefect.MissingStreamIdentifier
+                : DataBroadcastDefect.MalformedStreamIdentifier;
+
+            return Refuse(stream, defect, defects);
+        }
+
+        ReadOnlySpan<byte> carried = payload[DataComponentIdSize..];
+        BxmlInfo? info = BxmlInfo.Read(carried);
+
+        if (info is null && !carried.IsEmpty)
+        {
+            defects.Add(new DataBroadcastStreamDefect(stream.Pid, DataBroadcastDefect.MalformedBxmlInfo));
+        }
+
+        return new DataBroadcastStream(stream.Pid, identifier.Payload.Span[0], info);
+    }
+
+    private static DataBroadcastStream? Refuse(ElementaryStream stream, DataBroadcastDefect defect, List<DataBroadcastStreamDefect> defects)
+    {
+        defects.Add(new DataBroadcastStreamDefect(stream.Pid, defect));
+
+        return null;
     }
 }

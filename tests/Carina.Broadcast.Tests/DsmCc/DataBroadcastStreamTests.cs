@@ -27,6 +27,7 @@ public sealed class DataBroadcastStreamTests
             BxmlInfoWriter.DataBroadcastStream(OtherCarouselPid, OtherCarouselTag, BxmlInfoWriter.NotEntry(dataEventId: 3)));
 
         Assert.True(service.IsCarried);
+        Assert.Empty(service.Defects);
         Assert.Equal([EntryPid, OtherCarouselPid], service.Streams.Select(stream => stream.Pid));
         Assert.Equal([DataBroadcastStreams.EntryComponentTag, OtherCarouselTag], service.Streams.Select(stream => stream.ComponentTag));
         Assert.Equal(EntryPid, service.Entry!.Pid);
@@ -172,6 +173,7 @@ public sealed class DataBroadcastStreamTests
             PsiDescriptorWriter.DataComponent(BxmlInfoWriter.BxmlDataComponentId, BxmlInfoWriter.Entry(false, 0, 1, 0, 1))));
 
         Assert.Empty(service.Streams);
+        Assert.Equal([new DataBroadcastStreamDefect(EntryPid, DataBroadcastDefect.MissingStreamIdentifier)], service.Defects);
     }
 
     [Fact(DisplayName = "BR-BD-001: an additional_arib_bxml_info cut short leaves the stream found but its information unread")]
@@ -181,6 +183,7 @@ public sealed class DataBroadcastStreamTests
 
         Assert.True(service.IsCarried);
         Assert.Null(service.Entry!.Bxml);
+        Assert.Equal([new DataBroadcastStreamDefect(EntryPid, DataBroadcastDefect.MalformedBxmlInfo)], service.Defects);
     }
 
     [Fact(DisplayName = "BR-BD-001: a stream without any additional_arib_bxml_info is still found")]
@@ -190,6 +193,34 @@ public sealed class DataBroadcastStreamTests
 
         Assert.True(service.IsCarried);
         Assert.Null(service.Entry!.Bxml);
+        Assert.Empty(service.Defects);
+    }
+
+    [Fact(DisplayName = "BR-BD-001: a stream identifier without its tag and a data component cut short are reported apart from streams that carry none")]
+    public void AStreamIdentifierWithoutItsTagAndADataComponentCutShortAreReportedApartFromStreamsThatCarryNone()
+    {
+        DataBroadcastService service = Find(
+            PmtWriter.Stream(
+                PmtWriter.DsmCcSections,
+                EntryPid,
+                DescriptorWriter.Loop(
+                    DescriptorWriter.Of(PsiDescriptorWriter.StreamIdentifierTag),
+                    PsiDescriptorWriter.DataComponent(BxmlInfoWriter.BxmlDataComponentId, BxmlInfoWriter.Entry(false, 0, 1, 0, 1)))),
+            PmtWriter.Stream(
+                PmtWriter.DsmCcSections,
+                OtherCarouselPid,
+                DescriptorWriter.Loop(
+                    PsiDescriptorWriter.StreamIdentifier(OtherCarouselTag),
+                    DescriptorWriter.Of(PsiDescriptorWriter.DataComponentTag, 0x00))),
+            PmtWriter.Stream(PmtWriter.DsmCcSections, 0x0160, PsiDescriptorWriter.StreamIdentifier(0x60)));
+
+        Assert.Empty(service.Streams);
+        Assert.Equal(
+            [
+                new DataBroadcastStreamDefect(EntryPid, DataBroadcastDefect.MalformedStreamIdentifier),
+                new DataBroadcastStreamDefect(OtherCarouselPid, DataBroadcastDefect.MalformedDataComponent),
+            ],
+            service.Defects);
     }
 
     private static BxmlInfo Read(byte[] bxmlInfo)
