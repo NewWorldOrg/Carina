@@ -301,4 +301,32 @@ public sealed class CarouselStateTests
 
         Assert.Single(Assert.Single(state.Catalog!.Carousels).Modules);
     }
+
+    [Fact(DisplayName = "BR-BV-002: a carousel dropped before the data broadcast went away is told again once it is back")]
+    public void ACarouselDroppedBeforeTheDataBroadcastWentAwayIsToldAgainOnceItIsBack()
+    {
+        CarouselState state = new();
+        state.Apply(Carousels.Carried(), 0);
+        state.Apply(new CarouselSignal.Dropped(Carousels.Other, CarouselDropReason.TooManyModules), 10);
+        state.Apply(new CarouselSignal.NotCarried(), 20);
+        state.Apply(Carousels.Carried(), 30);
+
+        Assert.Equal(
+            new CarouselDelta.CarouselDropped(Carousels.Other, CarouselDropReason.TooManyModules),
+            Assert.Single(state.Apply(new CarouselSignal.Dropped(Carousels.Other, CarouselDropReason.TooManyModules), 40)));
+    }
+
+    [Fact(DisplayName = "BR-BD-004: an entry that changes gives the catalog again with the carousels it holds")]
+    public void AnEntryThatChangesGivesTheCatalogAgain()
+    {
+        CarouselState state = new();
+        state.Apply(Carousels.Carried(), 0);
+        state.Apply(Carousels.Listing(Carousels.Entry, (0, 1)), 0);
+
+        IReadOnlyList<CarouselDelta> deltas = state.Apply(Carousels.Carried(autoStart: true), 10);
+
+        CarouselCatalog catalog = Assert.IsType<CarouselDelta.CatalogChanged>(Assert.Single(deltas)).Catalog;
+        Assert.True(catalog.AutoStart);
+        Assert.Single(catalog.Carousels);
+    }
 }

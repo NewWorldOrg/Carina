@@ -58,6 +58,22 @@ public sealed class DataBroadcastRecordTests
         Assert.Equal([2, 3], Record.EventsBetween(250, 401).Select(message => message.Id));
     }
 
+    [Fact(DisplayName = "BR-BD-006: no event message lies between a moment and itself or a moment before it")]
+    public void NoEventLiesBetweenAMomentAndItselfOrAnEarlierOne()
+    {
+        Assert.Empty(Record.EventsBetween(150, 150));
+        Assert.Empty(Record.EventsBetween(400, 150));
+    }
+
+    [Fact(DisplayName = "BR-BD-006: an immediate event message is given at the moment it was received")]
+    public void AnImmediateEventIsGivenAtTheMomentItWasReceived()
+    {
+        EventMessage immediate = new(1, 5, 1, EventTiming.Immediate, 320, ReadOnlyMemory<byte>.Empty);
+        DataBroadcastRecord record = new(0, Carousels.Entry, [], [Carousels.Event(1, 150), immediate], false);
+
+        Assert.Equal([5], record.EventsBetween(300, 400).Select(message => message.Id));
+    }
+
     [Fact(DisplayName = "BR-BD-006: going back over moments already played gives their event messages again")]
     public void GoingBackGivesTheEventsAgain()
     {
