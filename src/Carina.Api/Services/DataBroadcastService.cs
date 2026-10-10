@@ -46,7 +46,7 @@ public sealed class DataBroadcastService(
             return Refused(id, standing);
         }
 
-        if (await records.ReadAsync(id, cancellationToken) is not { } record)
+        if (await records.OutlineAsync(id, cancellationToken) is not { } record)
         {
             logger.LogWarning(
                 "The data broadcast kept for recording {Recording} begins as a record of one and cannot be read as one.",

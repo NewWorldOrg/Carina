@@ -453,6 +453,27 @@ public sealed class DataBroadcastDeliveryTests
         Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
     }
 
+    [Fact(DisplayName = "BR-BA-001: the catalog is read without the resources, so a record whose resources are spoilt still gives it, while the spoilt module is not found")]
+    public async Task TheCatalogIsReadWithoutTheResources()
+    {
+        await using DataBroadcastFeature feature = new();
+        Recording recording = await feature.MadeAsync();
+        string kept = new DataBroadcastShelf(feature.Settings).PathOf(recording.Id)!;
+        byte[] whole = await File.ReadAllBytesAsync(kept);
+        int kind = DataBroadcastRecordFormat.HeaderLength + RecordedCarousel.HeaderBytes + ModuleVersion.HeaderBytes + sizeof(ushort) + "startup.bml".Length;
+        Assert.Equal(1, whole[kind]);
+        whole[kind] = 0x7F;
+        await File.WriteAllBytesAsync(kept, whole);
+
+        using HttpResponseMessage catalog = await feature.CatalogAsync(recording, "?source=recording");
+        using HttpResponseMessage spoilt = await feature.ModuleAsync(recording, "64/7/0/1");
+        using HttpResponseMessage sound = await feature.ModuleAsync(recording, "64/7/0/2");
+
+        Assert.Equal(["0/1 0-10", "0/2 10-1784.5", "2/1 684.5-1784.5"], DataBroadcastFeature.Versions(await DataBroadcastFeature.DataOfAsync(catalog), DataBroadcastFeature.Entry));
+        Assert.Equal(HttpStatusCode.NotFound, spoilt.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, sound.StatusCode);
+    }
+
     [Fact(DisplayName = "BR-BD-006: an artefact made from a file whose clock began elsewhere has no data broadcast placed over it, and the recording itself still does")]
     public async Task AnArtefactWhoseClockDisagreesHasNoDataBroadcastOverIt()
     {

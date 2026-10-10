@@ -55,6 +55,26 @@ public sealed class DataBroadcastRecord
 
     public string StartupDocument => CarouselCatalog.StartupDocumentOf(EntryTag);
 
+    /// <summary>
+    /// This record told without the resources of its versions.
+    /// </summary>
+    public DataBroadcastOutline Outline
+        => new(
+            StartsAt,
+            EntryTag,
+            [.. Carousels.Select(carousel => new OutlinedCarousel(
+                carousel.Tag,
+                carousel.DownloadId,
+                [.. carousel.Versions.Select(version => new OutlinedVersion(
+                    version.ModuleId,
+                    version.Version,
+                    version.FirstSeen,
+                    version.LastSeen,
+                    version.Bytes - ModuleVersion.HeaderBytes))]))],
+            Events,
+            Incomplete,
+            AutoStart);
+
     public int Modules
         => Carousels.Sum(carousel => carousel.Versions.Select(version => version.ModuleId).Distinct().Count());
 

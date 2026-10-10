@@ -18,7 +18,7 @@ public sealed record DataBroadcastVersionResponder(int Id, int Version, double F
             placed.Module.Version,
             placed.From.TotalSeconds,
             placed.To.TotalSeconds,
-            DataBroadcastFrames.ModulePayloadLength(placed.Module));
+            DataBroadcastFrames.ModuleHeaderLength + placed.Module.EntityBytes);
     }
 }
 

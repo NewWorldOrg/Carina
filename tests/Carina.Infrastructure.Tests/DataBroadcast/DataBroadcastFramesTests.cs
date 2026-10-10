@@ -32,7 +32,6 @@ public sealed class DataBroadcastFramesTests
         Assert.Equal("<bml>天</bml>", Encoding.UTF8.GetString(read.Resources[0].Body));
         Assert.Equal(Png, read.Resources[1].Body);
         Assert.Equal(frame.Payload.ToArray(), DataBroadcastFrames.ModulePayload(module));
-        Assert.Equal(frame.Payload.Length, DataBroadcastFrames.ModulePayloadLength(module));
     }
 
     [Theory(DisplayName = "BR-BD-004: a resource's kind is told from its media type, and text left undecoded says so")]

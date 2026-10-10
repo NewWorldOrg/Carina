@@ -76,24 +76,11 @@ public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcas
         return file.Exists ? file.Length : null;
     }
 
-    public async Task<ModuleVersion?> ModuleAsync(RecordingId id, ModuleVersionKey key, CancellationToken cancellationToken)
-    {
-        if (PathOf(id) is not { } kept || !File.Exists(kept))
-        {
-            return null;
-        }
+    public Task<DataBroadcastOutline?> OutlineAsync(RecordingId id, CancellationToken cancellationToken)
+        => WithKeptAsync(id, reading => DataBroadcastRecordFormat.OutlineAsync(reading, cancellationToken));
 
-        try
-        {
-            await using FileStream reading = File.OpenRead(kept);
-
-            return await DataBroadcastRecordFormat.FindAsync(reading, key, cancellationToken);
-        }
-        catch (FileNotFoundException)
-        {
-            return null;
-        }
-    }
+    public Task<ModuleVersion?> ModuleAsync(RecordingId id, ModuleVersionKey key, CancellationToken cancellationToken)
+        => WithKeptAsync(id, reading => DataBroadcastRecordFormat.FindAsync(reading, key, cancellationToken));
 
     /// <summary>
     /// Whether a record is kept for the recording: a file under its name whose head is the head of a record.
@@ -126,6 +113,26 @@ public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcas
         ArgumentNullException.ThrowIfNull(id);
 
         return settings.WrittenTo is { } shelf ? Path.Combine(shelf, id.Wire + Extension) : null;
+    }
+
+    private async Task<T?> WithKeptAsync<T>(RecordingId id, Func<FileStream, Task<T?>> read)
+        where T : class
+    {
+        if (PathOf(id) is not { } kept || !File.Exists(kept))
+        {
+            return null;
+        }
+
+        try
+        {
+            await using FileStream reading = File.OpenRead(kept);
+
+            return await read(reading);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
     }
 
     private static bool HeadsARecord(string kept)

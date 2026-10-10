@@ -4,7 +4,7 @@ namespace Carina.Domain.DataBroadcast;
 /// One module version placed on a source a recording is played from: the seconds of that source it runs from and
 /// to, and the version itself.
 /// </summary>
-public sealed record PlacedVersion(TimeSpan From, TimeSpan To, ModuleVersion Module);
+public sealed record PlacedVersion(TimeSpan From, TimeSpan To, OutlinedVersion Module);
 
 /// <summary>
 /// One download of a carousel with its versions placed on a source, in the order they were first seen.
@@ -24,7 +24,7 @@ public sealed record PlacedEvent(TimeSpan At, EventMessage Message);
 /// </summary>
 public sealed record DataBroadcastTimeline
 {
-    private DataBroadcastTimeline(DataBroadcastRecord record, IReadOnlyList<PlacedCarousel> carousels, IReadOnlyList<PlacedEvent> events)
+    private DataBroadcastTimeline(DataBroadcastOutline record, IReadOnlyList<PlacedCarousel> carousels, IReadOnlyList<PlacedEvent> events)
     {
         EntryTag = record.EntryTag;
         AutoStart = record.AutoStart;
@@ -47,13 +47,13 @@ public sealed record DataBroadcastTimeline
     public IReadOnlyList<PlacedEvent> Events { get; }
 
     /// <summary>
-    /// Places a record on a source whose zero is <paramref name="shift"/> on the file's own clock and which lasts
+    /// Places the outline of a record on a source whose zero is <paramref name="shift"/> on the file's own clock and which lasts
     /// <paramref name="length"/> where it says so, from <paramref name="from"/> on: every version still running at or
     /// after it, one that began before the source's zero running from that zero and one running past the source's
     /// end running to it, and every event message firing at or after it. A version first seen, or an event message
     /// firing, after the source's end is left out.
     /// </summary>
-    public static DataBroadcastTimeline Of(DataBroadcastRecord record, TimeSpan shift, TimeSpan? length, TimeSpan from)
+    public static DataBroadcastTimeline Of(DataBroadcastOutline record, TimeSpan shift, TimeSpan? length, TimeSpan from)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentOutOfRangeException.ThrowIfLessThan(from, TimeSpan.Zero);
@@ -71,7 +71,7 @@ public sealed record DataBroadcastTimeline
             ]);
     }
 
-    private static PlacedVersion? Placed(ModuleVersion version, TimeSpan shift, TimeSpan? length, TimeSpan from)
+    private static PlacedVersion? Placed(OutlinedVersion version, TimeSpan shift, TimeSpan? length, TimeSpan from)
     {
         TimeSpan first = version.FirstSeenAt - shift;
         TimeSpan last = version.LastSeenAt - shift;

@@ -133,7 +133,7 @@ public static class DataBroadcastFrames
     {
         ArgumentNullException.ThrowIfNull(module);
 
-        byte[] payload = new byte[ModulePayloadLength(module)];
+        byte[] payload = new byte[ModuleHeaderLength + module.Resources.Sum(resource => resource.Bytes)];
         Span<byte> written = payload;
 
         written[0] = ModuleKind;
@@ -143,16 +143,6 @@ public static class DataBroadcastFrames
         WriteResources(module.Resources, written[ModuleHeaderLength..]);
 
         return payload;
-    }
-
-    /// <summary>
-    /// The bytes <see cref="ModulePayload"/> takes for a module.
-    /// </summary>
-    public static long ModulePayloadLength(ModuleVersion module)
-    {
-        ArgumentNullException.ThrowIfNull(module);
-
-        return ModuleHeaderLength + module.Resources.Sum(resource => resource.Bytes);
     }
 
     /// <summary>

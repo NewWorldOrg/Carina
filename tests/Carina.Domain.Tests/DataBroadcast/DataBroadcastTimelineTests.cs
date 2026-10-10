@@ -31,7 +31,7 @@ public sealed class DataBroadcastTimelineTests
     [Fact(DisplayName = "BR-BD-006: on the recording itself every version runs from when it was first seen to when it was last seen, less where the file's clock begins")]
     public void OnTheRecordingEveryVersionRunsFromFirstToLastSeenLessWhereTheClockBegins()
     {
-        DataBroadcastTimeline timeline = DataBroadcastTimeline.Of(Record, Begins, null, TimeSpan.Zero);
+        DataBroadcastTimeline timeline = DataBroadcastTimeline.Of(Record.Outline, Begins, null, TimeSpan.Zero);
 
         Assert.Equal(
             ["40/1/0/2 0-30", "40/1/1/1 5-300", "40/1/0/3 30-300", "40/1/2/1 295-300"],
@@ -44,7 +44,7 @@ public sealed class DataBroadcastTimelineTests
     [Fact(DisplayName = "BR-BD-006: the timeline carries where the data broadcast is entered, whether it opens by itself, its startup document and whether it is incomplete")]
     public void TheTimelineCarriesTheEntryAndWhetherItOpensByItself()
     {
-        DataBroadcastTimeline timeline = DataBroadcastTimeline.Of(Record, Begins, null, TimeSpan.Zero);
+        DataBroadcastTimeline timeline = DataBroadcastTimeline.Of(Record.Outline, Begins, null, TimeSpan.Zero);
 
         Assert.Equal(
             (Carousels.Entry, true, "/40/0000/startup.bml", true),
@@ -55,7 +55,7 @@ public sealed class DataBroadcastTimelineTests
     [Fact(DisplayName = "BR-BD-006: on an artefact the versions and events are moved by the job's shift, and none first seen or firing after its end is placed")]
     public void OnAnArtefactNothingAfterItsEndIsPlaced()
     {
-        DataBroadcastTimeline timeline = DataBroadcastTimeline.Of(Record, TimeSpan.FromSeconds(102), TimeSpan.FromSeconds(200), TimeSpan.Zero);
+        DataBroadcastTimeline timeline = DataBroadcastTimeline.Of(Record.Outline, TimeSpan.FromSeconds(102), TimeSpan.FromSeconds(200), TimeSpan.Zero);
 
         Assert.Equal(
             ["40/1/0/2 0-28", "40/1/1/1 3-200", "40/1/0/3 28-200"],
@@ -66,14 +66,14 @@ public sealed class DataBroadcastTimelineTests
     [Fact(DisplayName = "BR-BD-006: from a later second only the versions still running there and the events firing there or later are placed")]
     public void FromALaterSecondOnlyWhatRunsThereOrLaterIsPlaced()
     {
-        DataBroadcastTimeline timeline = DataBroadcastTimeline.Of(Record, Begins, null, TimeSpan.FromSeconds(30));
+        DataBroadcastTimeline timeline = DataBroadcastTimeline.Of(Record.Outline, Begins, null, TimeSpan.FromSeconds(30));
 
         Assert.Equal(
             ["40/1/0/2 0-30", "40/1/1/1 5-300", "40/1/0/3 30-300", "40/1/2/1 295-300"],
             Described(timeline.Carousels.Single(carousel => carousel.Tag == Carousels.Entry)));
         Assert.Equal([290.0], timeline.Events.Select(placed => placed.At.TotalSeconds));
 
-        DataBroadcastTimeline later = DataBroadcastTimeline.Of(Record, Begins, null, TimeSpan.FromSeconds(31));
+        DataBroadcastTimeline later = DataBroadcastTimeline.Of(Record.Outline, Begins, null, TimeSpan.FromSeconds(31));
 
         Assert.Equal(
             ["40/1/1/1 5-300", "40/1/0/3 30-300", "40/1/2/1 295-300"],
@@ -90,8 +90,8 @@ public sealed class DataBroadcastTimelineTests
             [],
             false);
 
-        DataBroadcastTimeline before = DataBroadcastTimeline.Of(record, TimeSpan.Zero, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(100));
-        DataBroadcastTimeline after = DataBroadcastTimeline.Of(record, TimeSpan.Zero, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(120));
+        DataBroadcastTimeline before = DataBroadcastTimeline.Of(record.Outline, TimeSpan.Zero, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(100));
+        DataBroadcastTimeline after = DataBroadcastTimeline.Of(record.Outline, TimeSpan.Zero, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(120));
 
         Assert.Equal(["40/1/0/1 10-100"], Described(Assert.Single(before.Carousels)));
         Assert.Empty(Assert.Single(after.Carousels).Versions);
@@ -100,7 +100,7 @@ public sealed class DataBroadcastTimelineTests
     [Fact]
     public void ATimelineStartsAtOrAfterTheSourcesZero()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => DataBroadcastTimeline.Of(Record, Begins, null, TimeSpan.FromTicks(-1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => DataBroadcastTimeline.Of(Record.Outline, Begins, null, TimeSpan.FromTicks(-1)));
     }
 
     private static ModuleVersion Seen(int tag, int moduleId, int version, long firstSecond, long lastSecond)

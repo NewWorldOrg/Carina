@@ -127,6 +127,20 @@ public sealed class DataBroadcastShelfTests : IDisposable
         Assert.Null(await new DataBroadcastShelf(new CaptionSettings()).ModuleAsync(id, new ModuleVersionKey(Entry, 1, 0, 1), Cancel));
     }
 
+    [Fact(DisplayName = "BR-BA-001: the outline of a record kept for a recording is read from the shelf, and none for a recording with no record")]
+    public async Task TheOutlineOfARecordKeptIsReadFromTheShelf()
+    {
+        DataBroadcastShelf shelf = Shelf();
+        RecordingId id = RecordingId.New();
+        await shelf.KeepAsync(id, Record("<bml>1</bml>"), Cancel);
+
+        DataBroadcastOutline? outline = await shelf.OutlineAsync(id, Cancel);
+
+        Assert.Equal((Entry, 1u), (outline!.EntryTag, Assert.Single(outline.Carousels).DownloadId));
+        Assert.Null(await shelf.OutlineAsync(RecordingId.New(), Cancel));
+        Assert.Null(await new DataBroadcastShelf(new CaptionSettings()).OutlineAsync(id, Cancel));
+    }
+
     [Fact(DisplayName = "BR-BA-001: the shelf tells the bytes the record kept for a recording takes, and nothing for one with none")]
     public async Task TheShelfTellsTheBytesARecordTakes()
     {
