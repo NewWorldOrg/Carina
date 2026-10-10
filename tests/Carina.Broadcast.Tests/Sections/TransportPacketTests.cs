@@ -128,4 +128,28 @@ public sealed class TransportPacketTests
         Assert.True(TransportPacket.TryRead(writer.Packets[0], out TransportPacket packet));
         Assert.Equal(0x1FFF, packet.Pid);
     }
+
+    [Fact(DisplayName = "BR-BD-003: a packet carrying the programme clock gives its 33-bit base on the 90 kHz clock")]
+    public void APacketCarryingTheProgrammeClockGivesItsBase()
+    {
+        long reference = (1L << 33) - 1;
+        TransportStreamWriter writer = new TransportStreamWriter(Pid).Packet(null, [], TransportStreamWriter.ProgrammeClockFieldLength, programmeClock: reference);
+
+        Assert.True(TransportPacket.TryRead(writer.Packets[0], out TransportPacket packet));
+        Assert.Equal(reference, packet.ProgramClockReference);
+    }
+
+    [Fact]
+    public void APacketWhoseAdaptationFieldCarriesNoClockGivesNone()
+    {
+        TransportStreamWriter writer = new TransportStreamWriter(Pid)
+            .Packet(0, [0x42], adaptationFieldLength: TransportStreamWriter.ProgrammeClockFieldLength)
+            .Packet(0, [0x42]);
+
+        Assert.All(writer.Packets, bytes =>
+        {
+            Assert.True(TransportPacket.TryRead(bytes, out TransportPacket packet));
+            Assert.Null(packet.ProgramClockReference);
+        });
+    }
 }

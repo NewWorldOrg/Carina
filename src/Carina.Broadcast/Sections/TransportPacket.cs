@@ -10,6 +10,10 @@ public readonly ref struct TransportPacket
 
     public const int NullPacketPid = 0x1FFF;
 
+    private const int ClockFieldLength = 7;
+
+    private const byte ClockFlag = 0x10;
+
     private TransportPacket(
         int pid,
         bool transportError,
@@ -18,6 +22,7 @@ public readonly ref struct TransportPacket
         bool hasAdaptationField,
         bool hasPayload,
         int continuityCounter,
+        long? programClockReference,
         ReadOnlySpan<byte> payload)
     {
         Pid = pid;
@@ -27,6 +32,7 @@ public readonly ref struct TransportPacket
         HasAdaptationField = hasAdaptationField;
         HasPayload = hasPayload;
         ContinuityCounter = continuityCounter;
+        ProgramClockReference = programClockReference;
         Payload = payload;
     }
 
@@ -44,6 +50,12 @@ public readonly ref struct TransportPacket
 
     public int ContinuityCounter { get; }
 
+    /// <summary>
+    /// The 33-bit base of the programme clock reference the adaptation field carries, on the 90 kHz clock,
+    /// or null when it carries none.
+    /// </summary>
+    public long? ProgramClockReference { get; }
+
     public ReadOnlySpan<byte> Payload { get; }
 
     public static bool TryRead(ReadOnlySpan<byte> packet, out TransportPacket read)
@@ -59,6 +71,7 @@ public readonly ref struct TransportPacket
         bool hasAdaptationField = (adaptationFieldControl & 0b10) != 0;
         bool hasPayload = (adaptationFieldControl & 0b01) != 0;
         int payloadStart = HeaderSize;
+        long? clock = null;
 
         if (hasAdaptationField)
         {
@@ -69,6 +82,8 @@ public readonly ref struct TransportPacket
             {
                 return false;
             }
+
+            clock = ClockOf(packet.Slice(HeaderSize + 1, adaptationFieldLength));
         }
 
         read = new TransportPacket(
@@ -79,8 +94,23 @@ public readonly ref struct TransportPacket
             hasAdaptationField,
             hasPayload,
             packet[3] & 0x0F,
+            clock,
             hasPayload ? packet[payloadStart..] : []);
 
         return true;
+    }
+
+    private static long? ClockOf(ReadOnlySpan<byte> adaptation)
+    {
+        if (adaptation.Length < ClockFieldLength || (adaptation[0] & ClockFlag) == 0)
+        {
+            return null;
+        }
+
+        return ((long)adaptation[1] << 25)
+               | ((long)adaptation[2] << 17)
+               | ((long)adaptation[3] << 9)
+               | ((long)adaptation[4] << 1)
+               | ((long)adaptation[5] >> 7);
     }
 }
