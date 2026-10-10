@@ -93,6 +93,11 @@ public sealed class EventMessageClock
             return;
         }
 
+        if (arrived.PostDiscontinuity)
+        {
+            return;
+        }
+
         reference = arrived;
 
         foreach ((_, GeneralEvent held, long npt) in waiting)

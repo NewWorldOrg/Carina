@@ -19,7 +19,7 @@ public sealed class StreamDescriptorSectionTests
             Descriptors = DescriptorWriter.Loop(
                 StreamDescriptorWriter.GeneralEvent(0x0123, StreamDescriptorWriter.Immediate, 0, 0x01, 0x0405, 0xAA, 0xBB),
                 StreamDescriptorWriter.GeneralEvent(0x0123, StreamDescriptorWriter.Npt, 0x1_2345_6789, 0x02, 0x0406),
-                StreamDescriptorWriter.NptReference(stc: 0x1_0000_0001, npt: 0x0_0000_0002, scaleNumerator: 1, scaleDenominator: 1, contentId: 5)),
+                StreamDescriptorWriter.NptReference(stc: 0x1_0000_0001, npt: 0x0_0000_0002, scaleNumerator: 1, scaleDenominator: 1, contentId: 5, postDiscontinuity: true)),
         });
 
         Assert.Equal(3, read.DataEventId);
@@ -45,7 +45,7 @@ public sealed class StreamDescriptorSectionTests
         Assert.Equal(0x1_0000_0001, reference.Stc);
         Assert.Equal(0x0_0000_0002, reference.Npt);
         Assert.Equal(5, reference.ContentId);
-        Assert.False(reference.PostDiscontinuity);
+        Assert.True(reference.PostDiscontinuity);
         Assert.Equal(1, reference.ScaleNumerator);
         Assert.Equal(1, reference.ScaleDenominator);
     }

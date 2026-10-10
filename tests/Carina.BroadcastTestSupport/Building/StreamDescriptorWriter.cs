@@ -59,11 +59,17 @@ public sealed class StreamDescriptorWriter
                 .ToArray());
     }
 
-    public static byte[] NptReference(long stc, long npt, int scaleNumerator = 1, int scaleDenominator = 1, int contentId = 0)
+    public static byte[] NptReference(
+        long stc,
+        long npt,
+        int scaleNumerator = 1,
+        int scaleDenominator = 1,
+        int contentId = 0,
+        bool postDiscontinuity = false)
         => DescriptorWriter.Of(
             NptReferenceTag,
             new ByteWriter()
-                .Byte(contentId & 0x7F)
+                .Byte((postDiscontinuity ? 0x80 : 0x00) | (contentId & 0x7F))
                 .Run(BigEndian((0x7FL << 33) | (stc & 0x1_FFFF_FFFF), 5))
                 .Run(BigEndian((0x7FFF_FFFFL << 33) | (npt & 0x1_FFFF_FFFF), 8))
                 .Word(scaleNumerator)

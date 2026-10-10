@@ -219,6 +219,25 @@ public sealed class EventMessageClockTests
         Assert.Empty(repeat);
     }
 
+    [Fact(DisplayName = "BR-BD-003: a reference marked for after the next system time base discontinuity is not used before it, and events wait for a reference that holds now")]
+    public void AReferenceMarkedForAfterTheNextSystemTimeBaseDiscontinuityIsNotUsedBeforeItAndEventsWaitForAReferenceThatHoldsNow()
+    {
+        var clock = new EventMessageClock();
+
+        IReadOnlyList<EventMessageOutcome> afterTheBreak = clock.Push(
+            Section(
+                0,
+                StreamDescriptorWriter.NptReference(stc: 9_000_000, npt: 0, postDiscontinuity: true),
+                StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 10, 0, 1)),
+            ReceivedAt);
+        IReadOnlyList<EventMessageOutcome> now = clock.Push(
+            new StreamDescriptorWriter { EventMessageGroupId = 0x0FFF, Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 0) },
+            ReceivedAt);
+
+        Assert.Empty(afterTheBreak);
+        Assert.Equal(1_010, Fired(now).Single().FiresAt);
+    }
+
     [Fact(DisplayName = "BR-BD-003: a time mode other than immediate or NPT is discarded")]
     public void ATimeModeOtherThanImmediateOrNptIsDiscarded()
     {
