@@ -98,7 +98,7 @@ internal static class ModuleEntity
 
             int position = at + found;
 
-            if (position == 0 || entity[position - 1] == (byte)'\n')
+            if ((position == 0 || entity[position - 1] == (byte)'\n') && EndsTheLine(entity[(position + delimiter.Length)..]))
             {
                 return position;
             }
@@ -107,6 +107,15 @@ internal static class ModuleEntity
         }
 
         return -1;
+    }
+
+    private static bool EndsTheLine(ReadOnlySpan<byte> afterTheBoundary)
+    {
+        ReadOnlySpan<byte> rest = afterTheBoundary.StartsWith("--"u8) ? afterTheBoundary[2..] : afterTheBoundary;
+        int lineEnd = rest.IndexOf((byte)'\n');
+        ReadOnlySpan<byte> padding = lineEnd < 0 ? rest : rest[..lineEnd];
+
+        return padding.IndexOfAnyExcept(" \t\r"u8) < 0;
     }
 
     private static int WithoutLineBreak(ReadOnlySpan<byte> part, int end)

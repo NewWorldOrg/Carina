@@ -150,6 +150,20 @@ public sealed class ModuleContentTests
         Assert.Equal(Picture, resources[1].Body.ToArray());
     }
 
+    [Fact(DisplayName = "BR-BD-002: a line that only starts with the boundary is part of the body")]
+    public void ALineThatOnlyStartsWithTheBoundaryIsPartOfTheBody()
+    {
+        byte[] body = EntityWriter.Ascii($"first\r\n--{Boundary}x\r\n--{Boundary}--x\r\nlast");
+
+        IReadOnlyList<ModuleResource> resources = Opened(EntityWriter.Multipart(
+            Boundary,
+            new EntityPart("a.png", EntityWriter.PngType, body),
+            new EntityPart("b.png", EntityWriter.PngType, Picture)));
+
+        Assert.Equal(body, resources[0].Body.ToArray());
+        Assert.Equal(Picture, resources[1].Body.ToArray());
+    }
+
     [Fact(DisplayName = "BR-BD-002: the boundary inside a line is part of the body")]
     public void TheBoundaryInsideALineIsPartOfTheBody()
     {
