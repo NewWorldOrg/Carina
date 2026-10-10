@@ -10,7 +10,7 @@ public sealed class ModuleAssembler
 
     private readonly CarouselLimits limits;
     private readonly Dictionary<int, PendingModule> pending = [];
-    private readonly Dictionary<int, int> completed = [];
+    private readonly Dictionary<int, HeldModule> completed = [];
 
     private Dictionary<int, ModuleInfo> admitted = [];
     private DownloadInfoIndication? current;
@@ -66,7 +66,7 @@ public sealed class ModuleAssembler
         int[] withdrawn = admitted.Keys.Where(moduleId => !next.ContainsKey(moduleId)).Order().ToArray();
         bool sameDownload = current?.DownloadId == indication.DownloadId;
 
-        Forget(moduleId => !sameDownload || !next.TryGetValue(moduleId, out ModuleInfo? kept) || kept.ModuleVersion != VersionHeld(moduleId));
+        Forget(moduleId => !sameDownload || !next.TryGetValue(moduleId, out ModuleInfo? kept) || Held(moduleId) != HeldModule.Of(kept, indication.BlockSize));
         admitted = next;
         current = indication;
         DeclaredSize = total;
@@ -127,7 +127,7 @@ public sealed class ModuleAssembler
     {
         if (!pending.TryGetValue(module.ModuleId, out PendingModule? assembling))
         {
-            assembling = new PendingModule(module.ModuleVersion, module.ModuleSize, count);
+            assembling = new PendingModule(HeldModule.Of(module, blockSize), count);
             pending[module.ModuleId] = assembling;
         }
 
@@ -137,7 +137,7 @@ public sealed class ModuleAssembler
         }
 
         pending.Remove(module.ModuleId);
-        completed[module.ModuleId] = module.ModuleVersion;
+        completed[module.ModuleId] = assembling.Held;
 
         return ModuleContent.Open(assembling.Bytes, module, limits.LargestModule) switch
         {
@@ -185,14 +185,14 @@ public sealed class ModuleAssembler
         return BlockCount(module.ModuleSize, blockSize) > MostBlocks ? CarouselDefect.BlockCountOutOfRange : null;
     }
 
-    private int? VersionHeld(int moduleId)
+    private HeldModule? Held(int moduleId)
     {
         if (pending.TryGetValue(moduleId, out PendingModule? assembling))
         {
-            return assembling.ModuleVersion;
+            return assembling.Held;
         }
 
-        return completed.TryGetValue(moduleId, out int version) ? version : null;
+        return completed.TryGetValue(moduleId, out HeldModule? held) ? held : null;
     }
 
     private void Forget(Func<int, bool> stale)

@@ -200,6 +200,47 @@ public sealed class ModuleAssemblerTests
         Assert.Empty(again);
     }
 
+    [Fact(DisplayName = "BR-BS-002: a new transaction that keeps the version but changes the size drops the blocks held for the old size")]
+    public void ANewTransactionThatKeepsTheVersionButChangesTheSizeDropsTheBlocksHeldForTheOldSize()
+    {
+        ModuleAssembler assembler = new(EntryTag);
+        byte[] longer = [.. Css, .. Css];
+        assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
+        assembler.Accept(Block(DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock)[^1]));
+
+        assembler.Accept(Indication(1, SmallBlock, 0x8000_0004, DiiModule.Of(1, longer.Length, 0, ModuleDescriptorWriter.Type("text/css"))));
+        IReadOnlyList<CarouselChange> changes = DsmCcWriter.Blocks(1, 1, 0, longer, SmallBlock).SelectMany(block => assembler.Accept(Block(block))).ToArray();
+
+        Assert.Equal(longer, Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes)).Module.Resources.Single().Body.ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BS-002: a new transaction that changes the block size drops the blocks held for the old block size")]
+    public void ANewTransactionThatChangesTheBlockSizeDropsTheBlocksHeldForTheOldBlockSize()
+    {
+        ModuleAssembler assembler = new(EntryTag);
+        assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
+        assembler.Accept(Block(DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock)[^1]));
+
+        assembler.Accept(Indication(1, SmallBlock * 2, 0x8000_0004, CssModule(1, 0)));
+        IReadOnlyList<CarouselChange> changes = DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock * 2).SelectMany(block => assembler.Accept(Block(block))).ToArray();
+
+        Assert.Equal(Css, Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes)).Module.Resources.Single().Body.ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BS-002: a completed module whose size changes under the same version is completed again")]
+    public void ACompletedModuleWhoseSizeChangesUnderTheSameVersionIsCompletedAgain()
+    {
+        ModuleAssembler assembler = new(EntryTag);
+        byte[] shorter = Css[..20];
+        assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
+        _ = DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock).SelectMany(block => assembler.Accept(Block(block))).ToArray();
+
+        assembler.Accept(Indication(1, SmallBlock, 0x8000_0004, DiiModule.Of(1, shorter.Length, 0, ModuleDescriptorWriter.Type("text/css"))));
+        IReadOnlyList<CarouselChange> changes = DsmCcWriter.Blocks(1, 1, 0, shorter, SmallBlock).SelectMany(block => assembler.Accept(Block(block))).ToArray();
+
+        Assert.Equal(shorter, Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes)).Module.Resources.Single().Body.ToArray());
+    }
+
     [Fact(DisplayName = "BR-BS-002: the same transaction again changes nothing")]
     public void TheSameTransactionAgainChangesNothing()
     {
