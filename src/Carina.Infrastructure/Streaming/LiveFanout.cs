@@ -20,7 +20,7 @@ public sealed class LiveFanout(
 
     private readonly List<Viewing> viewers = [];
 
-    private readonly SortedDictionary<LiveChannel, LiveFrame> kept = [];
+    private readonly SortedDictionary<LiveChannel, IReadOnlyList<LiveFrame>> kept = [];
 
     private bool ended;
 
@@ -78,7 +78,7 @@ public sealed class LiveFanout(
         {
             lock (gate)
             {
-                return [.. kept.Values];
+                return [.. kept.Values.SelectMany(frames => frames)];
             }
         }
     }
@@ -118,7 +118,7 @@ public sealed class LiveFanout(
 
             Viewing viewing = new(this, settings.LongestBacklog);
 
-            foreach (LiveFrame held in kept.Values)
+            foreach (LiveFrame held in kept.Values.SelectMany(frames => frames))
             {
                 viewing.Offer(held);
             }
@@ -141,11 +141,33 @@ public sealed class LiveFanout(
             }
 
             Keep(frame);
+            Offer(frame);
+        }
+    }
 
-            foreach (Viewing viewing in viewers)
+    /// <summary>
+    /// Hands the frame to every viewer and keeps <paramref name="standing"/>, all of it on the frame's channel
+    /// and in the order given, as what a viewer joining later is handed of that channel.
+    /// </summary>
+    public void Publish(LiveFrame frame, IReadOnlyList<LiveFrame> standing)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        ArgumentNullException.ThrowIfNull(standing);
+
+        if (!LiveChannels.Kept.Contains(frame.Channel) || standing.Any(held => held.Channel != frame.Channel))
+        {
+            throw new ArgumentException("What is kept of a channel is kept of a channel that is kept, and of that channel only.", nameof(standing));
+        }
+
+        lock (gate)
+        {
+            if (ended)
             {
-                viewing.Offer(frame);
+                return;
             }
+
+            kept[frame.Channel] = [.. standing];
+            Offer(frame);
         }
     }
 
@@ -166,6 +188,16 @@ public sealed class LiveFanout(
 
     private static bool Expendable(LiveFrame frame) => LiveChannels.Expendable.Contains(frame.Channel);
 
+    private static bool CutWhenBehind(LiveFrame frame) => LiveChannels.CutWhenBehind.Contains(frame.Channel);
+
+    private void Offer(LiveFrame frame)
+    {
+        foreach (Viewing viewing in viewers)
+        {
+            viewing.Offer(frame);
+        }
+    }
+
     private void Keep(LiveFrame frame)
     {
         if (!LiveChannels.Kept.Contains(frame.Channel))
@@ -180,7 +212,7 @@ public sealed class LiveFanout(
             return;
         }
 
-        kept[frame.Channel] = frame;
+        kept[frame.Channel] = [frame];
     }
 
     private void Close(LiveFragmentFault? why)
@@ -285,10 +317,11 @@ public sealed class LiveFanout(
         internal void Offer(LiveFrame frame)
         {
             bool expendable = Expendable(frame);
+            bool cut = CutWhenBehind(frame);
 
             lock (counting)
             {
-                if (expendable && queued >= longestBacklog)
+                if (cut && queued >= longestBacklog)
                 {
                     dropped++;
 
