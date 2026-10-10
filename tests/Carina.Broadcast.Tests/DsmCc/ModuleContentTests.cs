@@ -17,6 +17,8 @@ public sealed class ModuleContentTests
 
     private const int MimeHeaderLimit = 64 * 1024;
 
+    private const int MimeHeaderFields = 256;
+
     private static readonly byte[] BmlInEucJp =
     [
         .. "<bml><body><p>"u8,
@@ -274,6 +276,21 @@ public sealed class ModuleContentTests
         byte[] entity = [.. EntityWriter.Ascii($"Content-Location: a.png{folded}\r\n\r\n"), .. Picture];
 
         Assert.Equal(CarouselDefect.EntityMalformed, Defect(entity, ModuleDescriptorWriter.Type(EntityWriter.PngType)));
+    }
+
+    [Theory(DisplayName = "BR-BV-002: a header of more fields than its limit is rejected")]
+    [InlineData(MimeHeaderFields, true)]
+    [InlineData(MimeHeaderFields + 1, false)]
+    public void AHeaderOfMoreFieldsThanItsLimitIsRejected(int count, bool read)
+    {
+        string fields = string.Concat(Enumerable.Range(1, count - 1).Select(index => $"X-Field-{index}: {index}\r\n"));
+        byte[] entity = [.. EntityWriter.Ascii($"Content-Location: a.png\r\n{fields}\r\n"), .. Picture];
+
+        IReadOnlyList<CarouselChange> changes = Open(entity, Limits, ModuleDescriptorWriter.Type(EntityWriter.PngType));
+
+        CarouselDefect? expected = read ? null : CarouselDefect.EntityMalformed;
+
+        Assert.Equal(expected, (Assert.Single(changes) as CarouselChange.Rejected)?.Defect);
     }
 
     [Fact(DisplayName = "BR-BV-001: an empty boundary is rejected")]

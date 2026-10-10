@@ -11,6 +11,8 @@ internal sealed class MimeHeader
 
     public const int MostHeaderBytes = 64 * 1024;
 
+    public const int MostFields = 256;
+
     private const string RepeatedField = "";
 
     private const byte LineFeed = (byte)'\n';
@@ -39,6 +41,7 @@ internal sealed class MimeHeader
         var repeated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? last = null;
         int at = 0;
+        int named = 0;
 
         while (TryTakeLine(bounded, ref at, out ReadOnlySpan<byte> line))
         {
@@ -52,7 +55,9 @@ internal sealed class MimeHeader
                 return true;
             }
 
-            if (!TryTakeField(line, fields, repeated, ref last))
+            named += line[0] is (byte)' ' or (byte)'\t' ? 0 : 1;
+
+            if (named > MostFields || !TryTakeField(line, fields, repeated, ref last))
             {
                 return false;
             }
