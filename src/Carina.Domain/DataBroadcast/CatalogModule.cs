@@ -11,16 +11,16 @@ public sealed record CatalogModule
         ArgumentNullException.ThrowIfNull(resources);
         ArgumentOutOfRangeException.ThrowIfNegative(size);
 
-        if (!arrived && resources.Count > 0)
+        if (arrived == (resources.Count == 0))
         {
-            throw new ArgumentException("A module that has not arrived carries no resources yet.", nameof(resources));
+            throw new ArgumentException("A module carries resources once it has arrived and none before.", nameof(resources));
         }
 
         Id = CarouselNumbers.ModuleId(id, nameof(id));
         Version = CarouselNumbers.Version(version, nameof(version));
         Size = size;
         Arrived = arrived;
-        Resources = resources;
+        Resources = [.. resources];
     }
 
     public int Id { get; }

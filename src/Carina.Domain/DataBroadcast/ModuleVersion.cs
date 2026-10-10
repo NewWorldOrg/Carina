@@ -10,6 +10,11 @@ public sealed record ModuleVersion
     {
         ArgumentNullException.ThrowIfNull(resources);
 
+        if (resources.Count == 0)
+        {
+            throw new ArgumentException("A module carries at least one resource.", nameof(resources));
+        }
+
         if (lastSeen < firstSeen)
         {
             throw new ArgumentOutOfRangeException(nameof(lastSeen), lastSeen, "A version is last seen no earlier than it is first seen.");

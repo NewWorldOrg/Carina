@@ -10,9 +10,14 @@ public sealed record CatalogCarousel
     {
         ArgumentNullException.ThrowIfNull(modules);
 
+        if (modules.Select(module => module.Id).Distinct().Count() != modules.Count)
+        {
+            throw new ArgumentException("A carousel holds each module once.", nameof(modules));
+        }
+
         Tag = CarouselNumbers.Tag(tag, nameof(tag));
         DownloadId = downloadId;
-        Modules = modules;
+        Modules = [.. modules];
     }
 
     public int Tag { get; }

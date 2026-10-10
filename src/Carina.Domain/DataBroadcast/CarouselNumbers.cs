@@ -17,6 +17,8 @@ public static class CarouselNumbers
 
     public const int MostEventType = 0xFF;
 
+    public const int MostPathBytes = 0xFFFF;
+
     internal static int Tag(int value, string name)
         => Within(value, MostTag, name, "A component tag is one byte.");
 
@@ -25,6 +27,25 @@ public static class CarouselNumbers
 
     internal static int Version(int value, string name)
         => Within(value, MostVersion, name, "A module version is one byte.");
+
+    internal static string Path(string value, string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(value, name);
+
+        if (System.Text.Encoding.UTF8.GetByteCount(value) > MostPathBytes)
+        {
+            throw new ArgumentOutOfRangeException(name, value.Length, "A path is told in two bytes of length.");
+        }
+
+        return value;
+    }
+
+    internal static string MediaType(string value, string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(value, name);
+
+        return value;
+    }
 
     internal static int Within(int value, int most, string name, string message)
     {

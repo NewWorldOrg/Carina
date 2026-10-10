@@ -58,6 +58,11 @@ public abstract record CarouselSignal
         {
             ArgumentNullException.ThrowIfNull(resources);
 
+            if (resources.Count == 0)
+            {
+                throw new ArgumentException("A module carries at least one resource.", nameof(resources));
+            }
+
             Tag = CarouselNumbers.Tag(tag, nameof(tag));
             ModuleId = CarouselNumbers.ModuleId(moduleId, nameof(moduleId));
             Version = CarouselNumbers.Version(version, nameof(version));

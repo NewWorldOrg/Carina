@@ -7,11 +7,8 @@ public sealed record CatalogResource
 {
     public CatalogResource(string path, string mediaType)
     {
-        ArgumentNullException.ThrowIfNull(path);
-        ArgumentNullException.ThrowIfNull(mediaType);
-
-        Path = path;
-        MediaType = mediaType;
+        Path = CarouselNumbers.Path(path, nameof(path));
+        MediaType = CarouselNumbers.MediaType(mediaType, nameof(mediaType));
     }
 
     public string Path { get; }

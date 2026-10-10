@@ -20,10 +20,15 @@ public sealed record CarouselCatalog
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(carousels);
 
+        if (carousels.Select(carousel => carousel.Tag).Distinct().Count() != carousels.Count)
+        {
+            throw new ArgumentException("A catalog holds each carousel once.", nameof(carousels));
+        }
+
         Service = service;
         EntryTag = CarouselNumbers.Tag(entryTag, nameof(entryTag));
         AutoStart = autoStart;
-        Carousels = carousels;
+        Carousels = [.. carousels];
     }
 
     public ServiceId Service { get; }

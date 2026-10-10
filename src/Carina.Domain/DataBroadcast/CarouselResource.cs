@@ -12,16 +12,13 @@ public sealed record CarouselResource
 
     public CarouselResource(string path, string mediaType, ResourceForm form, ReadOnlyMemory<byte> body)
     {
-        ArgumentNullException.ThrowIfNull(path);
-        ArgumentNullException.ThrowIfNull(mediaType);
-
         if (!Enum.IsDefined(form))
         {
             throw new ArgumentOutOfRangeException(nameof(form), form, "A resource is binary, text, or text left undecoded.");
         }
 
-        Path = path;
-        MediaType = mediaType;
+        Path = CarouselNumbers.Path(path, nameof(path));
+        MediaType = CarouselNumbers.MediaType(mediaType, nameof(mediaType));
         Form = form;
         Body = body;
     }
