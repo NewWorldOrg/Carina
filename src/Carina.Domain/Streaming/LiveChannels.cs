@@ -10,12 +10,8 @@ public static class LiveChannels
         LiveChannel.Sound,
         LiveChannel.CaptionHeader,
         LiveChannel.Caption,
+        LiveChannel.DataBroadcast,
         LiveChannel.Control,
-    ];
-
-    public static IReadOnlyList<LiveChannel> SetAsideForLater { get; } =
-    [
-        LiveChannel.ServiceInformation,
     ];
 
     public static IReadOnlyList<LiveChannel> Headers { get; } =

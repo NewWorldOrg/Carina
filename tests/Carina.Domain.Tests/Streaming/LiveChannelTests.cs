@@ -11,7 +11,7 @@ public sealed class LiveChannelTests
     [InlineData(LiveChannel.Sound, 0x11)]
     [InlineData(LiveChannel.CaptionHeader, 0x20)]
     [InlineData(LiveChannel.Caption, 0x21)]
-    [InlineData(LiveChannel.ServiceInformation, 0x30)]
+    [InlineData(LiveChannel.DataBroadcast, 0x30)]
     [InlineData(LiveChannel.Control, 0x40)]
     public void AChannelKeepsTheNumberTheWireWasSpecifiedWith(LiveChannel channel, byte number)
     {
@@ -34,34 +34,19 @@ public sealed class LiveChannelTests
             Enum.GetValues<LiveChannel>().Select(channel => (byte)channel).Distinct().Count());
     }
 
-    [Theory]
-    [InlineData(LiveChannel.ServiceInformation)]
-    public void AChannelSetAsideForLaterCarriesNothingYet(LiveChannel channel)
+    [Fact(DisplayName = "BR-BD-004: the data broadcast goes out on channel 0x30")]
+    public void TheDataBroadcastGoesOutOnTheChannelSetAsideForIt()
     {
-        Assert.Contains(channel, LiveChannels.SetAsideForLater);
-        Assert.DoesNotContain(channel, LiveChannels.Carrying);
-    }
-
-    [Theory]
-    [InlineData(LiveChannel.PictureHeader)]
-    [InlineData(LiveChannel.Picture)]
-    [InlineData(LiveChannel.SoundHeader)]
-    [InlineData(LiveChannel.Sound)]
-    [InlineData(LiveChannel.CaptionHeader)]
-    [InlineData(LiveChannel.Caption)]
-    [InlineData(LiveChannel.Control)]
-    public void AChannelInUseIsNotOneThatWasSetAside(LiveChannel channel)
-    {
-        Assert.Contains(channel, LiveChannels.Carrying);
-        Assert.DoesNotContain(channel, LiveChannels.SetAsideForLater);
+        Assert.Equal(0x30, (byte)LiveChannel.DataBroadcast);
+        Assert.Contains(LiveChannel.DataBroadcast, LiveChannels.Carrying);
     }
 
     [Fact]
-    public void EveryChannelIsEitherCarryingSomethingOrSetAsideForLater()
+    public void EveryChannelCarriesSomething()
     {
         Assert.Equal(
             Enum.GetValues<LiveChannel>().Order().ToArray(),
-            LiveChannels.Carrying.Concat(LiveChannels.SetAsideForLater).Order().ToArray());
+            LiveChannels.Carrying.Order().ToArray());
     }
 
     [Theory]
@@ -98,7 +83,7 @@ public sealed class LiveChannelTests
     [Theory]
     [InlineData(LiveChannel.Control)]
     [InlineData(LiveChannel.Caption)]
-    [InlineData(LiveChannel.ServiceInformation)]
+    [InlineData(LiveChannel.DataBroadcast)]
     public void WhatIsNeitherAHeaderNorMediaIsNeverThrownAwayEither(LiveChannel channel)
     {
         Assert.DoesNotContain(channel, LiveChannels.Expendable);
