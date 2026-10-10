@@ -141,6 +141,7 @@ internal sealed class LiveReception
     internal void ShowDataBroadcastTo(LiveFanout fanout)
     {
         DataBroadcastSession shown;
+        bool raised = false;
 
         lock (gate)
         {
@@ -152,16 +153,20 @@ internal sealed class LiveReception
             if (dataBroadcast is null)
             {
                 dataBroadcast = new DataBroadcastSession(service, logger);
-                seats.Add(new LiveSeat(
-                    dataBroadcast.Seat,
-                    static () => { },
-                    LeftBehindByTheDataBroadcast,
-                    settings.LongestWaitToBeFed,
-                    settings.MostBytesWaitingToBeFed,
-                    clock));
+                raised = true;
             }
 
             shown = dataBroadcast;
+        }
+
+        if (raised)
+        {
+            Take(
+                shown.Seat,
+                static () => { },
+                LeftBehindByTheDataBroadcast,
+                settings.LongestWaitToBeFed,
+                settings.MostBytesWaitingToBeFed);
         }
 
         shown.Show(fanout);
