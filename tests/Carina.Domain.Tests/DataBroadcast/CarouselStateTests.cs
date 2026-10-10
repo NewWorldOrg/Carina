@@ -269,4 +269,23 @@ public sealed class CarouselStateTests
 
         Assert.False(state.Catalog!.CanOpen);
     }
+
+    [Fact(DisplayName = "BR-BD-004: no event message goes out before the catalog it belongs to")]
+    public void NoEventMessageGoesOutBeforeTheCatalog()
+    {
+        CarouselState state = new();
+
+        Assert.Empty(state.Apply(new CarouselSignal.EventTimed(Carousels.Event(1, 40)), 40));
+        state.Apply(Carousels.Carried(), 50);
+        Assert.Single(state.Apply(new CarouselSignal.EventTimed(Carousels.Event(1, 60)), 60));
+    }
+
+    [Fact]
+    public void ACarouselDroppedWhileTheServiceCarriesNoDataBroadcastIsNotTold()
+    {
+        CarouselState state = new();
+        state.Apply(new CarouselSignal.NotCarried(), 0);
+
+        Assert.Empty(state.Apply(new CarouselSignal.Dropped(Carousels.Other, CarouselDropReason.TotalTooLarge), 10));
+    }
 }

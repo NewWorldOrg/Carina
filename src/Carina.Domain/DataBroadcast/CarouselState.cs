@@ -100,10 +100,15 @@ public sealed class CarouselState
     }
 
     private IReadOnlyList<CarouselDelta> Fire(EventMessage message)
-        => IsAbsent ? Nothing : [new CarouselDelta.EventCame(message)];
+        => entry is null ? Nothing : [new CarouselDelta.EventCame(message)];
 
     private IReadOnlyList<CarouselDelta> Drop(int tag, CarouselDropReason reason)
     {
+        if (IsAbsent)
+        {
+            return Nothing;
+        }
+
         bool removed = carousels.Remove(tag);
         List<CarouselDelta> deltas = [];
 
