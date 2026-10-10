@@ -14,8 +14,8 @@ namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
 /// Takes the data broadcast out of ended recordings one at a time, newest first, at the moments the captions are
-/// taken, and keeps the record of it on the shelf beside them. A pass starts nothing while anything is being
-/// recorded or watched or a reservation starts within <see cref="NoReservationWithin"/>, and reads a recording's
+/// taken, and keeps the record of it on the shelf beside them. A pass starts nothing unless the machine is idle as
+/// <see cref="Idleness"/> judges it for the captions too, and reads a recording's
 /// file only in its turn among the passes that read recordings through. It first puts back in the queue every
 /// record that failed with tries left and every record the row says is made while none is kept. A recording
 /// whose file has gone keeps the record already taken of it.
@@ -26,14 +26,11 @@ public sealed class DataBroadcastJob(
     DataBroadcastShelf shelf,
     CaptionSettings settings,
     IntegritySettings mounts,
-    IWatching watching,
     RecordingReadTurn turn,
     IAppEventPublisher events,
     TimeProvider clock,
     ILogger<DataBroadcastJob> logger) : BackgroundService
 {
-    public static readonly TimeSpan NoReservationWithin = TimeSpan.FromMinutes(30);
-
     private int running;
 
     public async Task<DataBroadcastPass> RunAsync(CancellationToken cancellationToken)
@@ -101,8 +98,9 @@ public sealed class DataBroadcastJob(
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IDataBroadcastWorklist worklist = scope.ServiceProvider.GetRequiredService<IDataBroadcastWorklist>();
+        IBusynessReader busyness = scope.ServiceProvider.GetRequiredService<IBusynessReader>();
 
-        if (await BusyAsync(worklist, cancellationToken))
+        if (await BusyAsync(busyness, cancellationToken))
         {
             return DataBroadcastPass.YieldedBeforeReadingAnything();
         }
@@ -117,7 +115,7 @@ public sealed class DataBroadcastJob(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (await BusyAsync(worklist, cancellationToken))
+            if (await BusyAsync(busyness, cancellationToken))
             {
                 tally = tally with { Yielded = true };
 
@@ -169,16 +167,11 @@ public sealed class DataBroadcastJob(
         return requeued;
     }
 
-    private async Task<bool> BusyAsync(IDataBroadcastWorklist worklist, CancellationToken cancellationToken)
+    private async Task<bool> BusyAsync(IBusynessReader busyness, CancellationToken cancellationToken)
     {
-        if (watching.Anyone || await worklist.AnyBeingRecordedAsync(cancellationToken))
-        {
-            return true;
-        }
-
         DateTime now = clock.GetUtcNow().UtcDateTime;
 
-        return await worklist.AnyReservationStartingAsync(now, now + NoReservationWithin, cancellationToken);
+        return Idleness.Judge(await busyness.ReadAsync(now, cancellationToken), now) is not IdleVerdict.Idle;
     }
 
     private async Task<DataBroadcastState?> TakeAsync(

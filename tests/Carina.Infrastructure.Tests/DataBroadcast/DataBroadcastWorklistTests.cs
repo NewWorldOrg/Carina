@@ -7,7 +7,6 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Integrity;
-using Carina.Infrastructure.Tests.Reservations;
 
 namespace Carina.Infrastructure.Tests.DataBroadcast;
 
@@ -19,7 +18,7 @@ public sealed class DataBroadcastWorklistTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-BS-001: a recording still being written has no record due and says something is being recorded")]
+    [Fact(DisplayName = "BR-BS-001: a recording still being written has no record due")]
     public async Task ARecordingStillBeingWrittenHasNoRecordDue()
     {
         OutputRoot alone = Alone();
@@ -27,7 +26,6 @@ public sealed class DataBroadcastWorklistTests(RepositoryDatabase database)
 
         Assert.DoesNotContain(await AwaitingAsync(alone), subject => subject.Id.Equals(recording.Id));
         Assert.Equal(DataBroadcastState.None, (await ReadAsync(recording.Id)).DataBroadcastState);
-        Assert.True(await AskAsync(worklist => worklist.AnyBeingRecordedAsync(Cancel)));
     }
 
     [Theory(DisplayName = "BR-BS-001: a recording that ended has its record coming however it ended, with its file and service")]
@@ -135,18 +133,6 @@ public sealed class DataBroadcastWorklistTests(RepositoryDatabase database)
         Assert.False(await AskAsync(worklist => worklist.LostAsync(gone, Cancel)));
     }
 
-    [Fact(DisplayName = "BR-BS-001: a reservation still to be recorded is found when it starts, its margin included, within the moments asked about")]
-    public async Task AReservationStillToBeRecordedIsFoundWithinTheMomentsAskedAbout()
-    {
-        DateTime starts = new(2031, 3, 1, 12, 0, 0, DateTimeKind.Utc);
-        await PlanAsync(starts, Margin.OfSeconds(600));
-
-        Assert.True(await AskAsync(worklist => worklist.AnyReservationStartingAsync(starts.AddMinutes(-35), starts.AddMinutes(-5), Cancel)));
-        Assert.True(await AskAsync(worklist => worklist.AnyReservationStartingAsync(starts.AddMinutes(-40), starts.AddMinutes(-10), Cancel)));
-        Assert.False(await AskAsync(worklist => worklist.AnyReservationStartingAsync(starts.AddMinutes(-45), starts.AddMinutes(-15), Cancel)));
-        Assert.False(await AskAsync(worklist => worklist.AnyReservationStartingAsync(starts.AddHours(2), starts.AddHours(2).AddMinutes(30), Cancel)));
-    }
-
     private static OutputRoot Alone() => new("databroadcast" + Guid.NewGuid().ToString("N")[..12]);
 
     private async Task<T> AskAsync<T>(Func<DataBroadcastWorklist, Task<T>> ask)
@@ -173,17 +159,6 @@ public sealed class DataBroadcastWorklistTests(RepositoryDatabase database)
         await SettleAsync(recording.Id, RecordingOutcome.Complete, Now.AddHours(1));
 
         return recording;
-    }
-
-    private async Task PlanAsync(DateTime starts, Margin before)
-    {
-        Reservation reservation = ReservationFixtures.Planned(
-            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), startsAt: starts),
-            marginBefore: before);
-
-        await using CarinaDbContext context = database.Open();
-        context.Add(reservation);
-        await context.SaveChangesAsync(Cancel);
     }
 
     private async Task<Recording> AddAsync(OutputRoot root, int eventId, ServiceId? service = null)

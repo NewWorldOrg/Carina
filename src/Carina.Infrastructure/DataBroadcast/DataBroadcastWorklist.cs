@@ -1,7 +1,6 @@
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;
 using Carina.Domain.Recordings;
-using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -44,28 +43,6 @@ public sealed class DataBroadcastWorklist(CarinaDbContext context, TimeProvider 
         return await Coming()
             .Where(recording => !reachable.Contains(recording.OutputRoot))
             .CountAsync(cancellationToken);
-    }
-
-    public Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken)
-        => context.Set<Recording>()
-            .AsNoTracking()
-            .AnyAsync(recording => recording.Outcome == null, cancellationToken);
-
-    public async Task<bool> AnyReservationStartingAsync(DateTime from, DateTime until, CancellationToken cancellationToken)
-    {
-        ArgumentOutOfRangeException.ThrowIfLessThan(until, from);
-
-        DateTime reach = until + Margin.Longest;
-
-        List<Reservation> pending = await context.Set<Reservation>()
-            .AsNoTracking()
-            .Where(reservation => reservation.RecordingOutcome == null
-                                  && (reservation.State == ReservationState.Scheduled || reservation.State == ReservationState.Conflict)
-                                  && reservation.EndAt >= from
-                                  && reservation.StartAt <= reach)
-            .ToListAsync(cancellationToken);
-
-        return pending.Any(reservation => reservation.EffectiveStartAt <= until);
     }
 
     public async Task<IReadOnlyList<RecordingId>> MadeAsync(CancellationToken cancellationToken)

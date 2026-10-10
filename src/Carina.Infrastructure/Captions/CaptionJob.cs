@@ -15,7 +15,8 @@ namespace Carina.Infrastructure.Captions;
 
 /// <summary>
 /// Takes the captions out of ended recordings one at a time, newest first, and keeps them on the shelf.
-/// A pass does not start the next recording while anything is being recorded or watched, reads a recording's
+/// A pass does not start the next recording while anything is being recorded or watched or a reservation starts
+/// soon, as <see cref="Idleness"/> judges it, reads a recording's
 /// file only in its turn among the passes that read recordings through, and first puts
 /// back in the queue any recording whose row says its captions are ready while no record of them is kept.
 /// With room left in the pass, it takes again the captions of ready recordings whose record was kept before
@@ -28,7 +29,6 @@ public sealed class CaptionJob(
     CaptionShelf shelf,
     CaptionSettings settings,
     IntegritySettings mounts,
-    IWatching watching,
     RecordingReadTurn turn,
     IAppEventPublisher events,
     TimeProvider clock,
@@ -103,24 +103,25 @@ public sealed class CaptionJob(
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         ICaptionWorklist worklist = scope.ServiceProvider.GetRequiredService<ICaptionWorklist>();
+        IBusynessReader busyness = scope.ServiceProvider.GetRequiredService<IBusynessReader>();
         Requeued requeued = await RequeueLostAsync(worklist, cancellationToken);
         IReadOnlyList<OutputRoot> withinReach = [.. mounts.OutputRoots.Select(mounted => mounted.Root)];
         IReadOnlyList<CaptionSubject> awaiting =
             await worklist.AwaitingAsync(withinReach, settings.AtMostAPass, cancellationToken);
         int outOfReach = await worklist.WaitingOutOfReachAsync(withinReach, cancellationToken);
 
-        Tally tally = await TakeEachAsync(worklist, awaiting, false, new Tally(), cancellationToken);
+        Tally tally = await TakeEachAsync(worklist, busyness, awaiting, false, new Tally(), cancellationToken);
         IReadOnlyList<CaptionSubject> again = tally.Yielded || awaiting.Count >= settings.AtMostAPass
             ? []
             : await TextlessAsync(worklist, requeued.StillReady, withinReach, settings.AtMostAPass - awaiting.Count, cancellationToken);
 
-        tally = await TakeEachAsync(worklist, again, true, tally, cancellationToken);
+        tally = await TakeEachAsync(worklist, busyness, again, true, tally, cancellationToken);
 
         if (!tally.Yielded)
         {
             Told(await scope.ServiceProvider
                 .GetRequiredService<IArtefactCaptioning>()
-                .CaptionAsync(settings.AtMostAPass, busy => BusyAsync(worklist, busy), cancellationToken));
+                .CaptionAsync(settings.AtMostAPass, busy => BusyAsync(busyness, busy), cancellationToken));
         }
 
         CaptionPass pass = CaptionPass.Of(
@@ -145,6 +146,7 @@ public sealed class CaptionJob(
 
     private async Task<Tally> TakeEachAsync(
         ICaptionWorklist worklist,
+        IBusynessReader busyness,
         IReadOnlyList<CaptionSubject> subjects,
         bool retaking,
         Tally tally,
@@ -159,7 +161,7 @@ public sealed class CaptionJob(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (await BusyAsync(worklist, cancellationToken))
+            if (await BusyAsync(busyness, cancellationToken))
             {
                 return tally with { Yielded = true };
             }
@@ -219,8 +221,12 @@ public sealed class CaptionJob(
         return new Requeued(requeued, stillReady);
     }
 
-    private async Task<bool> BusyAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
-        => watching.Anyone || await worklist.AnyBeingRecordedAsync(cancellationToken);
+    private async Task<bool> BusyAsync(IBusynessReader busyness, CancellationToken cancellationToken)
+    {
+        DateTime now = clock.GetUtcNow().UtcDateTime;
+
+        return Idleness.Judge(await busyness.ReadAsync(now, cancellationToken), now) is not IdleVerdict.Idle;
+    }
 
     private void Told(ArtefactCaptioningRound round)
     {

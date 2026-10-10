@@ -14,14 +14,6 @@ public interface IDataBroadcastWorklist
 
     Task<int> WaitingOutOfReachAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken);
 
-    Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Whether a reservation still to be recorded starts, its margin included, from <paramref name="from"/> up to
-    /// <paramref name="until"/>.
-    /// </summary>
-    Task<bool> AnyReservationStartingAsync(DateTime from, DateTime until, CancellationToken cancellationToken);
-
     /// <summary>
     /// The recordings whose row says their record is made.
     /// </summary>

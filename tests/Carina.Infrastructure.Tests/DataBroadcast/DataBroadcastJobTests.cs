@@ -42,6 +42,15 @@ public sealed class DataBroadcastJobTests : IDisposable
 
     private readonly RecordingReadTurn turn = new();
 
+    private readonly HeldBusyness busyness;
+
+    private DateTime? reservationStartsAt;
+
+    public DataBroadcastJobTests()
+    {
+        busyness = new HeldBusyness(() => new Busyness(worklist.BeingRecorded, watching.Anyone, reservationStartsAt));
+    }
+
     public void Dispose()
     {
         turn.Dispose();
@@ -156,7 +165,7 @@ public sealed class DataBroadcastJobTests : IDisposable
         worklist.FailedWithTriesLeft = 1;
         worklist.BeingRecorded = busy is "recording";
         watching.Anyone = busy is "watching";
-        worklist.ReservationStarting = busy is "reservation";
+        reservationStartsAt = busy is "reservation" ? Now.AddMinutes(30) : Now.AddMinutes(31);
 
         DataBroadcastPass pass = await Job().RunAsync(Cancel);
 
@@ -166,12 +175,12 @@ public sealed class DataBroadcastJobTests : IDisposable
         Assert.Equal(1, worklist.FailedWithTriesLeft);
     }
 
-    [Fact(DisplayName = "BR-BS-001: a reservation is asked about from now to thirty minutes on")]
-    public async Task AReservationIsAskedAboutFromNowToThirtyMinutesOn()
+    [Fact(DisplayName = "BR-BS-001: the machine is asked whether it is idle as of now, before anything is read")]
+    public async Task TheMachineIsAskedWhetherItIsIdleAsOfNow()
     {
         await Job().RunAsync(Cancel);
 
-        Assert.Equal((Now, Now.AddMinutes(30)), worklist.ReservationsAsked);
+        Assert.Equal([Now], busyness.Asked);
     }
 
     [Fact(DisplayName = "BR-BS-001: a pass stops before the next recording once somebody starts watching")]
@@ -296,7 +305,6 @@ public sealed class DataBroadcastJobTests : IDisposable
             new DataBroadcastShelf(chosen),
             chosen,
             new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, recordings)] },
-            watching,
             turn,
             events,
             new HeldClock(Now),
@@ -307,6 +315,7 @@ public sealed class DataBroadcastJobTests : IDisposable
     {
         ServiceCollection services = new();
         services.AddScoped<IDataBroadcastWorklist>(_ => worklist);
+        services.AddScoped<IBusynessReader>(_ => busyness);
 
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
@@ -396,10 +405,6 @@ public sealed class DataBroadcastJobTests : IDisposable
 
         public bool BeingRecorded { get; set; }
 
-        public bool ReservationStarting { get; set; }
-
-        public (DateTime From, DateTime Until)? ReservationsAsked { get; private set; }
-
         public int FailedWithTriesLeft { get; set; }
 
         public int? AskedFor { get; private set; }
@@ -420,15 +425,6 @@ public sealed class DataBroadcastJobTests : IDisposable
 
         public Task<int> WaitingOutOfReachAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken)
             => Task.FromResult(Awaiting.Count(subject => !withinReach.Contains(subject.Root)));
-
-        public Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken) => Task.FromResult(BeingRecorded);
-
-        public Task<bool> AnyReservationStartingAsync(DateTime from, DateTime until, CancellationToken cancellationToken)
-        {
-            ReservationsAsked = (from, until);
-
-            return Task.FromResult(ReservationStarting);
-        }
 
         public Task<IReadOnlyList<RecordingId>> MadeAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<RecordingId>>([.. Made]);

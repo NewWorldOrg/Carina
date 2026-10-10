@@ -439,6 +439,7 @@ public sealed class ServiceCollectionExtensionsTests
             service => ReferenceEquals(service, provider.GetRequiredService<LearningBacklogJob>()));
         Assert.IsType<LearningBacklogReader>(scope.ServiceProvider.GetRequiredService<ILearningBacklog>());
         Assert.IsType<OccupancyReader>(scope.ServiceProvider.GetRequiredService<IOccupancyReader>());
+        Assert.IsType<BusynessReader>(scope.ServiceProvider.GetRequiredService<IBusynessReader>());
         Assert.Same(LearningBacklogSettings.Default, provider.GetRequiredService<LearningBacklogSettings>());
     }
 

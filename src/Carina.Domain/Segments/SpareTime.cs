@@ -1,4 +1,4 @@
-using Carina.Domain.Base;
+using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
@@ -23,35 +23,31 @@ public enum SpareTimeVerdict
 }
 
 /// <summary>
-/// Whether it is spare time for the heavy work of learning: learning is on, nothing is being recorded or
-/// watched, and no reservation starts within <see cref="NoReservationWithin"/>. Otherwise, the first of
-/// those that stands in the way.
+/// Whether it is spare time for the heavy work of learning: learning is on and the machine is idle as
+/// <see cref="Idleness"/> judges it for every pass over ended recordings. Otherwise, the first of those that
+/// stands in the way.
 /// </summary>
 public static class SpareTime
 {
-    public static readonly TimeSpan NoReservationWithin = TimeSpan.FromMinutes(30);
+    public static readonly TimeSpan NoReservationWithin = Idleness.NoReservationWithin;
 
     public static SpareTimeVerdict Judge(Occupancy occupancy, DateTime now)
     {
         ArgumentNullException.ThrowIfNull(occupancy);
 
-        DateTime at = UtcTimes.Required(now, nameof(now));
+        IdleVerdict idle = Idleness.Judge(new Busyness(occupancy.Recording, occupancy.Watching, occupancy.NextReservationStartsAt), now);
 
         if (!occupancy.Learning)
         {
             return SpareTimeVerdict.LearningOff;
         }
 
-        if (occupancy.Recording)
+        return idle switch
         {
-            return SpareTimeVerdict.Recording;
-        }
-
-        if (occupancy.Watching)
-        {
-            return SpareTimeVerdict.Watching;
-        }
-
-        return occupancy.NextReservationStartsAt <= at + NoReservationWithin ? SpareTimeVerdict.ReservationSoon : SpareTimeVerdict.Spare;
+            IdleVerdict.Recording => SpareTimeVerdict.Recording,
+            IdleVerdict.Watching => SpareTimeVerdict.Watching,
+            IdleVerdict.ReservationSoon => SpareTimeVerdict.ReservationSoon,
+            _ => SpareTimeVerdict.Spare,
+        };
     }
 }

@@ -39,6 +39,8 @@ public sealed class CaptionJobTests : IDisposable
 
     private readonly RecordingReadTurn turn = new();
 
+    private DateTime? reservationStartsAt;
+
     public void Dispose()
     {
         turn.Dispose();
@@ -186,6 +188,18 @@ public sealed class CaptionJobTests : IDisposable
         Assert.True(pass.Yielded);
     }
 
+    [Fact(DisplayName = "BR-BS-001: captions are not taken while a reservation starts within thirty minutes, as the data broadcast is not")]
+    public async Task NothingIsStartedWhileAReservationStartsWithinThirtyMinutes()
+    {
+        Recorded();
+        reservationStartsAt = DateTime.UtcNow.AddMinutes(20);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(transcriber.Asked);
+        Assert.True(pass.Yielded);
+    }
+
     [Fact]
     public async Task BrPd016APassAsksAgainBeforeEachRecordingAndStopsOnceSomebodyStartsWatching()
     {
@@ -228,7 +242,6 @@ public sealed class CaptionJobTests : IDisposable
             new CaptionShelf(Settings()),
             Settings(),
             new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, recordings), new StorageRootPath(Elsewhere, recordings)] },
-            watching,
             turn,
             events,
             TimeProvider.System,
@@ -466,7 +479,6 @@ public sealed class CaptionJobTests : IDisposable
             new CaptionShelf(chosen),
             chosen,
             new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, recordings)] },
-            watching,
             turn,
             events,
             TimeProvider.System,
@@ -477,6 +489,7 @@ public sealed class CaptionJobTests : IDisposable
     {
         ServiceCollection services = new();
         services.AddScoped<ICaptionWorklist>(_ => worklist);
+        services.AddScoped<IBusynessReader>(_ => new HeldBusyness(() => new Busyness(worklist.BeingRecorded, watching.Anyone, reservationStartsAt)));
         services.AddScoped<IArtefactCaptioning>(_ => captioning);
 
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
@@ -557,8 +570,6 @@ public sealed class CaptionJobTests : IDisposable
 
         public Task<int> WaitingOutOfReachAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken)
             => Task.FromResult(Awaiting.Count(subject => !withinReach.Contains(subject.Root)));
-
-        public Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken) => Task.FromResult(BeingRecorded);
 
         public Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<RecordingId>>([.. Ready]);

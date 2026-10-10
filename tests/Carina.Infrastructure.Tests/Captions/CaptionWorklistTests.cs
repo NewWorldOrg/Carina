@@ -19,13 +19,12 @@ public sealed class CaptionWorklistTests(RepositoryDatabase database)
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     [Fact]
-    public async Task BrPd016ARecordingStillBeingWrittenIsNotWaitingForCaptionsAndSaysSomethingIsBeingRecorded()
+    public async Task BrPd016ARecordingStillBeingWrittenIsNotWaitingForCaptions()
     {
         OutputRoot alone = Alone();
         Recording recording = await AddAsync(alone, 7201);
 
         Assert.DoesNotContain(await AwaitingAsync(alone), subject => subject.Id.Equals(recording.Id));
-        Assert.True(await AnyBeingRecordedAsync());
     }
 
     [Theory]
@@ -231,13 +230,6 @@ public sealed class CaptionWorklistTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
 
         return await new CaptionWorklist(context, Clock()).AwaitingAsync([within], atMost, Cancel);
-    }
-
-    private async Task<bool> AnyBeingRecordedAsync()
-    {
-        await using CarinaDbContext context = database.Open();
-
-        return await new CaptionWorklist(context, Clock()).AnyBeingRecordedAsync(Cancel);
     }
 
     private async Task CaptionAsync(RecordingId id, CaptionState state, int? pictures, DateTime at)
