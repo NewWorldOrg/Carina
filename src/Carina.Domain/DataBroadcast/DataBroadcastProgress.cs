@@ -6,7 +6,7 @@ namespace Carina.Domain.DataBroadcast;
 /// </summary>
 public sealed record DataBroadcastProgress
 {
-    public const int MostRetries = 3;
+    public const int TriesAtMost = 3;
 
     public DataBroadcastProgress(DataBroadcastState state, int attempts, int? modules)
     {
@@ -43,7 +43,7 @@ public sealed record DataBroadcastProgress
 
     public int? Modules { get; }
 
-    public bool IsRetryDue => State is DataBroadcastState.Failed && Attempts <= MostRetries;
+    public bool IsRetryDue => State is DataBroadcastState.Failed && Attempts < TriesAtMost;
 
     public DataBroadcastProgress RecordingEnded()
     {
@@ -73,7 +73,7 @@ public sealed record DataBroadcastProgress
     {
         if (!IsRetryDue)
         {
-            throw new InvalidOperationException($"A failed record is tried again at most {MostRetries} times.");
+            throw new InvalidOperationException($"A record is tried at most {TriesAtMost} times in all.");
         }
 
         return new DataBroadcastProgress(DataBroadcastState.Coming, Attempts, null);

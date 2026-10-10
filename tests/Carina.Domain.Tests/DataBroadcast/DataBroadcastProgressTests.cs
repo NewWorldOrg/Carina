@@ -28,8 +28,8 @@ public sealed class DataBroadcastProgressTests
         Assert.Equal((DataBroadcastState.Missing, 0, (int?)null), Of(DataBroadcastProgress.NotYet.RecordingEnded().Taken(0)));
     }
 
-    [Fact(DisplayName = "BR-BS-001: a failed record is tried again three times and then stays failed")]
-    public void AFailedRecordIsTriedAgainThreeTimesAndThenStaysFailed()
+    [Fact(DisplayName = "BR-BS-001: a record is tried three times in all and then stays failed, as captions are")]
+    public void ARecordIsTriedThreeTimesInAllAndThenStaysFailed()
     {
         DataBroadcastProgress progress = DataBroadcastProgress.NotYet.RecordingEnded().Failed();
         int retries = 0;
@@ -40,8 +40,8 @@ public sealed class DataBroadcastProgressTests
             retries++;
         }
 
-        Assert.Equal(3, retries);
-        Assert.Equal((DataBroadcastState.Failed, 4, (int?)null), Of(progress));
+        Assert.Equal(2, retries);
+        Assert.Equal((DataBroadcastState.Failed, DataBroadcastProgress.TriesAtMost, (int?)null), Of(progress));
         Assert.Throws<InvalidOperationException>(() => progress.Retried());
     }
 
@@ -62,6 +62,7 @@ public sealed class DataBroadcastProgressTests
         Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.RecordingEnded().Taken(1).Failed());
         Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.RecordingEnded().RecordingEnded());
         Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.Retried());
+        Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.RecordingEnded().Taken(1).RecordingEnded());
     }
 
     [Theory]
