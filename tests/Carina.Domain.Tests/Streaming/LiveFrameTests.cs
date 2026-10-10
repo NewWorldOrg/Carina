@@ -94,7 +94,7 @@ public sealed class LiveFrameTests
     [InlineData(LiveChannel.Sound)]
     [InlineData(LiveChannel.CaptionHeader)]
     [InlineData(LiveChannel.Caption)]
-    [InlineData(LiveChannel.ServiceInformation)]
+    [InlineData(LiveChannel.DataBroadcast)]
     [InlineData(LiveChannel.Control)]
     public void EveryFrameSurvivesTheRoundTripThroughItsBytes(LiveChannel channel)
     {

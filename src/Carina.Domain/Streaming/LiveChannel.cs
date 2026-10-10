@@ -14,7 +14,7 @@ public enum LiveChannel : byte
 
     Caption = 0x21,
 
-    ServiceInformation = 0x30,
+    DataBroadcast = 0x30,
 
     Control = 0x40,
 }
