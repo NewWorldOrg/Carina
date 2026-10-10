@@ -192,7 +192,7 @@ public sealed class DataCarouselsTests
                 Modules = [DiiModule.Of(1, Png.Length, 0)],
             }.ToSection()));
 
-            Assert.Equal(CarouselDefect.BlockSizeOutOfRange, Assert.IsType<CarouselChange.Rejected>(Assert.Single(refused)).Defect);
+            Assert.Equal(CarouselDefect.BlockSizeOutOfRange, Assert.IsType<CarouselChange.IndicationRejected>(Assert.Single(refused)).Defect);
         }
 
         IReadOnlyList<CarouselChange> accepted = carousels.Push(0x7F, CarriedSection.Of(Indication(1, DiiModule.Of(1, Png.Length, 0))));

@@ -319,7 +319,7 @@ public sealed class ModuleAssemblerTests
         IReadOnlyList<CarouselChange> changes = assembler.Accept(Indication(1, blockSize, 0x8000_0004, CssModule(2, 0)));
         IReadOnlyList<CarouselChange> completed = DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock).SelectMany(block => assembler.Accept(Block(block))).ToArray();
 
-        Assert.Equal(CarouselDefect.BlockSizeOutOfRange, Rejected(changes).Defect);
+        Assert.Equal(CarouselDefect.BlockSizeOutOfRange, Assert.IsType<CarouselChange.IndicationRejected>(Assert.Single(changes)).Defect);
         Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(completed));
     }
 

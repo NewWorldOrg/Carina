@@ -46,7 +46,7 @@ public sealed class ModuleAssembler
 
         if (indication.BlockSize is <= 0 or > LargestBlock)
         {
-            return [new CarouselChange.Rejected(ComponentTag, CarouselDefect.BlockSizeOutOfRange, null)];
+            return [new CarouselChange.IndicationRejected(ComponentTag, CarouselDefect.BlockSizeOutOfRange)];
         }
 
         if (indication.Modules.Count > limits.MostModules)

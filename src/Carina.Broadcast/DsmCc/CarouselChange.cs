@@ -35,7 +35,7 @@ public abstract record CarouselChange
 
     public sealed record Rejected : CarouselChange
     {
-        internal Rejected(int componentTag, CarouselDefect defect, int? moduleId)
+        internal Rejected(int componentTag, CarouselDefect defect, int moduleId)
             : base(componentTag)
         {
             Defect = defect;
@@ -44,7 +44,18 @@ public abstract record CarouselChange
 
         public CarouselDefect Defect { get; }
 
-        public int? ModuleId { get; }
+        public int ModuleId { get; }
+    }
+
+    public sealed record IndicationRejected : CarouselChange
+    {
+        internal IndicationRejected(int componentTag, CarouselDefect defect)
+            : base(componentTag)
+        {
+            Defect = defect;
+        }
+
+        public CarouselDefect Defect { get; }
     }
 
     public sealed record Dropped : CarouselChange
