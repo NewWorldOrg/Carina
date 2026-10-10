@@ -16,6 +16,7 @@ public static class RecordingServices
 
         services.AddScoped<IRecordingRepository, RecordingRepository>();
         services.AddScoped<IRecordingDirectory, RecordingDirectory>();
+        services.AddScoped<IBusynessReader, BusynessReader>();
         services.AddScoped<ProgramExtensionFollower>();
         services.TryAddSingleton<EndsAlreadyAsked>();
         services.AddScoped<RecordingRefusalReporter>();

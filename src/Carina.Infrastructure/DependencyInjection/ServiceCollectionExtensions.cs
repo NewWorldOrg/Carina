@@ -233,7 +233,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeAutoRunReader, EncodeAutoRunReader>();
         services.AddScoped<ILearningSwitch, LearningSwitch>();
         services.AddScoped<ILearningWorklist, LearningWorklist>();
-        services.AddScoped<Carina.Domain.Recordings.IBusynessReader, BusynessReader>();
         services.AddScoped<IOccupancyReader, OccupancyReader>();
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
