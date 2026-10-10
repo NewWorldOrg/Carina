@@ -84,6 +84,21 @@ public sealed class DataBroadcastRecord
         => [.. Events.Where(message => message.FiresAt >= from && message.FiresAt < to)];
 
     /// <summary>
+    /// This record told on a clock <paramref name="by"/> ticks along from the one it was gathered on, beginning at
+    /// <paramref name="startsAt"/>: every sighting and every moment an event message fires moved by that much.
+    /// </summary>
+    public DataBroadcastRecord Shifted(long by, long startsAt)
+        => new(
+            startsAt,
+            EntryTag,
+            [.. Carousels.Select(carousel => new RecordedCarousel(
+                carousel.Tag,
+                carousel.DownloadId,
+                [.. carousel.Versions.Select(version => version.Shifted(by))]))],
+            [.. Events.Select(message => message.Shifted(by))],
+            Incomplete);
+
+    /// <summary>
     /// This record within <paramref name="mostBytes"/>: versions that a later version of the same module took the
     /// place of are left out, first seen earliest first, until what is left fits. The latest version of every
     /// module and every version of the startup document stay even when the record still does not fit, and it is

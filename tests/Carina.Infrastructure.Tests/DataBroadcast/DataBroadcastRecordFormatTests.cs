@@ -55,6 +55,31 @@ public sealed class DataBroadcastRecordFormatTests
         Assert.Equal([0x01, 0x02], read.Events[1].PrivateData.ToArray());
     }
 
+    [Fact(DisplayName = "BR-BD-005: a record over its size is written without the oldest superseded version and read back marked incomplete")]
+    public void ARecordOverItsSizeIsWrittenWithoutTheOldestSupersededVersionAndReadBackIncomplete()
+    {
+        DataBroadcastRecord whole = new(0, Entry, [.. Gathered().Carousels], [], false);
+        ModuleVersion oldest = whole.Carousels[0].Versions.Single(version => version is { ModuleId: 3 });
+        DataBroadcastRecord superseding = new(
+            0,
+            Entry,
+            [
+                whole.Carousels[1],
+                new RecordedCarousel(Entry, 1, [.. whole.Carousels[0].Versions, new ModuleVersion(Entry, 3, 2, 1_500_000, 1_800_000, oldest.Resources)]),
+            ],
+            [],
+            false);
+
+        byte[] written = DataBroadcastRecordFormat.Written(superseding.Within(superseding.Bytes - 1));
+        DataBroadcastRecord read = DataBroadcastRecordFormat.Read(written)!;
+
+        Assert.True(read.Incomplete);
+        Assert.Equal(superseding.Bytes - oldest.Bytes, written.Length);
+        Assert.Equal(
+            [(0, 1), (0, 2), (3, 2)],
+            read.Carousels[0].Versions.Select(version => (version.ModuleId, version.Version)));
+    }
+
     [Theory(DisplayName = "BR-BD-005: a resource read back from a record takes the media type and form its kind stands for")]
     [InlineData("text/X-arib-bml", ResourceForm.Text, "text/X-arib-bml", ResourceForm.Text)]
     [InlineData("text/css", ResourceForm.Text, "text/css", ResourceForm.Text)]

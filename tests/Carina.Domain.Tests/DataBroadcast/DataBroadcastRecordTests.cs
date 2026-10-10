@@ -115,6 +115,24 @@ public sealed class DataBroadcastRecordTests
             false));
     }
 
+    [Fact(DisplayName = "BR-BD-005: a record moved onto the recording's own clock moves every sighting and every event message by the same amount")]
+    public void ARecordMovedOntoTheRecordingsClockMovesEveryMomentByTheSameAmount()
+    {
+        long by = -(1L << 33);
+
+        DataBroadcastRecord moved = Record.Shifted(by, -7);
+
+        Assert.Equal(-7, moved.StartsAt);
+        Assert.Equal(
+            Record.Carousels.SelectMany(carousel => carousel.Versions).Select(version => (version.FirstSeen + by, version.LastSeen + by)),
+            moved.Carousels.SelectMany(carousel => carousel.Versions).Select(version => (version.FirstSeen, version.LastSeen)));
+        Assert.Equal(Record.Events.Select(message => message.FiresAt + by), moved.Events.Select(message => message.FiresAt));
+        Assert.Equal((Record.EntryTag, Record.Incomplete, Record.Bytes), (moved.EntryTag, moved.Incomplete, moved.Bytes));
+        Assert.Equal(
+            Record.Carousels.SelectMany(carousel => carousel.Versions).Select(version => version.Resources),
+            moved.Carousels.SelectMany(carousel => carousel.Versions).Select(version => version.Resources));
+    }
+
     [Fact(DisplayName = "BR-BD-005: a record within its size is kept whole")]
     public void ARecordWithinItsSizeIsKeptWhole()
     {
