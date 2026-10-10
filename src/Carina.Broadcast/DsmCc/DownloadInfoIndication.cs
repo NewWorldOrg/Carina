@@ -75,7 +75,7 @@ public sealed class DownloadInfoIndication
             }
         }
 
-        if (!TrySkipLengthPrefixed(span, ref at))
+        if (!TrySkipLengthPrefixed(span, ref at) || at != span.Length)
         {
             return Rejected(TableDefect.LoopOverrun);
         }

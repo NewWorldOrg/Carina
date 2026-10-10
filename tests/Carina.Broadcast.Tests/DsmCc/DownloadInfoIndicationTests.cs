@@ -179,6 +179,19 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.LoopOverrun, Defect(read));
     }
 
+    [Fact(DisplayName = "BR-BV-001: private data that ends short of the message is rejected")]
+    public void PrivateDataThatEndsShortOfTheMessageIsRejected()
+    {
+        TableRead<DownloadInfoIndication> read = Read(new DiiWriter
+        {
+            Modules = [DiiModule.Of(1, 10, 0)],
+            PrivateData = [0x01, 0x02, 0x03],
+            DeclaredPrivateDataLength = 1,
+        });
+
+        Assert.Equal(TableDefect.LoopOverrun, Defect(read));
+    }
+
     [Fact(DisplayName = "BR-BV-001: a broken descriptor in the module information is rejected")]
     public void ABrokenDescriptorInTheModuleInformationIsRejected()
     {

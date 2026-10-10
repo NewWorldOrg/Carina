@@ -41,7 +41,7 @@ internal static class DsmCcMessage
         int adaptationLength = span[9];
         int messageLength = BinaryPrimitives.ReadUInt16BigEndian(span[10..]);
 
-        if (HeaderSize + messageLength > body.Length || adaptationLength > messageLength)
+        if (HeaderSize + messageLength != body.Length || adaptationLength > messageLength)
         {
             defect = TableDefect.LoopOverrun;
 

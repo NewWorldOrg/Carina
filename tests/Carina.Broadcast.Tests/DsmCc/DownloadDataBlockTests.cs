@@ -25,14 +25,12 @@ public sealed class DownloadDataBlockTests
         Assert.Equal([0x10, 0x20, 0x30], read.Data.ToArray());
     }
 
-    [Fact(DisplayName = "BR-BV-001: the data ends where the message length says even with bytes after it")]
-    public void TheDataEndsWhereTheMessageLengthSaysEvenWithBytesAfterIt()
+    [Fact(DisplayName = "BR-BV-001: a message length short of the end of the section is rejected")]
+    public void AMessageLengthShortOfTheEndOfTheSectionIsRejected()
     {
         DdbWriter writer = new() { ModuleId = 1, Data = [0x01, 0x02, 0x03, 0x04], DeclaredMessageLength = 6 + 2 };
 
-        DownloadDataBlock read = Parse(writer);
-
-        Assert.Equal([0x01, 0x02], read.Data.ToArray());
+        Assert.Equal(TableDefect.LoopOverrun, Defect(DownloadDataBlock.Read(CarriedSection.Of(writer.ToSection()))));
     }
 
     [Fact(DisplayName = "BR-BV-001: a message length past the section is rejected")]
@@ -46,9 +44,10 @@ public sealed class DownloadDataBlockTests
     [Fact(DisplayName = "BR-BV-001: a message too short for the block header is rejected")]
     public void AMessageTooShortForTheBlockHeaderIsRejected()
     {
-        DdbWriter writer = new() { ModuleId = 1, Data = [0x01], DeclaredMessageLength = 5 };
+        DdbWriter writer = new() { ModuleId = 1 };
+        byte[] body = DsmCcWriter.Message(DsmCcWriter.DownloadDataBlockMessageId, writer.DownloadId, [0x00, 0x01, 0x00, 0xFF, 0x00]);
 
-        Assert.Equal(TableDefect.SectionTooShort, Defect(DownloadDataBlock.Read(CarriedSection.Of(writer.ToSection()))));
+        Assert.Equal(TableDefect.SectionTooShort, Defect(DownloadDataBlock.Read(CarriedSection.Of(writer.Section(body)))));
     }
 
     [Fact(DisplayName = "BR-BV-001: a message that is not a download data block is rejected")]
