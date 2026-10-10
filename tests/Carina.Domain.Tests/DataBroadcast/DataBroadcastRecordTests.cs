@@ -106,20 +106,71 @@ public sealed class DataBroadcastRecordTests
         Assert.False(Record.Within(DataBroadcastRecord.MostBytes).Incomplete);
     }
 
-    [Fact(DisplayName = "BR-BD-005: a record over its size leaves out the versions first seen earliest and is marked incomplete")]
-    public void ARecordOverItsSizeLeavesOutTheOldestVersionsAndIsMarkedIncomplete()
+    [Fact(DisplayName = "BR-BD-005: a record over its size leaves out the superseded versions first seen earliest and is marked incomplete")]
+    public void ARecordOverItsSizeLeavesOutTheOldestSupersededVersions()
     {
-        long each = Carousels.Version(Carousels.Entry, 0, 1, 0).Bytes;
+        DataBroadcastRecord record = Superseding();
+        long each = Carousels.Version(Carousels.Entry, 1, 1, 0).Bytes;
 
-        DataBroadcastRecord kept = Record.Within((each * 2) + 1);
+        DataBroadcastRecord kept = record.Within(record.Bytes - each);
 
         Assert.True(kept.Incomplete);
-        Assert.Equal(
-            [(Carousels.Entry, 0, 2), (Carousels.Entry, 1, 4)],
-            kept.Carousels.SelectMany(carousel => carousel.Versions).Select(version => (version.Tag, version.ModuleId, version.Version)));
-        Assert.True(kept.Bytes <= (each * 2) + 1);
-        Assert.Equal(Record.Events, kept.Events);
-        Assert.Equal((Record.StartsAt, Record.EntryTag), (kept.StartsAt, kept.EntryTag));
+        Assert.Equal(["40/0/1", "40/1/2", "40/1/3"], Held(kept));
+        Assert.True(kept.Bytes <= record.Bytes - each);
+        Assert.Equal((record.StartsAt, record.EntryTag), (kept.StartsAt, kept.EntryTag));
+        Assert.Equal(record.Events, kept.Events);
+    }
+
+    [Fact(DisplayName = "BR-BD-005: the startup document and the latest version of every module stay even when the record does not fit")]
+    public void TheStartupDocumentAndTheLatestVersionsStay()
+    {
+        DataBroadcastRecord kept = Superseding().Within(0);
+
+        Assert.True(kept.Incomplete);
+        Assert.Equal(["40/0/1", "40/1/3"], Held(kept));
+    }
+
+    [Fact(DisplayName = "BR-BD-005: every version of the startup document stays")]
+    public void EveryVersionOfTheStartupDocumentStays()
+    {
+        DataBroadcastRecord record = new(
+            0,
+            Carousels.Entry,
+            [new RecordedCarousel(Carousels.Entry, 1, [Carousels.Version(Carousels.Entry, 0, 1, 100), Carousels.Version(Carousels.Entry, 0, 2, 200)])],
+            [],
+            false);
+
+        Assert.Equal(["40/0/1", "40/0/2"], Held(record.Within(0)));
+    }
+
+    [Fact(DisplayName = "BR-BD-005: event messages count toward the size of a record")]
+    public void EventMessagesCountTowardTheSize()
+    {
+        DataBroadcastRecord quiet = Superseding();
+        EventMessage loud = new(1, 9, 1, EventTiming.Npt, 500, new byte[1_000]);
+        DataBroadcastRecord record = new(quiet.StartsAt, quiet.EntryTag, quiet.Carousels, [loud], false);
+
+        Assert.Equal(quiet.Bytes + loud.Bytes, record.Bytes);
+        Assert.Equal(EventMessage.FramingBytes + 1_000, loud.Bytes);
+        Assert.False(quiet.Within(quiet.Bytes).Incomplete);
+        Assert.Equal(["40/0/1", "40/1/3"], Held(record.Within(quiet.Bytes)));
+    }
+
+    [Fact(DisplayName = "BR-BD-005: a record is measured by its header, its carousels with their versions, and its event messages")]
+    public void ARecordIsMeasuredByItsHeaderCarouselsVersionsAndEvents()
+    {
+        DataBroadcastRecord empty = new(0, Carousels.Entry, [], [], false);
+        RecordedCarousel carousel = new(Carousels.Entry, 1, [Carousels.Version(Carousels.Entry, 0, 1, 0)]);
+
+        Assert.Equal(DataBroadcastRecord.HeaderBytes + DataBroadcastRecord.EventCountBytes, empty.Bytes);
+        Assert.Equal(22 + 4, empty.Bytes);
+        Assert.Equal(7 + carousel.Versions[0].Bytes, carousel.Bytes);
+    }
+
+    [Fact]
+    public void ASizeBelowNothingIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Record.Within(-1));
     }
 
     [Fact]
@@ -139,7 +190,7 @@ public sealed class DataBroadcastRecordTests
             0,
             [Carousels.Resource("startup.bml", 100), Carousels.Resource("a.png", 20)]);
 
-        Assert.Equal((7 + 11 + 100) + (7 + 5 + 20), version.Bytes);
+        Assert.Equal(23 + (7 + 11 + 100) + (7 + 5 + 20), version.Bytes);
     }
 
     [Fact(DisplayName = "BR-BD-006: of two versions first seen at the same moment, the one that arrived last is played")]
@@ -169,4 +220,25 @@ public sealed class DataBroadcastRecordTests
 
         Assert.Equal([9u, 2u], record.Carousels.Select(carousel => carousel.DownloadId));
     }
+
+    private static DataBroadcastRecord Superseding()
+        => new(
+            0,
+            Carousels.Entry,
+            [
+                new RecordedCarousel(
+                    Carousels.Entry,
+                    1,
+                    [
+                        Carousels.Version(Carousels.Entry, 0, 1, 50),
+                        Carousels.Version(Carousels.Entry, 1, 1, 100),
+                        Carousels.Version(Carousels.Entry, 1, 2, 200),
+                        Carousels.Version(Carousels.Entry, 1, 3, 300),
+                    ]),
+            ],
+            [],
+            false);
+
+    private static IReadOnlyList<string> Held(DataBroadcastRecord record)
+        => [.. record.Carousels.SelectMany(carousel => carousel.Versions).Select(version => $"{version.Tag:x2}/{version.ModuleId}/{version.Version}")];
 }

@@ -7,6 +7,8 @@ namespace Carina.Domain.DataBroadcast;
 /// </summary>
 public sealed record RecordedCarousel
 {
+    public const int HeaderBytes = sizeof(byte) + sizeof(uint) + sizeof(ushort);
+
     public RecordedCarousel(int tag, uint downloadId, IReadOnlyList<ModuleVersion> versions)
     {
         ArgumentNullException.ThrowIfNull(versions);
@@ -33,4 +35,6 @@ public sealed record RecordedCarousel
     public uint DownloadId { get; }
 
     public IReadOnlyList<ModuleVersion> Versions { get; }
+
+    public long Bytes => HeaderBytes + Versions.Sum(version => version.Bytes);
 }

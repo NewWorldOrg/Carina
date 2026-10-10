@@ -11,6 +11,10 @@ public sealed class DataBroadcastRecord
 {
     public const long MostBytes = 256L * 1024 * 1024;
 
+    public const int HeaderBytes = 8 + sizeof(ushort) + sizeof(long) + sizeof(byte) + sizeof(byte) + sizeof(ushort);
+
+    public const int EventCountBytes = sizeof(uint);
+
     public DataBroadcastRecord(
         long startsAt,
         int entryTag,
@@ -48,7 +52,14 @@ public sealed class DataBroadcastRecord
     public int Modules
         => Carousels.Sum(carousel => carousel.Versions.Select(version => version.ModuleId).Distinct().Count());
 
-    public long Bytes => Carousels.Sum(carousel => carousel.Versions.Sum(version => version.Bytes));
+    /// <summary>
+    /// The bytes it takes: its header, every carousel with its versions, and every event message.
+    /// </summary>
+    public long Bytes
+        => HeaderBytes
+           + Carousels.Sum(carousel => carousel.Bytes)
+           + EventCountBytes
+           + Events.Sum(message => message.Bytes);
 
     /// <summary>
     /// For each module, the version first seen latest at or before <paramref name="at"/>, and of versions first
@@ -73,8 +84,10 @@ public sealed class DataBroadcastRecord
         => [.. Events.Where(message => message.FiresAt >= from && message.FiresAt < to)];
 
     /// <summary>
-    /// This record within <paramref name="mostBytes"/>, leaving out the versions first seen earliest until
-    /// what is left fits, and marked incomplete when anything was left out.
+    /// This record within <paramref name="mostBytes"/>: versions that a later version of the same module took the
+    /// place of are left out, first seen earliest first, until what is left fits. The latest version of every
+    /// module and every version of the startup document stay even when the record still does not fit, and it is
+    /// marked incomplete whenever it was over.
     /// </summary>
     public DataBroadcastRecord Within(long mostBytes)
     {
@@ -89,7 +102,7 @@ public sealed class DataBroadcastRecord
 
         HashSet<ModuleVersion> leftOut = new(ReferenceEqualityComparer.Instance);
 
-        foreach (ModuleVersion version in Oldest())
+        foreach (ModuleVersion version in Superseded())
         {
             if (over <= 0)
             {
@@ -111,10 +124,16 @@ public sealed class DataBroadcastRecord
             true);
     }
 
-    private IEnumerable<ModuleVersion> Oldest()
-        => Carousels
+    private IEnumerable<ModuleVersion> Superseded()
+    {
+        HashSet<ModuleVersion> latest = new(VersionsAt(long.MaxValue), ReferenceEqualityComparer.Instance);
+
+        return Carousels
             .SelectMany(carousel => carousel.Versions)
-            .OrderBy(version => version.FirstSeen)
-            .ThenBy(version => version.Tag)
-            .ThenBy(version => version.ModuleId);
+            .Where(version => !latest.Contains(version) && !IsStartupDocument(version))
+            .OrderBy(version => version.FirstSeen);
+    }
+
+    private bool IsStartupDocument(ModuleVersion version)
+        => version.Tag == EntryTag && version.ModuleId == CarouselCatalog.StartupModuleId;
 }

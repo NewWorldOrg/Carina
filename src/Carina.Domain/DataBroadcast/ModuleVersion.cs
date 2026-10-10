@@ -6,6 +6,8 @@ namespace Carina.Domain.DataBroadcast;
 /// </summary>
 public sealed record ModuleVersion
 {
+    public const int HeaderBytes = sizeof(ushort) + sizeof(byte) + sizeof(ulong) + sizeof(ulong) + sizeof(uint);
+
     public ModuleVersion(int tag, int moduleId, int version, long firstSeen, long lastSeen, IReadOnlyList<CarouselResource> resources)
     {
         ArgumentNullException.ThrowIfNull(resources);
@@ -44,7 +46,10 @@ public sealed record ModuleVersion
 
     public IReadOnlyList<CarouselResource> Resources { get; }
 
-    public long Bytes => Resources.Sum(resource => resource.Bytes);
+    /// <summary>
+    /// The bytes it takes in a record: its module id, version, sightings and length, and each resource.
+    /// </summary>
+    public long Bytes => HeaderBytes + Resources.Sum(resource => resource.Bytes);
 
     public ModuleVersion SeenAt(long at) => at <= LastSeen ? this : this with { LastSeen = at };
 

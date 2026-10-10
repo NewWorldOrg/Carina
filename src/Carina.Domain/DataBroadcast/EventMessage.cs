@@ -6,6 +6,8 @@ namespace Carina.Domain.DataBroadcast;
 /// </summary>
 public sealed record EventMessage
 {
+    public const int FramingBytes = sizeof(byte) + sizeof(ushort) + sizeof(ushort) + sizeof(byte) + sizeof(byte) + sizeof(ulong) + sizeof(ushort);
+
     public EventMessage(int group, int id, int messageType, EventTiming timing, long firesAt, ReadOnlyMemory<byte> privateData)
     {
         if (!Enum.IsDefined(timing))
@@ -36,4 +38,10 @@ public sealed record EventMessage
     public TimeSpan At => StreamClock.ToTime(FiresAt);
 
     public ReadOnlyMemory<byte> PrivateData { get; }
+
+    /// <summary>
+    /// The bytes it takes in a record: its kind, group, id, type, timing, moment and the length of its private
+    /// data, and the private data.
+    /// </summary>
+    public long Bytes => FramingBytes + (long)PrivateData.Length;
 }
