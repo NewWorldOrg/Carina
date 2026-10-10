@@ -129,7 +129,7 @@ public sealed class DataBroadcastTap
             return;
         }
 
-        if (read.Pid == clockPid && read.ProgramClockReference is { } reference)
+        if (read.Pid == clockPid && !read.TransportError && read.ProgramClockReference is { } reference)
         {
             clock.Follow(reference);
         }

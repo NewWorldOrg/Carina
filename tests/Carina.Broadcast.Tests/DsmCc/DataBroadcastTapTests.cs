@@ -146,6 +146,19 @@ public sealed class DataBroadcastTapTests
         Assert.Equal(2 * Second, Assert.Single(tap.Push(new CarouselBroadcast().At(2 * Second, ElsewherePid).Bytes)).At);
     }
 
+    [Fact(DisplayName = "BR-BD-004: a programme clock carried in a packet the demodulator marked as broken is not followed")]
+    public void AClockInAPacketMarkedBrokenIsNotFollowed()
+    {
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+
+        Assert.Empty(tap.Push(new CarouselBroadcast().Associated().Mapped().At(Second, transportError: true).Bytes));
+        Assert.Null(tap.Now);
+
+        tap.Push(new CarouselBroadcast().At(2 * Second).At(5 * Second, transportError: true).Bytes);
+
+        Assert.Equal(2 * Second, tap.Now);
+    }
+
     private static IReadOnlyList<string> Described(IEnumerable<DataBroadcastRead> reads)
         => [.. reads.Select(read => read switch
         {

@@ -73,12 +73,12 @@ public sealed class CarouselBroadcast
             new SectionWriter { TableId = map.TableId, TableIdExtension = map.TableIdExtension, VersionNumber = version, Body = map.Body }.ToBytes());
     }
 
-    public CarouselBroadcast At(long reference, int clockPid = ClockPid)
+    public CarouselBroadcast At(long reference, int clockPid = ClockPid, bool transportError = false)
     {
         TransportStreamWriter writer = Writer(clockPid);
         int before = writer.Packets.Count;
 
-        writer.Packet(null, [], AdaptationForTheClock, programmeClock: reference);
+        writer.Packet(null, [], AdaptationForTheClock, transportError: transportError, programmeClock: reference);
         packets.AddRange(writer.Packets.Skip(before));
 
         return this;
