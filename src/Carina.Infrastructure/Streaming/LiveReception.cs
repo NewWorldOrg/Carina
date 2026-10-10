@@ -4,6 +4,9 @@ using System.Threading.Channels;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.DataBroadcast;
+
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Streaming;
 
@@ -28,6 +31,8 @@ internal sealed class LiveReception
 
     private readonly TimeProvider clock;
 
+    private readonly ILogger logger;
+
     private readonly Action<LiveReception> forget;
 
     private readonly CancellationTokenSource stopping = new();
@@ -46,12 +51,15 @@ internal sealed class LiveReception
 
     private bool captionsMissing;
 
+    private DataBroadcastSession? dataBroadcast;
+
     internal LiveReception(
         NetworkId network,
         ServiceId service,
         ILiveSupply supply,
         LiveSessionSettings settings,
         TimeProvider clock,
+        ILogger logger,
         Action<LiveReception> forget)
     {
         this.network = network;
@@ -59,6 +67,7 @@ internal sealed class LiveReception
         this.supply = supply;
         this.settings = settings;
         this.clock = clock;
+        this.logger = logger;
         this.forget = forget;
     }
 
@@ -123,6 +132,51 @@ internal sealed class LiveReception
         {
             captionsMissing = true;
         }
+    }
+
+    /// <summary>
+    /// Shows the channel's data broadcast to the fan-out, taking the one seat the data broadcast reads from
+    /// the first time it is asked for.
+    /// </summary>
+    internal void ShowDataBroadcastTo(LiveFanout fanout)
+    {
+        DataBroadcastSession shown;
+
+        lock (gate)
+        {
+            if (closed)
+            {
+                return;
+            }
+
+            if (dataBroadcast is null)
+            {
+                dataBroadcast = new DataBroadcastSession(service, logger);
+                seats.Add(new LiveSeat(
+                    dataBroadcast.Seat,
+                    static () => { },
+                    LeftBehindByTheDataBroadcast,
+                    settings.LongestWaitToBeFed,
+                    settings.MostBytesWaitingToBeFed,
+                    clock));
+            }
+
+            shown = dataBroadcast;
+        }
+
+        shown.Show(fanout);
+    }
+
+    internal void StopShowingDataBroadcastTo(LiveFanout fanout)
+    {
+        DataBroadcastSession? shown;
+
+        lock (gate)
+        {
+            shown = dataBroadcast;
+        }
+
+        shown?.StopShowing(fanout);
     }
 
     internal bool Attach()
@@ -222,6 +276,14 @@ internal sealed class LiveReception
     {
         forget(this);
         stopping.Cancel();
+    }
+
+    private void LeftBehindByTheDataBroadcast(LiveSupplyEnding why)
+    {
+        if (why.Why is LiveSupplyEnd.TranscoderFellBehind)
+        {
+            logger.LogWarning("The data broadcast of service {Service} fell behind the reading and stopped being read: {Note}", service.Value, why.Note);
+        }
     }
 
     private LiveSeat Take(

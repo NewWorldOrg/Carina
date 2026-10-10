@@ -329,7 +329,7 @@ public sealed class LiveSessionManager(
             return reading;
         }
 
-        LiveReception raised = new(network, service, supply, settings, clock, Forget);
+        LiveReception raised = new(network, service, supply, settings, clock, logger, Forget);
 
         receptions[channel] = raised;
         raised.Attach();

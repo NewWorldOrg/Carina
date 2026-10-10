@@ -313,6 +313,7 @@ internal sealed class LiveSession
         }
 
         startup.Reach(LiveStartupSegment.TunerSecured);
+        reception.ShowDataBroadcastTo(fanout);
 
         return await StartTranscodingAsync(
             reception.CaptionsMissing ? CaptionOutlet.None : CaptionOutlet.Drawn,
@@ -549,6 +550,7 @@ internal sealed class LiveSession
         }
         finally
         {
+            reception.StopShowingDataBroadcastTo(fanout);
             fanout.End();
             reception.Detach();
         }
