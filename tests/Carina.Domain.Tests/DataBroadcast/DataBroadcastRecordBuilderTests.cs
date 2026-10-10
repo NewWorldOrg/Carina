@@ -63,6 +63,49 @@ public sealed class DataBroadcastRecordBuilderTests
         Assert.Equal(0, record.Modules);
     }
 
+    [Fact(DisplayName = "BR-BD-005: the versions still valid when the recording ends are last seen at its end")]
+    public void TheVersionsStillValidAtTheEndAreLastSeenThere()
+    {
+        DataBroadcastRecord record = ReadFrom(
+            0,
+            1_000,
+            (Carousels.Carried(), 0),
+            (Carousels.Listing(Carousels.Entry, (0, 1), (1, 1)), 0),
+            (Carousels.Completed(Carousels.Entry, 0, 1), 100),
+            (Carousels.Completed(Carousels.Entry, 1, 1), 200),
+            (Carousels.Listing(Carousels.Entry, 1, [], (0, 1)), 300));
+
+        Assert.Equal(
+            [(0, 1_000L), (1, 200L)],
+            Assert.Single(record.Carousels).Versions.Select(version => (version.ModuleId, version.LastSeen)));
+    }
+
+    [Fact]
+    public void NothingIsValidAtTheEndOfARecordingWhoseDataBroadcastWentAway()
+    {
+        DataBroadcastRecordBuilder builder = new();
+        CarouselState state = new();
+
+        foreach ((CarouselSignal signal, long at) in new (CarouselSignal, long)[]
+                 {
+                     (Carousels.Carried(), 0),
+                     (Carousels.Listing(Carousels.Entry, (0, 1)), 0),
+                     (Carousels.Completed(Carousels.Entry, 0, 1), 100),
+                     (new CarouselSignal.NotCarried(), 200),
+                 })
+        {
+            Take(state, builder, signal, at);
+        }
+
+        Assert.Equal(100L, Assert.Single(Assert.Single(builder.Build(0, 1_000)!.Carousels).Versions).LastSeen);
+    }
+
+    [Fact]
+    public void ARecordingEndsNoEarlierThanItStarts()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DataBroadcastRecordBuilder().Build(10, 9));
+    }
+
     [Fact(DisplayName = "BR-BD-005: a version put together again with other content takes the place of what was held")]
     public void AVersionPutTogetherAgainWithOtherContentTakesItsPlace()
     {
@@ -133,31 +176,36 @@ public sealed class DataBroadcastRecordBuilderTests
             builder.Take(delta, 0);
         }
 
-        Assert.Null(builder.Build(0));
+        Assert.Null(builder.Build(0, 0));
     }
 
     [Fact]
     public void TheRecordBeginsWhereItIsToldTo()
     {
-        Assert.Equal(12_345L, ReadFrom(12_345, (Carousels.Carried(), 0)).StartsAt);
+        Assert.Equal(12_345L, ReadFrom(12_345, 12_345, (Carousels.Carried(), 12_345)).StartsAt);
     }
 
     private static DataBroadcastRecord Read(params (CarouselSignal Signal, long At)[] signals)
-        => ReadFrom(0, signals);
+        => ReadFrom(0, signals.Max(signal => signal.At), signals);
 
-    private static DataBroadcastRecord ReadFrom(long startsAt, params (CarouselSignal Signal, long At)[] signals)
+    private static DataBroadcastRecord ReadFrom(long startsAt, long endsAt, params (CarouselSignal Signal, long At)[] signals)
     {
         CarouselState state = new();
         DataBroadcastRecordBuilder builder = new();
 
         foreach ((CarouselSignal signal, long at) in signals)
         {
-            foreach (CarouselDelta delta in state.Apply(signal, at))
-            {
-                builder.Take(delta, at);
-            }
+            Take(state, builder, signal, at);
         }
 
-        return builder.Build(startsAt) ?? throw new InvalidOperationException("A catalog was read.");
+        return builder.Build(startsAt, endsAt) ?? throw new InvalidOperationException("A catalog was read.");
+    }
+
+    private static void Take(CarouselState state, DataBroadcastRecordBuilder builder, CarouselSignal signal, long at)
+    {
+        foreach (CarouselDelta delta in state.Apply(signal, at))
+        {
+            builder.Take(delta, at);
+        }
     }
 }

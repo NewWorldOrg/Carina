@@ -11,6 +11,7 @@ public sealed class DataBroadcastRecordBuilder
     private readonly List<CarouselKey> carousels = [];
     private readonly List<VersionKey> arrivals = [];
     private readonly Dictionary<VersionKey, ModuleVersion> versions = [];
+    private readonly HashSet<VersionKey> valid = [];
     private readonly List<EventMessage> events = [];
 
     private int? entryTag;
@@ -34,11 +35,14 @@ public sealed class DataBroadcastRecordBuilder
                 events.Add(came.Message);
 
                 break;
-            case CarouselDelta.CarouselDropped:
+            case CarouselDelta.CarouselDropped dropped:
                 incomplete = true;
+                valid.RemoveWhere(key => key.Carousel.Tag == dropped.Tag);
 
                 break;
             case CarouselDelta.Absent:
+                valid.Clear();
+
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(delta), delta, "A change is one of the kinds named.");
@@ -46,14 +50,21 @@ public sealed class DataBroadcastRecordBuilder
     }
 
     /// <summary>
-    /// The record as gathered, beginning at <paramref name="startsAt"/>, or nothing when no catalog was ever
-    /// read.
+    /// The record as gathered from <paramref name="startsAt"/> to <paramref name="endsAt"/>, the versions still
+    /// valid at the end last seen there, or nothing when no catalog was ever read.
     /// </summary>
-    public DataBroadcastRecord? Build(long startsAt)
+    public DataBroadcastRecord? Build(long startsAt, long endsAt)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(endsAt, startsAt);
+
         if (entryTag is not { } tag)
         {
             return null;
+        }
+
+        foreach (VersionKey key in valid)
+        {
+            SeeAgain(key, endsAt);
         }
 
         return new DataBroadcastRecord(
@@ -70,6 +81,7 @@ public sealed class DataBroadcastRecordBuilder
     private void Hold(CarouselCatalog catalog, long at)
     {
         entryTag = catalog.EntryTag;
+        valid.Clear();
 
         foreach (CatalogCarousel carousel in catalog.Carousels)
         {
@@ -77,7 +89,10 @@ public sealed class DataBroadcastRecordBuilder
 
             foreach (CatalogModule module in carousel.Modules.Where(module => module.Arrived))
             {
-                SeeAgain(new VersionKey(listed, module.Id, module.Version), at);
+                VersionKey key = new(listed, module.Id, module.Version);
+
+                SeeAgain(key, at);
+                valid.Add(key);
             }
         }
     }
@@ -92,6 +107,7 @@ public sealed class DataBroadcastRecordBuilder
         }
 
         versions[key] = module;
+        valid.Add(key);
         arrivals.Remove(key);
         arrivals.Add(key);
     }
