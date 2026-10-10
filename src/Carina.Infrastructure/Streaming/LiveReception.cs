@@ -291,6 +291,10 @@ internal sealed class LiveReception
         }
     }
 
+    /// <summary>
+    /// A seat at the reading, let go of at once when the reading has already closed, since nothing would be
+    /// written into it or end it.
+    /// </summary>
     private LiveSeat Take(
         Stream into,
         Action locked,
@@ -299,10 +303,21 @@ internal sealed class LiveReception
         long mostHeld)
     {
         LiveSeat seat = new(into, locked, ended, patience, mostHeld, clock);
+        bool late;
 
         lock (gate)
         {
-            seats.Add(seat);
+            late = closed;
+
+            if (!late)
+            {
+                seats.Add(seat);
+            }
+        }
+
+        if (late)
+        {
+            seat.LetGo();
         }
 
         return seat;
