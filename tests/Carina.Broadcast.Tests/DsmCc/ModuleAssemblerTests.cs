@@ -60,12 +60,12 @@ public sealed class ModuleAssemblerTests
         Assert.Empty(Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes)).Module.Resources.Single().Body.ToArray());
     }
 
-    [Fact(DisplayName = "BR-BV-003: a block before any indication is discarded")]
-    public void ABlockBeforeAnyIndicationIsDiscarded()
+    [Fact(DisplayName = "BR-BV-003: a block before any indication is discarded without being reported, as it is right after tuning")]
+    public void ABlockBeforeAnyIndicationIsDiscardedWithoutBeingReportedAsItIsRightAfterTuning()
     {
         ModuleAssembler assembler = new(EntryTag);
 
-        Assert.Equal(CarouselDefect.NotInCatalogue, Rejected(assembler.Accept(Block(new DdbWriter { ModuleId = 1, Data = [0x00] }.ToSection()))).Defect);
+        Assert.Empty(assembler.Accept(Block(new DdbWriter { ModuleId = 1, Data = [0x00] }.ToSection())));
     }
 
     [Fact(DisplayName = "BR-BV-003: a block of a module the indication does not list is discarded")]
@@ -337,7 +337,7 @@ public sealed class ModuleAssemblerTests
         CarouselChange.Dropped dropped = Assert.IsType<CarouselChange.Dropped>(Assert.Single(changes));
         Assert.Equal(CarouselDefect.TooManyModules, dropped.Defect);
         Assert.Equal(0, assembler.DeclaredSize);
-        Assert.Equal(CarouselDefect.NotInCatalogue, Rejected(assembler.Accept(Block(DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock)[0]))).Defect);
+        Assert.Empty(assembler.Accept(Block(DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock)[0])));
     }
 
     [Fact(DisplayName = "BR-BV-002: the limits are sixteen carousels, five hundred and twelve modules, sixteen and sixty-four mebibytes and a thousand and twenty-four parts")]

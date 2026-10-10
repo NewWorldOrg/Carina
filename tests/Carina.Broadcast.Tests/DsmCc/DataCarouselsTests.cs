@@ -122,7 +122,7 @@ public sealed class DataCarouselsTests
         IReadOnlyList<CarouselChange> block = carousels.Push(EntryTag, CarriedSection.Of(DsmCcWriter.Blocks(1, 1, 0, Png, 64)[0]));
         IReadOnlyList<CarouselChange> indication = carousels.Push(EntryTag, CarriedSection.Of(Indication(1, DiiModule.Of(1, Png.Length, 0))));
 
-        Assert.DoesNotContain(block, change => change is CarouselChange.ModuleCompleted);
+        Assert.Empty(block);
         Assert.IsType<CarouselChange.CatalogueUpdated>(Assert.Single(indication));
     }
 
@@ -140,14 +140,12 @@ public sealed class DataCarouselsTests
         Assert.Equal(CarouselDefect.VersionMismatch, Assert.IsType<CarouselChange.Rejected>(Assert.Single(other)).Defect);
     }
 
-    [Fact(DisplayName = "BR-BV-003: a block on a tag with no carousel is discarded")]
-    public void ABlockOnATagWithNoCarouselIsDiscarded()
+    [Fact(DisplayName = "BR-BV-003: a block on a tag with no carousel yet is discarded without being reported")]
+    public void ABlockOnATagWithNoCarouselYetIsDiscardedWithoutBeingReported()
     {
         DataCarousels carousels = new();
 
-        IReadOnlyList<CarouselChange> changes = carousels.Push(OtherTag, CarriedSection.Of(DsmCcWriter.Blocks(1, 1, 0, Png, 64)[0]));
-
-        Assert.Equal(CarouselDefect.NotInCatalogue, Assert.IsType<CarouselChange.Rejected>(Assert.Single(changes)).Defect);
+        Assert.Empty(carousels.Push(OtherTag, CarriedSection.Of(DsmCcWriter.Blocks(1, 1, 0, Png, 64)[0])));
     }
 
     [Fact(DisplayName = "BR-BD-003: stream descriptors and other tables are left to their own readers")]

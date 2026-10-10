@@ -77,9 +77,7 @@ public sealed class DataCarousels
             return Unreadable(componentTag, read);
         }
 
-        return carousels.TryGetValue(componentTag, out ModuleAssembler? assembler)
-            ? assembler.Accept(parsed.Table)
-            : [new CarouselChange.Rejected(componentTag, CarouselDefect.NotInCatalogue, parsed.Table.ModuleId)];
+        return carousels.TryGetValue(componentTag, out ModuleAssembler? assembler) ? assembler.Accept(parsed.Table) : Nothing;
     }
 
     private static IReadOnlyList<CarouselChange> Unreadable<TTable>(int componentTag, TableRead<TTable> read)

@@ -81,7 +81,12 @@ public sealed class ModuleAssembler
     {
         ArgumentNullException.ThrowIfNull(block);
 
-        if (current is null || block.DownloadId != current.DownloadId || !admitted.TryGetValue(block.ModuleId, out ModuleInfo? module))
+        if (current is null)
+        {
+            return Nothing;
+        }
+
+        if (block.DownloadId != current.DownloadId || !admitted.TryGetValue(block.ModuleId, out ModuleInfo? module))
         {
             return Rejected(CarouselDefect.NotInCatalogue, block.ModuleId);
         }
