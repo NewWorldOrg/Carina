@@ -79,6 +79,20 @@ public sealed record DataBroadcastProgress
         return new DataBroadcastProgress(DataBroadcastState.Coming, Attempts, null);
     }
 
+    /// <summary>
+    /// The record taken again from a recording descrambled after it was taken, whether it was made, missing, or
+    /// failed.
+    /// </summary>
+    public DataBroadcastProgress Descrambled()
+    {
+        if (State is not (DataBroadcastState.Made or DataBroadcastState.Missing or DataBroadcastState.Failed))
+        {
+            throw new InvalidOperationException("Only a record already taken is taken again once its recording is descrambled.");
+        }
+
+        return new DataBroadcastProgress(DataBroadcastState.Coming, Attempts, null);
+    }
+
     private void Expect(DataBroadcastState expected, string message)
     {
         if (State != expected)

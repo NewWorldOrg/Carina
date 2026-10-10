@@ -65,6 +65,34 @@ public sealed class DataBroadcastProgressTests
         Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.RecordingEnded().Taken(1).RecordingEnded());
     }
 
+    [Theory(DisplayName = "BR-BS-001: a record already taken is taken again once its recording is descrambled")]
+    [InlineData(1)]
+    [InlineData(0)]
+    public void ARecordAlreadyTakenIsTakenAgainOnceDescrambled(int modules)
+    {
+        DataBroadcastProgress taken = DataBroadcastProgress.NotYet.RecordingEnded().Taken(modules);
+
+        Assert.Equal((DataBroadcastState.Coming, 0, (int?)null), Of(taken.Descrambled()));
+    }
+
+    [Fact(DisplayName = "BR-BS-001: a record that failed every try is tried once more once its recording is descrambled")]
+    public void ARecordThatFailedEveryTryIsTriedOnceMoreOnceDescrambled()
+    {
+        DataBroadcastProgress failed = DataBroadcastProgress.NotYet.RecordingEnded().Failed().Retried().Failed().Retried().Failed();
+
+        DataBroadcastProgress again = failed.Descrambled();
+
+        Assert.Equal((DataBroadcastState.Coming, 3, (int?)null), Of(again));
+        Assert.False(again.Failed().IsRetryDue);
+    }
+
+    [Fact]
+    public void ARecordNotYetTakenIsNotTakenAgain()
+    {
+        Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.Descrambled());
+        Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.RecordingEnded().Descrambled());
+    }
+
     [Theory]
     [InlineData(DataBroadcastState.Made, 0, null)]
     [InlineData(DataBroadcastState.Missing, 0, 3)]
