@@ -66,7 +66,12 @@ public sealed class ModuleAssembler
         int[] withdrawn = admitted.Keys.Where(moduleId => !next.ContainsKey(moduleId)).Order().ToArray();
         bool sameDownload = current?.DownloadId == indication.DownloadId;
 
-        Forget(moduleId => !sameDownload || !next.TryGetValue(moduleId, out ModuleInfo? kept) || Held(moduleId) != HeldModule.Of(kept, indication.BlockSize));
+        Forget(
+            pending,
+            moduleId => !sameDownload || !next.TryGetValue(moduleId, out ModuleInfo? kept) || pending[moduleId].Held != HeldModule.Of(kept, indication.BlockSize));
+        Forget(
+            completed,
+            moduleId => !sameDownload || !next.TryGetValue(moduleId, out ModuleInfo? kept) || !completed[moduleId].HoldsTheSameContentAs(kept));
         admitted = next;
         current = indication;
         DeclaredSize = total;
@@ -190,26 +195,11 @@ public sealed class ModuleAssembler
         return BlockCount(module.ModuleSize, blockSize) > MostBlocks ? CarouselDefect.BlockCountOutOfRange : null;
     }
 
-    private HeldModule? Held(int moduleId)
+    private static void Forget<TValue>(Dictionary<int, TValue> held, Func<int, bool> stale)
     {
-        if (pending.TryGetValue(moduleId, out PendingModule? assembling))
+        foreach (int moduleId in held.Keys.Where(stale).ToArray())
         {
-            return assembling.Held;
-        }
-
-        return completed.TryGetValue(moduleId, out HeldModule? held) ? held : null;
-    }
-
-    private void Forget(Func<int, bool> stale)
-    {
-        foreach (int moduleId in pending.Keys.Where(stale).ToArray())
-        {
-            pending.Remove(moduleId);
-        }
-
-        foreach (int moduleId in completed.Keys.Where(stale).ToArray())
-        {
-            completed.Remove(moduleId);
+            held.Remove(moduleId);
         }
     }
 

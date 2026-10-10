@@ -227,6 +227,19 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(Css, Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes)).Module.Resources.Single().Body.ToArray());
     }
 
+    [Fact(DisplayName = "BR-BS-002: a completed module is not completed again when only the block size changes")]
+    public void ACompletedModuleIsNotCompletedAgainWhenOnlyTheBlockSizeChanges()
+    {
+        ModuleAssembler assembler = new(EntryTag);
+        assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
+        _ = DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock).SelectMany(block => assembler.Accept(Block(block))).ToArray();
+
+        assembler.Accept(Indication(1, SmallBlock * 2, 0x8000_0004, CssModule(1, 0)));
+        IReadOnlyList<CarouselChange> again = DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock * 2).SelectMany(block => assembler.Accept(Block(block))).ToArray();
+
+        Assert.Empty(again);
+    }
+
     [Fact(DisplayName = "BR-BS-002: a completed module whose size changes under the same version is completed again")]
     public void ACompletedModuleWhoseSizeChangesUnderTheSameVersionIsCompletedAgain()
     {
