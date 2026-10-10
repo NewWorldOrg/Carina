@@ -12,7 +12,7 @@ public sealed record BxmlInfo
 
     public int TransmissionFormat { get; private init; }
 
-    public bool IsEntryPoint { get; private init; }
+    public bool EntryPointFlag { get; private init; }
 
     public bool AutoStart { get; private init; }
 
@@ -46,11 +46,11 @@ public sealed record BxmlInfo
         BxmlInfo read = new()
         {
             TransmissionFormat = info[0] >> 6,
-            IsEntryPoint = (info[0] & 0x20) != 0,
+            EntryPointFlag = (info[0] & 0x20) != 0,
         };
         int at = 1;
 
-        if (read.IsEntryPoint && !TryReadEntry(info, ref at, ref read))
+        if (read.EntryPointFlag && !TryReadEntry(info, ref at, ref read))
         {
             return null;
         }

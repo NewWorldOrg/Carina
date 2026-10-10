@@ -6,7 +6,7 @@ public sealed class DataBroadcastService
     {
         Streams = streams;
         Defects = defects;
-        Entry = streams.FirstOrDefault(stream => stream.IsEntry);
+        Entry = streams.FirstOrDefault(stream => stream.HasEntryComponentTag);
     }
 
     public IReadOnlyList<DataBroadcastStream> Streams { get; }

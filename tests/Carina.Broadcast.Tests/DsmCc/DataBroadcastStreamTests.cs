@@ -31,8 +31,8 @@ public sealed class DataBroadcastStreamTests
         Assert.Equal([EntryPid, OtherCarouselPid], service.Streams.Select(stream => stream.Pid));
         Assert.Equal([DataBroadcastStreams.EntryComponentTag, OtherCarouselTag], service.Streams.Select(stream => stream.ComponentTag));
         Assert.Equal(EntryPid, service.Entry!.Pid);
-        Assert.True(service.Entry.IsEntry);
-        Assert.False(service.Streams[1].IsEntry);
+        Assert.True(service.Entry.HasEntryComponentTag);
+        Assert.False(service.Streams[1].HasEntryComponentTag);
     }
 
     [Fact(DisplayName = "BR-BD-001: the entry carries the auto start flag and what the start document asks for")]
@@ -44,7 +44,7 @@ public sealed class DataBroadcastStreamTests
             BxmlInfoWriter.Entry(autoStart: true, Resolution960By540, 0x0102, 0x0304, dataEventId: 5)));
 
         BxmlInfo info = service.Entry!.Bxml!;
-        Assert.True(info.IsEntryPoint);
+        Assert.True(info.EntryPointFlag);
         Assert.True(info.AutoStart);
         Assert.Equal(Resolution960By540, info.DocumentResolution);
         Assert.Equal(0x0102, info.BmlMajorVersion);
@@ -120,7 +120,7 @@ public sealed class DataBroadcastStreamTests
             BxmlInfoWriter.DataBroadcastStream(OtherCarouselPid, OtherCarouselTag, BxmlInfoWriter.NotEntry(dataEventId: 9)));
 
         BxmlInfo info = service.Streams[1].Bxml!;
-        Assert.False(info.IsEntryPoint);
+        Assert.False(info.EntryPointFlag);
         Assert.False(info.AutoStart);
         Assert.Equal(9, info.DataEventId);
     }
