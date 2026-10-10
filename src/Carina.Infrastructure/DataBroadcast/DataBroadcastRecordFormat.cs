@@ -6,14 +6,20 @@ namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
 /// How a <see cref="DataBroadcastRecord"/> is laid out on disk: a header naming the format, where the
-/// recording's clock begins, the carousel it is entered from, whether versions were left out, and the count of
-/// carousels; then each carousel as its tag, its download id and its versions, each with its id, version, the
+/// recording's clock begins, the carousel it is entered from, a byte marking whether versions were left out and
+/// whether the broadcaster asks for it to open by itself, and the count of carousels; then each carousel as its tag, its download id and its versions, each with its id, version, the
 /// moments it was first and last seen and its resources as the side channel lists them; then the count of event
 /// messages and each as the side channel carries it. Every number is big-endian, and every moment is signed.
 /// </summary>
 public static class DataBroadcastRecordFormat
 {
-    public const ushort FormatVersion = 1;
+    public const ushort FormatVersion = 2;
+
+    private const ushort FirstVersion = 1;
+
+    private const byte IncompleteMark = 0x01;
+
+    private const byte AutoStartMark = 0x02;
 
     public const int HeaderLength = DataBroadcastRecord.HeaderBytes;
 
@@ -25,9 +31,9 @@ public static class DataBroadcastRecordFormat
 
     private const int EntryTagAt = StartsAtAt + sizeof(long);
 
-    private const int IncompleteAt = EntryTagAt + sizeof(byte);
+    private const int MarksAt = EntryTagAt + sizeof(byte);
 
-    private const int CarouselCountAt = IncompleteAt + sizeof(byte);
+    private const int CarouselCountAt = MarksAt + sizeof(byte);
 
     private static ReadOnlySpan<byte> Magic => "CARINADB"u8;
 
@@ -59,7 +65,7 @@ public static class DataBroadcastRecordFormat
         BinaryPrimitives.WriteUInt16BigEndian(head[VersionAt..], FormatVersion);
         BinaryPrimitives.WriteInt64BigEndian(head[StartsAtAt..], record.StartsAt);
         head[EntryTagAt] = (byte)record.EntryTag;
-        head[IncompleteAt] = record.Incomplete ? (byte)1 : (byte)0;
+        head[MarksAt] = (byte)((record.Incomplete ? IncompleteMark : 0) | (record.AutoStart ? AutoStartMark : 0));
         BinaryPrimitives.WriteUInt16BigEndian(head[CarouselCountAt..], (ushort)record.Carousels.Count);
         into.Write(head);
 
@@ -83,14 +89,19 @@ public static class DataBroadcastRecordFormat
     }
 
     /// <summary>
-    /// Whether the head of a file is the head of a record this format wrote: its magic, a version it reads, and as
-    /// many bytes as a header takes.
+    /// Whether the head of a file is the head of a record this format wrote: its magic, a version it reads, marks
+    /// that version names, and as many bytes as a header takes. A record of the first version marks only whether
+    /// it is incomplete.
     /// </summary>
     public static bool Heads(ReadOnlySpan<byte> head)
         => head.Length >= HeaderLength
            && head[..MagicLength].SequenceEqual(Magic)
-           && BinaryPrimitives.ReadUInt16BigEndian(head[VersionAt..]) == FormatVersion
-           && head[IncompleteAt] <= 1;
+           && BinaryPrimitives.ReadUInt16BigEndian(head[VersionAt..]) switch
+           {
+               FirstVersion => head[MarksAt] <= IncompleteMark,
+               FormatVersion => head[MarksAt] <= (IncompleteMark | AutoStartMark),
+               _ => false,
+           };
 
     /// <summary>
     /// Reads a record back, or answers null when the bytes are not one this format wrote.
@@ -140,7 +151,8 @@ public static class DataBroadcastRecordFormat
             head[EntryTagAt],
             carousels,
             events,
-            head[IncompleteAt] is 1);
+            (head[MarksAt] & IncompleteMark) != 0,
+            (head[MarksAt] & AutoStartMark) != 0);
     }
 
     private static void Write(RecordedCarousel carousel, Stream into)

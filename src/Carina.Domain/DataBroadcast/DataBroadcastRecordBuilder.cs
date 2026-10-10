@@ -19,6 +19,7 @@ public sealed class DataBroadcastRecordBuilder(long mostBytes = DataBroadcastRec
     private readonly HashSet<VersionKey> letGo = [];
 
     private int? entryTag;
+    private bool autoStart;
     private bool incomplete;
     private long versionBytes;
     private long eventBytes;
@@ -102,12 +103,14 @@ public sealed class DataBroadcastRecordBuilder(long mostBytes = DataBroadcastRec
                 carousel.DownloadId,
                 [.. arrivals.Where(key => key.Carousel == carousel).Select(key => versions[key])]))],
             events,
-            incomplete);
+            incomplete,
+            autoStart);
     }
 
     private void Hold(CarouselCatalog catalog, long at)
     {
         entryTag = catalog.EntryTag;
+        autoStart = catalog.AutoStart;
         valid.Clear();
 
         foreach (CatalogCarousel carousel in catalog.Carousels)

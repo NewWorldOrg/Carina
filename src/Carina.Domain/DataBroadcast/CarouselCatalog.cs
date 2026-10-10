@@ -37,10 +37,15 @@ public sealed record CarouselCatalog
 
     public bool AutoStart { get; }
 
-    public string StartupDocument
-        => string.Create(CultureInfo.InvariantCulture, $"/{EntryTag:x2}/{StartupModuleId:x4}/{StartupResource}");
+    public string StartupDocument => StartupDocumentOf(EntryTag);
 
     public IReadOnlyList<CatalogCarousel> Carousels { get; }
+
+    /// <summary>
+    /// The path of the document a data broadcast entered from the carousel of <paramref name="entryTag"/> opens on.
+    /// </summary>
+    public static string StartupDocumentOf(int entryTag)
+        => string.Create(CultureInfo.InvariantCulture, $"/{entryTag:x2}/{StartupModuleId:x4}/{StartupResource}");
 
     public bool CanOpen
         => Carousels.Any(carousel => carousel.Tag == EntryTag

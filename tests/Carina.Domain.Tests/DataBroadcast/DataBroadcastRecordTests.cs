@@ -133,6 +133,23 @@ public sealed class DataBroadcastRecordTests
             moved.Carousels.SelectMany(carousel => carousel.Versions).Select(version => version.Resources));
     }
 
+    [Fact(DisplayName = "BR-BD-005: a record that opens by itself still does so moved onto another clock and kept within its size")]
+    public void ARecordThatOpensByItselfStillDoesSoMovedAndKeptWithinItsSize()
+    {
+        DataBroadcastRecord record = new(0, Carousels.Entry, [.. Superseding().Carousels], [], false, autoStart: true);
+
+        Assert.True(record.AutoStart);
+        Assert.True(record.Shifted(90_000, 90_000).AutoStart);
+        Assert.True(record.Within(0).AutoStart);
+        Assert.False(Record.AutoStart);
+    }
+
+    [Fact(DisplayName = "BR-BD-001: a record opens on the startup document of the carousel it is entered from, as the live catalog does")]
+    public void ARecordOpensOnTheStartupDocumentOfItsEntryCarousel()
+    {
+        Assert.Equal("/40/0000/startup.bml", Record.StartupDocument);
+    }
+
     [Fact(DisplayName = "BR-BD-005: a record within its size is kept whole")]
     public void ARecordWithinItsSizeIsKeptWhole()
     {

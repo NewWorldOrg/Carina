@@ -34,6 +34,8 @@ public sealed class DataBroadcastRecordFormatTests
         0x00, 0x02, 0xAA, 0xBB,
     ];
 
+    private static readonly byte[] VersionTwo = Rewritten(VersionOne, (9, 0x02), (19, 0x03));
+
     [Fact(DisplayName = "BR-BD-005: a record is written and read back whole, and takes the bytes it says it takes")]
     public void ARecordIsWrittenAndReadBackWhole()
     {
@@ -140,7 +142,35 @@ public sealed class DataBroadcastRecordFormatTests
         Assert.Equal(("a", "text/X-arib-bml", ResourceForm.Text, "<a>"), (resource.Path, resource.MediaType, resource.Form, Encoding.ASCII.GetString(resource.Body.Span)));
         Assert.Equal((1, 2, 5, EventTiming.Immediate, 240_000L), (message.Group, message.Id, message.MessageType, message.Timing, message.FiresAt));
         Assert.Equal([0xAA, 0xBB], message.PrivateData.ToArray());
-        Assert.Equal(VersionOne, DataBroadcastRecordFormat.Written(read));
+        Assert.False(read.AutoStart);
+        Assert.Equal(Rewritten(VersionOne, (9, 0x02)), DataBroadcastRecordFormat.Written(read));
+    }
+
+    [Fact(DisplayName = "BR-BV-004: a record of format version 2 written byte by byte is read with whether it opens by itself")]
+    public void ARecordOfVersionTwoIsReadWithWhetherItOpensByItself()
+    {
+        DataBroadcastRecord read = DataBroadcastRecordFormat.Read(VersionTwo)!;
+
+        Assert.Equal((90_000L, Entry, true, true), (read.StartsAt, read.EntryTag, read.Incomplete, read.AutoStart));
+        ModuleVersion version = Assert.Single(Assert.Single(read.Carousels).Versions);
+        Assert.Equal((0, 1, 180_000L, 270_000L), (version.ModuleId, version.Version, version.FirstSeen, version.LastSeen));
+        Assert.Equal(VersionTwo, DataBroadcastRecordFormat.Written(read));
+    }
+
+    [Theory(DisplayName = "BR-BD-005: whether a record opens by itself and whether it is incomplete are written apart and read back")]
+    [InlineData(false, false, 0x00)]
+    [InlineData(true, false, 0x01)]
+    [InlineData(false, true, 0x02)]
+    [InlineData(true, true, 0x03)]
+    public void WhetherARecordOpensByItselfAndIsIncompleteAreWrittenApart(bool incomplete, bool autoStart, byte marks)
+    {
+        DataBroadcastRecord record = new(0, Entry, [], [], incomplete, autoStart);
+
+        byte[] written = DataBroadcastRecordFormat.Written(record);
+        DataBroadcastRecord read = DataBroadcastRecordFormat.Read(written)!;
+
+        Assert.Equal((DataBroadcastRecordFormat.FormatVersion, marks), (written[9], written[19]));
+        Assert.Equal((incomplete, autoStart), (read.Incomplete, read.AutoStart));
     }
 
     [Fact(DisplayName = "BR-BD-005: a record cut short anywhere is no record, and reading it throws nothing")]
@@ -151,13 +181,20 @@ public sealed class DataBroadcastRecordFormatTests
             Assert.Null(DataBroadcastRecordFormat.Read(VersionOne.AsMemory(0, length)));
         }
 
+        for (int length = 0; length < VersionTwo.Length; length++)
+        {
+            Assert.Null(DataBroadcastRecordFormat.Read(VersionTwo.AsMemory(0, length)));
+        }
+
         Assert.Null(DataBroadcastRecordFormat.Read((byte[])[.. VersionOne, 0x00]));
+        Assert.Null(DataBroadcastRecordFormat.Read((byte[])[.. VersionTwo, 0x00]));
     }
 
     [Theory(DisplayName = "BR-BD-005: bytes this format did not write are no record, and reading them throws nothing")]
     [InlineData(0, 0x00)]
-    [InlineData(9, 0x02)]
+    [InlineData(9, 0x03)]
     [InlineData(19, 0x02)]
+    [InlineData(19, 0x03)]
     [InlineData(55, 0x00)]
     [InlineData(57, 0x08)]
     [InlineData(66, 0x02)]
@@ -170,6 +207,15 @@ public sealed class DataBroadcastRecordFormatTests
         spoilt[at] = instead;
 
         Assert.Null(DataBroadcastRecordFormat.Read(spoilt));
+    }
+
+    [Theory(DisplayName = "BR-BD-005: a record of format version 2 marked with a bit it does not name is no record")]
+    [InlineData(0x04)]
+    [InlineData(0x80)]
+    public void ARecordOfVersionTwoMarkedWithABitItDoesNotNameIsNoRecord(byte marks)
+    {
+        Assert.Null(DataBroadcastRecordFormat.Read(Rewritten(VersionTwo, (19, marks))));
+        Assert.False(DataBroadcastRecordFormat.Heads(Rewritten(VersionTwo, (19, marks))));
     }
 
     [Fact(DisplayName = "BR-BD-005: a version last seen before it was first seen is no record")]
@@ -208,6 +254,18 @@ public sealed class DataBroadcastRecordFormatTests
                 new EventMessage(1, 1, 1, EventTiming.Immediate, -9_000, ReadOnlyMemory<byte>.Empty),
             ],
             true);
+
+    private static byte[] Rewritten(byte[] bytes, params (int At, byte Instead)[] changes)
+    {
+        byte[] rewritten = [.. bytes];
+
+        foreach ((int at, byte instead) in changes)
+        {
+            rewritten[at] = instead;
+        }
+
+        return rewritten;
+    }
 
     private static DataBroadcastRecord Single(CarouselResource resource)
         => new(0, Entry, [new RecordedCarousel(Entry, 1, [new ModuleVersion(Entry, 0, 1, 0, 0, [resource])])], [], false);

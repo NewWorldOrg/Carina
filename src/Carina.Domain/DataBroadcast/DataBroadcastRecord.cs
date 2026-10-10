@@ -2,8 +2,8 @@ namespace Carina.Domain.DataBroadcast;
 
 /// <summary>
 /// The data broadcast taken from one recording, every time told on the recording's own
-/// <see cref="StreamClock"/>: where that clock begins, the carousel it is entered from,
-/// every module version each download of each carousel carried with when it was first and last seen, in the
+/// <see cref="StreamClock"/>: where that clock begins, the carousel it is entered from, whether the broadcaster
+/// asks for it to open by itself, every module version each download of each carousel carried with when it was first and last seen, in the
 /// order the downloads were first read, every event message in
 /// the order they fire, and whether versions were left out to stay within the size a record may take.
 /// </summary>
@@ -20,7 +20,8 @@ public sealed class DataBroadcastRecord
         int entryTag,
         IReadOnlyList<RecordedCarousel> carousels,
         IReadOnlyList<EventMessage> events,
-        bool incomplete)
+        bool incomplete,
+        bool autoStart = false)
     {
         ArgumentNullException.ThrowIfNull(carousels);
         ArgumentNullException.ThrowIfNull(events);
@@ -35,6 +36,7 @@ public sealed class DataBroadcastRecord
         Carousels = [.. carousels.OrderBy(carousel => carousel.Tag)];
         Events = [.. events.OrderBy(message => message.FiresAt)];
         Incomplete = incomplete;
+        AutoStart = autoStart;
     }
 
     public long StartsAt { get; }
@@ -48,6 +50,10 @@ public sealed class DataBroadcastRecord
     public IReadOnlyList<EventMessage> Events { get; }
 
     public bool Incomplete { get; }
+
+    public bool AutoStart { get; }
+
+    public string StartupDocument => CarouselCatalog.StartupDocumentOf(EntryTag);
 
     public int Modules
         => Carousels.Sum(carousel => carousel.Versions.Select(version => version.ModuleId).Distinct().Count());
@@ -96,7 +102,8 @@ public sealed class DataBroadcastRecord
                 carousel.DownloadId,
                 [.. carousel.Versions.Select(version => version.Shifted(by))]))],
             [.. Events.Select(message => message.Shifted(by))],
-            Incomplete);
+            Incomplete,
+            AutoStart);
 
     /// <summary>
     /// This record within <paramref name="mostBytes"/> and with no more versions in a carousel than a count of two
@@ -126,7 +133,8 @@ public sealed class DataBroadcastRecord
                 carousel.DownloadId,
                 [.. carousel.Versions.Where(version => !dropped.Contains(version))]))],
             Events,
-            true);
+            true,
+            AutoStart);
     }
 
     private List<HeldVersion> Held()
