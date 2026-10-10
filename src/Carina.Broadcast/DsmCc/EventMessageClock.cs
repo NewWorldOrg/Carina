@@ -6,7 +6,10 @@ public sealed class EventMessageClock
 
     public const int MostWaiting = 256;
 
+    public const int MostSectionsRemembered = 4096;
+
     private readonly Dictionary<SectionKey, int> versions = [];
+    private readonly Queue<SectionKey> remembered = new();
     private readonly List<(SectionKey Section, GeneralEvent Event, long Npt)> waiting = [];
 
     private NptReference? reference;
@@ -27,7 +30,7 @@ public sealed class EventMessageClock
             return [];
         }
 
-        versions[key] = section.VersionNumber;
+        Remember(key, section.VersionNumber);
         var outcomes = new List<EventMessageOutcome>();
 
         Supersede(key, outcomes);
@@ -51,8 +54,24 @@ public sealed class EventMessageClock
     public void Reset()
     {
         versions.Clear();
+        remembered.Clear();
         waiting.Clear();
         reference = null;
+    }
+
+    private void Remember(SectionKey key, int version)
+    {
+        if (!versions.ContainsKey(key))
+        {
+            remembered.Enqueue(key);
+        }
+
+        versions[key] = version;
+
+        while (remembered.Count > MostSectionsRemembered)
+        {
+            versions.Remove(remembered.Dequeue());
+        }
     }
 
     private void Supersede(SectionKey key, List<EventMessageOutcome> outcomes)

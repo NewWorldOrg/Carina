@@ -277,6 +277,24 @@ public sealed class EventMessageClockTests
         Assert.Equal(EventMessageClock.MostWaiting, Fired(released).Count);
     }
 
+    [Fact(DisplayName = "BR-BV-002: the versions remembered are bounded and the oldest section is forgotten first")]
+    public void TheVersionsRememberedAreBoundedAndTheOldestSectionIsForgottenFirst()
+    {
+        var clock = new EventMessageClock();
+        byte[] immediate = StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Immediate, 0, 0, 1);
+
+        for (int section = 0; section <= EventMessageClock.MostSectionsRemembered; section++)
+        {
+            clock.Push(Numbered(section, immediate), ReceivedAt);
+        }
+
+        IReadOnlyList<EventMessageOutcome> second = clock.Push(Numbered(1, immediate), ReceivedAt);
+        IReadOnlyList<EventMessageOutcome> oldest = clock.Push(Numbered(0, immediate), ReceivedAt);
+
+        Assert.Empty(second);
+        Assert.Single(Fired(oldest));
+    }
+
     [Fact(DisplayName = "BR-BD-003: a reset forgets the reference, the waiting events and the versions seen")]
     public void AResetForgetsTheReferenceTheWaitingEventsAndTheVersionsSeen()
     {
@@ -323,6 +341,9 @@ public sealed class EventMessageClockTests
 
         Assert.Empty(second);
     }
+
+    private static StreamDescriptorWriter Numbered(int section, byte[] descriptors)
+        => new() { EventMessageGroupId = section >> 8, SectionNumber = section & 0xFF, LastSectionNumber = 0xFF, Descriptors = descriptors };
 
     private static StreamDescriptorWriter Section(int version, params byte[][] descriptors)
         => new() { EventMessageGroupId = SomeGroup, VersionNumber = version, Descriptors = DescriptorWriter.Loop(descriptors) };
