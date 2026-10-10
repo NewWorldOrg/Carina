@@ -4,6 +4,7 @@ namespace Carina.Domain.DataBroadcast;
 /// The data broadcast of one live channel or one recording as it stands: whether the service carries one,
 /// the catalog, and every module version that is valid and has arrived. Each signal read of the stream moves
 /// it on and says what changed, at the moment it was read on the <see cref="StreamClock"/>, never a raw PTS.
+/// The catalog is told only when what it lists changes; a module that arrives is told on its own.
 /// </summary>
 public sealed class CarouselState
 {
@@ -106,7 +107,7 @@ public sealed class CarouselState
 
         carousel.Arrived[completed.ModuleId] = arrived;
 
-        return [new CarouselDelta.ModuleArrived(carousel.DownloadId, arrived), .. Changed()];
+        return [new CarouselDelta.ModuleArrived(carousel.DownloadId, arrived)];
     }
 
     private IReadOnlyList<CarouselDelta> Fire(EventMessage message)

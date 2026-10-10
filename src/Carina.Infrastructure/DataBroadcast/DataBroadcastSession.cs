@@ -10,8 +10,9 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// <summary>
 /// The data broadcast of one live channel: one reading of its transport stream and one state of its carousels,
 /// shared by every fan-out showing the channel. What changes is handed to each of them as a frame, beside the
-/// frames a viewer joining later is handed first: the latest catalog and every valid module that has arrived,
-/// or word that the channel carries no data broadcast.
+/// frames a viewer joining later is handed first: the catalog as it stands with every valid module that has
+/// arrived, or word that the channel carries no data broadcast. The catalog is handed on only when what it lists
+/// changes; the one kept for a viewer joining later is made again whenever a module arrives.
 /// </summary>
 /// <remarks>
 /// Each fan-out is handed the frames on the clock of the pictures it carries: the transcoder behind it counts from
@@ -195,6 +196,7 @@ public sealed class DataBroadcastSession
             case CarouselDelta.ModuleArrived arrived:
                 LiveFrame module = DataBroadcastFrames.Module(arrived.Module, at);
                 modules[Key(arrived.Module)] = module;
+                catalog = state.Catalog is { } held ? DataBroadcastFrames.Catalog(held, at) : catalog;
                 Stand();
 
                 return module;

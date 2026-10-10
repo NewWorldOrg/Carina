@@ -36,7 +36,7 @@ public sealed class LiveDataBroadcastWireTests
 
     private readonly TranscodeBudget budget = new(new TranscodeBudgetSettings { AtOnce = 4 });
 
-    [Fact(DisplayName = "BR-BD-004: a wire joining a channel already being watched receives the catalog and every module before anything else")]
+    [Fact(DisplayName = "BR-BD-004: a wire joining a channel already being watched receives the catalog naming what has arrived and every module before anything else")]
     public async Task AWireJoiningLaterReceivesTheCatalogAndEveryModuleFirst()
     {
         await using AuthProbe probe = Wiring();
@@ -51,7 +51,7 @@ public sealed class LiveDataBroadcastWireTests
             .Delivered(Startup)
             .Delivered(Logo)
             .Bytes);
-        IReadOnlyList<LiveFrame> toTheFirst = await DataBroadcastUntil(first, frames => frames.Count(IsModule) is 2 && !IsModule(frames[^1]));
+        IReadOnlyList<LiveFrame> toTheFirst = await DataBroadcastUntil(first, frames => frames.Count(IsModule) is 2);
 
         using WebSocket late = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
         LiveFrame[] toTheLate = [await TakePastProgress(late), await TakePastProgress(late), await TakePastProgress(late)];
@@ -60,7 +60,11 @@ public sealed class LiveDataBroadcastWireTests
         Assert.Equal(
             [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.ModuleKind],
             toTheLate.Select(frame => frame.Payload.Span[0]));
-        Assert.Equal(toTheFirst[^1].Payload.ToArray(), toTheLate[0].Payload.ToArray());
+        Assert.Equal(
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.ModuleKind],
+            toTheFirst.Select(frame => frame.Payload.Span[0]));
+        Assert.All(["startup.bml", "logo.png"], path => Assert.True(Names(toTheLate[0], path)));
+        Assert.False(Names(toTheFirst[1], "logo.png"));
         Assert.Equal(
             toTheFirst.Where(IsModule).Select(frame => frame.Payload.ToArray()),
             toTheLate.Skip(1).Select(frame => frame.Payload.ToArray()));
@@ -82,6 +86,8 @@ public sealed class LiveDataBroadcastWireTests
     }
 
     private static bool IsModule(LiveFrame frame) => frame.Payload.Span[0] == DataBroadcastFrames.ModuleKind;
+
+    private static bool Names(LiveFrame catalog, string path) => catalog.Payload.Span.IndexOf(Encoding.UTF8.GetBytes(path)) >= 0;
 
     private static async Task<IReadOnlyList<LiveFrame>> DataBroadcastUntil(WebSocket socket, Func<IReadOnlyList<LiveFrame>, bool> enough)
     {

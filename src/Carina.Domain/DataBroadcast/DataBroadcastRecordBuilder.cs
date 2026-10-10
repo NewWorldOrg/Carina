@@ -3,8 +3,9 @@ namespace Carina.Domain.DataBroadcast;
 /// <summary>
 /// Gathers what a <see cref="CarouselState"/> says changed while a recording is read, into the record of
 /// its data broadcast: every module version of every download once, when each was last held valid, and every
-/// event message. A version put together again with other content takes the place of what was held, and a
-/// carousel left out for being too large marks the record incomplete. Whenever the stream's clock moves on and what
+/// event message. What is valid is seen again whenever the catalog changes and whenever a module arrives. A version
+/// put together again with other content takes the place of what was held, and a carousel left out for being too
+/// large marks the record incomplete. Whenever the stream's clock moves on and what
 /// is held is over <see cref="DataBroadcastRecord.Within"/>'s bounds, the versions a record within them leaves out
 /// are let go there and then, so that a whole recording is never held, and the record built is the one that
 /// <see cref="DataBroadcastRecord.Within"/> would have made of everything.
@@ -53,7 +54,7 @@ public sealed class DataBroadcastRecordBuilder(long mostBytes = DataBroadcastRec
 
                 break;
             case CarouselDelta.ModuleArrived arrived:
-                Arrive(arrived.DownloadId, arrived.Module);
+                Arrive(arrived.DownloadId, arrived.Module, at);
 
                 break;
             case CarouselDelta.EventCame came:
@@ -127,28 +128,37 @@ public sealed class DataBroadcastRecordBuilder(long mostBytes = DataBroadcastRec
         }
     }
 
-    private void Arrive(uint downloadId, ModuleVersion module)
+    private void Arrive(uint downloadId, ModuleVersion module, long at)
     {
         VersionKey key = new(Note(module.Tag, downloadId), module.ModuleId, module.Version);
 
-        if (letGo.Contains(key))
+        if (!letGo.Contains(key))
+        {
+            Keep(key, module);
+        }
+
+        if (entryTag is null)
         {
             return;
         }
 
-        if (versions.TryGetValue(key, out ModuleVersion? held))
+        foreach (VersionKey held in valid)
         {
-            if (held.CarriesTheSameAs(module))
-            {
-                return;
-            }
+            SeeAgain(held, at);
+        }
+    }
 
-            versionBytes -= held.Bytes;
+    private void Keep(VersionKey key, ModuleVersion module)
+    {
+        valid.Add(key);
+
+        if (versions.TryGetValue(key, out ModuleVersion? held) && held.CarriesTheSameAs(module))
+        {
+            return;
         }
 
+        versionBytes += module.Bytes - (held?.Bytes ?? 0);
         versions[key] = module;
-        versionBytes += module.Bytes;
-        valid.Add(key);
         arrivals.Remove(key);
         arrivals.Add(key);
     }
