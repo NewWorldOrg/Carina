@@ -7,4 +7,6 @@ public enum EventMessageDefect
     TooManyWaiting = 2,
 
     UnusableNptReference = 3,
+
+    Superseded = 4,
 }

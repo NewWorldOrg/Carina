@@ -94,7 +94,11 @@ public sealed class EventMessageClockTests
             Section(0, StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 90_000, 0, 1)),
             ReceivedAt);
         IReadOnlyList<EventMessageOutcome> second = clock.Push(
-            Section(1, StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 180_000, 0, 2)),
+            new StreamDescriptorWriter
+            {
+                EventMessageGroupId = SomeGroup + 1,
+                Descriptors = StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 180_000, 0, 2),
+            },
             ReceivedAt);
         IReadOnlyList<EventMessageOutcome> after = clock.Push(
             new StreamDescriptorWriter { EventMessageGroupId = 0x0FFF, Descriptors = StreamDescriptorWriter.NptReference(stc: 5_000_000, npt: 0) },
@@ -111,7 +115,7 @@ public sealed class EventMessageClockTests
     {
         var clock = new EventMessageClock();
         clock.Push(new StreamDescriptorWriter { Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 0) }, ReceivedAt);
-        clock.Push(new StreamDescriptorWriter { Descriptors = StreamDescriptorWriter.NptReference(stc: 2_000, npt: 0) }, ReceivedAt);
+        clock.Push(new StreamDescriptorWriter { VersionNumber = 1, Descriptors = StreamDescriptorWriter.NptReference(stc: 2_000, npt: 0) }, ReceivedAt);
 
         IReadOnlyList<EventMessageOutcome> outcomes = clock.Push(
             Section(3, StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 10, 0, 1)),
@@ -182,6 +186,36 @@ public sealed class EventMessageClockTests
         Assert.Equal(1_010, Fired(current).Single().FiresAt);
     }
 
+    [Fact(DisplayName = "BR-BD-003: a new version of a section discards the events of the old one still waiting for a reference")]
+    public void ANewVersionOfASectionDiscardsTheEventsOfTheOldOneStillWaitingForAReference()
+    {
+        var clock = new EventMessageClock();
+        clock.Push(Section(0, StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 10, 0, 1)), ReceivedAt);
+
+        IReadOnlyList<EventMessageOutcome> replaced = clock.Push(
+            Section(1, StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 20, 0, 2)),
+            ReceivedAt);
+        IReadOnlyList<EventMessageOutcome> released = clock.Push(
+            new StreamDescriptorWriter { EventMessageGroupId = 0x0FFF, Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 0) },
+            ReceivedAt);
+
+        Assert.Equal(EventMessageDefect.Superseded, Assert.IsType<EventMessageOutcome.Discarded>(Assert.Single(replaced)).Defect);
+        Assert.Equal([2], Fired(released).Select(message => message.EventMessageId));
+    }
+
+    [Fact(DisplayName = "BR-BD-003: an unusable reference repeated in the same version is reported once")]
+    public void AnUnusableReferenceRepeatedInTheSameVersionIsReportedOnce()
+    {
+        var clock = new EventMessageClock();
+        StreamDescriptorWriter unusable = new() { Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 0, scaleNumerator: 0) };
+
+        IReadOnlyList<EventMessageOutcome> first = clock.Push(unusable, ReceivedAt);
+        IReadOnlyList<EventMessageOutcome> repeat = clock.Push(unusable, ReceivedAt);
+
+        Assert.Single(first);
+        Assert.Empty(repeat);
+    }
+
     [Fact(DisplayName = "BR-BD-003: a time mode other than immediate or NPT is discarded")]
     public void ATimeModeOtherThanImmediateOrNptIsDiscarded()
     {
@@ -224,8 +258,7 @@ public sealed class EventMessageClockTests
             discarded += clock.Push(
                     new StreamDescriptorWriter
                     {
-                        EventMessageGroupId = version >> 5,
-                        VersionNumber = version & 0x1F,
+                        EventMessageGroupId = version,
                         Descriptors = StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, version, 0, version),
                     },
                     ReceivedAt)
@@ -252,8 +285,7 @@ public sealed class EventMessageClockTests
             clock.Push(
                 new StreamDescriptorWriter
                 {
-                    EventMessageGroupId = version >> 5,
-                    VersionNumber = version & 0x1F,
+                    EventMessageGroupId = version,
                     Descriptors = StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, version, 0, version),
                 },
                 ReceivedAt);

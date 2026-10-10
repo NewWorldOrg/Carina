@@ -6,8 +6,8 @@ public sealed class EventMessageClock
 
     public const int MostWaiting = 256;
 
-    private readonly Dictionary<(int TableIdExtension, int SectionNumber), int> versions = [];
-    private readonly List<(GeneralEvent Event, long Npt)> waiting = [];
+    private readonly Dictionary<SectionKey, int> versions = [];
+    private readonly List<(SectionKey Section, GeneralEvent Event, long Npt)> waiting = [];
 
     private NptReference? reference;
 
@@ -20,25 +20,26 @@ public sealed class EventMessageClock
             return [];
         }
 
+        SectionKey key = new(section.TableIdExtension, section.SectionNumber);
+
+        if (versions.TryGetValue(key, out int seen) && seen == section.VersionNumber)
+        {
+            return [];
+        }
+
+        versions[key] = section.VersionNumber;
         var outcomes = new List<EventMessageOutcome>();
+
+        Supersede(key, outcomes);
 
         foreach (NptReference arrived in section.NptReferences)
         {
             Adopt(arrived, outcomes);
         }
 
-        (int, int) key = (section.TableIdExtension, section.SectionNumber);
-
-        if (versions.TryGetValue(key, out int seen) && seen == section.VersionNumber)
-        {
-            return outcomes;
-        }
-
-        versions[key] = section.VersionNumber;
-
         foreach (GeneralEvent carried in section.Events)
         {
-            if (Time(carried, receivedPts) is { } outcome)
+            if (Time(key, carried, receivedPts) is { } outcome)
             {
                 outcomes.Add(outcome);
             }
@@ -54,6 +55,16 @@ public sealed class EventMessageClock
         reference = null;
     }
 
+    private void Supersede(SectionKey key, List<EventMessageOutcome> outcomes)
+    {
+        int superseded = waiting.RemoveAll(held => held.Section == key);
+
+        for (int index = 0; index < superseded; index++)
+        {
+            outcomes.Add(new EventMessageOutcome.Discarded(EventMessageDefect.Superseded));
+        }
+    }
+
     private void Adopt(NptReference arrived, List<EventMessageOutcome> outcomes)
     {
         if (!arrived.IsUsable)
@@ -65,7 +76,7 @@ public sealed class EventMessageClock
 
         reference = arrived;
 
-        foreach ((GeneralEvent held, long npt) in waiting)
+        foreach ((_, GeneralEvent held, long npt) in waiting)
         {
             outcomes.Add(Timed(held, OnSystemClock(arrived, npt)));
         }
@@ -73,23 +84,23 @@ public sealed class EventMessageClock
         waiting.Clear();
     }
 
-    private EventMessageOutcome? Time(GeneralEvent carried, long receivedPts)
+    private EventMessageOutcome? Time(SectionKey key, GeneralEvent carried, long receivedPts)
         => carried switch
         {
             { TimeMode: GeneralEvent.Immediate } => Timed(carried, Wrapped(receivedPts)),
             { Npt: long npt } when reference is not null => Timed(carried, OnSystemClock(reference, npt)),
-            { Npt: long npt } => Wait(carried, npt),
+            { Npt: long npt } => Wait(key, carried, npt),
             _ => new EventMessageOutcome.Discarded(EventMessageDefect.UnsupportedTimeMode),
         };
 
-    private EventMessageOutcome.Discarded? Wait(GeneralEvent carried, long npt)
+    private EventMessageOutcome.Discarded? Wait(SectionKey key, GeneralEvent carried, long npt)
     {
         if (waiting.Count >= MostWaiting)
         {
             return new EventMessageOutcome.Discarded(EventMessageDefect.TooManyWaiting);
         }
 
-        waiting.Add((carried, npt));
+        waiting.Add((key, carried, npt));
 
         return null;
     }
@@ -107,4 +118,6 @@ public sealed class EventMessageClock
         => Wrapped(reference.Stc + ((npt - reference.Npt) * reference.ScaleDenominator / reference.ScaleNumerator));
 
     private static long Wrapped(long pts) => ((pts % PtsModulus) + PtsModulus) % PtsModulus;
+
+    private readonly record struct SectionKey(int TableIdExtension, int SectionNumber);
 }
