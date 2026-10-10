@@ -12,6 +12,8 @@ public sealed class PlaybackRuleTests
 
     private const string Captions = "/Carina.Api/Playback/CaptionDelivery.cs";
 
+    private const string DataBroadcast = "/Carina.Api/Playback/DataBroadcastDelivery.cs";
+
     private const string LiveHandedOver = "/Carina.Api/Live/LiveStreamDelivery.cs";
 
     private const string WhereItIsMapped = "/Carina.Api/Program.cs";
@@ -22,7 +24,7 @@ public sealed class PlaybackRuleTests
     public void TheOnlyPlacesThatSpellTheDeliveryPathAreWhereItIsDeclaredAndWhereTheDocumentDisownsIt()
     {
         Assert.Equal(
-            [WhereTheDocumentSaysItExists, Captions, Play, Scrub, Picture, Delivery],
+            [WhereTheDocumentSaysItExists, Captions, DataBroadcast, Play, Scrub, Picture, Delivery],
             PlaybackRules.FilesSpellingTheDeliveryPath(RepositoryLayout.SourceDirectory));
     }
 
@@ -46,6 +48,18 @@ public sealed class PlaybackRuleTests
         Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, captions, StringComparison.Ordinal);
         Assert.DoesNotContain("Accept-Ranges", captions, StringComparison.Ordinal);
         Assert.Empty(PlaybackRules.WhatTranscodesIn(RepositoryLayout.SourceDirectory, Captions));
+    }
+
+    [Fact(DisplayName = "BR-BA-001: the data broadcast under the same prefix is its catalog and its modules, and not a second way to the bytes")]
+    public void TheDataBroadcastUnderTheSamePrefixIsNotASecondWayToTheBytes()
+    {
+        string broadcast = File.ReadAllText(Path.Combine(RepositoryLayout.SourceDirectory, DataBroadcast.TrimStart('/')));
+
+        Assert.Contains("\"/api/videos/{id}/data-broadcast\"", broadcast, StringComparison.Ordinal);
+        Assert.Contains("\"/api/videos/{id}/data-broadcast/modules/{tag}/{download}/{module}/{version}\"", broadcast, StringComparison.Ordinal);
+        Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, broadcast, StringComparison.Ordinal);
+        Assert.DoesNotContain("Accept-Ranges", broadcast, StringComparison.Ordinal);
+        Assert.Empty(PlaybackRules.WhatTranscodesIn(RepositoryLayout.SourceDirectory, DataBroadcast));
     }
 
     [Fact]

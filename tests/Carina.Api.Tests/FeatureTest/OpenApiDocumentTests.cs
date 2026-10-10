@@ -169,6 +169,8 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getTuners",
                 "getVersion",
                 "getVideoCaptions",
+                "getVideoDataBroadcast",
+                "getVideoDataBroadcastModule",
                 "getVideoScrubFrame",
                 "getVideoThumbnail",
                 "impactOfRules",
@@ -609,6 +611,51 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             ["left", "top", "width", "height", "png"],
             schemas["CaptionPictureResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal("byte", schemas["CaptionPictureResponder"]!["properties"]!["png"]!["format"]!.GetValue<string>());
+    }
+
+    [Fact(DisplayName = "BR-BV-004: the catalog of a recording's data broadcast is described with what a caller sends and what comes back")]
+    public async Task TheCatalogOfADataBroadcastIsDescribedWithWhatACallerSendsAndWhatComesBack()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/videos/{id}/data-broadcast"]!["get"]!;
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["decodes", "from", "id", "source"],
+            operation["parameters"]!.AsArray().Select(parameter => parameter!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["200", "401", "404", "409", "500"],
+            operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["entryTag", "autoStart", "startup", "incomplete", "carousels", "events"],
+            schemas["DataBroadcastTimelineResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["tag", "downloadId", "versions"],
+            schemas["DataBroadcastCarouselResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["id", "version", "fromSec", "toSec", "size"],
+            schemas["DataBroadcastVersionResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["group", "id", "type", "immediate", "atSec", "privateData"],
+            schemas["DataBroadcastEventResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal("byte", schemas["DataBroadcastEventResponder"]!["properties"]!["privateData"]!["format"]!.GetValue<string>());
+    }
+
+    [Fact(DisplayName = "BR-BV-004: a module of a recording's data broadcast is described by the numbers that name it, and its bytes are left out of the JSON the document describes")]
+    public async Task AModuleOfADataBroadcastIsDescribedByTheNumbersThatNameIt()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/videos/{id}/data-broadcast/modules/{tag}/{download}/{module}/{version}"]!["get"]!;
+
+        Assert.Equal(
+            ["id", "tag", "download", "module", "version"],
+            operation["parameters"]!.AsArray().Select(parameter => parameter!["name"]!.GetValue<string>()).ToArray());
+        Assert.All(operation["parameters"]!.AsArray(), parameter => Assert.Equal("path", parameter!["in"]!.GetValue<string>()));
+        Assert.Equal(
+            ["200", "400", "401", "404"],
+            operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Null(operation["responses"]!["200"]!["content"]);
+        Assert.Contains("0x02", operation["summary"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
     [Fact]

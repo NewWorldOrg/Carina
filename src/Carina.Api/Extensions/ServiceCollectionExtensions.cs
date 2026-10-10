@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PlaybackService>();
         services.AddScoped<SourcePlacement>();
         services.AddScoped<CaptionService>();
+        services.AddScoped<DataBroadcastService>();
         services.AddScoped<PlaybackTicketService>();
         services.AddScoped<PlaybackPositionService>();
         services.AddScoped<LiveService>();

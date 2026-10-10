@@ -73,7 +73,7 @@ public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcas
 
         try
         {
-            await using FileStream reading = new(kept, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 12, FileOptions.Asynchronous);
+            await using FileStream reading = File.OpenRead(kept);
 
             return await DataBroadcastRecordFormat.FindAsync(reading, key, cancellationToken);
         }

@@ -158,6 +158,40 @@ app.MapGet(
     .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(
+        DataBroadcastDelivery.Path,
+        (HttpContext context, string id, PlaybackService playback, DataBroadcastService broadcast) =>
+            DataBroadcastDelivery.Invoke(context, id, playback, broadcast))
+    .WithName(PlaybackSurfaces.TheDataBroadcastIsCalled)
+    .WithTags(PlaybackSurfaces.Tag)
+    .WithSummary(PlaybackSurfaces.TheDataBroadcastOfARecording)
+    .Produces<BaseResponder<DataBroadcastTimelineResponder>>(StatusCodes.Status200OK, PlayDelivery.Json)
+    .Produces<BaseResponder<DataBroadcastTimelineResponder>>(StatusCodes.Status404NotFound, PlayDelivery.Json)
+    .Produces<BaseResponder<DataBroadcastTimelineResponder>>(StatusCodes.Status409Conflict, PlayDelivery.Json)
+    .Reads(
+        PlaybackSurfaces.WhereTheDataBroadcastStarts,
+        PlaybackSurfaces.WhichFileTheDataBroadcastIsPlacedOn,
+        PlaybackSurfaces.WhatThisBrowserDecodesForItsDataBroadcast)
+    .WithEffect(EndpointEffect.Reading);
+
+app.MapGet(
+        DataBroadcastDelivery.ModulePath,
+        (HttpContext context,
+                string id,
+                string tag,
+                string download,
+                string module,
+                string version,
+                DataBroadcastService broadcast) =>
+            DataBroadcastDelivery.InvokeModule(context, id, tag, download, module, version, broadcast))
+    .WithName(PlaybackSurfaces.AModuleOfTheDataBroadcastIsCalled)
+    .WithTags(PlaybackSurfaces.Tag)
+    .WithSummary(PlaybackSurfaces.AModuleOfTheDataBroadcast)
+    .Produces(StatusCodes.Status200OK, contentType: DataBroadcastDelivery.MediaType)
+    .Produces(StatusCodes.Status400BadRequest)
+    .Produces(StatusCodes.Status404NotFound)
+    .WithEffect(EndpointEffect.Reading);
+
+app.MapGet(
         ThumbnailDelivery.Path,
         (HttpContext context, string id, IDrawnThumbnails drawn) =>
             ThumbnailDelivery.Invoke(context, id, drawn))

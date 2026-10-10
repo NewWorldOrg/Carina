@@ -120,6 +120,7 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
     [Theory(DisplayName = "the playing and its captions say which picture codings a browser can name, each as a repeat of the name")]
     [InlineData(PlayDelivery.Path, PlayDelivery.Decodes)]
     [InlineData(CaptionDelivery.Path, CaptionDelivery.Decodes)]
+    [InlineData(DataBroadcastDelivery.Path, DataBroadcastDelivery.Decodes)]
     public async Task ThePlayingAndItsCaptionsSayWhichPictureCodingsABrowserCanName(string surface, string name)
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
