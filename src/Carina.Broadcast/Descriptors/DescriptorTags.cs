@@ -14,6 +14,8 @@ public static class DescriptorTags
 
     public const int Component = 0x50;
 
+    public const int StreamIdentifier = 0x52;
+
     public const int Content = 0x54;
 
     public const int AudioComponent = 0xC4;
@@ -27,4 +29,6 @@ public static class DescriptorTags
     public const int TransportStreamInformation = 0xCD;
 
     public const int PartialReception = 0xFB;
+
+    public const int DataComponent = 0xFD;
 }

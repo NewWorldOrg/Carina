@@ -21,6 +21,16 @@ public sealed class ByteWriter
         return this;
     }
 
+    public ByteWriter DoubleWord(long value)
+    {
+        bytes.Add((byte)(value >> 24));
+        bytes.Add((byte)(value >> 16));
+        bytes.Add((byte)(value >> 8));
+        bytes.Add((byte)(value & 0xFF));
+
+        return this;
+    }
+
     public ByteWriter Run(ReadOnlySpan<byte> run)
     {
         foreach (byte value in run)

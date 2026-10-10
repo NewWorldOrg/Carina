@@ -11,4 +11,6 @@ public enum TableDefect
     MalformedDescriptor = 4,
 
     DataModuleOverrun = 5,
+
+    UnexpectedMessage = 6,
 }

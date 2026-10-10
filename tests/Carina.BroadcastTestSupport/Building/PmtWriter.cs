@@ -8,11 +8,15 @@ public sealed class PmtWriter
 
     public const int PrivateData = 0x06;
 
+    public const int DsmCcSections = 0x0D;
+
     public required int ProgramNumber { get; init; }
 
     public int PcrPid { get; init; } = NoPcr;
 
     public byte[][] Streams { get; init; } = [];
+
+    public byte[] Descriptors { get; init; } = [];
 
     public static byte[] Stream(int streamType, int pid, byte[] descriptors)
     {
@@ -26,15 +30,18 @@ public sealed class PmtWriter
             .ToArray();
     }
 
-    public byte[] ToBytes()
+    public byte[] ToBytes() => ToSection().ToBytes();
+
+    public SectionWriter ToSection()
         => new SectionWriter
         {
             TableId = TableId,
             TableIdExtension = ProgramNumber,
             Body = new ByteWriter()
                 .Word(0xE000 | PcrPid)
-                .Word(0xF000)
+                .Word(0xF000 | Descriptors.Length)
+                .Run(Descriptors)
                 .Run(Streams.SelectMany(stream => stream).ToArray())
                 .ToArray(),
-        }.ToBytes();
+        };
 }
