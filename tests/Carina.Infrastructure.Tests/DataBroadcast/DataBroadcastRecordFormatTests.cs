@@ -218,6 +218,74 @@ public sealed class DataBroadcastRecordFormatTests
         Assert.False(DataBroadcastRecordFormat.Heads(Rewritten(VersionTwo, (19, marks))));
     }
 
+    [Fact(DisplayName = "BR-BD-005: every version of a record is found by its carousel, download, module and version without reading the others")]
+    public async Task EveryVersionIsFoundByItsCarouselDownloadModuleAndVersion()
+    {
+        DataBroadcastRecord record = Gathered();
+        byte[] written = DataBroadcastRecordFormat.Written(record);
+
+        foreach (RecordedCarousel carousel in record.Carousels)
+        {
+            foreach (ModuleVersion version in carousel.Versions)
+            {
+                using MemoryStream reading = new(written);
+
+                ModuleVersion? found = await DataBroadcastRecordFormat.FindAsync(
+                    reading,
+                    new ModuleVersionKey(carousel.Tag, carousel.DownloadId, version.ModuleId, version.Version),
+                    CancellationToken.None);
+
+                Assert.NotNull(found);
+                Assert.Equal(DataBroadcastFrames.ModulePayload(version), DataBroadcastFrames.ModulePayload(found));
+                Assert.Equal((version.FirstSeen, version.LastSeen), (found.FirstSeen, found.LastSeen));
+            }
+        }
+    }
+
+    [Theory(DisplayName = "BR-BD-005: a version the record does not hold is not found")]
+    [InlineData(Entry, 2u, 0, 1)]
+    [InlineData(Other, 1u, 0, 1)]
+    [InlineData(Entry, 1u, 0, 3)]
+    [InlineData(Entry, 1u, 4, 1)]
+    public async Task AVersionTheRecordDoesNotHoldIsNotFound(int tag, uint downloadId, int moduleId, int version)
+    {
+        using MemoryStream reading = new(DataBroadcastRecordFormat.Written(Gathered()));
+
+        Assert.Null(await DataBroadcastRecordFormat.FindAsync(reading, new ModuleVersionKey(tag, downloadId, moduleId, version), CancellationToken.None));
+    }
+
+    [Fact(DisplayName = "BR-BV-004: a version of a record of format version 1 is found")]
+    public async Task AVersionOfARecordOfVersionOneIsFound()
+    {
+        using MemoryStream reading = new(VersionOne);
+
+        ModuleVersion? found = await DataBroadcastRecordFormat.FindAsync(reading, new ModuleVersionKey(Entry, 7, 0, 1), CancellationToken.None);
+
+        Assert.Equal("a", Assert.Single(found!.Resources).Path);
+    }
+
+    [Fact(DisplayName = "BR-BD-005: a version is not found in bytes cut short before its end or in bytes that are not a record, and looking throws nothing")]
+    public async Task AVersionIsNotFoundInBytesCutShortOrThatAreNoRecord()
+    {
+        ModuleVersionKey key = new(Entry, 7, 0, 1);
+        int ends = 22 + RecordedCarousel.HeaderBytes + ModuleVersion.HeaderBytes + 11;
+
+        for (int length = 0; length < ends; length++)
+        {
+            using MemoryStream cut = new(VersionTwo, 0, length);
+
+            Assert.Null(await DataBroadcastRecordFormat.FindAsync(cut, key, CancellationToken.None));
+        }
+
+        using MemoryStream spoilt = new(Rewritten(VersionTwo, (0, 0x00)));
+        using MemoryStream unnamed = new(Rewritten(VersionTwo, (57, 0x08)));
+        using MemoryStream backwards = new(Rewritten(VersionTwo, (45, 0x00)));
+
+        Assert.Null(await DataBroadcastRecordFormat.FindAsync(spoilt, key, CancellationToken.None));
+        Assert.Null(await DataBroadcastRecordFormat.FindAsync(unnamed, key, CancellationToken.None));
+        Assert.Null(await DataBroadcastRecordFormat.FindAsync(backwards, key, CancellationToken.None));
+    }
+
     [Fact(DisplayName = "BR-BD-005: a version last seen before it was first seen is no record")]
     public void AVersionLastSeenBeforeItWasFirstSeenIsNoRecord()
     {

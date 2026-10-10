@@ -334,6 +334,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ICaptionRecords>(provider => provider.GetRequiredService<CaptionShelf>());
         services.TryAddSingleton<ICaptionTranscriber, FfmpegCaptionTranscriber>();
         services.TryAddSingleton<DataBroadcastShelf>();
+        services.TryAddSingleton<IDataBroadcastRecords>(provider => provider.GetRequiredService<DataBroadcastShelf>());
         services.TryAddSingleton<IRecordingClockStart, FfprobeRecordingClockStart>();
         services.TryAddSingleton<IDataBroadcastTaker, TransportStreamDataBroadcastTaker>();
         services.TryAddSingleton<RecordingReadTurn>();

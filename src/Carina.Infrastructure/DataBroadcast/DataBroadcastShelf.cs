@@ -10,7 +10,7 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// recording named after it. A record is written beside its final name and moved over it, so a reader sees the
 /// old one or the new one and never half of either.
 /// </summary>
-public sealed class DataBroadcastShelf(CaptionSettings settings)
+public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcastRecords
 {
     public const string Extension = ".databroadcast";
 
@@ -57,6 +57,25 @@ public sealed class DataBroadcastShelf(CaptionSettings settings)
         try
         {
             return DataBroadcastRecordFormat.Read(await File.ReadAllBytesAsync(kept, cancellationToken));
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    public async Task<ModuleVersion?> ModuleAsync(RecordingId id, ModuleVersionKey key, CancellationToken cancellationToken)
+    {
+        if (PathOf(id) is not { } kept || !File.Exists(kept))
+        {
+            return null;
+        }
+
+        try
+        {
+            await using FileStream reading = new(kept, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 12, FileOptions.Asynchronous);
+
+            return await DataBroadcastRecordFormat.FindAsync(reading, key, cancellationToken);
         }
         catch (FileNotFoundException)
         {

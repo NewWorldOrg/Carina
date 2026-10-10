@@ -125,6 +125,139 @@ public static class DataBroadcastRecordFormat
         }
     }
 
+    /// <summary>
+    /// Finds one version in a record being read, stepping over every other version by its length without reading it,
+    /// or answers null when the bytes are not a record this format wrote or the record does not hold that version.
+    /// </summary>
+    public static async Task<ModuleVersion?> FindAsync(Stream reading, ModuleVersionKey key, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+
+        byte[] head = new byte[HeaderLength];
+
+        if (!await FilledAsync(reading, head, cancellationToken) || !Heads(head))
+        {
+            return null;
+        }
+
+        int carousels = BinaryPrimitives.ReadUInt16BigEndian(head.AsSpan(CarouselCountAt));
+        byte[] carouselHead = new byte[RecordedCarousel.HeaderBytes];
+
+        for (int carousel = 0; carousel < carousels; carousel++)
+        {
+            if (!await FilledAsync(reading, carouselHead, cancellationToken))
+            {
+                return null;
+            }
+
+            int tag = carouselHead[0];
+            uint downloadId = BinaryPrimitives.ReadUInt32BigEndian(carouselHead.AsSpan(1));
+            int versions = BinaryPrimitives.ReadUInt16BigEndian(carouselHead.AsSpan(5));
+
+            if (tag == key.Tag && downloadId == key.DownloadId)
+            {
+                return await FindInCarouselAsync(reading, tag, versions, key, cancellationToken);
+            }
+
+            if (!await PassedAsync(reading, versions, cancellationToken))
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task<ModuleVersion?> FindInCarouselAsync(
+        Stream reading,
+        int tag,
+        int versions,
+        ModuleVersionKey key,
+        CancellationToken cancellationToken)
+    {
+        byte[] versionHead = new byte[ModuleVersion.HeaderBytes];
+
+        for (int read = 0; read < versions; read++)
+        {
+            if (!await FilledAsync(reading, versionHead, cancellationToken))
+            {
+                return null;
+            }
+
+            uint entity = BinaryPrimitives.ReadUInt32BigEndian(versionHead.AsSpan(19));
+
+            if (BinaryPrimitives.ReadUInt16BigEndian(versionHead) != key.ModuleId || versionHead[2] != key.Version)
+            {
+                if (!Stepped(reading, entity))
+                {
+                    return null;
+                }
+
+                continue;
+            }
+
+            if (entity > reading.Length - reading.Position)
+            {
+                return null;
+            }
+
+            byte[] whole = new byte[ModuleVersion.HeaderBytes + entity];
+
+            versionHead.CopyTo(whole, 0);
+
+            return await FilledAsync(reading, whole.AsMemory(ModuleVersion.HeaderBytes), cancellationToken)
+                ? Found(tag, whole)
+                : null;
+        }
+
+        return null;
+    }
+
+    private static ModuleVersion? Found(int tag, byte[] whole)
+    {
+        ReadOnlyMemory<byte> at = whole;
+
+        try
+        {
+            return Version(tag, ref at);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<bool> PassedAsync(Stream reading, int versions, CancellationToken cancellationToken)
+    {
+        byte[] versionHead = new byte[ModuleVersion.HeaderBytes];
+
+        for (int read = 0; read < versions; read++)
+        {
+            if (!await FilledAsync(reading, versionHead, cancellationToken)
+                || !Stepped(reading, BinaryPrimitives.ReadUInt32BigEndian(versionHead.AsSpan(19))))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool Stepped(Stream reading, uint entity)
+    {
+        if (entity > reading.Length - reading.Position)
+        {
+            return false;
+        }
+
+        reading.Seek(entity, SeekOrigin.Current);
+
+        return true;
+    }
+
+    private static async Task<bool> FilledAsync(Stream reading, Memory<byte> into, CancellationToken cancellationToken)
+        => await reading.ReadAtLeastAsync(into, into.Length, throwOnEndOfStream: false, cancellationToken) == into.Length;
+
     private static DataBroadcastRecord? Body(ReadOnlyMemory<byte> bytes, ReadOnlySpan<byte> head)
     {
         int count = BinaryPrimitives.ReadUInt16BigEndian(head[CarouselCountAt..]);
