@@ -220,6 +220,24 @@ public sealed class DataCarouselsTests
         Assert.IsType<CarouselChange.CatalogueUpdated>(Assert.Single(afterwards));
     }
 
+    [Fact(DisplayName = "BR-BV-002: the whole counts what compressed modules inflate to, not only what they take to carry")]
+    public void TheWholeCountsWhatCompressedModulesInflateToNotOnlyWhatTheyTakeToCarry()
+    {
+        DataCarousels carousels = new();
+        long largest = CarouselLimits.Broadcast.LargestModule;
+        DiiModule[] modules = Enumerable.Range(0, 5)
+            .Select(id => DiiModule.Of(id, 1024 * 1024, 0, ModuleDescriptorWriter.Compression(largest)))
+            .ToArray();
+
+        IReadOnlyList<CarouselChange> fits = carousels.Push(0, CarriedSection.Of(Indication(1, modules[..4])));
+        IReadOnlyList<CarouselChange> past = carousels.Push(1, CarriedSection.Of(Indication(1, modules[4])));
+        IReadOnlyList<CarouselChange> alone = new DataCarousels().Push(0, CarriedSection.Of(Indication(1, modules)));
+
+        Assert.IsType<CarouselChange.CatalogueUpdated>(Assert.Single(fits));
+        Assert.Equal(CarouselDefect.TotalTooLarge, Assert.IsType<CarouselChange.Dropped>(Assert.Single(alone)).Defect);
+        Assert.Equal(CarouselDefect.TotalTooLarge, Assert.IsType<CarouselChange.Dropped>(Assert.Single(past)).Defect);
+    }
+
     [Fact(DisplayName = "BR-BV-002: the modules refused on the way are still reported when the whole then drops the carousel")]
     public void TheModulesRefusedOnTheWayAreStillReportedWhenTheWholeThenDropsTheCarousel()
     {

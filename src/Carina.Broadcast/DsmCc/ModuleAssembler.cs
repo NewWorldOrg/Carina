@@ -56,7 +56,7 @@ public sealed class ModuleAssembler
 
         var changes = new List<CarouselChange>();
         Dictionary<int, ModuleInfo> next = Admit(indication, changes);
-        long total = next.Values.Sum(module => module.ModuleSize);
+        long total = next.Values.Sum(LargestHeld);
 
         if (total > room)
         {
@@ -219,6 +219,9 @@ public sealed class ModuleAssembler
 
     private IReadOnlyList<CarouselChange> Rejected(CarouselDefect defect, int moduleId)
         => [new CarouselChange.Rejected(ComponentTag, defect, moduleId)];
+
+    private static long LargestHeld(ModuleInfo module)
+        => Math.Max(module.ModuleSize, module.Compression?.OriginalSize ?? 0);
 
     private static bool SameContent(ModuleInfo held, ModuleInfo listed)
         => held.ModuleVersion == listed.ModuleVersion && held.ModuleSize == listed.ModuleSize;
