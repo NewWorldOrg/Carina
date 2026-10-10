@@ -51,6 +51,66 @@ public sealed class DataBroadcastStreamTests
         Assert.Equal(5, info.DataEventId);
     }
 
+    [Fact(DisplayName = "BR-BD-001: an entry on the default version carries no BML version and its data event id follows the flags")]
+    public void AnEntryOnTheDefaultVersionCarriesNoBmlVersionAndItsDataEventIdFollowsTheFlags()
+    {
+        BxmlInfo info = Read(BxmlInfoWriter.Entry(autoStart: true, Resolution960By540, 0, 0, dataEventId: 6, defaultVersion: true));
+
+        Assert.True(info.UsesDefaultVersion);
+        Assert.True(info.AutoStart);
+        Assert.Null(info.BmlMajorVersion);
+        Assert.Null(info.BmlMinorVersion);
+        Assert.Equal(6, info.DataEventId);
+    }
+
+    [Fact(DisplayName = "BR-BD-001: an entry that uses XML carries the BXML version after the BML version")]
+    public void AnEntryThatUsesXmlCarriesTheBxmlVersionAfterTheBmlVersion()
+    {
+        BxmlInfo info = Read(BxmlInfoWriter.Entry(false, Resolution960By540, 0x0100, 0x0002, dataEventId: 4, useXml: true, bxmlMajorVersion: 0x0300, bxmlMinorVersion: 0x0004));
+
+        Assert.True(info.UsesXml);
+        Assert.Equal(0x0100, info.BmlMajorVersion);
+        Assert.Equal(0x0002, info.BmlMinorVersion);
+        Assert.Equal(0x0300, info.BxmlMajorVersion);
+        Assert.Equal(0x0004, info.BxmlMinorVersion);
+        Assert.Equal(4, info.DataEventId);
+    }
+
+    [Fact(DisplayName = "BR-BD-001: an entry on the default version that uses XML carries no version at all")]
+    public void AnEntryOnTheDefaultVersionThatUsesXmlCarriesNoVersionAtAll()
+    {
+        BxmlInfo info = Read(BxmlInfoWriter.Entry(false, 0, 0, 0, dataEventId: 2, defaultVersion: true, useXml: true));
+
+        Assert.Null(info.BxmlMajorVersion);
+        Assert.Equal(2, info.DataEventId);
+    }
+
+    [Fact(DisplayName = "BR-BD-001: a transmission format of 01 carries a reserved byte and no carousel information")]
+    public void ATransmissionFormatOf01CarriesAReservedByteAndNoCarouselInformation()
+    {
+        BxmlInfo info = Read(BxmlInfoWriter.Entry(false, 0, 1, 0, dataEventId: 2, transmissionFormat: 1));
+
+        Assert.Equal(1, info.TransmissionFormat);
+        Assert.Null(info.DataEventId);
+        Assert.Equal(1, info.BmlMajorVersion);
+    }
+
+    [Theory(DisplayName = "BR-BD-001: an additional_arib_bxml_info cut short at any length is left unread")]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void AnAdditionalAribBxmlInfoCutShortAtAnyLengthIsLeftUnread(bool defaultVersion, bool useXml)
+    {
+        byte[] whole = BxmlInfoWriter.Entry(true, 2, 1, 0, 3, defaultVersion, useXml, 1, 0);
+
+        for (int length = 1; length < whole.Length; length++)
+        {
+            Assert.Null(BxmlInfo.Read(whole[..length]));
+        }
+
+        Assert.NotNull(BxmlInfo.Read(whole));
+    }
+
     [Fact(DisplayName = "BR-BD-001: a stream that is not an entry point reads its carousel information right after the first byte")]
     public void AStreamThatIsNotAnEntryPointReadsItsCarouselInformationRightAfterTheFirstByte()
     {
@@ -131,6 +191,9 @@ public sealed class DataBroadcastStreamTests
         Assert.True(service.IsCarried);
         Assert.Null(service.Entry!.Bxml);
     }
+
+    private static BxmlInfo Read(byte[] bxmlInfo)
+        => Find(BxmlInfoWriter.DataBroadcastStream(EntryPid, BxmlInfoWriter.EntryComponentTag, bxmlInfo)).Entry!.Bxml!;
 
     private static DataBroadcastService Find(params byte[][] streams)
     {

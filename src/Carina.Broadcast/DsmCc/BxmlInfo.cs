@@ -1,21 +1,40 @@
 namespace Carina.Broadcast.DsmCc;
 
-public sealed record BxmlInfo(
-    int TransmissionFormat,
-    bool IsEntryPoint,
-    bool AutoStart,
-    int DocumentResolution,
-    int BmlMajorVersion,
-    int BmlMinorVersion,
-    int? DataEventId)
+public sealed record BxmlInfo
 {
     public const int DataCarouselFormat = 0;
 
-    private const int EntryFieldsSize = 6;
+    public const int ReservedFormat = 1;
 
-    private const int XmlVersionSize = 4;
+    private const int VersionPairSize = 4;
 
     private const int CarouselInfoSize = 2;
+
+    public int TransmissionFormat { get; private init; }
+
+    public bool IsEntryPoint { get; private init; }
+
+    public bool AutoStart { get; private init; }
+
+    public int DocumentResolution { get; private init; }
+
+    public bool UsesXml { get; private init; }
+
+    public bool UsesDefaultVersion { get; private init; }
+
+    public bool IsIndependent { get; private init; }
+
+    public bool StyleForTv { get; private init; }
+
+    public int? BmlMajorVersion { get; private init; }
+
+    public int? BmlMinorVersion { get; private init; }
+
+    public int? BxmlMajorVersion { get; private init; }
+
+    public int? BxmlMinorVersion { get; private init; }
+
+    public int? DataEventId { get; private init; }
 
     public static BxmlInfo? Read(ReadOnlySpan<byte> info)
     {
@@ -24,46 +43,71 @@ public sealed record BxmlInfo(
             return null;
         }
 
-        int format = info[0] >> 6;
-        bool entry = (info[0] & 0x20) != 0;
-
-        if (!entry)
+        BxmlInfo read = new()
         {
-            return WithCarouselInfo(new BxmlInfo(format, false, false, 0, 0, 0, null), info[1..]);
-        }
+            TransmissionFormat = info[0] >> 6,
+            IsEntryPoint = (info[0] & 0x20) != 0,
+        };
+        int at = 1;
 
-        if (info.Length < EntryFieldsSize)
-        {
-            return null;
-        }
-
-        bool usesXml = (info[1] & 0x80) != 0;
-        int carouselInfoAt = EntryFieldsSize + (usesXml ? XmlVersionSize : 0);
-
-        if (info.Length < carouselInfoAt)
+        if (read.IsEntryPoint && !TryReadEntry(info, ref at, ref read))
         {
             return null;
         }
 
-        BxmlInfo read = new(
-            format,
-            true,
-            (info[0] & 0x10) != 0,
-            info[0] & 0x0F,
-            (info[2] << 8) | info[3],
-            (info[4] << 8) | info[5],
-            null);
+        return WithCarouselInfo(read, info[at..]);
+    }
 
-        return WithCarouselInfo(read, info[carouselInfoAt..]);
+    private static bool TryReadEntry(ReadOnlySpan<byte> info, ref int at, ref BxmlInfo read)
+    {
+        if (info.Length < 2)
+        {
+            return false;
+        }
+
+        read = read with
+        {
+            AutoStart = (info[0] & 0x10) != 0,
+            DocumentResolution = info[0] & 0x0F,
+            UsesXml = (info[1] & 0x80) != 0,
+            UsesDefaultVersion = (info[1] & 0x40) != 0,
+            IsIndependent = (info[1] & 0x20) != 0,
+            StyleForTv = (info[1] & 0x10) != 0,
+        };
+        at = 2;
+
+        if (read.UsesDefaultVersion)
+        {
+            return true;
+        }
+
+        int versionsSize = read.UsesXml ? 2 * VersionPairSize : VersionPairSize;
+
+        if (info.Length < at + versionsSize)
+        {
+            return false;
+        }
+
+        read = read with
+        {
+            BmlMajorVersion = Word(info, at),
+            BmlMinorVersion = Word(info, at + 2),
+            BxmlMajorVersion = read.UsesXml ? Word(info, at + 4) : null,
+            BxmlMinorVersion = read.UsesXml ? Word(info, at + 6) : null,
+        };
+        at += versionsSize;
+
+        return true;
     }
 
     private static BxmlInfo? WithCarouselInfo(BxmlInfo read, ReadOnlySpan<byte> rest)
-    {
-        if (read.TransmissionFormat != DataCarouselFormat)
+        => read.TransmissionFormat switch
         {
-            return read;
-        }
+            DataCarouselFormat when rest.Length >= CarouselInfoSize => read with { DataEventId = rest[0] >> 4 },
+            DataCarouselFormat => null,
+            ReservedFormat when rest.IsEmpty => null,
+            _ => read,
+        };
 
-        return rest.Length < CarouselInfoSize ? null : read with { DataEventId = rest[0] >> 4 };
-    }
+    private static int Word(ReadOnlySpan<byte> info, int at) => (info[at] << 8) | info[at + 1];
 }
