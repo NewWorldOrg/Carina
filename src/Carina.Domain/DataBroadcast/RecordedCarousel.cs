@@ -2,7 +2,8 @@ namespace Carina.Domain.DataBroadcast;
 
 /// <summary>
 /// One carousel of a recording's data broadcast: its component tag, its download id, and every module version
-/// it carried in the order they were first seen.
+/// it carried in the order they were first seen. Versions first seen at the same moment keep the order they
+/// arrived in, which is the order they are given in.
 /// </summary>
 public sealed record RecordedCarousel
 {

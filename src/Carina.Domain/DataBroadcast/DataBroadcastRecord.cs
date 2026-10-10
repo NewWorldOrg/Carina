@@ -50,8 +50,8 @@ public sealed class DataBroadcastRecord
     public long Bytes => Carousels.Sum(carousel => carousel.Versions.Sum(version => version.Bytes));
 
     /// <summary>
-    /// For each module, the version first seen latest at or before <paramref name="at"/>, in order of carousel
-    /// and module.
+    /// For each module, the version first seen latest at or before <paramref name="at"/>, and of versions first
+    /// seen at the same moment the one that arrived last, in order of carousel and module.
     /// </summary>
     public IReadOnlyList<ModuleVersion> VersionsAt(long at)
         => [
@@ -59,7 +59,7 @@ public sealed class DataBroadcastRecord
                 .SelectMany(carousel => carousel.Versions)
                 .Where(version => version.FirstSeen <= at)
                 .GroupBy(version => (version.Tag, version.ModuleId))
-                .Select(module => module.MaxBy(version => version.FirstSeen)!)
+                .Select(module => module.Aggregate((latest, next) => next.FirstSeen >= latest.FirstSeen ? next : latest))
                 .OrderBy(version => version.Tag)
                 .ThenBy(version => version.ModuleId),
         ];

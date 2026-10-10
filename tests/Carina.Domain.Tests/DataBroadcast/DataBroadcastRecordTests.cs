@@ -141,4 +141,19 @@ public sealed class DataBroadcastRecordTests
 
         Assert.Equal((7 + 11 + 100) + (7 + 5 + 20), version.Bytes);
     }
+
+    [Fact(DisplayName = "BR-BD-006: of two versions first seen at the same moment, the one that arrived last is played")]
+    public void OfTwoVersionsFirstSeenTogetherTheOneThatArrivedLastIsPlayed()
+    {
+        Assert.Equal(2, Assert.Single(Together(1, 2).VersionsAt(100)).Version);
+        Assert.Equal(1, Assert.Single(Together(2, 1).VersionsAt(100)).Version);
+    }
+
+    private static DataBroadcastRecord Together(int first, int second)
+        => new(
+            0,
+            Carousels.Entry,
+            [new RecordedCarousel(Carousels.Entry, 1, [Carousels.Version(Carousels.Entry, 0, first, 100), Carousels.Version(Carousels.Entry, 0, second, 100)])],
+            [],
+            false);
 }
