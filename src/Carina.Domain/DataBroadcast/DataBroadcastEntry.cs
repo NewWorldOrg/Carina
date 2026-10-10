@@ -8,8 +8,6 @@ namespace Carina.Domain.DataBroadcast;
 /// </summary>
 public sealed record DataBroadcastEntry
 {
-    public const int EntryComponentTag = 0x40;
-
     public DataBroadcastEntry(ServiceId service, int entryTag, bool autoStart)
     {
         ArgumentNullException.ThrowIfNull(service);

@@ -31,5 +31,15 @@ public sealed record CarouselResource
 
     public ReadOnlyMemory<byte> Body { get; }
 
+    public bool IsTheSameAs(CarouselResource other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return Path == other.Path
+               && MediaType == other.MediaType
+               && Form == other.Form
+               && Body.Span.SequenceEqual(other.Body.Span);
+    }
+
     public long Bytes => FramingBytes + Encoding.UTF8.GetByteCount(Path) + (long)Body.Length;
 }

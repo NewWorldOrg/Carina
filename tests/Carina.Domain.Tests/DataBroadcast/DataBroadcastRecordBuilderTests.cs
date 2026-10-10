@@ -63,6 +63,22 @@ public sealed class DataBroadcastRecordBuilderTests
         Assert.Equal(0, record.Modules);
     }
 
+    [Fact(DisplayName = "BR-BD-005: a version put together again with other content takes the place of what was held")]
+    public void AVersionPutTogetherAgainWithOtherContentTakesItsPlace()
+    {
+        DataBroadcastRecord record = Read(
+            (Carousels.Carried(), 0),
+            (Carousels.Listing(Carousels.Entry, (0, 1), (1, 1)), 0),
+            (Carousels.Completed(Carousels.Entry, 0, 1), 100),
+            (Carousels.Completed(Carousels.Entry, 1, 1), 150),
+            (Carousels.Listing(Carousels.Entry, 1, [0], (0, 1), (1, 1)), 200),
+            (Carousels.Completed(Carousels.Entry, 0, 1, "other.bml"), 300));
+
+        Assert.Equal(
+            [(1, 150L, "startup.bml"), (0, 300L, "other.bml")],
+            Assert.Single(record.Carousels).Versions.Select(version => (version.ModuleId, version.FirstSeen, version.Resources[0].Path)));
+    }
+
     [Fact(DisplayName = "BR-BD-005: a carousel whose download changes goes on as another carousel of the record")]
     public void ACarouselWhoseDownloadChangesGoesOnAsAnotherCarousel()
     {

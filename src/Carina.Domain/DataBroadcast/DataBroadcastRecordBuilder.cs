@@ -3,7 +3,7 @@ namespace Carina.Domain.DataBroadcast;
 /// <summary>
 /// Gathers what a <see cref="CarouselState"/> says changed while a recording is read, into the record of
 /// its data broadcast: every module version of every download once, when each was last held valid, and every
-/// event message.
+/// event message. A version put together again with other content takes the place of what was held.
 /// </summary>
 public sealed class DataBroadcastRecordBuilder
 {
@@ -76,10 +76,14 @@ public sealed class DataBroadcastRecordBuilder
     {
         VersionKey key = new(Note(module.Tag, downloadId), module.ModuleId, module.Version);
 
-        if (versions.TryAdd(key, module))
+        if (versions.TryGetValue(key, out ModuleVersion? held) && held.CarriesTheSameAs(module))
         {
-            arrivals.Add(key);
+            return;
         }
+
+        versions[key] = module;
+        arrivals.Remove(key);
+        arrivals.Add(key);
     }
 
     private CarouselKey Note(int tag, uint downloadId)

@@ -147,4 +147,15 @@ public sealed class CarouselValueTests
         Assert.Equal(TimeSpan.FromSeconds(1.5), version.LastSeenAt);
         Assert.Equal(TimeSpan.FromHours(27), message.At);
     }
+
+    [Fact]
+    public void TwoVersionsCarryTheSameWhenEveryResourceIsTheSame()
+    {
+        ModuleVersion version = new(0x40, 0, 0, 0, 0, [Carousels.Resource("a", 3)]);
+
+        Assert.True(version.CarriesTheSameAs(new ModuleVersion(0x40, 0, 0, 50, 50, [Carousels.Resource("a", 3)])));
+        Assert.False(version.CarriesTheSameAs(new ModuleVersion(0x40, 0, 0, 0, 0, [Carousels.Resource("a", 4)])));
+        Assert.False(version.CarriesTheSameAs(new ModuleVersion(0x40, 0, 0, 0, 0, [Carousels.Resource("b", 3)])));
+        Assert.False(version.CarriesTheSameAs(new ModuleVersion(0x40, 0, 0, 0, 0, [Carousels.Resource("a", 3), Carousels.Resource("b", 3)])));
+    }
 }

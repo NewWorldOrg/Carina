@@ -48,10 +48,11 @@ public sealed record ModuleVersion
 
     public ModuleVersion SeenAt(long at) => at <= LastSeen ? this : this with { LastSeen = at };
 
-    public bool IsTheSameAs(ModuleVersion other)
+    public bool CarriesTheSameAs(ModuleVersion other)
     {
         ArgumentNullException.ThrowIfNull(other);
 
-        return Tag == other.Tag && ModuleId == other.ModuleId && Version == other.Version;
+        return Resources.Count == other.Resources.Count
+               && Resources.Zip(other.Resources).All(pair => pair.First.IsTheSameAs(pair.Second));
     }
 }
