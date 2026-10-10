@@ -175,6 +175,24 @@ public sealed class DataBroadcastRecordTests
         Assert.True(kept.Incomplete);
     }
 
+    [Fact(DisplayName = "BR-BD-005: a carousel holding more versions than a count of two bytes tells leaves out its oldest superseded versions, whatever the bytes")]
+    public void ACarouselHoldingMoreVersionsThanTwoBytesTellLeavesOutItsOldest()
+    {
+        ModuleVersion[] versions =
+        [
+            .. Enumerable.Range(0, (256 * 256) + 1)
+                .Select(each => Carousels.Version(Carousels.Other, 1 + (each / 256), each % 256, each)),
+        ];
+        DataBroadcastRecord record = new(0, Carousels.Entry, [new RecordedCarousel(Carousels.Other, 1, versions)], [], false);
+
+        DataBroadcastRecord kept = record.Within(DataBroadcastRecord.MostBytes);
+
+        Assert.True(record.Bytes < DataBroadcastRecord.MostBytes);
+        Assert.Equal(ushort.MaxValue, kept.Carousels[0].Versions.Count);
+        Assert.Equal([2L, 3L], kept.Carousels[0].Versions.Take(2).Select(version => version.FirstSeen));
+        Assert.True(kept.Incomplete);
+    }
+
     [Fact(DisplayName = "BR-BD-005: the startup document and the latest version of every module stay even when the record does not fit")]
     public void TheStartupDocumentAndTheLatestVersionsStay()
     {
