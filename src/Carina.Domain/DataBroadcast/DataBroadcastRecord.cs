@@ -99,8 +99,8 @@ public sealed class DataBroadcastRecord
             Incomplete);
 
     /// <summary>
-    /// This record within <paramref name="mostBytes"/>: versions that a later version of the same module took the
-    /// place of are left out, first seen earliest first, until what is left fits. The latest version of every
+    /// This record within <paramref name="mostBytes"/>: versions that a later version of the same module of the same
+    /// download took the place of are left out, first seen earliest first, until what is left fits. The latest version of every
     /// module and every version of the startup document stay even when the record still does not fit, and it is
     /// marked incomplete whenever it was over.
     /// </summary>
@@ -141,7 +141,11 @@ public sealed class DataBroadcastRecord
 
     private IEnumerable<ModuleVersion> Superseded()
     {
-        HashSet<ModuleVersion> latest = new(VersionsAt(long.MaxValue), ReferenceEqualityComparer.Instance);
+        HashSet<ModuleVersion> latest = new(
+            Carousels.SelectMany(carousel => carousel.Versions
+                .GroupBy(version => version.ModuleId)
+                .Select(module => module.Aggregate((kept, next) => next.FirstSeen >= kept.FirstSeen ? next : kept))),
+            ReferenceEqualityComparer.Instance);
 
         return Carousels
             .SelectMany(carousel => carousel.Versions)

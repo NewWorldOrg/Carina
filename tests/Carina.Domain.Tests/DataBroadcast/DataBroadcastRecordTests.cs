@@ -155,6 +155,26 @@ public sealed class DataBroadcastRecordTests
         Assert.Equal(record.Events, kept.Events);
     }
 
+    [Fact(DisplayName = "BR-BD-005: the same module id in another download of the carousel is another module, whose latest version stays")]
+    public void TheSameModuleIdInAnotherDownloadIsAnotherModule()
+    {
+        DataBroadcastRecord record = new(
+            0,
+            Carousels.Entry,
+            [
+                new RecordedCarousel(Carousels.Other, 1, [Carousels.Version(Carousels.Other, 1, 1, 100)]),
+                new RecordedCarousel(Carousels.Other, 2, [Carousels.Version(Carousels.Other, 1, 1, 200), Carousels.Version(Carousels.Other, 1, 2, 300)]),
+            ],
+            [],
+            false);
+
+        DataBroadcastRecord kept = record.Within(0);
+
+        Assert.Equal([(1u, 1)], kept.Carousels[0].Versions.Select(version => (kept.Carousels[0].DownloadId, version.Version)));
+        Assert.Equal([2], kept.Carousels[1].Versions.Select(version => version.Version));
+        Assert.True(kept.Incomplete);
+    }
+
     [Fact(DisplayName = "BR-BD-005: the startup document and the latest version of every module stay even when the record does not fit")]
     public void TheStartupDocumentAndTheLatestVersionsStay()
     {
