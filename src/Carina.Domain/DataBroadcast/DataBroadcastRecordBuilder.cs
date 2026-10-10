@@ -3,7 +3,8 @@ namespace Carina.Domain.DataBroadcast;
 /// <summary>
 /// Gathers what a <see cref="CarouselState"/> says changed while a recording is read, into the record of
 /// its data broadcast: every module version of every download once, when each was last held valid, and every
-/// event message. A version put together again with other content takes the place of what was held.
+/// event message. A version put together again with other content takes the place of what was held, and a
+/// carousel left out for being too large marks the record incomplete.
 /// </summary>
 public sealed class DataBroadcastRecordBuilder
 {
@@ -13,6 +14,7 @@ public sealed class DataBroadcastRecordBuilder
     private readonly List<EventMessage> events = [];
 
     private int? entryTag;
+    private bool incomplete;
 
     public void Take(CarouselDelta delta, long at)
     {
@@ -32,6 +34,14 @@ public sealed class DataBroadcastRecordBuilder
                 events.Add(came.Message);
 
                 break;
+            case CarouselDelta.CarouselDropped:
+                incomplete = true;
+
+                break;
+            case CarouselDelta.Absent:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(delta), delta, "A change is one of the kinds named.");
         }
     }
 
@@ -54,7 +64,7 @@ public sealed class DataBroadcastRecordBuilder
                 carousel.DownloadId,
                 [.. arrivals.Where(key => key.Carousel == carousel).Select(key => versions[key])]))],
             events,
-            false);
+            incomplete);
     }
 
     private void Hold(CarouselCatalog catalog, long at)

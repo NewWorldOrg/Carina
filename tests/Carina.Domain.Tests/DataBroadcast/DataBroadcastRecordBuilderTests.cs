@@ -105,6 +105,23 @@ public sealed class DataBroadcastRecordBuilderTests
         Assert.Equal(7u, Assert.Single(record.Carousels).DownloadId);
     }
 
+    [Fact(DisplayName = "BR-BD-005: a recording with a carousel left out for being too large is marked incomplete")]
+    public void ACarouselLeftOutMarksTheRecordIncomplete()
+    {
+        DataBroadcastRecord record = Read(
+            (Carousels.Carried(), 0),
+            (Carousels.Listing(Carousels.Entry, (0, 1)), 0),
+            (new CarouselSignal.Dropped(Carousels.Other, CarouselDropReason.TooManyModules), 100));
+
+        Assert.True(record.Incomplete);
+    }
+
+    [Fact]
+    public void NoChangeAtAllIsRefused()
+    {
+        Assert.Throws<ArgumentNullException>(() => new DataBroadcastRecordBuilder().Take(null!, 0));
+    }
+
     [Fact]
     public void NothingIsRecordedWhenNoCatalogWasEverRead()
     {
