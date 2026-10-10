@@ -7,7 +7,7 @@ public sealed class EventMessageClock
     public const int MostWaiting = 256;
 
     private readonly Dictionary<int, int> versions = [];
-    private readonly List<GeneralEvent> waiting = [];
+    private readonly List<(GeneralEvent Event, long Npt)> waiting = [];
 
     private NptReference? reference;
 
@@ -51,31 +51,33 @@ public sealed class EventMessageClock
 
         reference = arrived;
 
-        foreach (GeneralEvent held in waiting)
+        foreach ((GeneralEvent held, long npt) in waiting)
         {
-            outcomes.Add(Timed(held, OnSystemClock(arrived, held.Npt!.Value)));
+            outcomes.Add(Timed(held, OnSystemClock(arrived, npt)));
         }
 
         waiting.Clear();
     }
 
     private EventMessageOutcome? Time(GeneralEvent carried, long receivedPts)
-    {
-        switch (carried.TimeMode)
+        => carried switch
         {
-            case GeneralEvent.Immediate:
-                return Timed(carried, Wrapped(receivedPts));
-            case GeneralEvent.NptTime when reference is not null:
-                return Timed(carried, OnSystemClock(reference, carried.Npt!.Value));
-            case GeneralEvent.NptTime when waiting.Count < MostWaiting:
-                waiting.Add(carried);
+            { TimeMode: GeneralEvent.Immediate } => Timed(carried, Wrapped(receivedPts)),
+            { Npt: long npt } when reference is not null => Timed(carried, OnSystemClock(reference, npt)),
+            { Npt: long npt } => Wait(carried, npt),
+            _ => new EventMessageOutcome.Discarded(EventMessageDefect.UnsupportedTimeMode),
+        };
 
-                return null;
-            case GeneralEvent.NptTime:
-                return new EventMessageOutcome.Discarded(EventMessageDefect.TooManyWaiting);
-            default:
-                return new EventMessageOutcome.Discarded(EventMessageDefect.UnsupportedTimeMode);
+    private EventMessageOutcome.Discarded? Wait(GeneralEvent carried, long npt)
+    {
+        if (waiting.Count >= MostWaiting)
+        {
+            return new EventMessageOutcome.Discarded(EventMessageDefect.TooManyWaiting);
         }
+
+        waiting.Add((carried, npt));
+
+        return null;
     }
 
     private static EventMessageOutcome.Timed Timed(GeneralEvent carried, long firesAt)
