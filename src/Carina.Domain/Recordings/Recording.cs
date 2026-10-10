@@ -630,12 +630,13 @@ public sealed class Recording
     public void DataBroadcastFailed(DateTime at) => Keep(DataBroadcast.Failed(), Settled(at));
 
     /// <summary>
-    /// Puts the record of the data broadcast back to coming: one that failed with tries left, or one that is made
-    /// and no longer kept.
+    /// Puts the record of the data broadcast to coming: one not yet due on a recording that has ended, one that
+    /// failed with tries left, or one that is made and no longer kept.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The record neither failed with tries left nor is made.</exception>
-    public void DataBroadcastAgain()
-        => Keep(DataBroadcastState is DataBroadcastState.Made ? DataBroadcast.Lost() : DataBroadcast.Retried(), null);
+    /// <exception cref="InvalidOperationException">
+    /// The record is none of those, or is not yet due on a recording still being written.
+    /// </exception>
+    public void DataBroadcastAgain() => Keep(DueAgain(), null);
 
     public void Acquire(TunerDeviceId tunerDeviceId)
     {
@@ -1048,6 +1049,14 @@ public sealed class Recording
                 nameof(madeAt));
         }
     }
+
+    private DataBroadcastProgress DueAgain()
+        => DataBroadcastState switch
+        {
+            DataBroadcastState.None when !IsInFlight => DataBroadcast.RecordingEnded(),
+            DataBroadcastState.Made => DataBroadcast.Lost(),
+            _ => DataBroadcast.Retried(),
+        };
 
     private DateTime Settled(DateTime at)
     {

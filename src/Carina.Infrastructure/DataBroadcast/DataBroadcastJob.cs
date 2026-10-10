@@ -16,9 +16,10 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// Takes the data broadcast out of ended recordings one at a time, newest first, at the moments the captions are
 /// taken, and keeps the record of it on the shelf beside them. A pass starts nothing unless the machine is idle as
 /// <see cref="Idleness"/> judges it for the captions too, and reads a recording's
-/// file only in its turn among the passes that read recordings through. It first puts back in the queue every
-/// record that failed with tries left and every record the row says is made while none is kept. A recording
-/// whose file has gone keeps the record already taken of it.
+/// file only in its turn among the passes that read recordings through. It first puts in the queue every ended
+/// recording whose record is not yet due, and, once idle, every record that failed with tries left and every
+/// record the row says is made while none is kept. A recording whose file has gone keeps the record already taken
+/// of it.
 /// </summary>
 public sealed class DataBroadcastJob(
     IServiceScopeFactory scopes,
@@ -99,13 +100,14 @@ public sealed class DataBroadcastJob(
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IDataBroadcastWorklist worklist = scope.ServiceProvider.GetRequiredService<IDataBroadcastWorklist>();
         IBusynessReader busyness = scope.ServiceProvider.GetRequiredService<IBusynessReader>();
+        int caughtUp = await worklist.CatchUpEndedAsync(cancellationToken);
 
         if (await BusyAsync(busyness, cancellationToken))
         {
-            return DataBroadcastPass.YieldedBeforeReadingAnything();
+            return Finished(DataBroadcastPass.YieldedBeforeReadingAnything(caughtUp));
         }
 
-        int requeued = await worklist.RetryFailedAsync(cancellationToken) + await RequeueLostAsync(worklist, cancellationToken);
+        int requeued = caughtUp + await worklist.RetryFailedAsync(cancellationToken) + await RequeueLostAsync(worklist, cancellationToken);
         IReadOnlyList<OutputRoot> withinReach = [.. mounts.OutputRoots.Select(mounted => mounted.Root)];
         IReadOnlyList<DataBroadcastSubject> awaiting = await worklist.AwaitingAsync(withinReach, settings.AtMostAPass, cancellationToken);
         int outOfReach = await worklist.WaitingOutOfReachAsync(withinReach, cancellationToken);
@@ -134,15 +136,18 @@ public sealed class DataBroadcastJob(
             tally = tally.Counting(await TakeAsync(worklist, subject, cancellationToken));
         }
 
-        DataBroadcastPass pass = DataBroadcastPass.Of(
+        return Finished(DataBroadcastPass.Of(
             awaiting.Count,
             tally.Made,
             tally.Missing,
             tally.Failed,
             outOfReach,
             tally.Yielded,
-            requeued);
+            requeued));
+    }
 
+    private DataBroadcastPass Finished(DataBroadcastPass pass)
+    {
         if (pass.Settled > 0 || pass.Requeued > 0)
         {
             events.Signal(AppEventName.Recordings);

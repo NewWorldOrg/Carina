@@ -218,6 +218,19 @@ public sealed class DataBroadcastJobTests : IDisposable
         Assert.Equal(["recordings"], events.Signalled);
     }
 
+    [Fact(DisplayName = "BR-BS-001: recordings that ended with no record due are put to coming first, even when the machine is busy")]
+    public async Task RecordingsThatEndedWithNoRecordDueArePutToComingFirst()
+    {
+        worklist.EndedNotYetDue = 2;
+        watching.Anyone = true;
+
+        DataBroadcastPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal(0, worklist.EndedNotYetDue);
+        Assert.Equal((true, 2), (pass.Yielded, pass.Requeued));
+        Assert.Equal(["recordings"], events.Signalled);
+    }
+
     [Fact(DisplayName = "BR-BS-001: a recording that goes while its data broadcast is taken keeps nothing on the shelf")]
     public async Task ARecordingThatGoesKeepsNothing()
     {
@@ -424,6 +437,8 @@ public sealed class DataBroadcastJobTests : IDisposable
 
         public int FailedWithTriesLeft { get; set; }
 
+        public int EndedNotYetDue { get; set; }
+
         public int? AskedFor { get; private set; }
 
         public IReadOnlyList<OutputRoot> AskedWithin { get; private set; } = [];
@@ -445,6 +460,14 @@ public sealed class DataBroadcastJobTests : IDisposable
 
         public Task<IReadOnlyList<RecordingId>> MadeAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<RecordingId>>([.. Made]);
+
+        public Task<int> CatchUpEndedAsync(CancellationToken cancellationToken)
+        {
+            int caughtUp = EndedNotYetDue;
+            EndedNotYetDue = 0;
+
+            return Task.FromResult(caughtUp);
+        }
 
         public Task<int> RetryFailedAsync(CancellationToken cancellationToken)
         {

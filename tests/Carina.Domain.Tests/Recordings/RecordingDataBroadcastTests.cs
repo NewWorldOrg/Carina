@@ -85,6 +85,16 @@ public sealed class RecordingDataBroadcastTests
         Assert.Equal((DataBroadcastState.Coming, (DateTime?)null, (int?)null, 0), Of(recording));
     }
 
+    [Fact(DisplayName = "BR-BS-001: a recording that ended with no record due, under a process that did not know it, has it coming")]
+    public void ARecordingThatEndedWithNoRecordDueHasItComing()
+    {
+        Recording recording = Rehydrated(RecordingOutcome.Failed, DataBroadcastProgress.NotYet, null);
+
+        recording.DataBroadcastAgain();
+
+        Assert.Equal((DataBroadcastState.Coming, (DateTime?)null, (int?)null, 0), Of(recording));
+    }
+
     [Fact]
     public void ARecordThatIsMissingDoesNotComeAgainUnlessTheRecordingIsDescrambled()
     {

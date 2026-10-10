@@ -46,7 +46,8 @@ public sealed record DataBroadcastPass
     public bool Yielded { get; }
 
     /// <summary>
-    /// How many records were put back to coming: failed with tries left, or made and no longer kept.
+    /// How many records were put to coming: not yet due on a recording that has ended, failed with tries left, or
+    /// made and no longer kept.
     /// </summary>
     public int Requeued { get; }
 
@@ -81,7 +82,12 @@ public sealed record DataBroadcastPass
         return new DataBroadcastPass(false, false, read, made, missing, failed, outOfReach, yielded, requeued);
     }
 
-    public static DataBroadcastPass YieldedBeforeReadingAnything() => new(false, false, 0, 0, 0, 0, 0, true, 0);
+    public static DataBroadcastPass YieldedBeforeReadingAnything(int requeued)
+    {
+        Counted(requeued, nameof(requeued));
+
+        return new DataBroadcastPass(false, false, 0, 0, 0, 0, 0, true, requeued);
+    }
 
     public static DataBroadcastPass RefusedBecauseOneIsRunning() => new(true, false, 0, 0, 0, 0, 0, false, 0);
 

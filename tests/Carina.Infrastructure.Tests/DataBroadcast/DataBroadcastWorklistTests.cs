@@ -8,6 +8,8 @@ using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Integrity;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace Carina.Infrastructure.Tests.DataBroadcast;
 
 [Collection(RepositoryDatabaseCollection.Name)]
@@ -121,6 +123,25 @@ public sealed class DataBroadcastWorklistTests(RepositoryDatabase database)
         await DescrambleAsync(recording.Id, Now.AddHours(4));
 
         Assert.Equal(recording.Id, Assert.Single(await AwaitingAsync(alone)).Id);
+    }
+
+    [Fact(DisplayName = "BR-BS-001: a recording that ended with no record due, under a process that did not know the record, is put to coming")]
+    public async Task ARecordingThatEndedWithNoRecordDueIsPutToComing()
+    {
+        OutputRoot alone = Alone();
+        Recording ended = await EndedAsync(alone, 7311);
+        Recording writing = await AddAsync(alone, 7312);
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            await context.Database.ExecuteSqlAsync($"UPDATE recording SET data_broadcast_state = 'None' WHERE id = {ended.Id.Value}", Cancel);
+        }
+
+        Assert.Empty(await AwaitingAsync(alone));
+        Assert.True(await AskAsync(worklist => worklist.CatchUpEndedAsync(Cancel)) >= 1);
+
+        Assert.Equal(ended.Id, Assert.Single(await AwaitingAsync(alone)).Id);
+        Assert.Equal(DataBroadcastState.None, (await ReadAsync(writing.Id)).DataBroadcastState);
     }
 
     [Fact(DisplayName = "BR-BS-001: a recording no longer in the ledger is answered so, and nothing is written")]

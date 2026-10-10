@@ -15,6 +15,12 @@ public interface IDataBroadcastWorklist
     Task<int> WaitingOutOfReachAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Puts every recording that has ended with its record not yet due — one that ended while a process that did
+    /// not know the record was running — to coming, and answers how many there were.
+    /// </summary>
+    Task<int> CatchUpEndedAsync(CancellationToken cancellationToken);
+
+    /// <summary>
     /// The recordings whose row says their record is made.
     /// </summary>
     Task<IReadOnlyList<RecordingId>> MadeAsync(CancellationToken cancellationToken);

@@ -52,22 +52,17 @@ public sealed class DataBroadcastWorklist(CarinaDbContext context, TimeProvider 
             .Select(recording => recording.Id)
             .ToListAsync(cancellationToken);
 
-    public async Task<int> RetryFailedAsync(CancellationToken cancellationToken)
-    {
-        List<Recording> due = await context.Set<Recording>()
-            .Where(recording => recording.DataBroadcastState == DataBroadcastState.Failed
-                                && recording.DataBroadcastAttempts < DataBroadcastProgress.TriesAtMost)
-            .ToListAsync(cancellationToken);
+    public Task<int> CatchUpEndedAsync(CancellationToken cancellationToken)
+        => AgainAsync(
+            context.Set<Recording>().Where(recording => recording.Outcome != null
+                                                        && recording.DataBroadcastState == DataBroadcastState.None),
+            cancellationToken);
 
-        foreach (Recording recording in due)
-        {
-            recording.DataBroadcastAgain();
-        }
-
-        await context.SaveChangesAsync(cancellationToken);
-
-        return due.Count;
-    }
+    public Task<int> RetryFailedAsync(CancellationToken cancellationToken)
+        => AgainAsync(
+            context.Set<Recording>().Where(recording => recording.DataBroadcastState == DataBroadcastState.Failed
+                                                        && recording.DataBroadcastAttempts < DataBroadcastProgress.TriesAtMost),
+            cancellationToken);
 
     public Task<bool> LostAsync(RecordingId id, CancellationToken cancellationToken)
         => MoveAsync(id, recording => recording.DataBroadcastAgain(), cancellationToken);
@@ -77,6 +72,20 @@ public sealed class DataBroadcastWorklist(CarinaDbContext context, TimeProvider 
 
     public Task<bool> FailedAsync(RecordingId id, CancellationToken cancellationToken)
         => MoveAsync(id, recording => recording.DataBroadcastFailed(Now()), cancellationToken);
+
+    private async Task<int> AgainAsync(IQueryable<Recording> due, CancellationToken cancellationToken)
+    {
+        List<Recording> moved = await due.ToListAsync(cancellationToken);
+
+        foreach (Recording recording in moved)
+        {
+            recording.DataBroadcastAgain();
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+
+        return moved.Count;
+    }
 
     private async Task<bool> MoveAsync(RecordingId id, Action<Recording> move, CancellationToken cancellationToken)
     {
