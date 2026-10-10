@@ -27,7 +27,7 @@ public sealed class DataBroadcastShelf(CaptionSettings settings)
 
         try
         {
-            await using (FileStream writing = new(unfinished, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.Asynchronous))
+            await using (FileStream writing = File.Create(unfinished, 1 << 16, FileOptions.Asynchronous))
             {
                 DataBroadcastRecordFormat.Write(record, writing);
                 await writing.FlushAsync(cancellationToken);
