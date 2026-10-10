@@ -122,6 +122,15 @@ public sealed class DataBroadcastJob(
                 break;
             }
 
+            using IDisposable reading = await turn.TakeAsync(cancellationToken);
+
+            if (await BusyAsync(busyness, cancellationToken))
+            {
+                tally = tally with { Yielded = true };
+
+                break;
+            }
+
             tally = tally.Counting(await TakeAsync(worklist, subject, cancellationToken));
         }
 
@@ -224,12 +233,7 @@ public sealed class DataBroadcastJob(
                 : LostMount(subject);
         }
 
-        DataBroadcastTaking taking;
-
-        using (await turn.TakeAsync(cancellationToken))
-        {
-            taking = await taker.TakeAsync(source, subject.Service, cancellationToken);
-        }
+        DataBroadcastTaking taking = await taker.TakeAsync(source, subject.Service, cancellationToken);
 
         if (taking.Fault is { } fault)
         {

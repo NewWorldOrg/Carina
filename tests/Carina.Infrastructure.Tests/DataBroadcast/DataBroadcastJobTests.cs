@@ -255,6 +255,23 @@ public sealed class DataBroadcastJobTests : IDisposable
         Assert.False(turn.Held);
     }
 
+    [Fact(DisplayName = "BR-BS-001: somebody who starts watching while the pass waits for its turn stops it before anything is read, and the turn is given back")]
+    public async Task SomebodyWhoStartsWatchingWhileThePassWaitsForItsTurnStopsIt()
+    {
+        DataBroadcastSubject subject = Recorded();
+        IDisposable captions = await turn.TakeAsync(Cancel);
+
+        Task<DataBroadcastPass> waiting = Job().RunAsync(Cancel);
+        watching.Anyone = true;
+        captions.Dispose();
+        DataBroadcastPass pass = await waiting;
+
+        Assert.True(pass.Yielded);
+        Assert.Empty(taker.Asked);
+        Assert.DoesNotContain(worklist.Written, written => written.Id == subject.Id);
+        Assert.False(turn.Held);
+    }
+
     [Fact]
     public async Task APassWithNowhereToKeepRecordsRefusesAndReadsNothing()
     {

@@ -166,6 +166,13 @@ public sealed class CaptionJob(
                 return tally with { Yielded = true };
             }
 
+            using IDisposable reading = await turn.TakeAsync(cancellationToken);
+
+            if (await BusyAsync(busyness, cancellationToken))
+            {
+                return tally with { Yielded = true };
+            }
+
             tally = tally.Counting(await TakeAsync(worklist, subject, retaking, cancellationToken));
         }
 
@@ -345,7 +352,6 @@ public sealed class CaptionJob(
             return LeftAsItWas(subject.Id, "its file is not within reach");
         }
 
-        using IDisposable reading = await turn.TakeAsync(cancellationToken);
         CaptionTranscription transcription = await transcriber.TranscribeAsync(
             Path.Combine(root, subject.FileName.Value),
             subject.Service,
@@ -402,7 +408,6 @@ public sealed class CaptionJob(
                 : LostMount(subject);
         }
 
-        using IDisposable reading = await turn.TakeAsync(cancellationToken);
         CaptionTranscription transcription = await transcriber.TranscribeAsync(source, subject.Service, cancellationToken);
 
         if (transcription.Fault is { } fault)

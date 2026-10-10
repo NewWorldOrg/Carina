@@ -81,6 +81,23 @@ public sealed class CaptionJobTests : IDisposable
         Assert.False(turn.Held);
     }
 
+    [Fact(DisplayName = "BR-BS-001: something that starts being recorded while the caption pass waits for its turn stops it before anything is read, and the turn is given back")]
+    public async Task SomethingRecordedWhileThePassWaitsForItsTurnStopsIt()
+    {
+        Recorded();
+        IDisposable dataBroadcast = await turn.TakeAsync(Cancel);
+
+        Task<CaptionPass> waiting = Job().RunAsync(Cancel);
+        worklist.BeingRecorded = true;
+        dataBroadcast.Dispose();
+        CaptionPass pass = await waiting;
+
+        Assert.True(pass.Yielded);
+        Assert.Empty(transcriber.Asked);
+        Assert.Empty(worklist.Written);
+        Assert.False(turn.Held);
+    }
+
     [Fact]
     public async Task BrPd016AServiceWithNoCaptionStreamHasNoCaptionsAndAnythingKeptBeforeGoes()
     {
