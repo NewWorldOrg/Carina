@@ -15,7 +15,7 @@ public static class ModuleContent
                 return new ModuleContentRead.Rejected(CarouselDefect.UnsupportedCompression);
             }
 
-            if (compression.OriginalSize > largestModule)
+            if (compression.OriginalSize > largestModule || compression.OriginalSize > int.MaxValue)
             {
                 return new ModuleContentRead.Rejected(CarouselDefect.ModuleTooLarge);
             }

@@ -194,6 +194,14 @@ public sealed class ModuleContentTests
             Defect(EntityWriter.Zlib([0x01]), ModuleDescriptorWriter.Compression(Largest + 1)));
     }
 
+    [Fact(DisplayName = "BR-BV-002: an original size past what one array can hold is discarded before inflating whatever the largest module")]
+    public void AnOriginalSizePastWhatOneArrayCanHoldIsDiscardedBeforeInflatingWhateverTheLargestModule()
+    {
+        ModuleContentRead read = ModuleContent.Open(EntityWriter.Zlib([0x01]), Info(ModuleDescriptorWriter.Compression(0xFFFF_FFFF)), long.MaxValue);
+
+        Assert.Equal(CarouselDefect.ModuleTooLarge, Assert.IsType<ModuleContentRead.Rejected>(read).Defect);
+    }
+
     [Fact(DisplayName = "BR-BV-002: zlib that ends short of the original size is discarded on the assumption that the size is exact")]
     public void ZlibThatEndsShortOfTheOriginalSizeIsDiscardedOnTheAssumptionThatTheSizeIsExact()
     {
