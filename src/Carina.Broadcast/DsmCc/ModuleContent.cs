@@ -2,9 +2,10 @@ namespace Carina.Broadcast.DsmCc;
 
 public static class ModuleContent
 {
-    public static ModuleContentRead Open(ReadOnlyMemory<byte> module, ModuleInfo info, long largestModule)
+    public static ModuleContentRead Open(ReadOnlyMemory<byte> module, ModuleInfo info, CarouselLimits limits)
     {
         ArgumentNullException.ThrowIfNull(info);
+        ArgumentNullException.ThrowIfNull(limits);
 
         ReadOnlyMemory<byte> entity = module;
 
@@ -15,7 +16,7 @@ public static class ModuleContent
                 return new ModuleContentRead.Rejected(CarouselDefect.UnsupportedCompression);
             }
 
-            if (compression.OriginalSize > largestModule || compression.OriginalSize > int.MaxValue)
+            if (compression.OriginalSize > limits.LargestModule || compression.OriginalSize > int.MaxValue)
             {
                 return new ModuleContentRead.Rejected(CarouselDefect.ModuleTooLarge);
             }
@@ -28,8 +29,6 @@ public static class ModuleContent
             entity = inflated;
         }
 
-        return ModuleEntity.TrySplit(entity, info.Type, info.Name, out IReadOnlyList<ModuleResource>? resources)
-            ? new ModuleContentRead.Opened(resources)
-            : new ModuleContentRead.Rejected(CarouselDefect.EntityMalformed);
+        return ModuleEntity.Split(entity, info.Type, info.Name, limits.MostParts);
     }
 }

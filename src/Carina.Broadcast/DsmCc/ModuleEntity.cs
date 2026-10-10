@@ -1,17 +1,13 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Carina.Broadcast.DsmCc;
 
 internal static class ModuleEntity
 {
-    public static bool TrySplit(
-        ReadOnlyMemory<byte> entity,
-        string? moduleType,
-        string? moduleName,
-        [NotNullWhen(true)] out IReadOnlyList<ModuleResource>? resources)
+    private static readonly ModuleContentRead Malformed = new ModuleContentRead.Rejected(CarouselDefect.EntityMalformed);
+
+    public static ModuleContentRead Split(ReadOnlyMemory<byte> entity, string? moduleType, string? moduleName, int mostParts)
     {
-        resources = null;
         MimeHeader? header = TypedHeader(entity.Span, out int start);
         string? contentType = header?[MimeHeader.ContentType] ?? moduleType;
         MediaType media = MediaType.Parse(contentType ?? string.Empty);
@@ -19,21 +15,13 @@ internal static class ModuleEntity
         if (!media.IsMultipart)
         {
             string location = header?[MimeHeader.ContentLocation] ?? moduleName ?? string.Empty;
-            resources = [ModuleResource.Of(location, contentType, entity[start..])];
 
-            return true;
+            return new ModuleContentRead.Opened([ModuleResource.Of(location, contentType, entity[start..])]);
         }
 
-        var parts = new List<ModuleResource>();
-
-        if (string.IsNullOrEmpty(media.Boundary) || !TrySplitParts(entity, start, Encoding.Latin1.GetBytes($"--{media.Boundary}"), parts))
-        {
-            return false;
-        }
-
-        resources = parts;
-
-        return true;
+        return string.IsNullOrEmpty(media.Boundary)
+            ? Malformed
+            : SplitParts(entity, start, Encoding.Latin1.GetBytes($"--{media.Boundary}"), mostParts);
     }
 
     private static MimeHeader? TypedHeader(ReadOnlySpan<byte> entity, out int bodyStart)
@@ -48,9 +36,10 @@ internal static class ModuleEntity
         return null;
     }
 
-    private static bool TrySplitParts(ReadOnlyMemory<byte> entity, int from, byte[] delimiter, List<ModuleResource> parts)
+    private static ModuleContentRead SplitParts(ReadOnlyMemory<byte> entity, int from, byte[] delimiter, int mostParts)
     {
         ReadOnlySpan<byte> span = entity.Span;
+        var parts = new List<ModuleResource>();
         int at = NextDelimiter(span, delimiter, from);
 
         while (at >= 0)
@@ -59,7 +48,12 @@ internal static class ModuleEntity
 
             if (span[after..].StartsWith("--"u8))
             {
-                return true;
+                return new ModuleContentRead.Opened(parts);
+            }
+
+            if (parts.Count >= mostParts)
+            {
+                return new ModuleContentRead.Rejected(CarouselDefect.TooManyParts);
             }
 
             int lineEnd = span[after..].IndexOf((byte)'\n');
@@ -68,13 +62,13 @@ internal static class ModuleEntity
 
             if (next < 0 || !TryTakePart(entity[partStart..WithoutLineBreak(span, partStart, next)], parts))
             {
-                return false;
+                return Malformed;
             }
 
             at = next;
         }
 
-        return false;
+        return Malformed;
     }
 
     private static bool TryTakePart(ReadOnlyMemory<byte> part, List<ModuleResource> parts)

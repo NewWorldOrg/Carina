@@ -340,10 +340,10 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselDefect.NotInCatalogue, Rejected(assembler.Accept(Block(DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock)[0]))).Defect);
     }
 
-    [Fact(DisplayName = "BR-BV-002: the limits are sixteen carousels five hundred and twelve modules sixteen and sixty-four mebibytes")]
-    public void TheLimitsAreSixteenCarouselsFiveHundredTwelveModulesSixteenAndSixtyFourMebibytes()
+    [Fact(DisplayName = "BR-BV-002: the limits are sixteen carousels, five hundred and twelve modules, sixteen and sixty-four mebibytes and a thousand and twenty-four parts")]
+    public void TheLimitsAreSixteenCarouselsFiveHundredTwelveModulesSixteenAndSixtyFourMebibytesAndOneThousandTwentyFourParts()
     {
-        Assert.Equal(new CarouselLimits(16, 512, 16L * 1024 * 1024, 64L * 1024 * 1024), CarouselLimits.Broadcast);
+        Assert.Equal(new CarouselLimits(16, 512, 16L * 1024 * 1024, 64L * 1024 * 1024, 1024), CarouselLimits.Broadcast);
     }
 
     [Fact(DisplayName = "BR-BV-001: the same module id listed twice keeps the first")]

@@ -139,7 +139,7 @@ public sealed class ModuleAssembler
         pending.Remove(module.ModuleId);
         completed[module.ModuleId] = assembling.Held;
 
-        return ModuleContent.Open(assembling.Bytes, module, limits.LargestModule) switch
+        return ModuleContent.Open(assembling.Bytes, module, limits) switch
         {
             ModuleContentRead.Opened opened => [new CarouselChange.ModuleCompleted(
                 ComponentTag,

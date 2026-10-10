@@ -33,4 +33,6 @@ public enum CarouselDefect
     TooManyCarousels = 15,
 
     TotalTooLarge = 16,
+
+    TooManyParts = 17,
 }

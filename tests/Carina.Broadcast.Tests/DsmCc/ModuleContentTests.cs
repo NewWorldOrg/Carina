@@ -8,7 +8,9 @@ namespace Carina.Broadcast.Tests.DsmCc;
 
 public sealed class ModuleContentTests
 {
-    private const long Largest = 16L * 1024 * 1024;
+    private static readonly CarouselLimits Limits = CarouselLimits.Broadcast;
+
+    private static readonly long Largest = Limits.LargestModule;
 
     private const string Boundary = "carina-part";
 
@@ -158,6 +160,19 @@ public sealed class ModuleContentTests
         Assert.Equal(CarouselDefect.EntityMalformed, Defect(entity));
     }
 
+    [Fact(DisplayName = "BR-BV-002: a multipart module of more parts than the limit is discarded")]
+    public void AMultipartModuleOfMorePartsThanTheLimitIsDiscarded()
+    {
+        CarouselLimits limits = Limits with { MostParts = 3 };
+        EntityPart[] parts = Enumerable.Range(0, 4).Select(index => new EntityPart($"{index}.png", EntityWriter.PngType, Picture)).ToArray();
+
+        ModuleContentRead atTheLimit = ModuleContent.Open(EntityWriter.Multipart(Boundary, parts[..3]), Info(), limits);
+        ModuleContentRead pastIt = ModuleContent.Open(EntityWriter.Multipart(Boundary, parts), Info(), limits);
+
+        Assert.Equal(3, Assert.IsType<ModuleContentRead.Opened>(atTheLimit).Resources.Count);
+        Assert.Equal(CarouselDefect.TooManyParts, Assert.IsType<ModuleContentRead.Rejected>(pastIt).Defect);
+    }
+
     [Fact(DisplayName = "BR-BV-001: an empty boundary is rejected")]
     public void AnEmptyBoundaryIsRejected()
     {
@@ -179,7 +194,7 @@ public sealed class ModuleContentTests
         ModuleInfo info = Info(ModuleDescriptorWriter.Compression(1024));
 
         long before = GC.GetAllocatedBytesForCurrentThread();
-        ModuleContentRead read = ModuleContent.Open(compressed, info, Largest);
+        ModuleContentRead read = ModuleContent.Open(compressed, info, Limits);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.Equal(CarouselDefect.OriginalSizeExceeded, Assert.IsType<ModuleContentRead.Rejected>(read).Defect);
@@ -197,7 +212,7 @@ public sealed class ModuleContentTests
     [Fact(DisplayName = "BR-BV-002: an original size past what one array can hold is discarded before inflating whatever the largest module")]
     public void AnOriginalSizePastWhatOneArrayCanHoldIsDiscardedBeforeInflatingWhateverTheLargestModule()
     {
-        ModuleContentRead read = ModuleContent.Open(EntityWriter.Zlib([0x01]), Info(ModuleDescriptorWriter.Compression(0xFFFF_FFFF)), long.MaxValue);
+        ModuleContentRead read = ModuleContent.Open(EntityWriter.Zlib([0x01]), Info(ModuleDescriptorWriter.Compression(0xFFFF_FFFF)), Limits with { LargestModule = long.MaxValue });
 
         Assert.Equal(CarouselDefect.ModuleTooLarge, Assert.IsType<ModuleContentRead.Rejected>(read).Defect);
     }
@@ -237,17 +252,17 @@ public sealed class ModuleContentTests
             byte[] module = new byte[random.Next(0, 200)];
             random.NextBytes(module);
 
-            _ = ModuleContent.Open(module, plain, Largest);
-            _ = ModuleContent.Open(module, compressed, Largest);
-            _ = ModuleContent.Open(EntityWriter.Ascii($"--{Boundary}\r\n").Concat(module).ToArray(), plain, Largest);
+            _ = ModuleContent.Open(module, plain, Limits);
+            _ = ModuleContent.Open(module, compressed, Limits);
+            _ = ModuleContent.Open(EntityWriter.Ascii($"--{Boundary}\r\n").Concat(module).ToArray(), plain, Limits);
         }
     }
 
     private static IReadOnlyList<ModuleResource> Opened(byte[] module, params byte[][] descriptors)
-        => Assert.IsType<ModuleContentRead.Opened>(ModuleContent.Open(module, Info(descriptors), Largest)).Resources;
+        => Assert.IsType<ModuleContentRead.Opened>(ModuleContent.Open(module, Info(descriptors), Limits)).Resources;
 
     private static CarouselDefect Defect(byte[] module, params byte[][] descriptors)
-        => Assert.IsType<ModuleContentRead.Rejected>(ModuleContent.Open(module, Info(descriptors), Largest)).Defect;
+        => Assert.IsType<ModuleContentRead.Rejected>(ModuleContent.Open(module, Info(descriptors), Limits)).Defect;
 
     private static ModuleInfo Info(params byte[][] descriptors)
     {
