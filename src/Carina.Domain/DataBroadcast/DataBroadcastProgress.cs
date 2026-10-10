@@ -91,7 +91,7 @@ public sealed record DataBroadcastProgress
 
     /// <summary>
     /// The record taken again from a recording descrambled after it was taken, whether it was made, missing, or
-    /// failed.
+    /// failed, tried as many times again as a record ever is.
     /// </summary>
     public DataBroadcastProgress Descrambled()
     {
@@ -100,7 +100,7 @@ public sealed record DataBroadcastProgress
             throw new InvalidOperationException("Only a record already taken is taken again once its recording is descrambled.");
         }
 
-        return new DataBroadcastProgress(DataBroadcastState.Coming, Attempts, null);
+        return new DataBroadcastProgress(DataBroadcastState.Coming, 0, null);
     }
 
     private void Expect(DataBroadcastState expected, string message)

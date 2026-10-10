@@ -75,15 +75,16 @@ public sealed class DataBroadcastProgressTests
         Assert.Equal((DataBroadcastState.Coming, 0, (int?)null), Of(taken.Descrambled()));
     }
 
-    [Fact(DisplayName = "BR-BS-001: a record that failed every try is tried once more once its recording is descrambled")]
-    public void ARecordThatFailedEveryTryIsTriedOnceMoreOnceDescrambled()
+    [Fact(DisplayName = "BR-BS-001: a record that failed every try is tried three times more once its recording is descrambled")]
+    public void ARecordThatFailedEveryTryIsTriedThreeTimesMoreOnceDescrambled()
     {
         DataBroadcastProgress failed = DataBroadcastProgress.NotYet.RecordingEnded().Failed().Retried().Failed().Retried().Failed();
 
         DataBroadcastProgress again = failed.Descrambled();
 
-        Assert.Equal((DataBroadcastState.Coming, 3, (int?)null), Of(again));
-        Assert.False(again.Failed().IsRetryDue);
+        Assert.Equal((DataBroadcastState.Coming, 0, (int?)null), Of(again));
+        Assert.True(again.Failed().IsRetryDue);
+        Assert.False(again.Failed().Retried().Failed().Retried().Failed().IsRetryDue);
     }
 
     [Fact(DisplayName = "BR-BS-001: a record that is made and no longer kept comes again with no failures counted")]
