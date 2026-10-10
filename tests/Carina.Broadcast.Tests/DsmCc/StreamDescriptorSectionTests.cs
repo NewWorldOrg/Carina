@@ -14,6 +14,8 @@ public sealed class StreamDescriptorSectionTests
             DataEventId = 3,
             EventMessageGroupId = 0x0123,
             VersionNumber = 7,
+            SectionNumber = 1,
+            LastSectionNumber = 2,
             Descriptors = DescriptorWriter.Loop(
                 StreamDescriptorWriter.GeneralEvent(0x0123, StreamDescriptorWriter.Immediate, 0, 0x01, 0x0405, 0xAA, 0xBB),
                 StreamDescriptorWriter.GeneralEvent(0x0123, StreamDescriptorWriter.Npt, 0x1_2345_6789, 0x02, 0x0406),
@@ -23,6 +25,8 @@ public sealed class StreamDescriptorSectionTests
         Assert.Equal(3, read.DataEventId);
         Assert.Equal(0x0123, read.EventMessageGroupId);
         Assert.Equal(7, read.VersionNumber);
+        Assert.Equal(1, read.SectionNumber);
+        Assert.True(read.IsCurrent);
 
         GeneralEvent immediate = read.Events[0];
         Assert.Equal(0x0123, immediate.EventMessageGroupId);

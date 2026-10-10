@@ -135,6 +135,29 @@ public sealed class EventMessageClockTests
         Assert.Equal(ReceivedAt + 180_000, Fired(next).Single().FiresAt);
     }
 
+    [Fact(DisplayName = "BR-BD-003: each section of a version carries events of its own and all of them fire")]
+    public void EachSectionOfAVersionCarriesEventsOfItsOwnAndAllOfThemFire()
+    {
+        var clock = new EventMessageClock();
+
+        IReadOnlyList<TimedEventMessage> fired = Enumerable.Range(0, 2)
+            .SelectMany(number => clock.Push(
+                new StreamDescriptorWriter
+                {
+                    EventMessageGroupId = SomeGroup,
+                    VersionNumber = 3,
+                    SectionNumber = number,
+                    LastSectionNumber = 1,
+                    Descriptors = StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Immediate, 0, 0, 10 + number),
+                },
+                ReceivedAt))
+            .OfType<EventMessageOutcome.Timed>()
+            .Select(timed => timed.Message)
+            .ToArray();
+
+        Assert.Equal([10, 11], fired.Select(message => message.EventMessageId));
+    }
+
     [Fact(DisplayName = "BR-BD-003: a section that is not yet current fires nothing and moves no reference")]
     public void ASectionThatIsNotYetCurrentFiresNothingAndMovesNoReference()
     {

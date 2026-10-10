@@ -6,7 +6,7 @@ public sealed class EventMessageClock
 
     public const int MostWaiting = 256;
 
-    private readonly Dictionary<int, int> versions = [];
+    private readonly Dictionary<(int TableIdExtension, int SectionNumber), int> versions = [];
     private readonly List<(GeneralEvent Event, long Npt)> waiting = [];
 
     private NptReference? reference;
@@ -27,12 +27,14 @@ public sealed class EventMessageClock
             Adopt(arrived, outcomes);
         }
 
-        if (versions.TryGetValue(section.TableIdExtension, out int seen) && seen == section.VersionNumber)
+        (int, int) key = (section.TableIdExtension, section.SectionNumber);
+
+        if (versions.TryGetValue(key, out int seen) && seen == section.VersionNumber)
         {
             return outcomes;
         }
 
-        versions[section.TableIdExtension] = section.VersionNumber;
+        versions[key] = section.VersionNumber;
 
         foreach (GeneralEvent carried in section.Events)
         {

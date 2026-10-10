@@ -20,6 +20,10 @@ public sealed class StreamDescriptorWriter
 
     public bool IsCurrent { get; init; } = true;
 
+    public int SectionNumber { get; init; }
+
+    public int LastSectionNumber { get; init; }
+
     public byte[] Descriptors { get; init; } = [];
 
     public SectionWriter ToSection()
@@ -29,6 +33,8 @@ public sealed class StreamDescriptorWriter
             TableIdExtension = ((DataEventId & 0x0F) << 12) | (EventMessageGroupId & 0x0FFF),
             VersionNumber = VersionNumber,
             IsCurrent = IsCurrent,
+            SectionNumber = SectionNumber,
+            LastSectionNumber = LastSectionNumber,
             Body = Descriptors,
         };
 
