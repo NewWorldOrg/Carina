@@ -80,6 +80,23 @@ public sealed class DataBroadcastTimelineTests
             Described(later.Carousels.Single(carousel => carousel.Tag == Carousels.Entry)));
     }
 
+    [Fact(DisplayName = "BR-BD-006: a version running past the source's end ends there, so asking from after that end leaves it out")]
+    public void AVersionRunningPastTheEndEndsThereAndIsLeftOutFromAfterIt()
+    {
+        DataBroadcastRecord record = new(
+            0,
+            Carousels.Entry,
+            [new RecordedCarousel(Carousels.Entry, 1, [Seen(Carousels.Entry, 0, 1, 10, 150)])],
+            [],
+            false);
+
+        DataBroadcastTimeline before = DataBroadcastTimeline.Of(record, TimeSpan.Zero, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(100));
+        DataBroadcastTimeline after = DataBroadcastTimeline.Of(record, TimeSpan.Zero, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(120));
+
+        Assert.Equal(["40/1/0/1 10-100"], Described(Assert.Single(before.Carousels)));
+        Assert.Empty(Assert.Single(after.Carousels).Versions);
+    }
+
     [Fact]
     public void ATimelineStartsAtOrAfterTheSourcesZero()
     {

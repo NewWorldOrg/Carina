@@ -75,16 +75,14 @@ public sealed record DataBroadcastTimeline
     {
         TimeSpan first = version.FirstSeenAt - shift;
         TimeSpan last = version.LastSeenAt - shift;
+        TimeSpan to = length is { } lasts && last > lasts ? lasts : last;
 
-        if (last < from || !Within(first, length))
+        if (to < from || !Within(first, length))
         {
             return null;
         }
 
-        return new PlacedVersion(
-            first > TimeSpan.Zero ? first : TimeSpan.Zero,
-            length is { } lasts && last > lasts ? lasts : last,
-            version);
+        return new PlacedVersion(first > TimeSpan.Zero ? first : TimeSpan.Zero, to, version);
     }
 
     private static bool Within(TimeSpan at, TimeSpan? length) => length is not { } lasts || at <= lasts;
