@@ -250,6 +250,46 @@ public sealed class ModuleContentTests
         Assert.Equal(CarouselDefect.InflatedSizeMismatch, Defect(EntityWriter.Zlib(new byte[10]), ModuleDescriptorWriter.Compression(11)));
     }
 
+    [Theory(DisplayName = "BR-BV-002: zlib cut off before its end and its checksum is discarded as failing to inflate")]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(8)]
+    [InlineData(40)]
+    public void ZlibCutOffBeforeItsEndAndItsChecksumIsDiscardedAsFailingToInflate(int dropped)
+    {
+        byte[] data = Encoding.ASCII.GetBytes(string.Concat(Enumerable.Range(0, 200).Select(index => $"{index},")));
+        byte[] compressed = EntityWriter.Zlib(data);
+
+        Assert.Equal(CarouselDefect.DecompressionFailed, Defect(compressed[..^dropped], ModuleDescriptorWriter.Compression(data.Length)));
+    }
+
+    [Fact(DisplayName = "BR-BV-002: bytes left over after a complete zlib stream make the module fail to inflate")]
+    public void BytesLeftOverAfterACompleteZlibStreamMakeTheModuleFailToInflate()
+    {
+        byte[] data = new byte[100];
+
+        Assert.Equal(
+            CarouselDefect.DecompressionFailed,
+            Defect([.. EntityWriter.Zlib(data), 0x00, 0x01, 0x02], ModuleDescriptorWriter.Compression(data.Length)));
+    }
+
+    [Fact(DisplayName = "BR-BV-002: no cut or flipped byte of a zlib stream lets an exception out")]
+    public void NoCutOrFlippedByteOfAZlibStreamLetsAnExceptionOut()
+    {
+        byte[] data = Encoding.ASCII.GetBytes(string.Concat(Enumerable.Range(0, 100).Select(index => $"<p>{index}</p>")));
+        byte[] compressed = EntityWriter.Zlib(data);
+        ModuleInfo info = Info(ModuleDescriptorWriter.Compression(data.Length));
+
+        for (int at = 0; at < compressed.Length; at++)
+        {
+            byte[] flipped = [.. compressed];
+            flipped[at] ^= 0x5A;
+
+            Assert.IsType<ModuleContentRead.Rejected>(ModuleContent.Open(compressed[..at], info, Limits));
+            _ = ModuleContent.Open(flipped, info, Limits);
+        }
+    }
+
     [Fact(DisplayName = "BR-BV-002: zlib that cannot be inflated is discarded")]
     public void ZlibThatCannotBeInflatedIsDiscarded()
     {
