@@ -7,7 +7,7 @@ internal sealed class PendingModule
 
     private int heldCount;
 
-    public PendingModule(HeldModule module, int blockCount)
+    public PendingModule(HeldModule module, long blockCount)
     {
         Held = module;
         bytes = new byte[module.ModuleSize];
@@ -22,14 +22,14 @@ internal sealed class PendingModule
 
     public bool Place(int blockNumber, ReadOnlySpan<byte> data, int blockSize)
     {
-        long offset = (long)blockNumber * blockSize;
+        int offset = blockNumber * blockSize;
 
         if (blockNumber >= held.Length || held[blockNumber] || offset + data.Length > bytes.Length)
         {
             return false;
         }
 
-        data.CopyTo(bytes.AsSpan((int)offset));
+        data.CopyTo(bytes.AsSpan(offset));
         held[blockNumber] = true;
         heldCount++;
 

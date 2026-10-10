@@ -337,7 +337,7 @@ public sealed class ModuleAssemblerTests
     [Fact(DisplayName = "BR-BV-002: a catalogue of one module more than the limit drops the carousel")]
     public void ACatalogueOfOneModuleMoreThanTheLimitDropsTheCarousel()
     {
-        CarouselLimits limits = CarouselLimits.Broadcast with { MostModules = 4 };
+        CarouselLimits limits = new(16, mostModules: 4, 16L * 1024 * 1024, 64L * 1024 * 1024, 1024);
         ModuleAssembler assembler = new(EntryTag, limits);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
 
@@ -356,7 +356,23 @@ public sealed class ModuleAssemblerTests
     [Fact(DisplayName = "BR-BV-002: the limits are sixteen carousels, five hundred and twelve modules, sixteen and sixty-four mebibytes and a thousand and twenty-four parts")]
     public void TheLimitsAreSixteenCarouselsFiveHundredTwelveModulesSixteenAndSixtyFourMebibytesAndOneThousandTwentyFourParts()
     {
-        Assert.Equal(new CarouselLimits(16, 512, 16L * 1024 * 1024, 64L * 1024 * 1024, 1024), CarouselLimits.Broadcast);
+        CarouselLimits limits = CarouselLimits.Broadcast;
+
+        Assert.Equal(
+            (16, 512, 16L * 1024 * 1024, 64L * 1024 * 1024, 1024),
+            (limits.MostCarousels, limits.MostModules, limits.LargestModule, limits.LargestTotal, limits.MostParts));
+    }
+
+    [Theory(DisplayName = "BR-BV-002: limits that cannot hold together are refused when they are made")]
+    [InlineData(0, 512, 1024L, 1024L, 1024)]
+    [InlineData(16, 0, 1024L, 1024L, 1024)]
+    [InlineData(16, 512, 0L, 1024L, 1024)]
+    [InlineData(16, 512, 1024L, 1024L, 0)]
+    [InlineData(16, 512, 2048L, 1024L, 1024)]
+    [InlineData(16, 512, (long)ModuleAssembler.LargestBlock * ModuleAssembler.MostBlocks + 1, long.MaxValue, 1024)]
+    public void LimitsThatCannotHoldTogetherAreRefusedWhenTheyAreMade(int carousels, int modules, long largestModule, long largestTotal, int parts)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new CarouselLimits(carousels, modules, largestModule, largestTotal, parts));
     }
 
     [Fact(DisplayName = "BR-BV-001: the same module id listed twice keeps the first")]

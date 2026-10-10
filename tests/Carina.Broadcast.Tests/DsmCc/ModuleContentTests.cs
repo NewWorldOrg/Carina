@@ -240,7 +240,7 @@ public sealed class ModuleContentTests
     [Fact(DisplayName = "BR-BV-002: a multipart module of more parts than the limit is discarded")]
     public void AMultipartModuleOfMorePartsThanTheLimitIsDiscarded()
     {
-        CarouselLimits limits = Limits with { MostParts = 3 };
+        CarouselLimits limits = new(Limits.MostCarousels, Limits.MostModules, Limits.LargestModule, Limits.LargestTotal, mostParts: 3);
         EntityPart[] parts = Enumerable.Range(0, 4).Select(index => new EntityPart($"{index}.png", EntityWriter.PngType, Picture)).ToArray();
 
         ModuleContentRead atTheLimit = ModuleContent.Open(EntityWriter.Multipart(Boundary, parts[..3]), Info(), limits);
@@ -286,10 +286,10 @@ public sealed class ModuleContentTests
             Defect(EntityWriter.Zlib([0x01]), ModuleDescriptorWriter.Compression(Largest + 1)));
     }
 
-    [Fact(DisplayName = "BR-BV-002: an original size past what one array can hold is discarded before inflating whatever the largest module")]
-    public void AnOriginalSizePastWhatOneArrayCanHoldIsDiscardedBeforeInflatingWhateverTheLargestModule()
+    [Fact(DisplayName = "BR-BV-002: an original size past what one array can hold is discarded before inflating")]
+    public void AnOriginalSizePastWhatOneArrayCanHoldIsDiscardedBeforeInflating()
     {
-        ModuleContentRead read = ModuleContent.Open(EntityWriter.Zlib([0x01]), Info(ModuleDescriptorWriter.Compression(0xFFFF_FFFF)), Limits with { LargestModule = long.MaxValue });
+        ModuleContentRead read = ModuleContent.Open(EntityWriter.Zlib([0x01]), Info(ModuleDescriptorWriter.Compression(0xFFFF_FFFF)), Limits);
 
         Assert.Equal(CarouselDefect.ModuleTooLarge, Assert.IsType<ModuleContentRead.Rejected>(read).Defect);
     }

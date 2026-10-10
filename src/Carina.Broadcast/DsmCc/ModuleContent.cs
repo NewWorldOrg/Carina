@@ -16,12 +16,12 @@ public static class ModuleContent
                 return new ModuleContentRead.Rejected(CarouselDefect.UnsupportedCompression);
             }
 
-            if (compression.OriginalSize > limits.LargestModule || compression.OriginalSize > int.MaxValue)
+            if (compression.OriginalSize > limits.LargestModule)
             {
                 return new ModuleContentRead.Rejected(CarouselDefect.ModuleTooLarge);
             }
 
-            if (!ModuleInflater.TryInflate(module, (int)compression.OriginalSize, out byte[]? inflated, out CarouselDefect defect))
+            if (!ModuleInflater.TryInflate(module, compression.OriginalSize, out byte[]? inflated, out CarouselDefect defect))
             {
                 return new ModuleContentRead.Rejected(defect);
             }

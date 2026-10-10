@@ -109,7 +109,7 @@ public sealed class ModuleAssembler
         }
 
         int blockSize = current.BlockSize;
-        int count = BlockCount(module.ModuleSize, blockSize);
+        long count = BlockCount(module.ModuleSize, blockSize);
 
         if (block.BlockNumber >= count)
         {
@@ -135,7 +135,7 @@ public sealed class ModuleAssembler
         DeclaredSize = 0;
     }
 
-    private IReadOnlyList<CarouselChange> Place(ModuleInfo module, DownloadDataBlock block, int count, int blockSize)
+    private IReadOnlyList<CarouselChange> Place(ModuleInfo module, DownloadDataBlock block, long count, int blockSize)
     {
         if (!pending.TryGetValue(module.ModuleId, out PendingModule? assembling))
         {
@@ -215,6 +215,6 @@ public sealed class ModuleAssembler
     private IReadOnlyList<CarouselChange> Rejected(CarouselDefect defect, int moduleId)
         => [new CarouselChange.Rejected(ComponentTag, defect, moduleId)];
 
-    private static int BlockCount(long moduleSize, int blockSize)
-        => (int)Math.Max(1, (moduleSize + blockSize - 1) / blockSize);
+    private static long BlockCount(long moduleSize, int blockSize)
+        => Math.Max(1, (moduleSize + blockSize - 1) / blockSize);
 }

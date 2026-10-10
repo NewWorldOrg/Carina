@@ -14,7 +14,7 @@ internal static class ModuleInflater
 
     public static bool TryInflate(
         ReadOnlyMemory<byte> compressed,
-        int originalSize,
+        long originalSize,
         [NotNullWhen(true)] out byte[]? inflated,
         out CarouselDefect defect)
     {
