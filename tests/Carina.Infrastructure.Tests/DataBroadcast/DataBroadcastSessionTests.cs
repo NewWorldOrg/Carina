@@ -140,6 +140,21 @@ public sealed class DataBroadcastSessionTests
         Assert.Equal(2, one.Kept.Count);
     }
 
+    [Fact(DisplayName = "BR-BD-004: a fan-out shown the data broadcast hands its viewers what stands once, and keeps it once")]
+    public async Task AFanoutShownTheDataBroadcastHandsWhatStandsOnce()
+    {
+        DataBroadcastSession session = Session();
+        session.Read(Carrying().Listed(1, Startup, Logo).Delivered(Startup).Delivered(Logo).Bytes);
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        await using ILiveViewing watching = await Joined(fanout);
+
+        session.Show(fanout);
+
+        Assert.Equal(session.Standing, Taken(watching.Frames));
+        Assert.Equal(session.Standing, fanout.Kept);
+        Assert.Equal(3, fanout.Kept.Count);
+    }
+
     [Fact]
     public void WhatIsWrittenIntoTheSeatIsRead()
     {

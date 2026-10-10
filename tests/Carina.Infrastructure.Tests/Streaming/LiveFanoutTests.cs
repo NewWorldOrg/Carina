@@ -703,6 +703,24 @@ public sealed class LiveFanoutTests
             Taken(viewing).Select(frame => frame.Channel).ToArray());
     }
 
+    [Fact(DisplayName = "BR-BD-004: frames published at one go reach a viewer once each and leave the set kept once")]
+    public async Task FramesPublishedAtOneGoReachAViewerOnceEachAndLeaveTheSetKeptOnce()
+    {
+        LiveFanout fanout = new(Room(10));
+        await using ILiveViewing watching = await Joined(fanout);
+        LiveFrame catalog = Data(1, 0x01);
+        LiveFrame module = Data(2, 0x02);
+
+        fanout.Publish([catalog, module], [catalog, module]);
+
+        await using ILiveViewing late = await Joined(fanout);
+
+        Assert.Equal([catalog, module], Taken(watching));
+        Assert.Equal([catalog, module], Taken(late));
+        Assert.Equal([catalog, module], fanout.Kept);
+        Assert.Throws<ArgumentException>(() => fanout.Publish([], [catalog]));
+    }
+
     private static LiveFrame Data(ulong pts, byte kind) => new(LiveChannel.DataBroadcast, LivePts.Of(pts), new byte[] { kind });
 
     private static LiveFanoutSettings Room(int frames) => new() { LongestBacklog = frames };

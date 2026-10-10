@@ -152,9 +152,20 @@ public sealed class LiveFanout(
     public void Publish(LiveFrame frame, IReadOnlyList<LiveFrame> standing)
     {
         ArgumentNullException.ThrowIfNull(frame);
+
+        Publish([frame], standing);
+    }
+
+    /// <summary>
+    /// Keeps <paramref name="standing"/> as what a viewer joining later is handed of the channel, and then hands
+    /// every frame to every viewer in turn, at one go, so that no viewer joins part way through.
+    /// </summary>
+    public void Publish(IReadOnlyList<LiveFrame> frames, IReadOnlyList<LiveFrame> standing)
+    {
+        ArgumentNullException.ThrowIfNull(frames);
         ArgumentNullException.ThrowIfNull(standing);
 
-        if (!LiveChannels.Kept.Contains(frame.Channel) || standing.Any(held => held.Channel != frame.Channel))
+        if (frames.Count is 0 || !OnOneKeptChannel([.. frames, .. standing]))
         {
             throw new ArgumentException("What is kept of a channel is kept of a channel that is kept, and of that channel only.", nameof(standing));
         }
@@ -166,8 +177,12 @@ public sealed class LiveFanout(
                 return;
             }
 
-            kept[frame.Channel] = [.. standing];
-            Offer(frame);
+            kept[frames[0].Channel] = [.. standing];
+
+            foreach (LiveFrame frame in frames)
+            {
+                Offer(frame);
+            }
         }
     }
 
@@ -189,6 +204,9 @@ public sealed class LiveFanout(
     private static bool Expendable(LiveFrame frame) => LiveChannels.Expendable.Contains(frame.Channel);
 
     private static bool CutWhenBehind(LiveFrame frame) => LiveChannels.CutWhenBehind.Contains(frame.Channel);
+
+    private static bool OnOneKeptChannel(IReadOnlyList<LiveFrame> frames)
+        => LiveChannels.Kept.Contains(frames[0].Channel) && frames.All(frame => frame.Channel == frames[0].Channel);
 
     private void Offer(LiveFrame frame)
     {

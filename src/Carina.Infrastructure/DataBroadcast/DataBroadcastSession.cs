@@ -73,9 +73,9 @@ public sealed class DataBroadcastSession
         {
             showing.Add(fanout);
 
-            foreach (LiveFrame frame in standing)
+            if (standing.Count > 0)
             {
-                fanout.Publish(frame, standing);
+                fanout.Publish(standing, standing);
             }
         }
     }
