@@ -22,6 +22,8 @@ public static class DataBroadcastFrames
 
     public const int ModuleHeaderLength = sizeof(byte) + sizeof(byte) + sizeof(ushort) + sizeof(byte);
 
+    private const int FiresAtOffset = sizeof(byte) + sizeof(ushort) + sizeof(ushort) + sizeof(byte) + sizeof(byte);
+
     private static readonly IReadOnlyDictionary<string, DataBroadcastResourceKind> Kinds =
         new Dictionary<string, DataBroadcastResourceKind>(StringComparer.OrdinalIgnoreCase)
         {
@@ -60,7 +62,7 @@ public static class DataBroadcastFrames
         BinaryPrimitives.WriteUInt16BigEndian(written[3..], (ushort)message.Id);
         written[5] = (byte)message.MessageType;
         written[6] = (byte)message.Timing;
-        BinaryPrimitives.WriteUInt64BigEndian(written[7..], OnTheWire(message.FiresAt));
+        BinaryPrimitives.WriteUInt64BigEndian(written[FiresAtOffset..], OnTheWire(message.FiresAt));
         BinaryPrimitives.WriteUInt16BigEndian(written[15..], (ushort)message.PrivateData.Length);
         message.PrivateData.Span.CopyTo(written[EventMessage.FramingBytes..]);
 
@@ -68,6 +70,34 @@ public static class DataBroadcastFrames
     }
 
     public static LiveFrame Absent(long at) => Frame(at, [AbsentKind]);
+
+    /// <summary>
+    /// The frame told on a clock <paramref name="by"/> ticks behind: its moment, and the moment an event message
+    /// fires, moved back by that much and held at the clock's start.
+    /// </summary>
+    public static LiveFrame Shifted(LiveFrame frame, long by)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        ArgumentOutOfRangeException.ThrowIfNegative(by);
+
+        if (by is 0)
+        {
+            return frame;
+        }
+
+        ReadOnlyMemory<byte> payload = frame.Payload;
+
+        if (!payload.IsEmpty && payload.Span[0] == EventKind && payload.Length >= EventMessage.FramingBytes)
+        {
+            byte[] moved = payload.ToArray();
+            long firesAt = (long)BinaryPrimitives.ReadUInt64BigEndian(moved.AsSpan(FiresAtOffset));
+
+            BinaryPrimitives.WriteUInt64BigEndian(moved.AsSpan(FiresAtOffset), OnTheWire(firesAt - by));
+            payload = moved;
+        }
+
+        return new LiveFrame(frame.Channel, LivePts.Of(OnTheWire((long)frame.Pts.Value - by)), payload);
+    }
 
     /// <summary>
     /// A module as the side channel carries it: its tag, id and version, then each resource with its path, its

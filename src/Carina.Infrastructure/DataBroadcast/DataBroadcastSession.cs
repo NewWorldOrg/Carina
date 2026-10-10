@@ -14,12 +14,16 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// or word that the channel carries no data broadcast.
 /// </summary>
 /// <remarks>
-/// The state goes on being read while no fan-out is showing it, so a fan-out that comes later starts from
+/// Each fan-out is handed the frames on the clock of the pictures it carries: the transcoder behind it counts from
+/// the raw clock where it began, so the times are moved back by the wraps the clock had made by the time the
+/// fan-out was first shown the data broadcast. The state goes on being read while no fan-out is showing it, so a fan-out that comes later starts from
 /// where the channel is. Once reading stops, every fan-out shown it is told there is no data broadcast, nothing
 /// is kept for a viewer joining later, and the reading that raised it is told so it can raise another.
 /// </remarks>
 public sealed class DataBroadcastSession
 {
+    private const long Lap = (long)LivePts.ComesAroundAt;
+
     private readonly Lock gate = new();
 
     private readonly CarouselReader reader;
@@ -30,7 +34,7 @@ public sealed class DataBroadcastSession
 
     private readonly Action<DataBroadcastSession> stopped;
 
-    private readonly List<LiveFanout> showing = [];
+    private readonly List<Shown> showing = [];
 
     private readonly Dictionary<(int Tag, int ModuleId, int Version), LiveFrame> modules = [];
 
@@ -83,11 +87,15 @@ public sealed class DataBroadcastSession
 
         lock (gate)
         {
-            showing.Add(fanout);
+            Shown shown = new(fanout, Laps(reader.Now ?? 0) * Lap);
+
+            showing.Add(shown);
 
             if (standing.Count > 0)
             {
-                fanout.Publish(standing, standing);
+                IReadOnlyList<LiveFrame> held = shown.Held(standing);
+
+                fanout.Publish(held, held);
             }
         }
     }
@@ -98,7 +106,7 @@ public sealed class DataBroadcastSession
 
         lock (gate)
         {
-            showing.Remove(fanout);
+            showing.RemoveAll(shown => ReferenceEquals(shown.Fanout, fanout));
         }
     }
 
@@ -244,9 +252,9 @@ public sealed class DataBroadcastSession
 
         LiveFrame none = DataBroadcastFrames.Absent(latest);
 
-        foreach (LiveFanout fanout in showing)
+        foreach (Shown shown in showing)
         {
-            fanout.Publish(none, standing);
+            shown.Fanout.Publish(shown.Moved(none), standing);
         }
 
         return true;
@@ -254,11 +262,21 @@ public sealed class DataBroadcastSession
 
     private void Publish(LiveFrame frame)
     {
-        foreach (LiveFanout fanout in showing)
+        foreach (Shown shown in showing)
         {
-            fanout.Publish(frame, standing);
+            shown.Fanout.Publish(shown.Moved(frame), shown.Held(standing));
         }
     }
 
+    private static long Laps(long at) => at < 0 ? 0 : at / Lap;
+
     private static (int Tag, int ModuleId, int Version) Key(ModuleVersion module) => (module.Tag, module.ModuleId, module.Version);
+
+    private sealed record Shown(LiveFanout Fanout, long Behind)
+    {
+        public LiveFrame Moved(LiveFrame frame) => DataBroadcastFrames.Shifted(frame, Behind);
+
+        public IReadOnlyList<LiveFrame> Held(IReadOnlyList<LiveFrame> frames)
+            => Behind is 0 ? frames : [.. frames.Select(Moved)];
+    }
 }

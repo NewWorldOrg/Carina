@@ -34,6 +34,12 @@ public sealed class CarouselReader
 
     public ServiceId Service => service;
 
+    /// <summary>
+    /// The moment of the service's clock, followed through its wrap, what is read now is stamped with, or null
+    /// until the clock has been heard.
+    /// </summary>
+    public long? Now => tap.Now;
+
     public long UnreadablePackets => tap.UnreadablePackets;
 
     public long RejectedSections => tap.RejectedSections;

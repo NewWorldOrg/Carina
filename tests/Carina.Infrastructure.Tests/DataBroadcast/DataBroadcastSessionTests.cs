@@ -211,6 +211,34 @@ public sealed class DataBroadcastSessionTests
         Assert.Same(session, told);
     }
 
+    [Fact(DisplayName = "BR-BD-004: a fan-out first shown after the clock came around is handed times moved back by the wraps, as its pictures are")]
+    public async Task AFanoutShownAfterTheClockCameAroundIsHandedTimesMovedBackByTheWraps()
+    {
+        const long Lap = 1L << 33;
+        DataBroadcastSession session = Session();
+        LiveFanout before = new(new LiveFanoutSettings());
+        session.Show(before);
+        session.Read(new CarouselBroadcast().Associated().Mapped().At(Lap - Second).Bytes);
+        session.Read(new CarouselBroadcast().At(Second).Bytes);
+        LiveFanout after = new(new LiveFanoutSettings());
+        session.Show(after);
+        await using ILiveViewing early = await Joined(before);
+        await using ILiveViewing late = await Joined(after);
+        Taken(early.Frames);
+        Taken(late.Frames);
+
+        session.Read(new CarouselBroadcast().At(2 * Second).Fired(0, 1, 2, 3).Bytes);
+
+        LiveFrame toTheEarly = Assert.Single(Taken(early.Frames));
+        LiveFrame toTheLate = Assert.Single(Taken(late.Frames));
+        Assert.Equal((ulong)(Lap + (2 * Second)), toTheEarly.Pts.Value);
+        Assert.Equal((ulong)(Lap + (2 * Second)), SideChannelReading.Event(toTheEarly).FiresAt);
+        Assert.Equal((ulong)(2 * Second), toTheLate.Pts.Value);
+        Assert.Equal((ulong)(2 * Second), SideChannelReading.Event(toTheLate).FiresAt);
+        Assert.Equal([(ulong)(Lap - Second)], before.Kept.Select(frame => frame.Pts.Value));
+        Assert.Equal([0UL], after.Kept.Select(frame => frame.Pts.Value));
+    }
+
     [Fact]
     public void WhatIsWrittenIntoTheSeatIsRead()
     {

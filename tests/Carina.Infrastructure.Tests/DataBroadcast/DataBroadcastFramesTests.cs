@@ -119,6 +119,22 @@ public sealed class DataBroadcastFramesTests
         Assert.Equal(expected, DataBroadcastFrames.CatalogCbor(catalog));
     }
 
+    [Fact(DisplayName = "BR-BD-004: a frame moved back by the wraps moves its moment and, for an event message, the moment it fires")]
+    public void AFrameMovedBackMovesItsMomentAndTheMomentAnEventFires()
+    {
+        const long Lap = 1L << 33;
+        EventMessage message = new(1, 2, 3, EventTiming.Immediate, Lap + 500, new byte[] { 0x07 });
+
+        LiveFrame moved = DataBroadcastFrames.Shifted(DataBroadcastFrames.Event(message, Lap + 400), Lap);
+        LiveFrame module = DataBroadcastFrames.Shifted(DataBroadcastFrames.Absent(Lap - 1), Lap);
+
+        Assert.Equal(400UL, moved.Pts.Value);
+        Assert.Equal(500UL, SideChannelReading.Event(moved).FiresAt);
+        Assert.Equal([0x07], SideChannelReading.Event(moved).PrivateData);
+        Assert.Equal(0UL, module.Pts.Value);
+        Assert.Same(moved, DataBroadcastFrames.Shifted(moved, 0));
+    }
+
     [Fact]
     public void AMomentBeforeTheClockBeganIsSentAsItsStart()
         => Assert.Equal(0UL, DataBroadcastFrames.Absent(-1).Pts.Value);
