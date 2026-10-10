@@ -159,6 +159,26 @@ public sealed class DataBroadcastTapTests
         Assert.Equal(2 * Second, tap.Now);
     }
 
+    [Fact(DisplayName = "BR-BD-004: a programme clock that steps back does not move what is read back with it")]
+    public void AClockThatStepsBackDoesNotMoveWhatIsReadBack()
+    {
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+        tap.Push(new CarouselBroadcast().Associated().Mapped().At(Second).Bytes);
+
+        IReadOnlyList<DataBroadcastRead> reads = tap.Push(new CarouselBroadcast()
+            .At(ProgramClock.Modulus - Second)
+            .Listed(1, Startup)
+            .Delivered(Startup)
+            .Bytes);
+
+        Assert.Equal(Second, tap.Now);
+        Assert.All(reads, read => Assert.Equal(Second, read.At));
+
+        tap.Push(new CarouselBroadcast().At(3 * Second).Bytes);
+
+        Assert.Equal(3 * Second, tap.Now);
+    }
+
     private static IReadOnlyList<string> Described(IEnumerable<DataBroadcastRead> reads)
         => [.. reads.Select(read => read switch
         {

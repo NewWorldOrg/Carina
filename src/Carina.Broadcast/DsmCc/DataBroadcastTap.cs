@@ -40,6 +40,8 @@ public sealed class DataBroadcastTap
 
     private DataBroadcastService? unannounced;
 
+    private long? stamp;
+
     public DataBroadcastTap(int programNumber)
         : this(programNumber, CarouselLimits.Broadcast)
     {
@@ -56,9 +58,10 @@ public sealed class DataBroadcastTap
     }
 
     /// <summary>
-    /// Where the programme's clock is, followed through its wrap, or null until it has been heard.
+    /// The moment what is read is stamped with: the programme's clock followed through its wrap, held where it
+    /// was when the clock steps back, or null until the clock has been heard.
     /// </summary>
-    public long? Now => clock.Now;
+    public long? Now => stamp;
 
     public long UnreadablePackets { get; private set; }
 
@@ -131,7 +134,9 @@ public sealed class DataBroadcastTap
 
         if (read.Pid == clockPid && !read.TransportError && read.ProgramClockReference is { } reference)
         {
-            clock.Follow(reference);
+            long followed = clock.Follow(reference);
+
+            stamp = stamp is { } before && before > followed ? before : followed;
         }
 
         if (read.Pid == association.Pid)
@@ -143,7 +148,7 @@ public sealed class DataBroadcastTap
             Map(map.Push(packet));
         }
 
-        if (clock.Now is not { } now)
+        if (stamp is not { } now)
         {
             return;
         }
