@@ -153,6 +153,16 @@ public sealed class ModuleContentTests
         Assert.Equal("天", Encoding.UTF8.GetString(resource.Body.Span));
     }
 
+    [Fact(DisplayName = "BR-BD-002: text read as EUC-JP counts the bytes it could not decode")]
+    public void TextReadAsEucJpCountsTheBytesItCouldNotDecode()
+    {
+        ModuleResource resource = Opened(EntityWriter.Multipart(Boundary, new EntityPart("a.css", "text/css", Encoding.UTF8.GetBytes("p{content:\"天気\"}")))).Single();
+        ModuleResource clean = Opened(EntityWriter.Multipart(Boundary, new EntityPart("b.css", "text/css", [0xC5, 0xB7]))).Single();
+
+        Assert.True(resource.Substitutions > 0);
+        Assert.Equal(0, clean.Substitutions);
+    }
+
     [Fact(DisplayName = "BR-BD-002: text already declared as UTF-8 is left as it is")]
     public void TextAlreadyDeclaredAsUtf8IsLeftAsItIs()
     {

@@ -73,6 +73,15 @@ public sealed class EucJpTextTests
         Assert.Equal($"{AribText.UnknownCharacter}", EucJpText.Decode([(byte)code]));
     }
 
+    [Fact(DisplayName = "BR-BD-002: every unknown character put in is counted and a known one is not")]
+    public void EveryUnknownCharacterPutInIsCountedAndAKnownOneIsNot()
+    {
+        string decoded = EucJpText.Decode([0xA2, 0xA2, 0xA9, 0xA1, 0x8F, 0xB0, 0xA1, 0xFF, 0xC5], out int substitutions);
+
+        Assert.Equal("□□□□□", decoded);
+        Assert.Equal(4, substitutions);
+    }
+
     [Fact(DisplayName = "BR-BD-002: the text leaves as UTF-8")]
     public void TheTextLeavesAsUtf8()
     {

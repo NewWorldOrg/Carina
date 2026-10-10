@@ -12,12 +12,13 @@ public sealed class ModuleResource
 
     private static readonly HashSet<string> EucJpNames = new(StringComparer.OrdinalIgnoreCase) { "euc-jp", "x-euc-jp" };
 
-    private ModuleResource(string location, string mediaType, bool isText, ReadOnlyMemory<byte> body)
+    private ModuleResource(string location, string mediaType, bool isText, ReadOnlyMemory<byte> body, int substitutions = 0)
     {
         Location = location;
         MediaType = mediaType;
         IsText = isText;
         Body = body;
+        Substitutions = substitutions;
     }
 
     public string Location { get; }
@@ -27,6 +28,8 @@ public sealed class ModuleResource
     public bool IsText { get; }
 
     public ReadOnlyMemory<byte> Body { get; }
+
+    public int Substitutions { get; }
 
     internal static ModuleResource Of(string location, string? contentType, ReadOnlyMemory<byte> body)
     {
@@ -39,7 +42,9 @@ public sealed class ModuleResource
 
         if (media.Charset is null || EucJpNames.Contains(media.Charset))
         {
-            return new ModuleResource(location, media.Type, true, EucJpText.ToUtf8(body.Span));
+            byte[] decoded = EucJpText.ToUtf8(body.Span, out int substitutions);
+
+            return new ModuleResource(location, media.Type, true, decoded, substitutions);
         }
 
         bool utf8 = string.Equals(media.Charset, "utf-8", StringComparison.OrdinalIgnoreCase);
