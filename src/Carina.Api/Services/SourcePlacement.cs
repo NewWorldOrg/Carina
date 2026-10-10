@@ -21,7 +21,7 @@ public sealed class SourcePlacement(IEncodeJobRepository jobs, ILogger<SourcePla
     public static readonly TimeSpan ClocksAgreeWithin = TimeSpan.FromMilliseconds(1);
 
     /// <param name="begins">Where the file's own clock began when <paramref name="taken"/> was taken from it.</param>
-    /// <param name="taken">What was taken, as the log names it.</param>
+    /// <param name="taken">What was taken, named in the plural as the log names it.</param>
     public async Task<SourceZero?> PlaceAsync(
         RecordingId id,
         PlaybackOffer offer,
@@ -46,8 +46,8 @@ public sealed class SourcePlacement(IEncodeJobRepository jobs, ILogger<SourcePla
         if ((begins - timeline.SourceStart).Duration() >= ClocksAgreeWithin)
         {
             logger.LogWarning(
-                "The {Taken} of recording {Recording} was taken from a file that began at {Kept} s and the "
-                + "artefact {Job} was made from one that began at {Encoded} s, so none of it is placed over the artefact.",
+                "The {Taken} of recording {Recording} were taken from a file that began at {Kept} s and the "
+                + "artefact {Job} was made from one that began at {Encoded} s, so none of them are placed over the artefact.",
                 taken,
                 id.Wire,
                 begins.TotalSeconds,

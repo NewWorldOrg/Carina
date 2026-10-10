@@ -55,7 +55,7 @@ public sealed class DataBroadcastService(
             return Refused(id, DataBroadcastStanding.None);
         }
 
-        if (await placement.PlaceAsync(id, offer, record.Start, "data broadcast", cancellationToken) is not { } zero)
+        if (await placement.PlaceAsync(id, offer, record.Start, "data broadcast carousels", cancellationToken) is not { } zero)
         {
             return Refused(id, DataBroadcastStanding.None);
         }
