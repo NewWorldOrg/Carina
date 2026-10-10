@@ -3,6 +3,7 @@ using Carina.Domain.Captions;
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Thumbnails;
@@ -45,6 +46,34 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
         Assert.Equal(3, erased.FilesRemoved);
         Assert.False(File.Exists(drawn));
         Assert.False(File.Exists(captions));
+    }
+
+    [Fact(DisplayName = "BR-BS-001: the record of the data broadcast taken from a recording thrown away goes with it, as its captions do, and is counted")]
+    public async Task TheRecordOfTheDataBroadcastGoesWithTheRecordingThrownAway()
+    {
+        RecordingId id = RecordingId.New();
+        string captions = Captioned(id);
+        string record = Recorded(id);
+        string neighbour = Recorded(RecordingId.New());
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(3, erased.FilesRemoved);
+        Assert.False(File.Exists(captions));
+        Assert.False(File.Exists(record));
+        Assert.True(File.Exists(neighbour));
+    }
+
+    [Fact]
+    public async Task ARecordOfTheDataBroadcastThatWillNotComeOffTheDiskIsReportedAsLeftBehind()
+    {
+        RecordingId id = RecordingId.New();
+        Directory.CreateDirectory(Path.Combine(shelf, id.Wire + DataBroadcastShelf.Extension, "held"));
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal((ErasureFault.FileLeftBehind, (int?)1), (erased.Fault, erased.FilesLeft));
     }
 
     [Fact]
@@ -368,6 +397,14 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
     private string Captioned(RecordingId id)
     {
         string path = Path.Combine(shelf, id.Wire + CaptionSettings.Extension);
+        File.WriteAllBytes(path, new byte[16]);
+
+        return path;
+    }
+
+    private string Recorded(RecordingId id)
+    {
+        string path = Path.Combine(shelf, id.Wire + DataBroadcastShelf.Extension);
         File.WriteAllBytes(path, new byte[16]);
 
         return path;

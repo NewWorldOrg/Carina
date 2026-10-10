@@ -114,8 +114,9 @@ walks past it.
   recording id rather than being handed a path, and refuses a name that is not
   one of its own, a root it does not declare, a root that holds no file at all
   (which is what a lost mount looks like) and a recording a session is still
-  writing. The app removes only what it made from the recording — its picture and
-  its captions — each in a directory of its own.
+  writing. The app removes only what it made from the recording — its picture,
+  its captions and the record of its data broadcast — the picture in a directory
+  of its own, the other two side by side in the captions directory.
 
   A file that no recording owns goes the same way, and only as something the most
   recent ledger check found. The caller names the finding, never a path: the app
@@ -128,7 +129,8 @@ walks past it.
   recording's own file is never a way to remove it.
 
   The check also walks the places the app writes into itself — the encode roots,
-  the thumbnail directory and the captions directory — and the app removes a file
+  the thumbnail directory and the captions directory, which holds the records of
+  data broadcasts beside the captions — and the app removes a file
   there that nothing claims, with the same checks made again just before it
   unlinks. Such a place is not walked when it shares a name or a directory with a
   recording root, or holds a file under a recording's own file name, so a

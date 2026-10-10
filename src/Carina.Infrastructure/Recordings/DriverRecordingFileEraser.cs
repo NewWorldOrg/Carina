@@ -4,6 +4,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Thumbnails;
 
 using Microsoft.Extensions.Logging;
@@ -81,6 +82,7 @@ public sealed class DriverRecordingFileEraser(
         if (captions.WrittenTo is { } shelf)
         {
             derived.Add((shelf, Path.Combine(shelf, id.Wire + CaptionSettings.Extension), "captions taken from this recording"));
+            derived.Add((shelf, Path.Combine(shelf, id.Wire + DataBroadcastShelf.Extension), "record of the data broadcast taken from this recording"));
         }
 
         return derived;
