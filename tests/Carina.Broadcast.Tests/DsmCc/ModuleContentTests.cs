@@ -36,7 +36,7 @@ public sealed class ModuleContentTests
 
         Assert.Equal("startup.bml", resource.Location);
         Assert.Equal("text/X-arib-bml", resource.MediaType);
-        Assert.True(resource.IsText);
+        Assert.Equal(ResourceContent.Text, resource.Content);
         Assert.Equal(BmlInUtf8, Encoding.UTF8.GetString(resource.Body.Span));
     }
 
@@ -64,7 +64,7 @@ public sealed class ModuleContentTests
         Assert.Equal(["startup.bml", "logo.png"], resources.Select(resource => resource.Location));
         Assert.Equal(["text/X-arib-bml", EntityWriter.PngType], resources.Select(resource => resource.MediaType));
         Assert.Equal(BmlInUtf8, Encoding.UTF8.GetString(resources[0].Body.Span));
-        Assert.False(resources[1].IsText);
+        Assert.Equal(ResourceContent.Binary, resources[1].Content);
         Assert.Equal(Picture, resources[1].Body.ToArray());
     }
 
@@ -149,7 +149,7 @@ public sealed class ModuleContentTests
     {
         ModuleResource resource = Opened(EntityWriter.Multipart(Boundary, new EntityPart("a", type, [0xC5, 0xB7]))).Single();
 
-        Assert.True(resource.IsText);
+        Assert.Equal(ResourceContent.Text, resource.Content);
         Assert.Equal("天", Encoding.UTF8.GetString(resource.Body.Span));
     }
 
@@ -170,18 +170,19 @@ public sealed class ModuleContentTests
 
         ModuleResource resource = Opened(EntityWriter.Multipart(Boundary, new EntityPart("a.css", "text/css; charset=UTF-8", body))).Single();
 
-        Assert.True(resource.IsText);
+        Assert.Equal(ResourceContent.Text, resource.Content);
         Assert.Equal(body, resource.Body.ToArray());
     }
 
-    [Fact(DisplayName = "BR-BD-002: text in a character set other than EUC-JP or UTF-8 is handed on as received and not as text")]
-    public void TextInACharacterSetOtherThanEucJpOrUtf8IsHandedOnAsReceivedAndNotAsText()
+    [Fact(DisplayName = "BR-BD-002: text in a character set other than EUC-JP or UTF-8 is handed on as received with its character set, apart from binaries")]
+    public void TextInACharacterSetOtherThanEucJpOrUtf8IsHandedOnAsReceivedWithItsCharacterSetApartFromBinaries()
     {
         byte[] body = [0x93, 0x56];
 
         ModuleResource resource = Opened(EntityWriter.Multipart(Boundary, new EntityPart("a.css", "text/css; charset=Shift_JIS", body))).Single();
 
-        Assert.False(resource.IsText);
+        Assert.Equal(ResourceContent.UndecodedText, resource.Content);
+        Assert.Equal("Shift_JIS", resource.Charset);
         Assert.Equal(body, resource.Body.ToArray());
     }
 

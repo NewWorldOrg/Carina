@@ -12,11 +12,18 @@ public sealed class ModuleResource
 
     private static readonly HashSet<string> EucJpNames = new(StringComparer.OrdinalIgnoreCase) { "euc-jp", "x-euc-jp" };
 
-    private ModuleResource(string location, string mediaType, bool isText, ReadOnlyMemory<byte> body, int substitutions = 0)
+    private ModuleResource(
+        string location,
+        string mediaType,
+        ResourceContent content,
+        string? charset,
+        ReadOnlyMemory<byte> body,
+        int substitutions)
     {
         Location = location;
         MediaType = mediaType;
-        IsText = isText;
+        Content = content;
+        Charset = charset;
         Body = body;
         Substitutions = substitutions;
     }
@@ -25,7 +32,9 @@ public sealed class ModuleResource
 
     public string MediaType { get; }
 
-    public bool IsText { get; }
+    public ResourceContent Content { get; }
+
+    public string? Charset { get; }
 
     public ReadOnlyMemory<byte> Body { get; }
 
@@ -37,18 +46,20 @@ public sealed class ModuleResource
 
         if (!TextTypes.Contains(media.Type))
         {
-            return new ModuleResource(location, media.Type, false, body);
+            return new ModuleResource(location, media.Type, ResourceContent.Binary, media.Charset, body, 0);
         }
 
         if (media.Charset is null || EucJpNames.Contains(media.Charset))
         {
             byte[] decoded = EucJpText.ToUtf8(body.Span, out int substitutions);
 
-            return new ModuleResource(location, media.Type, true, decoded, substitutions);
+            return new ModuleResource(location, media.Type, ResourceContent.Text, media.Charset, decoded, substitutions);
         }
 
-        bool utf8 = string.Equals(media.Charset, "utf-8", StringComparison.OrdinalIgnoreCase);
+        ResourceContent content = string.Equals(media.Charset, "utf-8", StringComparison.OrdinalIgnoreCase)
+            ? ResourceContent.Text
+            : ResourceContent.UndecodedText;
 
-        return new ModuleResource(location, media.Type, utf8, body);
+        return new ModuleResource(location, media.Type, content, media.Charset, body, 0);
     }
 }
