@@ -149,6 +149,7 @@ app.MapGet(
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.TheCaptionsOfARecording)
     .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status200OK, PlayDelivery.Json)
+    .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status400BadRequest, PlayDelivery.Json)
     .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status404NotFound, PlayDelivery.Json)
     .Produces<BaseResponder<CaptionWindowResponder>>(StatusCodes.Status409Conflict, PlayDelivery.Json)
     .Reads(
@@ -165,6 +166,7 @@ app.MapGet(
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.TheDataBroadcastOfARecording)
     .Produces<BaseResponder<DataBroadcastTimelineResponder>>(StatusCodes.Status200OK, PlayDelivery.Json)
+    .Produces<BaseResponder<DataBroadcastTimelineResponder>>(StatusCodes.Status400BadRequest, PlayDelivery.Json)
     .Produces<BaseResponder<DataBroadcastTimelineResponder>>(StatusCodes.Status404NotFound, PlayDelivery.Json)
     .Produces<BaseResponder<DataBroadcastTimelineResponder>>(StatusCodes.Status409Conflict, PlayDelivery.Json)
     .Reads(

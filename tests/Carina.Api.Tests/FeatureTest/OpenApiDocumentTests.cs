@@ -599,7 +599,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             ["decodes", "from", "id", "source"],
             operation["parameters"]!.AsArray().Select(parameter => parameter!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
-            ["200", "401", "404", "409", "500"],
+            ["200", "400", "401", "404", "409", "500"],
             operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
             ["canvas", "untilSec", "cues"],
@@ -624,7 +624,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             ["decodes", "from", "id", "source"],
             operation["parameters"]!.AsArray().Select(parameter => parameter!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
-            ["200", "401", "404", "409", "500"],
+            ["200", "400", "401", "404", "409", "500"],
             operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
             ["entryTag", "autoStart", "startup", "incomplete", "carousels", "events"],
