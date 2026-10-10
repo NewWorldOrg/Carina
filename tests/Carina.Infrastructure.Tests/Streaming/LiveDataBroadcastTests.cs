@@ -60,13 +60,13 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
 
         await supply.Opened[0].WriteAsync(new CarouselBroadcast().Associated().Mapped().At(Second).Listed(1, Startup).Delivered(Startup).Bytes);
 
-        LiveFrame[] toFrames = [await Next(frames), await Next(frames), await Next(frames), await Next(frames)];
-        LiveFrame[] toFields = [await Next(fields), await Next(fields), await Next(fields), await Next(fields)];
+        LiveFrame[] toFrames = [await Next(frames), await Next(frames), await Next(frames)];
+        LiveFrame[] toFields = [await Next(fields), await Next(fields), await Next(fields)];
 
         Assert.Single(supply.Opened);
         Assert.All(toFrames, frame => Assert.Equal(LiveChannel.DataBroadcast, frame.Channel));
         Assert.Equal(
-            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.CatalogKind],
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind],
             toFrames.Select(SideChannelReading.KindOf));
         Assert.Equal(toFrames, toFields);
     }
@@ -119,10 +119,10 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
         await using ILiveViewing next = await Joined(EveryField);
         await supply.Opened[0].WriteAsync(new CarouselBroadcast().Associated().Mapped(version: 1).At(2 * Second).Listed(1, Startup).Delivered(Startup).Bytes);
 
-        LiveFrame[] afresh = [await Next(next), await Next(next), await Next(next), await Next(next)];
+        LiveFrame[] afresh = [await Next(next), await Next(next), await Next(next)];
 
         Assert.Equal(
-            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.CatalogKind],
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind],
             afresh.Select(SideChannelReading.KindOf));
         Assert.Single(supply.Opened);
         Assert.Equal(1, logger.Refused);

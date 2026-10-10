@@ -49,6 +49,46 @@ public sealed class DataBroadcastSessionTests
         Assert.Equal(session.Standing, fanout.Kept);
     }
 
+    [Fact(DisplayName = "BR-BD-004: ten modules arriving under the same download info hand the viewers watching no catalog, and a change of the download info hands them one")]
+    public async Task ModulesArrivingHandNoCatalogAndAChangeOfTheDownloadInfoHandsOne()
+    {
+        DataBroadcastSession session = Session();
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        session.Show(fanout);
+        await using ILiveViewing watching = await Joined(fanout);
+        CarouselModule[] modules = [.. Enumerable.Range(0, 10).Select(id => Numbered(id, 1))];
+        session.Read(Carrying().Listed(1, modules).Bytes);
+        Taken(watching.Frames);
+
+        session.Read(modules.Aggregate(new CarouselBroadcast().At(2 * Second), (broadcast, module) => broadcast.Delivered(module)).Bytes);
+        IReadOnlyList<LiveFrame> arriving = Taken(watching.Frames);
+        session.Read(new CarouselBroadcast().At(3 * Second).Listed(2, [Numbered(0, 2), .. modules.Skip(1)]).Bytes);
+        IReadOnlyList<LiveFrame> changing = Taken(watching.Frames);
+
+        Assert.Equal(Enumerable.Repeat(DataBroadcastFrames.ModuleKind, 10), arriving.Select(SideChannelReading.KindOf));
+        Assert.Equal([DataBroadcastFrames.CatalogKind], changing.Select(SideChannelReading.KindOf));
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a viewer joining later is handed a catalog made when the last module arrived, saying every module handed after it has arrived")]
+    public async Task AViewerJoiningLaterIsHandedACatalogSayingEveryModuleHandedAfterItHasArrived()
+    {
+        DataBroadcastSession session = Session();
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        session.Show(fanout);
+        session.Read(Carrying().Listed(1, Startup, Logo).Bytes);
+        session.Read(new CarouselBroadcast().At(2 * Second).Delivered(Startup).Delivered(Logo).Bytes);
+
+        await using ILiveViewing late = await Joined(fanout);
+        IReadOnlyList<LiveFrame> handed = Taken(late.Frames);
+
+        Assert.Equal(
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.ModuleKind],
+            handed.Select(SideChannelReading.KindOf));
+        Assert.Equal((ulong)(2 * Second), handed[0].Pts.Value);
+        Assert.Equal([["startup.bml"], ["logo.png"]], ResourcesListed(SideChannelReading.Catalog(handed[0])));
+        Assert.Equal(session.Standing, fanout.Kept);
+    }
+
     [Fact(DisplayName = "BR-BS-002: a module the catalog no longer lists is not handed to a viewer joining afterwards")]
     public async Task AModuleTheCatalogNoLongerListsIsNotHandedOn()
     {
@@ -280,6 +320,14 @@ public sealed class DataBroadcastSessionTests
     }
 
     private static DataBroadcastSession Session() => new(Service, NullLogger.Instance);
+
+    private static CarouselModule Numbered(int id, int version)
+        => new(id, version, CarouselBroadcast.Resource($"m{id}.bml", EntityWriter.BmlType, Encoding.ASCII.GetBytes("<bml/>")));
+
+    private static List<List<string>> ResourcesListed(IReadOnlyDictionary<string, object> catalog)
+        => [.. ((List<object>)((Dictionary<string, object>)((List<object>)catalog["carousels"])[0])["modules"])
+            .Cast<Dictionary<string, object>>()
+            .Select(module => ((List<object>)module["resources"]).Cast<Dictionary<string, object>>().Select(resource => (string)resource["path"]).ToList())];
 
     private static CarouselBroadcast Carrying() => new CarouselBroadcast().Associated().Mapped().At(Second);
 

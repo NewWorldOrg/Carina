@@ -91,6 +91,30 @@ public sealed class LiveDataBroadcastMaterialTests : IDisposable
         Assert.Equal(["startup.bml", "logo.png"], fanout.Kept.Skip(1).Select(frame => SideChannelReading.Module(frame).Resources[0].Path));
     }
 
+    [Fact(DisplayName = "BR-BD-004: a viewer watching a broadcast ffmpeg wrote is handed the catalog when the service is found carrying it and when its download info is read, and not again as its modules arrive round after round")]
+    public async Task AViewerWatchingIsHandedTheCatalogOnlyWhenTheListingChanges()
+    {
+        byte[] broadcast = await CarryingACarouselAsync(TimeSpan.FromHours(13));
+        DataBroadcastSession session = new(Service, NullLogger.Instance);
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        session.Show(fanout);
+        await using ILiveViewing watching = await fanout.JoinAsync(CancellationToken.None) ?? throw new InvalidOperationException("A viewer joins.");
+
+        await session.Seat.WriteAsync(broadcast);
+
+        List<byte> kinds = [];
+
+        while (watching.Frames.TryRead(out LiveFrame? frame))
+        {
+            kinds.Add(SideChannelReading.KindOf(frame));
+        }
+
+        Assert.Equal(
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.ModuleKind],
+            kinds.Where(kind => kind is not DataBroadcastFrames.EventKind));
+        Assert.Contains(DataBroadcastFrames.EventKind, kinds);
+    }
+
     private async Task<byte[]> CarryingACarouselAsync(TimeSpan startsAt)
     {
         string written = await (SyntheticBroadcast.AsMeasured() with

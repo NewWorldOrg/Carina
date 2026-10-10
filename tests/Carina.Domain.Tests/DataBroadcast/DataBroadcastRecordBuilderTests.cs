@@ -34,6 +34,38 @@ public sealed class DataBroadcastRecordBuilderTests
         Assert.Equal((100L, 500L), (version.FirstSeen, version.LastSeen));
     }
 
+    [Fact(DisplayName = "BR-BD-005: a version still valid is seen again whenever another module of the data broadcast arrives")]
+    public void AVersionStillValidIsSeenAgainWheneverAnotherModuleArrives()
+    {
+        DataBroadcastRecord record = Read(
+            (Carousels.Carried(), 0),
+            (Carousels.Listing(Carousels.Entry, (0, 1), (1, 1)), 0),
+            (Carousels.Completed(Carousels.Entry, 0, 1), 100),
+            (Carousels.Completed(Carousels.Entry, 1, 1), 400),
+            (Carousels.Listing(Carousels.Entry, 1, [], (1, 1)), 900));
+
+        Assert.Equal(
+            [(0, 100L, 400L), (1, 400L, 900L)],
+            Assert.Single(record.Carousels).Versions.Select(version => (version.ModuleId, version.FirstSeen, version.LastSeen)));
+    }
+
+    [Fact(DisplayName = "BR-BD-005: a version held before its carousel was dropped is valid again once it arrives again")]
+    public void AVersionHeldBeforeItsCarouselWasDroppedIsValidAgainOnceItArrivesAgain()
+    {
+        DataBroadcastRecord record = ReadFrom(
+            0,
+            1_000,
+            (Carousels.Carried(), 0),
+            (Carousels.Listing(Carousels.Entry, (0, 1)), 0),
+            (Carousels.Completed(Carousels.Entry, 0, 1), 100),
+            (new CarouselSignal.Dropped(Carousels.Entry, CarouselDropReason.TotalTooLarge), 200),
+            (Carousels.Listing(Carousels.Entry, (0, 1)), 300),
+            (Carousels.Completed(Carousels.Entry, 0, 1), 400));
+
+        ModuleVersion version = Assert.Single(Assert.Single(record.Carousels).Versions);
+        Assert.Equal((100L, 1_000L), (version.FirstSeen, version.LastSeen));
+    }
+
     [Fact(DisplayName = "BR-BD-005: the same tag, module and version is held once")]
     public void TheSameVersionPutTogetherAgainIsHeldOnce()
     {
@@ -233,6 +265,37 @@ public sealed class DataBroadcastRecordBuilderTests
         Assert.InRange(kept.Bytes, 0, Most);
         Assert.True(kept.Incomplete);
         Assert.Equal(Described(whole.Within(Most)), Described(kept));
+    }
+
+    [Theory(DisplayName = "BR-BD-005: a record keeps when each version was first and last seen whether or not the catalog is told again each time a module arrives")]
+    [InlineData(60_000L)]
+    [InlineData(long.MaxValue)]
+    public void ARecordIsTheSameWhetherOrNotTheCatalogIsToldAgainEachTimeAModuleArrives(long most)
+    {
+        (CarouselSignal Signal, long At)[] history = [.. LongHistory()];
+        CarouselState state = new();
+        DataBroadcastRecordBuilder told = new(most);
+        DataBroadcastRecordBuilder toldAgain = new(most);
+
+        foreach ((CarouselSignal signal, long at) in history)
+        {
+            IReadOnlyList<CarouselDelta> deltas = state.Apply(signal, at);
+
+            foreach (CarouselDelta delta in deltas)
+            {
+                told.Take(delta, at);
+                toldAgain.Take(delta, at);
+            }
+
+            if (deltas.Any(delta => delta is CarouselDelta.ModuleArrived) && state.Catalog is { } catalog)
+            {
+                toldAgain.Take(new CarouselDelta.CatalogChanged(catalog), at);
+            }
+        }
+
+        long ends = history[^1].At;
+
+        Assert.Equal(Described(toldAgain.Build(0, ends)!), Described(told.Build(0, ends)!));
     }
 
     private const int RoundBytes = 16 * 2_000;

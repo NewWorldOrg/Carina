@@ -108,8 +108,8 @@ public sealed class CarouselStateTests
         Assert.All(carousel.Modules, module => Assert.Empty(module.Resources));
     }
 
-    [Fact(DisplayName = "BR-BD-004: a module that arrives comes before the catalog that says it has arrived")]
-    public void AModuleThatArrivesComesBeforeTheCatalogThatSaysSo()
+    [Fact(DisplayName = "BR-BD-004: a module that arrives is told on its own, and the catalog held says it has arrived")]
+    public void AModuleThatArrivesIsToldOnItsOwn()
     {
         CarouselState state = new();
         state.Apply(Carousels.Carried(), 0);
@@ -117,13 +117,44 @@ public sealed class CarouselStateTests
 
         IReadOnlyList<CarouselDelta> deltas = state.Apply(Carousels.Completed(Carousels.Entry, 0, 1), 90_000);
 
-        Assert.Equal(2, deltas.Count);
-        ModuleVersion arrived = Assert.IsType<CarouselDelta.ModuleArrived>(deltas[0]).Module;
+        ModuleVersion arrived = Assert.IsType<CarouselDelta.ModuleArrived>(Assert.Single(deltas)).Module;
         Assert.Equal((Carousels.Entry, 0, 1, 90_000L, 90_000L), (arrived.Tag, arrived.ModuleId, arrived.Version, arrived.FirstSeen, arrived.LastSeen));
-        CatalogModule listed = Assert.Single(Assert.Single(Assert.IsType<CarouselDelta.CatalogChanged>(deltas[1]).Catalog.Carousels).Modules);
+        CatalogModule listed = Assert.Single(Assert.Single(state.Catalog!.Carousels).Modules);
         Assert.True(listed.Arrived);
         Assert.Equal(["startup.bml"], listed.Resources.Select(resource => resource.Path));
-        Assert.True(state.Catalog?.CanOpen);
+        Assert.True(state.Catalog.CanOpen);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: ten modules arriving under the same download info give the catalog once")]
+    public void TenModulesArrivingUnderTheSameDownloadInfoGiveTheCatalogOnce()
+    {
+        CarouselState state = new();
+        state.Apply(Carousels.Carried(), 0);
+        List<CarouselDelta> deltas = [.. state.Apply(Carousels.Listing(Carousels.Entry, [.. Enumerable.Range(0, 10).Select(id => (id, 1))]), 0)];
+
+        foreach (int id in Enumerable.Range(0, 10))
+        {
+            deltas.AddRange(state.Apply(Carousels.Completed(Carousels.Entry, id, 1), 100 + id));
+        }
+
+        Assert.Single(deltas.OfType<CarouselDelta.CatalogChanged>());
+        Assert.Equal(10, deltas.OfType<CarouselDelta.ModuleArrived>().Count());
+        Assert.All(Assert.Single(state.Catalog!.Carousels).Modules, module => Assert.True(module.Arrived));
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a download info that changes gives the catalog once, with what has arrived")]
+    public void ADownloadInfoThatChangesGivesTheCatalogOnce()
+    {
+        CarouselState state = new();
+        state.Apply(Carousels.Carried(), 0);
+        state.Apply(Carousels.Listing(Carousels.Entry, (0, 1), (1, 1)), 0);
+        state.Apply(Carousels.Completed(Carousels.Entry, 0, 1), 100);
+        state.Apply(Carousels.Completed(Carousels.Entry, 1, 1), 200);
+
+        IReadOnlyList<CarouselDelta> deltas = state.Apply(Carousels.Listing(Carousels.Entry, 1, [1], (0, 1), (1, 2)), 300);
+
+        CatalogCarousel carousel = Assert.Single(Assert.IsType<CarouselDelta.CatalogChanged>(Assert.Single(deltas)).Catalog.Carousels);
+        Assert.Equal([(0, 1, true), (1, 2, false)], carousel.Modules.Select(module => (module.Id, module.Version, module.Arrived)));
     }
 
     [Fact(DisplayName = "BR-BD-005: the same tag, module and version is held once")]
