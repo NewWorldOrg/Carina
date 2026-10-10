@@ -51,6 +51,20 @@ internal sealed class MimeHeader
         return false;
     }
 
+    public static bool StartsWithField(ReadOnlySpan<byte> entity)
+    {
+        int at = 0;
+
+        if (!TryTakeLine(entity, ref at, out ReadOnlySpan<byte> line) || line.IsEmpty || line[0] is (byte)' ' or (byte)'\t')
+        {
+            return false;
+        }
+
+        int colon = line.IndexOf((byte)':');
+
+        return colon > 0 && IsToken(line[..colon]);
+    }
+
     private static bool TryTakeLine(ReadOnlySpan<byte> entity, ref int at, out ReadOnlySpan<byte> line)
     {
         int end = entity[at..].IndexOf(LineFeed);

@@ -8,7 +8,14 @@ internal static class ModuleEntity
 
     public static ModuleContentRead Split(ReadOnlyMemory<byte> entity, string? moduleType, string? moduleName, int mostParts)
     {
-        MimeHeader? header = TypedHeader(entity.Span, out int start);
+        MimeHeader? header = null;
+        int start = 0;
+
+        if (MimeHeader.StartsWithField(entity.Span) && !MimeHeader.TryRead(entity.Span, out header, out start))
+        {
+            return Malformed;
+        }
+
         string? contentType = header?[MimeHeader.ContentType] ?? moduleType;
         MediaType media = MediaType.Parse(contentType ?? string.Empty);
 
@@ -22,18 +29,6 @@ internal static class ModuleEntity
         return string.IsNullOrEmpty(media.Boundary)
             ? Malformed
             : SplitParts(entity, start, Encoding.Latin1.GetBytes($"--{media.Boundary}"), mostParts);
-    }
-
-    private static MimeHeader? TypedHeader(ReadOnlySpan<byte> entity, out int bodyStart)
-    {
-        if (MimeHeader.TryRead(entity, out MimeHeader? header, out bodyStart) && header[MimeHeader.ContentType] is not null)
-        {
-            return header;
-        }
-
-        bodyStart = 0;
-
-        return null;
     }
 
     private static ModuleContentRead SplitParts(ReadOnlyMemory<byte> entity, int from, byte[] delimiter, int mostParts)

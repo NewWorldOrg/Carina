@@ -91,6 +91,26 @@ public sealed class ModuleContentTests
         Assert.Equal(Picture, resource.Body.ToArray());
     }
 
+    [Fact(DisplayName = "BR-BD-002: a header without a content type takes the type from the type descriptor and keeps its location")]
+    public void AHeaderWithoutAContentTypeTakesTheTypeFromTheTypeDescriptorAndKeepsItsLocation()
+    {
+        byte[] entity = [.. EntityWriter.Ascii("Content-Location: photo.png\r\n\r\n"), .. Picture];
+
+        ModuleResource resource = Opened(entity, ModuleDescriptorWriter.Type(EntityWriter.PngType), ModuleDescriptorWriter.Name("module-name")).Single();
+
+        Assert.Equal("photo.png", resource.Location);
+        Assert.Equal(EntityWriter.PngType, resource.MediaType);
+        Assert.Equal(Picture, resource.Body.ToArray());
+    }
+
+    [Theory(DisplayName = "BR-BV-001: a header that starts but breaks off is rejected rather than read as the body")]
+    [InlineData("Content-Location: photo.png\r\nnot a field\r\n\r\nbody")]
+    [InlineData("Content-Type: image/png\r\nbody without the empty line")]
+    public void AHeaderThatStartsButBreaksOffIsRejectedRatherThanReadAsTheBody(string entity)
+    {
+        Assert.Equal(CarouselDefect.EntityMalformed, Defect(EntityWriter.Ascii(entity), ModuleDescriptorWriter.Type(EntityWriter.PngType)));
+    }
+
     [Fact(DisplayName = "BR-BD-002: a preamble transport padding folded headers and bare line feeds are all read")]
     public void APreambleTransportPaddingFoldedHeadersAndBareLineFeedsAreAllRead()
     {
