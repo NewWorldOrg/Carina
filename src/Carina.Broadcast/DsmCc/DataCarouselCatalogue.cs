@@ -5,4 +5,5 @@ public sealed record DataCarouselCatalogue(
     uint TransactionId,
     int BlockSize,
     IReadOnlyList<ModuleInfo> Modules,
-    IReadOnlyList<int> Withdrawn);
+    IReadOnlyList<int> Withdrawn,
+    IReadOnlyList<int> Superseded);

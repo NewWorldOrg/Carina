@@ -67,6 +67,11 @@ public sealed class ModuleAssembler
 
         int[] withdrawn = admitted.Keys.Where(moduleId => !next.ContainsKey(moduleId)).Order().ToArray();
         bool sameDownload = current?.DownloadId == indication.DownloadId;
+        int[] superseded = admitted.Values
+            .Where(old => next.TryGetValue(old.ModuleId, out ModuleInfo? kept) && (!sameDownload || !SameContent(old, kept)))
+            .Select(old => old.ModuleId)
+            .Order()
+            .ToArray();
 
         Forget(
             pending,
@@ -79,7 +84,7 @@ public sealed class ModuleAssembler
         DeclaredSize = total;
         changes.Insert(0, new CarouselChange.CatalogueUpdated(
             ComponentTag,
-            new DataCarouselCatalogue(indication.DownloadId, indication.TransactionId, indication.BlockSize, [.. next.Values], withdrawn)));
+            new DataCarouselCatalogue(indication.DownloadId, indication.TransactionId, indication.BlockSize, [.. next.Values], withdrawn, superseded)));
 
         return changes;
     }
@@ -214,6 +219,9 @@ public sealed class ModuleAssembler
 
     private IReadOnlyList<CarouselChange> Rejected(CarouselDefect defect, int moduleId)
         => [new CarouselChange.Rejected(ComponentTag, defect, moduleId)];
+
+    private static bool SameContent(ModuleInfo held, ModuleInfo listed)
+        => held.ModuleVersion == listed.ModuleVersion && held.ModuleSize == listed.ModuleSize;
 
     private static long BlockCount(long moduleSize, int blockSize)
         => Math.Max(1, (moduleSize + blockSize - 1) / blockSize);

@@ -254,6 +254,37 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(shorter, Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes)).Module.Resources.Single().Body.ToArray());
     }
 
+    [Fact(DisplayName = "BR-BS-002: a new transaction names the modules whose version or size it replaces and leaves the others out")]
+    public void ANewTransactionNamesTheModulesWhoseVersionOrSizeItReplacesAndLeavesTheOthersOut()
+    {
+        ModuleAssembler assembler = new(EntryTag);
+        assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0), CssModule(2, 0), CssModule(3, 0)));
+
+        DataCarouselCatalogue catalogue = Catalogue(assembler.Accept(Indication(
+            1,
+            SmallBlock,
+            0x8000_0004,
+            CssModule(1, 1),
+            DiiModule.Of(2, Css.Length + 1, 0),
+            CssModule(3, 0),
+            CssModule(4, 0))));
+
+        Assert.Equal([1, 2], catalogue.Superseded);
+        Assert.Empty(catalogue.Withdrawn);
+    }
+
+    [Fact(DisplayName = "BR-BS-002: another download replaces every module it lists again")]
+    public void AnotherDownloadReplacesEveryModuleItListsAgain()
+    {
+        ModuleAssembler assembler = new(EntryTag);
+        assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0), CssModule(2, 0)));
+
+        DataCarouselCatalogue catalogue = Catalogue(assembler.Accept(Indication(2, SmallBlock, CssModule(1, 0))));
+
+        Assert.Equal([1], catalogue.Superseded);
+        Assert.Equal([2], catalogue.Withdrawn);
+    }
+
     [Fact(DisplayName = "BR-BS-002: the same transaction again changes nothing")]
     public void TheSameTransactionAgainChangesNothing()
     {
