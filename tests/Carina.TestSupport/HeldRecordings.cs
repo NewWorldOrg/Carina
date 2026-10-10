@@ -225,7 +225,9 @@ public sealed class HeldRecordings : IRecordingDirectory
             held.CaptionState,
             held.CaptionsMadeAt,
             held.CaptionPictures,
-            held.CaptionAttempts);
+            held.CaptionAttempts,
+            held.DataBroadcast,
+            held.DataBroadcastMadeAt);
 
     private static string Folded(Recording recording)
         => ProgrammeSearchText.Folded(

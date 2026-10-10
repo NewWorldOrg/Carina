@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using System.Reflection;
 
+using Carina.Domain.DataBroadcast;
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Tests.Recordings;
@@ -25,8 +26,8 @@ public sealed class RecordingIsFrozenOnceItEndsTests
 
         Assert.Equal(
             [
-                "Abort", "Acquire", "Caption", "Descrambled", "Erased", "Extend", "Illustrate", "Interrupt", "Measure",
-                "Missed", "Note", "Resume", "Settle", "Wrote",
+                "Abort", "Acquire", "Caption", "DataBroadcastAgain", "DataBroadcastFailed", "DataBroadcastTaken", "Descrambled",
+                "Erased", "Extend", "Illustrate", "Interrupt", "Measure", "Missed", "Note", "Resume", "Settle", "Wrote",
             ],
             offered);
         Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Length);
@@ -60,7 +61,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
             .Where(method => !method.IsSpecialName)];
 
     [Fact]
-    public void EveryOneOfThemButThePictureTheCaptionsTheErasureAndTheDescramblingRefusesOnceTheRecordingHasEnded()
+    public void EveryOneOfThemButThePictureTheCaptionsTheDataBroadcastTheErasureAndTheDescramblingRefusesOnceTheRecordingHasEnded()
     {
         Recording recording = Settled();
 
@@ -85,11 +86,13 @@ public sealed class RecordingIsFrozenOnceItEndsTests
 
         recording.Illustrate(ThumbnailState.Ready);
         recording.Caption(CaptionState.Ready, 4, Later);
+        recording.DataBroadcastTaken(3, Later);
         recording.Erased(RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1), Later);
         recording.Descrambled(Later);
 
         Assert.Equal(ThumbnailState.Ready, recording.ThumbnailState);
         Assert.Equal(CaptionState.Ready, recording.CaptionState);
+        Assert.Equal(DataBroadcastState.Coming, recording.DataBroadcastState);
         Assert.Equal(Later, recording.LeftBehindAt);
         Assert.Equal(Later, recording.DescrambledAt);
     }
@@ -157,7 +160,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Empty(moved.Except(
             [nameof(Recording.ThumbnailState), nameof(Recording.ThumbnailFault)],
             StringComparer.Ordinal));
-        Assert.Equal(61, before.Count);
+        Assert.Equal(66, before.Count);
     }
 
     [Theory]
@@ -186,6 +189,47 @@ public sealed class RecordingIsFrozenOnceItEndsTests
                 nameof(Recording.CaptionsMadeAt),
                 nameof(Recording.CaptionPictures),
                 nameof(Recording.CaptionAttempts),
+            ],
+            StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void TakingTheDataBroadcastMovesTheColumnsThatAreTheDataBroadcastAndNoOthers(int modules)
+    {
+        Recording recording = Settled();
+        IReadOnlyDictionary<string, string> before = Read(recording);
+
+        if (modules < 0)
+        {
+            recording.DataBroadcastFailed(Later);
+        }
+        else
+        {
+            recording.DataBroadcastTaken(modules, Later);
+        }
+
+        recording.Descrambled(Later);
+
+        IReadOnlyDictionary<string, string> after = Read(recording);
+        string[] moved =
+        [
+            .. before.Where(held => !string.Equals(after[held.Key], held.Value, StringComparison.Ordinal))
+                .Select(held => held.Key)
+                .Order(StringComparer.Ordinal),
+        ];
+
+        Assert.NotEmpty(moved);
+        Assert.Empty(moved.Except(
+            [
+                nameof(Recording.DataBroadcast),
+                nameof(Recording.DataBroadcastState),
+                nameof(Recording.DataBroadcastMadeAt),
+                nameof(Recording.DataBroadcastModules),
+                nameof(Recording.DataBroadcastAttempts),
+                nameof(Recording.DescrambledAt),
             ],
             StringComparer.Ordinal));
     }

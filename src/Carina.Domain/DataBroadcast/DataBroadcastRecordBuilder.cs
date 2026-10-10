@@ -4,22 +4,46 @@ namespace Carina.Domain.DataBroadcast;
 /// Gathers what a <see cref="CarouselState"/> says changed while a recording is read, into the record of
 /// its data broadcast: every module version of every download once, when each was last held valid, and every
 /// event message. A version put together again with other content takes the place of what was held, and a
-/// carousel left out for being too large marks the record incomplete.
+/// carousel left out for being too large marks the record incomplete. Whenever the stream's clock moves on and what
+/// is held is over <see cref="DataBroadcastRecord.Within"/>'s bounds, the versions a record within them leaves out
+/// are let go there and then, so that a whole recording is never held, and the record built is the one that
+/// <see cref="DataBroadcastRecord.Within"/> would have made of everything.
 /// </summary>
-public sealed class DataBroadcastRecordBuilder
+public sealed class DataBroadcastRecordBuilder(long mostBytes = DataBroadcastRecord.MostBytes)
 {
     private readonly List<CarouselKey> carousels = [];
     private readonly List<VersionKey> arrivals = [];
     private readonly Dictionary<VersionKey, ModuleVersion> versions = [];
     private readonly HashSet<VersionKey> valid = [];
     private readonly List<EventMessage> events = [];
+    private readonly HashSet<VersionKey> letGo = [];
 
     private int? entryTag;
     private bool incomplete;
+    private long versionBytes;
+    private long eventBytes;
+    private long? lastAt;
+
+    /// <summary>
+    /// The bytes what is held would take as a record.
+    /// </summary>
+    public long Bytes
+        => DataBroadcastRecord.HeaderBytes
+           + ((long)carousels.Count * RecordedCarousel.HeaderBytes)
+           + versionBytes
+           + DataBroadcastRecord.EventCountBytes
+           + eventBytes;
 
     public void Take(CarouselDelta delta, long at)
     {
         ArgumentNullException.ThrowIfNull(delta);
+
+        if (lastAt is { } before && at > before)
+        {
+            LetGoOfWhatIsOver();
+        }
+
+        lastAt = lastAt is { } seen && seen > at ? seen : at;
 
         switch (delta)
         {
@@ -33,6 +57,7 @@ public sealed class DataBroadcastRecordBuilder
                 break;
             case CarouselDelta.EventCame came:
                 events.Add(came.Message);
+                eventBytes += came.Message.Bytes;
 
                 break;
             case CarouselDelta.CarouselDropped dropped:
@@ -61,6 +86,8 @@ public sealed class DataBroadcastRecordBuilder
         {
             return null;
         }
+
+        LetGoOfWhatIsOver();
 
         foreach (VersionKey key in valid)
         {
@@ -101,15 +128,52 @@ public sealed class DataBroadcastRecordBuilder
     {
         VersionKey key = new(Note(module.Tag, downloadId), module.ModuleId, module.Version);
 
-        if (versions.TryGetValue(key, out ModuleVersion? held) && held.CarriesTheSameAs(module))
+        if (letGo.Contains(key))
         {
             return;
         }
 
+        if (versions.TryGetValue(key, out ModuleVersion? held))
+        {
+            if (held.CarriesTheSameAs(module))
+            {
+                return;
+            }
+
+            versionBytes -= held.Bytes;
+        }
+
         versions[key] = module;
+        versionBytes += module.Bytes;
         valid.Add(key);
         arrivals.Remove(key);
         arrivals.Add(key);
+    }
+
+    private void LetGoOfWhatIsOver()
+    {
+        if (entryTag is not { } tag || (Bytes <= mostBytes && arrivals.Count <= VersionTrim.MostVersionsInACarousel))
+        {
+            return;
+        }
+
+        IReadOnlyList<HeldVersion> leftOut = VersionTrim.LeftOut(
+            [.. arrivals.Select(key => new HeldVersion(key.Carousel.Tag, key.Carousel.DownloadId, versions[key]))],
+            tag,
+            Bytes,
+            mostBytes);
+
+        foreach (HeldVersion version in leftOut)
+        {
+            VersionKey key = new(new CarouselKey(version.Tag, version.DownloadId), version.Version.ModuleId, version.Version.Version);
+
+            versions.Remove(key);
+            arrivals.Remove(key);
+            valid.Remove(key);
+            letGo.Add(key);
+            versionBytes -= version.Version.Bytes;
+            incomplete = true;
+        }
     }
 
     private CarouselKey Note(int tag, uint downloadId)

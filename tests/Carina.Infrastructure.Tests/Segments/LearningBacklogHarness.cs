@@ -5,6 +5,7 @@ using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Segments;
+using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Tests.Reservations;
@@ -255,6 +256,7 @@ internal sealed class LearningBacklogHarness : IDisposable
             .AddSingleton<IRecordingRepository>(new WorklistRecordings(Worklist))
             .AddSingleton<IReservationRepository>(Reservations)
             .AddSingleton<IWatching>(Watching)
+            .AddScoped<IBusynessReader, BusynessReader>()
             .AddScoped<IOccupancyReader, OccupancyReader>()
             .BuildServiceProvider();
 

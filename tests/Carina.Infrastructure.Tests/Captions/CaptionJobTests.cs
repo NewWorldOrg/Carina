@@ -5,6 +5,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Captions;
+using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -36,8 +37,13 @@ public sealed class CaptionJobTests : IDisposable
 
     private readonly HeldArtefactCaptioning captioning = new();
 
+    private readonly RecordingReadTurn turn = new();
+
+    private DateTime? reservationStartsAt;
+
     public void Dispose()
     {
+        turn.Dispose();
         Directory.Delete(recordings, recursive: true);
         Directory.Delete(Path.GetDirectoryName(shelved)!, recursive: true);
     }
@@ -55,6 +61,41 @@ public sealed class CaptionJobTests : IDisposable
         Assert.Equal([(Path.Combine(recordings, subject.FileName.Value), Service)], transcriber.Asked);
         Assert.Equal((1, 1, 0, 0), (pass.Read, pass.Kept, pass.Absent, pass.Failed));
         Assert.Equal(["recordings"], events.Signalled);
+    }
+
+    [Fact(DisplayName = "BR-BS-001: the captions are taken in the turn shared with the data broadcast, so that no two recordings are read through side by side")]
+    public async Task TheCaptionsAreTakenInTheTurnSharedWithTheDataBroadcast()
+    {
+        Recorded();
+        bool heldMeanwhile = false;
+        transcriber.Answer = _ =>
+        {
+            heldMeanwhile = turn.Held;
+
+            return CaptionTranscription.Transcribed(Record(1));
+        };
+
+        await Job().RunAsync(Cancel);
+
+        Assert.True(heldMeanwhile);
+        Assert.False(turn.Held);
+    }
+
+    [Fact(DisplayName = "BR-BS-001: something that starts being recorded while the caption pass waits for its turn stops it before anything is read, and the turn is given back")]
+    public async Task SomethingRecordedWhileThePassWaitsForItsTurnStopsIt()
+    {
+        Recorded();
+        IDisposable dataBroadcast = await turn.TakeAsync(Cancel);
+
+        Task<CaptionPass> waiting = Job().RunAsync(Cancel);
+        worklist.BeingRecorded = true;
+        dataBroadcast.Dispose();
+        CaptionPass pass = await waiting;
+
+        Assert.True(pass.Yielded);
+        Assert.Empty(transcriber.Asked);
+        Assert.Empty(worklist.Written);
+        Assert.False(turn.Held);
     }
 
     [Fact]
@@ -164,6 +205,18 @@ public sealed class CaptionJobTests : IDisposable
         Assert.True(pass.Yielded);
     }
 
+    [Fact(DisplayName = "BR-BS-001: captions are not taken while a reservation starts within thirty minutes, as the data broadcast is not")]
+    public async Task NothingIsStartedWhileAReservationStartsWithinThirtyMinutes()
+    {
+        Recorded();
+        reservationStartsAt = DateTime.UtcNow.AddMinutes(20);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(transcriber.Asked);
+        Assert.True(pass.Yielded);
+    }
+
     [Fact]
     public async Task BrPd016APassAsksAgainBeforeEachRecordingAndStopsOnceSomebodyStartsWatching()
     {
@@ -206,7 +259,7 @@ public sealed class CaptionJobTests : IDisposable
             new CaptionShelf(Settings()),
             Settings(),
             new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, recordings), new StorageRootPath(Elsewhere, recordings)] },
-            watching,
+            turn,
             events,
             TimeProvider.System,
             NullLogger<CaptionJob>.Instance).RunAsync(Cancel);
@@ -443,7 +496,7 @@ public sealed class CaptionJobTests : IDisposable
             new CaptionShelf(chosen),
             chosen,
             new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, recordings)] },
-            watching,
+            turn,
             events,
             TimeProvider.System,
             NullLogger<CaptionJob>.Instance);
@@ -453,6 +506,7 @@ public sealed class CaptionJobTests : IDisposable
     {
         ServiceCollection services = new();
         services.AddScoped<ICaptionWorklist>(_ => worklist);
+        services.AddScoped<IBusynessReader>(_ => new HeldBusyness(() => new Busyness(worklist.BeingRecorded, watching.Anyone, reservationStartsAt)));
         services.AddScoped<IArtefactCaptioning>(_ => captioning);
 
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
@@ -533,8 +587,6 @@ public sealed class CaptionJobTests : IDisposable
 
         public Task<int> WaitingOutOfReachAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken)
             => Task.FromResult(Awaiting.Count(subject => !withinReach.Contains(subject.Root)));
-
-        public Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken) => Task.FromResult(BeingRecorded);
 
         public Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<RecordingId>>([.. Ready]);

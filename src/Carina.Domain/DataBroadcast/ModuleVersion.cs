@@ -53,6 +53,8 @@ public sealed record ModuleVersion
 
     public ModuleVersion SeenAt(long at) => at <= LastSeen ? this : this with { LastSeen = at };
 
+    public ModuleVersion Shifted(long by) => new(Tag, ModuleId, Version, FirstSeen + by, LastSeen + by, Resources);
+
     public bool CarriesTheSameAs(ModuleVersion other)
     {
         ArgumentNullException.ThrowIfNull(other);

@@ -14,8 +14,6 @@ public interface ICaptionWorklist
 
     Task<int> WaitingOutOfReachAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken);
 
-    Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken);
-
     /// <summary>
     /// The recordings whose row says their captions are ready.
     /// </summary>

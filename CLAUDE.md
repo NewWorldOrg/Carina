@@ -114,8 +114,9 @@ walks past it.
   recording id rather than being handed a path, and refuses a name that is not
   one of its own, a root it does not declare, a root that holds no file at all
   (which is what a lost mount looks like) and a recording a session is still
-  writing. The app removes only what it made from the recording — its picture and
-  its captions — each in a directory of its own.
+  writing. The app removes only what it made from the recording — its picture,
+  its captions and the record of its data broadcast — the picture in a directory
+  of its own, the other two side by side in the captions directory.
 
   A file that no recording owns goes the same way, and only as something the most
   recent ledger check found. The caller names the finding, never a path: the app
@@ -128,7 +129,8 @@ walks past it.
   recording's own file is never a way to remove it.
 
   The check also walks the places the app writes into itself — the encode roots,
-  the thumbnail directory and the captions directory — and the app removes a file
+  the thumbnail directory and the captions directory, which holds the records of
+  data broadcasts beside the captions — and the app removes a file
   there that nothing claims, with the same checks made again just before it
   unlinks. Such a place is not walked when it shares a name or a directory with a
   recording root, or holds a file under a recording's own file name, so a
@@ -279,17 +281,21 @@ walks past it.
   that matches, so it grows with the archive. Nothing caps it yet; an estimated
   total, cursor paging, or a count that stops at a ceiling would.
 - **A recording that has ended is frozen except for its picture, its captions,
-  what throwing it away left behind and when it was descrambled — as long as it
-  is reached through the aggregate's own methods.** Every public method on
-  `Recording` but four refuses once an outcome is set: `Illustrate` moves the two
-  thumbnail columns; `Caption` moves the four caption columns, and refuses
-  anything but waiting while the recording is still being written; `Erased`
-  moves the two columns that say a deletion left files on disk (a deletion that
-  took everything removes the row); `Descrambled` moves `descrambled_at`, only on
-  a recording that ended with `ScramblingUnresolved` and has not been descrambled
-  yet, leaving the outcome as written. Reflection tests assert the whole set of
-  methods, that no property has a public setter, and that the only static entry
-  points are the two that make a recording. The change tracker, raw SQL and
+  the record of its data broadcast, what throwing it away left behind and when it
+  was descrambled — as long as it is reached through the aggregate's own
+  methods.** Every public method on `Recording` but seven refuses once an outcome
+  is set: `Illustrate` moves the two thumbnail columns; `Caption` moves the four
+  caption columns, and refuses anything but waiting while the recording is still
+  being written; `DataBroadcastTaken`, `DataBroadcastFailed` and
+  `DataBroadcastAgain` move the four data broadcast columns, which `Settle` puts
+  to coming as the recording ends; `Erased` moves the two columns that say a
+  deletion left files on disk (a deletion that took everything removes the row);
+  `Descrambled` moves `descrambled_at`, only on a recording that ended with
+  `ScramblingUnresolved` and has not been descrambled yet, leaving the outcome as
+  written, and puts a data broadcast record already taken back to coming.
+  Reflection tests assert the whole set of methods, that no property has a public
+  setter, and that the only static entry points are the two that make a
+  recording. The change tracker, raw SQL and
   reflection reach past the aggregate, and only the trip wires below look for
   those.
 

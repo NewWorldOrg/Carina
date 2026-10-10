@@ -40,6 +40,11 @@ public sealed class CarouselReader
     /// </summary>
     public long? Now => tap.Now;
 
+    /// <summary>
+    /// The first moment of the service's clock that was heard, or null until it has been heard.
+    /// </summary>
+    public long? FirstHeard => tap.FirstHeard;
+
     public long UnreadablePackets => tap.UnreadablePackets;
 
     public long RejectedSections => tap.RejectedSections;

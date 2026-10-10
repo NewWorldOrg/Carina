@@ -24,6 +24,20 @@ public static class DataBroadcastFrames
 
     private const int FiresAtOffset = sizeof(byte) + sizeof(ushort) + sizeof(ushort) + sizeof(byte) + sizeof(byte);
 
+    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    private static readonly IReadOnlyDictionary<DataBroadcastResourceKind, (string MediaType, ResourceForm Form)> Representatives =
+        new Dictionary<DataBroadcastResourceKind, (string MediaType, ResourceForm Form)>
+        {
+            [DataBroadcastResourceKind.Bml] = ("text/X-arib-bml", ResourceForm.Text),
+            [DataBroadcastResourceKind.Css] = ("text/css", ResourceForm.Text),
+            [DataBroadcastResourceKind.EcmaScript] = ("text/X-arib-ecmascript", ResourceForm.Text),
+            [DataBroadcastResourceKind.Jpeg] = ("image/jpeg", ResourceForm.Binary),
+            [DataBroadcastResourceKind.Png] = ("image/X-arib-png", ResourceForm.Binary),
+            [DataBroadcastResourceKind.OtherBinary] = (CarouselReader.UnnamedMediaType, ResourceForm.Binary),
+            [DataBroadcastResourceKind.UndecodedText] = ("text/plain", ResourceForm.UndecodedText),
+        };
+
     private static readonly IReadOnlyDictionary<string, DataBroadcastResourceKind> Kinds =
         new Dictionary<string, DataBroadcastResourceKind>(StringComparer.OrdinalIgnoreCase)
         {
@@ -55,18 +69,30 @@ public static class DataBroadcastFrames
         ArgumentNullException.ThrowIfNull(message);
 
         byte[] payload = new byte[message.Bytes];
-        Span<byte> written = payload;
 
-        written[0] = EventKind;
-        BinaryPrimitives.WriteUInt16BigEndian(written[1..], (ushort)message.Group);
-        BinaryPrimitives.WriteUInt16BigEndian(written[3..], (ushort)message.Id);
-        written[5] = (byte)message.MessageType;
-        written[6] = (byte)message.Timing;
-        BinaryPrimitives.WriteUInt64BigEndian(written[FiresAtOffset..], OnTheWire(message.FiresAt));
-        BinaryPrimitives.WriteUInt16BigEndian(written[15..], (ushort)message.PrivateData.Length);
-        message.PrivateData.Span.CopyTo(written[EventMessage.FramingBytes..]);
+        WriteEvent(message, (long)OnTheWire(message.FiresAt), payload);
 
         return Frame(at, payload);
+    }
+
+    /// <summary>
+    /// An event message as the side channel carries it, opened by its kind, with the moment it fires written as
+    /// <paramref name="firesAt"/>, into <paramref name="into"/>, answering how many bytes that took.
+    /// </summary>
+    public static int WriteEvent(EventMessage message, long firesAt, Span<byte> into)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        into[0] = EventKind;
+        BinaryPrimitives.WriteUInt16BigEndian(into[1..], (ushort)message.Group);
+        BinaryPrimitives.WriteUInt16BigEndian(into[3..], (ushort)message.Id);
+        into[5] = (byte)message.MessageType;
+        into[6] = (byte)message.Timing;
+        BinaryPrimitives.WriteInt64BigEndian(into[FiresAtOffset..], firesAt);
+        BinaryPrimitives.WriteUInt16BigEndian(into[15..], (ushort)message.PrivateData.Length);
+        message.PrivateData.Span.CopyTo(into[EventMessage.FramingBytes..]);
+
+        return EventMessage.FramingBytes + message.PrivateData.Length;
     }
 
     public static LiveFrame Absent(long at) => Frame(at, [AbsentKind]);
@@ -114,15 +140,56 @@ public static class DataBroadcastFrames
         written[1] = (byte)module.Tag;
         BinaryPrimitives.WriteUInt16BigEndian(written[2..], (ushort)module.ModuleId);
         written[4] = (byte)module.Version;
-        int at = ModuleHeaderLength;
-
-        foreach (CarouselResource resource in module.Resources)
-        {
-            at += Write(resource, written[at..]);
-        }
+        WriteResources(module.Resources, written[ModuleHeaderLength..]);
 
         return payload;
     }
+
+    /// <summary>
+    /// Each resource with its path, its kind and its bytes, one after another, into <paramref name="into"/>,
+    /// answering how many bytes that took.
+    /// </summary>
+    public static int WriteResources(IReadOnlyList<CarouselResource> resources, Span<byte> into)
+    {
+        ArgumentNullException.ThrowIfNull(resources);
+
+        int at = 0;
+
+        foreach (CarouselResource resource in resources)
+        {
+            at += Write(resource, into[at..]);
+        }
+
+        return at;
+    }
+
+    /// <summary>
+    /// The resources written one after another to the end of <paramref name="bytes"/>, each with the media type and
+    /// the form its kind stands for, or null when the bytes are not a list of at least one resource.
+    /// </summary>
+    public static IReadOnlyList<CarouselResource>? ReadResources(ReadOnlyMemory<byte> bytes)
+    {
+        List<CarouselResource> resources = [];
+
+        while (!bytes.IsEmpty)
+        {
+            if (Resource(bytes.Span) is not { } read)
+            {
+                return null;
+            }
+
+            (string mediaType, ResourceForm form) = Representatives[read.Kind];
+            resources.Add(new CarouselResource(read.Path, mediaType, form, bytes.Slice(read.BodyAt, read.BodyLength)));
+            bytes = bytes[(read.BodyAt + read.BodyLength)..];
+        }
+
+        return resources.Count is 0 ? null : resources;
+    }
+
+    /// <summary>
+    /// The media type a resource of <paramref name="kind"/> is read back as.
+    /// </summary>
+    public static string MediaTypeOf(DataBroadcastResourceKind kind) => Representatives[kind].MediaType;
 
     public static DataBroadcastResourceKind KindOf(CarouselResource resource)
     {
@@ -192,8 +259,43 @@ public static class DataBroadcastFrames
         return at + resource.Body.Length;
     }
 
+    private static ResourceRead? Resource(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length < CarouselResource.FramingBytes)
+        {
+            return null;
+        }
+
+        int pathLength = BinaryPrimitives.ReadUInt16BigEndian(bytes);
+        int bodyAt = CarouselResource.FramingBytes + pathLength;
+
+        if (pathLength is 0 || bytes.Length < bodyAt)
+        {
+            return null;
+        }
+
+        DataBroadcastResourceKind kind = (DataBroadcastResourceKind)bytes[sizeof(ushort) + pathLength];
+        uint bodyLength = BinaryPrimitives.ReadUInt32BigEndian(bytes[(sizeof(ushort) + pathLength + sizeof(byte))..]);
+
+        if (!Enum.IsDefined(kind) || bodyLength > (uint)(bytes.Length - bodyAt))
+        {
+            return null;
+        }
+
+        try
+        {
+            return new ResourceRead(Utf8.GetString(bytes.Slice(sizeof(ushort), pathLength)), kind, bodyAt, (int)bodyLength);
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
+    }
+
     private static LiveFrame Frame(long at, byte[] payload)
         => new(LiveChannel.DataBroadcast, LivePts.Of(OnTheWire(at)), payload);
 
     private static ulong OnTheWire(long at) => at < 0 ? 0UL : (ulong)at;
+
+    private sealed record ResourceRead(string Path, DataBroadcastResourceKind Kind, int BodyAt, int BodyLength);
 }

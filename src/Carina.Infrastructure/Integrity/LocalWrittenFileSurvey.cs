@@ -3,6 +3,7 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Thumbnails;
 
 using Microsoft.Extensions.Logging;
@@ -11,7 +12,7 @@ namespace Carina.Infrastructure.Integrity;
 
 /// <summary>
 /// Walks the roots this process encodes into, the directory it draws thumbnails into and the one it
-/// keeps captions in. A place is left out when it shares a name with a recording root, or when its
+/// keeps captions and the records of data broadcasts in. A place is left out when it shares a name with a recording root, or when its
 /// directory is a recording root's, or one inside it or around it, or one already taken. What is
 /// claimed in a place left out is still claimed wherever that place is walked under another name.
 /// </summary>
@@ -126,6 +127,7 @@ public sealed class LocalWrittenFileSurvey : IWrittenFileSurvey
         if (keepsCaptions)
         {
             claimed.AddRange(ledger.Select(row => new DeclaredFile(CaptionPlace, row.Id.Wire + CaptionSettings.Extension)));
+            claimed.AddRange(ledger.Select(row => new DeclaredFile(CaptionPlace, row.Id.Wire + DataBroadcastShelf.Extension)));
         }
 
         List<DeclaredFile> seenElsewhere = [];

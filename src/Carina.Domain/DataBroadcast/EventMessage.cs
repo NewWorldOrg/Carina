@@ -44,4 +44,6 @@ public sealed record EventMessage
     /// data, and the private data.
     /// </summary>
     public long Bytes => FramingBytes + (long)PrivateData.Length;
+
+    public EventMessage Shifted(long by) => new(Group, Id, MessageType, Timing, FiresAt + by, PrivateData);
 }

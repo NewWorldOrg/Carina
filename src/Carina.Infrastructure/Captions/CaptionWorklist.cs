@@ -44,11 +44,6 @@ public sealed class CaptionWorklist(CarinaDbContext context, TimeProvider clock)
             .CountAsync(cancellationToken);
     }
 
-    public Task<bool> AnyBeingRecordedAsync(CancellationToken cancellationToken)
-        => context.Set<Recording>()
-            .AsNoTracking()
-            .AnyAsync(recording => recording.Outcome == null, cancellationToken);
-
     public async Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken)
         => await context.Set<Recording>()
             .AsNoTracking()

@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.DataBroadcast;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -146,6 +147,18 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 AND (caption_pictures IS NULL OR caption_pictures > 0)
                 AND (caption_state = 'Failed') = (caption_attempts > 0)
                 AND caption_attempts >= 0
+                """);
+            table.HasCheckConstraint(
+                "ck_recording_data_broadcast",
+                $"""
+                data_broadcast_state IN ({Vocabulary<DataBroadcastState>(quoted: true)})
+                AND (data_broadcast_state = 'None' OR recording_outcome IS NOT NULL)
+                AND (data_broadcast_state IN ('None', 'Coming')) = (data_broadcast_made_at IS NULL)
+                AND (data_broadcast_state = 'Made') = (data_broadcast_modules IS NOT NULL)
+                AND (data_broadcast_modules IS NULL OR data_broadcast_modules > 0)
+                AND (data_broadcast_state <> 'Failed' OR data_broadcast_attempts > 0)
+                AND (data_broadcast_state IN ('Failed', 'Coming') OR data_broadcast_attempts = 0)
+                AND data_broadcast_attempts >= 0
                 """);
             table.HasCheckConstraint(
                 "ck_recording_tuner",
@@ -417,6 +430,20 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             .HasDefaultValue(0)
             .IsRequired();
 
+        builder.Property(recording => recording.DataBroadcastState)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .HasDefaultValue(DataBroadcastState.None)
+            .HasSentinel(DataBroadcastState.None)
+            .IsRequired();
+
+        builder.Property(recording => recording.DataBroadcastMadeAt);
+        builder.Property(recording => recording.DataBroadcastModules);
+
+        builder.Property(recording => recording.DataBroadcastAttempts)
+            .HasDefaultValue(0)
+            .IsRequired();
+
         builder.Property(recording => recording.TunerDeviceId)
             .HasConversion(id => id!.Value, value => new TunerDeviceId(value))
             .HasMaxLength(Carina.Domain.Recordings.TunerDeviceId.MaxLength);
@@ -478,6 +505,7 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
         builder.Ignore(recording => recording.Counters);
         builder.Ignore(recording => recording.Programme);
+        builder.Ignore(recording => recording.DataBroadcast);
         builder.Ignore(recording => recording.IsInFlight);
         builder.Ignore(recording => recording.Written);
         builder.Ignore(recording => recording.ThumbnailShowsAnUnfinishedRecording);

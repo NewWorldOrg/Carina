@@ -118,7 +118,7 @@ pcscd は起動し直すたびにソケットを作り直すので、ソケッ�
 | `RecordingRetry__BetweenAttempts` | 始め直す間隔。既定は 1 分、上限は 1 日。チャンネル側で間を空けているときは、その時間が過ぎるまで始め直さない |
 | `RecordingProgress__AtMostEvery` | 録画中に書いた長さやドロップの数が変わったとき、開いている画面に知らせる最短の間隔。既定は 30 秒、上限は 1 時間。録画の開始・停止・中断・結果は、この間隔を待たずに知らせる |
 | `Thumbnails__WrittenTo` | サムネイルの保存先。空なら作らない |
-| `Captions__WrittenTo` | 録画から取り出した字幕の保存先。空なら取り出さない |
+| `Captions__WrittenTo` | 録画から取り出した字幕とデータ放送の記録の保存先。空ならどちらも取り出さない |
 | `Learning__ImportFrom` | 録画を縮めたデータ(形 `anime-material-v1`、1 本につきディレクトリ 1 つ)を置いたディレクトリ(絶対パス)。空なら取り込まない。CM・OP・ED の学習が入のとき、空いている時間に 1 本ずつ学習に使うデータとして取り込む。中のファイルは書き換えも削除もしない |
 | `Encodings__OutputRoots` | エンコード済みファイルの保存先(`encodes=/srv/encodes`) |
 | `Encodings__Prefer` | 録画をあとからエンコードするときの変換器(`Software` / `Vaapi`)。既定は `Software` |

@@ -2643,6 +2643,28 @@ namespace Carina.Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("counted_session_opened_at");
 
+                    b.Property<int>("DataBroadcastAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("data_broadcast_attempts");
+
+                    b.Property<DateTime?>("DataBroadcastMadeAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("data_broadcast_made_at");
+
+                    b.Property<int?>("DataBroadcastModules")
+                        .HasColumnType("integer")
+                        .HasColumnName("data_broadcast_modules");
+
+                    b.Property<string>("DataBroadcastState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("None")
+                        .HasColumnName("data_broadcast_state");
+
                     b.Property<DateTime?>("DescrambledAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("descrambled_at");
@@ -2916,6 +2938,8 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_recording_complete_was_asked_for", "recording_outcome IS DISTINCT FROM 'Complete' OR aborted_at IS NOT NULL");
 
                             t.HasCheckConstraint("ck_recording_counts", "written_duration_ms >= 0\nAND resume_count >= 0\nAND eovf_count >= 0\nAND (file_size_observed IS NULL OR file_size_observed >= 0)\nAND (scrambled_packets IS NULL OR scrambled_packets >= 0)");
+
+                            t.HasCheckConstraint("ck_recording_data_broadcast", "data_broadcast_state IN ('None', 'Coming', 'Made', 'Missing', 'Failed')\nAND (data_broadcast_state = 'None' OR recording_outcome IS NOT NULL)\nAND (data_broadcast_state IN ('None', 'Coming')) = (data_broadcast_made_at IS NULL)\nAND (data_broadcast_state = 'Made') = (data_broadcast_modules IS NOT NULL)\nAND (data_broadcast_modules IS NULL OR data_broadcast_modules > 0)\nAND (data_broadcast_state <> 'Failed' OR data_broadcast_attempts > 0)\nAND (data_broadcast_state IN ('Failed', 'Coming') OR data_broadcast_attempts = 0)\nAND data_broadcast_attempts >= 0");
 
                             t.HasCheckConstraint("ck_recording_descrambled", "descrambled_at IS NULL\nOR (recording_outcome IS NOT NULL\n    AND recording_reasons_name_any(outcome_detail, ARRAY['ScramblingUnresolved']::text[])\n    AND descrambled_at >= stopped_at_actual)");
 

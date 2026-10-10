@@ -2,6 +2,7 @@ using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Captions;
 using Carina.Domain.Channels;
+using Carina.Domain.DataBroadcast;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Encodings;
@@ -24,6 +25,7 @@ using Carina.Infrastructure.Captions;
 using Carina.Infrastructure.Channels;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
+using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Events;
@@ -240,6 +242,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeIntakeRound>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<ICaptionWorklist, CaptionWorklist>();
+        services.AddScoped<IDataBroadcastWorklist, DataBroadcastWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
@@ -330,6 +333,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<CaptionShelf>();
         services.TryAddSingleton<ICaptionRecords>(provider => provider.GetRequiredService<CaptionShelf>());
         services.TryAddSingleton<ICaptionTranscriber, FfmpegCaptionTranscriber>();
+        services.TryAddSingleton<DataBroadcastShelf>();
+        services.TryAddSingleton<IRecordingClockStart, FfprobeRecordingClockStart>();
+        services.TryAddSingleton<IDataBroadcastTaker, TransportStreamDataBroadcastTaker>();
+        services.TryAddSingleton<RecordingReadTurn>();
         services.TryAddSingleton<IWatching, TranscodersInUse>();
         services.AddScoped<IScrubFrames, Scrubber>();
         services.AddScoped<IDrawnThumbnails, DrawnThumbnails>();
@@ -391,6 +398,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IOnTheFlyPlayer, OnTheFlyPlayer>();
         services.AddSingleton<ThumbnailJob>();
         services.AddSingleton<CaptionJob>();
+        services.AddSingleton<DataBroadcastJob>();
         services.TryAddSingleton(LearningFollowSettings.Default);
         services.TryAddSingleton<LearningRecords>();
         services.TryAddSingleton<ILearningFollower, FfmpegLearningFollower>();
@@ -434,6 +442,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
         services.AddHostedService(provider => provider.GetRequiredService<CaptionJob>());
+        services.AddHostedService(provider => provider.GetRequiredService<DataBroadcastJob>());
         services.AddHostedService(provider => provider.GetRequiredService<LearningFollowJob>());
         services.AddHostedService(provider => provider.GetRequiredService<LearningBacklogJob>());
         services.AddHostedService(provider =>

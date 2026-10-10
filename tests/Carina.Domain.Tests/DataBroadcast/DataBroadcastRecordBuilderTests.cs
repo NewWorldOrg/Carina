@@ -185,6 +185,86 @@ public sealed class DataBroadcastRecordBuilderTests
         Assert.Equal(12_345L, ReadFrom(12_345, 12_345, (Carousels.Carried(), 12_345)).StartsAt);
     }
 
+    [Fact(DisplayName = "BR-BD-005: a long history held within its size lets go of superseded versions as it goes, and builds the record leaving out everything else would have made")]
+    public void ALongHistoryHeldWithinItsSizeLetsGoAsItGoes()
+    {
+        const long Most = 60_000;
+        (CarouselSignal Signal, long At)[] history = [.. LongHistory()];
+        CarouselState bounded = new();
+        DataBroadcastRecordBuilder within = new(Most);
+        long peak = 0;
+
+        foreach ((CarouselSignal signal, long at) in history)
+        {
+            Take(bounded, within, signal, at);
+            peak = Math.Max(peak, within.Bytes);
+        }
+
+        CarouselState unbounded = new();
+        DataBroadcastRecordBuilder everything = new(long.MaxValue);
+
+        foreach ((CarouselSignal signal, long at) in history)
+        {
+            Take(unbounded, everything, signal, at);
+        }
+
+        long ends = history[^1].At;
+        DataBroadcastRecord whole = everything.Build(0, ends)!;
+        DataBroadcastRecord kept = within.Build(0, ends)!;
+
+        Assert.InRange(whole.Bytes, 10 * Most, long.MaxValue);
+        Assert.InRange(peak, Most / 2, Most + RoundBytes);
+        Assert.InRange(kept.Bytes, 0, Most);
+        Assert.True(kept.Incomplete);
+        Assert.Equal(Described(whole.Within(Most)), Described(kept));
+    }
+
+    private const int RoundBytes = 16 * 2_000;
+
+    private static IEnumerable<(CarouselSignal Signal, long At)> LongHistory()
+    {
+        yield return (Carousels.Carried(), 0);
+
+        for (int round = 0; round < 300; round++)
+        {
+            long at = (round + 1) * 1_000L;
+            uint other = round < 150 ? 1u : 2u;
+            int[] entryUpdated = [.. Enumerable.Range(0, 10).Where(module => round % EntryEvery(module) == 0)];
+            int[] otherUpdated = [.. Enumerable.Range(0, 5).Where(module => round % (module + 2) == 0)];
+
+            yield return (Carousels.Listing(Carousels.Entry, 1, entryUpdated, [.. Enumerable.Range(0, 10).Select(module => (module, VersionAt(round, EntryEvery(module))))]), at);
+            yield return (Carousels.Listing(Carousels.Other, other, otherUpdated, [.. Enumerable.Range(0, 5).Select(module => (module, VersionAt(round, module + 2)))]), at);
+
+            foreach (int module in entryUpdated)
+            {
+                yield return (Module(Carousels.Entry, module, VersionAt(round, EntryEvery(module))), at + module);
+            }
+
+            foreach (int module in otherUpdated)
+            {
+                yield return (Module(Carousels.Other, module, VersionAt(round, module + 2)), at + 20 + module);
+            }
+
+            yield return (new CarouselSignal.EventTimed(Carousels.Event(round, at + 50)), at + 50);
+        }
+    }
+
+    private static int VersionAt(int round, int every) => (round / every) % 256;
+
+    private static int EntryEvery(int module) => module is CarouselCatalog.StartupModuleId ? 100 : module + 1;
+
+    private static CarouselSignal.ModuleCompleted Module(int tag, int module, int version)
+        => new(tag, module, version, [Carousels.Resource("m.bml", 500 + (module * 97) + (version % 7))]);
+
+    private static string Described(DataBroadcastRecord record)
+        => string.Join(
+            "\n",
+            [
+                $"{record.EntryTag} {record.Incomplete} {record.Bytes} {record.Events.Count}",
+                .. record.Carousels.SelectMany(carousel => carousel.Versions.Select(version =>
+                    $"{carousel.Tag} {carousel.DownloadId} {version.ModuleId} {version.Version} {version.FirstSeen} {version.LastSeen} {version.Bytes}")),
+            ]);
+
     private static DataBroadcastRecord Read(params (CarouselSignal Signal, long At)[] signals)
         => ReadFrom(0, signals.Max(signal => signal.At), signals);
 

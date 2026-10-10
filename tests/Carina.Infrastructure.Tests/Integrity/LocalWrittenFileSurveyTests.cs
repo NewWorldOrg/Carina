@@ -56,15 +56,31 @@ public sealed class LocalWrittenFileSurveyTests
     }
 
     [Fact]
-    public void BrKd025EveryRecordingTheLedgerHoldsClaimsItsCaptionsAndNothingElseOnTheirShelf()
+    public void BrKd025EveryRecordingTheLedgerHoldsClaimsItsCaptionsAndTheRecordOfItsDataBroadcastAndNothingElseOnTheirShelf()
     {
         using var recordings = new TempTree();
         using var captions = new TempTree();
 
-        DeclaredFile claimed = Assert.Single(Survey(recordings.Root, null, null, captions.Root).Claimed([Row], []));
+        IReadOnlyList<DeclaredFile> claimed = Survey(recordings.Root, null, null, captions.Root).Claimed([Row], []);
 
-        Assert.Equal(new DeclaredFile(LocalWrittenFileSurvey.CaptionPlace, Recorded.Wire + ".captions"), claimed);
+        Assert.Equal(
+            [
+                new DeclaredFile(LocalWrittenFileSurvey.CaptionPlace, Recorded.Wire + ".captions"),
+                new DeclaredFile(LocalWrittenFileSurvey.CaptionPlace, Recorded.Wire + ".databroadcast"),
+            ],
+            claimed);
         Assert.Empty(Survey(recordings.Root, null, null, captions.Root).Drawn([Row]));
+    }
+
+    [Fact(DisplayName = "BR-BS-001: the record of a recording's data broadcast kept inside the recording root is claimed there")]
+    public void TheRecordOfTheDataBroadcastKeptInsideTheRecordingRootIsClaimedThere()
+    {
+        using var recordings = new TempTree();
+        recordings.HoldingDirectory("captions");
+
+        LocalWrittenFileSurvey survey = Survey(recordings.Root, null, null, recordings.Under("captions"));
+
+        Assert.Contains(new DeclaredFile(Primary, "captions/" + Recorded.Wire + ".databroadcast"), survey.Claimed([Row], []));
     }
 
     [Fact]
