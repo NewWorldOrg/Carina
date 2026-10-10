@@ -60,7 +60,7 @@ internal static class ModuleEntity
             int partStart = after + lineEnd + 1;
             int next = lineEnd < 0 ? -1 : NextDelimiter(span, delimiter, partStart);
 
-            if (next < 0 || !TryTakePart(entity[partStart..WithoutLineBreak(span, partStart, next)], parts))
+            if (next < 0 || !TryTakePart(entity[partStart..next], parts))
             {
                 return Malformed;
             }
@@ -78,10 +78,12 @@ internal static class ModuleEntity
             return false;
         }
 
+        int bodyEnd = Math.Max(bodyStart, WithoutLineBreak(part.Span, part.Length));
+
         parts.Add(ModuleResource.Of(
             header[MimeHeader.ContentLocation] ?? string.Empty,
             header[MimeHeader.ContentType],
-            part[bodyStart..]));
+            part[bodyStart..bodyEnd]));
 
         return true;
     }
@@ -112,16 +114,16 @@ internal static class ModuleEntity
         return -1;
     }
 
-    private static int WithoutLineBreak(ReadOnlySpan<byte> entity, int start, int end)
+    private static int WithoutLineBreak(ReadOnlySpan<byte> part, int end)
     {
         int trimmed = end;
 
-        if (trimmed > start && entity[trimmed - 1] == (byte)'\n')
+        if (trimmed > 0 && part[trimmed - 1] == (byte)'\n')
         {
             trimmed--;
         }
 
-        if (trimmed > start && entity[trimmed - 1] == (byte)'\r')
+        if (trimmed > 0 && part[trimmed - 1] == (byte)'\r')
         {
             trimmed--;
         }

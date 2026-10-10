@@ -21,7 +21,7 @@ public static class EntityWriter
         {
             entity.AddRange(Ascii($"--{boundary}\r\nContent-Location: {part.Location}\r\nContent-Type: {part.ContentType}\r\n\r\n"));
             entity.AddRange(part.Body);
-            entity.AddRange(Ascii("\r\n"));
+            entity.AddRange(part.EndsOnTheBlankLine ? [] : Ascii("\r\n"));
         }
 
         entity.AddRange(Ascii($"--{boundary}--\r\n"));
@@ -44,4 +44,7 @@ public static class EntityWriter
     public static byte[] Ascii(string text) => Encoding.ASCII.GetBytes(text);
 }
 
-public sealed record EntityPart(string Location, string ContentType, byte[] Body);
+public sealed record EntityPart(string Location, string ContentType, byte[] Body)
+{
+    public bool EndsOnTheBlankLine { get; init; }
+}

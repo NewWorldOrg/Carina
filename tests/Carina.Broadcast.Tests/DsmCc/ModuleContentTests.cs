@@ -115,6 +115,21 @@ public sealed class ModuleContentTests
         Assert.Equal("image/png", resource.MediaType);
     }
 
+    [Theory(DisplayName = "BR-BD-002: a part with no body comes out empty and the parts beside it stay")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void APartWithNoBodyComesOutEmptyAndThePartsBesideItStay(bool endsOnTheBlankLine)
+    {
+        IReadOnlyList<ModuleResource> resources = Opened(EntityWriter.Multipart(
+            Boundary,
+            new EntityPart("empty.png", EntityWriter.PngType, []) { EndsOnTheBlankLine = endsOnTheBlankLine },
+            new EntityPart("logo.png", EntityWriter.PngType, Picture)));
+
+        Assert.Equal(["empty.png", "logo.png"], resources.Select(resource => resource.Location));
+        Assert.Empty(resources[0].Body.ToArray());
+        Assert.Equal(Picture, resources[1].Body.ToArray());
+    }
+
     [Fact(DisplayName = "BR-BD-002: the boundary inside a line is part of the body")]
     public void TheBoundaryInsideALineIsPartOfTheBody()
     {
