@@ -5,6 +5,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Captions;
+using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -36,8 +37,11 @@ public sealed class CaptionJobTests : IDisposable
 
     private readonly HeldArtefactCaptioning captioning = new();
 
+    private readonly RecordingReadTurn turn = new();
+
     public void Dispose()
     {
+        turn.Dispose();
         Directory.Delete(recordings, recursive: true);
         Directory.Delete(Path.GetDirectoryName(shelved)!, recursive: true);
     }
@@ -55,6 +59,24 @@ public sealed class CaptionJobTests : IDisposable
         Assert.Equal([(Path.Combine(recordings, subject.FileName.Value), Service)], transcriber.Asked);
         Assert.Equal((1, 1, 0, 0), (pass.Read, pass.Kept, pass.Absent, pass.Failed));
         Assert.Equal(["recordings"], events.Signalled);
+    }
+
+    [Fact(DisplayName = "BR-BS-001: the captions are taken in the turn shared with the data broadcast, so that no two recordings are read through side by side")]
+    public async Task TheCaptionsAreTakenInTheTurnSharedWithTheDataBroadcast()
+    {
+        Recorded();
+        bool heldMeanwhile = false;
+        transcriber.Answer = _ =>
+        {
+            heldMeanwhile = turn.Held;
+
+            return CaptionTranscription.Transcribed(Record(1));
+        };
+
+        await Job().RunAsync(Cancel);
+
+        Assert.True(heldMeanwhile);
+        Assert.False(turn.Held);
     }
 
     [Fact]
@@ -207,6 +229,7 @@ public sealed class CaptionJobTests : IDisposable
             Settings(),
             new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, recordings), new StorageRootPath(Elsewhere, recordings)] },
             watching,
+            turn,
             events,
             TimeProvider.System,
             NullLogger<CaptionJob>.Instance).RunAsync(Cancel);
@@ -444,6 +467,7 @@ public sealed class CaptionJobTests : IDisposable
             chosen,
             new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, recordings)] },
             watching,
+            turn,
             events,
             TimeProvider.System,
             NullLogger<CaptionJob>.Instance);

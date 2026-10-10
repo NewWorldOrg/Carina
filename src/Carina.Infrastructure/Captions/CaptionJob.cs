@@ -5,6 +5,7 @@ using Carina.Domain.Captions;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
+using Carina.Infrastructure.Recordings;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,7 +15,8 @@ namespace Carina.Infrastructure.Captions;
 
 /// <summary>
 /// Takes the captions out of ended recordings one at a time, newest first, and keeps them on the shelf.
-/// A pass does not start the next recording while anything is being recorded or watched, and first puts
+/// A pass does not start the next recording while anything is being recorded or watched, reads a recording's
+/// file only in its turn among the passes that read recordings through, and first puts
 /// back in the queue any recording whose row says its captions are ready while no record of them is kept.
 /// With room left in the pass, it takes again the captions of ready recordings whose record was kept before
 /// their text was taken, leaving them ready meanwhile, and then puts a text track of captions into the
@@ -27,6 +29,7 @@ public sealed class CaptionJob(
     CaptionSettings settings,
     IntegritySettings mounts,
     IWatching watching,
+    RecordingReadTurn turn,
     IAppEventPublisher events,
     TimeProvider clock,
     ILogger<CaptionJob> logger) : BackgroundService
@@ -336,6 +339,7 @@ public sealed class CaptionJob(
             return LeftAsItWas(subject.Id, "its file is not within reach");
         }
 
+        using IDisposable reading = await turn.TakeAsync(cancellationToken);
         CaptionTranscription transcription = await transcriber.TranscribeAsync(
             Path.Combine(root, subject.FileName.Value),
             subject.Service,
@@ -392,6 +396,7 @@ public sealed class CaptionJob(
                 : LostMount(subject);
         }
 
+        using IDisposable reading = await turn.TakeAsync(cancellationToken);
         CaptionTranscription transcription = await transcriber.TranscribeAsync(source, subject.Service, cancellationToken);
 
         if (transcription.Fault is { } fault)
