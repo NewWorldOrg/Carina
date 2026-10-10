@@ -179,6 +179,29 @@ public sealed class DataBroadcastTapTests
         Assert.Equal(3 * Second, tap.Now);
     }
 
+    [Fact(DisplayName = "BR-BV-001: no stream of random packets on the pids it reads makes the tap throw")]
+    public void NoStreamOfRandomPacketsMakesTheTapThrow()
+    {
+        Random random = new(20261010);
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+        int[] pids = [0x0000, CarouselBroadcast.MapPid, CarouselBroadcast.ClockPid, CarouselBroadcast.CarouselPid];
+        tap.Push(new CarouselBroadcast().Associated().Mapped().At(Second).Listed(1, Startup).Bytes);
+
+        for (int round = 0; round < 4000; round++)
+        {
+            byte[] packet = new byte[TransportPacket.Size];
+            random.NextBytes(packet);
+            packet[0] = TransportPacket.SyncByte;
+            int pid = pids[round % pids.Length];
+            packet[1] = (byte)((packet[1] & 0xE0) | (pid >> 8));
+            packet[2] = (byte)pid;
+
+            _ = tap.Push(round % 7 == 0 ? packet.AsSpan(0, random.Next(0, TransportPacket.Size)) : packet);
+        }
+
+        _ = tap.Push(new CarouselBroadcast().Associated().Mapped(version: 3).At(9 * Second).Listed(2, Startup).Delivered(Startup).Bytes);
+    }
+
     private static IReadOnlyList<string> Described(IEnumerable<DataBroadcastRead> reads)
         => [.. reads.Select(read => read switch
         {

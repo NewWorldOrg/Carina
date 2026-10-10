@@ -7,6 +7,7 @@ using Carina.Domain.Streaming;
 using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Streaming;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.DataBroadcast;
@@ -160,6 +161,23 @@ public sealed class DataBroadcastSessionTests
         Assert.Throws<ObjectDisposedException>(() => session.Seat.Write(Carrying().Bytes));
     }
 
+    [Fact(DisplayName = "BR-BV-001: a failure while reading is written down with what failed, and nothing more is read")]
+    public void AFailureWhileReadingIsWrittenDownAndNothingMoreIsRead()
+    {
+        ThrowingOnTheFirstWarning logger = new();
+        DataBroadcastSession session = new(Service, logger);
+        const long Largest = 16 * 1024 * 1024;
+
+        session.Read(Carrying().Sections(
+            CarouselBroadcast.CarouselPid,
+            new DiiWriter { Modules = [.. Enumerable.Range(0, 5).Select(id => DiiModule.Of(id, Largest, 1))] }.ToSection().ToBytes()).Bytes);
+        session.Read(new CarouselBroadcast().At(2 * Second).Listed(2, Startup).Delivered(Startup).Bytes);
+
+        Exception written = Assert.Single(logger.Failures);
+        Assert.IsType<InvalidOperationException>(written);
+        Assert.Equal([DataBroadcastFrames.CatalogKind], session.Standing.Select(SideChannelReading.KindOf));
+    }
+
     private static DataBroadcastSession Session() => new(Service, NullLogger.Instance);
 
     private static CarouselBroadcast Carrying() => new CarouselBroadcast().Associated().Mapped().At(Second);
@@ -183,5 +201,38 @@ public sealed class DataBroadcastSessionTests
         }
 
         return taken;
+    }
+
+    private sealed class ThrowingOnTheFirstWarning : ILogger
+    {
+        private bool thrown;
+
+        public List<Exception> Failures { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel < LogLevel.Warning)
+            {
+                return;
+            }
+
+            if (!thrown)
+            {
+                thrown = true;
+
+                throw new InvalidOperationException("the first warning is refused for the test.");
+            }
+
+            if (exception is not null)
+            {
+                Failures.Add(exception);
+            }
+        }
     }
 }

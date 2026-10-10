@@ -103,10 +103,10 @@ public sealed class DataBroadcastSession
             {
                 Apply(reader.Read(bytes));
             }
-            catch (ArgumentException refused)
+            catch (Exception failure) when (failure is not OutOfMemoryException)
             {
                 broken = true;
-                logger.LogWarning(refused, "The data broadcast of service {Service} stopped being read: what was read could not be held.", reader.Service.Value);
+                logger.LogWarning(failure, "The data broadcast of service {Service} stopped being read: reading it failed.", reader.Service.Value);
             }
         }
     }
