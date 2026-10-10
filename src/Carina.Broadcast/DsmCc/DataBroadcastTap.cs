@@ -63,6 +63,11 @@ public sealed class DataBroadcastTap
     /// </summary>
     public long? Now => stamp;
 
+    /// <summary>
+    /// The first moment of the programme's clock that was heard, or null until it has been heard.
+    /// </summary>
+    public long? FirstHeard { get; private set; }
+
     public long UnreadablePackets { get; private set; }
 
     public long RejectedSections { get; private set; }
@@ -137,6 +142,7 @@ public sealed class DataBroadcastTap
             long followed = clock.Follow(reference);
 
             stamp = stamp is { } before && before > followed ? before : followed;
+            FirstHeard ??= followed;
         }
 
         if (read.Pid == association.Pid)

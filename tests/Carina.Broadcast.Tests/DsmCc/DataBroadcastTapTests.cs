@@ -159,6 +159,20 @@ public sealed class DataBroadcastTapTests
         Assert.Equal(2 * Second, tap.Now);
     }
 
+    [Fact(DisplayName = "BR-BD-005: the first moment of the programme's clock heard is kept while the clock goes on and comes around")]
+    public void TheFirstMomentOfTheClockHeardIsKept()
+    {
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+        tap.Push(new CarouselBroadcast().Associated().Mapped().At(Second, transportError: true).Bytes);
+
+        Assert.Null(tap.FirstHeard);
+
+        tap.Push(new CarouselBroadcast().At(ProgramClock.Modulus - Second).At(Second).At(3 * Second).Bytes);
+
+        Assert.Equal(ProgramClock.Modulus - Second, tap.FirstHeard);
+        Assert.Equal(ProgramClock.Modulus + (3 * Second), tap.Now);
+    }
+
     [Fact(DisplayName = "BR-BD-004: a programme clock that steps back does not move what is read back with it")]
     public void AClockThatStepsBackDoesNotMoveWhatIsReadBack()
     {

@@ -78,7 +78,6 @@ public sealed class TransportStreamDataBroadcastTaker(
         CarouselState state = new();
         DataBroadcastRecordBuilder builder = new();
         byte[] mouthful = new byte[Mouthful];
-        long? firstHeard = null;
 
         await using FileStream reading = File.OpenRead(source);
         int read;
@@ -87,14 +86,11 @@ public sealed class TransportStreamDataBroadcastTaker(
         {
             foreach (CarouselSignalRead signal in reader.Read(mouthful.AsSpan(0, read)))
             {
-                firstHeard ??= signal.At;
                 Take(builder, state.Apply(signal.Signal, signal.At), signal.At);
             }
-
-            firstHeard ??= reader.Now;
         }
 
-        return firstHeard is { } from
+        return reader.FirstHeard is { } from
             ? new Gathered(builder.Build(from, Math.Max(from, reader.Now ?? from)), from)
             : new Gathered(null, 0);
     }
