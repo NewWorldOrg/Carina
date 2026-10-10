@@ -179,6 +179,38 @@ public sealed class DataBroadcastSessionTests
         Assert.Equal([0], session.Standing.Skip(1).Select(frame => SideChannelReading.Module(frame).ModuleId));
     }
 
+    [Fact(DisplayName = "BR-BD-004: a data broadcast that stops tells every fan-out shown it that there is none and keeps nothing for a viewer joining later")]
+    public async Task ADataBroadcastThatStopsSaysThereIsNoneAndKeepsNothing()
+    {
+        int stops = 0;
+        DataBroadcastSession? told = null;
+        DataBroadcastSession session = new(Service, NullLogger.Instance, stopped =>
+        {
+            stops++;
+            told = stopped;
+        });
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        session.Show(fanout);
+        session.Read(Carrying().Listed(1, Startup).Delivered(Startup).Bytes);
+        await using ILiveViewing watching = await Joined(fanout);
+        Taken(watching.Frames);
+
+        session.Stop();
+        session.Stop();
+        session.Read(new CarouselBroadcast().At(2 * Second).Listed(2, Startup, Logo).Bytes);
+
+        await using ILiveViewing late = await Joined(fanout);
+
+        LiveFrame none = Assert.Single(Taken(watching.Frames));
+        Assert.Equal([DataBroadcastFrames.AbsentKind], none.Payload.ToArray());
+        Assert.Equal((ulong)Second, none.Pts.Value);
+        Assert.Empty(Taken(late.Frames));
+        Assert.Empty(fanout.Kept);
+        Assert.Empty(session.Standing);
+        Assert.Equal(1, stops);
+        Assert.Same(session, told);
+    }
+
     [Fact]
     public void WhatIsWrittenIntoTheSeatIsRead()
     {
@@ -200,11 +232,12 @@ public sealed class DataBroadcastSessionTests
         Assert.Throws<ObjectDisposedException>(() => session.Seat.Write(Carrying().Bytes));
     }
 
-    [Fact(DisplayName = "BR-BV-001: a failure while reading is written down with what failed, and nothing more is read")]
+    [Fact(DisplayName = "BR-BV-001: a failure while reading is written down with what failed, nothing more is read, and the reading is told it stopped")]
     public void AFailureWhileReadingIsWrittenDownAndNothingMoreIsRead()
     {
         ThrowingOnTheFirstWarning logger = new();
-        DataBroadcastSession session = new(Service, logger);
+        int stops = 0;
+        DataBroadcastSession session = new(Service, logger, _ => stops++);
         const long Largest = 16 * 1024 * 1024;
 
         session.Read(Carrying().Sections(
@@ -214,7 +247,8 @@ public sealed class DataBroadcastSessionTests
 
         Exception written = Assert.Single(logger.Failures);
         Assert.IsType<InvalidOperationException>(written);
-        Assert.Equal([DataBroadcastFrames.CatalogKind], session.Standing.Select(SideChannelReading.KindOf));
+        Assert.Empty(session.Standing);
+        Assert.Equal(1, stops);
     }
 
     private static DataBroadcastSession Session() => new(Service, NullLogger.Instance);

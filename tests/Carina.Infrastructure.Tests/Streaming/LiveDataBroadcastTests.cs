@@ -8,7 +8,7 @@ using Carina.Infrastructure.Streaming;
 using Carina.Infrastructure.Tests.DataBroadcast;
 using Carina.TestSupport;
 
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 
@@ -31,6 +31,8 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
 
     private readonly PipedSupply supply = new();
 
+    private readonly RefusingTheFirstCarouselLeftOut logger = new();
+
     private readonly LiveSessionManager manager;
 
     public LiveDataBroadcastTests()
@@ -45,7 +47,7 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
             new HeldTranscoders(budget),
             new HandTurnedClock(new DateTimeOffset(2026, 10, 10, 0, 0, 0, TimeSpan.Zero)),
             new SilentEvents(),
-            NullLogger<LiveSessionManager>.Instance);
+            logger);
     }
 
     public ValueTask DisposeAsync() => manager.DisposeAsync();
@@ -98,6 +100,34 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
         Assert.Equal([DataBroadcastFrames.AbsentKind], frame.Payload.ToArray());
     }
 
+    [Fact(DisplayName = "BR-BD-004: a data broadcast that stops reading tells its viewers there is none, and the next session of the channel reads it afresh")]
+    public async Task ADataBroadcastThatStopsSaysSoAndTheNextSessionReadsItAfresh()
+    {
+        const long Largest = 16 * 1024 * 1024;
+        await using ILiveViewing first = await Joined(EveryFrame);
+        await supply.Opened[0].WriteAsync(new CarouselBroadcast()
+            .Associated()
+            .Mapped()
+            .At(Second)
+            .Sections(
+                CarouselBroadcast.CarouselPid,
+                new DiiWriter { Modules = [.. Enumerable.Range(0, 5).Select(id => DiiModule.Of(id, Largest, 1))] }.ToSection().ToBytes())
+            .Bytes);
+
+        await Reached(first, DataBroadcastFrames.AbsentKind);
+
+        await using ILiveViewing next = await Joined(EveryField);
+        await supply.Opened[0].WriteAsync(new CarouselBroadcast().Associated().Mapped(version: 1).At(2 * Second).Listed(1, Startup).Delivered(Startup).Bytes);
+
+        LiveFrame[] afresh = [await Next(next), await Next(next), await Next(next), await Next(next)];
+
+        Assert.Equal(
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.CatalogKind],
+            afresh.Select(SideChannelReading.KindOf));
+        Assert.Single(supply.Opened);
+        Assert.Equal(1, logger.Refused);
+    }
+
     private async Task<ILiveViewing> Joined(LiveSessionKey key)
     {
         LiveJoin join = await manager.JoinAsync(key, CancellationToken.None);
@@ -119,5 +149,26 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
         using CancellationTokenSource patience = new(Eventually.Patience);
 
         return await viewing.Frames.ReadAsync(patience.Token);
+    }
+
+    private sealed class RefusingTheFirstCarouselLeftOut : ILogger<LiveSessionManager>
+    {
+        private int refused;
+
+        public int Refused => Volatile.Read(ref refused);
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (formatter(state, exception).Contains("was left out", StringComparison.Ordinal) && Interlocked.Exchange(ref refused, 1) is 0)
+            {
+                throw new InvalidOperationException("the first carousel left out is refused for the test.");
+            }
+        }
     }
 }

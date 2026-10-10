@@ -53,6 +53,8 @@ internal sealed class LiveReception
 
     private DataBroadcastSession? dataBroadcast;
 
+    private LiveSeat? dataBroadcastSeat;
+
     internal LiveReception(
         NetworkId network,
         ServiceId service,
@@ -135,10 +137,10 @@ internal sealed class LiveReception
     }
 
     /// <summary>
-    /// Shows the channel's data broadcast to the fan-out, taking the one seat the data broadcast reads from
-    /// the first time it is asked for.
+    /// Shows the channel's data broadcast to the fan-out, and hands back what shows it. The first time it is asked
+    /// for, and again after the one before it stopped, a data broadcast is raised that takes a seat of its own.
     /// </summary>
-    internal void ShowDataBroadcastTo(LiveFanout fanout)
+    internal DataBroadcastSession? ShowDataBroadcastTo(LiveFanout fanout)
     {
         DataBroadcastSession shown;
         bool raised = false;
@@ -147,12 +149,12 @@ internal sealed class LiveReception
         {
             if (closed)
             {
-                return;
+                return null;
             }
 
             if (dataBroadcast is null)
             {
-                dataBroadcast = new DataBroadcastSession(service, logger);
+                dataBroadcast = new DataBroadcastSession(service, logger, DataBroadcastStopped);
                 raised = true;
             }
 
@@ -161,27 +163,12 @@ internal sealed class LiveReception
 
         if (raised)
         {
-            Take(
-                shown.Seat,
-                static () => { },
-                LeftBehindByTheDataBroadcast,
-                settings.LongestWaitToBeFed,
-                settings.MostBytesWaitingToBeFed);
+            Seat(shown);
         }
 
         shown.Show(fanout);
-    }
 
-    internal void StopShowingDataBroadcastTo(LiveFanout fanout)
-    {
-        DataBroadcastSession? shown;
-
-        lock (gate)
-        {
-            shown = dataBroadcast;
-        }
-
-        shown?.StopShowing(fanout);
+        return shown;
     }
 
     internal bool Attach()
@@ -283,12 +270,61 @@ internal sealed class LiveReception
         stopping.Cancel();
     }
 
-    private void LeftBehindByTheDataBroadcast(LiveSupplyEnding why)
+    private void Seat(DataBroadcastSession raised)
     {
-        if (why.Why is LiveSupplyEnd.TranscoderFellBehind)
+        LiveSeat seat = Take(
+            raised.Seat,
+            static () => { },
+            why => LeftBehindByTheDataBroadcast(raised, why),
+            settings.LongestWaitToBeFed,
+            settings.MostBytesWaitingToBeFed);
+        bool stillShown;
+
+        lock (gate)
         {
-            logger.LogWarning("The data broadcast of service {Service} fell behind the reading and stopped being read: {Note}", service.Value, why.Note);
+            stillShown = ReferenceEquals(dataBroadcast, raised);
+
+            if (stillShown)
+            {
+                dataBroadcastSeat = seat;
+            }
         }
+
+        if (!stillShown)
+        {
+            Drop(seat);
+        }
+    }
+
+    private void DataBroadcastStopped(DataBroadcastSession gone)
+    {
+        LiveSeat? seat = null;
+
+        lock (gate)
+        {
+            if (ReferenceEquals(dataBroadcast, gone))
+            {
+                seat = dataBroadcastSeat;
+                dataBroadcast = null;
+                dataBroadcastSeat = null;
+            }
+        }
+
+        if (seat is not null)
+        {
+            Drop(seat);
+        }
+    }
+
+    private void LeftBehindByTheDataBroadcast(DataBroadcastSession raised, LiveSupplyEnding why)
+    {
+        if (why.Why is not LiveSupplyEnd.TranscoderFellBehind)
+        {
+            return;
+        }
+
+        logger.LogWarning("The data broadcast of service {Service} fell behind the reading and stopped being read: {Note}", service.Value, why.Note);
+        raised.Stop();
     }
 
     /// <summary>

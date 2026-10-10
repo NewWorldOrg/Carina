@@ -15,7 +15,8 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// </summary>
 /// <remarks>
 /// The state goes on being read while no fan-out is showing it, so a fan-out that comes later starts from
-/// where the channel is.
+/// where the channel is. Once reading stops, every fan-out shown it is told there is no data broadcast, nothing
+/// is kept for a viewer joining later, and the reading that raised it is told so it can raise another.
 /// </remarks>
 public sealed class DataBroadcastSession
 {
@@ -27,6 +28,8 @@ public sealed class DataBroadcastSession
 
     private readonly ILogger logger;
 
+    private readonly Action<DataBroadcastSession> stopped;
+
     private readonly List<LiveFanout> showing = [];
 
     private readonly Dictionary<(int Tag, int ModuleId, int Version), LiveFrame> modules = [];
@@ -37,15 +40,24 @@ public sealed class DataBroadcastSession
 
     private IReadOnlyList<LiveFrame> standing = [];
 
+    private long latest;
+
     private bool broken;
 
     public DataBroadcastSession(ServiceId service, ILogger logger)
+        : this(service, logger, static _ => { })
+    {
+    }
+
+    public DataBroadcastSession(ServiceId service, ILogger logger, Action<DataBroadcastSession> stopped)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(stopped);
 
         reader = new CarouselReader(service);
         this.logger = logger;
+        this.stopped = stopped;
         Seat = new DataBroadcastSeat(this);
     }
 
@@ -92,6 +104,8 @@ public sealed class DataBroadcastSession
 
     public void Read(ReadOnlySpan<byte> bytes)
     {
+        bool halted = false;
+
         lock (gate)
         {
             if (broken)
@@ -105,9 +119,32 @@ public sealed class DataBroadcastSession
             }
             catch (Exception failure) when (failure is not OutOfMemoryException)
             {
-                broken = true;
                 logger.LogWarning(failure, "The data broadcast of service {Service} stopped being read: reading it failed.", reader.Service.Value);
+                halted = Halt();
             }
+        }
+
+        if (halted)
+        {
+            stopped(this);
+        }
+    }
+
+    /// <summary>
+    /// Stops reading: every fan-out shown the data broadcast is told there is none, and nothing is kept of it.
+    /// </summary>
+    public void Stop()
+    {
+        bool halted;
+
+        lock (gate)
+        {
+            halted = Halt();
+        }
+
+        if (halted)
+        {
+            stopped(this);
         }
     }
 
@@ -125,6 +162,8 @@ public sealed class DataBroadcastSession
     {
         foreach (CarouselSignalRead read in signals)
         {
+            latest = read.At;
+
             foreach (CarouselDelta delta in state.Apply(read.Signal, read.At))
             {
                 if (FrameOf(delta, read.At) is { } frame)
@@ -188,6 +227,29 @@ public sealed class DataBroadcastSession
             (null, { } nothing) => [nothing],
             _ => [],
         };
+    }
+
+    private bool Halt()
+    {
+        if (broken)
+        {
+            return false;
+        }
+
+        broken = true;
+        catalog = null;
+        absent = null;
+        modules.Clear();
+        standing = [];
+
+        LiveFrame none = DataBroadcastFrames.Absent(latest);
+
+        foreach (LiveFanout fanout in showing)
+        {
+            fanout.Publish(none, standing);
+        }
+
+        return true;
     }
 
     private void Publish(LiveFrame frame)
