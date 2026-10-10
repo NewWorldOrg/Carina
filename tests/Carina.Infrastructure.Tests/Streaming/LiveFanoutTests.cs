@@ -677,7 +677,7 @@ public sealed class LiveFanoutTests
         Assert.Throws<ArgumentException>(() => fanout.Publish(Picture(1), [Picture(1)]));
     }
 
-    [Fact(DisplayName = "BR-BD-004: the data broadcast is not counted in the backlog, but a viewer whose backlog is full goes without it as it goes without pictures")]
+    [Fact(DisplayName = "BR-BD-004: the data broadcast is not counted in the backlog nor among the pictures dropped, but a viewer whose backlog is full goes without it")]
     public async Task TheDataBroadcastIsNotCountedButIsCutWhenTheBacklogIsFull()
     {
         LiveFanout fanout = new(Room(2));
@@ -692,6 +692,10 @@ public sealed class LiveFanoutTests
         fanout.Publish(Picture(3));
         fanout.Publish(Data(4, 0x02), [catalog]);
         fanout.Publish(Caption(5));
+
+        Assert.Equal(0L, viewing.Backlog.Dropped);
+
+        fanout.Publish(Picture(6));
 
         Assert.Equal(1L, viewing.Backlog.Dropped);
         Assert.Equal(

@@ -323,7 +323,7 @@ public sealed class LiveFanout(
             {
                 if (cut && queued >= longestBacklog)
                 {
-                    dropped++;
+                    dropped += expendable ? 1 : 0;
 
                     return;
                 }
