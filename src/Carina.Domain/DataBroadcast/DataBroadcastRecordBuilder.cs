@@ -2,12 +2,14 @@ namespace Carina.Domain.DataBroadcast;
 
 /// <summary>
 /// Gathers what a <see cref="CarouselState"/> says changed while a recording is read, into the record of
-/// its data broadcast: every module version once, when each was last held valid, and every event message.
+/// its data broadcast: every module version of every download once, when each was last held valid, and every
+/// event message.
 /// </summary>
 public sealed class DataBroadcastRecordBuilder
 {
-    private readonly SortedDictionary<int, uint> downloads = [];
-    private readonly Dictionary<(int Tag, int ModuleId, int Version), ModuleVersion> versions = [];
+    private readonly List<CarouselKey> carousels = [];
+    private readonly List<VersionKey> arrivals = [];
+    private readonly Dictionary<VersionKey, ModuleVersion> versions = [];
     private readonly List<EventMessage> events = [];
 
     private int? entryTag;
@@ -23,7 +25,7 @@ public sealed class DataBroadcastRecordBuilder
 
                 break;
             case CarouselDelta.ModuleArrived arrived:
-                versions.TryAdd((arrived.Module.Tag, arrived.Module.ModuleId, arrived.Module.Version), arrived.Module);
+                Arrive(arrived.DownloadId, arrived.Module);
 
                 break;
             case CarouselDelta.EventCame came:
@@ -44,15 +46,13 @@ public sealed class DataBroadcastRecordBuilder
             return null;
         }
 
-        IEnumerable<int> tags = downloads.Keys.Union(versions.Keys.Select(key => key.Tag)).Order();
-
         return new DataBroadcastRecord(
             startsAt,
             tag,
-            [.. tags.Select(carousel => new RecordedCarousel(
-                carousel,
-                downloads.GetValueOrDefault(carousel),
-                [.. versions.Values.Where(version => version.Tag == carousel)]))],
+            [.. carousels.Select(carousel => new RecordedCarousel(
+                carousel.Tag,
+                carousel.DownloadId,
+                [.. arrivals.Where(key => key.Carousel == carousel).Select(key => versions[key])]))],
             events,
             false);
     }
@@ -63,20 +63,46 @@ public sealed class DataBroadcastRecordBuilder
 
         foreach (CatalogCarousel carousel in catalog.Carousels)
         {
-            downloads[carousel.Tag] = carousel.DownloadId;
+            CarouselKey listed = Note(carousel.Tag, carousel.DownloadId);
 
             foreach (CatalogModule module in carousel.Modules.Where(module => module.Arrived))
             {
-                SeeAgain((carousel.Tag, module.Id, module.Version), at);
+                SeeAgain(new VersionKey(listed, module.Id, module.Version), at);
             }
         }
     }
 
-    private void SeeAgain((int Tag, int ModuleId, int Version) key, long at)
+    private void Arrive(uint downloadId, ModuleVersion module)
+    {
+        VersionKey key = new(Note(module.Tag, downloadId), module.ModuleId, module.Version);
+
+        if (versions.TryAdd(key, module))
+        {
+            arrivals.Add(key);
+        }
+    }
+
+    private CarouselKey Note(int tag, uint downloadId)
+    {
+        CarouselKey key = new(tag, downloadId);
+
+        if (!carousels.Contains(key))
+        {
+            carousels.Add(key);
+        }
+
+        return key;
+    }
+
+    private void SeeAgain(VersionKey key, long at)
     {
         if (versions.TryGetValue(key, out ModuleVersion? held))
         {
             versions[key] = held.SeenAt(at);
         }
     }
+
+    private readonly record struct CarouselKey(int Tag, uint DownloadId);
+
+    private readonly record struct VersionKey(CarouselKey Carousel, int ModuleId, int Version);
 }

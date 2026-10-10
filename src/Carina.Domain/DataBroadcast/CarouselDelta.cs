@@ -12,7 +12,7 @@ public abstract record CarouselDelta
 
     public sealed record CatalogChanged(CarouselCatalog Catalog) : CarouselDelta;
 
-    public sealed record ModuleArrived(ModuleVersion Module) : CarouselDelta;
+    public sealed record ModuleArrived(uint DownloadId, ModuleVersion Module) : CarouselDelta;
 
     public sealed record EventCame(EventMessage Message) : CarouselDelta;
 

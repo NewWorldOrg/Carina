@@ -96,7 +96,7 @@ public sealed class CarouselState
 
         carousel.Arrived[completed.ModuleId] = arrived;
 
-        return [new CarouselDelta.ModuleArrived(arrived), .. Changed()];
+        return [new CarouselDelta.ModuleArrived(carousel.DownloadId, arrived), .. Changed()];
     }
 
     private IReadOnlyList<CarouselDelta> Fire(EventMessage message)

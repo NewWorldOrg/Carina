@@ -94,7 +94,7 @@ public sealed class DataBroadcastRecordTests
         Assert.Throws<ArgumentException>(() => new DataBroadcastRecord(
             0,
             Carousels.Entry,
-            [new RecordedCarousel(Carousels.Entry, 1, []), new RecordedCarousel(Carousels.Entry, 2, [])],
+            [new RecordedCarousel(Carousels.Entry, 1, []), new RecordedCarousel(Carousels.Entry, 1, [])],
             [],
             false));
     }
@@ -156,4 +156,17 @@ public sealed class DataBroadcastRecordTests
             [new RecordedCarousel(Carousels.Entry, 1, [Carousels.Version(Carousels.Entry, 0, first, 100), Carousels.Version(Carousels.Entry, 0, second, 100)])],
             [],
             false);
+
+    [Fact]
+    public void ARecordHoldsTwoDownloadsOfOneCarouselInTheOrderTheyAreGiven()
+    {
+        DataBroadcastRecord record = new(
+            0,
+            Carousels.Entry,
+            [new RecordedCarousel(Carousels.Entry, 9, []), new RecordedCarousel(Carousels.Entry, 2, [])],
+            [],
+            false);
+
+        Assert.Equal([9u, 2u], record.Carousels.Select(carousel => carousel.DownloadId));
+    }
 }

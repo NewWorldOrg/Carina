@@ -63,6 +63,32 @@ public sealed class DataBroadcastRecordBuilderTests
         Assert.Equal(0, record.Modules);
     }
 
+    [Fact(DisplayName = "BR-BD-005: a carousel whose download changes goes on as another carousel of the record")]
+    public void ACarouselWhoseDownloadChangesGoesOnAsAnotherCarousel()
+    {
+        DataBroadcastRecord record = Read(
+            (Carousels.Carried(), 0),
+            (Carousels.Listing(Carousels.Entry, 1, [], (0, 1)), 0),
+            (Carousels.Completed(Carousels.Entry, 0, 1), 100),
+            (Carousels.Listing(Carousels.Entry, 2, [], (0, 1)), 200),
+            (Carousels.Completed(Carousels.Entry, 0, 1), 300));
+
+        Assert.Equal(
+            [(Carousels.Entry, 1u, 100L), (Carousels.Entry, 2u, 300L)],
+            record.Carousels.Select(carousel => (carousel.Tag, carousel.DownloadId, Assert.Single(carousel.Versions).FirstSeen)));
+    }
+
+    [Fact]
+    public void AModuleThatArrivesBeforeTheProgrammeMapIsReadKeepsTheDownloadItCameIn()
+    {
+        DataBroadcastRecord record = Read(
+            (Carousels.Listing(Carousels.Entry, 7, [], (0, 1)), 0),
+            (Carousels.Completed(Carousels.Entry, 0, 1), 100),
+            (Carousels.Carried(), 200));
+
+        Assert.Equal(7u, Assert.Single(record.Carousels).DownloadId);
+    }
+
     [Fact]
     public void NothingIsRecordedWhenNoCatalogWasEverRead()
     {

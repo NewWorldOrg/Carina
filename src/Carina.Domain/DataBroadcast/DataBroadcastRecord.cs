@@ -3,7 +3,8 @@ namespace Carina.Domain.DataBroadcast;
 /// <summary>
 /// The data broadcast taken from one recording, every time told on the recording's own
 /// <see cref="StreamClock"/>: where that clock begins, the carousel it is entered from,
-/// every module version each carousel carried with when it was first and last seen, every event message in
+/// every module version each download of each carousel carried with when it was first and last seen, in the
+/// order the downloads were first read, every event message in
 /// the order they fire, and whether versions were left out to stay within the size a record may take.
 /// </summary>
 public sealed class DataBroadcastRecord
@@ -20,9 +21,9 @@ public sealed class DataBroadcastRecord
         ArgumentNullException.ThrowIfNull(carousels);
         ArgumentNullException.ThrowIfNull(events);
 
-        if (carousels.Select(carousel => carousel.Tag).Distinct().Count() != carousels.Count)
+        if (carousels.Select(carousel => (carousel.Tag, carousel.DownloadId)).Distinct().Count() != carousels.Count)
         {
-            throw new ArgumentException("A record holds each carousel once.", nameof(carousels));
+            throw new ArgumentException("A record holds each download of a carousel once.", nameof(carousels));
         }
 
         StartsAt = startsAt;
