@@ -179,6 +179,27 @@ public sealed class DataCarouselsTests
         Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(first));
     }
 
+    [Fact(DisplayName = "BR-BV-002: an indication refused before any catalogue holds no place among the sixteen carousels")]
+    public void AnIndicationRefusedBeforeAnyCatalogueHoldsNoPlaceAmongTheSixteenCarousels()
+    {
+        DataCarousels carousels = new();
+
+        for (int tag = 0; tag < CarouselLimits.Broadcast.MostCarousels; tag++)
+        {
+            IReadOnlyList<CarouselChange> refused = carousels.Push(tag, CarriedSection.Of(new DiiWriter
+            {
+                BlockSize = 0,
+                Modules = [DiiModule.Of(1, Png.Length, 0)],
+            }.ToSection()));
+
+            Assert.Equal(CarouselDefect.BlockSizeOutOfRange, Assert.IsType<CarouselChange.Rejected>(Assert.Single(refused)).Defect);
+        }
+
+        IReadOnlyList<CarouselChange> accepted = carousels.Push(0x7F, CarriedSection.Of(Indication(1, DiiModule.Of(1, Png.Length, 0))));
+
+        Assert.IsType<CarouselChange.CatalogueUpdated>(Assert.Single(accepted));
+    }
+
     [Fact(DisplayName = "BR-BV-002: the carousel that takes the whole past sixty-four mebibytes is dropped and the others carry on")]
     public void TheCarouselThatTakesTheWholePastSixtyFourMebibytesIsDroppedAndTheOthersCarryOn()
     {

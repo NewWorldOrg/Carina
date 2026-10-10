@@ -48,23 +48,24 @@ public sealed class DataCarousels
             return Unreadable(componentTag, read);
         }
 
-        if (!carousels.TryGetValue(componentTag, out ModuleAssembler? assembler))
-        {
-            if (carousels.Count >= limits.MostCarousels)
-            {
-                return [new CarouselChange.Dropped(componentTag, CarouselDefect.TooManyCarousels)];
-            }
+        bool known = carousels.TryGetValue(componentTag, out ModuleAssembler? assembler);
 
-            assembler = new ModuleAssembler(componentTag, limits);
-            carousels[componentTag] = assembler;
+        if (!known && carousels.Count >= limits.MostCarousels)
+        {
+            return [new CarouselChange.Dropped(componentTag, CarouselDefect.TooManyCarousels)];
         }
 
+        assembler ??= new ModuleAssembler(componentTag, limits);
         long others = carousels.Values.Where(other => other != assembler).Sum(other => other.DeclaredSize);
         IReadOnlyList<CarouselChange> changes = assembler.Accept(parsed.Table, limits.LargestTotal - others);
 
         if (changes.Any(change => change is CarouselChange.Dropped))
         {
             carousels.Remove(componentTag);
+        }
+        else if (!known && changes.Any(change => change is CarouselChange.CatalogueUpdated))
+        {
+            carousels[componentTag] = assembler;
         }
 
         return changes;
