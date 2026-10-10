@@ -9,6 +9,8 @@ internal sealed class MimeHeader
 
     public const string ContentLocation = "Content-Location";
 
+    private const string RepeatedField = "";
+
     private const byte LineFeed = (byte)'\n';
 
     private const byte CarriageReturn = (byte)'\r';
@@ -80,7 +82,10 @@ internal sealed class MimeHeader
                 return false;
             }
 
-            fields[last] = $"{fields[last]} {Encoding.Latin1.GetString(line).Trim()}";
+            if (last != RepeatedField)
+            {
+                fields[last] = $"{fields[last]} {Encoding.Latin1.GetString(line).Trim()}";
+            }
 
             return true;
         }
@@ -94,10 +99,7 @@ internal sealed class MimeHeader
 
         string name = Encoding.Latin1.GetString(line[..colon]);
 
-        if (fields.TryAdd(name, Encoding.Latin1.GetString(line[(colon + 1)..]).Trim()))
-        {
-            last = name;
-        }
+        last = fields.TryAdd(name, Encoding.Latin1.GetString(line[(colon + 1)..]).Trim()) ? name : RepeatedField;
 
         return true;
     }

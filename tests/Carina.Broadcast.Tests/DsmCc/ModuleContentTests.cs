@@ -103,6 +103,18 @@ public sealed class ModuleContentTests
         Assert.Equal("body{}", Encoding.UTF8.GetString(resource.Body.Span));
     }
 
+    [Fact(DisplayName = "BR-BD-002: a repeated header field keeps the first and its folded lines stay with it")]
+    public void ARepeatedHeaderFieldKeepsTheFirstAndItsFoldedLinesStayWithIt()
+    {
+        byte[] entity = EntityWriter.Ascii(
+            "Content-Type: multipart/mixed; boundary=b1\r\n\r\n--b1\r\nContent-Location: a.png\r\nContent-Type: image/png\r\nContent-Location: b.png\r\n c.png\r\n\r\nx\r\n--b1--\r\n");
+
+        ModuleResource resource = Opened(entity).Single();
+
+        Assert.Equal("a.png", resource.Location);
+        Assert.Equal("image/png", resource.MediaType);
+    }
+
     [Fact(DisplayName = "BR-BD-002: the boundary inside a line is part of the body")]
     public void TheBoundaryInsideALineIsPartOfTheBody()
     {
