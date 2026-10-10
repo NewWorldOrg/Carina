@@ -24,7 +24,8 @@ public sealed class EventMessageClockTests
         Assert.Equal(SomeGroup, fired.EventMessageGroupId);
         Assert.Equal(0x0010, fired.EventMessageId);
         Assert.Equal(0x01, fired.EventMessageType);
-        Assert.Equal(GeneralEvent.Immediate, fired.TimeMode);
+        Assert.Equal(EventTimeMode.Immediate, fired.TimeMode);
+        Assert.True(fired.IsImmediate);
         Assert.Equal([0x55], fired.PrivateData.ToArray());
     }
 
@@ -53,6 +54,8 @@ public sealed class EventMessageClockTests
             ReceivedAt);
 
         Assert.Equal(1_270_000, Fired(outcomes).Single().FiresAt);
+        Assert.Equal(EventTimeMode.Npt, Fired(outcomes).Single().TimeMode);
+        Assert.False(Fired(outcomes).Single().IsImmediate);
     }
 
     [Fact(DisplayName = "BR-BD-003: the NPT scale is the rate NPT runs at against the system clock")]

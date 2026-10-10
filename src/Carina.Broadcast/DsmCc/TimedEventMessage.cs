@@ -4,6 +4,9 @@ public sealed record TimedEventMessage(
     int EventMessageGroupId,
     int EventMessageId,
     int EventMessageType,
-    int TimeMode,
+    EventTimeMode TimeMode,
     long FiresAt,
-    ReadOnlyMemory<byte> PrivateData);
+    ReadOnlyMemory<byte> PrivateData)
+{
+    public bool IsImmediate => TimeMode == EventTimeMode.Immediate;
+}

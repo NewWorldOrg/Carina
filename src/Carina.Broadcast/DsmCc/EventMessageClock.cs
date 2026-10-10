@@ -110,7 +110,7 @@ public sealed class EventMessageClock
             carried.EventMessageGroupId,
             carried.EventMessageId,
             carried.EventMessageType,
-            carried.TimeMode,
+            carried.TimeMode == GeneralEvent.Immediate ? EventTimeMode.Immediate : EventTimeMode.Npt,
             firesAt,
             carried.PrivateData));
 
