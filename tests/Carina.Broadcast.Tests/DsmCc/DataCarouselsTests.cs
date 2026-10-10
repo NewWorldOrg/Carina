@@ -220,6 +220,26 @@ public sealed class DataCarouselsTests
         Assert.IsType<CarouselChange.CatalogueUpdated>(Assert.Single(afterwards));
     }
 
+    [Fact(DisplayName = "BR-BV-002: the modules refused on the way are still reported when the whole then drops the carousel")]
+    public void TheModulesRefusedOnTheWayAreStillReportedWhenTheWholeThenDropsTheCarousel()
+    {
+        DataCarousels carousels = new();
+        long largest = CarouselLimits.Broadcast.LargestModule;
+
+        for (int tag = 0; tag < 3; tag++)
+        {
+            carousels.Push(tag, CarriedSection.Of(Indication(1, DiiModule.Of(1, largest, 0))));
+        }
+
+        IReadOnlyList<CarouselChange> changes = carousels.Push(
+            3,
+            CarriedSection.Of(Indication(1, DiiModule.Of(1, largest + 1, 0), DiiModule.Of(2, largest, 0), DiiModule.Of(3, 1, 0))));
+
+        Assert.Equal(CarouselDefect.ModuleTooLarge, Assert.IsType<CarouselChange.Rejected>(changes[0]).Defect);
+        Assert.Equal(CarouselDefect.TotalTooLarge, Assert.IsType<CarouselChange.Dropped>(changes[1]).Defect);
+        Assert.Equal(2, changes.Count);
+    }
+
     [Fact(DisplayName = "BR-BV-001: no section of random bytes makes the carousels throw")]
     public void NoSectionOfRandomBytesMakesTheCarouselsThrow()
     {

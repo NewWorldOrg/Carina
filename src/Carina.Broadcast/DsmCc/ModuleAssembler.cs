@@ -60,7 +60,9 @@ public sealed class ModuleAssembler
 
         if (total > room)
         {
-            return Drop(CarouselDefect.TotalTooLarge);
+            changes.AddRange(Drop(CarouselDefect.TotalTooLarge));
+
+            return changes;
         }
 
         int[] withdrawn = admitted.Keys.Where(moduleId => !next.ContainsKey(moduleId)).Order().ToArray();
