@@ -46,6 +46,14 @@ public sealed class ProgramMapTableTests
     }
 
     [Fact]
+    public void AProgrammeWithoutAClockReferenceHasNoPcrPid()
+    {
+        ProgramMapTable table = Parse(new PmtWriter { ProgramNumber = SomeProgramme, PcrPid = PmtWriter.NoPcr });
+
+        Assert.Null(table.PcrPid);
+    }
+
+    [Fact]
     public void ATableOfAnotherIdIsRejected()
     {
         TableRead<ProgramMapTable> read = ProgramMapTable.Read(CarriedSection.Of(new SectionWriter

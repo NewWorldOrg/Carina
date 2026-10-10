@@ -7,13 +7,15 @@ public sealed class ProgramMapTable
 {
     public const int TableId = 0x02;
 
+    public const int NoPcrPid = 0x1FFF;
+
     private const int FixedFieldsSize = 4;
 
     private const int StreamHeaderSize = 5;
 
     private ProgramMapTable(
         Section section,
-        int pcrPid,
+        int? pcrPid,
         IReadOnlyList<Descriptor> descriptors,
         IReadOnlyList<ElementaryStream> streams)
     {
@@ -28,7 +30,7 @@ public sealed class ProgramMapTable
 
     public int VersionNumber { get; }
 
-    public int PcrPid { get; }
+    public int? PcrPid { get; }
 
     public IReadOnlyList<Descriptor> Descriptors { get; }
 
@@ -90,8 +92,10 @@ public sealed class ProgramMapTable
         }
 
         return new TableRead<ProgramMapTable>.Parsed(
-            new ProgramMapTable(section, ((span[0] & 0x1F) << 8) | span[1], descriptors, streams));
+            new ProgramMapTable(section, PcrPidOf(((span[0] & 0x1F) << 8) | span[1]), descriptors, streams));
     }
+
+    private static int? PcrPidOf(int carried) => carried == NoPcrPid ? null : carried;
 
     private static TableRead<ProgramMapTable> Rejected(TableDefect defect)
         => new TableRead<ProgramMapTable>.Rejected(defect);
