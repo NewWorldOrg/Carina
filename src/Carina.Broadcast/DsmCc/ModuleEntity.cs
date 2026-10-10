@@ -24,7 +24,7 @@ internal static class ModuleEntity
         {
             string location = header?[MimeHeader.ContentLocation] ?? moduleName ?? string.Empty;
 
-            return new ModuleContentRead.Opened([ModuleResource.Of(location, contentType, entity[start..])]);
+            return new ModuleContentRead.Parsed([ModuleResource.Of(location, contentType, entity[start..])]);
         }
 
         return string.IsNullOrEmpty(media.Boundary)
@@ -45,7 +45,7 @@ internal static class ModuleEntity
 
             if (span[after..].StartsWith("--"u8))
             {
-                return new ModuleContentRead.Opened(parts);
+                return new ModuleContentRead.Parsed(parts);
             }
 
             if (parts.Count >= mostParts)

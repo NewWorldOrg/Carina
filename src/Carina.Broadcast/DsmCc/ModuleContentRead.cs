@@ -1,14 +1,14 @@
 namespace Carina.Broadcast.DsmCc;
 
-public abstract record ModuleContentRead
+internal abstract record ModuleContentRead
 {
     private ModuleContentRead()
     {
     }
 
-    public sealed record Opened : ModuleContentRead
+    public sealed record Parsed : ModuleContentRead
     {
-        internal Opened(IReadOnlyList<ModuleResource> resources)
+        internal Parsed(IReadOnlyList<ModuleResource> resources)
         {
             Resources = resources;
         }

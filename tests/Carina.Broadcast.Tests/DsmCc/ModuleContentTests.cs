@@ -243,11 +243,11 @@ public sealed class ModuleContentTests
         CarouselLimits limits = new(Limits.MostCarousels, Limits.MostModules, Limits.LargestModule, Limits.LargestTotal, mostParts: 3);
         EntityPart[] parts = Enumerable.Range(0, 4).Select(index => new EntityPart($"{index}.png", EntityWriter.PngType, Picture)).ToArray();
 
-        ModuleContentRead atTheLimit = ModuleContent.Open(EntityWriter.Multipart(Boundary, parts[..3]), Info(), limits);
-        ModuleContentRead pastIt = ModuleContent.Open(EntityWriter.Multipart(Boundary, parts), Info(), limits);
+        IReadOnlyList<CarouselChange> atTheLimit = Open(EntityWriter.Multipart(Boundary, parts[..3]), limits);
+        IReadOnlyList<CarouselChange> pastIt = Open(EntityWriter.Multipart(Boundary, parts), limits);
 
-        Assert.Equal(3, Assert.IsType<ModuleContentRead.Opened>(atTheLimit).Resources.Count);
-        Assert.Equal(CarouselDefect.TooManyParts, Assert.IsType<ModuleContentRead.Rejected>(pastIt).Defect);
+        Assert.Equal(3, Resources(atTheLimit).Count);
+        Assert.Equal(CarouselDefect.TooManyParts, Defect(pastIt));
     }
 
     [Fact(DisplayName = "BR-BV-001: an empty boundary is rejected")]
@@ -268,13 +268,16 @@ public sealed class ModuleContentTests
     public void AModuleThatInflatesFarPastItsOriginalSizeIsNotInflatedToTheEnd()
     {
         byte[] compressed = EntityWriter.Zlib(new byte[64 * 1024 * 1024]);
-        ModuleInfo info = Info(ModuleDescriptorWriter.Compression(1024));
+        byte[] described = ModuleDescriptorWriter.Compression(1024);
+        IReadOnlyList<SectionWriter> blocks = DsmCcWriter.Blocks(1, 0, 0, compressed, DsmCcWriter.LargestBlock);
+        ModuleAssembler assembler = Assembler(compressed.Length, Limits, described);
+        DownloadDataBlock[] read = blocks.Select(Block).ToArray();
 
         long before = GC.GetAllocatedBytesForCurrentThread();
-        ModuleContentRead read = ModuleContent.Open(compressed, info, Limits);
+        IReadOnlyList<CarouselChange> changes = read.SelectMany(assembler.Accept).ToArray();
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
-        Assert.Equal(CarouselDefect.OriginalSizeExceeded, Assert.IsType<ModuleContentRead.Rejected>(read).Defect);
+        Assert.Equal(CarouselDefect.OriginalSizeExceeded, Defect(changes));
         Assert.True(allocated < 4 * 1024 * 1024, $"{allocated} bytes were allocated");
     }
 
@@ -289,9 +292,7 @@ public sealed class ModuleContentTests
     [Fact(DisplayName = "BR-BV-002: an original size past what one array can hold is discarded before inflating")]
     public void AnOriginalSizePastWhatOneArrayCanHoldIsDiscardedBeforeInflating()
     {
-        ModuleContentRead read = ModuleContent.Open(EntityWriter.Zlib([0x01]), Info(ModuleDescriptorWriter.Compression(0xFFFF_FFFF)), Limits);
-
-        Assert.Equal(CarouselDefect.ModuleTooLarge, Assert.IsType<ModuleContentRead.Rejected>(read).Defect);
+        Assert.Equal(CarouselDefect.ModuleTooLarge, Defect(EntityWriter.Zlib([0x01]), ModuleDescriptorWriter.Compression(0xFFFF_FFFF)));
     }
 
     [Fact(DisplayName = "BR-BV-002: zlib that ends short of the original size is discarded on the assumption that the size is exact")]
@@ -328,15 +329,15 @@ public sealed class ModuleContentTests
     {
         byte[] data = Encoding.ASCII.GetBytes(string.Concat(Enumerable.Range(0, 100).Select(index => $"<p>{index}</p>")));
         byte[] compressed = EntityWriter.Zlib(data);
-        ModuleInfo info = Info(ModuleDescriptorWriter.Compression(data.Length));
+        byte[] described = ModuleDescriptorWriter.Compression(data.Length);
 
         for (int at = 0; at < compressed.Length; at++)
         {
             byte[] flipped = [.. compressed];
             flipped[at] ^= 0x5A;
 
-            Assert.IsType<ModuleContentRead.Rejected>(ModuleContent.Open(compressed[..at], info, Limits));
-            _ = ModuleContent.Open(flipped, info, Limits);
+            Assert.IsType<CarouselChange.Rejected>(Assert.Single(Open(compressed[..at], Limits, described)));
+            _ = Open(flipped, Limits, described);
         }
     }
 
@@ -361,31 +362,57 @@ public sealed class ModuleContentTests
     public void NoModuleOfRandomBytesMakesOpeningItThrow()
     {
         var random = new Random(20261013);
-        ModuleInfo plain = Info(ModuleDescriptorWriter.Type($"multipart/mixed; boundary={Boundary}"));
-        ModuleInfo compressed = Info(ModuleDescriptorWriter.Compression(256));
+        byte[] plain = ModuleDescriptorWriter.Type($"multipart/mixed; boundary={Boundary}");
+        byte[] compressed = ModuleDescriptorWriter.Compression(256);
 
         for (int round = 0; round < 2000; round++)
         {
             byte[] module = new byte[random.Next(0, 200)];
             random.NextBytes(module);
 
-            _ = ModuleContent.Open(module, plain, Limits);
-            _ = ModuleContent.Open(module, compressed, Limits);
-            _ = ModuleContent.Open(EntityWriter.Ascii($"--{Boundary}\r\n").Concat(module).ToArray(), plain, Limits);
+            _ = Open(module, Limits, plain);
+            _ = Open(module, Limits, compressed);
+            _ = Open(EntityWriter.Ascii($"--{Boundary}\r\n").Concat(module).ToArray(), Limits, plain);
         }
     }
 
     private static IReadOnlyList<ModuleResource> Opened(byte[] module, params byte[][] descriptors)
-        => Assert.IsType<ModuleContentRead.Opened>(ModuleContent.Open(module, Info(descriptors), Limits)).Resources;
+        => Resources(Open(module, Limits, descriptors));
 
-    private static CarouselDefect Defect(byte[] module, params byte[][] descriptors)
-        => Assert.IsType<ModuleContentRead.Rejected>(ModuleContent.Open(module, Info(descriptors), Limits)).Defect;
+    private static CarouselDefect Defect(byte[] module, params byte[][] descriptors) => Defect(Open(module, Limits, descriptors));
 
-    private static ModuleInfo Info(params byte[][] descriptors)
+    private static IReadOnlyList<ModuleResource> Resources(IReadOnlyList<CarouselChange> changes)
+        => Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes)).Module.Resources;
+
+    private static CarouselDefect Defect(IReadOnlyList<CarouselChange> changes)
+        => Assert.IsType<CarouselChange.Rejected>(changes.First(change => change is CarouselChange.Rejected)).Defect;
+
+    private static IReadOnlyList<CarouselChange> Open(byte[] module, CarouselLimits limits, params byte[][] descriptors)
     {
-        DiiWriter writer = new() { Modules = [DiiModule.Of(0, 100, 1, descriptors)] };
+        List<CarouselChange> changes = [];
+        ModuleAssembler assembler = Assembler(module.Length, limits, descriptors, changes);
 
-        return Assert.IsType<TableRead<DownloadInfoIndication>.Parsed>(
-            DownloadInfoIndication.Read(CarriedSection.Of(writer.ToSection()))).Table.Modules.Single();
+        changes.AddRange(DsmCcWriter.Blocks(1, 0, 0, module, DsmCcWriter.LargestBlock).SelectMany(block => assembler.Accept(Block(block))));
+
+        return changes;
     }
+
+    private static ModuleAssembler Assembler(int size, CarouselLimits limits, params byte[][] descriptors)
+        => Assembler(size, limits, descriptors, []);
+
+    private static ModuleAssembler Assembler(int size, CarouselLimits limits, byte[][] descriptors, List<CarouselChange> changes)
+    {
+        ModuleAssembler assembler = new(0x40, limits);
+        DownloadInfoIndication indication = Assert.IsType<TableRead<DownloadInfoIndication>.Parsed>(DownloadInfoIndication.Read(CarriedSection.Of(new DiiWriter
+        {
+            Modules = [DiiModule.Of(0, size, 0, descriptors)],
+        }.ToSection()))).Table;
+
+        changes.AddRange(assembler.Accept(indication).Where(change => change is not CarouselChange.CatalogueUpdated));
+
+        return assembler;
+    }
+
+    private static DownloadDataBlock Block(SectionWriter section)
+        => Assert.IsType<TableRead<DownloadDataBlock>.Parsed>(DownloadDataBlock.Read(CarriedSection.Of(section))).Table;
 }

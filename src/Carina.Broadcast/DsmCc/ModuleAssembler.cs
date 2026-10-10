@@ -35,7 +35,7 @@ public sealed class ModuleAssembler
     public IReadOnlyList<CarouselChange> Accept(DownloadInfoIndication indication)
         => Accept(indication, limits.LargestTotal);
 
-    public IReadOnlyList<CarouselChange> Accept(DownloadInfoIndication indication, long room)
+    internal IReadOnlyList<CarouselChange> Accept(DownloadInfoIndication indication, long room)
     {
         ArgumentNullException.ThrowIfNull(indication);
 
@@ -158,9 +158,9 @@ public sealed class ModuleAssembler
 
         return ModuleContent.Open(assembling.Bytes, module, limits) switch
         {
-            ModuleContentRead.Opened opened => [new CarouselChange.ModuleCompleted(
+            ModuleContentRead.Parsed parsed => [new CarouselChange.ModuleCompleted(
                 ComponentTag,
-                new CompletedModule(module.ModuleId, module.ModuleVersion, module.Name, opened.Resources))],
+                new CompletedModule(module.ModuleId, module.ModuleVersion, module.Name, parsed.Resources))],
             ModuleContentRead.Rejected rejected => Rejected(rejected.Defect, module.ModuleId),
             _ => Nothing,
         };

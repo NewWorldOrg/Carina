@@ -1,6 +1,6 @@
 namespace Carina.Broadcast.DsmCc;
 
-public static class ModuleContent
+internal static class ModuleContent
 {
     public static ModuleContentRead Open(ReadOnlyMemory<byte> module, ModuleInfo info, CarouselLimits limits)
     {
