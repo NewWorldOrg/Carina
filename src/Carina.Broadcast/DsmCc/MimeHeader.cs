@@ -9,6 +9,8 @@ internal sealed class MimeHeader
 
     public const string ContentLocation = "Content-Location";
 
+    public const int MostHeaderBytes = 64 * 1024;
+
     private const string RepeatedField = "";
 
     private const byte LineFeed = (byte)'\n';
@@ -32,16 +34,19 @@ internal sealed class MimeHeader
     {
         header = null;
         bodyStart = 0;
-        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        ReadOnlySpan<byte> bounded = entity[..Math.Min(entity.Length, MostHeaderBytes)];
+        var fields = new Dictionary<string, StringBuilder>(StringComparer.OrdinalIgnoreCase);
         var repeated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? last = null;
         int at = 0;
 
-        while (TryTakeLine(entity, ref at, out ReadOnlySpan<byte> line))
+        while (TryTakeLine(bounded, ref at, out ReadOnlySpan<byte> line))
         {
             if (line.IsEmpty)
             {
-                header = new MimeHeader(fields, repeated);
+                header = new MimeHeader(
+                    fields.ToDictionary(field => field.Key, field => field.Value.ToString(), StringComparer.OrdinalIgnoreCase),
+                    repeated);
                 bodyStart = at;
 
                 return true;
@@ -92,7 +97,7 @@ internal sealed class MimeHeader
         return true;
     }
 
-    private static bool TryTakeField(ReadOnlySpan<byte> line, Dictionary<string, string> fields, HashSet<string> repeated, ref string? last)
+    private static bool TryTakeField(ReadOnlySpan<byte> line, Dictionary<string, StringBuilder> fields, HashSet<string> repeated, ref string? last)
     {
         if (line[0] is (byte)' ' or (byte)'\t')
         {
@@ -103,7 +108,7 @@ internal sealed class MimeHeader
 
             if (last != RepeatedField)
             {
-                fields[last] = $"{fields[last]} {Encoding.Latin1.GetString(line).Trim()}";
+                fields[last].Append(' ').Append(Encoding.Latin1.GetString(line).Trim());
             }
 
             return true;
@@ -118,7 +123,7 @@ internal sealed class MimeHeader
 
         string name = Encoding.Latin1.GetString(line[..colon]);
 
-        last = fields.TryAdd(name, Encoding.Latin1.GetString(line[(colon + 1)..]).Trim()) ? name : RepeatedField;
+        last = fields.TryAdd(name, new StringBuilder(Encoding.Latin1.GetString(line[(colon + 1)..]).Trim())) ? name : RepeatedField;
 
         if (last == RepeatedField)
         {

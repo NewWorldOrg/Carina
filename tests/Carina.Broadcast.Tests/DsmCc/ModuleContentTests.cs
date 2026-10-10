@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 using Carina.Broadcast.DsmCc;
@@ -13,6 +14,8 @@ public sealed class ModuleContentTests
     private static readonly long Largest = Limits.LargestModule;
 
     private const string Boundary = "carina-part";
+
+    private const int MimeHeaderLimit = 64 * 1024;
 
     private static readonly byte[] BmlInEucJp =
     [
@@ -248,6 +251,29 @@ public sealed class ModuleContentTests
 
         Assert.Equal(3, Resources(atTheLimit).Count);
         Assert.Equal(CarouselDefect.TooManyParts, Defect(pastIt));
+    }
+
+    [Fact(DisplayName = "BR-BV-002: a header folded over many lines is read in linear time up to its limit")]
+    public void AHeaderFoldedOverManyLinesIsReadInLinearTimeUpToItsLimit()
+    {
+        string folded = string.Concat(Enumerable.Repeat("\r\n x", 16_000));
+        byte[] entity = [.. EntityWriter.Ascii($"Content-Location: a.png{folded}\r\n\r\n"), .. Picture];
+        Stopwatch watch = Stopwatch.StartNew();
+
+        ModuleResource resource = Opened(entity, ModuleDescriptorWriter.Type(EntityWriter.PngType)).Single();
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"{watch.Elapsed} to read the header");
+        Assert.StartsWith("a.png x x", resource.Location, StringComparison.Ordinal);
+        Assert.Equal(Picture, resource.Body.ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BV-002: a header longer than its limit is rejected")]
+    public void AHeaderLongerThanItsLimitIsRejected()
+    {
+        string folded = string.Concat(Enumerable.Repeat("\r\n x", (MimeHeaderLimit / 4) + 1));
+        byte[] entity = [.. EntityWriter.Ascii($"Content-Location: a.png{folded}\r\n\r\n"), .. Picture];
+
+        Assert.Equal(CarouselDefect.EntityMalformed, Defect(entity, ModuleDescriptorWriter.Type(EntityWriter.PngType)));
     }
 
     [Fact(DisplayName = "BR-BV-001: an empty boundary is rejected")]
