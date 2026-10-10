@@ -10,8 +10,8 @@ public sealed class DownloadInfoIndicationTests
 
     private const long SomeDownload = 0x0102_0304;
 
-    [Fact]
-    public void BR_BV_001_TheIndicationHandsBackItsTransactionDownloadBlockSizeAndModules()
+    [Fact(DisplayName = "BR-BV-001: the indication hands back its transaction download block size and modules")]
+    public void TheIndicationHandsBackItsTransactionDownloadBlockSizeAndModules()
     {
         DownloadInfoIndication read = Parse(new DiiWriter
         {
@@ -33,8 +33,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal([3, 255], read.Modules.Select(module => module.ModuleVersion));
     }
 
-    [Fact]
-    public void BR_BV_001_TheModuleDescriptorsGiveTheTypeNameInformationAndCompression()
+    [Fact(DisplayName = "BR-BV-001: the module descriptors give the type name information and compression")]
+    public void TheModuleDescriptorsGiveTheTypeNameInformationAndCompression()
     {
         DownloadInfoIndication read = Parse(new DiiWriter
         {
@@ -59,8 +59,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(4, module.Descriptors.Count);
     }
 
-    [Fact]
-    public void BR_BV_001_AModuleWithoutDescriptorsHasNoTypeNameInformationOrCompression()
+    [Fact(DisplayName = "BR-BV-001: a module without descriptors has no type name information or compression")]
+    public void AModuleWithoutDescriptorsHasNoTypeNameInformationOrCompression()
     {
         ModuleInfo module = Parse(new DiiWriter { Modules = [DiiModule.Of(7, 10, 0)] }).Modules.Single();
 
@@ -71,8 +71,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Empty(module.Descriptors);
     }
 
-    [Fact]
-    public void BR_BV_001_ACompatibilityDescriptorAndAnAdaptationHeaderDoNotMoveWhereTheModulesStart()
+    [Fact(DisplayName = "BR-BV-001: a compatibility descriptor and an adaptation header do not move where the modules start")]
+    public void ACompatibilityDescriptorAndAnAdaptationHeaderDoNotMoveWhereTheModulesStart()
     {
         DiiWriter writer = new()
         {
@@ -93,8 +93,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(77, read.Modules.Single().ModuleSize);
     }
 
-    [Fact]
-    public void BR_BV_001_AnotherTableIdIsRejected()
+    [Fact(DisplayName = "BR-BV-001: another table id is rejected")]
+    public void AnotherTableIdIsRejected()
     {
         TableRead<DownloadInfoIndication> read = DownloadInfoIndication.Read(CarriedSection.Of(new SectionWriter
         {
@@ -105,11 +105,11 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.WrongTableId, Defect(read));
     }
 
-    [Theory]
+    [Theory(DisplayName = "BR-BV-001: a message that is not a download info indication is rejected")]
     [InlineData(0x12, DsmCcWriter.DownloadType, DsmCcWriter.DownloadInfoIndicationMessageId)]
     [InlineData(DsmCcWriter.ProtocolDiscriminator, 0x04, DsmCcWriter.DownloadInfoIndicationMessageId)]
     [InlineData(DsmCcWriter.ProtocolDiscriminator, DsmCcWriter.DownloadType, DsmCcWriter.DownloadServerInitiateMessageId)]
-    public void BR_BV_001_AMessageThatIsNotADownloadInfoIndicationIsRejected(int protocol, int type, int messageId)
+    public void AMessageThatIsNotADownloadInfoIndicationIsRejected(int protocol, int type, int messageId)
     {
         DiiWriter writer = new();
         byte[] payload = writer.ToMessage()[DsmCcWriter.MessageHeaderSize..];
@@ -120,8 +120,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.UnexpectedMessage, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_AMessageLengthPastTheSectionIsRejected()
+    [Fact(DisplayName = "BR-BV-001: a message length past the section is rejected")]
+    public void AMessageLengthPastTheSectionIsRejected()
     {
         DiiWriter writer = new() { Modules = [DiiModule.Of(1, 10, 0)] };
         byte[] payload = writer.ToMessage()[DsmCcWriter.MessageHeaderSize..];
@@ -132,8 +132,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.LoopOverrun, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_AnAdaptationHeaderLongerThanTheMessageIsRejected()
+    [Fact(DisplayName = "BR-BV-001: an adaptation header longer than the message is rejected")]
+    public void AnAdaptationHeaderLongerThanTheMessageIsRejected()
     {
         DiiWriter writer = new();
         byte[] payload = writer.ToMessage()[DsmCcWriter.MessageHeaderSize..];
@@ -144,8 +144,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.LoopOverrun, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_MoreModulesAnnouncedThanCarriedIsRejected()
+    [Fact(DisplayName = "BR-BV-001: more modules announced than carried is rejected")]
+    public void MoreModulesAnnouncedThanCarriedIsRejected()
     {
         TableRead<DownloadInfoIndication> read = Read(new DiiWriter
         {
@@ -156,8 +156,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.LoopOverrun, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_ModuleInformationRunningPastTheMessageIsRejected()
+    [Fact(DisplayName = "BR-BV-001: module information running past the message is rejected")]
+    public void ModuleInformationRunningPastTheMessageIsRejected()
     {
         TableRead<DownloadInfoIndication> read = Read(new DiiWriter
         {
@@ -167,8 +167,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.LoopOverrun, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_PrivateDataRunningPastTheMessageIsRejected()
+    [Fact(DisplayName = "BR-BV-001: private data running past the message is rejected")]
+    public void PrivateDataRunningPastTheMessageIsRejected()
     {
         TableRead<DownloadInfoIndication> read = Read(new DiiWriter
         {
@@ -179,8 +179,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.LoopOverrun, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_ABrokenDescriptorInTheModuleInformationIsRejected()
+    [Fact(DisplayName = "BR-BV-001: a broken descriptor in the module information is rejected")]
+    public void ABrokenDescriptorInTheModuleInformationIsRejected()
     {
         TableRead<DownloadInfoIndication> read = Read(new DiiWriter
         {
@@ -190,8 +190,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.MalformedDescriptor, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_ACompressionTypeDescriptorTooShortForTheOriginalSizeIsRejected()
+    [Fact(DisplayName = "BR-BV-001: a compression type descriptor too short for the original size is rejected")]
+    public void ACompressionTypeDescriptorTooShortForTheOriginalSizeIsRejected()
     {
         TableRead<DownloadInfoIndication> read = Read(new DiiWriter
         {
@@ -201,8 +201,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.MalformedDescriptor, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_AnInfoDescriptorTooShortForItsLanguageIsRejected()
+    [Fact(DisplayName = "BR-BV-001: an info descriptor too short for its language is rejected")]
+    public void AnInfoDescriptorTooShortForItsLanguageIsRejected()
     {
         TableRead<DownloadInfoIndication> read = Read(new DiiWriter
         {
@@ -212,8 +212,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.Equal(TableDefect.MalformedDescriptor, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_AnIndicationCutShortAtAnyLengthIsRejectedWithoutThrowing()
+    [Fact(DisplayName = "BR-BV-001: an indication cut short at any length is rejected without throwing")]
+    public void AnIndicationCutShortAtAnyLengthIsRejectedWithoutThrowing()
     {
         DiiWriter writer = new()
         {
@@ -237,8 +237,8 @@ public sealed class DownloadInfoIndicationTests
         Assert.IsType<TableRead<DownloadInfoIndication>.Parsed>(DownloadInfoIndication.Read(CarriedSection.Of(writer.Section(whole))));
     }
 
-    [Fact]
-    public void BR_BV_001_NoBodyOfRandomBytesMakesTheReaderThrow()
+    [Fact(DisplayName = "BR-BV-001: no body of random bytes makes the reader throw")]
+    public void NoBodyOfRandomBytesMakesTheReaderThrow()
     {
         var random = new Random(20261010);
 

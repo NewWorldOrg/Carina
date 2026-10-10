@@ -10,8 +10,8 @@ public sealed class EventMessageClockTests
 
     private const long ReceivedAt = 900_000;
 
-    [Fact]
-    public void BR_BD_003_AnImmediateEventFiresAtThePtsItWasReceivedAt()
+    [Fact(DisplayName = "BR-BD-003: an immediate event fires at the PTS it was received at")]
+    public void AnImmediateEventFiresAtThePtsItWasReceivedAt()
     {
         var clock = new EventMessageClock();
 
@@ -28,8 +28,8 @@ public sealed class EventMessageClockTests
         Assert.Equal([0x55], fired.PrivateData.ToArray());
     }
 
-    [Fact]
-    public void BR_BD_003_AnImmediateEventReceivedPastTheWrapIsKeptInsideThirtyThreeBits()
+    [Fact(DisplayName = "BR-BD-003: an immediate event received past the wrap is kept inside thirty-three bits")]
+    public void AnImmediateEventReceivedPastTheWrapIsKeptInsideThirtyThreeBits()
     {
         var clock = new EventMessageClock();
 
@@ -40,8 +40,8 @@ public sealed class EventMessageClockTests
         Assert.Equal(5, Fired(outcomes).Single().FiresAt);
     }
 
-    [Fact]
-    public void BR_BD_003_AnNptEventIsTurnedIntoThePtsTheReferencePairsItWith()
+    [Fact(DisplayName = "BR-BD-003: an NPT event is turned into the PTS the reference pairs it with")]
+    public void AnNptEventIsTurnedIntoThePtsTheReferencePairsItWith()
     {
         var clock = new EventMessageClock();
 
@@ -55,8 +55,8 @@ public sealed class EventMessageClockTests
         Assert.Equal(1_270_000, Fired(outcomes).Single().FiresAt);
     }
 
-    [Fact]
-    public void BR_BD_003_TheNptScaleIsTheRateNptRunsAtAgainstTheSystemClock()
+    [Fact(DisplayName = "BR-BD-003: the NPT scale is the rate NPT runs at against the system clock")]
+    public void TheNptScaleIsTheRateNptRunsAtAgainstTheSystemClock()
     {
         var clock = new EventMessageClock();
 
@@ -70,8 +70,8 @@ public sealed class EventMessageClockTests
         Assert.Equal(1_090_000, Fired(outcomes).Single().FiresAt);
     }
 
-    [Fact]
-    public void BR_BD_003_AnNptEventThatLandsPastTheWrapIsKeptInsideThirtyThreeBits()
+    [Fact(DisplayName = "BR-BD-003: an NPT event that lands past the wrap is kept inside thirty-three bits")]
+    public void AnNptEventThatLandsPastTheWrapIsKeptInsideThirtyThreeBits()
     {
         var clock = new EventMessageClock();
 
@@ -85,8 +85,8 @@ public sealed class EventMessageClockTests
         Assert.Equal(20, Fired(outcomes).Single().FiresAt);
     }
 
-    [Fact]
-    public void BR_BD_003_AnNptEventWaitsForItsReferenceAndFiresWhenTheReferenceArrives()
+    [Fact(DisplayName = "BR-BD-003: an NPT event waits for its reference and fires when the reference arrives")]
+    public void AnNptEventWaitsForItsReferenceAndFiresWhenTheReferenceArrives()
     {
         var clock = new EventMessageClock();
 
@@ -106,8 +106,8 @@ public sealed class EventMessageClockTests
         Assert.Equal([5_090_000L, 5_180_000L], Fired(after).Select(fired => fired.FiresAt));
     }
 
-    [Fact]
-    public void BR_BD_003_TheNewestReferenceIsTheOneLaterEventsAreTurnedWith()
+    [Fact(DisplayName = "BR-BD-003: the newest reference is the one later events are turned with")]
+    public void TheNewestReferenceIsTheOneLaterEventsAreTurnedWith()
     {
         var clock = new EventMessageClock();
         clock.Push(new StreamDescriptorWriter { Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 0) }, ReceivedAt);
@@ -120,8 +120,8 @@ public sealed class EventMessageClockTests
         Assert.Equal(2_010, Fired(outcomes).Single().FiresAt);
     }
 
-    [Fact]
-    public void BR_BD_003_ARepeatOfTheSameSectionVersionFiresItsEventsOnceAndANewVersionFiresAgain()
+    [Fact(DisplayName = "BR-BD-003: a repeat of the same section version fires its events once and a new version fires again")]
+    public void ARepeatOfTheSameSectionVersionFiresItsEventsOnceAndANewVersionFiresAgain()
     {
         var clock = new EventMessageClock();
         byte[] immediate = StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Immediate, 0, 0, 1);
@@ -135,8 +135,8 @@ public sealed class EventMessageClockTests
         Assert.Equal(ReceivedAt + 180_000, Fired(next).Single().FiresAt);
     }
 
-    [Fact]
-    public void BR_BD_003_ATimeModeOtherThanImmediateOrNptIsDiscarded()
+    [Fact(DisplayName = "BR-BD-003: a time mode other than immediate or NPT is discarded")]
+    public void ATimeModeOtherThanImmediateOrNptIsDiscarded()
     {
         var clock = new EventMessageClock();
 
@@ -147,8 +147,8 @@ public sealed class EventMessageClockTests
         Assert.Equal(EventMessageDefect.UnsupportedTimeMode, Assert.IsType<EventMessageOutcome.Discarded>(outcomes.Single()).Defect);
     }
 
-    [Fact]
-    public void BR_BD_003_AReferenceWithAZeroScaleIsDiscardedAndTheEventKeepsWaiting()
+    [Fact(DisplayName = "BR-BD-003: a reference with a zero scale is discarded and the event keeps waiting")]
+    public void AReferenceWithAZeroScaleIsDiscardedAndTheEventKeepsWaiting()
     {
         var clock = new EventMessageClock();
 
@@ -166,8 +166,8 @@ public sealed class EventMessageClockTests
         Assert.Equal(1_010, Fired(later).Single().FiresAt);
     }
 
-    [Fact]
-    public void BR_BV_001_EventsWaitingPastTheLimitForAReferenceAreDiscarded()
+    [Fact(DisplayName = "BR-BV-001: events waiting past the limit for a reference are discarded")]
+    public void EventsWaitingPastTheLimitForAReferenceAreDiscarded()
     {
         var clock = new EventMessageClock();
         int discarded = 0;

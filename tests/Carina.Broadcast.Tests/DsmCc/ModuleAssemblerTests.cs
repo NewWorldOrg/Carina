@@ -14,8 +14,8 @@ public sealed class ModuleAssemblerTests
 
     private static readonly byte[] Css = Encoding.ASCII.GetBytes("p{color:red;}body{margin:0;}div{padding:1px;}span{}");
 
-    [Fact]
-    public void BR_BD_002_AModuleIsCompleteWhenEveryBlockTheSizeAndBlockSizeCallForHasArrivedInAnyOrder()
+    [Fact(DisplayName = "BR-BD-002: a module is complete when every block the size and block size call for has arrived in any order")]
+    public void AModuleIsCompleteWhenEveryBlockTheSizeAndBlockSizeCallForHasArrivedInAnyOrder()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(0x0001, 3)));
@@ -36,8 +36,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(Css, module.Resources.Single().Body.ToArray());
     }
 
-    [Fact]
-    public void BR_BD_002_AModuleMissingABlockIsNotComplete()
+    [Fact(DisplayName = "BR-BD-002: a module missing a block is not complete")]
+    public void AModuleMissingABlockIsNotComplete()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -49,8 +49,8 @@ public sealed class ModuleAssemblerTests
         Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(assembler.Accept(Block(blocks[0]))));
     }
 
-    [Fact]
-    public void BR_BD_002_AModuleOfNoBytesIsCompletedByOneEmptyBlock()
+    [Fact(DisplayName = "BR-BD-002: a module of no bytes is completed by one empty block")]
+    public void AModuleOfNoBytesIsCompletedByOneEmptyBlock()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, DiiModule.Of(1, 0, 0, ModuleDescriptorWriter.Type("image/png"))));
@@ -60,16 +60,16 @@ public sealed class ModuleAssemblerTests
         Assert.Empty(Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes)).Module.Resources.Single().Body.ToArray());
     }
 
-    [Fact]
-    public void BR_BV_003_ABlockBeforeAnyIndicationIsDiscarded()
+    [Fact(DisplayName = "BR-BV-003: a block before any indication is discarded")]
+    public void ABlockBeforeAnyIndicationIsDiscarded()
     {
         ModuleAssembler assembler = new(EntryTag);
 
         Assert.Equal(CarouselDefect.NotInCatalogue, Rejected(assembler.Accept(Block(new DdbWriter { ModuleId = 1, Data = [0x00] }.ToSection()))).Defect);
     }
 
-    [Fact]
-    public void BR_BV_003_ABlockOfAModuleTheIndicationDoesNotListIsDiscarded()
+    [Fact(DisplayName = "BR-BV-003: a block of a module the indication does not list is discarded")]
+    public void ABlockOfAModuleTheIndicationDoesNotListIsDiscarded()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -80,8 +80,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(2, rejected.ModuleId);
     }
 
-    [Fact]
-    public void BR_BV_003_ABlockOfAnotherDownloadIsDiscarded()
+    [Fact(DisplayName = "BR-BV-003: a block of another download is discarded")]
+    public void ABlockOfAnotherDownloadIsDiscarded()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -91,8 +91,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselDefect.NotInCatalogue, Rejected(changes).Defect);
     }
 
-    [Fact]
-    public void BR_BV_003_ABlockOfAnOldVersionIsDiscardedAndDoesNotBreakTheAssemblyOfTheCurrentOne()
+    [Fact(DisplayName = "BR-BV-003: a block of an old version is discarded and does not break the assembly of the current one")]
+    public void ABlockOfAnOldVersionIsDiscardedAndDoesNotBreakTheAssemblyOfTheCurrentOne()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 5)));
@@ -106,8 +106,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(Css, Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes)).Module.Resources.Single().Body.ToArray());
     }
 
-    [Fact]
-    public void BR_BV_003_ABlockNumberPastWhatTheSizeAndBlockSizeCallForIsDiscarded()
+    [Fact(DisplayName = "BR-BV-003: a block number past what the size and block size call for is discarded")]
+    public void ABlockNumberPastWhatTheSizeAndBlockSizeCallForIsDiscarded()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -118,11 +118,11 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselDefect.BlockOutOfRange, Rejected(changes).Defect);
     }
 
-    [Theory]
+    [Theory(DisplayName = "BR-BV-003: a block of another length than its place calls for is discarded")]
     [InlineData(0, SmallBlock - 1)]
     [InlineData(0, SmallBlock + 1)]
     [InlineData(3, 1)]
-    public void BR_BV_003_ABlockOfAnotherLengthThanItsPlaceCallsForIsDiscarded(int blockNumber, int length)
+    public void ABlockOfAnotherLengthThanItsPlaceCallsForIsDiscarded(int blockNumber, int length)
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -137,8 +137,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselDefect.BlockSizeMismatch, Rejected(changes).Defect);
     }
 
-    [Fact]
-    public void BR_BV_003_ABlockReceivedTwiceKeepsTheFirstAndTheModuleCompletesOnce()
+    [Fact(DisplayName = "BR-BV-003: a block received twice keeps the first and the module completes once")]
+    public void ABlockReceivedTwiceKeepsTheFirstAndTheModuleCompletesOnce()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -156,8 +156,8 @@ public sealed class ModuleAssemblerTests
         Assert.Empty(again);
     }
 
-    [Fact]
-    public void BR_BS_002_ANewTransactionWithdrawsTheModulesItNoLongerListsAndTheirBlocksAreDiscarded()
+    [Fact(DisplayName = "BR-BS-002: a new transaction withdraws the modules it no longer lists and their blocks are discarded")]
+    public void ANewTransactionWithdrawsTheModulesItNoLongerListsAndTheirBlocksAreDiscarded()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0), CssModule(2, 0)));
@@ -169,8 +169,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselDefect.NotInCatalogue, Rejected(assembler.Accept(Block(DsmCcWriter.Blocks(1, 2, 0, Css, SmallBlock)[0]))).Defect);
     }
 
-    [Fact]
-    public void BR_BS_002_ANewVersionOfAModuleDropsTheBlocksHeldForTheOldOneAndCompletesAgain()
+    [Fact(DisplayName = "BR-BS-002: a new version of a module drops the blocks held for the old one and completes again")]
+    public void ANewVersionOfAModuleDropsTheBlocksHeldForTheOldOneAndCompletesAgain()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -185,8 +185,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(Css, module.Resources.Single().Body.ToArray());
     }
 
-    [Fact]
-    public void BR_BS_002_AModuleCompletedBeforeANewTransactionThatKeepsItsVersionIsNotCompletedAgain()
+    [Fact(DisplayName = "BR-BS-002: a module completed before a new transaction that keeps its version is not completed again")]
+    public void AModuleCompletedBeforeANewTransactionThatKeepsItsVersionIsNotCompletedAgain()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -200,8 +200,8 @@ public sealed class ModuleAssemblerTests
         Assert.Empty(again);
     }
 
-    [Fact]
-    public void BR_BS_002_TheSameTransactionAgainChangesNothing()
+    [Fact(DisplayName = "BR-BS-002: the same transaction again changes nothing")]
+    public void TheSameTransactionAgainChangesNothing()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -209,8 +209,8 @@ public sealed class ModuleAssemblerTests
         Assert.Empty(assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0))));
     }
 
-    [Fact]
-    public void BR_BS_002_AnotherDownloadStartsTheCarouselOver()
+    [Fact(DisplayName = "BR-BS-002: another download starts the carousel over")]
+    public void AnotherDownloadStartsTheCarouselOver()
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -223,10 +223,10 @@ public sealed class ModuleAssemblerTests
         Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(changes));
     }
 
-    [Theory]
+    [Theory(DisplayName = "BR-BV-001: a block size no section can carry is rejected and the catalogue stays as it was")]
     [InlineData(0)]
     [InlineData(ModuleAssembler.LargestBlock + 1)]
-    public void BR_BV_001_ABlockSizeNoSectionCanCarryIsRejectedAndTheCatalogueStaysAsItWas(int blockSize)
+    public void ABlockSizeNoSectionCanCarryIsRejectedAndTheCatalogueStaysAsItWas(int blockSize)
     {
         ModuleAssembler assembler = new(EntryTag);
         assembler.Accept(Indication(1, SmallBlock, CssModule(1, 0)));
@@ -238,8 +238,8 @@ public sealed class ModuleAssemblerTests
         Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(completed));
     }
 
-    [Fact]
-    public void BR_BV_002_AModuleOneByteOverSixteenMebibytesIsDiscardedAndTheRestOfTheCatalogueStands()
+    [Fact(DisplayName = "BR-BV-002: a module one byte over sixteen mebibytes is discarded and the rest of the catalogue stands")]
+    public void AModuleOneByteOverSixteenMebibytesIsDiscardedAndTheRestOfTheCatalogueStands()
     {
         ModuleAssembler assembler = new(EntryTag);
 
@@ -256,8 +256,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselLimits.Broadcast.LargestModule, assembler.DeclaredSize);
     }
 
-    [Fact]
-    public void BR_BV_002_AModuleWhoseOriginalSizeIsOverSixteenMebibytesIsDiscardedFromTheCatalogue()
+    [Fact(DisplayName = "BR-BV-002: a module whose original size is over sixteen mebibytes is discarded from the catalogue")]
+    public void AModuleWhoseOriginalSizeIsOverSixteenMebibytesIsDiscardedFromTheCatalogue()
     {
         ModuleAssembler assembler = new(EntryTag);
 
@@ -270,8 +270,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselDefect.ModuleTooLarge, Assert.Single(changes.OfType<CarouselChange.Rejected>()).Defect);
     }
 
-    [Fact]
-    public void BR_BV_002_AModuleNeedingMoreBlocksThanABlockNumberCanCountIsDiscarded()
+    [Fact(DisplayName = "BR-BV-002: a module needing more blocks than a block number can count is discarded")]
+    public void AModuleNeedingMoreBlocksThanABlockNumberCanCountIsDiscarded()
     {
         ModuleAssembler assembler = new(EntryTag);
 
@@ -280,8 +280,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselDefect.BlockCountOutOfRange, Assert.Single(changes.OfType<CarouselChange.Rejected>()).Defect);
     }
 
-    [Fact]
-    public void BR_BV_002_ACatalogueOfOneModuleMoreThanTheLimitDropsTheCarousel()
+    [Fact(DisplayName = "BR-BV-002: a catalogue of one module more than the limit drops the carousel")]
+    public void ACatalogueOfOneModuleMoreThanTheLimitDropsTheCarousel()
     {
         CarouselLimits limits = CarouselLimits.Broadcast with { MostModules = 4 };
         ModuleAssembler assembler = new(EntryTag, limits);
@@ -299,14 +299,14 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselDefect.NotInCatalogue, Rejected(assembler.Accept(Block(DsmCcWriter.Blocks(1, 1, 0, Css, SmallBlock)[0]))).Defect);
     }
 
-    [Fact]
-    public void BR_BV_002_TheLimitsAreSixteenCarouselsFiveHundredTwelveModulesSixteenAndSixtyFourMebibytes()
+    [Fact(DisplayName = "BR-BV-002: the limits are sixteen carousels five hundred and twelve modules sixteen and sixty-four mebibytes")]
+    public void TheLimitsAreSixteenCarouselsFiveHundredTwelveModulesSixteenAndSixtyFourMebibytes()
     {
         Assert.Equal(new CarouselLimits(16, 512, 16L * 1024 * 1024, 64L * 1024 * 1024), CarouselLimits.Broadcast);
     }
 
-    [Fact]
-    public void BR_BV_001_TheSameModuleIdListedTwiceKeepsTheFirst()
+    [Fact(DisplayName = "BR-BV-001: the same module id listed twice keeps the first")]
+    public void TheSameModuleIdListedTwiceKeepsTheFirst()
     {
         ModuleAssembler assembler = new(EntryTag);
 
@@ -316,8 +316,8 @@ public sealed class ModuleAssemblerTests
         Assert.Equal(CarouselDefect.DuplicateModule, Assert.Single(changes.OfType<CarouselChange.Rejected>()).Defect);
     }
 
-    [Fact]
-    public void BR_BV_002_AModuleThatCannotBeInflatedIsReportedOnceAndNotAssembledAgain()
+    [Fact(DisplayName = "BR-BV-002: a module that cannot be inflated is reported once and not assembled again")]
+    public void AModuleThatCannotBeInflatedIsReportedOnceAndNotAssembledAgain()
     {
         ModuleAssembler assembler = new(EntryTag);
         byte[] compressed = EntityWriter.Zlib(new byte[100]);

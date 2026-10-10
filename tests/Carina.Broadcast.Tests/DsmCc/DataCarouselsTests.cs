@@ -17,8 +17,8 @@ public sealed class DataCarouselsTests
 
     private static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00];
 
-    [Fact]
-    public void BR_BD_002_ACarouselWrittenIntoTransportPacketsComesOutAsResourcesWithTheDocumentInUtf8()
+    [Fact(DisplayName = "BR-BD-002: a carousel written into transport packets comes out as resources with the document in UTF-8")]
+    public void ACarouselWrittenIntoTransportPacketsComesOutAsResourcesWithTheDocumentInUtf8()
     {
         byte[] bml = [.. "<bml><body><p>"u8, 0xC5, 0xB7, 0xFA, 0xA1, .. "</p></body></bml>"u8];
         byte[] entity = EntityWriter.Multipart(
@@ -49,8 +49,8 @@ public sealed class DataCarouselsTests
         Assert.Equal(Png, module.Resources[1].Body.ToArray());
     }
 
-    [Fact]
-    public void BR_BV_001_AnIndicationWithABrokenChecksumOrALengthPastTheLimitNeverReachesTheCarousels()
+    [Fact(DisplayName = "BR-BV-001: an indication with a broken checksum or a length past the limit never reaches the carousels")]
+    public void AnIndicationWithABrokenChecksumOrALengthPastTheLimitNeverReachesTheCarousels()
     {
         SectionWriter dii = new DiiWriter { Modules = [DiiModule.Of(0, 10, 1)] }.ToSection();
         SectionReader reader = new(CarouselPid);
@@ -68,8 +68,8 @@ public sealed class DataCarouselsTests
         Assert.Contains(reads, read => read is SectionRead.Rejected { Defect: SectionDefect.LengthOutOfRange });
     }
 
-    [Fact]
-    public void BR_BV_001_AnIndicationThatCannotBeReadIsReportedWithTheReason()
+    [Fact(DisplayName = "BR-BV-001: an indication that cannot be read is reported with the reason")]
+    public void AnIndicationThatCannotBeReadIsReportedWithTheReason()
     {
         DataCarousels carousels = new();
 
@@ -84,8 +84,8 @@ public sealed class DataCarouselsTests
         Assert.Equal(EntryTag, unreadable.ComponentTag);
     }
 
-    [Fact]
-    public void BR_BV_003_EachComponentTagIsACarouselOfItsOwn()
+    [Fact(DisplayName = "BR-BV-003: each component tag is a carousel of its own")]
+    public void EachComponentTagIsACarouselOfItsOwn()
     {
         DataCarousels carousels = new();
         carousels.Push(EntryTag, CarriedSection.Of(Indication(1, DiiModule.Of(1, Png.Length, 0))));
@@ -98,8 +98,8 @@ public sealed class DataCarouselsTests
         Assert.Equal(CarouselDefect.VersionMismatch, Assert.IsType<CarouselChange.Rejected>(Assert.Single(other)).Defect);
     }
 
-    [Fact]
-    public void BR_BV_003_ABlockOnATagWithNoCarouselIsDiscarded()
+    [Fact(DisplayName = "BR-BV-003: a block on a tag with no carousel is discarded")]
+    public void ABlockOnATagWithNoCarouselIsDiscarded()
     {
         DataCarousels carousels = new();
 
@@ -108,8 +108,8 @@ public sealed class DataCarouselsTests
         Assert.Equal(CarouselDefect.NotInCatalogue, Assert.IsType<CarouselChange.Rejected>(Assert.Single(changes)).Defect);
     }
 
-    [Fact]
-    public void BR_BD_003_StreamDescriptorsAndOtherTablesAreLeftToTheirOwnReaders()
+    [Fact(DisplayName = "BR-BD-003: stream descriptors and other tables are left to their own readers")]
+    public void StreamDescriptorsAndOtherTablesAreLeftToTheirOwnReaders()
     {
         DataCarousels carousels = new();
 
@@ -120,8 +120,8 @@ public sealed class DataCarouselsTests
         Assert.Empty(carousels.Push(EntryTag, CarriedSection.Of(new SectionWriter { TableId = 0x3E })));
     }
 
-    [Fact]
-    public void BR_BV_002_TheCarouselPastTheSixteenthIsDroppedAndTheOthersCarryOn()
+    [Fact(DisplayName = "BR-BV-002: the carousel past the sixteenth is dropped and the others carry on")]
+    public void TheCarouselPastTheSixteenthIsDroppedAndTheOthersCarryOn()
     {
         DataCarousels carousels = new();
 
@@ -139,8 +139,8 @@ public sealed class DataCarouselsTests
         Assert.IsType<CarouselChange.ModuleCompleted>(Assert.Single(first));
     }
 
-    [Fact]
-    public void BR_BV_002_TheCarouselThatTakesTheWholePastSixtyFourMebibytesIsDroppedAndTheOthersCarryOn()
+    [Fact(DisplayName = "BR-BV-002: the carousel that takes the whole past sixty-four mebibytes is dropped and the others carry on")]
+    public void TheCarouselThatTakesTheWholePastSixtyFourMebibytesIsDroppedAndTheOthersCarryOn()
     {
         DataCarousels carousels = new();
         long largest = CarouselLimits.Broadcast.LargestModule;
@@ -159,8 +159,8 @@ public sealed class DataCarouselsTests
         Assert.IsType<CarouselChange.CatalogueUpdated>(Assert.Single(afterwards));
     }
 
-    [Fact]
-    public void BR_BV_001_NoSectionOfRandomBytesMakesTheCarouselsThrow()
+    [Fact(DisplayName = "BR-BV-001: no section of random bytes makes the carousels throw")]
+    public void NoSectionOfRandomBytesMakesTheCarouselsThrow()
     {
         var random = new Random(20261014);
         DataCarousels carousels = new();

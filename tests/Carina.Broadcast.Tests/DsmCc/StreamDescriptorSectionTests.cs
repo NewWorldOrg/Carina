@@ -6,8 +6,8 @@ namespace Carina.Broadcast.Tests.DsmCc;
 
 public sealed class StreamDescriptorSectionTests
 {
-    [Fact]
-    public void BR_BV_001_TheSectionHandsBackItsEventsAndNptReferences()
+    [Fact(DisplayName = "BR-BV-001: the section hands back its events and NPT references")]
+    public void TheSectionHandsBackItsEventsAndNptReferences()
     {
         StreamDescriptorSection read = Parse(new StreamDescriptorWriter
         {
@@ -46,8 +46,8 @@ public sealed class StreamDescriptorSectionTests
         Assert.Equal(1, reference.ScaleDenominator);
     }
 
-    [Fact]
-    public void BR_BV_001_ADescriptorOfAnotherTagIsKeptButNotTakenForAnEvent()
+    [Fact(DisplayName = "BR-BV-001: a descriptor of another tag is kept but not taken for an event")]
+    public void ADescriptorOfAnotherTagIsKeptButNotTakenForAnEvent()
     {
         StreamDescriptorSection read = Parse(new StreamDescriptorWriter
         {
@@ -61,8 +61,8 @@ public sealed class StreamDescriptorSectionTests
         Assert.Empty(read.NptReferences);
     }
 
-    [Fact]
-    public void BR_BV_001_AGeneralEventTooShortForItsFixedFieldsIsRejected()
+    [Fact(DisplayName = "BR-BV-001: a general event too short for its fixed fields is rejected")]
+    public void AGeneralEventTooShortForItsFixedFieldsIsRejected()
     {
         TableRead<StreamDescriptorSection> read = Read(new StreamDescriptorWriter
         {
@@ -72,8 +72,8 @@ public sealed class StreamDescriptorSectionTests
         Assert.Equal(TableDefect.MalformedDescriptor, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_AnNptReferenceTooShortForItsFieldsIsRejected()
+    [Fact(DisplayName = "BR-BV-001: an NPT reference too short for its fields is rejected")]
+    public void AnNptReferenceTooShortForItsFieldsIsRejected()
     {
         TableRead<StreamDescriptorSection> read = Read(new StreamDescriptorWriter
         {
@@ -83,8 +83,8 @@ public sealed class StreamDescriptorSectionTests
         Assert.Equal(TableDefect.MalformedDescriptor, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_ADescriptorRunningPastTheSectionIsRejected()
+    [Fact(DisplayName = "BR-BV-001: a descriptor running past the section is rejected")]
+    public void ADescriptorRunningPastTheSectionIsRejected()
     {
         TableRead<StreamDescriptorSection> read = Read(new StreamDescriptorWriter
         {
@@ -94,8 +94,8 @@ public sealed class StreamDescriptorSectionTests
         Assert.Equal(TableDefect.MalformedDescriptor, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_AnotherTableIdIsRejected()
+    [Fact(DisplayName = "BR-BV-001: another table id is rejected")]
+    public void AnotherTableIdIsRejected()
     {
         TableRead<StreamDescriptorSection> read = StreamDescriptorSection.Read(CarriedSection.Of(new SectionWriter
         {
@@ -105,8 +105,8 @@ public sealed class StreamDescriptorSectionTests
         Assert.Equal(TableDefect.WrongTableId, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_NoBodyOfRandomBytesMakesTheReaderThrow()
+    [Fact(DisplayName = "BR-BV-001: no body of random bytes makes the reader throw")]
+    public void NoBodyOfRandomBytesMakesTheReaderThrow()
     {
         var random = new Random(20261011);
 

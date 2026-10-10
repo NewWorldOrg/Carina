@@ -6,8 +6,8 @@ namespace Carina.Broadcast.Tests.DsmCc;
 
 public sealed class DownloadDataBlockTests
 {
-    [Fact]
-    public void BR_BV_001_TheBlockHandsBackItsDownloadModuleVersionNumberAndData()
+    [Fact(DisplayName = "BR-BV-001: the block hands back its download module version number and data")]
+    public void TheBlockHandsBackItsDownloadModuleVersionNumberAndData()
     {
         DownloadDataBlock read = Parse(new DdbWriter
         {
@@ -25,8 +25,8 @@ public sealed class DownloadDataBlockTests
         Assert.Equal([0x10, 0x20, 0x30], read.Data.ToArray());
     }
 
-    [Fact]
-    public void BR_BV_001_TheDataEndsWhereTheMessageLengthSaysEvenWithBytesAfterIt()
+    [Fact(DisplayName = "BR-BV-001: the data ends where the message length says even with bytes after it")]
+    public void TheDataEndsWhereTheMessageLengthSaysEvenWithBytesAfterIt()
     {
         DdbWriter writer = new() { ModuleId = 1, Data = [0x01, 0x02, 0x03, 0x04], DeclaredMessageLength = 6 + 2 };
 
@@ -35,32 +35,32 @@ public sealed class DownloadDataBlockTests
         Assert.Equal([0x01, 0x02], read.Data.ToArray());
     }
 
-    [Fact]
-    public void BR_BV_001_AMessageLengthPastTheSectionIsRejected()
+    [Fact(DisplayName = "BR-BV-001: a message length past the section is rejected")]
+    public void AMessageLengthPastTheSectionIsRejected()
     {
         DdbWriter writer = new() { ModuleId = 1, Data = [0x01], DeclaredMessageLength = 6 + 2 };
 
         Assert.Equal(TableDefect.LoopOverrun, Defect(DownloadDataBlock.Read(CarriedSection.Of(writer.ToSection()))));
     }
 
-    [Fact]
-    public void BR_BV_001_AMessageTooShortForTheBlockHeaderIsRejected()
+    [Fact(DisplayName = "BR-BV-001: a message too short for the block header is rejected")]
+    public void AMessageTooShortForTheBlockHeaderIsRejected()
     {
         DdbWriter writer = new() { ModuleId = 1, Data = [0x01], DeclaredMessageLength = 5 };
 
         Assert.Equal(TableDefect.SectionTooShort, Defect(DownloadDataBlock.Read(CarriedSection.Of(writer.ToSection()))));
     }
 
-    [Fact]
-    public void BR_BV_001_AMessageThatIsNotADownloadDataBlockIsRejected()
+    [Fact(DisplayName = "BR-BV-001: a message that is not a download data block is rejected")]
+    public void AMessageThatIsNotADownloadDataBlockIsRejected()
     {
         DdbWriter writer = new() { ModuleId = 1, MessageId = DsmCcWriter.DownloadInfoIndicationMessageId };
 
         Assert.Equal(TableDefect.UnexpectedMessage, Defect(DownloadDataBlock.Read(CarriedSection.Of(writer.ToSection()))));
     }
 
-    [Fact]
-    public void BR_BV_001_AnotherTableIdIsRejected()
+    [Fact(DisplayName = "BR-BV-001: another table id is rejected")]
+    public void AnotherTableIdIsRejected()
     {
         TableRead<DownloadDataBlock> read = DownloadDataBlock.Read(CarriedSection.Of(new SectionWriter
         {
@@ -71,8 +71,8 @@ public sealed class DownloadDataBlockTests
         Assert.Equal(TableDefect.WrongTableId, Defect(read));
     }
 
-    [Fact]
-    public void BR_BV_001_ABlockCutShortAtAnyLengthBeforeItsDataIsRejectedWithoutThrowing()
+    [Fact(DisplayName = "BR-BV-001: a block cut short at any length before its data is rejected without throwing")]
+    public void ABlockCutShortAtAnyLengthBeforeItsDataIsRejectedWithoutThrowing()
     {
         DdbWriter writer = new() { ModuleId = 1, Data = [0x01, 0x02] };
         byte[] whole = writer.ToMessage();

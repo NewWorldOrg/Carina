@@ -16,8 +16,8 @@ public sealed class DataBroadcastStreamTests
 
     private const int Resolution960By540 = 0x02;
 
-    [Fact]
-    public void BR_BD_001_TheStreamCarryingTheEntryCarouselIsFoundWithItsComponentTag()
+    [Fact(DisplayName = "BR-BD-001: the stream carrying the entry carousel is found with its component tag")]
+    public void TheStreamCarryingTheEntryCarouselIsFoundWithItsComponentTag()
     {
         DataBroadcastService service = Find(
             BxmlInfoWriter.DataBroadcastStream(
@@ -34,8 +34,8 @@ public sealed class DataBroadcastStreamTests
         Assert.False(service.Streams[1].IsEntry);
     }
 
-    [Fact]
-    public void BR_BD_001_TheEntryCarriesTheAutoStartFlagAndWhatTheStartDocumentAsksFor()
+    [Fact(DisplayName = "BR-BD-001: the entry carries the auto start flag and what the start document asks for")]
+    public void TheEntryCarriesTheAutoStartFlagAndWhatTheStartDocumentAsksFor()
     {
         DataBroadcastService service = Find(BxmlInfoWriter.DataBroadcastStream(
             EntryPid,
@@ -51,8 +51,8 @@ public sealed class DataBroadcastStreamTests
         Assert.Equal(5, info.DataEventId);
     }
 
-    [Fact]
-    public void BR_BD_001_AStreamThatIsNotAnEntryPointReadsItsCarouselInformationRightAfterTheFirstByte()
+    [Fact(DisplayName = "BR-BD-001: a stream that is not an entry point reads its carousel information right after the first byte")]
+    public void AStreamThatIsNotAnEntryPointReadsItsCarouselInformationRightAfterTheFirstByte()
     {
         DataBroadcastService service = Find(
             BxmlInfoWriter.DataBroadcastStream(EntryPid, BxmlInfoWriter.EntryComponentTag, BxmlInfoWriter.Entry(false, 0, 1, 0, 1)),
@@ -64,8 +64,8 @@ public sealed class DataBroadcastStreamTests
         Assert.Equal(9, info.DataEventId);
     }
 
-    [Fact]
-    public void BR_BD_001_AStreamOfAnotherDataComponentLikeOneSegIsNotADataBroadcast()
+    [Fact(DisplayName = "BR-BD-001: a stream of another data component like one-seg is not a data broadcast")]
+    public void AStreamOfAnotherDataComponentLikeOneSegIsNotADataBroadcast()
     {
         DataBroadcastService service = Find(PmtWriter.Stream(
             PmtWriter.DsmCcSections,
@@ -79,8 +79,8 @@ public sealed class DataBroadcastStreamTests
         Assert.Null(service.Entry);
     }
 
-    [Fact]
-    public void BR_BD_001_AStreamOfAnotherStreamTypeIsNotADataBroadcastEvenWithTheDataComponent()
+    [Fact(DisplayName = "BR-BD-001: a stream of another stream type is not a data broadcast even with the data component")]
+    public void AStreamOfAnotherStreamTypeIsNotADataBroadcastEvenWithTheDataComponent()
     {
         DataBroadcastService service = Find(PmtWriter.Stream(
             PmtWriter.PrivateData,
@@ -92,8 +92,8 @@ public sealed class DataBroadcastStreamTests
         Assert.False(service.IsCarried);
     }
 
-    [Fact]
-    public void BR_BD_001_AServiceWithCarouselsButNoEntryTagCarriesNoDataBroadcast()
+    [Fact(DisplayName = "BR-BD-001: a service with carousels but no entry tag carries no data broadcast")]
+    public void AServiceWithCarouselsButNoEntryTagCarriesNoDataBroadcast()
     {
         DataBroadcastService service = Find(
             BxmlInfoWriter.DataBroadcastStream(OtherCarouselPid, OtherCarouselTag, BxmlInfoWriter.NotEntry(dataEventId: 1)));
@@ -103,8 +103,8 @@ public sealed class DataBroadcastStreamTests
         Assert.Null(service.Entry);
     }
 
-    [Fact]
-    public void BR_BD_001_AStreamWithoutAStreamIdentifierHasNoTagToBeAddressedByAndIsLeftOut()
+    [Fact(DisplayName = "BR-BD-001: a stream without a stream identifier has no tag to be addressed by and is left out")]
+    public void AStreamWithoutAStreamIdentifierHasNoTagToBeAddressedByAndIsLeftOut()
     {
         DataBroadcastService service = Find(PmtWriter.Stream(
             PmtWriter.DsmCcSections,
@@ -114,8 +114,8 @@ public sealed class DataBroadcastStreamTests
         Assert.Empty(service.Streams);
     }
 
-    [Fact]
-    public void BR_BD_001_ABxmlInfoCutShortLeavesTheStreamFoundButItsInformationUnread()
+    [Fact(DisplayName = "BR-BD-001: an additional_arib_bxml_info cut short leaves the stream found but its information unread")]
+    public void ABxmlInfoCutShortLeavesTheStreamFoundButItsInformationUnread()
     {
         DataBroadcastService service = Find(BxmlInfoWriter.DataBroadcastStream(EntryPid, BxmlInfoWriter.EntryComponentTag, [0x20, 0x0F, 0x00]));
 
@@ -123,8 +123,8 @@ public sealed class DataBroadcastStreamTests
         Assert.Null(service.Entry!.Bxml);
     }
 
-    [Fact]
-    public void BR_BD_001_AStreamWithoutAnyBxmlInfoIsStillFound()
+    [Fact(DisplayName = "BR-BD-001: a stream without any additional_arib_bxml_info is still found")]
+    public void AStreamWithoutAnyBxmlInfoIsStillFound()
     {
         DataBroadcastService service = Find(BxmlInfoWriter.DataBroadcastStream(EntryPid, BxmlInfoWriter.EntryComponentTag, []));
 

@@ -24,8 +24,8 @@ public sealed class ModuleContentTests
 
     private static readonly byte[] Picture = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0xC5, 0xB7, 0x00, 0xFF];
 
-    [Fact]
-    public void BR_BD_002_AModuleOfOneResourceTakesItsLocationFromTheModuleNameAndItsTypeFromTheTypeDescriptor()
+    [Fact(DisplayName = "BR-BD-002: a module of one resource takes its location from the module name and its type from the type descriptor")]
+    public void AModuleOfOneResourceTakesItsLocationFromTheModuleNameAndItsTypeFromTheTypeDescriptor()
     {
         ModuleResource resource = Opened(
             BmlInEucJp,
@@ -38,8 +38,8 @@ public sealed class ModuleContentTests
         Assert.Equal(BmlInUtf8, Encoding.UTF8.GetString(resource.Body.Span));
     }
 
-    [Fact]
-    public void BR_BD_002_ACompressedModuleIsInflatedBeforeItIsTakenApart()
+    [Fact(DisplayName = "BR-BD-002: a compressed module is inflated before it is taken apart")]
+    public void ACompressedModuleIsInflatedBeforeItIsTakenApart()
     {
         byte[] entity = EntityWriter.Multipart(Boundary, new EntityPart("startup.bml", EntityWriter.BmlType, BmlInEucJp));
 
@@ -51,8 +51,8 @@ public sealed class ModuleContentTests
         Assert.Equal(BmlInUtf8, Encoding.UTF8.GetString(resource.Body.Span));
     }
 
-    [Fact]
-    public void BR_BD_002_AMultipartModuleIsTakenApartByItsContentLocationAndContentType()
+    [Fact(DisplayName = "BR-BD-002: a multipart module is taken apart by its content location and content type")]
+    public void AMultipartModuleIsTakenApartByItsContentLocationAndContentType()
     {
         IReadOnlyList<ModuleResource> resources = Opened(EntityWriter.Multipart(
             Boundary,
@@ -66,8 +66,8 @@ public sealed class ModuleContentTests
         Assert.Equal(Picture, resources[1].Body.ToArray());
     }
 
-    [Fact]
-    public void BR_BD_002_TheBoundaryCanComeFromTheTypeDescriptorWhenTheEntityCarriesNoHeader()
+    [Fact(DisplayName = "BR-BD-002: the boundary can come from the type descriptor when the entity carries no header")]
+    public void TheBoundaryCanComeFromTheTypeDescriptorWhenTheEntityCarriesNoHeader()
     {
         IReadOnlyList<ModuleResource> resources = Opened(
             EntityWriter.Parts(Boundary, new EntityPart("a.png", EntityWriter.PngType, Picture)),
@@ -77,8 +77,8 @@ public sealed class ModuleContentTests
         Assert.Equal(Picture, resources.Single().Body.ToArray());
     }
 
-    [Fact]
-    public void BR_BD_002_AnEntityOfOneResourceWithAHeaderTakesItsLocationFromTheHeader()
+    [Fact(DisplayName = "BR-BD-002: an entity of one resource with a header takes its location from the header")]
+    public void AnEntityOfOneResourceWithAHeaderTakesItsLocationFromTheHeader()
     {
         byte[] entity = [.. EntityWriter.Ascii("Content-Type: image/jpeg\r\nContent-Location: photo.jpg\r\n\r\n"), .. Picture];
 
@@ -89,8 +89,8 @@ public sealed class ModuleContentTests
         Assert.Equal(Picture, resource.Body.ToArray());
     }
 
-    [Fact]
-    public void BR_BD_002_APreambleTransportPaddingFoldedHeadersAndBareLineFeedsAreAllRead()
+    [Fact(DisplayName = "BR-BD-002: a preamble transport padding folded headers and bare line feeds are all read")]
+    public void APreambleTransportPaddingFoldedHeadersAndBareLineFeedsAreAllRead()
     {
         byte[] entity = EntityWriter.Ascii(
             "Content-Type: multipart/mixed;\n boundary=\"b1\"\n\nthis is a preamble\n--b1  \nContent-Location: a.css\nContent-Type: text/css\n\nbody{}\n--b1--\n");
@@ -101,8 +101,8 @@ public sealed class ModuleContentTests
         Assert.Equal("body{}", Encoding.UTF8.GetString(resource.Body.Span));
     }
 
-    [Fact]
-    public void BR_BD_002_TheBoundaryInsideALineIsPartOfTheBody()
+    [Fact(DisplayName = "BR-BD-002: the boundary inside a line is part of the body")]
+    public void TheBoundaryInsideALineIsPartOfTheBody()
     {
         byte[] body = EntityWriter.Ascii($"x --{Boundary} y");
 
@@ -111,12 +111,12 @@ public sealed class ModuleContentTests
         Assert.Equal(body, resource.Body.ToArray());
     }
 
-    [Theory]
+    [Theory(DisplayName = "BR-BD-002: stylesheets scripts and documents are text turned into UTF-8")]
     [InlineData("text/css")]
     [InlineData("text/X-arib-ecmascript")]
     [InlineData("application/X-arib-ecmascript")]
     [InlineData("text/X-arib-bml")]
-    public void BR_BD_002_StylesheetsScriptsAndDocumentsAreTextTurnedIntoUtf8(string type)
+    public void StylesheetsScriptsAndDocumentsAreTextTurnedIntoUtf8(string type)
     {
         ModuleResource resource = Opened(EntityWriter.Multipart(Boundary, new EntityPart("a", type, [0xC5, 0xB7]))).Single();
 
@@ -124,8 +124,8 @@ public sealed class ModuleContentTests
         Assert.Equal("天", Encoding.UTF8.GetString(resource.Body.Span));
     }
 
-    [Fact]
-    public void BR_BD_002_TextAlreadyDeclaredAsUtf8IsLeftAsItIs()
+    [Fact(DisplayName = "BR-BD-002: text already declared as UTF-8 is left as it is")]
+    public void TextAlreadyDeclaredAsUtf8IsLeftAsItIs()
     {
         byte[] body = Encoding.UTF8.GetBytes("天");
 
@@ -135,8 +135,8 @@ public sealed class ModuleContentTests
         Assert.Equal(body, resource.Body.ToArray());
     }
 
-    [Fact]
-    public void BR_BD_002_TextInACharacterSetOtherThanEucJpOrUtf8IsHandedOnAsReceivedAndNotAsText()
+    [Fact(DisplayName = "BR-BD-002: text in a character set other than EUC-JP or UTF-8 is handed on as received and not as text")]
+    public void TextInACharacterSetOtherThanEucJpOrUtf8IsHandedOnAsReceivedAndNotAsText()
     {
         byte[] body = [0x93, 0x56];
 
@@ -146,34 +146,34 @@ public sealed class ModuleContentTests
         Assert.Equal(body, resource.Body.ToArray());
     }
 
-    [Theory]
+    [Theory(DisplayName = "BR-BV-001: a multipart entity without its delimiters or headers is rejected")]
     [InlineData("--carina-part\r\nContent-Location: a\r\n\r\nbody\r\n")]
     [InlineData("Content-Location: a\r\n\r\nbody\r\n")]
     [InlineData("--carina-part\r\nContent-Location: a\r\nbody without the empty line\r\n--carina-part--\r\n")]
     [InlineData("--carina-part")]
-    public void BR_BV_001_AMultipartEntityWithoutItsDelimitersOrHeadersIsRejected(string parts)
+    public void AMultipartEntityWithoutItsDelimitersOrHeadersIsRejected(string parts)
     {
         byte[] entity = [.. EntityWriter.Ascii($"Content-Type: multipart/mixed; boundary={Boundary}\r\n\r\n"), .. EntityWriter.Ascii(parts)];
 
         Assert.Equal(CarouselDefect.EntityMalformed, Defect(entity));
     }
 
-    [Fact]
-    public void BR_BV_001_AnEmptyBoundaryIsRejected()
+    [Fact(DisplayName = "BR-BV-001: an empty boundary is rejected")]
+    public void AnEmptyBoundaryIsRejected()
     {
         Assert.Equal(CarouselDefect.EntityMalformed, Defect(EntityWriter.Ascii("Content-Type: multipart/mixed; boundary=\"\"\r\n\r\n--\r\n----\r\n")));
     }
 
-    [Fact]
-    public void BR_BV_002_InflatingStopsAtTheOriginalSizeAndAModuleThatGoesPastItIsDiscarded()
+    [Fact(DisplayName = "BR-BV-002: inflating stops at the original size and a module that goes past it is discarded")]
+    public void InflatingStopsAtTheOriginalSizeAndAModuleThatGoesPastItIsDiscarded()
     {
         byte[] data = new byte[1000];
 
         Assert.Equal(CarouselDefect.OriginalSizeExceeded, Defect(EntityWriter.Zlib(data), ModuleDescriptorWriter.Compression(999)));
     }
 
-    [Fact]
-    public void BR_BV_002_AModuleThatInflatesFarPastItsOriginalSizeIsNotInflatedToTheEnd()
+    [Fact(DisplayName = "BR-BV-002: a module that inflates far past its original size is not inflated to the end")]
+    public void AModuleThatInflatesFarPastItsOriginalSizeIsNotInflatedToTheEnd()
     {
         byte[] compressed = EntityWriter.Zlib(new byte[64 * 1024 * 1024]);
         ModuleInfo info = Info(ModuleDescriptorWriter.Compression(1024));
@@ -186,22 +186,22 @@ public sealed class ModuleContentTests
         Assert.True(allocated < 4 * 1024 * 1024, $"{allocated} bytes were allocated");
     }
 
-    [Fact]
-    public void BR_BV_002_AnOriginalSizeAboveTheLargestModuleIsDiscardedBeforeInflating()
+    [Fact(DisplayName = "BR-BV-002: an original size above the largest module is discarded before inflating")]
+    public void AnOriginalSizeAboveTheLargestModuleIsDiscardedBeforeInflating()
     {
         Assert.Equal(
             CarouselDefect.ModuleTooLarge,
             Defect(EntityWriter.Zlib([0x01]), ModuleDescriptorWriter.Compression(Largest + 1)));
     }
 
-    [Fact]
-    public void BR_BV_002_ZlibThatEndsShortOfTheOriginalSizeIsDiscardedOnTheAssumptionThatTheSizeIsExact()
+    [Fact(DisplayName = "BR-BV-002: zlib that ends short of the original size is discarded on the assumption that the size is exact")]
+    public void ZlibThatEndsShortOfTheOriginalSizeIsDiscardedOnTheAssumptionThatTheSizeIsExact()
     {
         Assert.Equal(CarouselDefect.InflatedSizeMismatch, Defect(EntityWriter.Zlib(new byte[10]), ModuleDescriptorWriter.Compression(11)));
     }
 
-    [Fact]
-    public void BR_BV_002_ZlibThatCannotBeInflatedIsDiscarded()
+    [Fact(DisplayName = "BR-BV-002: zlib that cannot be inflated is discarded")]
+    public void ZlibThatCannotBeInflatedIsDiscarded()
     {
         byte[] compressed = EntityWriter.Zlib(new byte[100]);
         compressed[0] = 0x00;
@@ -209,16 +209,16 @@ public sealed class ModuleContentTests
         Assert.Equal(CarouselDefect.DecompressionFailed, Defect(compressed, ModuleDescriptorWriter.Compression(100)));
     }
 
-    [Fact]
-    public void BR_BV_002_ACompressionTypeOtherThanZeroIsTakenToBeSomethingOtherThanZlibAndDiscarded()
+    [Fact(DisplayName = "BR-BV-002: a compression type other than zero is taken to be something other than zlib and discarded")]
+    public void ACompressionTypeOtherThanZeroIsTakenToBeSomethingOtherThanZlibAndDiscarded()
     {
         Assert.Equal(
             CarouselDefect.UnsupportedCompression,
             Defect(EntityWriter.Zlib([0x01]), ModuleDescriptorWriter.Compression(1, compressionType: 0x01)));
     }
 
-    [Fact]
-    public void BR_BV_001_NoModuleOfRandomBytesMakesOpeningItThrow()
+    [Fact(DisplayName = "BR-BV-001: no module of random bytes makes opening it throw")]
+    public void NoModuleOfRandomBytesMakesOpeningItThrow()
     {
         var random = new Random(20261013);
         ModuleInfo plain = Info(ModuleDescriptorWriter.Type($"multipart/mixed; boundary={Boundary}"));
