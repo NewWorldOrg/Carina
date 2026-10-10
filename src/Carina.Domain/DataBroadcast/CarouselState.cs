@@ -3,7 +3,7 @@ namespace Carina.Domain.DataBroadcast;
 /// <summary>
 /// The data broadcast of one live channel or one recording as it stands: whether the service carries one,
 /// the catalog, and every module version that is valid and has arrived. Each signal read of the stream moves
-/// it on and says what changed.
+/// it on and says what changed, at the moment it was read on the <see cref="StreamClock"/>, never a raw PTS.
 /// </summary>
 public sealed class CarouselState
 {

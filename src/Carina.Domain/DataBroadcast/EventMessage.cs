@@ -1,8 +1,8 @@
 namespace Carina.Domain.DataBroadcast;
 
 /// <summary>
-/// One event message of a data broadcast, with the moment it fires on the 90 kHz clock of what it was
-/// taken from.
+/// One event message of a data broadcast, with the moment it fires on the <see cref="StreamClock"/>, never a
+/// raw PTS.
 /// </summary>
 public sealed record EventMessage
 {
@@ -32,6 +32,8 @@ public sealed record EventMessage
     public bool IsImmediate => Timing == EventTiming.Immediate;
 
     public long FiresAt { get; }
+
+    public TimeSpan At => StreamClock.ToTime(FiresAt);
 
     public ReadOnlyMemory<byte> PrivateData { get; }
 }

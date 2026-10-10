@@ -1,8 +1,8 @@
 namespace Carina.Domain.DataBroadcast;
 
 /// <summary>
-/// One version of one module of a carousel as it was put together, with when it was first and last seen
-/// on the 90 kHz clock of what it was taken from.
+/// One version of one module of a carousel as it was put together, with when it was first and last seen on
+/// the <see cref="StreamClock"/>, never a raw PTS.
 /// </summary>
 public sealed record ModuleVersion
 {
@@ -37,6 +37,10 @@ public sealed record ModuleVersion
     public long FirstSeen { get; }
 
     public long LastSeen { get; private init; }
+
+    public TimeSpan FirstSeenAt => StreamClock.ToTime(FirstSeen);
+
+    public TimeSpan LastSeenAt => StreamClock.ToTime(LastSeen);
 
     public IReadOnlyList<CarouselResource> Resources { get; }
 
