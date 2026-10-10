@@ -39,6 +39,8 @@ public sealed class DataCarousels
         };
     }
 
+    public void Reset() => carousels.Clear();
+
     private IReadOnlyList<CarouselChange> Indicate(int componentTag, TableRead<DownloadInfoIndication> read)
     {
         if (read is not TableRead<DownloadInfoIndication>.Parsed parsed)

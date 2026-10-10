@@ -47,6 +47,13 @@ public sealed class EventMessageClock
         return outcomes;
     }
 
+    public void Reset()
+    {
+        versions.Clear();
+        waiting.Clear();
+        reference = null;
+    }
+
     private void Adopt(NptReference arrived, List<EventMessageOutcome> outcomes)
     {
         if (!arrived.IsUsable)

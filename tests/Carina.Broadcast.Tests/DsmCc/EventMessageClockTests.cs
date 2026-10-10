@@ -241,6 +241,54 @@ public sealed class EventMessageClockTests
         Assert.Equal(EventMessageClock.MostWaiting, Fired(released).Count);
     }
 
+    [Fact(DisplayName = "BR-BD-003: a reset forgets the reference, the waiting events and the versions seen")]
+    public void AResetForgetsTheReferenceTheWaitingEventsAndTheVersionsSeen()
+    {
+        var clock = new EventMessageClock();
+        byte[] immediate = StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Immediate, 0, 0, 1);
+
+        for (int version = 0; version < EventMessageClock.MostWaiting; version++)
+        {
+            clock.Push(
+                new StreamDescriptorWriter
+                {
+                    EventMessageGroupId = version >> 5,
+                    VersionNumber = version & 0x1F,
+                    Descriptors = StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, version, 0, version),
+                },
+                ReceivedAt);
+        }
+
+        clock.Push(Section(9, immediate), ReceivedAt);
+        clock.Reset();
+
+        IReadOnlyList<EventMessageOutcome> waiting = clock.Push(
+            new StreamDescriptorWriter { EventMessageGroupId = 0x0FFE, Descriptors = StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 5, 0, 7) },
+            ReceivedAt);
+        IReadOnlyList<EventMessageOutcome> again = clock.Push(Section(9, immediate), ReceivedAt);
+        IReadOnlyList<EventMessageOutcome> released = clock.Push(
+            new StreamDescriptorWriter { EventMessageGroupId = 0x0FFF, Descriptors = StreamDescriptorWriter.NptReference(stc: 100, npt: 0) },
+            ReceivedAt);
+
+        Assert.Empty(waiting);
+        Assert.Single(Fired(again));
+        Assert.Equal([7], Fired(released).Select(message => message.EventMessageId));
+    }
+
+    [Fact(DisplayName = "BR-BD-003: events released by a reference do not wait for the next one")]
+    public void EventsReleasedByAReferenceDoNotWaitForTheNextOne()
+    {
+        var clock = new EventMessageClock();
+        clock.Push(Section(0, StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 5, 0, 1)), ReceivedAt);
+        clock.Push(new StreamDescriptorWriter { EventMessageGroupId = 0x0FFF, Descriptors = StreamDescriptorWriter.NptReference(stc: 100, npt: 0) }, ReceivedAt);
+
+        IReadOnlyList<EventMessageOutcome> second = clock.Push(
+            new StreamDescriptorWriter { EventMessageGroupId = 0x0FFF, VersionNumber = 1, Descriptors = StreamDescriptorWriter.NptReference(stc: 200, npt: 0) },
+            ReceivedAt);
+
+        Assert.Empty(second);
+    }
+
     private static StreamDescriptorWriter Section(int version, params byte[][] descriptors)
         => new() { EventMessageGroupId = SomeGroup, VersionNumber = version, Descriptors = DescriptorWriter.Loop(descriptors) };
 

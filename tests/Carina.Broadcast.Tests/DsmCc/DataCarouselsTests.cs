@@ -112,6 +112,20 @@ public sealed class DataCarouselsTests
         Assert.Empty(delivered);
     }
 
+    [Fact(DisplayName = "BR-BV-003: a reset forgets every carousel")]
+    public void AResetForgetsEveryCarousel()
+    {
+        DataCarousels carousels = new();
+        carousels.Push(EntryTag, CarriedSection.Of(Indication(1, DiiModule.Of(1, Png.Length, 0))));
+
+        carousels.Reset();
+        IReadOnlyList<CarouselChange> block = carousels.Push(EntryTag, CarriedSection.Of(DsmCcWriter.Blocks(1, 1, 0, Png, 64)[0]));
+        IReadOnlyList<CarouselChange> indication = carousels.Push(EntryTag, CarriedSection.Of(Indication(1, DiiModule.Of(1, Png.Length, 0))));
+
+        Assert.DoesNotContain(block, change => change is CarouselChange.ModuleCompleted);
+        Assert.IsType<CarouselChange.CatalogueUpdated>(Assert.Single(indication));
+    }
+
     [Fact(DisplayName = "BR-BV-003: each component tag is a carousel of its own")]
     public void EachComponentTagIsACarouselOfItsOwn()
     {
