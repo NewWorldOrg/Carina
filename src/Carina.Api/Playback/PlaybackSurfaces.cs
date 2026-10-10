@@ -16,6 +16,30 @@ public static class PlaybackSurfaces
 
     public const string TheCaptionsAreCalled = "getVideoCaptions";
 
+    public const string TheDataBroadcastIsCalled = "getVideoDataBroadcast";
+
+    public const string AModuleOfTheDataBroadcastIsCalled = "getVideoDataBroadcastModule";
+
+    public const string TheDataBroadcastOfARecording =
+        "The catalog of a recording's data broadcast over the source it is played from: the carousel it is entered "
+        + "from, whether the broadcaster asks for it to open by itself, the path of the document it opens on, whether "
+        + "versions were left out of the record to keep it within its size, every version of every module of every "
+        + "download of every carousel with the seconds of that source it runs from and to and the bytes its module "
+        + "answers, and every event message at the second it fires, each counted from the source's own zero the way "
+        + "the captions are, so that the artefact and the recording itself give a scene the same second. A version "
+        + "that began before the source's zero runs from that zero, and nothing first seen or firing after the "
+        + "source's end is given. It answers 409 while the data broadcast is still being taken from the recording, "
+        + "or failed with tries left, and 404 where there is none to show beside that source. Opened with the "
+        + "reader's own session only, never with a ticket.";
+
+    public const string AModuleOfTheDataBroadcast =
+        "One version of one module of a recording's data broadcast, as the live side channel carries it: the byte "
+        + "0x02, the carousel's tag, the module id and the version, then each resource with its path, its kind and "
+        + "its bytes, to the end, so that the same reader reads both. It is answered with a tag that changes whenever "
+        + "the record is taken again, and asked again with that tag in If-None-Match it answers 304 without the bytes. "
+        + "It answers 404 where the recording's data broadcast is not ready or does not hold that version. Opened "
+        + "with the reader's own session only, never with a ticket.";
+
     public const string TheCaptionsOfARecording =
         "The captions of a recording for ten minutes of the source it is played from, starting at the second "
         + "asked for: the caption already showing there first, then every change before the second the answer "
@@ -32,6 +56,26 @@ public static class PlaybackSurfaces
     public const string ThePictureDrawnOfARecording = "The picture drawn of a recording once it had ended.";
 
     public const string AFrameFromWhereTheSliderIs = "One frame taken out of a recording at the second asked for.";
+
+    public static readonly QueryInput WhereTheDataBroadcastStarts = QueryInput.Seconds(
+        DataBroadcastDelivery.Position,
+        "The second of the source the catalog starts at, counted from the source's own zero, as the player's position "
+        + "reads it: the versions still running there or later and the event messages firing there or later are "
+        + "given, to the source's end. Seconds may be fractional, and asking for none starts at the beginning.");
+
+    public static readonly QueryInput WhichFileTheDataBroadcastIsPlacedOn = QueryInput.OneOfThese(
+        DataBroadcastDelivery.Source,
+        "Which of the two files the data broadcast is placed on, asked the way the plan was asked, as the captions "
+        + "are. The seconds of the artefact and of the recording itself differ by what the encode skipped at the head.",
+        PlaybackSources.Names,
+        PlaybackSources.ArtefactIsCalled);
+
+    public static readonly QueryInput WhatThisBrowserDecodesForItsDataBroadcast = QueryInput.SomeOfThese(
+        DataBroadcastDelivery.Decodes,
+        "The picture codings the browser says it decodes, named as the plan was asked with, so that the data "
+        + "broadcast is placed on the file the plan settled on: naming h265 lets that be an artefact encoded in "
+        + "H.265 and tagged hvc1.",
+        AskedDecoding.Names);
 
     public static readonly QueryInput WhereTheFrameIsTakenFrom = QueryInput.Seconds(
         ScrubDelivery.Position,

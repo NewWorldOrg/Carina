@@ -120,6 +120,7 @@ public sealed class TicketInThePathTests
     [InlineData("thumbnail")]
     [InlineData("scrub")]
     [InlineData("captions")]
+    [InlineData("data-broadcast")]
     public async Task TheTicketInThePathOpensTheBytesAndNothingElse(string beneath)
     {
         await using TicketedFeature feature = new();

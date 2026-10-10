@@ -10,7 +10,7 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// recording named after it. A record is written beside its final name and moved over it, so a reader sees the
 /// old one or the new one and never half of either.
 /// </summary>
-public sealed class DataBroadcastShelf(CaptionSettings settings)
+public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcastRecords
 {
     public const string Extension = ".databroadcast";
 
@@ -64,6 +64,24 @@ public sealed class DataBroadcastShelf(CaptionSettings settings)
         }
     }
 
+    public long? BytesOf(RecordingId id)
+    {
+        if (PathOf(id) is not { } kept)
+        {
+            return null;
+        }
+
+        FileInfo file = new(kept);
+
+        return file.Exists ? file.Length : null;
+    }
+
+    public Task<DataBroadcastOutline?> OutlineAsync(RecordingId id, CancellationToken cancellationToken)
+        => WithKeptAsync(id, reading => DataBroadcastRecordFormat.OutlineAsync(reading, cancellationToken));
+
+    public Task<ModuleVersion?> ModuleAsync(RecordingId id, ModuleVersionKey key, CancellationToken cancellationToken)
+        => WithKeptAsync(id, reading => DataBroadcastRecordFormat.FindAsync(reading, key, cancellationToken));
+
     /// <summary>
     /// Whether a record is kept for the recording: a file under its name whose head is the head of a record.
     /// </summary>
@@ -95,6 +113,26 @@ public sealed class DataBroadcastShelf(CaptionSettings settings)
         ArgumentNullException.ThrowIfNull(id);
 
         return settings.WrittenTo is { } shelf ? Path.Combine(shelf, id.Wire + Extension) : null;
+    }
+
+    private async Task<T?> WithKeptAsync<T>(RecordingId id, Func<FileStream, Task<T?>> read)
+        where T : class
+    {
+        if (PathOf(id) is not { } kept || !File.Exists(kept))
+        {
+            return null;
+        }
+
+        try
+        {
+            await using FileStream reading = File.OpenRead(kept);
+
+            return await read(reading);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
     }
 
     private static bool HeadsARecord(string kept)

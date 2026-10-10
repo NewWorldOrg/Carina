@@ -134,4 +134,19 @@ public sealed class DataBroadcastProgressTests
 
     private static (DataBroadcastState, int, int?) Of(DataBroadcastProgress progress)
         => (progress.State, progress.Attempts, progress.Modules);
+
+    [Theory(DisplayName = "BR-BS-001: a record is ready to play only while it is made and kept, coming while it is taken or tried again, and none otherwise")]
+    [InlineData(DataBroadcastState.None, 0, null, true, DataBroadcastStanding.None)]
+    [InlineData(DataBroadcastState.Coming, 0, null, false, DataBroadcastStanding.Coming)]
+    [InlineData(DataBroadcastState.Coming, 2, null, false, DataBroadcastStanding.Coming)]
+    [InlineData(DataBroadcastState.Made, 0, 3, true, DataBroadcastStanding.Ready)]
+    [InlineData(DataBroadcastState.Made, 0, 3, false, DataBroadcastStanding.Coming)]
+    [InlineData(DataBroadcastState.Missing, 0, null, true, DataBroadcastStanding.None)]
+    [InlineData(DataBroadcastState.Failed, 1, null, false, DataBroadcastStanding.Coming)]
+    [InlineData(DataBroadcastState.Failed, 2, null, false, DataBroadcastStanding.Coming)]
+    [InlineData(DataBroadcastState.Failed, 3, null, true, DataBroadcastStanding.None)]
+    public void ARecordIsReadyOnlyWhileMadeAndKept(DataBroadcastState state, int attempts, int? modules, bool kept, DataBroadcastStanding standing)
+    {
+        Assert.Equal(standing, new DataBroadcastProgress(state, attempts, modules).StandingWith(kept));
+    }
 }

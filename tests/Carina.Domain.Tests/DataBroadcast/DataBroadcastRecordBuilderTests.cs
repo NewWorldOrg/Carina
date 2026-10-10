@@ -179,6 +179,22 @@ public sealed class DataBroadcastRecordBuilderTests
         Assert.Null(builder.Build(0, 0));
     }
 
+    [Theory(DisplayName = "BR-BD-005: the record says whether the broadcaster asks for its data broadcast to open by itself, as the last catalog read says")]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void TheRecordSaysWhetherItOpensByItselfAsTheLastCatalogSays(bool first, bool last)
+    {
+        DataBroadcastRecord record = Read(
+            (Carousels.Carried(autoStart: first), 0),
+            (Carousels.Listing(Carousels.Entry, (0, 1)), 0),
+            (Carousels.Completed(Carousels.Entry, 0, 1), 100),
+            (Carousels.Carried(autoStart: last), 200),
+            (Carousels.Listing(Carousels.Entry, 1, [], (0, 1)), 300));
+
+        Assert.Equal(last, record.AutoStart);
+    }
+
     [Fact]
     public void TheRecordBeginsWhereItIsToldTo()
     {

@@ -1,6 +1,5 @@
 using Carina.Api.Common;
 using Carina.Domain.Captions;
-using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 
 namespace Carina.Api.Services;
@@ -20,13 +19,11 @@ public enum CaptionFailure
 /// </summary>
 public sealed class CaptionService(
     IRecordingDirectory recordings,
-    IEncodeJobRepository jobs,
     ICaptionRecords records,
     CaptionSettings settings,
+    SourcePlacement placement,
     ILogger<CaptionService> logger)
 {
-    public static readonly TimeSpan ClocksAgreeWithin = TimeSpan.FromMilliseconds(1);
-
     public async Task<ServiceResult<CaptionStanding>> StandingAsync(
         RecordingId id,
         PlaybackOffer offer,
@@ -43,7 +40,7 @@ public sealed class CaptionService(
 
         Placing placing = await PlacedAsync(id, offer, cancellationToken);
 
-        if (placing is not { Standing: CaptionStanding.Ready, Shift: { } shift })
+        if (placing is not { Standing: CaptionStanding.Ready, Zero: { } zero })
         {
             return Refused(id, placing.Standing);
         }
@@ -57,7 +54,7 @@ public sealed class CaptionService(
             return Refused(id, CaptionStanding.None);
         }
 
-        return ServiceResult<CaptionWindow, CaptionFailure>.Success(CaptionWindow.Of(record, shift, placing.Length, from));
+        return ServiceResult<CaptionWindow, CaptionFailure>.Success(CaptionWindow.Of(record, zero.Shift, zero.Length, from));
     }
 
     private static ServiceResult<CaptionWindow, CaptionFailure> Refused(RecordingId id, CaptionStanding standing)
@@ -86,46 +83,16 @@ public sealed class CaptionService(
 
         if (standing is not CaptionStanding.Ready || startsAt is not { } begins)
         {
-            return new Placing(standing, null, null);
+            return new Placing(standing, null);
         }
 
-        if (offer.Plan.Transcodes)
-        {
-            return new Placing(CaptionStanding.Ready, begins, null);
-        }
-
-        return await OnTheArtefactAsync(id, offer.Artefact, begins, cancellationToken);
+        return await placement.PlaceAsync(id, offer, begins, "captions", cancellationToken) is { } zero
+            ? new Placing(CaptionStanding.Ready, zero)
+            : Placing.Nowhere;
     }
 
-    private async Task<Placing> OnTheArtefactAsync(
-        RecordingId id,
-        EncodeJobId? artefact,
-        TimeSpan begins,
-        CancellationToken cancellationToken)
+    private sealed record Placing(CaptionStanding Standing, SourceZero? Zero)
     {
-        if (artefact is null || await jobs.FindAsync(artefact, cancellationToken) is not { Timeline: { } timeline })
-        {
-            return Placing.Nowhere;
-        }
-
-        if ((begins - timeline.SourceStart).Duration() >= ClocksAgreeWithin)
-        {
-            logger.LogWarning(
-                "The captions of recording {Recording} were taken from a file that began at {Captioned} s and the "
-                + "artefact {Job} was made from one that began at {Encoded} s, so no captions are drawn over the artefact.",
-                id.Wire,
-                begins.TotalSeconds,
-                artefact.Wire,
-                timeline.SourceStart.TotalSeconds);
-
-            return Placing.Nowhere;
-        }
-
-        return new Placing(CaptionStanding.Ready, timeline.CaptionShift, timeline.ArtefactLength);
-    }
-
-    private sealed record Placing(CaptionStanding Standing, TimeSpan? Shift, TimeSpan? Length)
-    {
-        public static readonly Placing Nowhere = new(CaptionStanding.None, null, null);
+        public static readonly Placing Nowhere = new(CaptionStanding.None, null);
     }
 }

@@ -44,7 +44,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new FindingDisposals());
         services.AddScoped<IntegrityService>();
         services.AddScoped<PlaybackService>();
+        services.AddScoped<SourcePlacement>();
         services.AddScoped<CaptionService>();
+        services.AddScoped<DataBroadcastService>();
         services.AddScoped<PlaybackTicketService>();
         services.AddScoped<PlaybackPositionService>();
         services.AddScoped<LiveService>();

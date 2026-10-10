@@ -410,6 +410,8 @@ public sealed class TicketedVideoTests
     [InlineData("/thumbnail")]
     [InlineData("/scrub")]
     [InlineData("/captions")]
+    [InlineData("/data-broadcast")]
+    [InlineData("/data-broadcast/modules/64/7/0/1")]
     public async Task TheTicketOpensTheBytesAndNothingElseUnderTheSamePrefix(string beneath)
     {
         await using var feature = new TicketedFeature();
@@ -430,6 +432,8 @@ public sealed class TicketedVideoTests
     [InlineData("/thumbnail")]
     [InlineData("/scrub")]
     [InlineData("/captions")]
+    [InlineData("/data-broadcast")]
+    [InlineData("/data-broadcast/modules/64/7/0/1")]
     public async Task EverySurfaceUnderThisPrefixRefusesAStrangerWithTheSameStatus(string beneath)
     {
         await using var feature = new TicketedFeature();

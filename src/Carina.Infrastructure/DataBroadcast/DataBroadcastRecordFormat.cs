@@ -6,14 +6,20 @@ namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
 /// How a <see cref="DataBroadcastRecord"/> is laid out on disk: a header naming the format, where the
-/// recording's clock begins, the carousel it is entered from, whether versions were left out, and the count of
-/// carousels; then each carousel as its tag, its download id and its versions, each with its id, version, the
+/// recording's clock begins, the carousel it is entered from, a byte marking whether versions were left out and
+/// whether the broadcaster asks for it to open by itself, and the count of carousels; then each carousel as its tag, its download id and its versions, each with its id, version, the
 /// moments it was first and last seen and its resources as the side channel lists them; then the count of event
 /// messages and each as the side channel carries it. Every number is big-endian, and every moment is signed.
 /// </summary>
 public static class DataBroadcastRecordFormat
 {
-    public const ushort FormatVersion = 1;
+    public const ushort FormatVersion = 2;
+
+    private const ushort FirstVersion = 1;
+
+    private const byte IncompleteMark = 0x01;
+
+    private const byte AutoStartMark = 0x02;
 
     public const int HeaderLength = DataBroadcastRecord.HeaderBytes;
 
@@ -25,9 +31,9 @@ public static class DataBroadcastRecordFormat
 
     private const int EntryTagAt = StartsAtAt + sizeof(long);
 
-    private const int IncompleteAt = EntryTagAt + sizeof(byte);
+    private const int MarksAt = EntryTagAt + sizeof(byte);
 
-    private const int CarouselCountAt = IncompleteAt + sizeof(byte);
+    private const int CarouselCountAt = MarksAt + sizeof(byte);
 
     private static ReadOnlySpan<byte> Magic => "CARINADB"u8;
 
@@ -59,7 +65,7 @@ public static class DataBroadcastRecordFormat
         BinaryPrimitives.WriteUInt16BigEndian(head[VersionAt..], FormatVersion);
         BinaryPrimitives.WriteInt64BigEndian(head[StartsAtAt..], record.StartsAt);
         head[EntryTagAt] = (byte)record.EntryTag;
-        head[IncompleteAt] = record.Incomplete ? (byte)1 : (byte)0;
+        head[MarksAt] = (byte)((record.Incomplete ? IncompleteMark : 0) | (record.AutoStart ? AutoStartMark : 0));
         BinaryPrimitives.WriteUInt16BigEndian(head[CarouselCountAt..], (ushort)record.Carousels.Count);
         into.Write(head);
 
@@ -83,14 +89,19 @@ public static class DataBroadcastRecordFormat
     }
 
     /// <summary>
-    /// Whether the head of a file is the head of a record this format wrote: its magic, a version it reads, and as
-    /// many bytes as a header takes.
+    /// Whether the head of a file is the head of a record this format wrote: its magic, a version it reads, marks
+    /// that version names, and as many bytes as a header takes. A record of the first version marks only whether
+    /// it is incomplete.
     /// </summary>
     public static bool Heads(ReadOnlySpan<byte> head)
         => head.Length >= HeaderLength
            && head[..MagicLength].SequenceEqual(Magic)
-           && BinaryPrimitives.ReadUInt16BigEndian(head[VersionAt..]) == FormatVersion
-           && head[IncompleteAt] <= 1;
+           && BinaryPrimitives.ReadUInt16BigEndian(head[VersionAt..]) switch
+           {
+               FirstVersion => head[MarksAt] <= IncompleteMark,
+               FormatVersion => head[MarksAt] <= (IncompleteMark | AutoStartMark),
+               _ => false,
+           };
 
     /// <summary>
     /// Reads a record back, or answers null when the bytes are not one this format wrote.
@@ -113,6 +124,241 @@ public static class DataBroadcastRecordFormat
             return null;
         }
     }
+
+    /// <summary>
+    /// Finds one version in a record being read, stepping over every other version by its length without reading it,
+    /// or answers null when the bytes are not a record this format wrote or the record does not hold that version.
+    /// </summary>
+    public static async Task<ModuleVersion?> FindAsync(Stream reading, ModuleVersionKey key, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+
+        byte[] head = new byte[HeaderLength];
+
+        if (!await FilledAsync(reading, head, cancellationToken) || !Heads(head))
+        {
+            return null;
+        }
+
+        int carousels = BinaryPrimitives.ReadUInt16BigEndian(head.AsSpan(CarouselCountAt));
+        byte[] carouselHead = new byte[RecordedCarousel.HeaderBytes];
+
+        for (int carousel = 0; carousel < carousels; carousel++)
+        {
+            if (!await FilledAsync(reading, carouselHead, cancellationToken))
+            {
+                return null;
+            }
+
+            int tag = carouselHead[0];
+            uint downloadId = BinaryPrimitives.ReadUInt32BigEndian(carouselHead.AsSpan(1));
+            int versions = BinaryPrimitives.ReadUInt16BigEndian(carouselHead.AsSpan(5));
+
+            if (tag == key.Tag && downloadId == key.DownloadId)
+            {
+                return await FindInCarouselAsync(reading, tag, versions, key, cancellationToken);
+            }
+
+            if (!await PassedAsync(reading, versions, cancellationToken))
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads a record being read without the resources of its versions, stepping over each by its length, or answers
+    /// null when the bytes are not a record this format wrote. The resources themselves are not looked at.
+    /// </summary>
+    public static async Task<DataBroadcastOutline?> OutlineAsync(Stream reading, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+
+        byte[] head = new byte[HeaderLength];
+
+        if (!await FilledAsync(reading, head, cancellationToken) || !Heads(head))
+        {
+            return null;
+        }
+
+        try
+        {
+            return await OutlinedAsync(reading, head, cancellationToken);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<DataBroadcastOutline?> OutlinedAsync(Stream reading, byte[] head, CancellationToken cancellationToken)
+    {
+        int count = BinaryPrimitives.ReadUInt16BigEndian(head.AsSpan(CarouselCountAt));
+        List<OutlinedCarousel> carousels = [];
+        byte[] carouselHead = new byte[RecordedCarousel.HeaderBytes];
+
+        for (int carousel = 0; carousel < count; carousel++)
+        {
+            if (!await FilledAsync(reading, carouselHead, cancellationToken)
+                || await OutlinedVersionsAsync(reading, BinaryPrimitives.ReadUInt16BigEndian(carouselHead.AsSpan(5)), cancellationToken) is not { } versions)
+            {
+                return null;
+            }
+
+            carousels.Add(new OutlinedCarousel(carouselHead[0], BinaryPrimitives.ReadUInt32BigEndian(carouselHead.AsSpan(1)), versions));
+        }
+
+        long left = reading.Length - reading.Position;
+
+        if (left > int.MaxValue)
+        {
+            return null;
+        }
+
+        byte[] rest = new byte[left];
+
+        if (!await FilledAsync(reading, rest, cancellationToken))
+        {
+            return null;
+        }
+
+        ReadOnlyMemory<byte> at = rest;
+
+        if (Events(ref at) is not { } events || !at.IsEmpty)
+        {
+            return null;
+        }
+
+        return new DataBroadcastOutline(
+            BinaryPrimitives.ReadInt64BigEndian(head.AsSpan(StartsAtAt)),
+            head[EntryTagAt],
+            carousels,
+            events,
+            (head[MarksAt] & IncompleteMark) != 0,
+            (head[MarksAt] & AutoStartMark) != 0);
+    }
+
+    private static async Task<List<OutlinedVersion>?> OutlinedVersionsAsync(Stream reading, int count, CancellationToken cancellationToken)
+    {
+        List<OutlinedVersion> versions = [];
+        byte[] versionHead = new byte[ModuleVersion.HeaderBytes];
+
+        for (int read = 0; read < count; read++)
+        {
+            if (!await FilledAsync(reading, versionHead, cancellationToken))
+            {
+                return null;
+            }
+
+            uint entity = BinaryPrimitives.ReadUInt32BigEndian(versionHead.AsSpan(19));
+
+            if (!Stepped(reading, entity))
+            {
+                return null;
+            }
+
+            versions.Add(new OutlinedVersion(
+                BinaryPrimitives.ReadUInt16BigEndian(versionHead),
+                versionHead[2],
+                BinaryPrimitives.ReadInt64BigEndian(versionHead.AsSpan(3)),
+                BinaryPrimitives.ReadInt64BigEndian(versionHead.AsSpan(11)),
+                entity));
+        }
+
+        return versions;
+    }
+
+    private static async Task<ModuleVersion?> FindInCarouselAsync(
+        Stream reading,
+        int tag,
+        int versions,
+        ModuleVersionKey key,
+        CancellationToken cancellationToken)
+    {
+        byte[] versionHead = new byte[ModuleVersion.HeaderBytes];
+
+        for (int read = 0; read < versions; read++)
+        {
+            if (!await FilledAsync(reading, versionHead, cancellationToken))
+            {
+                return null;
+            }
+
+            uint entity = BinaryPrimitives.ReadUInt32BigEndian(versionHead.AsSpan(19));
+
+            if (BinaryPrimitives.ReadUInt16BigEndian(versionHead) != key.ModuleId || versionHead[2] != key.Version)
+            {
+                if (!Stepped(reading, entity))
+                {
+                    return null;
+                }
+
+                continue;
+            }
+
+            if (entity > reading.Length - reading.Position)
+            {
+                return null;
+            }
+
+            byte[] whole = new byte[ModuleVersion.HeaderBytes + entity];
+
+            versionHead.CopyTo(whole, 0);
+
+            return await FilledAsync(reading, whole.AsMemory(ModuleVersion.HeaderBytes), cancellationToken)
+                ? Found(tag, whole)
+                : null;
+        }
+
+        return null;
+    }
+
+    private static ModuleVersion? Found(int tag, byte[] whole)
+    {
+        ReadOnlyMemory<byte> at = whole;
+
+        try
+        {
+            return Version(tag, ref at);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<bool> PassedAsync(Stream reading, int versions, CancellationToken cancellationToken)
+    {
+        byte[] versionHead = new byte[ModuleVersion.HeaderBytes];
+
+        for (int read = 0; read < versions; read++)
+        {
+            if (!await FilledAsync(reading, versionHead, cancellationToken)
+                || !Stepped(reading, BinaryPrimitives.ReadUInt32BigEndian(versionHead.AsSpan(19))))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool Stepped(Stream reading, uint entity)
+    {
+        if (entity > reading.Length - reading.Position)
+        {
+            return false;
+        }
+
+        reading.Seek(entity, SeekOrigin.Current);
+
+        return true;
+    }
+
+    private static async Task<bool> FilledAsync(Stream reading, Memory<byte> into, CancellationToken cancellationToken)
+        => await reading.ReadAtLeastAsync(into, into.Length, throwOnEndOfStream: false, cancellationToken) == into.Length;
 
     private static DataBroadcastRecord? Body(ReadOnlyMemory<byte> bytes, ReadOnlySpan<byte> head)
     {
@@ -140,7 +386,8 @@ public static class DataBroadcastRecordFormat
             head[EntryTagAt],
             carousels,
             events,
-            head[IncompleteAt] is 1);
+            (head[MarksAt] & IncompleteMark) != 0,
+            (head[MarksAt] & AutoStartMark) != 0);
     }
 
     private static void Write(RecordedCarousel carousel, Stream into)

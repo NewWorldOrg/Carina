@@ -100,7 +100,11 @@ public static class CaptionDelivery
             context.RequestAborted);
     }
 
-    private static TimeSpan? From(string? asked)
+    /// <summary>
+    /// The second of the source asked for, or nothing asked as its beginning, or null when what is asked is not a
+    /// second a window can start at.
+    /// </summary>
+    public static TimeSpan? From(string? asked)
     {
         if (string.IsNullOrWhiteSpace(asked))
         {

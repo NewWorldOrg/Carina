@@ -112,6 +112,48 @@ public sealed class DataBroadcastShelfTests : IDisposable
         Assert.False(shelf.Holds(another));
     }
 
+    [Fact(DisplayName = "BR-BA-001: a version of a record kept for a recording is found on the shelf, and none is found for a recording with no record")]
+    public async Task AVersionOfARecordKeptIsFoundOnTheShelf()
+    {
+        DataBroadcastShelf shelf = Shelf();
+        RecordingId id = RecordingId.New();
+        await shelf.KeepAsync(id, Record("<bml>1</bml>"), Cancel);
+
+        ModuleVersion? found = await shelf.ModuleAsync(id, new ModuleVersionKey(Entry, 1, 0, 1), Cancel);
+
+        Assert.Equal("<bml>1</bml>", Encoding.UTF8.GetString(Assert.Single(found!.Resources).Body.Span));
+        Assert.Null(await shelf.ModuleAsync(id, new ModuleVersionKey(Entry, 1, 0, 2), Cancel));
+        Assert.Null(await shelf.ModuleAsync(RecordingId.New(), new ModuleVersionKey(Entry, 1, 0, 1), Cancel));
+        Assert.Null(await new DataBroadcastShelf(new CaptionSettings()).ModuleAsync(id, new ModuleVersionKey(Entry, 1, 0, 1), Cancel));
+    }
+
+    [Fact(DisplayName = "BR-BA-001: the outline of a record kept for a recording is read from the shelf, and none for a recording with no record")]
+    public async Task TheOutlineOfARecordKeptIsReadFromTheShelf()
+    {
+        DataBroadcastShelf shelf = Shelf();
+        RecordingId id = RecordingId.New();
+        await shelf.KeepAsync(id, Record("<bml>1</bml>"), Cancel);
+
+        DataBroadcastOutline? outline = await shelf.OutlineAsync(id, Cancel);
+
+        Assert.Equal((Entry, 1u), (outline!.EntryTag, Assert.Single(outline.Carousels).DownloadId));
+        Assert.Null(await shelf.OutlineAsync(RecordingId.New(), Cancel));
+        Assert.Null(await new DataBroadcastShelf(new CaptionSettings()).OutlineAsync(id, Cancel));
+    }
+
+    [Fact(DisplayName = "BR-BA-001: the shelf tells the bytes the record kept for a recording takes, and nothing for one with none")]
+    public async Task TheShelfTellsTheBytesARecordTakes()
+    {
+        DataBroadcastShelf shelf = Shelf();
+        RecordingId id = RecordingId.New();
+        DataBroadcastRecord record = Record("<bml>1</bml>");
+        await shelf.KeepAsync(id, record, Cancel);
+
+        Assert.Equal(record.Bytes, shelf.BytesOf(id));
+        Assert.Null(shelf.BytesOf(RecordingId.New()));
+        Assert.Null(new DataBroadcastShelf(new CaptionSettings()).BytesOf(id));
+    }
+
     [Fact]
     public void AShelfWithNowhereToKeepRecordsKeepsNothing()
     {

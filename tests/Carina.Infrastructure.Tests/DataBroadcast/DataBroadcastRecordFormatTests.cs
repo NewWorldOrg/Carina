@@ -34,6 +34,8 @@ public sealed class DataBroadcastRecordFormatTests
         0x00, 0x02, 0xAA, 0xBB,
     ];
 
+    private static readonly byte[] VersionTwo = Rewritten(VersionOne, (9, 0x02), (19, 0x03));
+
     [Fact(DisplayName = "BR-BD-005: a record is written and read back whole, and takes the bytes it says it takes")]
     public void ARecordIsWrittenAndReadBackWhole()
     {
@@ -140,7 +142,35 @@ public sealed class DataBroadcastRecordFormatTests
         Assert.Equal(("a", "text/X-arib-bml", ResourceForm.Text, "<a>"), (resource.Path, resource.MediaType, resource.Form, Encoding.ASCII.GetString(resource.Body.Span)));
         Assert.Equal((1, 2, 5, EventTiming.Immediate, 240_000L), (message.Group, message.Id, message.MessageType, message.Timing, message.FiresAt));
         Assert.Equal([0xAA, 0xBB], message.PrivateData.ToArray());
-        Assert.Equal(VersionOne, DataBroadcastRecordFormat.Written(read));
+        Assert.False(read.AutoStart);
+        Assert.Equal(Rewritten(VersionOne, (9, 0x02)), DataBroadcastRecordFormat.Written(read));
+    }
+
+    [Fact(DisplayName = "BR-BV-004: a record of format version 2 written byte by byte is read with whether it opens by itself")]
+    public void ARecordOfVersionTwoIsReadWithWhetherItOpensByItself()
+    {
+        DataBroadcastRecord read = DataBroadcastRecordFormat.Read(VersionTwo)!;
+
+        Assert.Equal((90_000L, Entry, true, true), (read.StartsAt, read.EntryTag, read.Incomplete, read.AutoStart));
+        ModuleVersion version = Assert.Single(Assert.Single(read.Carousels).Versions);
+        Assert.Equal((0, 1, 180_000L, 270_000L), (version.ModuleId, version.Version, version.FirstSeen, version.LastSeen));
+        Assert.Equal(VersionTwo, DataBroadcastRecordFormat.Written(read));
+    }
+
+    [Theory(DisplayName = "BR-BD-005: whether a record opens by itself and whether it is incomplete are written apart and read back")]
+    [InlineData(false, false, 0x00)]
+    [InlineData(true, false, 0x01)]
+    [InlineData(false, true, 0x02)]
+    [InlineData(true, true, 0x03)]
+    public void WhetherARecordOpensByItselfAndIsIncompleteAreWrittenApart(bool incomplete, bool autoStart, byte marks)
+    {
+        DataBroadcastRecord record = new(0, Entry, [], [], incomplete, autoStart);
+
+        byte[] written = DataBroadcastRecordFormat.Written(record);
+        DataBroadcastRecord read = DataBroadcastRecordFormat.Read(written)!;
+
+        Assert.Equal((DataBroadcastRecordFormat.FormatVersion, marks), (written[9], written[19]));
+        Assert.Equal((incomplete, autoStart), (read.Incomplete, read.AutoStart));
     }
 
     [Fact(DisplayName = "BR-BD-005: a record cut short anywhere is no record, and reading it throws nothing")]
@@ -151,13 +181,20 @@ public sealed class DataBroadcastRecordFormatTests
             Assert.Null(DataBroadcastRecordFormat.Read(VersionOne.AsMemory(0, length)));
         }
 
+        for (int length = 0; length < VersionTwo.Length; length++)
+        {
+            Assert.Null(DataBroadcastRecordFormat.Read(VersionTwo.AsMemory(0, length)));
+        }
+
         Assert.Null(DataBroadcastRecordFormat.Read((byte[])[.. VersionOne, 0x00]));
+        Assert.Null(DataBroadcastRecordFormat.Read((byte[])[.. VersionTwo, 0x00]));
     }
 
     [Theory(DisplayName = "BR-BD-005: bytes this format did not write are no record, and reading them throws nothing")]
     [InlineData(0, 0x00)]
-    [InlineData(9, 0x02)]
+    [InlineData(9, 0x03)]
     [InlineData(19, 0x02)]
+    [InlineData(19, 0x03)]
     [InlineData(55, 0x00)]
     [InlineData(57, 0x08)]
     [InlineData(66, 0x02)]
@@ -170,6 +207,158 @@ public sealed class DataBroadcastRecordFormatTests
         spoilt[at] = instead;
 
         Assert.Null(DataBroadcastRecordFormat.Read(spoilt));
+    }
+
+    [Theory(DisplayName = "BR-BD-005: a record of format version 2 marked with a bit it does not name is no record")]
+    [InlineData(0x04)]
+    [InlineData(0x80)]
+    public void ARecordOfVersionTwoMarkedWithABitItDoesNotNameIsNoRecord(byte marks)
+    {
+        Assert.Null(DataBroadcastRecordFormat.Read(Rewritten(VersionTwo, (19, marks))));
+        Assert.False(DataBroadcastRecordFormat.Heads(Rewritten(VersionTwo, (19, marks))));
+    }
+
+    [Fact(DisplayName = "BR-BD-005: every version of a record is found by its carousel, download, module and version without reading the others")]
+    public async Task EveryVersionIsFoundByItsCarouselDownloadModuleAndVersion()
+    {
+        DataBroadcastRecord record = Gathered();
+        byte[] written = DataBroadcastRecordFormat.Written(record);
+
+        foreach (RecordedCarousel carousel in record.Carousels)
+        {
+            foreach (ModuleVersion version in carousel.Versions)
+            {
+                using MemoryStream reading = new(written);
+
+                ModuleVersion? found = await DataBroadcastRecordFormat.FindAsync(
+                    reading,
+                    new ModuleVersionKey(carousel.Tag, carousel.DownloadId, version.ModuleId, version.Version),
+                    CancellationToken.None);
+
+                Assert.NotNull(found);
+                Assert.Equal(DataBroadcastFrames.ModulePayload(version), DataBroadcastFrames.ModulePayload(found));
+                Assert.Equal((version.FirstSeen, version.LastSeen), (found.FirstSeen, found.LastSeen));
+            }
+        }
+    }
+
+    [Theory(DisplayName = "BR-BD-005: a version the record does not hold is not found")]
+    [InlineData(Entry, 2u, 0, 1)]
+    [InlineData(Other, 1u, 0, 1)]
+    [InlineData(Entry, 1u, 0, 3)]
+    [InlineData(Entry, 1u, 4, 1)]
+    public async Task AVersionTheRecordDoesNotHoldIsNotFound(int tag, uint downloadId, int moduleId, int version)
+    {
+        using MemoryStream reading = new(DataBroadcastRecordFormat.Written(Gathered()));
+
+        Assert.Null(await DataBroadcastRecordFormat.FindAsync(reading, new ModuleVersionKey(tag, downloadId, moduleId, version), CancellationToken.None));
+    }
+
+    [Fact(DisplayName = "BR-BV-004: a version of a record of format version 1 is found")]
+    public async Task AVersionOfARecordOfVersionOneIsFound()
+    {
+        using MemoryStream reading = new(VersionOne);
+
+        ModuleVersion? found = await DataBroadcastRecordFormat.FindAsync(reading, new ModuleVersionKey(Entry, 7, 0, 1), CancellationToken.None);
+
+        Assert.Equal("a", Assert.Single(found!.Resources).Path);
+    }
+
+    [Fact(DisplayName = "BR-BD-005: a version is not found in bytes cut short before its end or in bytes that are not a record, and looking throws nothing")]
+    public async Task AVersionIsNotFoundInBytesCutShortOrThatAreNoRecord()
+    {
+        ModuleVersionKey key = new(Entry, 7, 0, 1);
+        int ends = 22 + RecordedCarousel.HeaderBytes + ModuleVersion.HeaderBytes + 11;
+
+        for (int length = 0; length < ends; length++)
+        {
+            using MemoryStream cut = new(VersionTwo, 0, length);
+
+            Assert.Null(await DataBroadcastRecordFormat.FindAsync(cut, key, CancellationToken.None));
+        }
+
+        using MemoryStream spoilt = new(Rewritten(VersionTwo, (0, 0x00)));
+        using MemoryStream unnamed = new(Rewritten(VersionTwo, (57, 0x08)));
+        using MemoryStream backwards = new(Rewritten(VersionTwo, (45, 0x00)));
+
+        Assert.Null(await DataBroadcastRecordFormat.FindAsync(spoilt, key, CancellationToken.None));
+        Assert.Null(await DataBroadcastRecordFormat.FindAsync(unnamed, key, CancellationToken.None));
+        Assert.Null(await DataBroadcastRecordFormat.FindAsync(backwards, key, CancellationToken.None));
+    }
+
+    [Fact(DisplayName = "BR-BA-001: the outline of a record read from its bytes is the outline of the record written")]
+    public async Task TheOutlineReadIsTheOutlineOfTheRecordWritten()
+    {
+        DataBroadcastRecord record = Gathered();
+        using MemoryStream reading = new(DataBroadcastRecordFormat.Written(record));
+
+        DataBroadcastOutline read = (await DataBroadcastRecordFormat.OutlineAsync(reading, CancellationToken.None))!;
+
+        Assert.Equal(Outlined(record.Outline), Outlined(read));
+        Assert.Equal(record.Events.Select(message => (message.Id, message.FiresAt)), read.Events.Select(message => (message.Id, message.FiresAt)));
+        Assert.Equal([0x01, 0x02], read.Events[1].PrivateData.ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BV-004: the outline of a record of format version 1 is read, as not opening by itself")]
+    public async Task TheOutlineOfARecordOfVersionOneIsRead()
+    {
+        using MemoryStream reading = new(VersionOne);
+
+        DataBroadcastOutline read = (await DataBroadcastRecordFormat.OutlineAsync(reading, CancellationToken.None))!;
+
+        Assert.Equal((90_000L, Entry, true, false), (read.StartsAt, read.EntryTag, read.Incomplete, read.AutoStart));
+        Assert.Equal(11, Assert.Single(Assert.Single(read.Carousels).Versions).EntityBytes);
+    }
+
+    [Fact(DisplayName = "BR-BA-001: the outline of a record is read without reading the resources of its versions")]
+    public async Task TheOutlineIsReadWithoutReadingTheResources()
+    {
+        byte[] large = new byte[4 << 20];
+        DataBroadcastRecord record = Single(new CarouselResource("large.jpg", "image/jpeg", ResourceForm.Binary, large));
+        using CountedStream reading = new(DataBroadcastRecordFormat.Written(record));
+
+        DataBroadcastOutline read = (await DataBroadcastRecordFormat.OutlineAsync(reading, CancellationToken.None))!;
+
+        Assert.Equal(record.Carousels[0].Versions[0].Bytes - ModuleVersion.HeaderBytes, Assert.Single(Assert.Single(read.Carousels).Versions).EntityBytes);
+        Assert.InRange(reading.BytesRead, 1, 1024);
+    }
+
+    [Fact(DisplayName = "BR-BA-001: the outline of a record whose resources are spoilt is still read, though the record is not")]
+    public async Task TheOutlineOfARecordWhoseResourcesAreSpoiltIsStillRead()
+    {
+        byte[] spoilt = Rewritten(VersionTwo, (55, 0x7F));
+        using MemoryStream reading = new(spoilt);
+
+        Assert.NotNull(await DataBroadcastRecordFormat.OutlineAsync(reading, CancellationToken.None));
+        Assert.Null(DataBroadcastRecordFormat.Read(spoilt));
+    }
+
+    [Fact(DisplayName = "BR-BD-005: an outline is not read from bytes cut short, carrying more, or that are not a record, and reading throws nothing")]
+    public async Task AnOutlineIsNotReadFromBytesThatAreNoRecord()
+    {
+        for (int length = 0; length < VersionTwo.Length; length++)
+        {
+            using MemoryStream cut = new(VersionTwo, 0, length);
+
+            Assert.Null(await DataBroadcastRecordFormat.OutlineAsync(cut, CancellationToken.None));
+        }
+
+        byte[][] spoilt =
+        [
+            [.. VersionTwo, 0x00],
+            Rewritten(VersionTwo, (0, 0x00)),
+            Rewritten(VersionTwo, (51, 0x0C)),
+            Rewritten(VersionTwo, (45, 0x00)),
+            Rewritten(VersionTwo, (66, 0x02)),
+            Rewritten(VersionTwo, (68, 0x10)),
+        ];
+
+        foreach (byte[] bytes in spoilt)
+        {
+            using MemoryStream reading = new(bytes);
+
+            Assert.Null(await DataBroadcastRecordFormat.OutlineAsync(reading, CancellationToken.None));
+        }
     }
 
     [Fact(DisplayName = "BR-BD-005: a version last seen before it was first seen is no record")]
@@ -209,6 +398,47 @@ public sealed class DataBroadcastRecordFormatTests
             ],
             true);
 
+    private static string[] Outlined(DataBroadcastOutline outline)
+        => [
+            $"{outline.StartsAt} {outline.EntryTag} {outline.Incomplete} {outline.AutoStart}",
+            .. outline.Carousels.SelectMany(carousel => carousel.Versions.Select(version =>
+                $"{carousel.Tag}/{carousel.DownloadId} {version.ModuleId}/{version.Version} {version.FirstSeen}-{version.LastSeen} {version.EntityBytes}")),
+        ];
+
+    private static byte[] Rewritten(byte[] bytes, params (int At, byte Instead)[] changes)
+    {
+        byte[] rewritten = [.. bytes];
+
+        foreach ((int at, byte instead) in changes)
+        {
+            rewritten[at] = instead;
+        }
+
+        return rewritten;
+    }
+
     private static DataBroadcastRecord Single(CarouselResource resource)
         => new(0, Entry, [new RecordedCarousel(Entry, 1, [new ModuleVersion(Entry, 0, 1, 0, 0, [resource])])], [], false);
+
+    private sealed class CountedStream(byte[] bytes) : MemoryStream(bytes)
+    {
+        public long BytesRead { get; private set; }
+
+        public override int Read(byte[] buffer, int offset, int count) => Counted(base.Read(buffer, offset, count));
+
+        public override int Read(Span<byte> buffer) => Counted(base.Read(buffer));
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            => Counted(await base.ReadAsync(buffer, cancellationToken));
+
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            => Counted(await base.ReadAsync(buffer, offset, count, cancellationToken));
+
+        private int Counted(int read)
+        {
+            BytesRead += read;
+
+            return read;
+        }
+    }
 }

@@ -45,6 +45,18 @@ public sealed record DataBroadcastProgress
 
     public bool IsRetryDue => State is DataBroadcastState.Failed && Attempts < TriesAtMost;
 
+    /// <summary>
+    /// Whether the record can be played: ready while it is made and <paramref name="kept"/>, coming while it is being
+    /// taken, tried again or taken again for not being kept, and none otherwise.
+    /// </summary>
+    public DataBroadcastStanding StandingWith(bool kept) => State switch
+    {
+        DataBroadcastState.Made => kept ? DataBroadcastStanding.Ready : DataBroadcastStanding.Coming,
+        DataBroadcastState.Coming => DataBroadcastStanding.Coming,
+        DataBroadcastState.Failed when IsRetryDue => DataBroadcastStanding.Coming,
+        _ => DataBroadcastStanding.None,
+    };
+
     public DataBroadcastProgress RecordingEnded()
     {
         Expect(DataBroadcastState.None, "A record comes due once, when the recording ends.");
