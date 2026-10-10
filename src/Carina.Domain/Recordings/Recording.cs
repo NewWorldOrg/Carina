@@ -1,5 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.DataBroadcast;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 
@@ -138,6 +139,26 @@ public sealed class Recording
     /// </summary>
     public int CaptionAttempts { get; private set; }
 
+    public DataBroadcastState DataBroadcastState { get; private set; } = DataBroadcastState.None;
+
+    /// <summary>
+    /// When the data broadcast was last taken from the recording's file, made, found missing or failed, or null
+    /// while its record is not yet due or is coming.
+    /// </summary>
+    public DateTime? DataBroadcastMadeAt { get; private set; }
+
+    /// <summary>
+    /// How many modules the record of the data broadcast holds, or null unless it is made.
+    /// </summary>
+    public int? DataBroadcastModules { get; private set; }
+
+    /// <summary>
+    /// How many times in all taking the data broadcast has failed.
+    /// </summary>
+    public int DataBroadcastAttempts { get; private set; }
+
+    public DataBroadcastProgress DataBroadcast => new(DataBroadcastState, DataBroadcastAttempts, DataBroadcastModules);
+
     public DateTime? MeasuredUpdatedAt { get; private set; }
 
     public string SnapshotName { get; private set; } = string.Empty;
@@ -274,7 +295,9 @@ public sealed class Recording
         CaptionState captionState = CaptionState.Pending,
         DateTime? captionsMadeAt = null,
         int? captionPictures = null,
-        int captionAttempts = 0)
+        int captionAttempts = 0,
+        DataBroadcastProgress? dataBroadcast = null,
+        DateTime? dataBroadcastMadeAt = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -399,6 +422,10 @@ public sealed class Recording
         RefuseCaptionsThatDoNotAddUp(captionState, captionPictures);
         RefuseCaptionsKeptThatDoNotAddUp(outcome, captionState, captionsMadeAt, captionAttempts);
 
+        DataBroadcastProgress progress = dataBroadcast ?? DueOnceEnded(outcome);
+
+        RefuseADataBroadcastThatDoesNotAddUp(outcome, progress, dataBroadcastMadeAt);
+
         return new Recording
         {
             Id = id,
@@ -453,6 +480,10 @@ public sealed class Recording
             CaptionsMadeAt = UtcTimes.Optional(captionsMadeAt, nameof(captionsMadeAt)),
             CaptionPictures = captionPictures,
             CaptionAttempts = captionAttempts,
+            DataBroadcastState = progress.State,
+            DataBroadcastMadeAt = UtcTimes.Optional(dataBroadcastMadeAt, nameof(dataBroadcastMadeAt)),
+            DataBroadcastModules = progress.Modules,
+            DataBroadcastAttempts = progress.Attempts,
             EncodeWhenRecorded = encodeWhenRecorded,
             Interruptions = interruptions,
             Gaps = gaps ?? [],
@@ -548,6 +579,11 @@ public sealed class Recording
         RefuseATimeBeforeTheRecordingBegan(StoppedAtActual!.Value, descrambled, nameof(at));
 
         DescrambledAt = descrambled;
+
+        if (DataBroadcastState is DataBroadcastState.Made or DataBroadcastState.Missing or DataBroadcastState.Failed)
+        {
+            Keep(DataBroadcast.Descrambled(), null);
+        }
     }
 
     /// <summary>
@@ -577,6 +613,29 @@ public sealed class Recording
         CaptionsMadeAt = captionState is CaptionState.Pending ? null : settled;
         CaptionAttempts = captionState is CaptionState.Failed ? CaptionAttempts + 1 : 0;
     }
+
+    /// <summary>
+    /// Keeps that the data broadcast coming from the recording's file was taken: made with the modules its record
+    /// holds, or missing when it holds none.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The record is not coming.</exception>
+    /// <exception cref="ArgumentException"><paramref name="at"/> is not UTC or is before the recording began.</exception>
+    public void DataBroadcastTaken(int modules, DateTime at) => Keep(DataBroadcast.Taken(modules), Settled(at));
+
+    /// <summary>
+    /// Keeps that taking the data broadcast coming from the recording's file failed once more.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The record is not coming.</exception>
+    /// <exception cref="ArgumentException"><paramref name="at"/> is not UTC or is before the recording began.</exception>
+    public void DataBroadcastFailed(DateTime at) => Keep(DataBroadcast.Failed(), Settled(at));
+
+    /// <summary>
+    /// Puts the record of the data broadcast back to coming: one that failed with tries left, or one that is made
+    /// and no longer kept.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The record neither failed with tries left nor is made.</exception>
+    public void DataBroadcastAgain()
+        => Keep(DataBroadcastState is DataBroadcastState.Made ? DataBroadcast.Lost() : DataBroadcast.Retried(), null);
 
     public void Acquire(TunerDeviceId tunerDeviceId)
     {
@@ -787,6 +846,11 @@ public sealed class Recording
         FileSizeObserved = fileSizeObserved;
         ObservedAt = stopped;
         StoppedAtActual = stopped;
+
+        if (DataBroadcastState is DataBroadcastState.None)
+        {
+            Keep(DataBroadcast.RecordingEnded(), null);
+        }
     }
 
     private static void RefuseAnUnreachableOutcome(
@@ -960,6 +1024,46 @@ public sealed class Recording
                 $"A picture that is {thumbnailState} was not stopped by anything, so it names no fault.",
                 nameof(thumbnailFault));
         }
+    }
+
+    private static DataBroadcastProgress DueOnceEnded(RecordingOutcome? outcome)
+        => outcome is null ? DataBroadcastProgress.NotYet : DataBroadcastProgress.NotYet.RecordingEnded();
+
+    private static void RefuseADataBroadcastThatDoesNotAddUp(
+        RecordingOutcome? outcome,
+        DataBroadcastProgress progress,
+        DateTime? madeAt)
+    {
+        if (progress.State is not DataBroadcastState.None && outcome is null)
+        {
+            throw new ArgumentException(
+                "The data broadcast is taken from a recording once it has ended, never while it is being written.",
+                nameof(outcome));
+        }
+
+        if (progress.State is DataBroadcastState.None or DataBroadcastState.Coming != madeAt is null)
+        {
+            throw new ArgumentException(
+                "A record of the data broadcast that was taken, found missing or failed says when, and one not yet due or coming does not.",
+                nameof(madeAt));
+        }
+    }
+
+    private DateTime Settled(DateTime at)
+    {
+        DateTime settled = UtcTimes.Required(at, nameof(at));
+
+        RefuseATimeBeforeTheRecordingBegan(StartedAtActual, settled, nameof(at));
+
+        return settled;
+    }
+
+    private void Keep(DataBroadcastProgress progress, DateTime? madeAt)
+    {
+        DataBroadcastState = progress.State;
+        DataBroadcastModules = progress.Modules;
+        DataBroadcastAttempts = progress.Attempts;
+        DataBroadcastMadeAt = madeAt;
     }
 
     private static void RefuseCaptionsThatDoNotAddUp(CaptionState captionState, int? captionPictures)

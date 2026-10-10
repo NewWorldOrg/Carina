@@ -279,17 +279,21 @@ walks past it.
   that matches, so it grows with the archive. Nothing caps it yet; an estimated
   total, cursor paging, or a count that stops at a ceiling would.
 - **A recording that has ended is frozen except for its picture, its captions,
-  what throwing it away left behind and when it was descrambled — as long as it
-  is reached through the aggregate's own methods.** Every public method on
-  `Recording` but four refuses once an outcome is set: `Illustrate` moves the two
-  thumbnail columns; `Caption` moves the four caption columns, and refuses
-  anything but waiting while the recording is still being written; `Erased`
-  moves the two columns that say a deletion left files on disk (a deletion that
-  took everything removes the row); `Descrambled` moves `descrambled_at`, only on
-  a recording that ended with `ScramblingUnresolved` and has not been descrambled
-  yet, leaving the outcome as written. Reflection tests assert the whole set of
-  methods, that no property has a public setter, and that the only static entry
-  points are the two that make a recording. The change tracker, raw SQL and
+  the record of its data broadcast, what throwing it away left behind and when it
+  was descrambled — as long as it is reached through the aggregate's own
+  methods.** Every public method on `Recording` but seven refuses once an outcome
+  is set: `Illustrate` moves the two thumbnail columns; `Caption` moves the four
+  caption columns, and refuses anything but waiting while the recording is still
+  being written; `DataBroadcastTaken`, `DataBroadcastFailed` and
+  `DataBroadcastAgain` move the four data broadcast columns, which `Settle` puts
+  to coming as the recording ends; `Erased` moves the two columns that say a
+  deletion left files on disk (a deletion that took everything removes the row);
+  `Descrambled` moves `descrambled_at`, only on a recording that ended with
+  `ScramblingUnresolved` and has not been descrambled yet, leaving the outcome as
+  written, and puts a data broadcast record already taken back to coming.
+  Reflection tests assert the whole set of methods, that no property has a public
+  setter, and that the only static entry points are the two that make a
+  recording. The change tracker, raw SQL and
   reflection reach past the aggregate, and only the trip wires below look for
   those.
 

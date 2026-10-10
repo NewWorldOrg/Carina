@@ -86,6 +86,23 @@ public sealed class DataBroadcastProgressTests
         Assert.False(again.Failed().IsRetryDue);
     }
 
+    [Fact(DisplayName = "BR-BS-001: a record that is made and no longer kept comes again with no failures counted")]
+    public void ARecordMadeAndNoLongerKeptComesAgain()
+    {
+        DataBroadcastProgress made = DataBroadcastProgress.NotYet.RecordingEnded().Failed().Retried().Taken(4);
+
+        Assert.Equal((DataBroadcastState.Coming, 0, (int?)null), Of(made.Lost()));
+    }
+
+    [Fact]
+    public void OnlyARecordThatIsMadeIsLost()
+    {
+        Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.Lost());
+        Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.RecordingEnded().Lost());
+        Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.RecordingEnded().Taken(0).Lost());
+        Assert.Throws<InvalidOperationException>(() => DataBroadcastProgress.NotYet.RecordingEnded().Failed().Lost());
+    }
+
     [Fact]
     public void ARecordNotYetTakenIsNotTakenAgain()
     {

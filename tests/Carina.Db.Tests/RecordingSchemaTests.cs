@@ -633,6 +633,77 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await Execute(connection, $"UPDATE recording SET caption_state = 'Failed', captions_made_at = {Ends}, caption_attempts = 3, recording_outcome = 'Failed', file_size_observed = 0, observed_at = {Ends}, stopped_at_actual = {Ends}, outcome_detail = {OneFault} WHERE id = '{id}'");
     }
 
+    [Fact(DisplayName = "BR-BS-001: a row written while the recording is being written, saying nothing about its data broadcast, has no record due")]
+    public async Task ARowWrittenWithoutSayingAnythingAboutTheDataBroadcastHasNoRecordDue()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, 40081);
+
+        Assert.Equal(
+            "None|0|true|true",
+            await Scalar(
+                connection,
+                $"SELECT data_broadcast_state || '|' || data_broadcast_attempts || '|' || (data_broadcast_made_at IS NULL) || '|' || (data_broadcast_modules IS NULL) FROM recording WHERE id = '{id}'"));
+    }
+
+    [Theory(DisplayName = "BR-BS-001: a record of the data broadcast that does not add up is refused")]
+    [InlineData(40082, "'Made'", Ends, "NULL", 0)]
+    [InlineData(40083, "'Made'", Ends, "0", 0)]
+    [InlineData(40084, "'Made'", "NULL", "3", 0)]
+    [InlineData(40085, "'Made'", Ends, "3", 1)]
+    [InlineData(40086, "'Missing'", Ends, "3", 0)]
+    [InlineData(40087, "'Missing'", "NULL", "NULL", 0)]
+    [InlineData(40088, "'Missing'", Ends, "NULL", 2)]
+    [InlineData(40089, "'Failed'", Ends, "NULL", 0)]
+    [InlineData(40090, "'Failed'", "NULL", "NULL", 1)]
+    [InlineData(40091, "'Coming'", Ends, "NULL", 0)]
+    [InlineData(40092, "'Coming'", "NULL", "3", 0)]
+    [InlineData(40093, "'Coming'", "NULL", "NULL", -1)]
+    [InlineData(40094, "'None'", "NULL", "NULL", 1)]
+    [InlineData(40095, "'Taking'", "NULL", "NULL", 0)]
+    public async Task ARecordOfTheDataBroadcastThatDoesNotAddUpIsRefused(int networkId, string state, string madeAt, string modules, int attempts)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, networkId, outcome: "'Failed'", size: "0", observedAt: Ends, stoppedAt: Ends, detail: OneFault);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => Execute(
+            connection,
+            $"UPDATE recording SET data_broadcast_state = {state}, data_broadcast_made_at = {madeAt}, data_broadcast_modules = {modules}, data_broadcast_attempts = {attempts} WHERE id = '{id}'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_data_broadcast", refusal.ConstraintName);
+    }
+
+    [Theory(DisplayName = "BR-BS-001: every state the record of the data broadcast moves through is held")]
+    [InlineData(40096, "'Coming'", "NULL", "NULL", 0)]
+    [InlineData(40097, "'Coming'", "NULL", "NULL", 2)]
+    [InlineData(40098, "'Made'", Ends, "36", 0)]
+    [InlineData(40099, "'Missing'", Ends, "NULL", 0)]
+    [InlineData(40100, "'Failed'", Ends, "NULL", 3)]
+    [InlineData(40101, "'None'", "NULL", "NULL", 0)]
+    public async Task EveryStateTheRecordMovesThroughIsHeld(int networkId, string state, string madeAt, string modules, int attempts)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, networkId, outcome: "'Failed'", size: "0", observedAt: Ends, stoppedAt: Ends, detail: OneFault);
+
+        await Execute(
+            connection,
+            $"UPDATE recording SET data_broadcast_state = {state}, data_broadcast_made_at = {madeAt}, data_broadcast_modules = {modules}, data_broadcast_attempts = {attempts} WHERE id = '{id}'");
+    }
+
+    [Fact(DisplayName = "BR-BS-001: the record of the data broadcast is never taken from a recording still being written")]
+    public async Task TheRecordIsNeverTakenFromARecordingStillBeingWritten()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, 40102);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => Execute(
+            connection,
+            $"UPDATE recording SET data_broadcast_state = 'Coming' WHERE id = '{id}'"));
+
+        Assert.Equal("ck_recording_data_broadcast", refusal.ConstraintName);
+    }
+
     [Fact]
     public async Task AThumbnailStateTheLedgerDoesNotHoldIsRefused()
     {
