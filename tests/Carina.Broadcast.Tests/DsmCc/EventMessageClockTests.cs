@@ -135,6 +135,30 @@ public sealed class EventMessageClockTests
         Assert.Equal(ReceivedAt + 180_000, Fired(next).Single().FiresAt);
     }
 
+    [Fact(DisplayName = "BR-BD-003: a section that is not yet current fires nothing and moves no reference")]
+    public void ASectionThatIsNotYetCurrentFiresNothingAndMovesNoReference()
+    {
+        var clock = new EventMessageClock();
+        clock.Push(new StreamDescriptorWriter { Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 0) }, ReceivedAt);
+
+        IReadOnlyList<EventMessageOutcome> next = clock.Push(
+            new StreamDescriptorWriter
+            {
+                EventMessageGroupId = SomeGroup,
+                IsCurrent = false,
+                Descriptors = DescriptorWriter.Loop(
+                    StreamDescriptorWriter.NptReference(stc: 9_000, npt: 0),
+                    StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Immediate, 0, 0, 1)),
+            },
+            ReceivedAt);
+        IReadOnlyList<EventMessageOutcome> current = clock.Push(
+            Section(0, StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 10, 0, 2)),
+            ReceivedAt);
+
+        Assert.Empty(next);
+        Assert.Equal(1_010, Fired(current).Single().FiresAt);
+    }
+
     [Fact(DisplayName = "BR-BD-003: a time mode other than immediate or NPT is discarded")]
     public void ATimeModeOtherThanImmediateOrNptIsDiscarded()
     {

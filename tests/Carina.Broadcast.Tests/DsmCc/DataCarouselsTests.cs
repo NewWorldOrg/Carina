@@ -84,6 +84,34 @@ public sealed class DataCarouselsTests
         Assert.Equal(EntryTag, unreadable.ComponentTag);
     }
 
+    [Fact(DisplayName = "BR-BV-003: an indication or a block that is not yet current is left alone")]
+    public void AnIndicationOrABlockThatIsNotYetCurrentIsLeftAlone()
+    {
+        DataCarousels carousels = new();
+        DiiWriter next = new() { Modules = [DiiModule.Of(1, Png.Length, 0)] };
+        SectionWriter dii = next.ToSection();
+        SectionWriter ddb = DsmCcWriter.Blocks(1, 1, 0, Png, 64)[0];
+
+        IReadOnlyList<CarouselChange> indicated = carousels.Push(EntryTag, CarriedSection.Of(new SectionWriter
+        {
+            TableId = dii.TableId,
+            TableIdExtension = dii.TableIdExtension,
+            IsCurrent = false,
+            Body = dii.Body,
+        }));
+        carousels.Push(EntryTag, CarriedSection.Of(Indication(1, DiiModule.Of(1, Png.Length, 0))));
+        IReadOnlyList<CarouselChange> delivered = carousels.Push(EntryTag, CarriedSection.Of(new SectionWriter
+        {
+            TableId = ddb.TableId,
+            TableIdExtension = ddb.TableIdExtension,
+            IsCurrent = false,
+            Body = ddb.Body,
+        }));
+
+        Assert.Empty(indicated);
+        Assert.Empty(delivered);
+    }
+
     [Fact(DisplayName = "BR-BV-003: each component tag is a carousel of its own")]
     public void EachComponentTagIsACarouselOfItsOwn()
     {

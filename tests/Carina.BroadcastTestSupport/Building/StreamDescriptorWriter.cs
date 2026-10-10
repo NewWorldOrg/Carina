@@ -18,6 +18,8 @@ public sealed class StreamDescriptorWriter
 
     public int VersionNumber { get; init; }
 
+    public bool IsCurrent { get; init; } = true;
+
     public byte[] Descriptors { get; init; } = [];
 
     public SectionWriter ToSection()
@@ -26,6 +28,7 @@ public sealed class StreamDescriptorWriter
             TableId = DsmCcWriter.StreamDescriptorsTableId,
             TableIdExtension = ((DataEventId & 0x0F) << 12) | (EventMessageGroupId & 0x0FFF),
             VersionNumber = VersionNumber,
+            IsCurrent = IsCurrent,
             Body = Descriptors,
         };
 

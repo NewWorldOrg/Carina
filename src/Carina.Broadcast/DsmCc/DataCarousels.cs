@@ -26,6 +26,11 @@ public sealed class DataCarousels
     {
         ArgumentNullException.ThrowIfNull(section);
 
+        if (!section.IsCurrent)
+        {
+            return Nothing;
+        }
+
         return section.TableId switch
         {
             DownloadInfoIndication.TableId => Indicate(componentTag, DownloadInfoIndication.Read(section)),

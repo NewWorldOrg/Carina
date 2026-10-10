@@ -16,6 +16,7 @@ public sealed class StreamDescriptorSection
     {
         TableIdExtension = section.TableIdExtension;
         VersionNumber = section.VersionNumber;
+        IsCurrent = section.IsCurrent;
         Descriptors = descriptors;
         Events = events;
         NptReferences = nptReferences;
@@ -28,6 +29,8 @@ public sealed class StreamDescriptorSection
     public int EventMessageGroupId => TableIdExtension & 0x0FFF;
 
     public int VersionNumber { get; }
+
+    public bool IsCurrent { get; }
 
     public IReadOnlyList<Descriptor> Descriptors { get; }
 

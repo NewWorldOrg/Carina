@@ -15,6 +15,11 @@ public sealed class EventMessageClock
     {
         ArgumentNullException.ThrowIfNull(section);
 
+        if (!section.IsCurrent)
+        {
+            return [];
+        }
+
         var outcomes = new List<EventMessageOutcome>();
 
         foreach (NptReference arrived in section.NptReferences)
