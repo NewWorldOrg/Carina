@@ -14,6 +14,8 @@ public sealed class CarouselState
 
     private DataBroadcastEntry? entry;
 
+    private IReadOnlyList<int> tags = [];
+
     public bool IsAbsent { get; private set; }
 
     public CarouselCatalog? Catalog => entry is null ? null : CatalogOf(entry);
@@ -27,7 +29,7 @@ public sealed class CarouselState
 
         return signal switch
         {
-            CarouselSignal.Carried carried => Carry(carried.Entry),
+            CarouselSignal.Carried carried => Carry(carried.Entry, carried.Tags),
             CarouselSignal.NotCarried => Withdraw(),
             CarouselSignal.CatalogUpdated updated => List(updated, at),
             CarouselSignal.ModuleCompleted completed => Complete(completed, at),
@@ -37,15 +39,23 @@ public sealed class CarouselState
         };
     }
 
-    private IReadOnlyList<CarouselDelta> Carry(DataBroadcastEntry carried)
+    private IReadOnlyList<CarouselDelta> Carry(DataBroadcastEntry carried, IReadOnlyList<int> listed)
     {
-        if (carried == entry)
+        if (carried == entry && listed.SequenceEqual(tags))
         {
             return Nothing;
         }
 
         entry = carried;
+        tags = listed;
         IsAbsent = false;
+
+        foreach (int gone in carousels.Keys.Where(tag => !listed.Contains(tag)).ToArray())
+        {
+            carousels.Remove(gone);
+        }
+
+        dropped.RemoveWhere(seen => !listed.Contains(seen.Tag));
 
         return Changed();
     }
@@ -67,7 +77,7 @@ public sealed class CarouselState
 
     private IReadOnlyList<CarouselDelta> List(CarouselSignal.CatalogUpdated updated, long at)
     {
-        if (IsAbsent)
+        if (IsAbsent || (entry is not null && !tags.Contains(updated.Tag)))
         {
             return Nothing;
         }

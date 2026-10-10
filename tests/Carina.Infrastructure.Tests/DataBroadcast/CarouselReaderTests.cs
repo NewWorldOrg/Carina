@@ -26,9 +26,20 @@ public sealed class CarouselReaderTests
 
         CarouselSignalRead read = Assert.Single(reader.Read(new CarouselBroadcast().Associated().Mapped(autoStart: true).At(Second).Bytes));
 
-        DataBroadcastEntry entry = Assert.IsType<CarouselSignal.Carried>(read.Signal).Entry;
-        Assert.Equal(new DataBroadcastEntry(Service, CarouselBroadcast.EntryTag, true), entry);
+        CarouselSignal.Carried carried = Assert.IsType<CarouselSignal.Carried>(read.Signal);
+        Assert.Equal(new DataBroadcastEntry(Service, CarouselBroadcast.EntryTag, true), carried.Entry);
+        Assert.Equal([CarouselBroadcast.EntryTag], carried.Tags);
         Assert.Equal(Second, read.At);
+    }
+
+    [Fact(DisplayName = "BR-BS-002: a service carrying more than one data stream is read as carried with every stream's tag")]
+    public void AServiceCarryingMoreThanOneDataStreamIsReadWithEveryTag()
+    {
+        CarouselReader reader = new(Service);
+
+        CarouselSignalRead read = Assert.Single(reader.Read(new CarouselBroadcast().Associated().Mapped(withAnotherCarousel: true).At(Second).Bytes));
+
+        Assert.Equal([CarouselBroadcast.EntryTag, CarouselBroadcast.OtherTag], Assert.IsType<CarouselSignal.Carried>(read.Signal).Tags);
     }
 
     [Fact(DisplayName = "BR-BD-004: a service with no data stream is read as carrying none")]

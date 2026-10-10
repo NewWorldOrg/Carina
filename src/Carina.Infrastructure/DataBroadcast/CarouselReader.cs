@@ -71,7 +71,9 @@ public sealed class CarouselReader
 
     private CarouselSignal Mapped(DataBroadcastService mapped)
         => mapped.Entry is { } entry
-            ? new CarouselSignal.Carried(new DataBroadcastEntry(service, entry.ComponentTag, entry.Bxml?.AutoStart ?? false))
+            ? new CarouselSignal.Carried(
+                new DataBroadcastEntry(service, entry.ComponentTag, entry.Bxml?.AutoStart ?? false),
+                [.. mapped.Streams.Select(stream => stream.ComponentTag).Distinct()])
             : new CarouselSignal.NotCarried();
 
     private CarouselSignal? Changed(CarouselChange change)

@@ -155,6 +155,30 @@ public sealed class DataBroadcastSessionTests
         Assert.Equal(3, fanout.Kept.Count);
     }
 
+    [Fact(DisplayName = "BR-BS-002: a new programme map that no longer lists a data stream drops its carousel from what stands")]
+    public void ANewMapThatNoLongerListsADataStreamDropsItsCarousel()
+    {
+        CarouselModule other = new(0x0003, 1, CarouselBroadcast.Resource("other.bml", EntityWriter.BmlType, Encoding.ASCII.GetBytes("<bml/>")));
+        DataBroadcastSession session = Session();
+        session.Read(new CarouselBroadcast()
+            .Associated()
+            .Mapped(withAnotherCarousel: true)
+            .At(Second)
+            .Listed(1, Startup)
+            .Delivered(Startup)
+            .Listed(CarouselBroadcast.OtherCarouselPid, 1, other)
+            .Delivered(CarouselBroadcast.OtherCarouselPid, other)
+            .Bytes);
+
+        Assert.Equal([0, 3], session.Standing.Skip(1).Select(frame => SideChannelReading.Module(frame).ModuleId));
+
+        session.Read(new CarouselBroadcast().Mapped(version: 1).At(2 * Second).Bytes);
+
+        IReadOnlyDictionary<string, object> catalog = SideChannelReading.Catalog(session.Standing[0]);
+        Assert.Equal([(ulong)CarouselBroadcast.EntryTag], ((List<object>)catalog["carousels"]).Select(carousel => ((Dictionary<string, object>)carousel)["tag"]));
+        Assert.Equal([0], session.Standing.Skip(1).Select(frame => SideChannelReading.Module(frame).ModuleId));
+    }
+
     [Fact]
     public void WhatIsWrittenIntoTheSeatIsRead()
     {

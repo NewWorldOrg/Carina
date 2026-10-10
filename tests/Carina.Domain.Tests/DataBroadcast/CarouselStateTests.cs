@@ -54,6 +54,46 @@ public sealed class CarouselStateTests
         Assert.Empty(state.Apply(new CarouselSignal.EventTimed(Carousels.Event(1, 40)), 40));
     }
 
+    [Fact(DisplayName = "BR-BS-002: a carousel whose tag the programme map no longer lists is dropped with its modules")]
+    public void ACarouselWhoseTagTheMapNoLongerListsIsDropped()
+    {
+        CarouselState state = new();
+        state.Apply(Carousels.Carried(), 0);
+        state.Apply(Carousels.Listing(Carousels.Entry, (0, 1)), 0);
+        state.Apply(Carousels.Listing(Carousels.Other, (5, 1)), 0);
+        state.Apply(Carousels.Completed(Carousels.Entry, 0, 1), 10);
+        state.Apply(Carousels.Completed(Carousels.Other, 5, 1), 10);
+
+        IReadOnlyList<CarouselDelta> deltas = state.Apply(new CarouselSignal.Carried(Carousels.EntryOf(), [Carousels.Entry]), 20);
+
+        CarouselCatalog catalog = Assert.IsType<CarouselDelta.CatalogChanged>(Assert.Single(deltas)).Catalog;
+        Assert.Equal([Carousels.Entry], catalog.Carousels.Select(carousel => carousel.Tag));
+        Assert.Equal([(Carousels.Entry, 0)], state.Modules.Select(module => (module.Tag, module.ModuleId)));
+        Assert.Empty(state.Apply(Carousels.Listing(Carousels.Other, (5, 1)), 30));
+    }
+
+    [Fact]
+    public void TheSameEntryWithTheSameTagsInAnotherOrderIsAChangeOfTheMapButKeepsEveryCarousel()
+    {
+        CarouselState state = new();
+        state.Apply(Carousels.Carried(), 0);
+        state.Apply(Carousels.Listing(Carousels.Other, (5, 1)), 0);
+
+        IReadOnlyList<CarouselDelta> deltas = state.Apply(new CarouselSignal.Carried(Carousels.EntryOf(), [Carousels.Other, Carousels.Entry]), 10);
+
+        Assert.Equal([Carousels.Other], Assert.IsType<CarouselDelta.CatalogChanged>(Assert.Single(deltas)).Catalog.Carousels.Select(carousel => carousel.Tag));
+    }
+
+    [Fact]
+    public void ACarriedMapListsTheEntrysTagOnceAmongTheOthers()
+    {
+        Assert.Throws<ArgumentException>(() => new CarouselSignal.Carried(Carousels.EntryOf(), [Carousels.Other]));
+        Assert.Throws<ArgumentException>(() => new CarouselSignal.Carried(Carousels.EntryOf(), [Carousels.Entry, Carousels.Entry]));
+        Assert.Equal(
+            new CarouselSignal.Carried(Carousels.EntryOf(), [Carousels.Entry]),
+            new CarouselSignal.Carried(Carousels.EntryOf(), [Carousels.Entry]));
+    }
+
     [Fact(DisplayName = "BR-BS-002: the catalog lists the modules of the download info, none of them arrived yet")]
     public void TheCatalogListsWhatTheDownloadInfoListsBeforeAnyModuleArrives()
     {
