@@ -137,7 +137,7 @@ public sealed class CarouselState
         {
             Tag = tag;
             DownloadId = downloadId;
-            Listed = listed;
+            Listed = [.. listed];
         }
 
         public int Tag { get; }

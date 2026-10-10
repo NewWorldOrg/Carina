@@ -20,7 +20,7 @@ public sealed record ModuleVersion
         Version = CarouselNumbers.Version(version, nameof(version));
         FirstSeen = firstSeen;
         LastSeen = lastSeen;
-        Resources = resources;
+        Resources = [.. resources];
     }
 
     public int Tag { get; }

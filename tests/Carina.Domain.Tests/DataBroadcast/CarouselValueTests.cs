@@ -75,4 +75,15 @@ public sealed class CarouselValueTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new CarouselSignal.Dropped(0x40, (CarouselDropReason)0));
     }
+
+    [Fact]
+    public void AVersionKeepsItsOwnCopyOfItsResources()
+    {
+        List<CarouselResource> resources = [Carousels.Resource("startup.bml")];
+        ModuleVersion version = new(0x40, 0, 0, 0, 0, resources);
+
+        resources.Clear();
+
+        Assert.Single(version.Resources);
+    }
 }

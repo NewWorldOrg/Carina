@@ -288,4 +288,17 @@ public sealed class CarouselStateTests
 
         Assert.Empty(state.Apply(new CarouselSignal.Dropped(Carousels.Other, CarouselDropReason.TotalTooLarge), 10));
     }
+
+    [Fact]
+    public void TheStateKeepsItsOwnCopyOfAListing()
+    {
+        CarouselState state = new();
+        state.Apply(Carousels.Carried(), 0);
+        List<ListedModule> listed = [new ListedModule(0, 1, 100)];
+        state.Apply(new CarouselSignal.CatalogUpdated(Carousels.Entry, 1, listed, []), 0);
+
+        listed.Clear();
+
+        Assert.Single(Assert.Single(state.Catalog!.Carousels).Modules);
+    }
 }
