@@ -16,19 +16,24 @@ internal sealed class MimeHeader
     private const byte CarriageReturn = (byte)'\r';
 
     private readonly Dictionary<string, string> fields;
+    private readonly HashSet<string> repeated;
 
-    private MimeHeader(Dictionary<string, string> fields)
+    private MimeHeader(Dictionary<string, string> fields, HashSet<string> repeated)
     {
         this.fields = fields;
+        this.repeated = repeated;
     }
 
     public string? this[string name] => fields.GetValueOrDefault(name);
+
+    public bool Repeats(string name) => repeated.Contains(name);
 
     public static bool TryRead(ReadOnlySpan<byte> entity, [NotNullWhen(true)] out MimeHeader? header, out int bodyStart)
     {
         header = null;
         bodyStart = 0;
         var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var repeated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? last = null;
         int at = 0;
 
@@ -36,13 +41,13 @@ internal sealed class MimeHeader
         {
             if (line.IsEmpty)
             {
-                header = new MimeHeader(fields);
+                header = new MimeHeader(fields, repeated);
                 bodyStart = at;
 
                 return true;
             }
 
-            if (!TryTakeField(line, fields, ref last))
+            if (!TryTakeField(line, fields, repeated, ref last))
             {
                 return false;
             }
@@ -87,7 +92,7 @@ internal sealed class MimeHeader
         return true;
     }
 
-    private static bool TryTakeField(ReadOnlySpan<byte> line, Dictionary<string, string> fields, ref string? last)
+    private static bool TryTakeField(ReadOnlySpan<byte> line, Dictionary<string, string> fields, HashSet<string> repeated, ref string? last)
     {
         if (line[0] is (byte)' ' or (byte)'\t')
         {
@@ -114,6 +119,11 @@ internal sealed class MimeHeader
         string name = Encoding.Latin1.GetString(line[..colon]);
 
         last = fields.TryAdd(name, Encoding.Latin1.GetString(line[(colon + 1)..]).Trim()) ? name : RepeatedField;
+
+        if (last == RepeatedField)
+        {
+            repeated.Add(name);
+        }
 
         return true;
     }

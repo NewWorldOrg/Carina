@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Carina.Broadcast.DsmCc;
@@ -11,7 +12,7 @@ internal static class ModuleEntity
         MimeHeader? header = null;
         int start = 0;
 
-        if (MimeHeader.StartsWithField(entity.Span) && !MimeHeader.TryRead(entity.Span, out header, out start))
+        if (MimeHeader.StartsWithField(entity.Span) && !TryReadHeader(entity.Span, out header, out start))
         {
             return Malformed;
         }
@@ -35,6 +36,7 @@ internal static class ModuleEntity
     {
         ReadOnlySpan<byte> span = entity.Span;
         var parts = new List<ModuleResource>();
+        var locations = new HashSet<string>(StringComparer.Ordinal);
         int at = NextDelimiter(span, delimiter, from);
 
         while (at >= 0)
@@ -55,7 +57,7 @@ internal static class ModuleEntity
             int partStart = after + lineEnd + 1;
             int next = lineEnd < 0 ? -1 : NextDelimiter(span, delimiter, partStart);
 
-            if (next < 0 || !TryTakePart(entity[partStart..next], parts))
+            if (next < 0 || !TryTakePart(entity[partStart..next], parts, locations))
             {
                 return Malformed;
             }
@@ -66,22 +68,25 @@ internal static class ModuleEntity
         return Malformed;
     }
 
-    private static bool TryTakePart(ReadOnlyMemory<byte> part, List<ModuleResource> parts)
+    private static bool TryTakePart(ReadOnlyMemory<byte> part, List<ModuleResource> parts, HashSet<string> locations)
     {
-        if (!MimeHeader.TryRead(part.Span, out MimeHeader? header, out int bodyStart))
+        if (!TryReadHeader(part.Span, out MimeHeader? header, out int bodyStart)
+            || header[MimeHeader.ContentLocation] is not { } location
+            || !locations.Add(location))
         {
             return false;
         }
 
         int bodyEnd = Math.Max(bodyStart, WithoutLineBreak(part.Span, part.Length));
-
-        parts.Add(ModuleResource.Of(
-            header[MimeHeader.ContentLocation] ?? string.Empty,
-            header[MimeHeader.ContentType],
-            part[bodyStart..bodyEnd]));
+        parts.Add(ModuleResource.Of(location, header[MimeHeader.ContentType], part[bodyStart..bodyEnd]));
 
         return true;
     }
+
+    private static bool TryReadHeader(ReadOnlySpan<byte> entity, [NotNullWhen(true)] out MimeHeader? header, out int bodyStart)
+        => MimeHeader.TryRead(entity, out header, out bodyStart)
+            && !header.Repeats(MimeHeader.ContentType)
+            && !header.Repeats(MimeHeader.ContentLocation);
 
     private static int NextDelimiter(ReadOnlySpan<byte> entity, ReadOnlySpan<byte> delimiter, int from)
     {

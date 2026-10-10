@@ -123,11 +123,11 @@ public sealed class ModuleContentTests
         Assert.Equal("body{}", Encoding.UTF8.GetString(resource.Body.Span));
     }
 
-    [Fact(DisplayName = "BR-BD-002: a repeated header field keeps the first and its folded lines stay with it")]
-    public void ARepeatedHeaderFieldKeepsTheFirstAndItsFoldedLinesStayWithIt()
+    [Fact(DisplayName = "BR-BD-002: a repeated header field other than the type and location keeps the first and its folded lines stay with it")]
+    public void ARepeatedHeaderFieldOtherThanTheTypeAndLocationKeepsTheFirstAndItsFoldedLinesStayWithIt()
     {
         byte[] entity = EntityWriter.Ascii(
-            "Content-Type: multipart/mixed; boundary=b1\r\n\r\n--b1\r\nContent-Location: a.png\r\nContent-Type: image/png\r\nContent-Location: b.png\r\n c.png\r\n\r\nx\r\n--b1--\r\n");
+            "Content-Type: multipart/mixed; boundary=b1\r\n\r\n--b1\r\nContent-Location: a.png\r\nX-Note: one\r\nContent-Type: image/png\r\nX-Note: two\r\n c.png\r\n\r\nx\r\n--b1--\r\n");
 
         ModuleResource resource = Opened(entity).Single();
 
@@ -135,19 +135,24 @@ public sealed class ModuleContentTests
         Assert.Equal("image/png", resource.MediaType);
     }
 
-    [Theory(DisplayName = "BR-BD-002: a part with no body comes out empty and the parts beside it stay")]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void APartWithNoBodyComesOutEmptyAndThePartsBesideItStay(bool endsOnTheBlankLine)
+    [Theory(DisplayName = "BR-BV-001: a part without a location, a location used twice or a type or location given twice is rejected")]
+    [InlineData("--b1\r\nContent-Type: image/png\r\n\r\nx\r\n--b1--\r\n")]
+    [InlineData("--b1\r\nContent-Location: a.png\r\n\r\nx\r\n--b1\r\nContent-Location: a.png\r\n\r\ny\r\n--b1--\r\n")]
+    [InlineData("--b1\r\nContent-Location: a.png\r\nContent-Location: b.png\r\n\r\nx\r\n--b1--\r\n")]
+    [InlineData("--b1\r\nContent-Location: a.png\r\nContent-Type: image/png\r\ncontent-type: image/jpeg\r\n\r\nx\r\n--b1--\r\n")]
+    public void APartWithoutALocationALocationUsedTwiceOrATypeOrLocationGivenTwiceIsRejected(string parts)
     {
-        IReadOnlyList<ModuleResource> resources = Opened(EntityWriter.Multipart(
-            Boundary,
-            new EntityPart("empty.png", EntityWriter.PngType, []) { EndsOnTheBlankLine = endsOnTheBlankLine },
-            new EntityPart("logo.png", EntityWriter.PngType, Picture)));
+        byte[] entity = EntityWriter.Ascii($"Content-Type: multipart/mixed; boundary=b1\r\n\r\n{parts}");
 
-        Assert.Equal(["empty.png", "logo.png"], resources.Select(resource => resource.Location));
-        Assert.Empty(resources[0].Body.ToArray());
-        Assert.Equal(Picture, resources[1].Body.ToArray());
+        Assert.Equal(CarouselDefect.EntityMalformed, Defect(entity));
+    }
+
+    [Fact(DisplayName = "BR-BV-001: an entity header giving the type twice is rejected")]
+    public void AnEntityHeaderGivingTheTypeTwiceIsRejected()
+    {
+        byte[] entity = [.. EntityWriter.Ascii("Content-Type: image/png\r\nContent-Type: image/jpeg\r\n\r\n"), .. Picture];
+
+        Assert.Equal(CarouselDefect.EntityMalformed, Defect(entity));
     }
 
     [Fact(DisplayName = "BR-BD-002: a line that only starts with the boundary is part of the body")]
