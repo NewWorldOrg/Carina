@@ -96,11 +96,11 @@ public sealed class LiveChannelTests
         Assert.Equal([0x01, 0x11], LiveChannels.Expendable.Select(channel => (byte)channel).Order().ToArray());
     }
 
-    [Fact]
-    public void WhatIsKeptForWhoeverArrivesLateIsEveryHeaderAndTheCaptionThatIsShowing()
+    [Fact(DisplayName = "BR-BD-004: what is kept for whoever arrives late is every header, the caption that is showing, and the data broadcast")]
+    public void WhatIsKeptForWhoeverArrivesLateIsEveryHeaderTheCaptionAndTheDataBroadcast()
     {
         Assert.Equal(
-            [LiveChannel.PictureHeader, LiveChannel.SoundHeader, LiveChannel.CaptionHeader, LiveChannel.Caption],
+            [LiveChannel.PictureHeader, LiveChannel.SoundHeader, LiveChannel.CaptionHeader, LiveChannel.Caption, LiveChannel.DataBroadcast],
             LiveChannels.Kept);
         Assert.All(LiveChannels.Headers, header => Assert.Contains(header, LiveChannels.Kept));
         Assert.DoesNotContain(LiveChannel.Picture, LiveChannels.Kept);
@@ -112,6 +112,15 @@ public sealed class LiveChannelTests
     public void NothingKeptIsEverThrownAway()
     {
         Assert.All(LiveChannels.Kept, kept => Assert.DoesNotContain(kept, LiveChannels.Expendable));
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a viewer whose backlog is full goes without the media and the data broadcast, and without nothing else")]
+    public void AViewerWhoseBacklogIsFullGoesWithoutTheMediaAndTheDataBroadcast()
+    {
+        Assert.Equal(
+            [LiveChannel.Picture, LiveChannel.Sound, LiveChannel.DataBroadcast],
+            LiveChannels.CutWhenBehind);
+        Assert.All(LiveChannels.Expendable, expendable => Assert.Contains(expendable, LiveChannels.CutWhenBehind));
     }
 
     [Fact]

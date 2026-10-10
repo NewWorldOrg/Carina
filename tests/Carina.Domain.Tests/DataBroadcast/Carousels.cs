@@ -15,7 +15,7 @@ internal static class Carousels
         => new(new ServiceId(service), Entry, autoStart);
 
     public static CarouselSignal.Carried Carried(int service = 1024, bool autoStart = false)
-        => new(EntryOf(service, autoStart));
+        => new(EntryOf(service, autoStart), [Entry, Other]);
 
     public static CarouselSignal.CatalogUpdated Listing(int tag, params (int Id, int Version)[] modules)
         => Listing(tag, 1, [], modules);

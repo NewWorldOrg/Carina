@@ -11,16 +11,34 @@ public abstract record CarouselSignal
     {
     }
 
+    /// <summary>
+    /// The programme map carrying a data broadcast: where it is entered, and the component tags of every data
+    /// stream it lists, the entry's among them.
+    /// </summary>
     public sealed record Carried : CarouselSignal
     {
-        public Carried(DataBroadcastEntry entry)
+        public Carried(DataBroadcastEntry entry, IReadOnlyList<int> tags)
         {
             ArgumentNullException.ThrowIfNull(entry);
+            ArgumentNullException.ThrowIfNull(tags);
+
+            if (!tags.Contains(entry.EntryTag) || tags.Distinct().Count() != tags.Count)
+            {
+                throw new ArgumentException("The tags of the data streams are listed once each, the entry's among them.", nameof(tags));
+            }
 
             Entry = entry;
+            Tags = [.. tags.Select(tag => CarouselNumbers.Tag(tag, nameof(tags)))];
         }
 
         public DataBroadcastEntry Entry { get; }
+
+        public IReadOnlyList<int> Tags { get; }
+
+        public bool Equals(Carried? other)
+            => other is not null && Entry == other.Entry && Tags.SequenceEqual(other.Tags);
+
+        public override int GetHashCode() => HashCode.Combine(Entry, Tags.Count);
     }
 
     public sealed record NotCarried : CarouselSignal;

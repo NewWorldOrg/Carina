@@ -3,6 +3,7 @@ using System.Threading.Channels;
 
 using Carina.Contracts;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.DataBroadcast;
 
 using Microsoft.Extensions.Logging;
 
@@ -41,6 +42,8 @@ internal sealed class LiveSession
     private ILiveTranscoder? transcoder;
 
     private CaptionOutlet captions;
+
+    private DataBroadcastSession? dataBroadcast;
 
     private Task<LiveFragmentFault?>? carrying;
 
@@ -313,6 +316,12 @@ internal sealed class LiveSession
         }
 
         startup.Reach(LiveStartupSegment.TunerSecured);
+        DataBroadcastSession? shown = reception.ShowDataBroadcastTo(fanout);
+
+        lock (gate)
+        {
+            dataBroadcast = shown;
+        }
 
         return await StartTranscodingAsync(
             reception.CaptionsMissing ? CaptionOutlet.None : CaptionOutlet.Drawn,
@@ -549,9 +558,23 @@ internal sealed class LiveSession
         }
         finally
         {
+            StopShowingTheDataBroadcast();
             fanout.End();
             reception.Detach();
         }
+    }
+
+    private void StopShowingTheDataBroadcast()
+    {
+        DataBroadcastSession? shown;
+
+        lock (gate)
+        {
+            shown = dataBroadcast;
+            dataBroadcast = null;
+        }
+
+        shown?.StopShowing(fanout);
     }
 
     private async Task StopTranscodingAsync(ILiveTranscoder? running, Task<LiveFragmentFault?>? carried, Task? captioned)

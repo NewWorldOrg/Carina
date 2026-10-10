@@ -631,6 +631,98 @@ public sealed class LiveFanoutTests
         Assert.Equal(1, viewing.Backlog.Queued);
     }
 
+    [Fact(DisplayName = "BR-BD-004: what is kept of the data broadcast is the whole set it was last published with, in its order")]
+    public async Task WhatIsKeptOfTheDataBroadcastIsTheWholeSetItWasLastPublishedWith()
+    {
+        LiveFanout fanout = new(Room(10));
+        LiveFrame catalog = Data(1, 0x01);
+        LiveFrame module = Data(2, 0x02);
+        LiveFrame another = Data(3, 0x02);
+
+        fanout.Publish(PictureHeader);
+        fanout.Publish(catalog, [catalog]);
+        fanout.Publish(module, [catalog, module]);
+        fanout.Publish(another, [catalog, module, another]);
+        fanout.Publish(Data(4, 0x03), [catalog, module, another]);
+
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        Assert.Equal(
+            [(LiveChannel.PictureHeader, 0UL), (LiveChannel.DataBroadcast, 1UL), (LiveChannel.DataBroadcast, 2UL), (LiveChannel.DataBroadcast, 3UL)],
+            Taken(viewing).Select(frame => (frame.Channel, frame.Pts.Value)).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BS-002: a set published afterwards replaces what was kept of the data broadcast")]
+    public async Task ASetPublishedAfterwardsReplacesWhatWasKept()
+    {
+        LiveFanout fanout = new(Room(10));
+        LiveFrame catalog = Data(1, 0x01);
+        LiveFrame module = Data(2, 0x02);
+        LiveFrame absent = Data(3, 0x04);
+
+        fanout.Publish(module, [catalog, module]);
+        fanout.Publish(absent, [absent]);
+
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        Assert.Equal([absent], Taken(viewing));
+    }
+
+    [Fact]
+    public void ASetOfAnotherChannelOrOfAChannelThatIsNotKeptIsRefused()
+    {
+        LiveFanout fanout = new(Room(10));
+
+        Assert.Throws<ArgumentException>(() => fanout.Publish(Data(1, 0x01), [Caption(1)]));
+        Assert.Throws<ArgumentException>(() => fanout.Publish(Picture(1), [Picture(1)]));
+    }
+
+    [Fact(DisplayName = "BR-BD-004: the data broadcast is not counted in the backlog nor among the pictures dropped, but a viewer whose backlog is full goes without it")]
+    public async Task TheDataBroadcastIsNotCountedButIsCutWhenTheBacklogIsFull()
+    {
+        LiveFanout fanout = new(Room(2));
+        await using ILiveViewing viewing = await Joined(fanout);
+        LiveFrame catalog = Data(1, 0x01);
+
+        fanout.Publish(catalog, [catalog]);
+        fanout.Publish(Picture(2));
+
+        Assert.Equal(1, viewing.Backlog.Queued);
+
+        fanout.Publish(Picture(3));
+        fanout.Publish(Data(4, 0x02), [catalog]);
+        fanout.Publish(Caption(5));
+
+        Assert.Equal(0L, viewing.Backlog.Dropped);
+
+        fanout.Publish(Picture(6));
+
+        Assert.Equal(1L, viewing.Backlog.Dropped);
+        Assert.Equal(
+            [LiveChannel.DataBroadcast, LiveChannel.Picture, LiveChannel.Picture, LiveChannel.Caption],
+            Taken(viewing).Select(frame => frame.Channel).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BD-004: frames published at one go reach a viewer once each and leave the set kept once")]
+    public async Task FramesPublishedAtOneGoReachAViewerOnceEachAndLeaveTheSetKeptOnce()
+    {
+        LiveFanout fanout = new(Room(10));
+        await using ILiveViewing watching = await Joined(fanout);
+        LiveFrame catalog = Data(1, 0x01);
+        LiveFrame module = Data(2, 0x02);
+
+        fanout.Publish([catalog, module], [catalog, module]);
+
+        await using ILiveViewing late = await Joined(fanout);
+
+        Assert.Equal([catalog, module], Taken(watching));
+        Assert.Equal([catalog, module], Taken(late));
+        Assert.Equal([catalog, module], fanout.Kept);
+        Assert.Throws<ArgumentException>(() => fanout.Publish([], [catalog]));
+    }
+
+    private static LiveFrame Data(ulong pts, byte kind) => new(LiveChannel.DataBroadcast, LivePts.Of(pts), new byte[] { kind });
+
     private static LiveFanoutSettings Room(int frames) => new() { LongestBacklog = frames };
 
     private static LiveFrame Picture(ulong pts) => new(LiveChannel.Picture, LivePts.Of(pts), Payload);

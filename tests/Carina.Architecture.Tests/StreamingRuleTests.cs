@@ -8,6 +8,22 @@ public sealed class StreamingRuleTests
         Assert.Empty(StreamingRules.WhatTakesTheStreamApartInsideTheFeature(RepositoryLayout.SourceDirectory));
     }
 
+    [Fact(DisplayName = "BR-BD-004: the live data broadcast is carried by the streaming feature, opens no stream of its own and leaves taking the transport stream apart to the broadcast library")]
+    public void TheLiveDataBroadcastIsCarriedByTheFeatureAndTakesNothingApartItself()
+    {
+        string folder = Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Infrastructure", "DataBroadcast");
+        IReadOnlyList<string> feature = StreamingRules.FilesInTheFeature(RepositoryLayout.SourceDirectory);
+
+        Assert.Contains("/Carina.Infrastructure/DataBroadcast/DataBroadcastSession.cs", feature);
+        Assert.Contains("/Carina.Infrastructure/DataBroadcast/DataBroadcastFrames.cs", feature);
+        Assert.DoesNotContain(
+            StreamingRules.FilesOpeningTheDriversStream(RepositoryLayout.SourceDirectory),
+            file => file.Contains("/DataBroadcast/", StringComparison.Ordinal));
+        Assert.All(
+            Directory.EnumerateFiles(folder, "*.cs"),
+            file => Assert.Equal(0, MeasurementRules.MarksIn(File.ReadAllText(file))));
+    }
+
     [Fact]
     public void TheGlobalParserRuleAsksForTwoMarksAndTheStreamingFeatureIsAllowedNone()
     {

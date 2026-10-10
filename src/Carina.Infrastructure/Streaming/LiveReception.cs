@@ -4,6 +4,9 @@ using System.Threading.Channels;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.DataBroadcast;
+
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Streaming;
 
@@ -28,6 +31,8 @@ internal sealed class LiveReception
 
     private readonly TimeProvider clock;
 
+    private readonly ILogger logger;
+
     private readonly Action<LiveReception> forget;
 
     private readonly CancellationTokenSource stopping = new();
@@ -46,12 +51,17 @@ internal sealed class LiveReception
 
     private bool captionsMissing;
 
+    private DataBroadcastSession? dataBroadcast;
+
+    private LiveSeat? dataBroadcastSeat;
+
     internal LiveReception(
         NetworkId network,
         ServiceId service,
         ILiveSupply supply,
         LiveSessionSettings settings,
         TimeProvider clock,
+        ILogger logger,
         Action<LiveReception> forget)
     {
         this.network = network;
@@ -59,6 +69,7 @@ internal sealed class LiveReception
         this.supply = supply;
         this.settings = settings;
         this.clock = clock;
+        this.logger = logger;
         this.forget = forget;
     }
 
@@ -123,6 +134,41 @@ internal sealed class LiveReception
         {
             captionsMissing = true;
         }
+    }
+
+    /// <summary>
+    /// Shows the channel's data broadcast to the fan-out, and hands back what shows it. The first time it is asked
+    /// for, and again after the one before it stopped, a data broadcast is raised that takes a seat of its own.
+    /// </summary>
+    internal DataBroadcastSession? ShowDataBroadcastTo(LiveFanout fanout)
+    {
+        DataBroadcastSession shown;
+        bool raised = false;
+
+        lock (gate)
+        {
+            if (closed)
+            {
+                return null;
+            }
+
+            if (dataBroadcast is null)
+            {
+                dataBroadcast = new DataBroadcastSession(service, logger, DataBroadcastStopped);
+                raised = true;
+            }
+
+            shown = dataBroadcast;
+        }
+
+        if (raised)
+        {
+            Seat(shown);
+        }
+
+        shown.Show(fanout);
+
+        return shown;
     }
 
     internal bool Attach()
@@ -224,6 +270,67 @@ internal sealed class LiveReception
         stopping.Cancel();
     }
 
+    private void Seat(DataBroadcastSession raised)
+    {
+        LiveSeat seat = Take(
+            raised.Seat,
+            static () => { },
+            why => LeftBehindByTheDataBroadcast(raised, why),
+            settings.LongestWaitToBeFed,
+            settings.MostBytesWaitingToBeFed);
+        bool stillShown;
+
+        lock (gate)
+        {
+            stillShown = ReferenceEquals(dataBroadcast, raised);
+
+            if (stillShown)
+            {
+                dataBroadcastSeat = seat;
+            }
+        }
+
+        if (!stillShown)
+        {
+            Drop(seat);
+        }
+    }
+
+    private void DataBroadcastStopped(DataBroadcastSession gone)
+    {
+        LiveSeat? seat = null;
+
+        lock (gate)
+        {
+            if (ReferenceEquals(dataBroadcast, gone))
+            {
+                seat = dataBroadcastSeat;
+                dataBroadcast = null;
+                dataBroadcastSeat = null;
+            }
+        }
+
+        if (seat is not null)
+        {
+            Drop(seat);
+        }
+    }
+
+    private void LeftBehindByTheDataBroadcast(DataBroadcastSession raised, LiveSupplyEnding why)
+    {
+        if (why.Why is not LiveSupplyEnd.TranscoderFellBehind)
+        {
+            return;
+        }
+
+        logger.LogWarning("The data broadcast of service {Service} fell behind the reading and stopped being read: {Note}", service.Value, why.Note);
+        raised.Stop();
+    }
+
+    /// <summary>
+    /// A seat at the reading, let go of at once when the reading has already closed, since nothing would be
+    /// written into it or end it.
+    /// </summary>
     private LiveSeat Take(
         Stream into,
         Action locked,
@@ -232,10 +339,21 @@ internal sealed class LiveReception
         long mostHeld)
     {
         LiveSeat seat = new(into, locked, ended, patience, mostHeld, clock);
+        bool late;
 
         lock (gate)
         {
-            seats.Add(seat);
+            late = closed;
+
+            if (!late)
+            {
+                seats.Add(seat);
+            }
+        }
+
+        if (late)
+        {
+            seat.LetGo();
         }
 
         return seat;
