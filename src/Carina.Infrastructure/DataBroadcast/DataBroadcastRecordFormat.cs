@@ -83,16 +83,23 @@ public static class DataBroadcastRecordFormat
     }
 
     /// <summary>
+    /// Whether the head of a file is the head of a record this format wrote: its magic, a version it reads, and as
+    /// many bytes as a header takes.
+    /// </summary>
+    public static bool Heads(ReadOnlySpan<byte> head)
+        => head.Length >= HeaderLength
+           && head[..MagicLength].SequenceEqual(Magic)
+           && BinaryPrimitives.ReadUInt16BigEndian(head[VersionAt..]) == FormatVersion
+           && head[IncompleteAt] <= 1;
+
+    /// <summary>
     /// Reads a record back, or answers null when the bytes are not one this format wrote.
     /// </summary>
     public static DataBroadcastRecord? Read(ReadOnlyMemory<byte> bytes)
     {
         ReadOnlySpan<byte> head = bytes.Span;
 
-        if (head.Length < HeaderLength
-            || !head[..MagicLength].SequenceEqual(Magic)
-            || BinaryPrimitives.ReadUInt16BigEndian(head[VersionAt..]) != FormatVersion
-            || head[IncompleteAt] > 1)
+        if (!Heads(head))
         {
             return null;
         }

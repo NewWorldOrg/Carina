@@ -31,6 +31,7 @@ public sealed class DataBroadcastShelf(CaptionSettings settings)
             {
                 DataBroadcastRecordFormat.Write(record, writing);
                 await writing.FlushAsync(cancellationToken);
+                writing.Flush(flushToDisk: true);
             }
 
             File.Move(unfinished, kept, overwrite: true);
@@ -63,12 +64,16 @@ public sealed class DataBroadcastShelf(CaptionSettings settings)
         }
     }
 
-    public bool Holds(RecordingId id) => PathOf(id) is { } kept && File.Exists(kept);
+    /// <summary>
+    /// Whether a record is kept for the recording: a file under its name whose head is the head of a record.
+    /// </summary>
+    public bool Holds(RecordingId id) => PathOf(id) is { } kept && HeadsARecord(kept);
 
     public void Forget(RecordingId id) => Unlink(Kept(id));
 
     /// <summary>
-    /// The recordings a record is kept for, read off the names on the shelf.
+    /// The recordings a record is kept for: the names on the shelf whose file begins as a record does, so that an
+    /// empty or broken file is no record.
     /// </summary>
     public IReadOnlySet<string> Shelved()
     {
@@ -80,7 +85,7 @@ public sealed class DataBroadcastShelf(CaptionSettings settings)
         return Directory.EnumerateFiles(shelf, "*" + Extension)
             .Select(Path.GetFileName)
             .OfType<string>()
-            .Where(name => name.EndsWith(Extension, StringComparison.Ordinal))
+            .Where(name => name.EndsWith(Extension, StringComparison.Ordinal) && HeadsARecord(Path.Combine(shelf, name)))
             .Select(name => name[..^Extension.Length])
             .ToHashSet(StringComparer.Ordinal);
     }
@@ -90,6 +95,23 @@ public sealed class DataBroadcastShelf(CaptionSettings settings)
         ArgumentNullException.ThrowIfNull(id);
 
         return settings.WrittenTo is { } shelf ? Path.Combine(shelf, id.Wire + Extension) : null;
+    }
+
+    private static bool HeadsARecord(string kept)
+    {
+        byte[] head = new byte[DataBroadcastRecordFormat.HeaderLength];
+
+        try
+        {
+            using FileStream reading = File.OpenRead(kept);
+            int read = reading.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+
+            return DataBroadcastRecordFormat.Heads(head.AsSpan(0, read));
+        }
+        catch (Exception unreadable) when (unreadable is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static void Unlink(string path)

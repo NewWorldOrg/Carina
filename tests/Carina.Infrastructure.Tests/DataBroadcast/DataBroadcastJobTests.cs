@@ -201,20 +201,22 @@ public sealed class DataBroadcastJobTests : IDisposable
         Assert.Equal((2, 1, 1, true), (pass.Read, pass.Settled, pass.LeftForNextTime, pass.Yielded));
     }
 
-    [Fact(DisplayName = "BR-BS-001: records that failed with tries left, and records said to be made that are not kept, are put back to be taken again")]
+    [Fact(DisplayName = "BR-BS-001: records that failed with tries left, and records said to be made that are not kept or are kept empty, are put back to be taken again")]
     public async Task FailedAndLostRecordsArePutBack()
     {
         RecordingId kept = RecordingId.New();
         RecordingId lost = RecordingId.New();
+        RecordingId broken = RecordingId.New();
         await Shelf().KeepAsync(kept, Record("<bml>1</bml>"), Cancel);
-        worklist.Made.AddRange([kept, lost]);
+        await File.WriteAllBytesAsync(Shelf().PathOf(broken)!, [], Cancel);
+        worklist.Made.AddRange([kept, lost, broken]);
         worklist.FailedWithTriesLeft = 2;
 
         DataBroadcastPass pass = await Job().RunAsync(Cancel);
 
-        Assert.Equal([lost], worklist.Lost);
+        Assert.Equal([lost, broken], worklist.Lost);
         Assert.Equal(0, worklist.FailedWithTriesLeft);
-        Assert.Equal(3, pass.Requeued);
+        Assert.Equal(4, pass.Requeued);
         Assert.Equal(["recordings"], events.Signalled);
     }
 

@@ -82,12 +82,34 @@ public sealed class DataBroadcastShelfTests : IDisposable
         await shelf.KeepAsync(forgotten, Record("<bml>1</bml>"), Cancel);
         await File.WriteAllBytesAsync(Path.Combine(Shelved, RecordingId.New().Wire + CaptionSettings.Extension), [0], Cancel);
         await File.WriteAllBytesAsync(Path.Combine(Shelved, RecordingId.New().Wire + DataBroadcastShelf.Extension + CaptionShelf.Unfinished), [0], Cancel);
+        await File.WriteAllBytesAsync(Path.Combine(Shelved, RecordingId.New().Wire + DataBroadcastShelf.Extension), [], Cancel);
 
         shelf.Forget(forgotten);
         shelf.Forget(RecordingId.New());
 
         Assert.Equal([kept.Wire], shelf.Shelved());
         Assert.False(shelf.Holds(forgotten));
+    }
+
+    [Fact(DisplayName = "BR-BS-001: an empty file, or one whose head is not a record's, under a recording's name is no record kept")]
+    public async Task AnEmptyOrBrokenFileIsNoRecordKept()
+    {
+        DataBroadcastShelf shelf = Shelf();
+        RecordingId kept = RecordingId.New();
+        RecordingId empty = RecordingId.New();
+        RecordingId cut = RecordingId.New();
+        RecordingId another = RecordingId.New();
+        await shelf.KeepAsync(kept, Record("<bml>1</bml>"), Cancel);
+        byte[] whole = await File.ReadAllBytesAsync(shelf.PathOf(kept)!, Cancel);
+        await File.WriteAllBytesAsync(shelf.PathOf(empty)!, [], Cancel);
+        await File.WriteAllBytesAsync(shelf.PathOf(cut)!, whole[..(DataBroadcastRecordFormat.HeaderLength - 1)], Cancel);
+        await File.WriteAllBytesAsync(shelf.PathOf(another)!, [.. "CARINACC"u8, .. whole[8..]], Cancel);
+
+        Assert.Equal([kept.Wire], shelf.Shelved());
+        Assert.True(shelf.Holds(kept));
+        Assert.False(shelf.Holds(empty));
+        Assert.False(shelf.Holds(cut));
+        Assert.False(shelf.Holds(another));
     }
 
     [Fact]
