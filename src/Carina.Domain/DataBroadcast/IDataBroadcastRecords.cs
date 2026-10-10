@@ -11,6 +11,11 @@ public interface IDataBroadcastRecords
     /// </summary>
     bool Holds(RecordingId id);
 
+    /// <summary>
+    /// The bytes the record kept for the recording takes, or null when none is kept.
+    /// </summary>
+    long? BytesOf(RecordingId id);
+
     Task<DataBroadcastRecord?> ReadAsync(RecordingId id, CancellationToken cancellationToken);
 
     /// <summary>

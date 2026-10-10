@@ -64,6 +64,18 @@ public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcas
         }
     }
 
+    public long? BytesOf(RecordingId id)
+    {
+        if (PathOf(id) is not { } kept)
+        {
+            return null;
+        }
+
+        FileInfo file = new(kept);
+
+        return file.Exists ? file.Length : null;
+    }
+
     public async Task<ModuleVersion?> ModuleAsync(RecordingId id, ModuleVersionKey key, CancellationToken cancellationToken)
     {
         if (PathOf(id) is not { } kept || !File.Exists(kept))

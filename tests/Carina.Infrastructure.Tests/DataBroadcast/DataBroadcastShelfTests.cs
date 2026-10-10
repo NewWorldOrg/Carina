@@ -127,6 +127,19 @@ public sealed class DataBroadcastShelfTests : IDisposable
         Assert.Null(await new DataBroadcastShelf(new CaptionSettings()).ModuleAsync(id, new ModuleVersionKey(Entry, 1, 0, 1), Cancel));
     }
 
+    [Fact(DisplayName = "BR-BA-001: the shelf tells the bytes the record kept for a recording takes, and nothing for one with none")]
+    public async Task TheShelfTellsTheBytesARecordTakes()
+    {
+        DataBroadcastShelf shelf = Shelf();
+        RecordingId id = RecordingId.New();
+        DataBroadcastRecord record = Record("<bml>1</bml>");
+        await shelf.KeepAsync(id, record, Cancel);
+
+        Assert.Equal(record.Bytes, shelf.BytesOf(id));
+        Assert.Null(shelf.BytesOf(RecordingId.New()));
+        Assert.Null(new DataBroadcastShelf(new CaptionSettings()).BytesOf(id));
+    }
+
     [Fact]
     public void AShelfWithNowhereToKeepRecordsKeepsNothing()
     {

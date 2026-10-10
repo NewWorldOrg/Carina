@@ -35,7 +35,8 @@ public static class PlaybackSurfaces
     public const string AModuleOfTheDataBroadcast =
         "One version of one module of a recording's data broadcast, as the live side channel carries it: the byte "
         + "0x02, the carousel's tag, the module id and the version, then each resource with its path, its kind and "
-        + "its bytes, to the end, so that the same reader reads both. It never changes, so it is held for a day. "
+        + "its bytes, to the end, so that the same reader reads both. It is answered with a tag that changes whenever "
+        + "the record is taken again, and asked again with that tag in If-None-Match it answers 304 without the bytes. "
         + "It answers 404 where the recording's data broadcast is not ready or does not hold that version. Opened "
         + "with the reader's own session only, never with a ticket.";
 

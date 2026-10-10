@@ -652,7 +652,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             operation["parameters"]!.AsArray().Select(parameter => parameter!["name"]!.GetValue<string>()).ToArray());
         Assert.All(operation["parameters"]!.AsArray(), parameter => Assert.Equal("path", parameter!["in"]!.GetValue<string>()));
         Assert.Equal(
-            ["200", "400", "401", "404"],
+            ["200", "304", "400", "401", "404"],
             operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
         Assert.Null(operation["responses"]!["200"]!["content"]);
         Assert.Contains("0x02", operation["summary"]!.GetValue<string>(), StringComparison.Ordinal);

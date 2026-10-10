@@ -187,6 +187,7 @@ app.MapGet(
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.AModuleOfTheDataBroadcast)
     .Produces(StatusCodes.Status200OK, contentType: DataBroadcastDelivery.MediaType)
+    .Produces(StatusCodes.Status304NotModified)
     .Produces(StatusCodes.Status400BadRequest)
     .Produces(StatusCodes.Status404NotFound)
     .WithEffect(EndpointEffect.Reading);

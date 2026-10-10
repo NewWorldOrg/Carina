@@ -1,8 +1,16 @@
+using System.Globalization;
+
 using Carina.Api.Common;
 using Carina.Domain.DataBroadcast;
 using Carina.Domain.Recordings;
 
 namespace Carina.Api.Services;
+
+/// <summary>
+/// A module version of a recording's data broadcast with the tag it is answered under, or the tag alone where the
+/// asker already holds it.
+/// </summary>
+public sealed record KeptModule(string ETag, ModuleVersion? Version);
 
 public enum DataBroadcastFailure
 {
@@ -57,23 +65,40 @@ public sealed class DataBroadcastService(
     }
 
     /// <summary>
-    /// One module version of the record kept for a recording whose data broadcast is ready to play.
+    /// One module version of the record kept for a recording whose data broadcast is ready to play, with the tag that
+    /// changes whenever the record is taken again. Where the asker already holds what that tag names, the version is
+    /// not read and only the tag is answered.
     /// </summary>
-    public async Task<ServiceResult<ModuleVersion, DataBroadcastFailure>> ModuleAsync(
+    public async Task<ServiceResult<KeptModule, DataBroadcastFailure>> ModuleAsync(
         RecordingId id,
         ModuleVersionKey key,
+        Func<string, bool> alreadyHeld,
         CancellationToken cancellationToken)
     {
-        if (await StandingAsync(id, cancellationToken) is DataBroadcastStanding.Ready
-            && await records.ModuleAsync(id, key, cancellationToken) is { } found)
+        ArgumentNullException.ThrowIfNull(alreadyHeld);
+
+        if (await ReadyAsync(id, cancellationToken) is not { DataBroadcastMadeAt: { } madeAt }
+            || records.BytesOf(id) is not { } bytes)
         {
-            return ServiceResult<ModuleVersion, DataBroadcastFailure>.Success(found);
+            return NoSuchModule(id);
         }
 
-        return ServiceResult<ModuleVersion, DataBroadcastFailure>.Failure(
+        string tag = string.Create(CultureInfo.InvariantCulture, $"\"{madeAt.Ticks:x}-{bytes:x}\"");
+
+        if (alreadyHeld(tag))
+        {
+            return ServiceResult<KeptModule, DataBroadcastFailure>.Success(new KeptModule(tag, null));
+        }
+
+        return await records.ModuleAsync(id, key, cancellationToken) is { } found
+            ? ServiceResult<KeptModule, DataBroadcastFailure>.Success(new KeptModule(tag, found))
+            : NoSuchModule(id);
+    }
+
+    private static ServiceResult<KeptModule, DataBroadcastFailure> NoSuchModule(RecordingId id)
+        => ServiceResult<KeptModule, DataBroadcastFailure>.Failure(
             $"Recording {id.Wire} has no such version of a module of its data broadcast ready to play.",
             DataBroadcastFailure.None);
-    }
 
     private static ServiceResult<DataBroadcastTimeline, DataBroadcastFailure> Refused(RecordingId id, DataBroadcastStanding standing)
         => standing is DataBroadcastStanding.Coming
@@ -85,15 +110,25 @@ public sealed class DataBroadcastService(
                 DataBroadcastFailure.None);
 
     private async Task<DataBroadcastStanding> StandingAsync(RecordingId id, CancellationToken cancellationToken)
+        => (await StandAsync(id, cancellationToken)).Standing;
+
+    private async Task<Recording?> ReadyAsync(RecordingId id, CancellationToken cancellationToken)
+        => await StandAsync(id, cancellationToken) is { Standing: DataBroadcastStanding.Ready, Recording: { } recording }
+            ? recording
+            : null;
+
+    private async Task<(DataBroadcastStanding Standing, Recording? Recording)> StandAsync(RecordingId id, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
 
         if (!records.KeepsAnything || await recordings.FindAsync(id, cancellationToken) is not { } recording)
         {
-            return DataBroadcastStanding.None;
+            return (DataBroadcastStanding.None, null);
         }
 
-        return recording.DataBroadcast.StandingWith(
+        DataBroadcastStanding standing = recording.DataBroadcast.StandingWith(
             recording.DataBroadcastState is DataBroadcastState.Made && records.Holds(id));
+
+        return (standing, recording);
     }
 }

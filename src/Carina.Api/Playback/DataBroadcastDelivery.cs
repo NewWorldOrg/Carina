@@ -10,6 +10,8 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.DataBroadcast;
 
+using Microsoft.Net.Http.Headers;
+
 namespace Carina.Api.Playback;
 
 /// <summary>
@@ -31,7 +33,7 @@ public static class DataBroadcastDelivery
 
     public const string MediaType = "application/octet-stream";
 
-    public const string HeldForADay = "private, max-age=86400";
+    public const string Revalidated = "private, no-cache";
 
     public const string ThePositionsThereAre =
         "The data broadcast is asked for from a whole or fractional number of seconds into the source, or from its beginning.";
@@ -128,8 +130,12 @@ public static class DataBroadcastDelivery
             return;
         }
 
-        ServiceResult<ModuleVersion, DataBroadcastFailure> found =
-            await broadcast.ModuleAsync(recordingId, key, context.RequestAborted);
+        IList<EntityTagHeaderValue> held = context.Request.GetTypedHeaders().IfNoneMatch;
+        ServiceResult<KeptModule, DataBroadcastFailure> found = await broadcast.ModuleAsync(
+            recordingId,
+            key,
+            tag => held.Any(asked => asked.Equals(EntityTagHeaderValue.Any) || asked.Compare(new EntityTagHeaderValue(tag), useStrongComparison: false)),
+            context.RequestAborted);
 
         if (!found.IsSuccess)
         {
@@ -138,12 +144,21 @@ public static class DataBroadcastDelivery
             return;
         }
 
-        byte[] payload = DataBroadcastFrames.ModulePayload(found.Data!);
+        context.Response.Headers.CacheControl = Revalidated;
+        context.Response.Headers.ETag = found.Data!.ETag;
+
+        if (found.Data.Version is not { } answered)
+        {
+            context.Response.StatusCode = StatusCodes.Status304NotModified;
+
+            return;
+        }
+
+        byte[] payload = DataBroadcastFrames.ModulePayload(answered);
 
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = MediaType;
         context.Response.ContentLength = payload.Length;
-        context.Response.Headers.CacheControl = HeldForADay;
 
         await context.Response.Body.WriteAsync(payload, context.RequestAborted);
     }

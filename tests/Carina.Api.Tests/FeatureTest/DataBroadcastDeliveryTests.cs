@@ -158,8 +158,17 @@ internal sealed class DataBroadcastFeature : IAsyncDisposable
     public Task<HttpResponseMessage> CatalogAsync(Recording recording, string query = "", HttpClient? asking = null)
         => (asking ?? Client).GetAsync(new Uri($"/api/videos/{recording.Id.Wire}/data-broadcast{query}", UriKind.Relative));
 
-    public Task<HttpResponseMessage> ModuleAsync(Recording recording, string module, HttpClient? asking = null)
-        => (asking ?? Client).GetAsync(new Uri($"/api/videos/{recording.Id.Wire}/data-broadcast/modules/{module}", UriKind.Relative));
+    public async Task<HttpResponseMessage> ModuleAsync(Recording recording, string module, HttpClient? asking = null, string? ifNoneMatch = null)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, new Uri($"/api/videos/{recording.Id.Wire}/data-broadcast/modules/{module}", UriKind.Relative));
+
+        if (ifNoneMatch is not null)
+        {
+            request.Headers.TryAddWithoutValidation("If-None-Match", ifNoneMatch);
+        }
+
+        return await (asking ?? Client).SendAsync(request);
+    }
 
     public static async Task<JsonElement> DataOfAsync(HttpResponseMessage answer)
     {
@@ -293,9 +302,48 @@ public sealed class DataBroadcastDeliveryTests
                 Assert.Equal(DataBroadcastFrames.ModuleKind, body[0]);
                 Assert.Equal(body.Length, listed.GetProperty("size").GetInt64());
                 Assert.Equal("application/octet-stream", answer.Content.Headers.ContentType?.MediaType);
-                Assert.Equal((true, false, TimeSpan.FromDays(1)), (answer.Headers.CacheControl!.Private, answer.Headers.CacheControl.NoStore, answer.Headers.CacheControl.MaxAge));
+                Assert.Equal((true, true, false, null), (answer.Headers.CacheControl!.Private, answer.Headers.CacheControl.NoCache, answer.Headers.CacheControl.NoStore, answer.Headers.CacheControl.MaxAge));
+                Assert.False(answer.Headers.ETag!.IsWeak);
             }
         }
+    }
+
+    [Fact(DisplayName = "BR-BA-001: a module asked for again with the tag it was answered with is not sent again")]
+    public async Task AModuleAskedForAgainWithItsTagIsNotSentAgain()
+    {
+        await using DataBroadcastFeature feature = new();
+        Recording recording = await feature.MadeAsync();
+        using HttpResponseMessage first = await feature.ModuleAsync(recording, "64/7/0/1");
+        EntityTagHeaderValue tag = first.Headers.ETag!;
+
+        using HttpResponseMessage again = await feature.ModuleAsync(recording, "64/7/0/1", ifNoneMatch: tag.Tag);
+        using HttpResponseMessage otherwise = await feature.ModuleAsync(recording, "64/7/0/1", ifNoneMatch: "\"another\"");
+
+        Assert.Equal(HttpStatusCode.NotModified, again.StatusCode);
+        Assert.Empty(await again.Content.ReadAsByteArrayAsync());
+        Assert.Equal(tag, again.Headers.ETag);
+        Assert.True(again.Headers.CacheControl!.NoCache);
+        Assert.Equal(HttpStatusCode.OK, otherwise.StatusCode);
+        Assert.Equal(tag, otherwise.Headers.ETag);
+    }
+
+    [Fact(DisplayName = "BR-BA-001: a record taken again answers its modules under another tag, so what was held before is sent again")]
+    public async Task ARecordTakenAgainAnswersItsModulesUnderAnotherTag()
+    {
+        await using DataBroadcastFeature feature = new();
+        Recording recording = await feature.MadeAsync();
+        using HttpResponseMessage before = await feature.ModuleAsync(recording, "64/7/0/1");
+        EntityTagHeaderValue held = before.Headers.ETag!;
+
+        recording.DataBroadcastAgain();
+        recording.DataBroadcastTaken(3, RecordingFeature.Noon.AddHours(5));
+        await new DataBroadcastShelf(feature.Settings).KeepAsync(recording.Id, DataBroadcastFeature.Record(), CancellationToken.None);
+
+        using HttpResponseMessage after = await feature.ModuleAsync(recording, "64/7/0/1", ifNoneMatch: held.Tag);
+
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        Assert.NotEqual(held, after.Headers.ETag);
+        Assert.Equal(await before.Content.ReadAsByteArrayAsync(), await after.Content.ReadAsByteArrayAsync());
     }
 
     [Theory(DisplayName = "BR-BA-001: a module the record does not hold is not found, and the refusal is never held")]
