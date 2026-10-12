@@ -36,6 +36,8 @@ public sealed class DataBroadcastRecordFormatTests
 
     private static readonly byte[] VersionTwo = Rewritten(VersionOne, (9, 0x02), (19, 0x03));
 
+    private static readonly byte[] VersionThree = [.. Rewritten(VersionTwo, (9, 0x03)), 0x5E];
+
     [Fact(DisplayName = "BR-BD-005: a record is written and read back whole, and takes the bytes it says it takes")]
     public void ARecordIsWrittenAndReadBackWhole()
     {
@@ -53,7 +55,7 @@ public sealed class DataBroadcastRecordFormatTests
             read.Carousels[0].Versions.Select(version => (version.ModuleId, version.Version, version.FirstSeen, version.LastSeen)));
         Assert.Equal("<bml>天気</bml>", Encoding.UTF8.GetString(read.Carousels[0].Versions[0].Resources[0].Body.Span));
         Assert.Equal(Png, read.Carousels[1].Versions[0].Resources[0].Body.ToArray());
-        Assert.Equal([-9_000L, 450_000L], read.Events.Select(message => message.FiresAt));
+        Assert.Equal([(-9_000L, 0x40), (450_000L, 0x5E)], read.Events.Select(message => (message.FiresAt, message.ComponentTag)));
         Assert.Equal([0x01, 0x02], read.Events[1].PrivateData.ToArray());
     }
 
@@ -118,7 +120,7 @@ public sealed class DataBroadcastRecordFormatTests
     [Fact(DisplayName = "BR-BD-005: each event message of a record is the side channel's event message, its kind included")]
     public void EachEventMessageIsTheSideChannelsEventMessage()
     {
-        EventMessage message = new(0xABC, 0x1234, 0x05, EventTiming.Npt, (1L << 33) + 90_000, new byte[] { 0x01, 0x02, 0x03 });
+        EventMessage message = new(0xABC, 0x1234, 0x05, EventTiming.Npt, (1L << 33) + 90_000, new byte[] { 0x01, 0x02, 0x03 }, componentTag: 0x6E);
         DataBroadcastRecord record = new(0, Entry, [], [message], false);
 
         byte[] written = DataBroadcastRecordFormat.Written(record);
@@ -142,8 +144,8 @@ public sealed class DataBroadcastRecordFormatTests
         Assert.Equal(("a", "text/X-arib-bml", ResourceForm.Text, "<a>"), (resource.Path, resource.MediaType, resource.Form, Encoding.ASCII.GetString(resource.Body.Span)));
         Assert.Equal((1, 2, 5, EventTiming.Immediate, 240_000L), (message.Group, message.Id, message.MessageType, message.Timing, message.FiresAt));
         Assert.Equal([0xAA, 0xBB], message.PrivateData.ToArray());
+        Assert.Null(message.ComponentTag);
         Assert.False(read.AutoStart);
-        Assert.Equal(Rewritten(VersionOne, (9, 0x02)), DataBroadcastRecordFormat.Written(read));
     }
 
     [Fact(DisplayName = "BR-BV-004: a record of format version 2 written byte by byte is read with whether it opens by itself")]
@@ -154,7 +156,26 @@ public sealed class DataBroadcastRecordFormatTests
         Assert.Equal((90_000L, Entry, true, true), (read.StartsAt, read.EntryTag, read.Incomplete, read.AutoStart));
         ModuleVersion version = Assert.Single(Assert.Single(read.Carousels).Versions);
         Assert.Equal((0, 1, 180_000L, 270_000L), (version.ModuleId, version.Version, version.FirstSeen, version.LastSeen));
-        Assert.Equal(VersionTwo, DataBroadcastRecordFormat.Written(read));
+        Assert.Null(Assert.Single(read.Events).ComponentTag);
+    }
+
+    [Fact(DisplayName = "BR-BD-005: a record of format version 3 written byte by byte is read with the stream each event message came on")]
+    public void ARecordOfVersionThreeIsReadWithTheStreamOfEachEvent()
+    {
+        DataBroadcastRecord read = DataBroadcastRecordFormat.Read(VersionThree)!;
+
+        EventMessage message = Assert.Single(read.Events);
+        Assert.Equal((1, 2, 240_000L, 0x5E), (message.Group, message.Id, message.FiresAt, message.ComponentTag));
+        Assert.Equal([0xAA, 0xBB], message.PrivateData.ToArray());
+        Assert.Equal(VersionThree, DataBroadcastRecordFormat.Written(read));
+    }
+
+    [Fact(DisplayName = "BR-BD-005: a record whose event messages do not name their streams is not written")]
+    public void ARecordWhoseEventsDoNotNameTheirStreamsIsNotWritten()
+    {
+        DataBroadcastRecord read = DataBroadcastRecordFormat.Read(VersionTwo)!;
+
+        Assert.Throws<ArgumentException>(() => DataBroadcastRecordFormat.Written(read));
     }
 
     [Theory(DisplayName = "BR-BD-005: whether a record opens by itself and whether it is incomplete are written apart and read back")]
@@ -186,13 +207,19 @@ public sealed class DataBroadcastRecordFormatTests
             Assert.Null(DataBroadcastRecordFormat.Read(VersionTwo.AsMemory(0, length)));
         }
 
+        for (int length = 0; length < VersionThree.Length; length++)
+        {
+            Assert.Null(DataBroadcastRecordFormat.Read(VersionThree.AsMemory(0, length)));
+        }
+
         Assert.Null(DataBroadcastRecordFormat.Read((byte[])[.. VersionOne, 0x00]));
         Assert.Null(DataBroadcastRecordFormat.Read((byte[])[.. VersionTwo, 0x00]));
+        Assert.Null(DataBroadcastRecordFormat.Read((byte[])[.. VersionThree, 0x00]));
     }
 
     [Theory(DisplayName = "BR-BD-005: bytes this format did not write are no record, and reading them throws nothing")]
     [InlineData(0, 0x00)]
-    [InlineData(9, 0x03)]
+    [InlineData(9, 0x04)]
     [InlineData(19, 0x02)]
     [InlineData(19, 0x03)]
     [InlineData(55, 0x00)]
@@ -209,13 +236,14 @@ public sealed class DataBroadcastRecordFormatTests
         Assert.Null(DataBroadcastRecordFormat.Read(spoilt));
     }
 
-    [Theory(DisplayName = "BR-BD-005: a record of format version 2 marked with a bit it does not name is no record")]
+    [Theory(DisplayName = "BR-BD-005: a record of format version 2 or 3 marked with a bit it does not name is no record")]
     [InlineData(0x04)]
     [InlineData(0x80)]
     public void ARecordOfVersionTwoMarkedWithABitItDoesNotNameIsNoRecord(byte marks)
     {
         Assert.Null(DataBroadcastRecordFormat.Read(Rewritten(VersionTwo, (19, marks))));
         Assert.False(DataBroadcastRecordFormat.Heads(Rewritten(VersionTwo, (19, marks))));
+        Assert.Null(DataBroadcastRecordFormat.Read(Rewritten(VersionThree, (19, marks))));
     }
 
     [Fact(DisplayName = "BR-BD-005: every version of a record is found by its carousel, download, module and version without reading the others")]
@@ -295,7 +323,9 @@ public sealed class DataBroadcastRecordFormatTests
         DataBroadcastOutline read = (await DataBroadcastRecordFormat.OutlineAsync(reading, CancellationToken.None))!;
 
         Assert.Equal(Outlined(record.Outline), Outlined(read));
-        Assert.Equal(record.Events.Select(message => (message.Id, message.FiresAt)), read.Events.Select(message => (message.Id, message.FiresAt)));
+        Assert.Equal(
+            record.Events.Select(message => (message.Id, message.FiresAt, message.ComponentTag)),
+            read.Events.Select(message => (message.Id, message.FiresAt, message.ComponentTag)));
         Assert.Equal([0x01, 0x02], read.Events[1].PrivateData.ToArray());
     }
 
@@ -308,6 +338,17 @@ public sealed class DataBroadcastRecordFormatTests
 
         Assert.Equal((90_000L, Entry, true, false), (read.StartsAt, read.EntryTag, read.Incomplete, read.AutoStart));
         Assert.Equal(11, Assert.Single(Assert.Single(read.Carousels).Versions).EntityBytes);
+        Assert.Null(Assert.Single(read.Events).ComponentTag);
+    }
+
+    [Fact(DisplayName = "BR-BD-005: the outline of a record of format version 3 is read with the stream each event message came on")]
+    public async Task TheOutlineOfARecordOfVersionThreeIsReadWithTheStreamOfEachEvent()
+    {
+        using MemoryStream reading = new(VersionThree);
+
+        DataBroadcastOutline read = (await DataBroadcastRecordFormat.OutlineAsync(reading, CancellationToken.None))!;
+
+        Assert.Equal(0x5E, Assert.Single(read.Events).ComponentTag);
     }
 
     [Fact(DisplayName = "BR-BA-001: the outline of a record is read without reading the resources of its versions")]
@@ -393,8 +434,8 @@ public sealed class DataBroadcastRecordFormatTests
                     ]),
             ],
             [
-                new EventMessage(1, 2, 1, EventTiming.Npt, 450_000, new byte[] { 0x01, 0x02 }),
-                new EventMessage(1, 1, 1, EventTiming.Immediate, -9_000, ReadOnlyMemory<byte>.Empty),
+                new EventMessage(1, 2, 1, EventTiming.Npt, 450_000, new byte[] { 0x01, 0x02 }, componentTag: 0x5E),
+                new EventMessage(1, 1, 1, EventTiming.Immediate, -9_000, ReadOnlyMemory<byte>.Empty, componentTag: Entry),
             ],
             true);
 

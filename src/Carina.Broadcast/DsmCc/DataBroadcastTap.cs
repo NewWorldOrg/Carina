@@ -267,7 +267,7 @@ public sealed class DataBroadcastTap
             reads.Add(outcome switch
             {
                 EventMessageOutcome.Timed timed
-                    => new DataBroadcastRead.EventMessageTimed(now, timed.Message, clock.Place(timed.Message.FiresAt) ?? now),
+                    => new DataBroadcastRead.EventMessageTimed(now, component.Tag, timed.Message, clock.Place(timed.Message.FiresAt) ?? now),
                 EventMessageOutcome.Referred referred
                     => new DataBroadcastRead.NptReferred(now, component.Tag, referred.Reference, clock.Place(referred.Reference.Stc) ?? now),
                 EventMessageOutcome.Discarded discarded => new DataBroadcastRead.EventMessageDiscarded(now, discarded.Defect),

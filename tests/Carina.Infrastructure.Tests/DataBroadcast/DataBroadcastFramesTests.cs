@@ -57,7 +57,34 @@ public sealed class DataBroadcastFramesTests
         Assert.Equal((0xABC, 0x1234, 0x05, (int)EventTiming.Npt), (read.Group, read.Id, read.MessageType, read.Timing));
         Assert.Equal((1UL << 33) + 90_000, read.FiresAt);
         Assert.Equal([0x01, 0x02, 0x03], read.PrivateData);
+        Assert.Null(read.ComponentTag);
         Assert.Equal(message.Bytes, frame.Payload.Length);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: an event message closes with the tag of the stream it came on, after its private data, leaving the first seventeen bytes as they were")]
+    public void AnEventMessageClosesWithTheTagOfItsStream()
+    {
+        EventMessage message = new(0x012, 0x0034, 0x05, EventTiming.Immediate, 0x0102_0304, new byte[] { 0xAA, 0xBB }, componentTag: 0x5E);
+
+        LiveFrame frame = DataBroadcastFrames.Event(message, At);
+
+        Assert.Equal(
+            [0x03, 0x00, 0x12, 0x00, 0x34, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x00, 0x02, 0xAA, 0xBB, 0x5E],
+            frame.Payload.ToArray());
+        Assert.Equal(0x5E, SideChannelReading.Event(frame).ComponentTag);
+        Assert.Equal(message.Bytes, frame.Payload.Length);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: an event message moved back by the wraps keeps the tag of its stream")]
+    public void AnEventMessageMovedBackKeepsTheTagOfItsStream()
+    {
+        const long Lap = 1L << 33;
+        EventMessage message = new(1, 2, 3, EventTiming.Immediate, Lap + 500, new byte[] { 0x07 }, componentTag: 0x6E);
+
+        EventRead moved = SideChannelReading.Event(DataBroadcastFrames.Shifted(DataBroadcastFrames.Event(message, Lap + 400), Lap));
+
+        Assert.Equal((500UL, 0x6E), (moved.FiresAt, moved.ComponentTag));
+        Assert.Equal([0x07], moved.PrivateData);
     }
 
     [Fact(DisplayName = "BR-BD-004: word that there is no data broadcast is the kind byte alone")]

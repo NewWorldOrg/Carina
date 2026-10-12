@@ -8,8 +8,8 @@ namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
 /// The frames of the data broadcast side channel: the catalog in CBOR, a module with its resources, an event
-/// message, word that the service carries no data broadcast, and a data stream's reference of the programme
-/// time, each opened by the byte that says which.
+/// message with the tag of the stream it came on, word that the service carries no data broadcast, and a data
+/// stream's reference of the programme time, each opened by the byte that says which.
 /// </summary>
 public static class DataBroadcastFrames
 {
@@ -88,11 +88,14 @@ public static class DataBroadcastFrames
 
     /// <summary>
     /// An event message as the side channel carries it, opened by its kind, with the moment it fires written as
-    /// <paramref name="firesAt"/>, into <paramref name="into"/>, answering how many bytes that took.
+    /// <paramref name="firesAt"/> and closed by the tag of its stream when that is known, into
+    /// <paramref name="into"/>, answering how many bytes that took.
     /// </summary>
     public static int WriteEvent(EventMessage message, long firesAt, Span<byte> into)
     {
         ArgumentNullException.ThrowIfNull(message);
+
+        int privateDataEnd = EventMessage.FramingBytes + message.PrivateData.Length;
 
         into[0] = EventKind;
         BinaryPrimitives.WriteUInt16BigEndian(into[1..], (ushort)message.Group);
@@ -103,7 +106,14 @@ public static class DataBroadcastFrames
         BinaryPrimitives.WriteUInt16BigEndian(into[15..], (ushort)message.PrivateData.Length);
         message.PrivateData.Span.CopyTo(into[EventMessage.FramingBytes..]);
 
-        return EventMessage.FramingBytes + message.PrivateData.Length;
+        if (message.ComponentTag is not { } tag)
+        {
+            return privateDataEnd;
+        }
+
+        into[privateDataEnd] = (byte)tag;
+
+        return privateDataEnd + EventMessage.ComponentTagBytes;
     }
 
     public static LiveFrame Absent(long at) => Frame(at, [AbsentKind]);

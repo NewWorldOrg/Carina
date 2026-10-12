@@ -40,9 +40,17 @@ public sealed record DataBroadcastCarouselResponder(int Tag, uint DownloadId, IR
 
 /// <summary>
 /// One event message at the second of the source played it fires at, with its group, id, type, whether it was sent
-/// to fire at once, and its private data.
+/// to fire at once, its private data, and the tag of the stream it came on, null for a recording kept before that
+/// was kept.
 /// </summary>
-public sealed record DataBroadcastEventResponder(int Group, int Id, int Type, bool Immediate, double AtSec, byte[] PrivateData)
+public sealed record DataBroadcastEventResponder(
+    int Group,
+    int Id,
+    int Type,
+    bool Immediate,
+    double AtSec,
+    byte[] PrivateData,
+    int? ComponentTag)
 {
     public static DataBroadcastEventResponder Of(PlacedEvent placed)
     {
@@ -54,7 +62,8 @@ public sealed record DataBroadcastEventResponder(int Group, int Id, int Type, bo
             placed.Message.MessageType,
             placed.Message.IsImmediate,
             placed.At.TotalSeconds,
-            placed.Message.PrivateData.ToArray());
+            placed.Message.PrivateData.ToArray(),
+            placed.Message.ComponentTag);
     }
 }
 
