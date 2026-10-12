@@ -113,6 +113,22 @@ app.MapGet(
     .WithEffect(EndpointEffect.Reading)
     .Ticketed();
 
+app.MapGet(
+        HybridcastAppDelivery.Path,
+        (HttpContext context, int networkId, int serviceId, string? uri, DataBroadcastRelayService relay) =>
+            HybridcastAppDelivery.Invoke(context, networkId, serviceId, uri, relay))
+    .ExcludeFromDescription()
+    .WithEffect(EndpointEffect.Reading)
+    .Ticketed();
+
+app.MapGet(
+        HybridcastSocketDelivery.Path,
+        (HttpContext context, int networkId, int serviceId, string? uri, DataBroadcastRelayService relay) =>
+            HybridcastSocketDelivery.Invoke(context, networkId, serviceId, uri, relay))
+    .ExcludeFromDescription()
+    .WithEffect(EndpointEffect.Reading)
+    .Ticketed();
+
 app.MapMethods(VideoDelivery.Path, VideoDelivery.Methods, (HttpContext context, string id, PlaybackService playback) =>
     VideoDelivery.Invoke(context, id, playback)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading).Ticketed();
 

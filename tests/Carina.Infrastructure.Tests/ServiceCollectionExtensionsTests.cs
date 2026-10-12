@@ -430,6 +430,18 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Equal(BroadcasterRelaySettings.Default, provider.GetRequiredService<BroadcasterRelaySettings>());
     }
 
+    [Fact(DisplayName = "BR-BA-004: registers one relay for Hybridcast applications, introducing itself as the data broadcast relay does, and one shelf of the applications started")]
+    public void RegistersTheHybridcastRelay()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.IsType<HybridcastRelay>(provider.GetRequiredService<IHybridcastRelay>());
+        Assert.Same(provider.GetRequiredService<IHybridcastRelay>(), provider.GetRequiredService<IHybridcastRelay>());
+        Assert.IsType<HybridcastLaunchShelf>(provider.GetRequiredService<IHybridcastLaunches>());
+        Assert.Same(provider.GetRequiredService<IHybridcastLaunches>(), provider.GetRequiredService<IHybridcastLaunches>());
+        Assert.Equal(BroadcasterRelaySettings.Default.UserAgent, provider.GetRequiredService<HybridcastRelaySettings>().UserAgent);
+    }
+
     [Fact(DisplayName = "registers the follow of recordings being written for their learning data alongside the other hosted services, with what it reaches for")]
     public void RegistersTheLearningFollowAlongsideTheOtherHostedServices()
     {

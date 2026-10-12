@@ -11,3 +11,15 @@ public sealed record TransmitDataBroadcastRequest
 
     public string? Charset { get; init; }
 }
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record StartHybridcastRequest
+{
+    public string? Ait { get; init; }
+
+    public long? OrgId { get; init; }
+
+    public int? AppId { get; init; }
+
+    public string? ReceiverScript { get; init; }
+}

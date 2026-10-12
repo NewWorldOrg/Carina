@@ -44,6 +44,13 @@ public sealed class PublicOrigin
 
     public static string RedirectUriAt(string origin) => $"{origin}{OidcHandshake.CallbackPath}";
 
+    public string OriginFor(string arrivedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(arrivedAt);
+
+        return named ?? arrivedAt;
+    }
+
     public PublicRedirectUri RedirectUriFor(string arrivedAt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(arrivedAt);

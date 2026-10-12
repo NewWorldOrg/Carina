@@ -145,6 +145,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getEncodeDurations",
                 "getEncodeSettings",
                 "getHealth",
+                "getLiveDataBroadcastAit",
                 "getLiveDataBroadcastReceiverId",
                 "getMe",
                 "getMigrationRecord",
@@ -176,6 +177,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getVideoScrubFrame",
                 "getVideoThumbnail",
                 "impactOfRules",
+                "issueLiveHybridcastTicket",
                 "issueLiveTicket",
                 "issueVideoTicket",
                 "listEncodeDestinations",
@@ -699,6 +701,48 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             ["caSystemId", "cardId"],
             schemas["DataBroadcastReceiverIdResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
+    [Fact(DisplayName = "FR-015: an AIT is described as the applications it names, read from the address in the query")]
+    public async Task AnAitIsDescribedAsTheApplicationsItNames()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/live/{networkId}-{serviceId}/data-broadcast/ait"]!["get"]!;
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["networkId:path", "serviceId:path", "uri:query"],
+            operation["parameters"]!.AsArray()
+                .Select(parameter => $"{parameter!["name"]!.GetValue<string>()}:{parameter["in"]!.GetValue<string>()}")
+                .ToArray());
+        Assert.Equal(
+            ["200", "400", "401", "403", "404", "500", "502"],
+            operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["orgId", "appId", "controlCode", "entryUrl", "profile", "boundary"],
+            schemas["HybridcastApplicationResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["permissionBitmap", "managedUrls"],
+            schemas["HybridcastBoundaryResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BA-004: starting an application is described with what it is started by and the ticket and path its frame opens")]
+    public async Task StartingAnApplicationIsDescribed()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/live/{networkId}-{serviceId}/data-broadcast/app/ticket"]!["post"]!;
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["200", "400", "401", "403", "404", "429", "500", "502"],
+            operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["ait", "orgId", "appId", "receiverScript"],
+            schemas["StartHybridcastRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.False(schemas["StartHybridcastRequest"]!["additionalProperties"]!.GetValue<bool>());
+        Assert.Equal(
+            ["inTheClear", "lapsesAt", "entryUrl", "address"],
+            schemas["HybridcastTicketResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
     [Fact(DisplayName = "BR-BD-013: a fetch from a broadcaster's server names the address in the query, and its bytes are left out of the JSON the document describes")]
