@@ -116,6 +116,29 @@ public sealed class TransportStreamDataBroadcastTakerTests : IDisposable
             record.Events.Select(message => DataBroadcastFrames.Event(message, 0).Payload.ToArray()));
     }
 
+    [Fact(DisplayName = "BR-BD-005: the event messages of a stream without a data component descriptor are kept in the record beside those of the carousel's stream")]
+    public async Task TheEventsOfAStreamWithoutADataComponentAreKeptInTheRecord()
+    {
+        starts.Start = TimeSpan.Zero;
+        byte[] broadcast = new CarouselBroadcast()
+            .Associated()
+            .Mapped(eventStreamTag: CarouselBroadcast.EventStreamTag)
+            .At(Second)
+            .Listed(1, Startup)
+            .Delivered(Startup)
+            .At(3 * Second)
+            .Fired(0, 0x12, 0x0345, 0x06)
+            .At(4 * Second)
+            .FiredOn(CarouselBroadcast.EventStreamPid, 0, 0x13, 0x0346, 0x06, 0xEE)
+            .At(5 * Second)
+            .Bytes;
+
+        DataBroadcastRecord record = (await Taker().TakeAsync(await WrittenAsync(broadcast), Service, Cancel)).Record!;
+
+        Assert.Equal([(0x12, 0x0345, 3 * Second), (0x13, 0x0346, 4 * Second)], record.Events.Select(message => (message.Group, message.Id, message.FiresAt)));
+        Assert.Equal(CarouselBroadcast.EntryTag, Assert.Single(record.Carousels).Tag);
+    }
+
     [Fact(DisplayName = "BR-BS-001: a recording whose service carries no data broadcast has none, and nothing is asked of its clock")]
     public async Task ARecordingWithNoDataBroadcastHasNone()
     {

@@ -42,6 +42,26 @@ public sealed class CarouselReaderTests
         Assert.Equal([CarouselBroadcast.EntryTag, CarouselBroadcast.OtherTag], Assert.IsType<CarouselSignal.Carried>(read.Signal).Tags);
     }
 
+    [Fact(DisplayName = "BR-BD-004: a reference of the programme time on a stream without a data component descriptor is taken by the state under its tag")]
+    public void AReferenceOnAStreamWithoutADataComponentIsTakenByTheStateUnderItsTag()
+    {
+        CarouselReader reader = new(Service);
+        CarouselState state = new();
+
+        IReadOnlyList<CarouselSignalRead> reads = reader.Read(new CarouselBroadcast()
+            .Associated()
+            .Mapped(eventStreamTag: CarouselBroadcast.EventStreamTag)
+            .At(Second)
+            .Referred(CarouselBroadcast.EventStreamPid, stc: 2 * Second, npt: 10 * Second)
+            .Bytes);
+
+        Assert.Equal([CarouselBroadcast.EntryTag, CarouselBroadcast.EventStreamTag], Assert.IsType<CarouselSignal.Carried>(reads[0].Signal).Tags);
+        List<CarouselDelta> deltas = [.. reads.SelectMany(read => state.Apply(read.Signal, read.At))];
+        CarouselDelta.NptReferred referred = Assert.Single(deltas.OfType<CarouselDelta.NptReferred>());
+        Assert.Equal((CarouselBroadcast.EventStreamTag, 10 * Second), (referred.Reference.Tag, referred.Reference.Npt));
+        Assert.Equal([CarouselBroadcast.EventStreamTag], state.NptReferences.Select(reference => reference.Tag));
+    }
+
     [Fact(DisplayName = "BR-BD-004: a service with no data stream is read as carrying none")]
     public void AServiceWithNoDataStreamIsReadAsCarryingNone()
     {

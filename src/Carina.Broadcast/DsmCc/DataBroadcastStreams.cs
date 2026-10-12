@@ -11,14 +11,16 @@ public static class DataBroadcastStreams
 
     public const int EntryComponentTag = 0x40;
 
+    public const int LastDataComponentTag = 0x7F;
+
     private const int DataComponentIdSize = 2;
 
     public static DataBroadcastService Find(ProgramMapTable table)
     {
         ArgumentNullException.ThrowIfNull(table);
 
-        var found = new List<DataBroadcastStream>();
-        var defects = new List<DataBroadcastStreamDefect>();
+        List<DataBroadcastStream> found = [];
+        List<DataBroadcastStreamDefect> defects = [];
 
         foreach (ElementaryStream stream in table.Streams)
         {
@@ -33,13 +35,34 @@ public static class DataBroadcastStreams
 
     private static DataBroadcastStream? Read(ElementaryStream stream, List<DataBroadcastStreamDefect> defects)
     {
-        Descriptor? component = stream.Descriptors.WithTag(DescriptorTags.DataComponent);
-
-        if (stream.StreamType != DsmCcSectionsStreamType || component is null)
+        if (stream.StreamType != DsmCcSectionsStreamType)
         {
             return null;
         }
 
+        Descriptor? component = stream.Descriptors.WithTag(DescriptorTags.DataComponent);
+
+        return component is null ? EventMessagesOnly(stream) : Carousel(stream, component, defects);
+    }
+
+    private static DataBroadcastStream? EventMessagesOnly(ElementaryStream stream)
+    {
+        Descriptor? identifier = stream.Descriptors.WithTag(DescriptorTags.StreamIdentifier);
+
+        if (identifier is null || identifier.Payload.IsEmpty)
+        {
+            return null;
+        }
+
+        int tag = identifier.Payload.Span[0];
+
+        return tag is >= EntryComponentTag and <= LastDataComponentTag
+            ? new DataBroadcastStream(stream.Pid, tag, null, CarriesCarousels: false)
+            : null;
+    }
+
+    private static DataBroadcastStream? Carousel(ElementaryStream stream, Descriptor component, List<DataBroadcastStreamDefect> defects)
+    {
         if (component.Payload.Length < DataComponentIdSize)
         {
             return Refuse(stream, DataBroadcastDefect.MalformedDataComponent, defects);
@@ -71,7 +94,7 @@ public static class DataBroadcastStreams
             defects.Add(new DataBroadcastStreamDefect(stream.Pid, DataBroadcastDefect.MalformedBxmlInfo));
         }
 
-        return new DataBroadcastStream(stream.Pid, identifier.Payload.Span[0], info);
+        return new DataBroadcastStream(stream.Pid, identifier.Payload.Span[0], info, CarriesCarousels: true);
     }
 
     private static DataBroadcastStream? Refuse(ElementaryStream stream, DataBroadcastDefect defect, List<DataBroadcastStreamDefect> defects)

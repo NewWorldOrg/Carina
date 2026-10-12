@@ -7,7 +7,7 @@ namespace Carina.Broadcast.DsmCc;
 /// Reads one programme's data broadcast out of a transport stream handed over in pieces of any length: the
 /// association table to the programme map, the map to the data streams, and each data stream's sections to
 /// the carousels, the event messages and the references of the programme time, timed on the programme's clock
-/// followed through its wrap.
+/// followed through its wrap. Carousels are put together only from the streams marked as carrying them.
 /// </summary>
 /// <remarks>
 /// Nothing is said of the data broadcast until the programme's clock has been heard. A new version of the
@@ -219,7 +219,7 @@ public sealed class DataBroadcastTap
 
         foreach (DataBroadcastStream stream in service.Streams)
         {
-            components[stream.Pid] = new Component(stream.ComponentTag, new SectionAssembler(stream.Pid), new EventMessageClock());
+            components[stream.Pid] = new Component(stream.ComponentTag, stream.CarriesCarousels, new SectionAssembler(stream.Pid), new EventMessageClock());
         }
 
         unannounced = service;
@@ -238,6 +238,11 @@ public sealed class DataBroadcastTap
             {
                 Time(component, section, now, reads);
 
+                continue;
+            }
+
+            if (!component.CarriesCarousels)
+            {
                 continue;
             }
 
@@ -283,5 +288,5 @@ public sealed class DataBroadcastTap
         return null;
     }
 
-    private sealed record Component(int Tag, SectionAssembler Sections, EventMessageClock Events);
+    private sealed record Component(int Tag, bool CarriesCarousels, SectionAssembler Sections, EventMessageClock Events);
 }
