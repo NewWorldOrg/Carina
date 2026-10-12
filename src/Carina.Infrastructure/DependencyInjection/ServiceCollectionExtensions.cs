@@ -295,7 +295,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ClientSecretSeal>();
         services.TryAddSingleton<ILoginThrottle, LoginThrottle>();
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
-        services.AddSingleton<IDriverClient, DriverIpcClient>();
+        services.AddSingleton<DriverIpcClient>();
+        services.AddSingleton<IDriverClient>(provider => provider.GetRequiredService<DriverIpcClient>());
+        services.AddSingleton<IConditionalAccessCardReader>(provider => provider.GetRequiredService<DriverIpcClient>());
         services.AddSingleton<DriverConnectionMonitor>();
         services.AddSingleton<ScanRunner>();
         services.AddSingleton<DriverSignalRelay>();

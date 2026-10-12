@@ -1,6 +1,8 @@
 using Carina.Api.Common;
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;
+using Carina.Domain.Driver;
 
 namespace Carina.Api.Services;
 
@@ -9,19 +11,73 @@ public enum DataBroadcastRelayRefusal
     NotAllowed = 1,
 
     NoSuchChannel = 2,
+
+    NoCard = 3,
+
+    DriverUnreachable = 4,
 }
 
 /// <summary>
 /// Relays a live channel's data broadcast document to a broadcaster's server, only where the browser asking allows
-/// communication and only for a channel that can be watched live here.
+/// communication and only for a channel that can be watched live here, and names the receiver's card to the document
+/// only where the browser lets that be handed over too.
 /// </summary>
 public sealed class DataBroadcastRelayService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates,
-    IBroadcasterRelay relay)
+    IBroadcasterRelay relay,
+    IConditionalAccessCardReader cards)
 {
     public const string CommunicationIsOff =
         "Communication for data broadcasts is off in this browser's viewing settings.";
+
+    public const string ReceiverIdIsKept =
+        "Handing the receiver's identifier to data broadcasts is off in this browser's viewing settings.";
+
+    public const string NoCardHasAnswered =
+        "No conditional-access card has answered the driver, so there is no identifier to hand over.";
+
+    public const string DriverOutOfReach =
+        "The driver could not be asked which card answered it.";
+
+    /// <summary>
+    /// The card the driver last heard from, for a document of a live channel to be given as the receiver's
+    /// identifier: only where the browser allows communication and hands the identifier over.
+    /// </summary>
+    public async Task<ServiceResult<ConditionalAccessCardDto, DataBroadcastRelayRefusal>> ReceiverIdAsync(
+        NetworkId network,
+        ServiceId service,
+        bool allowed,
+        bool handed,
+        CancellationToken cancellationToken)
+    {
+        if (await RefusedAsync(network, service, allowed, cancellationToken) is { } refused)
+        {
+            return ServiceResult<ConditionalAccessCardDto, DataBroadcastRelayRefusal>.Failure(refused.Said, refused.Refusal);
+        }
+
+        if (!handed)
+        {
+            return ServiceResult<ConditionalAccessCardDto, DataBroadcastRelayRefusal>.Failure(
+                ReceiverIdIsKept,
+                DataBroadcastRelayRefusal.NotAllowed);
+        }
+
+        DriverCall<ConditionalAccessCardDto> asked = await cards.GetConditionalAccessCardAsync(cancellationToken);
+
+        if (asked.TryGetValue(out ConditionalAccessCardDto? card))
+        {
+            return ServiceResult<ConditionalAccessCardDto, DataBroadcastRelayRefusal>.Success(card);
+        }
+
+        return asked.Outcome is DriverCallOutcome.Unreachable
+            ? ServiceResult<ConditionalAccessCardDto, DataBroadcastRelayRefusal>.Failure(
+                DriverOutOfReach,
+                DataBroadcastRelayRefusal.DriverUnreachable)
+            : ServiceResult<ConditionalAccessCardDto, DataBroadcastRelayRefusal>.Failure(
+                NoCardHasAnswered,
+                DataBroadcastRelayRefusal.NoCard);
+    }
 
     public async Task<ServiceResult<RelayedText, DataBroadcastRelayRefusal>> TransmitAsync(
         NetworkId network,

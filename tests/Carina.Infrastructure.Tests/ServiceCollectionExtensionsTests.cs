@@ -322,6 +322,9 @@ public sealed class ServiceCollectionExtensionsTests
         using ServiceProvider provider = Build(ValidSettings());
 
         Assert.IsType<DriverIpcClient>(provider.GetRequiredService<IDriverClient>());
+        Assert.Same(
+            provider.GetRequiredService<IDriverClient>(),
+            provider.GetRequiredService<IConditionalAccessCardReader>());
         Assert.NotNull(provider.GetRequiredService<DriverConnectionMonitor>());
         Assert.Same(
             provider.GetRequiredService<DriverSignalRelay>(),

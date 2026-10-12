@@ -38,6 +38,8 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public IReadOnlyList<DetectedDeviceDto> DetectedDevices { get; set; } = [];
 
+    public ConditionalAccessCardDto Card { get; set; } = new();
+
     public TunerLedgerDto Ledger { get; set; } = new();
 
     public DriverRestartDto Restart { get; set; } = new();
@@ -128,6 +130,8 @@ public sealed class FakeDriver : IAsyncDisposable
             driver.CannedAsync(context, driver.Diagnostics, DriverJson.Context.IReadOnlyListDiagnosticSnapshot));
         app.MapGet(DriverEndpoints.DevicesDetected, context =>
             driver.CannedAsync(context, driver.DetectedDevices, DriverJson.Context.IReadOnlyListDetectedDeviceDto));
+        app.MapGet(DriverEndpoints.ConditionalAccessCard, context =>
+            driver.CannedAsync(context, driver.Card, DriverJson.Context.ConditionalAccessCardDto));
         app.MapGet(DriverEndpoints.TunerLedger, context =>
             driver.CannedAsync(context, driver.Ledger, DriverJson.Context.TunerLedgerDto));
         app.MapPut(DriverEndpoints.Tuners, driver.ReplaceLedgerAsync);

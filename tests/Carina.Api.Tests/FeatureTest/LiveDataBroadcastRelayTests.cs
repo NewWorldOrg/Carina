@@ -6,8 +6,10 @@ using System.Text;
 using System.Text.Json;
 
 using Carina.Api.Live;
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;
+using Carina.Domain.Driver;
 using Carina.Infrastructure.DataBroadcast;
 using Carina.TestSupport;
 
@@ -48,8 +50,30 @@ internal sealed class ScriptedRelay : IBroadcasterRelay
     }
 }
 
+/// <summary>
+/// The driver as the HTTP surface asks it which card answered: it counts the asking and answers what it is told to.
+/// </summary>
+internal sealed class ScriptedCardReader : IConditionalAccessCardReader
+{
+    private int asked;
+
+    public int Asked => Volatile.Read(ref asked);
+
+    public DriverCall<ConditionalAccessCardDto> Answer { get; set; } =
+        DriverCall<ConditionalAccessCardDto>.Reached(new ConditionalAccessCardDto { CaSystemId = 5, CardId = "0A0B0C0D0E0F" });
+
+    public Task<DriverCall<ConditionalAccessCardDto>> GetConditionalAccessCardAsync(CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref asked);
+
+        return Task.FromResult(Answer);
+    }
+}
+
 internal sealed class DataBroadcastRelayFeature : IAsyncDisposable
 {
+    public const string ReceiverId = "/api/live/32736-1024/data-broadcast/receiver-id";
+
     public const string Transmit = "/api/live/32736-1024/data-broadcast/transmit";
 
     public const string Fetch = "/api/live/32736-1024/data-broadcast/fetch";
@@ -67,6 +91,7 @@ internal sealed class DataBroadcastRelayFeature : IAsyncDisposable
             services.AddSingleton<IBroadcastServiceRepository>(Services);
             services.AddSingleton<ICandidateChannelRepository>(Candidates);
             services.AddSingleton<IBroadcasterRelay>(Relay);
+            services.AddSingleton<IConditionalAccessCardReader>(Cards);
         }));
 
         Client = Built.CreateAuthenticatedClient();
@@ -86,10 +111,17 @@ internal sealed class DataBroadcastRelayFeature : IAsyncDisposable
 
     public ScriptedRelay Relay { get; } = new();
 
+    public ScriptedCardReader Cards { get; } = new();
+
     public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
 
     public void Allow(string said = DataBroadcastLineCookie.Allows)
         => Client.DefaultRequestHeaders.Add(HeaderNames.Cookie, $"{DataBroadcastLineCookie.Name}={said}");
+
+    public void AllowAndHand(string line = DataBroadcastLineCookie.Allows, string id = DataBroadcastReceiverIdCookie.Hands)
+        => Client.DefaultRequestHeaders.Add(
+            HeaderNames.Cookie,
+            $"{DataBroadcastLineCookie.Name}={line}; {DataBroadcastReceiverIdCookie.Name}={id}");
 
     public async Task<(HttpStatusCode Status, JsonElement Body)> TransmitAsync(object body, string path = Transmit)
     {
