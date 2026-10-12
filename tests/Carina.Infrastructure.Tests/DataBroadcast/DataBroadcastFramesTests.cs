@@ -135,6 +135,34 @@ public sealed class DataBroadcastFramesTests
         Assert.Same(moved, DataBroadcastFrames.Shifted(moved, 0));
     }
 
+    [Fact(DisplayName = "BR-BD-004: a reference of the programme time is written with its stream's tag, the moment it names, the programme time and the scale")]
+    public void AReferenceOfTheProgrammeTimeIsWrittenAndReadBack()
+    {
+        NptReference reference = new(0x40, (1L << 33) + 90_000, (1L << 33) - 1, 3, 2);
+
+        LiveFrame frame = DataBroadcastFrames.NptReference(reference, At);
+        NptRead read = SideChannelReading.Npt(frame);
+
+        Assert.Equal(LiveChannel.DataBroadcast, frame.Channel);
+        Assert.Equal((ulong)At, frame.Pts.Value);
+        Assert.Equal(new NptRead(0x40, (1UL << 33) + 90_000, (1UL << 33) - 1, 3, 2), read);
+        Assert.Equal(DataBroadcastFrames.NptReferenceLength, frame.Payload.Length);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a reference of the programme time told on a clock behind moves the moment it names and keeps the programme time")]
+    public void AReferenceToldOnAClockBehindMovesTheMomentItNames()
+    {
+        const long Lap = 1L << 33;
+        NptReference reference = new(0x40, Lap + 900, 45_000, 1, 1);
+
+        LiveFrame moved = DataBroadcastFrames.Shifted(DataBroadcastFrames.NptReference(reference, Lap + 400), Lap);
+        LiveFrame held = DataBroadcastFrames.Shifted(DataBroadcastFrames.NptReference(new NptReference(0x40, 100, 45_000, 1, 1), Lap + 400), Lap);
+
+        Assert.Equal(400UL, moved.Pts.Value);
+        Assert.Equal(new NptRead(0x40, 900, 45_000, 1, 1), SideChannelReading.Npt(moved));
+        Assert.Equal(0UL, SideChannelReading.Npt(held).Stc);
+    }
+
     [Fact]
     public void AMomentBeforeTheClockBeganIsSentAsItsStart()
         => Assert.Equal(0UL, DataBroadcastFrames.Absent(-1).Pts.Value);

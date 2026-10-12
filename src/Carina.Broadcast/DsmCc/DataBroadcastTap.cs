@@ -6,7 +6,8 @@ namespace Carina.Broadcast.DsmCc;
 /// <summary>
 /// Reads one programme's data broadcast out of a transport stream handed over in pieces of any length: the
 /// association table to the programme map, the map to the data streams, and each data stream's sections to
-/// the carousels and the event messages, timed on the programme's clock followed through its wrap.
+/// the carousels, the event messages and the references of the programme time, timed on the programme's clock
+/// followed through its wrap.
 /// </summary>
 /// <remarks>
 /// Nothing is said of the data broadcast until the programme's clock has been heard. A new version of the
@@ -262,8 +263,10 @@ public sealed class DataBroadcastTap
             {
                 EventMessageOutcome.Timed timed
                     => new DataBroadcastRead.EventMessageTimed(now, timed.Message, clock.Place(timed.Message.FiresAt) ?? now),
+                EventMessageOutcome.Referred referred
+                    => new DataBroadcastRead.NptReferred(now, component.Tag, referred.Reference, clock.Place(referred.Reference.Stc) ?? now),
                 EventMessageOutcome.Discarded discarded => new DataBroadcastRead.EventMessageDiscarded(now, discarded.Defect),
-                _ => throw new ArgumentOutOfRangeException(nameof(component), outcome, "An event message is timed or discarded."),
+                _ => throw new ArgumentOutOfRangeException(nameof(component), outcome, "An event message is timed or discarded, or the programme time is referred."),
             });
         }
     }

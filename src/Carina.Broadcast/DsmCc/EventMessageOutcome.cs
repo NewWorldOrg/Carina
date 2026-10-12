@@ -16,6 +16,16 @@ public abstract record EventMessageOutcome
         public TimedEventMessage Message { get; }
     }
 
+    public sealed record Referred : EventMessageOutcome
+    {
+        internal Referred(NptReference reference)
+        {
+            Reference = reference;
+        }
+
+        public NptReference Reference { get; }
+    }
+
     public sealed record Discarded : EventMessageOutcome
     {
         internal Discarded(EventMessageDefect defect)

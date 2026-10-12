@@ -11,8 +11,9 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// The data broadcast of one live channel: one reading of its transport stream and one state of its carousels,
 /// shared by every fan-out showing the channel. What changes is handed to each of them as a frame, beside the
 /// frames a viewer joining later is handed first: the catalog as it stands with every valid module that has
-/// arrived, or word that the channel carries no data broadcast. The catalog is handed on only when what it lists
-/// changes; the one kept for a viewer joining later is made again whenever a module arrives.
+/// arrived and each data stream's latest reference of the programme time, or word that the channel carries no
+/// data broadcast. The catalog is handed on only when what it lists changes; the one kept for a viewer joining
+/// later is made again whenever a module arrives.
 /// </summary>
 /// <remarks>
 /// Each fan-out is handed the frames on the clock of the pictures it carries: the transcoder behind it counts from
@@ -38,6 +39,8 @@ public sealed class DataBroadcastSession
     private readonly List<Shown> showing = [];
 
     private readonly Dictionary<(int Tag, int ModuleId, int Version), LiveFrame> modules = [];
+
+    private readonly Dictionary<int, LiveFrame> references = [];
 
     private LiveFrame? catalog;
 
@@ -202,6 +205,12 @@ public sealed class DataBroadcastSession
                 return module;
             case CarouselDelta.EventCame came:
                 return DataBroadcastFrames.Event(came.Message, at);
+            case CarouselDelta.NptReferred referred:
+                LiveFrame reference = DataBroadcastFrames.NptReference(referred.Reference, at);
+                references[referred.Reference.Tag] = reference;
+                Stand();
+
+                return reference;
             case CarouselDelta.Absent:
                 catalog = null;
                 absent = DataBroadcastFrames.Absent(at);
@@ -231,9 +240,21 @@ public sealed class DataBroadcastSession
             modules.Remove(gone);
         }
 
+        HashSet<int> referred = [.. state.NptReferences.Select(reference => reference.Tag)];
+
+        foreach (int gone in references.Keys.Where(tag => !referred.Contains(tag)).ToArray())
+        {
+            references.Remove(gone);
+        }
+
         standing = (catalog, absent) switch
         {
-            ({ } latest, _) => [latest, .. valid.Select(Key).Where(modules.ContainsKey).Select(key => modules[key])],
+            ({ } latest, _) =>
+            [
+                latest,
+                .. valid.Select(Key).Where(modules.ContainsKey).Select(key => modules[key]),
+                .. references.OrderBy(reference => reference.Key).Select(reference => reference.Value),
+            ],
             (null, { } nothing) => [nothing],
             _ => [],
         };
@@ -250,6 +271,7 @@ public sealed class DataBroadcastSession
         catalog = null;
         absent = null;
         modules.Clear();
+        references.Clear();
         standing = [];
 
         LiveFrame none = DataBroadcastFrames.Absent(latest);

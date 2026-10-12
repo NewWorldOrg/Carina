@@ -62,6 +62,8 @@ public sealed class DataBroadcastRecordBuilder(long mostBytes = DataBroadcastRec
                 eventBytes += came.Message.Bytes;
 
                 break;
+            case CarouselDelta.NptReferred:
+                break;
             case CarouselDelta.CarouselDropped dropped:
                 incomplete = true;
                 valid.RemoveWhere(key => key.Carousel.Tag == dropped.Tag);

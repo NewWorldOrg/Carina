@@ -88,7 +88,8 @@ public sealed class DataBroadcastRecordBuilderTests
             (Carousels.Listing(Carousels.Entry, 7, [], (0, 1)), 0),
             (Carousels.Listing(Carousels.Other, 9, [], (0, 1)), 0),
             (new CarouselSignal.EventTimed(Carousels.Event(2, 600)), 500),
-            (new CarouselSignal.EventTimed(Carousels.Event(1, 400)), 300));
+            (new CarouselSignal.EventTimed(Carousels.Event(1, 400)), 300),
+            (new CarouselSignal.NptReferred(new NptReference(Carousels.Entry, 300, 0, 1, 1)), 300));
 
         Assert.Equal([(Carousels.Entry, 7u), (Carousels.Other, 9u)], record.Carousels.Select(carousel => (carousel.Tag, carousel.DownloadId)));
         Assert.Equal([1, 2], record.Events.Select(message => message.Id));

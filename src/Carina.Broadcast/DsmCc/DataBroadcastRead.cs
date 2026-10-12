@@ -52,6 +52,26 @@ public abstract record DataBroadcastRead
         public long FiresAt { get; }
     }
 
+    public sealed record NptReferred : DataBroadcastRead
+    {
+        internal NptReferred(long at, int componentTag, NptReference reference, long stc)
+            : base(at)
+        {
+            ComponentTag = componentTag;
+            Reference = reference;
+            Stc = stc;
+        }
+
+        public int ComponentTag { get; }
+
+        public NptReference Reference { get; }
+
+        /// <summary>
+        /// The moment of the programme's clock the reference names, on the same clock as <see cref="DataBroadcastRead.At"/>.
+        /// </summary>
+        public long Stc { get; }
+    }
+
     public sealed record EventMessageDiscarded : DataBroadcastRead
     {
         internal EventMessageDiscarded(long at, EventMessageDefect defect)

@@ -2,7 +2,8 @@ namespace Carina.Domain.DataBroadcast;
 
 /// <summary>
 /// What changed in a <see cref="CarouselState"/>: the catalog, a module version that arrived, an event
-/// message that came, the data broadcast found not to be there, or a carousel left out.
+/// message that came, a data stream's reference of the programme time that moved, the data broadcast found
+/// not to be there, or a carousel left out.
 /// </summary>
 public abstract record CarouselDelta
 {
@@ -15,6 +16,8 @@ public abstract record CarouselDelta
     public sealed record ModuleArrived(uint DownloadId, ModuleVersion Module) : CarouselDelta;
 
     public sealed record EventCame(EventMessage Message) : CarouselDelta;
+
+    public sealed record NptReferred(NptReference Reference) : CarouselDelta;
 
     public sealed record Absent : CarouselDelta;
 

@@ -2,9 +2,10 @@ namespace Carina.Domain.DataBroadcast;
 
 /// <summary>
 /// The data broadcast of one live channel or one recording as it stands: whether the service carries one,
-/// the catalog, and every module version that is valid and has arrived. Each signal read of the stream moves
-/// it on and says what changed, at the moment it was read on the <see cref="StreamClock"/>, never a raw PTS.
-/// The catalog is told only when what it lists changes; a module that arrives is told on its own.
+/// the catalog, every module version that is valid and has arrived, and each data stream's reference of the
+/// programme time. Each signal read of the stream moves it on and says what changed, at the moment it was read
+/// on the <see cref="StreamClock"/>, never a raw PTS. The catalog is told only when what it lists changes; a
+/// module that arrives is told on its own, and so is a reference of the programme time that moved.
 /// </summary>
 public sealed class CarouselState
 {
@@ -12,6 +13,7 @@ public sealed class CarouselState
 
     private readonly SortedDictionary<int, Carousel> carousels = [];
     private readonly HashSet<(int Tag, CarouselDropReason Reason)> dropped = [];
+    private readonly SortedDictionary<int, NptReference> references = [];
 
     private DataBroadcastEntry? entry;
 
@@ -24,6 +26,11 @@ public sealed class CarouselState
     public IReadOnlyList<ModuleVersion> Modules
         => [.. carousels.Values.SelectMany(carousel => carousel.ArrivedInListedOrder())];
 
+    /// <summary>
+    /// The reference of the programme time each data stream last carried, in the order of their tags.
+    /// </summary>
+    public IReadOnlyList<NptReference> NptReferences => [.. references.Values];
+
     public IReadOnlyList<CarouselDelta> Apply(CarouselSignal signal, long at)
     {
         ArgumentNullException.ThrowIfNull(signal);
@@ -35,6 +42,7 @@ public sealed class CarouselState
             CarouselSignal.CatalogUpdated updated => List(updated, at),
             CarouselSignal.ModuleCompleted completed => Complete(completed, at),
             CarouselSignal.EventTimed timed => Fire(timed.Message),
+            CarouselSignal.NptReferred referred => Refer(referred.Reference),
             CarouselSignal.Dropped drop => Drop(drop.Tag, drop.Reason),
             _ => throw new ArgumentOutOfRangeException(nameof(signal), signal, "A signal is one of the kinds named."),
         };
@@ -58,6 +66,11 @@ public sealed class CarouselState
 
         dropped.RemoveWhere(seen => !listed.Contains(seen.Tag));
 
+        foreach (int gone in references.Keys.Where(tag => !listed.Contains(tag)).ToArray())
+        {
+            references.Remove(gone);
+        }
+
         return Changed();
     }
 
@@ -70,6 +83,7 @@ public sealed class CarouselState
 
         carousels.Clear();
         dropped.Clear();
+        references.Clear();
         entry = null;
         IsAbsent = true;
 
@@ -112,6 +126,19 @@ public sealed class CarouselState
 
     private IReadOnlyList<CarouselDelta> Fire(EventMessage message)
         => entry is null ? Nothing : [new CarouselDelta.EventCame(message)];
+
+    private IReadOnlyList<CarouselDelta> Refer(NptReference reference)
+    {
+        if (entry is null || !tags.Contains(reference.Tag)
+            || (references.TryGetValue(reference.Tag, out NptReference? held) && held == reference))
+        {
+            return Nothing;
+        }
+
+        references[reference.Tag] = reference;
+
+        return [new CarouselDelta.NptReferred(reference)];
+    }
 
     private IReadOnlyList<CarouselDelta> Drop(int tag, CarouselDropReason reason)
     {

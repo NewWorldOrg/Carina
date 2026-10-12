@@ -279,6 +279,61 @@ public sealed class DataBroadcastSessionTests
         Assert.Equal([0UL], after.Kept.Select(frame => frame.Pts.Value));
     }
 
+    [Fact(DisplayName = "BR-BD-004: a reference of the programme time reaches the viewers watching when it moves, and a viewer joining later is handed the latest after the modules")]
+    public async Task AReferenceReachesTheViewersWatchingAndTheLatestIsHandedToOneJoiningLater()
+    {
+        DataBroadcastSession session = Session();
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        session.Show(fanout);
+        session.Read(Carrying().Listed(1, Startup).Delivered(Startup).Bytes);
+        await using ILiveViewing watching = await Joined(fanout);
+        Taken(watching.Frames);
+
+        session.Read(new CarouselBroadcast().At(2 * Second).Sections(CarouselBroadcast.CarouselPid, Referring(0, 3 * Second, 0)).Bytes);
+        session.Read(new CarouselBroadcast().At(3 * Second).Sections(CarouselBroadcast.CarouselPid, Referring(1, 3 * Second, 0)).Bytes);
+        session.Read(new CarouselBroadcast().At(4 * Second).Sections(CarouselBroadcast.CarouselPid, Referring(2, 5 * Second, 90_000)).Bytes);
+
+        await using ILiveViewing late = await Joined(fanout);
+
+        IReadOnlyList<LiveFrame> told = Taken(watching.Frames);
+        Assert.Equal([3UL * Second, 5UL * Second], told.Select(frame => SideChannelReading.Npt(frame).Stc));
+        IReadOnlyList<LiveFrame> handed = Taken(late.Frames);
+        Assert.Equal(
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.NptReferenceKind],
+            handed.Select(SideChannelReading.KindOf));
+        Assert.Equal(new NptRead(CarouselBroadcast.EntryTag, 5UL * Second, 90_000, 1, 1), SideChannelReading.Npt(handed[2]));
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a fan-out first shown after the clock came around is handed the moment a reference names moved back by the wraps")]
+    public async Task AFanoutShownAfterTheClockCameAroundIsHandedReferencesMovedBackByTheWraps()
+    {
+        const long Lap = 1L << 33;
+        DataBroadcastSession session = Session();
+        session.Read(new CarouselBroadcast().Associated().Mapped().At(Lap - Second).Bytes);
+        session.Read(new CarouselBroadcast().At(Second).Sections(CarouselBroadcast.CarouselPid, Referring(0, 2 * Second, 0)).Bytes);
+        LiveFanout after = new(new LiveFanoutSettings());
+        session.Show(after);
+        await using ILiveViewing late = await Joined(after);
+
+        LiveFrame kept = Assert.Single(Taken(late.Frames), frame => SideChannelReading.KindOf(frame) == DataBroadcastFrames.NptReferenceKind);
+
+        Assert.Equal((ulong)Second, kept.Pts.Value);
+        Assert.Equal((ulong)(2 * Second), SideChannelReading.Npt(kept).Stc);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a data broadcast that stops keeps no reference for a viewer joining later")]
+    public void ADataBroadcastThatStopsKeepsNoReference()
+    {
+        DataBroadcastSession session = Session();
+        session.Read(Carrying().Sections(CarouselBroadcast.CarouselPid, Referring(0, 3 * Second, 0)).Bytes);
+        IReadOnlyList<byte> before = [.. session.Standing.Select(SideChannelReading.KindOf)];
+
+        session.Stop();
+
+        Assert.Equal([DataBroadcastFrames.CatalogKind, DataBroadcastFrames.NptReferenceKind], before);
+        Assert.Empty(session.Standing);
+    }
+
     [Fact]
     public void WhatIsWrittenIntoTheSeatIsRead()
     {
@@ -328,6 +383,14 @@ public sealed class DataBroadcastSessionTests
         => [.. ((List<object>)((Dictionary<string, object>)((List<object>)catalog["carousels"])[0])["modules"])
             .Cast<Dictionary<string, object>>()
             .Select(module => ((List<object>)module["resources"]).Cast<Dictionary<string, object>>().Select(resource => (string)resource["path"]).ToList())];
+
+    private static byte[] Referring(int version, long stc, long npt)
+        => new StreamDescriptorWriter
+        {
+            DataEventId = CarouselBroadcast.DataEventId,
+            VersionNumber = version,
+            Descriptors = StreamDescriptorWriter.NptReference(stc, npt),
+        }.ToSection().ToBytes();
 
     private static CarouselBroadcast Carrying() => new CarouselBroadcast().Associated().Mapped().At(Second);
 
