@@ -114,11 +114,22 @@ public sealed class HybridcastRelay : IHybridcastRelay, IDisposable
             return RelayedSocket.Failed(RelayResult.RefusedOrTooLarge);
         }
 
-        RelayedSocket opened = await ConnectAsync(channel, address, subProtocols, started, cancellationToken);
+        RelayedSocket? opened = null;
+
+        try
+        {
+            opened = await ConnectAsync(channel, address, subProtocols, started, cancellationToken);
+        }
+        finally
+        {
+            if (opened?.Socket is null)
+            {
+                GaveASocketBack(channel);
+            }
+        }
 
         if (opened.Socket is null)
         {
-            GaveASocketBack(channel);
             Write(channel, address, Socket, opened.Result, opened.HttpStatus, 0, 0, started);
         }
 
@@ -148,30 +159,41 @@ public sealed class HybridcastRelay : IHybridcastRelay, IDisposable
         CancellationToken cancellationToken)
     {
         ClientWebSocket upstream = new();
-        upstream.Options.HttpVersion = HttpVersion.Version11;
-        upstream.Options.HttpVersionPolicy = HttpVersionPolicy.RequestVersionExact;
-        upstream.Options.CollectHttpResponseDetails = true;
-        upstream.Options.SetRequestHeader("User-Agent", line.UserAgent);
-
-        foreach (string subProtocol in subProtocols)
-        {
-            upstream.Options.AddSubProtocol(subProtocol);
-        }
-
+        bool handed = false;
         using CancellationTokenSource deadline = new(settings.Time, clock);
         using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
 
         try
         {
+            Prepare(upstream.Options, subProtocols);
             await upstream.ConnectAsync(address, line.Client, linked.Token);
+            handed = true;
 
             return new RelayedSocket(RelayResult.Answered, null, new CarriedSocket(this, channel, address, upstream, started));
         }
         catch (Exception failure) when (Refused(failure, upstream, cancellationToken) is { } refused)
         {
-            upstream.Dispose();
-
             return refused;
+        }
+        finally
+        {
+            if (!handed)
+            {
+                upstream.Dispose();
+            }
+        }
+    }
+
+    private void Prepare(ClientWebSocketOptions options, IReadOnlyList<string> subProtocols)
+    {
+        options.HttpVersion = HttpVersion.Version11;
+        options.HttpVersionPolicy = HttpVersionPolicy.RequestVersionExact;
+        options.CollectHttpResponseDetails = true;
+        options.SetRequestHeader("User-Agent", line.UserAgent);
+
+        foreach (string subProtocol in subProtocols)
+        {
+            options.AddSubProtocol(subProtocol);
         }
     }
 

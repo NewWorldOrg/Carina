@@ -247,6 +247,38 @@ public sealed class HybridcastRelayTests
         await third.Socket!.DisposeAsync();
     }
 
+    [Fact(DisplayName = "BR-BD-011: a WebSocket whose asking was called off while the server was being reached gives its place back")]
+    public async Task ACalledOffWebSocketGivesItsPlaceBack()
+    {
+        await using SocketRig rig = new(BroadcasterSocketStandIn.EchoAsync, settings => settings with { SocketsAtOnce = 1 });
+        using CancellationTokenSource calledOff = new();
+        await calledOff.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => rig.Relay.OpenSocketAsync(Channel, new Uri($"ws://{Host}/live"), Boundary, [], calledOff.Token));
+        RelayedSocket after = await rig.Relay.OpenSocketAsync(Channel, new Uri($"ws://{Host}/live"), Boundary, [], CancellationToken.None);
+
+        Assert.NotNull(after.Socket);
+        await after.Socket!.DisposeAsync();
+    }
+
+    [Theory(DisplayName = "BR-BD-011: a WebSocket asked for on a subprotocol that cannot be named gives its place back")]
+    [InlineData("hc.v1", "hc.v1")]
+    [InlineData(" ", null)]
+    [InlineData("", null)]
+    public async Task AnUnnamableSubprotocolGivesItsPlaceBack(string first, string? second)
+    {
+        await using SocketRig rig = new(BroadcasterSocketStandIn.EchoAsync, settings => settings with { SocketsAtOnce = 1 });
+        string[] offered = second is null ? [first] : [first, second];
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(
+            () => rig.Relay.OpenSocketAsync(Channel, new Uri($"ws://{Host}/live"), Boundary, offered, CancellationToken.None));
+        RelayedSocket after = await rig.Relay.OpenSocketAsync(Channel, new Uri($"ws://{Host}/live"), Boundary, [], CancellationToken.None);
+
+        Assert.NotNull(after.Socket);
+        await after.Socket!.DisposeAsync();
+    }
+
     [Fact(DisplayName = "BR-BD-011: a message larger than the relay carries closes both sides as too big")]
     public async Task AMessageTooLargeClosesBothSides()
     {
