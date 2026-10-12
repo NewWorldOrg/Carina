@@ -304,6 +304,28 @@ public sealed class DataBroadcastSessionTests
         Assert.Equal(new NptRead(CarouselBroadcast.EntryTag, 5UL * Second, 90_000, 1, 1), SideChannelReading.Npt(handed[2]));
     }
 
+    [Fact(DisplayName = "BR-BD-004: the event messages and references of a stream without a data component descriptor reach the viewers watching with its tag")]
+    public async Task TheEventsAndReferencesOfAStreamWithoutADataComponentReachTheViewers()
+    {
+        DataBroadcastSession session = Session();
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        session.Show(fanout);
+        session.Read(new CarouselBroadcast().Associated().Mapped(eventStreamTag: CarouselBroadcast.EventStreamTag).At(Second).Bytes);
+        await using ILiveViewing watching = await Joined(fanout);
+        Taken(watching.Frames);
+
+        session.Read(new CarouselBroadcast()
+            .At(2 * Second)
+            .FiredOn(CarouselBroadcast.EventStreamPid, 0, 1, 2, 3)
+            .Sections(CarouselBroadcast.EventStreamPid, Referring(0, 3 * Second, 90_000))
+            .Bytes);
+
+        IReadOnlyList<LiveFrame> told = Taken(watching.Frames);
+        Assert.Equal([DataBroadcastFrames.EventKind, DataBroadcastFrames.NptReferenceKind], told.Select(SideChannelReading.KindOf));
+        Assert.Equal((ulong)(2 * Second), SideChannelReading.Event(told[0]).FiresAt);
+        Assert.Equal(new NptRead(CarouselBroadcast.EventStreamTag, 3UL * Second, 90_000, 1, 1), SideChannelReading.Npt(told[1]));
+    }
+
     [Fact(DisplayName = "BR-BD-004: a fan-out first shown after the clock came around is handed the moment a reference names moved back by the wraps")]
     public async Task AFanoutShownAfterTheClockCameAroundIsHandedReferencesMovedBackByTheWraps()
     {

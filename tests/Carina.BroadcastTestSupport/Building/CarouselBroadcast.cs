@@ -3,7 +3,8 @@ namespace Carina.BroadcastTestSupport;
 /// <summary>
 /// Writes a transport stream of one programme carrying a data broadcast, packet by packet in the order it is
 /// asked for: the association table, the programme map, the programme's clock, and a carousel's download
-/// info, blocks and event messages.
+/// info, blocks and event messages, and a stream that carries only event messages and references of the programme
+/// time.
 /// </summary>
 public sealed class CarouselBroadcast
 {
@@ -19,11 +20,15 @@ public sealed class CarouselBroadcast
 
     public const int OtherCarouselPid = 0x0141;
 
+    public const int EventStreamPid = 0x0142;
+
     public const int PictureStreamType = 0x02;
 
     public const int EntryTag = BxmlInfoWriter.EntryComponentTag;
 
     public const int OtherTag = 0x50;
+
+    public const int EventStreamTag = 0x5E;
 
     public const int DataEventId = 1;
 
@@ -49,7 +54,8 @@ public sealed class CarouselBroadcast
         bool autoStart = false,
         int clockPid = ClockPid,
         int programNumber = ProgramNumber,
-        bool withAnotherCarousel = false)
+        bool withAnotherCarousel = false,
+        int? eventStreamTag = null)
     {
         List<byte[]> streams = [PmtWriter.Stream(PictureStreamType, ClockPid, [])];
 
@@ -64,6 +70,11 @@ public sealed class CarouselBroadcast
         if (carrying && withAnotherCarousel)
         {
             streams.Add(BxmlInfoWriter.DataBroadcastStream(OtherCarouselPid, OtherTag, BxmlInfoWriter.NotEntry(DataEventId)));
+        }
+
+        if (eventStreamTag is { } tag)
+        {
+            streams.Add(PmtWriter.Stream(PmtWriter.DsmCcSections, EventStreamPid, PsiDescriptorWriter.StreamIdentifier(tag)));
         }
 
         SectionWriter map = new PmtWriter { ProgramNumber = programNumber, PcrPid = clockPid, Streams = [.. streams] }.ToSection();
@@ -104,12 +115,22 @@ public sealed class CarouselBroadcast
             [.. DsmCcWriter.Blocks(1, module.Id, module.Version, module.Body, DsmCcWriter.LargestBlock).Select(block => block.ToBytes())]);
 
     public CarouselBroadcast Fired(int version, int group, int id, int messageType, params byte[] privateData)
-        => Sections(CarouselPid, new StreamDescriptorWriter
+        => FiredOn(CarouselPid, version, group, id, messageType, privateData);
+
+    public CarouselBroadcast FiredOn(int pid, int version, int group, int id, int messageType, params byte[] privateData)
+        => Sections(pid, new StreamDescriptorWriter
         {
             DataEventId = DataEventId,
             EventMessageGroupId = group,
             VersionNumber = version,
             Descriptors = StreamDescriptorWriter.GeneralEvent(group, StreamDescriptorWriter.Immediate, 0, messageType, id, privateData),
+        }.ToSection().ToBytes());
+
+    public CarouselBroadcast Referred(int pid, long stc, long npt)
+        => Sections(pid, new StreamDescriptorWriter
+        {
+            DataEventId = DataEventId,
+            Descriptors = StreamDescriptorWriter.NptReference(stc, npt),
         }.ToSection().ToBytes());
 
     public CarouselBroadcast Sections(int pid, params byte[][] sections)

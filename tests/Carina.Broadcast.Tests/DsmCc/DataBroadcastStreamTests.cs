@@ -14,6 +14,14 @@ public sealed class DataBroadcastStreamTests
 
     private const int OneSegDataComponentId = 0x000D;
 
+    private const int EventStreamPid = 0x015E;
+
+    private const int ReferenceStreamPid = 0x015F;
+
+    private const int EventStreamTag = 0x5E;
+
+    private const int ReferenceStreamTag = 0x5F;
+
     private const int Resolution960By540 = 0x02;
 
     [Fact(DisplayName = "BR-BD-001: the stream carrying the entry carousel is found with its component tag")]
@@ -33,6 +41,82 @@ public sealed class DataBroadcastStreamTests
         Assert.Equal(EntryPid, service.Entry!.Pid);
         Assert.True(service.Entry.HasEntryComponentTag);
         Assert.False(service.Streams[1].HasEntryComponentTag);
+        Assert.All(service.Streams, stream => Assert.True(stream.CarriesCarousels));
+    }
+
+    [Fact(DisplayName = "BR-BD-001: a sections stream in the range of data tags without a data component descriptor is read for its event messages only")]
+    public void ASectionsStreamInTheRangeOfDataTagsWithoutADataComponentIsReadForItsEventMessagesOnly()
+    {
+        DataBroadcastService service = Find(
+            BxmlInfoWriter.DataBroadcastStream(EntryPid, BxmlInfoWriter.EntryComponentTag, BxmlInfoWriter.Entry(false, Resolution960By540, 1, 0, 3)),
+            PmtWriter.Stream(PmtWriter.DsmCcSections, EventStreamPid, PsiDescriptorWriter.StreamIdentifier(EventStreamTag)),
+            PmtWriter.Stream(PmtWriter.DsmCcSections, ReferenceStreamPid, PsiDescriptorWriter.StreamIdentifier(ReferenceStreamTag)));
+
+        Assert.Empty(service.Defects);
+        Assert.Equal(
+            [(EntryPid, BxmlInfoWriter.EntryComponentTag, true), (EventStreamPid, EventStreamTag, false), (ReferenceStreamPid, ReferenceStreamTag, false)],
+            service.Streams.Select(stream => (stream.Pid, stream.ComponentTag, stream.CarriesCarousels)));
+        Assert.Null(service.Streams[1].Bxml);
+        Assert.Equal(EntryPid, service.Entry!.Pid);
+    }
+
+    [Theory(DisplayName = "BR-BD-001: a sections stream without a data component descriptor outside the range of data tags is not a data broadcast")]
+    [InlineData(0x30)]
+    [InlineData(0x3F)]
+    [InlineData(0x80)]
+    [InlineData(0x89)]
+    [InlineData(0xFF)]
+    public void ASectionsStreamWithoutADataComponentOutsideTheRangeOfDataTagsIsNotADataBroadcast(int tag)
+    {
+        DataBroadcastService service = Find(PmtWriter.Stream(PmtWriter.DsmCcSections, EventStreamPid, PsiDescriptorWriter.StreamIdentifier(tag)));
+
+        Assert.Empty(service.Streams);
+        Assert.Empty(service.Defects);
+    }
+
+    [Theory(DisplayName = "BR-BD-001: a sections stream without a data component descriptor at either end of the range of data tags is read for its event messages")]
+    [InlineData(0x40)]
+    [InlineData(0x7F)]
+    public void ASectionsStreamWithoutADataComponentAtEitherEndOfTheRangeIsReadForItsEventMessages(int tag)
+    {
+        DataBroadcastService service = Find(PmtWriter.Stream(PmtWriter.DsmCcSections, EventStreamPid, PsiDescriptorWriter.StreamIdentifier(tag)));
+
+        Assert.Equal((EventStreamPid, tag, false), service.Streams.Select(stream => (stream.Pid, stream.ComponentTag, stream.CarriesCarousels)).Single());
+    }
+
+    [Fact(DisplayName = "BR-BD-001: a stream of event messages only on the entry tag is not the entry, so the service carries no data broadcast")]
+    public void AStreamOfEventMessagesOnlyOnTheEntryTagIsNotTheEntry()
+    {
+        DataBroadcastService service = Find(PmtWriter.Stream(PmtWriter.DsmCcSections, EntryPid, PsiDescriptorWriter.StreamIdentifier(BxmlInfoWriter.EntryComponentTag)));
+
+        Assert.Single(service.Streams);
+        Assert.False(service.Streams[0].HasEntryComponentTag);
+        Assert.Null(service.Entry);
+        Assert.False(service.IsCarried);
+    }
+
+    [Fact(DisplayName = "BR-BD-001: a sections stream with neither a data component descriptor nor a tag is left out without a defect")]
+    public void ASectionsStreamWithNeitherADataComponentNorATagIsLeftOutWithoutADefect()
+    {
+        DataBroadcastService service = Find(
+            PmtWriter.Stream(PmtWriter.DsmCcSections, EventStreamPid, []),
+            PmtWriter.Stream(PmtWriter.DsmCcSections, ReferenceStreamPid, DescriptorWriter.Of(PsiDescriptorWriter.StreamIdentifierTag)));
+
+        Assert.Empty(service.Streams);
+        Assert.Empty(service.Defects);
+    }
+
+    [Fact(DisplayName = "BR-BD-001: a sections stream in the range of data tags whose data component is not BML is not a data broadcast")]
+    public void ASectionsStreamInTheRangeWhoseDataComponentIsNotBmlIsNotADataBroadcast()
+    {
+        DataBroadcastService service = Find(PmtWriter.Stream(
+            PmtWriter.DsmCcSections,
+            EventStreamPid,
+            DescriptorWriter.Loop(
+                PsiDescriptorWriter.StreamIdentifier(EventStreamTag),
+                PsiDescriptorWriter.DataComponent(OneSegDataComponentId, []))));
+
+        Assert.Empty(service.Streams);
     }
 
     [Fact(DisplayName = "BR-BD-001: the entry carries the auto start flag and what the start document asks for")]
@@ -212,7 +296,7 @@ public sealed class DataBroadcastStreamTests
                 DescriptorWriter.Loop(
                     PsiDescriptorWriter.StreamIdentifier(OtherCarouselTag),
                     DescriptorWriter.Of(PsiDescriptorWriter.DataComponentTag, 0x00))),
-            PmtWriter.Stream(PmtWriter.DsmCcSections, 0x0160, PsiDescriptorWriter.StreamIdentifier(0x60)));
+            PmtWriter.Stream(PmtWriter.DsmCcSections, 0x0160, PsiDescriptorWriter.StreamIdentifier(0x89)));
 
         Assert.Empty(service.Streams);
         Assert.Equal(

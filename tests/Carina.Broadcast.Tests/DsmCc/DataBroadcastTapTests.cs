@@ -146,6 +146,58 @@ public sealed class DataBroadcastTapTests
         Assert.Equal(45 * Second, referred.Reference.Npt);
     }
 
+    [Fact(DisplayName = "BR-BD-001: the event messages and references of the programme time on a stream without a data component descriptor are read with its tag")]
+    public void TheEventsAndReferencesOnAStreamWithoutADataComponentAreReadWithItsTag()
+    {
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+        tap.Push(new CarouselBroadcast().Associated().Mapped(eventStreamTag: CarouselBroadcast.EventStreamTag).At(Second).Bytes);
+
+        IReadOnlyList<DataBroadcastRead> reads = tap.Push(new CarouselBroadcast()
+            .At(2 * Second)
+            .FiredOn(CarouselBroadcast.EventStreamPid, 0, 5, 6, 7, 0xAB)
+            .Referred(CarouselBroadcast.EventStreamPid, stc: 3 * Second, npt: 45 * Second)
+            .Bytes);
+
+        Assert.Equal(2, reads.Count);
+        DataBroadcastRead.EventMessageTimed timed = Assert.IsType<DataBroadcastRead.EventMessageTimed>(reads[0]);
+        Assert.Equal((5, 6, 7), (timed.Message.EventMessageGroupId, timed.Message.EventMessageId, timed.Message.EventMessageType));
+        Assert.Equal(2 * Second, timed.FiresAt);
+        DataBroadcastRead.NptReferred referred = Assert.IsType<DataBroadcastRead.NptReferred>(reads[1]);
+        Assert.Equal(CarouselBroadcast.EventStreamTag, referred.ComponentTag);
+        Assert.Equal(45 * Second, referred.Reference.Npt);
+    }
+
+    [Fact(DisplayName = "BR-BD-001: no carousel is put together from a stream without a data component descriptor")]
+    public void NoCarouselIsPutTogetherFromAStreamWithoutADataComponent()
+    {
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+        tap.Push(new CarouselBroadcast().Associated().Mapped(eventStreamTag: CarouselBroadcast.EventStreamTag).At(Second).Bytes);
+
+        IReadOnlyList<DataBroadcastRead> reads = tap.Push(new CarouselBroadcast()
+            .At(2 * Second)
+            .Listed(CarouselBroadcast.EventStreamPid, 1, Startup)
+            .Delivered(CarouselBroadcast.EventStreamPid, Startup)
+            .Bytes);
+
+        Assert.Empty(reads);
+        Assert.Equal(0, tap.RejectedSections);
+    }
+
+    [Fact(DisplayName = "BR-BD-001: a stream without a data component descriptor outside the range of data tags is not read")]
+    public void AStreamWithoutADataComponentOutsideTheRangeOfDataTagsIsNotRead()
+    {
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+        tap.Push(new CarouselBroadcast().Associated().Mapped(eventStreamTag: 0x89).At(Second).Bytes);
+
+        IReadOnlyList<DataBroadcastRead> reads = tap.Push(new CarouselBroadcast()
+            .At(2 * Second)
+            .FiredOn(CarouselBroadcast.EventStreamPid, 0, 5, 6, 7)
+            .Referred(CarouselBroadcast.EventStreamPid, stc: 3 * Second, npt: 0)
+            .Bytes);
+
+        Assert.Empty(reads);
+    }
+
     [Fact(DisplayName = "BR-BD-004: a reference naming a moment just before the wrap, read just after it, is placed before the wrap")]
     public void AReferenceNamingAMomentBeforeTheWrapIsPlacedBeforeIt()
     {
