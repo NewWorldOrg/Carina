@@ -638,7 +638,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             ["id", "version", "fromSec", "toSec", "size"],
             schemas["DataBroadcastVersionResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal(
-            ["group", "id", "type", "immediate", "atSec", "privateData"],
+            ["group", "id", "type", "immediate", "atSec", "privateData", "componentTag"],
             schemas["DataBroadcastEventResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal("byte", schemas["DataBroadcastEventResponder"]!["properties"]!["privateData"]!["format"]!.GetValue<string>());
     }

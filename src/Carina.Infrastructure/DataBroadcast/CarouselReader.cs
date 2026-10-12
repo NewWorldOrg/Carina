@@ -75,7 +75,7 @@ public sealed class CarouselReader
         {
             DataBroadcastRead.ServiceMapped mapped => Mapped(mapped.Service),
             DataBroadcastRead.CarouselChanged changed => Changed(changed.Change),
-            DataBroadcastRead.EventMessageTimed timed => new CarouselSignal.EventTimed(Event(timed.Message, timed.FiresAt)),
+            DataBroadcastRead.EventMessageTimed timed => new CarouselSignal.EventTimed(Event(timed)),
             DataBroadcastRead.NptReferred referred => new CarouselSignal.NptReferred(new Domain.DataBroadcast.NptReference(
                 referred.ComponentTag,
                 referred.Stc,
@@ -162,14 +162,15 @@ public sealed class CarouselReader
         return null;
     }
 
-    private static EventMessage Event(TimedEventMessage message, long firesAt)
+    private static EventMessage Event(DataBroadcastRead.EventMessageTimed timed)
         => new(
-            message.EventMessageGroupId,
-            message.EventMessageId,
-            message.EventMessageType,
-            message.IsImmediate ? EventTiming.Immediate : EventTiming.Npt,
-            firesAt,
-            message.PrivateData);
+            timed.Message.EventMessageGroupId,
+            timed.Message.EventMessageId,
+            timed.Message.EventMessageType,
+            timed.Message.IsImmediate ? EventTiming.Immediate : EventTiming.Npt,
+            timed.FiresAt,
+            timed.Message.PrivateData,
+            timed.ComponentTag);
 
     private static ResourceForm FormOf(ResourceContent content)
         => content switch

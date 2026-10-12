@@ -37,12 +37,18 @@ public abstract record DataBroadcastRead
 
     public sealed record EventMessageTimed : DataBroadcastRead
     {
-        internal EventMessageTimed(long at, TimedEventMessage message, long firesAt)
+        internal EventMessageTimed(long at, int componentTag, TimedEventMessage message, long firesAt)
             : base(at)
         {
+            ComponentTag = componentTag;
             Message = message;
             FiresAt = firesAt;
         }
+
+        /// <summary>
+        /// The tag of the stream the message came on.
+        /// </summary>
+        public int ComponentTag { get; }
 
         public TimedEventMessage Message { get; }
 

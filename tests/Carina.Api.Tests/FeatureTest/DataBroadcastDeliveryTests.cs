@@ -28,6 +28,8 @@ internal sealed class DataBroadcastFeature : IAsyncDisposable
 
     public const int Other = 0x50;
 
+    public const int EventStream = 0x5E;
+
     public const uint Download = 7;
 
     public static readonly OutputRoot Root = new("bulk");
@@ -113,8 +115,8 @@ internal sealed class DataBroadcastFeature : IAsyncDisposable
                     ]),
             ],
             [
-                new EventMessage(1, 2, 1, EventTiming.Immediate, At(6120.5), new byte[] { 0x0A, 0x0B }),
-                new EventMessage(1, 3, 2, EventTiming.Npt, At(6900), ReadOnlyMemory<byte>.Empty),
+                new EventMessage(1, 2, 1, EventTiming.Immediate, At(6120.5), new byte[] { 0x0A, 0x0B }, Entry),
+                new EventMessage(1, 3, 2, EventTiming.Npt, At(6900), ReadOnlyMemory<byte>.Empty, EventStream),
             ],
             false,
             autoStart: true);
@@ -235,11 +237,42 @@ public sealed class DataBroadcastDeliveryTests
 
         JsonElement message = catalog.GetProperty("events")[0];
         Assert.Equal(
-            ["group", "id", "type", "immediate", "atSec", "privateData"],
+            ["group", "id", "type", "immediate", "atSec", "privateData", "componentTag"],
             message.EnumerateObject().Select(property => property.Name));
         Assert.Equal((1, 2, 1, true), (message.GetProperty("group").GetInt32(), message.GetProperty("id").GetInt32(), message.GetProperty("type").GetInt32(), message.GetProperty("immediate").GetBoolean()));
         Assert.Equal(new byte[] { 0x0A, 0x0B }, message.GetProperty("privateData").GetBytesFromBase64());
         Assert.False(catalog.GetProperty("events")[1].GetProperty("immediate").GetBoolean());
+        Assert.Equal(
+            [DataBroadcastFeature.Entry, DataBroadcastFeature.EventStream],
+            catalog.GetProperty("events").EnumerateArray().Select(each => each.GetProperty("componentTag").GetInt32()));
+    }
+
+    [Fact(DisplayName = "BR-BD-005: a record kept before event messages named their streams answers each event with no stream")]
+    public async Task ARecordKeptBeforeEventsNamedTheirStreamsAnswersEachWithNoStream()
+    {
+        await using DataBroadcastFeature feature = new();
+        Recording recording = await feature.MadeAsync();
+        string kept = new DataBroadcastShelf(feature.Settings).PathOf(recording.Id)!;
+        byte[] whole = await File.ReadAllBytesAsync(kept);
+        IReadOnlyList<EventMessage> events = DataBroadcastFeature.Record().Events;
+        int eventsAt = whole.Length - DataBroadcastRecord.EventCountBytes - (int)events.Sum(message => message.Bytes);
+        List<byte> older = [.. whole[..eventsAt], .. whole[eventsAt..(eventsAt + DataBroadcastRecord.EventCountBytes)]];
+
+        foreach (EventMessage message in events)
+        {
+            EventMessage untagged = new(message.Group, message.Id, message.MessageType, message.Timing, message.FiresAt, message.PrivateData);
+            byte[] written = new byte[untagged.Bytes];
+            DataBroadcastFrames.WriteEvent(untagged, untagged.FiresAt, written);
+            older.AddRange(written);
+        }
+
+        older[9] = 0x02;
+        await File.WriteAllBytesAsync(kept, [.. older]);
+
+        JsonElement catalog = await DataBroadcastFeature.DataOfAsync(await feature.CatalogAsync(recording, "?source=recording"));
+
+        Assert.Equal([5.0, 784.5], DataBroadcastFeature.Moments(catalog));
+        Assert.All(catalog.GetProperty("events").EnumerateArray(), each => Assert.Equal(JsonValueKind.Null, each.GetProperty("componentTag").ValueKind));
     }
 
     [Fact(DisplayName = "BR-BD-006: on the artefact every version and event is at its moment less the job's shift, so the same scene has the same second on both files")]

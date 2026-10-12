@@ -129,7 +129,22 @@ public sealed class CarouselReaderTests
         Assert.Equal((0x12, 0x0345, 0x06, EventTiming.Immediate), (message.Group, message.Id, message.MessageType, message.Timing));
         Assert.Equal(3 * Second, message.FiresAt);
         Assert.Equal([0xEE], message.PrivateData.ToArray());
+        Assert.Equal(CarouselBroadcast.EntryTag, message.ComponentTag);
         Assert.Equal(3 * Second, read.At);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: an event message on a stream that carries only event messages is read with that stream's tag")]
+    public void AnEventOnAStreamOfEventsOnlyIsReadWithThatStreamsTag()
+    {
+        CarouselReader reader = new(Service);
+        reader.Read(new CarouselBroadcast().Associated().Mapped(eventStreamTag: CarouselBroadcast.EventStreamTag).At(Second).Bytes);
+
+        CarouselSignalRead read = Assert.Single(reader.Read(new CarouselBroadcast()
+            .At(3 * Second)
+            .FiredOn(CarouselBroadcast.EventStreamPid, 0, 0x12, 0x0345, 0x06, 0xEE)
+            .Bytes));
+
+        Assert.Equal(CarouselBroadcast.EventStreamTag, Assert.IsType<CarouselSignal.EventTimed>(read.Signal).Message.ComponentTag);
     }
 
     [Fact(DisplayName = "BR-BD-003: an event message timed by the programme time is read at the moment the reference pairs it with, after the reference")]

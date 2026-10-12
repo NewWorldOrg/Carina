@@ -121,7 +121,25 @@ public sealed class DataBroadcastTapTests
         Assert.Equal(ProgramClock.Modulus + Second, timed.FiresAt);
         Assert.Equal((5, 6, 7), (timed.Message.EventMessageGroupId, timed.Message.EventMessageId, timed.Message.EventMessageType));
         Assert.Equal([0xAB], timed.Message.PrivateData.ToArray());
+        Assert.Equal(CarouselBroadcast.EntryTag, timed.ComponentTag);
         Assert.Equal(ProgramClock.Modulus + Second, tap.Now);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: an event message is read with the tag of the stream it came on, a stream that carries only event messages included")]
+    public void AnEventIsReadWithTheTagOfTheStreamItCameOn()
+    {
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+        tap.Push(new CarouselBroadcast().Associated().Mapped(eventStreamTag: CarouselBroadcast.EventStreamTag).At(Second).Bytes);
+
+        IReadOnlyList<DataBroadcastRead> reads = tap.Push(new CarouselBroadcast()
+            .At(2 * Second)
+            .Fired(0, 1, 2, 3)
+            .FiredOn(CarouselBroadcast.EventStreamPid, 0, 4, 5, 6)
+            .Bytes);
+
+        Assert.Equal(
+            [(1, CarouselBroadcast.EntryTag), (4, CarouselBroadcast.EventStreamTag)],
+            reads.OfType<DataBroadcastRead.EventMessageTimed>().Select(timed => (timed.Message.EventMessageGroupId, timed.ComponentTag)));
     }
 
     [Fact(DisplayName = "BR-BD-004: a reference of the programme time is read with its stream's tag and the moment it names placed on the clock followed through its wrap")]
