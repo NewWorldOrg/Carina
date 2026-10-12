@@ -70,6 +70,22 @@ internal static class SideChannelReading
             payload[17..].ToArray());
     }
 
+    public static NptRead Npt(LiveFrame frame)
+    {
+        Assert.Equal(DataBroadcastFrames.NptReferenceKind, KindOf(frame));
+
+        ReadOnlySpan<byte> payload = frame.Payload.Span;
+
+        Assert.Equal(22, payload.Length);
+
+        return new NptRead(
+            payload[1],
+            BinaryPrimitives.ReadUInt64BigEndian(payload[2..]),
+            BinaryPrimitives.ReadUInt64BigEndian(payload[10..]),
+            BinaryPrimitives.ReadUInt16BigEndian(payload[18..]),
+            BinaryPrimitives.ReadUInt16BigEndian(payload[20..]));
+    }
+
     private static object Cbor(ReadOnlySpan<byte> bytes, ref int at)
     {
         byte initial = bytes[at++];
@@ -160,3 +176,5 @@ internal sealed record ModuleRead(int Tag, int ModuleId, int Version, IReadOnlyL
 internal sealed record ResourceRead(string Path, DataBroadcastResourceKind Kind, byte[] Body);
 
 internal sealed record EventRead(int Group, int Id, int MessageType, int Timing, ulong FiresAt, byte[] PrivateData);
+
+internal sealed record NptRead(int Tag, ulong Stc, ulong Npt, int ScaleNumerator, int ScaleDenominator);

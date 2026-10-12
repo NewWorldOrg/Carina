@@ -8,7 +8,8 @@ namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
 /// The frames of the data broadcast side channel: the catalog in CBOR, a module with its resources, an event
-/// message, and word that the service carries no data broadcast, each opened by the byte that says which.
+/// message, word that the service carries no data broadcast, and a data stream's reference of the programme
+/// time, each opened by the byte that says which.
 /// </summary>
 public static class DataBroadcastFrames
 {
@@ -19,6 +20,16 @@ public static class DataBroadcastFrames
     public const byte EventKind = 0x03;
 
     public const byte AbsentKind = 0x04;
+
+    public const byte NptReferenceKind = 0x05;
+
+    public const int NptReferenceLength = sizeof(byte) + sizeof(byte) + sizeof(ulong) + sizeof(ulong) + sizeof(ushort) + sizeof(ushort);
+
+    private const int StcOffset = sizeof(byte) + sizeof(byte);
+
+    private const int NptOffset = StcOffset + sizeof(ulong);
+
+    private const int ScaleOffset = NptOffset + sizeof(ulong);
 
     public const int ModuleHeaderLength = sizeof(byte) + sizeof(byte) + sizeof(ushort) + sizeof(byte);
 
@@ -98,8 +109,29 @@ public static class DataBroadcastFrames
     public static LiveFrame Absent(long at) => Frame(at, [AbsentKind]);
 
     /// <summary>
-    /// The frame told on a clock <paramref name="by"/> ticks behind: its moment, and the moment an event message
-    /// fires, moved back by that much and held at the clock's start.
+    /// A data stream's reference of the programme time: its tag, the moment of the clock the reference names on
+    /// the same clock as the frames, the programme time at that moment, and the scale's numerator and denominator.
+    /// </summary>
+    public static LiveFrame NptReference(NptReference reference, long at)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+
+        byte[] payload = new byte[NptReferenceLength];
+
+        payload[0] = NptReferenceKind;
+        payload[1] = (byte)reference.Tag;
+        BinaryPrimitives.WriteUInt64BigEndian(payload.AsSpan(StcOffset), OnTheWire(reference.Stc));
+        BinaryPrimitives.WriteUInt64BigEndian(payload.AsSpan(NptOffset), (ulong)reference.Npt);
+        BinaryPrimitives.WriteUInt16BigEndian(payload.AsSpan(ScaleOffset), (ushort)reference.ScaleNumerator);
+        BinaryPrimitives.WriteUInt16BigEndian(payload.AsSpan(ScaleOffset + sizeof(ushort)), (ushort)reference.ScaleDenominator);
+
+        return Frame(at, payload);
+    }
+
+    /// <summary>
+    /// The frame told on a clock <paramref name="by"/> ticks behind: its moment, the moment an event message
+    /// fires and the moment a reference of the programme time names, moved back by that much and held at the
+    /// clock's start.
     /// </summary>
     public static LiveFrame Shifted(LiveFrame frame, long by)
     {
@@ -112,18 +144,27 @@ public static class DataBroadcastFrames
         }
 
         ReadOnlyMemory<byte> payload = frame.Payload;
+        int? momentAt = MomentOffset(payload.Span);
 
-        if (!payload.IsEmpty && payload.Span[0] == EventKind && payload.Length >= EventMessage.FramingBytes)
+        if (momentAt is { } offset)
         {
             byte[] moved = payload.ToArray();
-            long firesAt = (long)BinaryPrimitives.ReadUInt64BigEndian(moved.AsSpan(FiresAtOffset));
+            long moment = (long)BinaryPrimitives.ReadUInt64BigEndian(moved.AsSpan(offset));
 
-            BinaryPrimitives.WriteUInt64BigEndian(moved.AsSpan(FiresAtOffset), OnTheWire(firesAt - by));
+            BinaryPrimitives.WriteUInt64BigEndian(moved.AsSpan(offset), OnTheWire(moment - by));
             payload = moved;
         }
 
         return new LiveFrame(frame.Channel, LivePts.Of(OnTheWire((long)frame.Pts.Value - by)), payload);
     }
+
+    private static int? MomentOffset(ReadOnlySpan<byte> payload)
+        => payload switch
+        {
+            [EventKind, ..] when payload.Length >= EventMessage.FramingBytes => FiresAtOffset,
+            [NptReferenceKind, ..] when payload.Length == NptReferenceLength => StcOffset,
+            _ => null,
+        };
 
     /// <summary>
     /// A module as the side channel carries it: its tag, id and version, then each resource with its path, its
