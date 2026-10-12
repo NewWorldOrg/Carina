@@ -40,6 +40,20 @@ RUN curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && test -s /out/notices/ffmpeg/source/configure-options.txt \
     && cp /src/libaribcaption/LICENSE /out/notices/libaribcaption/
 
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS denpa-font
+ARG DENPA_FONT_VERSION=v3.2
+ARG DENPA_FONT_SHA256=c20f77bdad691223c50c43609df4b4e87916bfdc7d29fe7c4690f2fd6e72414c
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src/denpa-font
+RUN curl -fsSLO "https://github.com/NewWorldOrg/denpa-font/releases/download/${DENPA_FONT_VERSION}/denpa-font.ttf" \
+    && curl -fsSLO "https://github.com/NewWorldOrg/denpa-font/releases/download/${DENPA_FONT_VERSION}/SHA256SUMS" \
+    && grep ' denpa-font.ttf$' SHA256SUMS | sha256sum -c - \
+    && echo "${DENPA_FONT_SHA256}  denpa-font.ttf" | sha256sum -c - \
+    && mkdir -p /out/fonts/denpa-font \
+    && cp denpa-font.ttf /out/fonts/denpa-font/
+
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS driver-build
 ARG RID=linux-x64
 RUN apt-get update \
@@ -86,6 +100,7 @@ RUN /notices/nuget.sh /out/notices app /out/app/Carina.Api.deps.json \
     && /notices/nuget.sh /out/notices migrate /out/db/Carina.Db.deps.json
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS develop
+COPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/
 RUN apt-get update \
     && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 \
     && rm -rf /var/lib/apt/lists/* \
@@ -104,6 +119,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime-base
 
 FROM runtime-base AS runtime
 
+COPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/
 RUN sed 's/^Types: deb$/Types: deb-src/' /etc/apt/sources.list.d/ubuntu.sources > /etc/apt/sources.list.d/ubuntu-src.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 libpcsclite1 \

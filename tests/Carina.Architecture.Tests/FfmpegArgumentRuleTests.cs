@@ -146,7 +146,7 @@ public sealed class FfmpegArgumentRuleTests
     }
 
     [Fact]
-    public void TheOnlyPlaceThatNamesAFontIsTheLiveBuilderAndItNamesTheOneFaceTheImageInstallsAsAConstant()
+    public void TheOnlyPlaceThatNamesAFontIsTheLiveBuilderAndItNamesTheFacesTheImageInstallsAsOneConstant()
     {
         Assert.Equal(
             ["/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs -font"],
@@ -158,7 +158,7 @@ public sealed class FfmpegArgumentRuleTests
             "Streaming",
             "FfmpegLiveInvocation.cs"));
 
-        Assert.Contains("public const string Font = \"Noto Sans CJK JP\";", source, StringComparison.Ordinal);
+        Assert.Contains("public const string Font = \"Denpa Font,Noto Sans CJK JP\";", source, StringComparison.Ordinal);
         Assert.Contains("\"-font\",\n                Font,", source, StringComparison.Ordinal);
     }
 

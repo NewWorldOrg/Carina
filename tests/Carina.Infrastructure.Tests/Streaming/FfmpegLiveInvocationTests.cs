@@ -579,7 +579,7 @@ public sealed class FfmpegLiveInvocationTests
         int input = arguments.ToList().IndexOf("-i");
 
         Assert.Equal(
-            ["-sub_type", "bitmap", "-canvas_size", "1440x1080", "-font", "Noto Sans CJK JP"],
+            ["-sub_type", "bitmap", "-canvas_size", "1440x1080", "-font", "Denpa Font,Noto Sans CJK JP"],
             arguments.Skip(input - 6).Take(6));
         Assert.Equal(
             FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None),
