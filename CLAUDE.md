@@ -150,7 +150,8 @@ walks past it.
   stored and where it is spent. Neither of them logs, and nothing that answers a
   caller can name it.
 - **No log names the path a request came on,** because a playback ticket can
-  travel in the path of the two surfaces an external player opens. A line about a
+  travel in the path of four surfaces: the two an external player opens and the
+  two a Hybridcast application's frame opens. A line about a
   request names the route pattern it matched; the framework categories that write
   the path are pinned to warnings after every configured rule, a provider's own
   included; and a source rule refuses a file on the HTTP surface that both reads
