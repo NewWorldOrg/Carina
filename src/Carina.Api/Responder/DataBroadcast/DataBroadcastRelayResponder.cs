@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.DataBroadcast;
 
 namespace Carina.Api.Responder.DataBroadcast;
@@ -30,4 +31,21 @@ public sealed record DataBroadcastFetchFailureResponder(int Result, int? HttpSta
 
         return new DataBroadcastFetchFailureResponder((int)relayed.Result, relayed.HttpStatus);
     }
+}
+
+/// <summary>
+/// The receiver's identifier a data broadcast document is given through <c>getIRDID</c>: <c>caSystemId</c> is the CA
+/// system of the card the driver last heard from, the <c>type</c> a document asks with for it, and <c>cardId</c> is
+/// that card's ID as twelve hexadecimal digits.
+/// </summary>
+public sealed record DataBroadcastReceiverIdResponder(int CaSystemId, string CardId)
+{
+    public static DataBroadcastReceiverIdResponder Of(ConditionalAccessCardDto card)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+
+        return new DataBroadcastReceiverIdResponder(card.CaSystemId, card.CardId);
+    }
+
+    public override string ToString() => $"a card of CA system 0x{CaSystemId:X4}";
 }

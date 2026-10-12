@@ -34,6 +34,7 @@ public sealed class LiveTicketReachTests
     [InlineData("/api/live/profiles")]
     [InlineData("/api/live/departures")]
     [InlineData("/api/live/32736-1024/data-broadcast/fetch?uri=http%3A%2F%2Fbc.example.jp%2F")]
+    [InlineData("/api/live/32736-1024/data-broadcast/receiver-id")]
     [InlineData(AppEventStream.Path)]
     public async Task ALiveTicketOpensNoOtherSurfaceABrowserReachesWithItsCookie(string path)
     {

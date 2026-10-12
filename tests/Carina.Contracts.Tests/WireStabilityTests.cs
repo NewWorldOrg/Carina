@@ -597,8 +597,23 @@ public sealed class WireStabilityTests
     [Fact]
     public void AskingForAFileNobodyOwnsToGoTakesItsPlaceAfterEverythingThatCameBefore()
     {
-        Assert.Equal("/stray-files", DriverEndpoints.All[^1]);
-        Assert.Equal(EndpointsTheFrontendReaches.Length + 6, DriverEndpoints.All.Count);
+        Assert.Equal("/stray-files", DriverEndpoints.All[EndpointsTheFrontendReaches.Length + 5]);
+    }
+
+    [Fact]
+    public void AskingWhichCardAnsweredTakesItsPlaceAfterEverythingThatCameBefore()
+    {
+        Assert.Equal("/conditional-access-card", DriverEndpoints.All[^1]);
+        Assert.Equal(EndpointsTheFrontendReaches.Length + 7, DriverEndpoints.All.Count);
+    }
+
+    [Fact]
+    public void TheCardCarriesItsCaSystemAndItsCardIdAndWritesNeitherOutAsText()
+    {
+        ConditionalAccessCardDto card = new() { CaSystemId = 5, CardId = "0A0B0C0D0E0F" };
+
+        Assert.Equal(["caSystemId", "cardId"], FieldsOf(DriverJson.Serialize(card)));
+        Assert.Equal("a card of CA system 0x0005", card.ToString());
     }
 
     [Fact]

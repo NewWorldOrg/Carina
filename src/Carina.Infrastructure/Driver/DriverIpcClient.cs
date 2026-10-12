@@ -13,7 +13,7 @@ using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Driver;
 
-public sealed class DriverIpcClient : IDriverClient, IDisposable
+public sealed class DriverIpcClient : IDriverClient, IConditionalAccessCardReader, IDisposable
 {
     public static readonly TimeSpan RequestPatience = TimeSpan.FromSeconds(10);
 
@@ -91,6 +91,14 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
             DriverCapabilities.Storage,
             DriverEndpoints.Storage,
             DriverJson.Context.IReadOnlyListStorageRootDto,
+            cancellationToken);
+
+    public Task<DriverCall<ConditionalAccessCardDto>> GetConditionalAccessCardAsync(
+        CancellationToken cancellationToken)
+        => DeclaredGetAsync(
+            DriverCapabilities.CardIdentification,
+            DriverEndpoints.ConditionalAccessCard,
+            DriverJson.Context.ConditionalAccessCardDto,
             cancellationToken);
 
     public Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken)

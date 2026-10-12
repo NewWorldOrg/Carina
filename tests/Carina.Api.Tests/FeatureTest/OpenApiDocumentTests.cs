@@ -145,6 +145,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getEncodeDurations",
                 "getEncodeSettings",
                 "getHealth",
+                "getLiveDataBroadcastReceiverId",
                 "getMe",
                 "getMigrationRecord",
                 "getOidcConfig",
@@ -680,6 +681,24 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             ["result", "httpStatus", "body"],
             schemas["DataBroadcastTransmissionResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BD-014: the receiver's identifier is described as the card's CA system and its ID, and the ways it is kept back")]
+    public async Task TheReceiverIdIsDescribedAsTheCardsCaSystemAndItsId()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/live/{networkId}-{serviceId}/data-broadcast/receiver-id"]!["get"]!;
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["networkId", "serviceId"],
+            operation["parameters"]!.AsArray().Select(parameter => parameter!["name"]!.GetValue<string>()).ToArray());
+        Assert.Equal(
+            ["200", "400", "401", "403", "404", "500", "503"],
+            operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["caSystemId", "cardId"],
+            schemas["DataBroadcastReceiverIdResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
     [Fact(DisplayName = "BR-BD-013: a fetch from a broadcaster's server names the address in the query, and its bytes are left out of the JSON the document describes")]

@@ -280,6 +280,8 @@ public sealed class CardsOnRequest(Func<IDescrambler?> answer) : IDescramblerFac
 
     public bool Unscrambles => true;
 
+    public CardIdentity? CardInHand => null;
+
     public IDescrambler? Open()
     {
         Asked++;
@@ -364,8 +366,58 @@ public sealed class DescramblingWiringTests
 
         public bool Unscrambles => true;
 
+        public CardIdentity? CardInHand => null;
+
         public IDescrambler? Open() =>
             Answers ? new ScriptedDescrambler(_ => [1]) : null;
+    }
+}
+
+public sealed class DescramblersTests
+{
+    [Fact]
+    public void NoCardIsInHandUntilOneHasAnswered()
+    {
+        FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection _);
+
+        Descramblers descramblers = Descramblers.Over(() => service, logger: null);
+
+        Assert.Null(descramblers.CardInHand);
+    }
+
+    [Fact]
+    public void TheCardThatAnsweredAsATunerOpenedIsTheOneInHand()
+    {
+        FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection _);
+        Descramblers descramblers = Descramblers.Over(() => service, logger: null);
+
+        using IDescrambler? descrambler = descramblers.Open();
+
+        Assert.NotNull(descrambler);
+        Assert.Equal(SyntheticCardKeys.CaSystemId, descramblers.CardInHand!.CaSystemId);
+        Assert.Equal("0A0B0C0D0E0F", descramblers.CardInHand.CardId);
+    }
+
+    [Fact]
+    public void TheCardLastHeardOfStaysInHandWhenTheReaderLaterHasNone()
+    {
+        FakeSmartCardService answering = FakeSmartCardService.WithOneCard(out FakeCardConnection _);
+        FakeSmartCardService empty = new();
+        Queue<FakeSmartCardService> services = new([answering, empty]);
+        Descramblers descramblers = Descramblers.Over(services.Dequeue, logger: null);
+
+        using IDescrambler? first = descramblers.Open();
+        using IDescrambler? second = descramblers.Open();
+
+        Assert.NotNull(first);
+        Assert.Null(second);
+        Assert.Equal("0A0B0C0D0E0F", descramblers.CardInHand!.CardId);
+    }
+
+    [Fact]
+    public void ADriverThatAsksNoCardHasNoneInHand()
+    {
+        Assert.Null(NoDescrambling.Instance.CardInHand);
     }
 }
 

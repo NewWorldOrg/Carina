@@ -84,6 +84,7 @@ public sealed record LiveDataBroadcastChannel(NetworkId Network, ServiceId Servi
     public static int StatusOf(DataBroadcastRelayRefusal refusal) => refusal switch
     {
         DataBroadcastRelayRefusal.NotAllowed => StatusCodes.Status403Forbidden,
+        DataBroadcastRelayRefusal.DriverUnreachable => StatusCodes.Status503ServiceUnavailable,
         _ => StatusCodes.Status404NotFound,
     };
 }

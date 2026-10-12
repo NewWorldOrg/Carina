@@ -199,6 +199,39 @@ public sealed class DriverIpcClientTests
     }
 
     [Fact]
+    public async Task ReadsTheCardTheDriverLastHeardFrom()
+    {
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: [DriverCapabilities.CardIdentification]));
+        driver.Card = new ConditionalAccessCardDto { CaSystemId = 5, CardId = "0A0B0C0D0E0F" };
+        using DriverIpcClient client = ClientFor(socketPath);
+
+        DriverCall<ConditionalAccessCardDto> call = await client.GetConditionalAccessCardAsync(CancellationToken.None);
+
+        Assert.True(call.TryGetValue(out ConditionalAccessCardDto? card));
+        Assert.Equal(5, card.CaSystemId);
+        Assert.Equal("0A0B0C0D0E0F", card.CardId);
+    }
+
+    [Fact]
+    public async Task ADriverThatCannotNameItsCardIsNotAskedForIt()
+    {
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-old"));
+        using DriverIpcClient client = ClientFor(socketPath);
+
+        DriverCall<ConditionalAccessCardDto> call = await client.GetConditionalAccessCardAsync(CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
+        Assert.Equal("capabilityMissing", call.Problem?.Title);
+        Assert.Equal(0, driver.RequestsFor(DriverEndpoints.ConditionalAccessCard));
+    }
+
+    [Fact]
     public async Task ReadsTheLedgerWithItsDriftHashes()
     {
         string socketPath = NewSocketPath();

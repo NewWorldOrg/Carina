@@ -53,6 +53,7 @@ public static class DriverJson
 [JsonSerializable(typeof(RecordingErasedDto))]
 [JsonSerializable(typeof(StrayFileErasureRequest))]
 [JsonSerializable(typeof(StrayFileErasedDto))]
+[JsonSerializable(typeof(ConditionalAccessCardDto))]
 [JsonSerializable(typeof(StorageRootDto))]
 [JsonSerializable(typeof(IReadOnlyList<StorageRootDto>))]
 [JsonSerializable(typeof(IReadOnlyList<RecordingSessionDto>))]

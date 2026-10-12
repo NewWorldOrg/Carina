@@ -3,6 +3,7 @@ using System.Text.Json.Serialization.Metadata;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
 using Carina.Driver.Recording;
@@ -119,6 +120,10 @@ public static class DriverApi
                 DriverJson.Context.IReadOnlyListStorageRootDto
             );
 
+        IDescramblerFactory cards = app.Services.GetRequiredService<IDescramblerFactory>();
+
+        RequestDelegate card = context => ShowCardAsync(context, cards);
+
         RequestDelegate diagnostics = context =>
             Write(
                 context,
@@ -146,6 +151,33 @@ public static class DriverApi
         app.MapDelete($"{DriverEndpoints.Recordings}/{{id}}", eraseRecording);
         app.MapPost(DriverEndpoints.StrayFiles, eraseStrayFile);
         app.MapPost(DriverEndpoints.Restart, restart);
+        app.MapGet(DriverEndpoints.ConditionalAccessCard, card);
+    }
+
+    public const string NoCardTitle = "No card has answered";
+
+    private static Task ShowCardAsync(HttpContext context, IDescramblerFactory cards)
+    {
+        if (cards.CardInHand is not { } identity)
+        {
+            return Problem(
+                context,
+                StatusCodes.Status404NotFound,
+                NoCardTitle,
+                cards.Unscrambles
+                    ? "No card has answered this driver's reader since it started."
+                    : "This driver does not ask a card for anything."
+            );
+        }
+
+        context.Response.Headers.CacheControl = "no-store";
+
+        return Write(
+            context,
+            StatusCodes.Status200OK,
+            new ConditionalAccessCardDto { CaSystemId = identity.CaSystemId, CardId = identity.CardId },
+            DriverJson.Context.ConditionalAccessCardDto
+        );
     }
 
     internal static Task Write<T>(

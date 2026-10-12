@@ -48,6 +48,8 @@ internal sealed class FakeCardConnection : ISmartCardConnection
 
     public ushort InitialReturnCode { get; set; } = ConditionalAccessCard.InitialSettingAnswered;
 
+    public byte[] CardId { get; set; } = SyntheticCardKeys.CardId;
+
     public Func<byte[], ushort> EcmReturnCode { get; set; } = _ => 0x0800;
 
     public Func<byte[], byte[]?>? Override { get; set; }
@@ -88,7 +90,7 @@ internal sealed class FakeCardConnection : ISmartCardConnection
         answer[3] = 0x01;
         BinaryPrimitives.WriteUInt16BigEndian(answer.AsSpan(4), InitialReturnCode);
         BinaryPrimitives.WriteUInt16BigEndian(answer.AsSpan(6), SyntheticCardKeys.CaSystemId);
-        SyntheticCardKeys.CardId.CopyTo(answer, 8);
+        CardId.CopyTo(answer, 8);
         answer[14] = 0x01;
         answer[15] = 0x50;
         SyntheticCardKeys.SystemKey.CopyTo(answer, 16);
