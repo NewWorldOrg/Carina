@@ -13,7 +13,8 @@ public sealed class HybridcastLaunchShelfTests
         "32736-1024",
         new Subject("viewer"),
         new Uri("http://hc.station.example.jp/p/index.html"),
-        HybridcastBoundary.Of(new Uri("http://hc.station.example.jp/p/index.html"), []));
+        HybridcastBoundary.Of(new Uri("http://hc.station.example.jp/p/index.html"), []),
+        "/hybridcast/receiver.js");
 
     [Fact(DisplayName = "BR-BA-004: a launch is found again by the ticket it was kept under, and by nothing else")]
     public void ALaunchIsFoundByItsTicket()

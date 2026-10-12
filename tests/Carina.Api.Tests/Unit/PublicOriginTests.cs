@@ -23,6 +23,13 @@ public sealed class PublicOriginTests
         Assert.True(redirect.Guessed);
     }
 
+    [Fact(DisplayName = "BR-BA-004: the origin a page is told it is served from is the named one, and the one the request arrived on where none is named")]
+    public void TheOriginAPageIsServedFromIsTheNamedOne()
+    {
+        Assert.Equal("https://carina.example", PublicOrigin.Named("https://carina.example").OriginFor(Inside));
+        Assert.Equal(Inside, PublicOrigin.Named(null).OriginFor(Inside));
+    }
+
     [Fact]
     public void ANamedOriginIsTheRedirectUriHoweverTheRequestArrived()
     {

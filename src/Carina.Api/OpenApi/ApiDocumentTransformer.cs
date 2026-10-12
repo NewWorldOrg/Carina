@@ -8,7 +8,7 @@ namespace Carina.Api.OpenApi;
 public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
 {
     private const string Description =
-        "The HTTP surface of the app process. Six contract surfaces do not fit a "
+        "The HTTP surface of the app process. Eight contract surfaces do not fit a "
         + "request/response schema and are absent from this document: the transport stream "
         + "(`/sessions/{id}/stream` on the driver socket), the event hub (`GET /api/events`), "
         + "the bulk programme guide (`GET /api/programs/bulk`), the recording file served "
@@ -21,7 +21,13 @@ public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
         + "(`GET /api/live/{networkId}-{serviceId}/stream`), one endless `video/mp2t` body "
         + "carrying the multiplex the tuner receives, nothing transcoded and nothing seekable, "
         + "which is the surface an external player or an AirPlay receiver opens with a ticket "
-        + "from `POST /api/live/ticket` and is not the path a browser watches through. "
+        + "from `POST /api/live/ticket` and is not the path a browser watches through, and the two a Hybridcast "
+        + "application's frame opens with the ticket `POST /api/live/{networkId}-{serviceId}/data-broadcast/app/ticket` "
+        + "issued: its documents and resources relayed from the broadcaster's server "
+        + "(`GET /api/live/{networkId}-{serviceId}/data-broadcast/app/{ticket}`, the address in `uri`, answered "
+        + "with whatever the server answered, a document rewritten to be read through the relay), and its "
+        + "WebSockets carried both ways (`GET /api/live/{networkId}-{serviceId}/data-broadcast/ws/{ticket}`, the ws "
+        + "or wss address in `uri`). "
         + "The wire is asked for by `network`, `service` "
         + "and `profile` in the query, the profile being one of those `GET /api/live/profiles` lists; "
         + "a viewer that is refused is told why on the control channel before the wire is closed.";
