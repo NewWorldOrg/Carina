@@ -12,8 +12,8 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// shared by every fan-out showing the channel. What changes is handed to each of them as a frame, beside the
 /// frames a viewer joining later is handed first: the catalog as it stands with every valid module that has
 /// arrived and each data stream's latest reference of the programme time, or word that the channel carries no
-/// data broadcast. The catalog is handed on only when what it lists
-/// changes; the one kept for a viewer joining later is made again whenever a module arrives.
+/// data broadcast. The catalog is handed on only when what it lists changes; the one kept for a viewer joining
+/// later is made again whenever a module arrives.
 /// </summary>
 /// <remarks>
 /// Each fan-out is handed the frames on the clock of the pictures it carries: the transcoder behind it counts from
