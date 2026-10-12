@@ -342,6 +342,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(BroadcasterRelaySettings.Default);
         services.TryAddSingleton<IRelayNetwork, SystemRelayNetwork>();
         services.TryAddSingleton<IBroadcasterRelay, BroadcasterRelay>();
+        services.TryAddSingleton(HybridcastRelaySettings.Default);
+        services.TryAddSingleton<IHybridcastRelay, HybridcastRelay>();
+        services.TryAddSingleton<IHybridcastLaunches, HybridcastLaunchShelf>();
         services.TryAddSingleton<RecordingReadTurn>();
         services.TryAddSingleton<IWatching, TranscodersInUse>();
         services.AddScoped<IScrubFrames, Scrubber>();

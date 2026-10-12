@@ -27,6 +27,7 @@ public sealed class PlaybackTicketRuleTests
                 "Carina.Domain/Auth/PlaybackTicketPolicy.cs",
                 "Carina.Infrastructure/Auth/PlaybackGrantStore.cs",
                 "Carina.Infrastructure/Auth/PlaybackTicketStore.cs",
+                "Carina.Infrastructure/DataBroadcast/HybridcastLaunchShelf.cs",
                 "Carina.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs",
             ],
             SourceScan.FilesMentioning(

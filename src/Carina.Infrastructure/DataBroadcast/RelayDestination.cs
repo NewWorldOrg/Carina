@@ -3,9 +3,10 @@ using System.Net;
 namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
-/// Which addresses a data broadcast document may be relayed to, read from the address alone: http or https, on
-/// port 80 or 443, with no user named in it, and where the host is written as an address, a public one. A host
-/// written as a name is judged again by the addresses it resolves to when the connection is opened.
+/// Which addresses a data broadcast document may be relayed to, read from the address alone: http or https, or ws or
+/// wss for a WebSocket, on port 80 or 443, with no user named in it, and where the host is written as an address, a
+/// public one. A host written as a name is judged again by the addresses it resolves to when the connection is
+/// opened.
 /// </summary>
 public static class RelayDestination
 {
@@ -34,6 +35,19 @@ public static class RelayDestination
         return address.IsAbsoluteUri
                && address.AbsoluteUri.Length <= LongestAddress
                && (address.Scheme == Uri.UriSchemeHttp || address.Scheme == Uri.UriSchemeHttps)
+               && address.Port is HttpPort or HttpsPort
+               && address.UserInfo.Length == 0
+               && address.IdnHost.Length > 0
+               && WrittenAddressIsPublic(address);
+    }
+
+    public static bool AdmitsSocket(Uri address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        return address.IsAbsoluteUri
+               && address.AbsoluteUri.Length <= LongestAddress
+               && (address.Scheme == Uri.UriSchemeWs || address.Scheme == Uri.UriSchemeWss)
                && address.Port is HttpPort or HttpsPort
                && address.UserInfo.Length == 0
                && address.IdnHost.Length > 0
