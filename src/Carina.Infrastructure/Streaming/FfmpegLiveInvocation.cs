@@ -12,7 +12,11 @@ public static class FfmpegLiveInvocation
 
     public const string Output = "pipe:1";
 
-    public const string Font = "Noto Sans CJK JP";
+    /// <summary>
+    /// The faces the captions are drawn with, in the order the decoder tries them: Denpa Font, which keeps
+    /// every character of a caption to half or the whole of its em, and Noto for what it does not have.
+    /// </summary>
+    public const string Font = "Denpa Font,Noto Sans CJK JP";
 
     public const string DrawnCaptions = "[c]";
 

@@ -36,6 +36,15 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 | FFmpeg 6.1.6, built with `--enable-gpl` and libx264 | GPL-2.0-or-later | <https://ffmpeg.org/releases/ffmpeg-6.1.6.tar.xz> | `/usr/share/doc/carina/ffmpeg/` |
 | libaribcaption v1.1.2 | MIT | <https://github.com/xqq/libaribcaption> | `/usr/share/doc/carina/libaribcaption/` |
 
+## Fonts fetched into the image
+
+| Component | License | Obtained from | License text in the image |
+| --- | --- | --- | --- |
+| Denpa Font v3.2 | OFL-1.1 | <https://github.com/danything/denpa-font/releases/download/v3.2/denpa-font.ttf> | the `name` table of `/usr/local/share/fonts/denpa-font/denpa-font.ttf` (copyright, license and its URL) |
+
+The font is checked against the `SHA256SUMS` of the same release and against
+`DENPA_FONT_SHA256` in the `Dockerfile` before it is copied into the image.
+
 The corresponding source of the FFmpeg binaries is in the image at
 `/usr/share/doc/carina/ffmpeg/source/`: the release archive as downloaded, the
 patch applied to it, and the configure options.

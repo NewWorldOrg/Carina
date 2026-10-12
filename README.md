@@ -306,6 +306,12 @@ compose の `app` は `/srv/recordings` を読み取り専用でしか持たず�
 字幕を画像として描くデコーダを持つパッケージが無いためである。
 VAAPI 用に `intel-media-va-driver` も入れている。
 
+字幕の絵は Denpa Font で描く。
+半角 512・全角 1024 の等幅で、ARIB の追加記号を収めた字幕用の書体である。
+イメージをビルドするとき Releases から `denpa-font.ttf` を取り、`SHA256SUMS` と `Dockerfile` の `DENPA_FONT_SHA256` の両方で確かめる。
+版は `Dockerfile` の `DENPA_FONT_VERSION` で固定する。
+Denpa Font に無い字は Noto Sans CJK JP(`fonts-noto-cjk`)で描く。
+
 ## イメージのタグ
 
 `master` にマージされるたびに、CI が同じ 1 つのイメージを `ghcr.io/newworldorg/carina` に 2 つのタグで公開する。
