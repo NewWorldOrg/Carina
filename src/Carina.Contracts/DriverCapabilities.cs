@@ -40,6 +40,8 @@ public static class DriverCapabilities
 
     public const string LnbPowerSwitch = "lnbPowerSwitch";
 
+    public const string CardIdentification = "cardIdentification";
+
     public const string SignalQualityMetricPrefix = "signalQuality.";
 
     public const string SessionPurposePrefix = "sessionPurpose.";

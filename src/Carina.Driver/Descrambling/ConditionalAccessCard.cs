@@ -15,6 +15,38 @@ public sealed class EcmAnswer(ushort returnCode, ScrambleKeys? keys)
 }
 
 /// <summary>
+/// Which card answered the initial setting: the CA system it belongs to and its card ID, the six bytes that follow
+/// the CA system in the answer. The ID names one card, so <see cref="ToString"/> leaves it out.
+/// </summary>
+public sealed class CardIdentity
+{
+    public const int CardIdLength = 6;
+
+    public CardIdentity(int caSystemId, ReadOnlySpan<byte> cardId)
+    {
+        if (cardId.Length is not CardIdLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(cardId),
+                $"A card ID is {CardIdLength} bytes, not {cardId.Length}."
+            );
+        }
+
+        CaSystemId = caSystemId;
+        CardId = Convert.ToHexString(cardId);
+    }
+
+    public int CaSystemId { get; }
+
+    /// <summary>
+    /// The card ID as twelve upper-case hexadecimal digits, one pair for each byte in the order the card sent them.
+    /// </summary>
+    public string CardId { get; }
+
+    public override string ToString() => $"a card of CA system 0x{CaSystemId:X4}";
+}
+
+/// <summary>
 /// The conditional-access card of ARIB STD-B25, spoken to over PC/SC with the two commands descrambling needs.
 /// </summary>
 public sealed class ConditionalAccessCard : IDisposable
@@ -37,6 +69,8 @@ public sealed class ConditionalAccessCard : IDisposable
 
     private const int CaSystemOffset = 6;
 
+    private const int CardIdOffset = 8;
+
     private const int SystemKeyOffset = 16;
 
     private const int InitialValueOffset = 48;
@@ -55,33 +89,46 @@ public sealed class ConditionalAccessCard : IDisposable
 
     private readonly Lock gate = new();
 
+    private readonly Action<CardIdentity>? settled;
+
     private byte[] systemKey = [];
 
     private byte[] initialValue = [];
 
     private bool disposed;
 
-    private ConditionalAccessCard(ISmartCardService service, ISmartCardConnection connection)
+    private ConditionalAccessCard(
+        ISmartCardService service,
+        ISmartCardConnection connection,
+        Action<CardIdentity>? settled
+    )
     {
         this.service = service;
         this.connection = connection;
+        this.settled = settled;
     }
 
-    public int CaSystemId { get; private set; }
+    public int CaSystemId => Identity?.CaSystemId ?? 0;
+
+    /// <summary>
+    /// The card that answered the initial setting last, which after the card was reset may be another card.
+    /// </summary>
+    public CardIdentity? Identity { get; private set; }
 
     public static ReadOnlySpan<byte> InitialSettingCommand =>
         [CommandClass, InitialSettingInstruction, 0x00, 0x00, 0x00];
 
     /// <summary>
     /// Takes the service over and connects to the first reader, in the order the service lists them, whose card answers the initial setting.
+    /// <paramref name="settled"/> hears which card answered, each time one does.
     /// </summary>
-    public static ConditionalAccessCard Open(ISmartCardService service)
+    public static ConditionalAccessCard Open(ISmartCardService service, Action<CardIdentity>? settled = null)
     {
         ArgumentNullException.ThrowIfNull(service);
 
         try
         {
-            return Connect(service);
+            return Connect(service, settled);
         }
         catch
         {
@@ -91,7 +138,7 @@ public sealed class ConditionalAccessCard : IDisposable
         }
     }
 
-    private static ConditionalAccessCard Connect(ISmartCardService service)
+    private static ConditionalAccessCard Connect(ISmartCardService service, Action<CardIdentity>? settled)
     {
         IReadOnlyList<string> readers = Ask(service.Readers, "listing the readers");
         if (readers.Count is 0)
@@ -102,7 +149,7 @@ public sealed class ConditionalAccessCard : IDisposable
         List<string> refusals = [];
         foreach (string reader in readers)
         {
-            ConditionalAccessCard? card = TryReader(service, reader, refusals);
+            ConditionalAccessCard? card = TryReader(service, reader, refusals, settled);
             if (card is not null)
             {
                 return card;
@@ -114,7 +161,12 @@ public sealed class ConditionalAccessCard : IDisposable
         );
     }
 
-    private static ConditionalAccessCard? TryReader(ISmartCardService service, string reader, List<string> refusals)
+    private static ConditionalAccessCard? TryReader(
+        ISmartCardService service,
+        string reader,
+        List<string> refusals,
+        Action<CardIdentity>? settled
+    )
     {
         ISmartCardConnection connection;
 
@@ -129,7 +181,7 @@ public sealed class ConditionalAccessCard : IDisposable
             return null;
         }
 
-        ConditionalAccessCard card = new(service, connection);
+        ConditionalAccessCard card = new(service, connection, settled);
 
         try
         {
@@ -196,9 +248,14 @@ public sealed class ConditionalAccessCard : IDisposable
             );
         }
 
-        CaSystemId = BinaryPrimitives.ReadUInt16BigEndian(payload[CaSystemOffset..]);
+        CardIdentity identity = new(
+            BinaryPrimitives.ReadUInt16BigEndian(payload[CaSystemOffset..]),
+            payload.Slice(CardIdOffset, CardIdentity.CardIdLength)
+        );
         systemKey = payload.Slice(SystemKeyOffset, Multi2.SystemKeyLength).ToArray();
         initialValue = payload.Slice(InitialValueOffset, ScrambleKeys.InitialValueLength).ToArray();
+        Identity = identity;
+        settled?.Invoke(identity);
     }
 
     private byte[] TransmitOnce(byte[] command, string what)

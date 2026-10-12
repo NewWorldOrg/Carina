@@ -6,14 +6,26 @@ namespace Carina.Driver.Descrambling;
 
 public sealed class Descramblers : IDescramblerFactory
 {
-    private readonly PcscLibrary library;
+    private readonly Func<ISmartCardService> openService;
 
     private readonly ILogger? logger;
 
-    private Descramblers(PcscLibrary library, ILogger? logger)
+    private CardIdentity? cardInHand;
+
+    private Descramblers(Func<ISmartCardService> openService, ILogger? logger)
     {
-        this.library = library;
+        this.openService = openService;
         this.logger = logger;
+    }
+
+    /// <summary>
+    /// Cards asked for through the smart-card service <paramref name="openService"/> opens, a new one each time.
+    /// </summary>
+    public static Descramblers Over(Func<ISmartCardService> openService, ILogger? logger)
+    {
+        ArgumentNullException.ThrowIfNull(openService);
+
+        return new Descramblers(openService, logger);
     }
 
     public static IDescramblerFactory For(DriverConfiguration configuration, ILogger? logger)
@@ -41,11 +53,11 @@ public sealed class Descramblers : IDescramblerFactory
             return NoDescrambling.Instance;
         }
 
-        Descramblers descramblers = new(library, logger);
+        Descramblers descramblers = new(library.Open, logger);
 
         try
         {
-            TheCard(library).Dispose();
+            descramblers.TheCard().Dispose();
 
             logger?.LogInformation(
                 "A card answered the reader, so this driver unscrambles what it records and says so in its greeting."
@@ -64,11 +76,13 @@ public sealed class Descramblers : IDescramblerFactory
 
     public bool Unscrambles => true;
 
+    public CardIdentity? CardInHand => Volatile.Read(ref cardInHand);
+
     public IDescrambler? Open()
     {
         try
         {
-            return new TransportStreamDescrambler(TheCard(library), logger);
+            return new TransportStreamDescrambler(TheCard(), logger);
         }
         catch (DescramblingException error)
         {
@@ -81,19 +95,19 @@ public sealed class Descramblers : IDescramblerFactory
         }
     }
 
-    private static ConditionalAccessCard TheCard(PcscLibrary library)
+    private ConditionalAccessCard TheCard()
     {
         ISmartCardService service;
 
         try
         {
-            service = library.Open();
+            service = openService();
         }
         catch (SmartCardException refused)
         {
             throw new DescramblingException(refused.Message);
         }
 
-        return ConditionalAccessCard.Open(service);
+        return ConditionalAccessCard.Open(service, identity => Volatile.Write(ref cardInHand, identity));
     }
 }

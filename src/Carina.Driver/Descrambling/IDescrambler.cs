@@ -13,6 +13,11 @@ public interface IDescramblerFactory
 {
     bool Unscrambles { get; }
 
+    /// <summary>
+    /// The card that answered last, when this driver started or as a tuner opened, or null where none has.
+    /// </summary>
+    CardIdentity? CardInHand { get; }
+
     IDescrambler? Open();
 }
 
@@ -23,6 +28,8 @@ public sealed class NoDescrambling : IDescramblerFactory
     private NoDescrambling() { }
 
     public bool Unscrambles => false;
+
+    public CardIdentity? CardInHand => null;
 
     public IDescrambler? Open() => null;
 }

@@ -245,6 +245,55 @@ public sealed class ConditionalAccessCardTests
     }
 
     [Fact]
+    public void TheCardIdIsTheSixBytesAfterTheCaSystemWrittenAsTwelveHexadecimalDigits()
+    {
+        FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection _);
+        List<CardIdentity> heard = [];
+
+        using ConditionalAccessCard opened = ConditionalAccessCard.Open(service, heard.Add);
+
+        CardIdentity identity = Assert.Single(heard);
+        Assert.Same(identity, opened.Identity);
+        Assert.Equal(SyntheticCardKeys.CaSystemId, identity.CaSystemId);
+        Assert.Equal("0A0B0C0D0E0F", identity.CardId);
+    }
+
+    [Fact]
+    public void ACardThatRefusesTheInitialSettingIsNeverHeardOf()
+    {
+        FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection card);
+        card.InitialReturnCode = 0x2101;
+        List<CardIdentity> heard = [];
+
+        Assert.Throws<DescramblingException>(() => ConditionalAccessCard.Open(service, heard.Add));
+
+        Assert.Empty(heard);
+    }
+
+    [Fact]
+    public void ACardSwappedInWhileTheReaderWasResetIsHeardOfWhenItSettles()
+    {
+        FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection card);
+        List<CardIdentity> heard = [];
+        using ConditionalAccessCard opened = ConditionalAccessCard.Open(service, heard.Add);
+        card.CardId = [0x10, 0x20, 0x30, 0x40, 0x50, 0x60];
+        card.Failures.Enqueue(SmartCardCodes.RemovedCard);
+
+        opened.Answer(SyntheticEcm);
+
+        Assert.Equal(["0A0B0C0D0E0F", "102030405060"], heard.Select(identity => identity.CardId));
+        Assert.Equal("102030405060", opened.Identity!.CardId);
+    }
+
+    [Fact]
+    public void ACardIdDoesNotWriteItselfOut()
+    {
+        CardIdentity identity = new(0x0005, SyntheticCardKeys.CardId);
+
+        Assert.Equal("a card of CA system 0x0005", identity.ToString());
+    }
+
+    [Fact]
     public void KeysDoNotWriteThemselvesOut()
     {
         FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection _);
