@@ -15,6 +15,13 @@ public sealed class PlaybackTargetTests
     }
 
     [Fact]
+    public void AnApplicationOnAChannelIsNotTheChannelItself()
+    {
+        Assert.NotEqual(PlaybackTarget.LiveChannel("7"), PlaybackTarget.HybridcastApplication("7"));
+        Assert.NotEqual(PlaybackTarget.LiveChannel("7").Value, PlaybackTarget.HybridcastApplication("7").Value);
+    }
+
+    [Fact]
     public void TwoNamesOfTheSameRecordingAreTheSameTarget()
     {
         Assert.Equal(PlaybackTarget.Recording("7"), PlaybackTarget.Recording("7"));
@@ -34,6 +41,7 @@ public sealed class PlaybackTargetTests
     {
         Assert.Equal(PlaybackTargetKind.Recording, PlaybackTarget.Recording("7").Kind);
         Assert.Equal(PlaybackTargetKind.LiveChannel, PlaybackTarget.LiveChannel("7").Kind);
+        Assert.Equal(PlaybackTargetKind.HybridcastApplication, PlaybackTarget.HybridcastApplication("7").Kind);
         Assert.Equal("7", PlaybackTarget.Recording("7").Name);
     }
 

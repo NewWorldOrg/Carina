@@ -7,6 +7,8 @@ public enum PlaybackTargetKind
     Recording = 1,
 
     LiveChannel = 2,
+
+    HybridcastApplication = 3,
 }
 
 public sealed class PlaybackTarget : CommonValueObject<string>
@@ -32,8 +34,15 @@ public sealed class PlaybackTarget : CommonValueObject<string>
     public static PlaybackTarget LiveChannel(string name)
         => new(PlaybackTargetKind.LiveChannel, Validated(name));
 
-    private static string Word(PlaybackTargetKind kind)
-        => kind is PlaybackTargetKind.Recording ? "recording" : "live-channel";
+    public static PlaybackTarget HybridcastApplication(string name)
+        => new(PlaybackTargetKind.HybridcastApplication, Validated(name));
+
+    private static string Word(PlaybackTargetKind kind) => kind switch
+    {
+        PlaybackTargetKind.Recording => "recording",
+        PlaybackTargetKind.LiveChannel => "live-channel",
+        _ => "hybridcast-application",
+    };
 
     private static string Validated(string name)
     {
