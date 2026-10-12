@@ -47,8 +47,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src/denpa-font
-RUN curl -fsSLO "https://github.com/danything/denpa-font/releases/download/${DENPA_FONT_VERSION}/denpa-font.ttf" \
-    && curl -fsSLO "https://github.com/danything/denpa-font/releases/download/${DENPA_FONT_VERSION}/SHA256SUMS" \
+RUN curl -fsSLO "https://github.com/NewWorldOrg/denpa-font/releases/download/${DENPA_FONT_VERSION}/denpa-font.ttf" \
+    && curl -fsSLO "https://github.com/NewWorldOrg/denpa-font/releases/download/${DENPA_FONT_VERSION}/SHA256SUMS" \
     && grep ' denpa-font.ttf$' SHA256SUMS | sha256sum -c - \
     && echo "${DENPA_FONT_SHA256}  denpa-font.ttf" | sha256sum -c - \
     && mkdir -p /out/fonts/denpa-font \

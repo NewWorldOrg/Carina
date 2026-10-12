@@ -19,7 +19,7 @@ public static class CaptionFontRules
 
     public const string Sums = "SHA256SUMS";
 
-    public const string Release = "https://github.com/danything/denpa-font/releases/download/${DENPA_FONT_VERSION}/";
+    public const string Release = "https://github.com/NewWorldOrg/denpa-font/releases/download/${DENPA_FONT_VERSION}/";
 
     public const string Installed = "COPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/";
 

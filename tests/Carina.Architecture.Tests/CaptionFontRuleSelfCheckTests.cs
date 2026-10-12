@@ -6,8 +6,8 @@ public sealed class CaptionFontRuleSelfCheckTests
         FROM mcr.microsoft.com/dotnet/sdk:10.0 AS denpa-font
         ARG DENPA_FONT_VERSION=v3.2
         ARG DENPA_FONT_SHA256=c20f77bdad691223c50c43609df4b4e87916bfdc7d29fe7c4690f2fd6e72414c
-        RUN curl -fsSLO "https://github.com/danything/denpa-font/releases/download/${DENPA_FONT_VERSION}/denpa-font.ttf" \
-            && curl -fsSLO "https://github.com/danything/denpa-font/releases/download/${DENPA_FONT_VERSION}/SHA256SUMS" \
+        RUN curl -fsSLO "https://github.com/NewWorldOrg/denpa-font/releases/download/${DENPA_FONT_VERSION}/denpa-font.ttf" \
+            && curl -fsSLO "https://github.com/NewWorldOrg/denpa-font/releases/download/${DENPA_FONT_VERSION}/SHA256SUMS" \
             && grep ' denpa-font.ttf$' SHA256SUMS | sha256sum -c - \
             && echo "${DENPA_FONT_SHA256}  denpa-font.ttf" | sha256sum -c - \
             && cp denpa-font.ttf /out/fonts/denpa-font/
@@ -71,7 +71,7 @@ public sealed class CaptionFontRuleSelfCheckTests
     public void DetectsAFontFetchedFromSomewhereOtherThanTheRelease()
     {
         string dockerfile = Sound.Replace(
-            "https://github.com/danything/denpa-font/releases/download/${DENPA_FONT_VERSION}/denpa-font.ttf",
+            "https://github.com/NewWorldOrg/denpa-font/releases/download/${DENPA_FONT_VERSION}/denpa-font.ttf",
             "https://example.invalid/denpa-font.ttf",
             StringComparison.Ordinal);
 

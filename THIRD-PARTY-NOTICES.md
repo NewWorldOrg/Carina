@@ -40,7 +40,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 | Component | License | Obtained from | License text in the image |
 | --- | --- | --- | --- |
-| Denpa Font v3.2 | OFL-1.1 | <https://github.com/danything/denpa-font/releases/download/v3.2/denpa-font.ttf> | the `name` table of `/usr/local/share/fonts/denpa-font/denpa-font.ttf` (copyright, license and its URL) |
+| Denpa Font v3.2 | OFL-1.1 | <https://github.com/NewWorldOrg/denpa-font/releases/download/v3.2/denpa-font.ttf> | the `name` table of `/usr/local/share/fonts/denpa-font/denpa-font.ttf` (copyright, license and its URL) |
 
 The font is checked against the `SHA256SUMS` of the same release and against
 `DENPA_FONT_SHA256` in the `Dockerfile` before it is copied into the image.
