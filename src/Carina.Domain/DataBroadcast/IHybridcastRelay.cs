@@ -13,9 +13,9 @@ public sealed record RelayedAit(RelayResult Result, int? HttpStatus, IReadOnlyLi
 
 /// <summary>
 /// What a document or resource of a Hybridcast application came back as: the result, and where the server
-/// answered, its status, the media type it named, the body and the address the body was finally taken from.
+/// answered, its status, the content type it named, the body and the address the body was finally taken from.
 /// </summary>
-public sealed record RelayedBody(RelayResult Result, int? HttpStatus, string? MediaType, ReadOnlyMemory<byte> Body, Uri? At)
+public sealed record RelayedBody(RelayResult Result, int? HttpStatus, string? ContentType, ReadOnlyMemory<byte> Body, Uri? At)
 {
     public static RelayedBody Failed(RelayResult result) => new(result, null, null, ReadOnlyMemory<byte>.Empty, null);
 }
