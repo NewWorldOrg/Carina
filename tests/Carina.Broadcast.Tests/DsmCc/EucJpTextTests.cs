@@ -101,4 +101,34 @@ public sealed class EucJpTextTests
             _ = EucJpText.ToUtf8(bytes);
         }
     }
+
+    [Fact(DisplayName = "BR-BD-011: text sent to a broadcaster is written in EUC-JP with the tables it is read with")]
+    public void TextSentToABroadcasterIsWrittenInEucJp()
+    {
+        Assert.Equal(
+            new byte[] { 0x41, 0x0A, 0xC5, 0xB7, 0xB5, 0xA4, 0x8E, 0xB1, 0x8E, 0xDF },
+            EucJpText.Encode("A\n天気ｱﾟ"));
+    }
+
+    [Theory(DisplayName = "BR-BD-011: what is written in EUC-JP reads back as the same text")]
+    [InlineData("応募\t1\tおはよう")]
+    [InlineData("ﾃｽﾄ ABC 123")]
+    [InlineData("⛌⛠")]
+    [InlineData("")]
+    public void WhatIsWrittenInEucJpReadsBackAsTheSameText(string text)
+    {
+        byte[] written = EucJpText.Encode(text, out int substitutions);
+
+        Assert.Equal(0, substitutions);
+        Assert.Equal(text, EucJpText.Decode(written));
+    }
+
+    [Fact(DisplayName = "BR-BD-011: a character no table holds is written as the geta mark and counted")]
+    public void ACharacterNoTableHoldsIsWrittenAsTheGetaMarkAndCounted()
+    {
+        byte[] written = EucJpText.Encode("a😀b", out int substitutions);
+
+        Assert.Equal(1, substitutions);
+        Assert.Equal("a〓b", EucJpText.Decode(written));
+    }
 }

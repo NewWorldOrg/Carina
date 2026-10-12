@@ -137,6 +137,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             "deleteReservation",
                 "deleteRule",
                 "deleteSession",
+                "fetchLiveDataBroadcast",
                 "forgetArchivedService",
                 "getCollectionStatus",
                 "getDetectedTuners",
@@ -225,6 +226,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "startScan",
                 "stopRecording",
                 "switchRule",
+                "transmitLiveDataBroadcast",
             ],
             named.Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(named.Length, named.Distinct(StringComparer.Ordinal).Count());
@@ -656,6 +658,49 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
         Assert.Null(operation["responses"]!["200"]!["content"]);
         Assert.Contains("0x02", operation["summary"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-BD-013: a transmission to a broadcaster's server is described with what a document sends and the result it reads")]
+    public async Task ATransmissionIsDescribedWithWhatADocumentSendsAndTheResultItReads()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/live/{networkId}-{serviceId}/data-broadcast/transmit"]!["post"]!;
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["networkId", "serviceId"],
+            operation["parameters"]!.AsArray().Select(parameter => parameter!["name"]!.GetValue<string>()).ToArray());
+        Assert.Equal(
+            ["200", "400", "401", "403", "404", "500"],
+            operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["uri", "text", "charset"],
+            schemas["TransmitDataBroadcastRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.False(schemas["TransmitDataBroadcastRequest"]!["additionalProperties"]!.GetValue<bool>());
+        Assert.Equal(
+            ["result", "httpStatus", "body"],
+            schemas["DataBroadcastTransmissionResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BD-013: a fetch from a broadcaster's server names the address in the query, and its bytes are left out of the JSON the document describes")]
+    public async Task AFetchNamesTheAddressInTheQuery()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/live/{networkId}-{serviceId}/data-broadcast/fetch"]!["get"]!;
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["networkId:path", "serviceId:path", "uri:query"],
+            operation["parameters"]!.AsArray()
+                .Select(parameter => $"{parameter!["name"]!.GetValue<string>()}:{parameter["in"]!.GetValue<string>()}")
+                .ToArray());
+        Assert.Equal(
+            ["200", "400", "401", "403", "404", "500", "502"],
+            operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Null(operation["responses"]!["200"]!["content"]);
+        Assert.Equal(
+            ["result", "httpStatus"],
+            schemas["DataBroadcastFetchFailureResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
     [Fact]

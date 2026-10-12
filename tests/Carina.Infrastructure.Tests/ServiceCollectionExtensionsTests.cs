@@ -1,6 +1,7 @@
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.DataBroadcast;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Encodings;
@@ -18,6 +19,7 @@ using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
+using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Encodings;
@@ -412,6 +414,17 @@ public sealed class ServiceCollectionExtensionsTests
             scope.ServiceProvider.GetRequiredService<ISegmentSettingsRepository>());
         Assert.IsType<LearningSwitch>(
             scope.ServiceProvider.GetRequiredService<ILearningSwitch>());
+    }
+
+    [Fact(DisplayName = "BR-BD-011: registers one relay to broadcasters' servers over the system's own network")]
+    public void RegistersTheRelay()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.IsType<BroadcasterRelay>(provider.GetRequiredService<IBroadcasterRelay>());
+        Assert.Same(provider.GetRequiredService<IBroadcasterRelay>(), provider.GetRequiredService<IBroadcasterRelay>());
+        Assert.IsType<SystemRelayNetwork>(provider.GetRequiredService<IRelayNetwork>());
+        Assert.Equal(BroadcasterRelaySettings.Default, provider.GetRequiredService<BroadcasterRelaySettings>());
     }
 
     [Fact(DisplayName = "registers the follow of recordings being written for their learning data alongside the other hosted services, with what it reaches for")]

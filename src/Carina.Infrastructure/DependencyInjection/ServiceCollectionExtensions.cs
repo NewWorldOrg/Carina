@@ -337,6 +337,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IDataBroadcastRecords>(provider => provider.GetRequiredService<DataBroadcastShelf>());
         services.TryAddSingleton<IRecordingClockStart, FfprobeRecordingClockStart>();
         services.TryAddSingleton<IDataBroadcastTaker, TransportStreamDataBroadcastTaker>();
+        services.TryAddSingleton(BroadcasterRelaySettings.Default);
+        services.TryAddSingleton<IRelayNetwork, SystemRelayNetwork>();
+        services.TryAddSingleton<IBroadcasterRelay, BroadcasterRelay>();
         services.TryAddSingleton<RecordingReadTurn>();
         services.TryAddSingleton<IWatching, TranscodersInUse>();
         services.AddScoped<IScrubFrames, Scrubber>();
