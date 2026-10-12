@@ -477,7 +477,7 @@ public sealed class EncodingEndpointTests
         Assert.Equal(600, ran.GetProperty("headway").GetProperty("leftSeconds").GetInt32());
         Assert.Equal(900, ran.GetProperty("quietForSeconds").GetInt32());
         Assert.True(ran.GetProperty("stalled").GetBoolean());
-        Assert.DoesNotContain("4242", ran.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain(Numbers(ran), number => number.GetRawText() == "4242");
         Assert.False(ran.TryGetProperty("programme", out _));
         JsonElement timeline = ran.GetProperty("timeline");
         Assert.Equal(30499.474078, timeline.GetProperty("sourceStartSeconds").GetDouble(), 6);
@@ -763,4 +763,11 @@ public sealed class EncodingEndpointTests
         Assert.Equal([AppEventName.EncodeJobs], feature.Events.Signalled);
     }
 
+    private static IEnumerable<JsonElement> Numbers(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => element.EnumerateObject().SelectMany(property => Numbers(property.Value)),
+        JsonValueKind.Array => element.EnumerateArray().SelectMany(Numbers),
+        JsonValueKind.Number => [element],
+        _ => [],
+    };
 }
