@@ -76,6 +76,12 @@ public sealed class CarouselReader
             DataBroadcastRead.ServiceMapped mapped => Mapped(mapped.Service),
             DataBroadcastRead.CarouselChanged changed => Changed(changed.Change),
             DataBroadcastRead.EventMessageTimed timed => new CarouselSignal.EventTimed(Event(timed.Message, timed.FiresAt)),
+            DataBroadcastRead.NptReferred referred => new CarouselSignal.NptReferred(new Domain.DataBroadcast.NptReference(
+                referred.ComponentTag,
+                referred.Stc,
+                referred.Reference.Npt,
+                referred.Reference.ScaleNumerator,
+                referred.Reference.ScaleDenominator)),
             DataBroadcastRead.EventMessageDiscarded => Discarded(),
             _ => throw new ArgumentOutOfRangeException(nameof(read), read, "A data broadcast is read as one of the kinds named."),
         };

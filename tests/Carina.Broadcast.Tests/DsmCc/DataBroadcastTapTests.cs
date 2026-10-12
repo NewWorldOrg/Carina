@@ -124,6 +124,46 @@ public sealed class DataBroadcastTapTests
         Assert.Equal(ProgramClock.Modulus + Second, tap.Now);
     }
 
+    [Fact(DisplayName = "BR-BD-004: a reference of the programme time is read with its stream's tag and the moment it names placed on the clock followed through its wrap")]
+    public void AReferenceIsReadWithItsTagAndItsMomentPlacedOnTheFollowedClock()
+    {
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+        tap.Push(new CarouselBroadcast().Associated().Mapped().At(ProgramClock.Modulus - Second).Bytes);
+
+        IReadOnlyList<DataBroadcastRead> reads = tap.Push(new CarouselBroadcast()
+            .At(Second)
+            .Sections(CarouselBroadcast.CarouselPid, new StreamDescriptorWriter
+            {
+                DataEventId = CarouselBroadcast.DataEventId,
+                Descriptors = StreamDescriptorWriter.NptReference(stc: 3 * Second, npt: 45 * Second),
+            }.ToSection().ToBytes())
+            .Bytes);
+
+        DataBroadcastRead.NptReferred referred = Assert.IsType<DataBroadcastRead.NptReferred>(Assert.Single(reads));
+        Assert.Equal(ProgramClock.Modulus + Second, referred.At);
+        Assert.Equal(ProgramClock.Modulus + (3 * Second), referred.Stc);
+        Assert.Equal(CarouselBroadcast.EntryTag, referred.ComponentTag);
+        Assert.Equal(45 * Second, referred.Reference.Npt);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a reference naming a moment just before the wrap, read just after it, is placed before the wrap")]
+    public void AReferenceNamingAMomentBeforeTheWrapIsPlacedBeforeIt()
+    {
+        DataBroadcastTap tap = new(CarouselBroadcast.ProgramNumber);
+        tap.Push(new CarouselBroadcast().Associated().Mapped().At(ProgramClock.Modulus - Second).Bytes);
+
+        IReadOnlyList<DataBroadcastRead> reads = tap.Push(new CarouselBroadcast()
+            .At(Second)
+            .Sections(CarouselBroadcast.CarouselPid, new StreamDescriptorWriter
+            {
+                DataEventId = CarouselBroadcast.DataEventId,
+                Descriptors = StreamDescriptorWriter.NptReference(stc: ProgramClock.Modulus - (2 * Second), npt: 0),
+            }.ToSection().ToBytes())
+            .Bytes);
+
+        Assert.Equal(ProgramClock.Modulus - (2 * Second), Assert.IsType<DataBroadcastRead.NptReferred>(Assert.Single(reads)).Stc);
+    }
+
     [Fact]
     public void TheMapOfAnotherProgrammeIsNotRead()
     {

@@ -112,6 +112,33 @@ public sealed class CarouselReaderTests
         Assert.Equal(3 * Second, read.At);
     }
 
+    [Fact(DisplayName = "BR-BD-003: an event message timed by the programme time is read at the moment the reference pairs it with, after the reference")]
+    public void AnEventTimedByTheProgrammeTimeIsReadAtTheMomentTheReferencePairsItWith()
+    {
+        CarouselReader reader = new(Service);
+        reader.Read(new CarouselBroadcast().Associated().Mapped().At(Second).Bytes);
+
+        IReadOnlyList<CarouselSignalRead> reads = reader.Read(new CarouselBroadcast()
+            .At(3 * Second)
+            .Sections(CarouselBroadcast.CarouselPid, new StreamDescriptorWriter
+            {
+                DataEventId = CarouselBroadcast.DataEventId,
+                Descriptors = DescriptorWriter.Loop(
+                    StreamDescriptorWriter.NptReference(stc: 4 * Second, npt: 10 * Second),
+                    StreamDescriptorWriter.GeneralEvent(0x12, StreamDescriptorWriter.Npt, 12 * Second, 0x06, 0x0345)),
+            }.ToSection().ToBytes())
+            .Bytes);
+
+        Assert.Equal(2, reads.Count);
+        CarouselSignal.NptReferred referred = Assert.IsType<CarouselSignal.NptReferred>(reads[0].Signal);
+        Assert.Equal(
+            (CarouselBroadcast.EntryTag, 4 * Second, 10 * Second, 1, 1),
+            (referred.Reference.Tag, referred.Reference.Stc, referred.Reference.Npt, referred.Reference.ScaleNumerator, referred.Reference.ScaleDenominator));
+        EventMessage message = Assert.IsType<CarouselSignal.EventTimed>(reads[1].Signal).Message;
+        Assert.Equal(EventTiming.Npt, message.Timing);
+        Assert.Equal(6 * Second, message.FiresAt);
+    }
+
     [Fact(DisplayName = "BR-BV-002: a carousel past the limit is read as left out for that reason")]
     public void ACarouselPastTheLimitIsReadAsLeftOut()
     {

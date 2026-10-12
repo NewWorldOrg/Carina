@@ -400,4 +400,51 @@ public sealed class CarouselStateTests
         Assert.True(catalog.AutoStart);
         Assert.Single(catalog.Carousels);
     }
+
+    [Fact(DisplayName = "BR-BD-004: a data stream's reference of the programme time is told when it moves and held for its stream")]
+    public void AReferenceIsToldWhenItMovesAndHeldForItsStream()
+    {
+        CarouselState state = new();
+        state.Apply(Carousels.Carried(), 0);
+        NptReference first = new(Carousels.Entry, 1_000, 0, 1, 1);
+        NptReference moved = new(Carousels.Entry, 2_000, 90_000, 1, 1);
+        NptReference other = new(Carousels.Other, 3_000, 0, 1, 1);
+
+        IReadOnlyList<CarouselDelta> told = state.Apply(new CarouselSignal.NptReferred(first), 10);
+        IReadOnlyList<CarouselDelta> again = state.Apply(new CarouselSignal.NptReferred(new NptReference(Carousels.Entry, 1_000, 0, 1, 1)), 20);
+        state.Apply(new CarouselSignal.NptReferred(other), 30);
+        IReadOnlyList<CarouselDelta> movedOn = state.Apply(new CarouselSignal.NptReferred(moved), 40);
+
+        Assert.Equal(new CarouselDelta.NptReferred(first), Assert.Single(told));
+        Assert.Empty(again);
+        Assert.Equal(new CarouselDelta.NptReferred(moved), Assert.Single(movedOn));
+        Assert.Equal([moved, other], state.NptReferences);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a reference of a stream the map does not list, or before the map is read, is not taken")]
+    public void AReferenceOfAStreamTheMapDoesNotListIsNotTaken()
+    {
+        CarouselState state = new();
+
+        Assert.Empty(state.Apply(new CarouselSignal.NptReferred(new NptReference(Carousels.Entry, 0, 0, 1, 1)), 0));
+        state.Apply(Carousels.Carried(), 0);
+        Assert.Empty(state.Apply(new CarouselSignal.NptReferred(new NptReference(0x60, 0, 0, 1, 1)), 10));
+        Assert.Empty(state.NptReferences);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: the references go with their streams when the map stops listing them or the data broadcast goes")]
+    public void TheReferencesGoWithTheirStreams()
+    {
+        CarouselState state = new();
+        state.Apply(Carousels.Carried(), 0);
+        state.Apply(new CarouselSignal.NptReferred(new NptReference(Carousels.Entry, 0, 0, 1, 1)), 0);
+        state.Apply(new CarouselSignal.NptReferred(new NptReference(Carousels.Other, 0, 0, 1, 1)), 0);
+
+        state.Apply(new CarouselSignal.Carried(Carousels.EntryOf(), [Carousels.Entry]), 10);
+        IReadOnlyList<int> afterTheMap = [.. state.NptReferences.Select(reference => reference.Tag)];
+        state.Apply(new CarouselSignal.NotCarried(), 20);
+
+        Assert.Equal([Carousels.Entry], afterTheMap);
+        Assert.Empty(state.NptReferences);
+    }
 }

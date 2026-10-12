@@ -98,6 +98,11 @@ public sealed class EventMessageClock
             return;
         }
 
+        if (arrived != reference)
+        {
+            outcomes.Add(new EventMessageOutcome.Referred(arrived));
+        }
+
         reference = arrived;
 
         foreach ((_, GeneralEvent held, long npt) in waiting)

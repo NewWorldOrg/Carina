@@ -49,6 +49,19 @@ public sealed class CarouselValueTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new EventMessage(1, 2, 3, (EventTiming)0, 0, ReadOnlyMemory<byte>.Empty));
     }
 
+    [Theory]
+    [InlineData(-1, 0, 1, 1)]
+    [InlineData(0x100, 0, 1, 1)]
+    [InlineData(0x40, -1, 1, 1)]
+    [InlineData(0x40, 1L << 33, 1, 1)]
+    [InlineData(0x40, 0, 0, 1)]
+    [InlineData(0x40, 0, 1, 0)]
+    [InlineData(0x40, 0, 0x10000, 1)]
+    public void AReferenceOfTheProgrammeTimeOutsideItsFieldsIsRefused(int tag, long npt, int numerator, int denominator)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new NptReference(tag, 0, npt, numerator, denominator));
+    }
+
     [Fact]
     public void ACatalogModuleCarriesResourcesOnceItHasArrivedAndNoneBefore()
     {

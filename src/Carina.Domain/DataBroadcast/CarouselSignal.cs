@@ -2,8 +2,8 @@ namespace Carina.Domain.DataBroadcast;
 
 /// <summary>
 /// What is read of a data broadcast, handed to <see cref="CarouselState"/>: the programme map carrying one
-/// or not, a carousel's download info, a module put together, an event message timed, or a carousel left
-/// out for being too large.
+/// or not, a carousel's download info, a module put together, an event message timed, a data stream's
+/// reference of the programme time, or a carousel left out for being too large.
 /// </summary>
 public abstract record CarouselSignal
 {
@@ -106,6 +106,18 @@ public abstract record CarouselSignal
         }
 
         public EventMessage Message { get; }
+    }
+
+    public sealed record NptReferred : CarouselSignal
+    {
+        public NptReferred(NptReference reference)
+        {
+            ArgumentNullException.ThrowIfNull(reference);
+
+            Reference = reference;
+        }
+
+        public NptReference Reference { get; }
     }
 
     public sealed record Dropped : CarouselSignal

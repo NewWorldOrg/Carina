@@ -127,6 +127,56 @@ public sealed class EventMessageClockTests
         Assert.Equal(2_010, Fired(outcomes).Single().FiresAt);
     }
 
+    [Fact(DisplayName = "BR-BD-004: a reference of the programme time is told when it is first adopted and again only when it moves")]
+    public void AReferenceIsToldWhenFirstAdoptedAndAgainOnlyWhenItMoves()
+    {
+        EventMessageClock clock = new();
+
+        IReadOnlyList<NptReference> first = Referred(clock.Push(
+            new StreamDescriptorWriter { Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 90_000, scaleNumerator: 1, scaleDenominator: 1, contentId: 3) },
+            ReceivedAt));
+        IReadOnlyList<NptReference> same = Referred(clock.Push(
+            new StreamDescriptorWriter { VersionNumber = 1, Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 90_000, scaleNumerator: 1, scaleDenominator: 1, contentId: 3) },
+            ReceivedAt));
+        IReadOnlyList<NptReference> moved = Referred(clock.Push(
+            new StreamDescriptorWriter { VersionNumber = 2, Descriptors = StreamDescriptorWriter.NptReference(stc: 5_000, npt: 90_000) },
+            ReceivedAt));
+
+        NptReference told = Assert.Single(first);
+        Assert.Equal((1_000L, 90_000L, 1, 1, 3), (told.Stc, told.Npt, told.ScaleNumerator, told.ScaleDenominator, told.ContentId));
+        Assert.Empty(same);
+        Assert.Equal(5_000, Assert.Single(moved).Stc);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a reference that is not used, unusable or for after a discontinuity, is not told")]
+    public void AReferenceThatIsNotUsedIsNotTold()
+    {
+        EventMessageClock clock = new();
+
+        IReadOnlyList<EventMessageOutcome> unusable = clock.Push(
+            new StreamDescriptorWriter { Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 0, scaleNumerator: 0) },
+            ReceivedAt);
+        IReadOnlyList<EventMessageOutcome> later = clock.Push(
+            new StreamDescriptorWriter { VersionNumber = 1, Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 0, postDiscontinuity: true) },
+            ReceivedAt);
+
+        Assert.Empty(Referred(unusable));
+        Assert.Empty(later);
+    }
+
+    [Fact(DisplayName = "BR-BD-004: the reference that releases waiting events is told before them")]
+    public void TheReferenceThatReleasesWaitingEventsIsToldBeforeThem()
+    {
+        EventMessageClock clock = new();
+        clock.Push(Section(0, StreamDescriptorWriter.GeneralEvent(SomeGroup, StreamDescriptorWriter.Npt, 10, 0, 1)), ReceivedAt);
+
+        IReadOnlyList<EventMessageOutcome> outcomes = clock.Push(
+            new StreamDescriptorWriter { EventMessageGroupId = 2, Descriptors = StreamDescriptorWriter.NptReference(stc: 1_000, npt: 0) },
+            ReceivedAt);
+
+        Assert.Equal([typeof(EventMessageOutcome.Referred), typeof(EventMessageOutcome.Timed)], outcomes.Select(outcome => outcome.GetType()));
+    }
+
     [Fact(DisplayName = "BR-BD-003: a repeat of the same section version fires its events once and a new version fires again")]
     public void ARepeatOfTheSameSectionVersionFiresItsEventsOnceAndANewVersionFiresAgain()
     {
@@ -358,7 +408,7 @@ public sealed class EventMessageClockTests
             new StreamDescriptorWriter { EventMessageGroupId = 0x0FFF, VersionNumber = 1, Descriptors = StreamDescriptorWriter.NptReference(stc: 200, npt: 0) },
             ReceivedAt);
 
-        Assert.Empty(second);
+        Assert.IsType<EventMessageOutcome.Referred>(Assert.Single(second));
     }
 
     private static StreamDescriptorWriter Numbered(int section, byte[] descriptors)
@@ -366,6 +416,9 @@ public sealed class EventMessageClockTests
 
     private static StreamDescriptorWriter Section(int version, params byte[][] descriptors)
         => new() { EventMessageGroupId = SomeGroup, VersionNumber = version, Descriptors = DescriptorWriter.Loop(descriptors) };
+
+    private static IReadOnlyList<NptReference> Referred(IReadOnlyList<EventMessageOutcome> outcomes)
+        => outcomes.OfType<EventMessageOutcome.Referred>().Select(referred => referred.Reference).ToArray();
 
     private static IReadOnlyList<TimedEventMessage> Fired(IReadOnlyList<EventMessageOutcome> outcomes)
         => outcomes.OfType<EventMessageOutcome.Timed>().Select(timed => timed.Message).ToArray();
