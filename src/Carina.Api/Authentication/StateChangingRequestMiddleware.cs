@@ -12,7 +12,7 @@ public sealed class StateChangingRequestMiddleware(RequestDelegate next)
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (!ChangesState(context))
+        if (!ChangesState(context) || context.GetEndpoint().IsOpenToTheFrame())
         {
             return next(context);
         }

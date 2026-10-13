@@ -4,6 +4,8 @@ namespace Carina.Api.Authentication;
 
 public static class RequestOrigin
 {
+    public const string Opaque = "null";
+
     public static bool NamesThisOne(HttpRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -17,6 +19,13 @@ public static class RequestOrigin
         ArgumentNullException.ThrowIfNull(request);
 
         return request.Headers[HeaderNames.Origin].Count > 0 && !NamesThisOne(request);
+    }
+
+    public static bool IsOpaque(HttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return request.Headers.Origin is [string named] && string.Equals(named, Opaque, StringComparison.Ordinal);
     }
 
     private static string Here(HttpRequest request) => $"{AsThePageSaysIt(request.Scheme)}://{request.Host.Value}";

@@ -112,7 +112,7 @@ public sealed class StateChangeGuardSweepTests(TestingWebApplicationFactory fact
     }
 
     private static bool ChangesState(RoutedSurface surface)
-        => EndpointRules.GuardsRequiredBy(surface.Method, carriesABody: false).Count > 0;
+        => !surface.OpenToTheFrame && EndpointRules.GuardsRequiredBy(surface.Method, carriesABody: false).Count > 0;
 
     private static async Task<HttpResponseMessage> SendingAsync(
         HttpClient client,

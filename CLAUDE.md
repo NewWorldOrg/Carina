@@ -146,6 +146,12 @@ walks past it.
   source reads an identity handed to it by an edge. Authentication is decided by
   the session the request carries, not by a header a proxy could be talked into
   setting.
+- **The Hybridcast frame's two relays are the only surfaces another origin may read, and the only ones a POST
+  reaches without naming this origin.** The frame is sandboxed without an origin of its own and sends no cookie;
+  the ticket in the path is its only credential. `OpenToTheFrame` gives those routes a CORS policy of any origin
+  without credentials and takes them out of the Origin check on state-changing requests, and the WebSocket one
+  takes an origin of `null`. Every other route carries no CORS header and keeps its checks, and a test lists the
+  routes so marked.
 - **The OIDC client secret is read in the clear in two files only** — where it is
   stored and where it is spent. Neither of them logs, and nothing that answers a
   caller can name it.

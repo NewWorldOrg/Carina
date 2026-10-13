@@ -17,7 +17,8 @@ public sealed record RelayLimits(int AtOnce, TimeSpan Time, int LargestReceived,
 
 /// <summary>
 /// One exchange to make: the lane it waits its turn in, its limits, where it goes (nothing where the address was
-/// already refused), how, with what body in which character set, and which redirect it follows from where.
+/// already refused), how, with what body of which media type, and which redirect it follows from where. The media
+/// type is one <see cref="MediaTypeHeaderValue"/> has read.
 /// </summary>
 public sealed record RelayAsk(
     string Lane,
@@ -25,7 +26,7 @@ public sealed record RelayAsk(
     Uri? Destination,
     HttpMethod Method,
     byte[]? Body,
-    string? Charset,
+    string? BodyType,
     Func<Uri, Uri, bool> Follows);
 
 /// <summary>
@@ -47,8 +48,6 @@ public sealed record RelayExchange(RelayResult Result, int? Status, byte[]? Body
 /// </summary>
 public sealed class RelayLine : IDisposable
 {
-    private const string FormMediaType = "application/x-www-form-urlencoded";
-
     private readonly IRelayNetwork network;
 
     private readonly OwnHost own;
@@ -188,7 +187,7 @@ public sealed class RelayLine : IDisposable
 
         for (int hop = 0; ; hop++)
         {
-            using HttpRequestMessage request = Request(at, method, body, ask.Charset);
+            using HttpRequestMessage request = Request(at, method, body, ask.BodyType);
             using HttpResponseMessage response = await Client.SendAsync(request, cancellationToken);
 
             if (hop < ask.Limits.Redirects && Redirected(at, response, ask.Follows) is { } next)
@@ -206,7 +205,7 @@ public sealed class RelayLine : IDisposable
         }
     }
 
-    private HttpRequestMessage Request(Uri at, HttpMethod method, byte[]? body, string? charset)
+    private HttpRequestMessage Request(Uri at, HttpMethod method, byte[]? body, string? bodyType)
     {
         HttpRequestMessage request = new(method, at)
         {
@@ -219,7 +218,7 @@ public sealed class RelayLine : IDisposable
         if (body is not null)
         {
             request.Content = new ByteArrayContent(body);
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue(FormMediaType) { CharSet = charset };
+            request.Content.Headers.ContentType = bodyType is null ? null : MediaTypeHeaderValue.Parse(bodyType);
         }
 
         return request;

@@ -16,6 +16,8 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// </summary>
 public sealed class BroadcasterRelay : IBroadcasterRelay, IDisposable
 {
+    public const string FormMediaType = "application/x-www-form-urlencoded";
+
     public const string Exchanged =
         "Data broadcast relay on channel {Channel}: {Method} {Host}{Path} ended {Result} with status {Status}, "
         + "{Sent} bytes sent and {Received} received in {Elapsed} ms.";
@@ -73,7 +75,7 @@ public sealed class BroadcasterRelay : IBroadcasterRelay, IDisposable
         Uri? destination = asked is null || body?.Length > settings.LargestSent ? null : RelayDestination.Admit(uri);
 
         RelayExchange exchange = await line.RelayAsync(
-            new RelayAsk(channel, limits, destination, method, body, charset, OnTheSameHost),
+            new RelayAsk(channel, limits, destination, method, body, body is null ? null : $"{FormMediaType}; charset={charset}", OnTheSameHost),
             cancellationToken);
         Write(channel, uri, method, exchange, body?.Length ?? 0, started);
 

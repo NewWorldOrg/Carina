@@ -194,6 +194,28 @@ public sealed partial class DataBroadcastRelayService(
         return ServiceResult<RelayedBody, DataBroadcastRelayRefusal>.Success(fetched);
     }
 
+    public async Task<ServiceResult<RelayedBody, DataBroadcastRelayRefusal>> PostApplicationAsync(
+        HybridcastLaunch launch,
+        Uri address,
+        PostedBody posted,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(launch);
+        ArgumentNullException.ThrowIfNull(address);
+        ArgumentNullException.ThrowIfNull(posted);
+
+        if (!launch.Boundary.Admits(address))
+        {
+            return ServiceResult<RelayedBody, DataBroadcastRelayRefusal>.Failure(
+                OutsideTheBoundaryOfTheApplication,
+                DataBroadcastRelayRefusal.OutsideTheBoundary);
+        }
+
+        RelayedBody answered = await hybridcast.PostAsync(launch.Channel, address, launch.Boundary, posted, cancellationToken);
+
+        return ServiceResult<RelayedBody, DataBroadcastRelayRefusal>.Success(answered);
+    }
+
     public async Task<ServiceResult<RelayedSocket, DataBroadcastRelayRefusal>> OpenApplicationSocketAsync(
         HybridcastLaunch launch,
         Uri address,

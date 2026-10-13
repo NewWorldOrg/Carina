@@ -244,6 +244,126 @@ public sealed class HybridcastRelayTests
         Assert.Empty(rig.Network.Connected);
     }
 
+    [Fact(DisplayName = "BR-BD-011: a body the application posts inside the boundary is sent with the type it named, and the answer is handed back as a fetch's is")]
+    public async Task ABodyPostedInsideTheBoundaryIsSentWithItsType()
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Of(200, "{\"ok\":true}"u8.ToArray(), "Content-Type: application/json"));
+
+        RelayedBody answered = await rig.Relay.PostAsync(
+            Channel,
+            new Uri($"http://{Host}/p/vote"),
+            Boundary,
+            new PostedBody("choice=2"u8.ToArray(), "application/x-www-form-urlencoded; charset=UTF-8"),
+            CancellationToken.None);
+
+        HeardRequest heard = Assert.Single(rig.Server.Heard);
+        Assert.Equal("POST", heard.Method);
+        Assert.Equal("/p/vote", heard.Target);
+        Assert.Equal("application/x-www-form-urlencoded; charset=UTF-8", heard.Headers["Content-Type"]);
+        Assert.Equal("choice=2"u8.ToArray(), heard.Body);
+        Assert.Equal(BroadcasterRelaySettings.Default.UserAgent, heard.Headers["User-Agent"]);
+        Assert.Equal(RelayResult.Answered, answered.Result);
+        Assert.Equal(200, answered.HttpStatus);
+        Assert.Equal("application/json", answered.ContentType);
+        Assert.Equal("{\"ok\":true}"u8.ToArray(), answered.Body.ToArray());
+        Assert.Equal(new Uri($"http://{Host}/p/vote"), answered.At);
+    }
+
+    [Fact(DisplayName = "BR-BD-011: a body that names no type is sent with none")]
+    public async Task ABodyThatNamesNoTypeIsSentWithNone()
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(204, string.Empty));
+
+        RelayedBody answered = await rig.Relay.PostAsync(Channel, new Uri($"http://{Host}/p/beacon"), Boundary, new PostedBody(ReadOnlyMemory<byte>.Empty, null), CancellationToken.None);
+
+        HeardRequest heard = Assert.Single(rig.Server.Heard);
+        Assert.Equal("POST", heard.Method);
+        Assert.False(heard.Headers.ContainsKey("Content-Type"));
+        Assert.Empty(heard.Body);
+        Assert.Equal(204, answered.HttpStatus);
+    }
+
+    [Fact(DisplayName = "BR-BD-011: a posted body of 16 KiB is sent, as the document relay's is, and one byte more is refused and never leaves")]
+    public async Task APostedBodyOverSixteenKibIsRefused()
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, "1"));
+        byte[] most = new byte[BroadcasterRelaySettings.Default.LargestSent];
+
+        RelayedBody within = await rig.Relay.PostAsync(Channel, new Uri($"http://{Host}/p/vote"), Boundary, new PostedBody(most, "application/octet-stream"), CancellationToken.None);
+        RelayedBody over = await rig.Relay.PostAsync(Channel, new Uri($"http://{Host}/p/vote"), Boundary, new PostedBody(new byte[most.Length + 1], "application/octet-stream"), CancellationToken.None);
+
+        Assert.Equal(BroadcasterRelaySettings.Default.LargestSent, HybridcastRelaySettings.Default.LargestSent);
+        Assert.Equal(RelayResult.Answered, within.Result);
+        Assert.Equal(RelayedBody.Failed(RelayResult.RefusedOrTooLarge), over);
+        Assert.Equal(most.Length, Assert.Single(rig.Server.Heard).Body.Length);
+    }
+
+    [Theory(DisplayName = "BR-BD-011: a post outside the boundary, to an address inside, to this installation or naming a type that cannot be read is refused and connects to nothing")]
+    [InlineData("http://elsewhere.example/p/vote", "text/plain")]
+    [InlineData("http://10.0.0.1/p/vote", "text/plain")]
+    [InlineData("http://carina.example/api/health", "text/plain")]
+    [InlineData("http://hc.station.example.jp:8080/p/vote", "text/plain")]
+    [InlineData("http://hc.station.example.jp/p/vote", "not a type")]
+    [InlineData("http://hc.station.example.jp/p/vote", "text/plain\r\nCookie: a=1")]
+    public async Task APostOutsideIsRefused(string address, string type)
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, "1"));
+
+        RelayedBody refused = await rig.Relay.PostAsync(Channel, new Uri(address), ReachingInwards, new PostedBody("a=1"u8.ToArray(), type), CancellationToken.None);
+
+        Assert.Equal(RelayedBody.Failed(RelayResult.RefusedOrTooLarge), refused);
+        Assert.Empty(rig.Network.Connected);
+    }
+
+    [Fact(DisplayName = "BR-BD-011: no cookie is sent with a post, and one the server sets is never sent back")]
+    public async Task NoCookieIsSentWithAPost()
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Of(200, "1"u8.ToArray(), "Content-Type: text/plain", "Set-Cookie: session=kept; Path=/"));
+
+        await rig.Relay.PostAsync(Channel, new Uri($"http://{Host}/p/vote"), Boundary, new PostedBody("a=1"u8.ToArray(), "text/plain"), CancellationToken.None);
+        await rig.Relay.PostAsync(Channel, new Uri($"http://{Host}/p/vote"), Boundary, new PostedBody("a=2"u8.ToArray(), "text/plain"), CancellationToken.None);
+
+        Assert.Equal(2, rig.Server.Heard.Count);
+        Assert.All(rig.Server.Heard, heard => Assert.False(heard.Headers.ContainsKey("Cookie")));
+    }
+
+    [Fact(DisplayName = "BR-BD-011: a 307 inside the boundary keeps the post and its body, and a 303 turns it into a GET with none")]
+    public async Task ARedirectKeepsOrDropsThePostAsTheStatusSays()
+    {
+        await using RelayRig rig = new(request => request.Target switch
+        {
+            "/p/kept" => CannedAnswer.Of(307, [], "Location: /p/landed"),
+            "/p/seen" => CannedAnswer.Of(303, [], "Location: http://cdn.station.example.jp/p/landed"),
+            _ => CannedAnswer.Text(200, "here"),
+        });
+
+        await rig.Relay.PostAsync(Channel, new Uri($"http://{Host}/p/kept"), Boundary, new PostedBody("a=1"u8.ToArray(), "text/plain"), CancellationToken.None);
+        await rig.Relay.PostAsync(Channel, new Uri($"http://{Host}/p/seen"), Boundary, new PostedBody("a=2"u8.ToArray(), "text/plain"), CancellationToken.None);
+
+        Assert.Equal(
+            ["POST /p/kept a=1", "POST /p/landed a=1", "POST /p/seen a=2", "GET /p/landed "],
+            rig.Server.Heard.Select(heard => $"{heard.Method} {heard.Target} {Encoding.ASCII.GetString(heard.Body)}"));
+    }
+
+    [Fact(DisplayName = "BR-BD-012: a post is written down by host, path, method and sizes, never by its query or its body")]
+    public async Task APostIsWrittenDownWithoutItsQueryOrBody()
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, "answered-secret"));
+
+        await rig.Relay.PostAsync(Channel, new Uri($"http://{Host}/p/vote?id=query-secret"), Boundary, new PostedBody("card=body-secret"u8.ToArray(), "text/plain"), CancellationToken.None);
+
+        KeptLine line = Assert.Single(rig.Log.Lines);
+        Assert.Equal(Channel, line.Values["Channel"]);
+        Assert.Equal("POST", line.Values["Method"]);
+        Assert.Equal(Host, line.Values["Host"]);
+        Assert.Equal("/p/vote", line.Values["Path"]);
+        Assert.Equal(1, line.Values["Result"]);
+        Assert.Equal(200, line.Values["Status"]);
+        Assert.Equal(16L, line.Values["Sent"]);
+        Assert.Equal(15L, line.Values["Received"]);
+        Assert.DoesNotContain("secret", line.Said, StringComparison.Ordinal);
+    }
+
     [Theory(DisplayName = "BR-BD-011: an AIT at this installation's own host is refused whatever its case, trailing dot or port, and nothing is resolved or connected to")]
     [InlineData("http://carina.example/app.ait")]
     [InlineData("https://Carina.Example./app.ait")]

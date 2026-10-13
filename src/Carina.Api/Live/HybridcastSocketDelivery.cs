@@ -13,15 +13,19 @@ namespace Carina.Api.Live;
 /// Carries a Hybridcast application's WebSocket to the broadcaster's server and back, on the subprotocol the server
 /// chose, until either side closes; a close is passed on with its status and reason. The ticket the application was
 /// started with travels in the path, and opens only the application it started, on its own channel, for the viewer
-/// who started it. An address outside the application's boundary is refused 403 and asked of nobody.
+/// who started it. The frame has no origin of its own, so a WebSocket is taken from an origin of "null", from this
+/// one or from none, and refused 403 from any other. An address outside the application's boundary is refused 403
+/// and asked of nobody.
 /// </summary>
 public static class HybridcastSocketDelivery
 {
-    public const string Path = "/api/live/{networkId:int}-{serviceId:int}/data-broadcast/ws/{ticket}";
+    public const string Path = "/api/live/{networkId:int}-{serviceId:int}/data-broadcast/ws/{ticket:length(43)}";
 
     public const string OnlyAWebSocket = "This is opened as a WebSocket.";
 
     public const string WhatIsCarried = "An application names the ws or wss address it connects to as uri.";
+
+    public const string OnlyFromTheFrame = "A WebSocket is opened only from the application's frame.";
 
     public static string RelayOf(int networkId, int serviceId, string ticket) => $"/api/live/{networkId}-{serviceId}/data-broadcast/ws/{ticket}";
 
@@ -38,6 +42,11 @@ public static class HybridcastSocketDelivery
         if (!context.WebSockets.IsWebSocketRequest)
         {
             return HybridcastAppDelivery.RefuseAsync(context, StatusCodes.Status400BadRequest, OnlyAWebSocket);
+        }
+
+        if (RequestOrigin.NamesSomewhereElse(context.Request) && !RequestOrigin.IsOpaque(context.Request))
+        {
+            return HybridcastAppDelivery.RefuseAsync(context, StatusCodes.Status403Forbidden, OnlyFromTheFrame);
         }
 
         return context.RequestServices

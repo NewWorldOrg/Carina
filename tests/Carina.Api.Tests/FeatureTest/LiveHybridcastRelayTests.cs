@@ -9,6 +9,7 @@ using System.Text.Json;
 using Carina.Api.Live;
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;
+using Carina.Infrastructure.DataBroadcast;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -33,6 +34,8 @@ internal sealed class ScriptedHybridcastRelay : IHybridcastRelay
 
     public Func<Uri, RelayedBody> Fetched { get; set; } = address => new RelayedBody(RelayResult.Answered, 200, "text/plain", "x"u8.ToArray(), address);
 
+    public ConcurrentQueue<PostedBody> Posts { get; } = new();
+
     public Task<RelayedAit> ReadAitAsync(string channel, string uri, CancellationToken cancellationToken)
     {
         Asked.Enqueue($"ait {channel} {uri}");
@@ -43,6 +46,14 @@ internal sealed class ScriptedHybridcastRelay : IHybridcastRelay
     public Task<RelayedBody> FetchAsync(string channel, Uri address, HybridcastBoundary boundary, CancellationToken cancellationToken)
     {
         Asked.Enqueue($"fetch {channel} {address.AbsoluteUri}");
+
+        return Task.FromResult(Fetched(address));
+    }
+
+    public Task<RelayedBody> PostAsync(string channel, Uri address, HybridcastBoundary boundary, PostedBody posted, CancellationToken cancellationToken)
+    {
+        Asked.Enqueue($"post {channel} {address.AbsoluteUri} {posted.ContentType ?? "untyped"} {Encoding.UTF8.GetString(posted.Bytes.Span)}");
+        Posts.Enqueue(posted);
 
         return Task.FromResult(Fetched(address));
     }
@@ -567,6 +578,199 @@ public sealed class LiveHybridcastRelayTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory(DisplayName = "BR-BA-004: the frame's two relays answer any origin, without credentials and naming no header beyond the safe ones")]
+    [InlineData("app")]
+    [InlineData("ws")]
+    public async Task TheFramesRelaysAnswerAnyOrigin(string relay)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        using HttpRequestMessage asking = new(HttpMethod.Get, Relayed(started, relay, "http://hc.station.example.jp/p/a.js"));
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+
+        Assert.Equal("*", response.Headers.GetValues(HeaderNames.AccessControlAllowOrigin).Single());
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowCredentials));
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlExposeHeaders));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a preflight from the frame is answered for GET and POST, the safe request headers and the content type, and asks nothing of the server")]
+    [InlineData("POST", "content-type")]
+    [InlineData("GET", "accept,accept-language,content-language")]
+    public async Task APreflightFromTheFrameIsAnswered(string method, string headers)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        int askedBefore = feature.Relay.Asked.Count;
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(Preflight(Relayed(started, "app", "http://hc.station.example.jp/p/vote"), method, headers));
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("*", response.Headers.GetValues(HeaderNames.AccessControlAllowOrigin).Single());
+        Assert.Contains(method, response.Headers.GetValues(HeaderNames.AccessControlAllowMethods).Single(), StringComparison.Ordinal);
+        Assert.All(
+            headers.Split(','),
+            header => Assert.Contains(header, response.Headers.GetValues(HeaderNames.AccessControlAllowHeaders).Single(), StringComparison.OrdinalIgnoreCase));
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowCredentials));
+        Assert.Equal(askedBefore, feature.Relay.Asked.Count);
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a preflight asking for another method or for a header beyond the safe ones and the content type is not allowed it")]
+    [InlineData("PUT", "", "PUT")]
+    [InlineData("DELETE", "", "DELETE")]
+    [InlineData("POST", "x-requested-with", "x-requested-with")]
+    [InlineData("POST", "authorization", "authorization")]
+    [InlineData("POST", "content-type,cookie", "cookie")]
+    public async Task APreflightAskingForMoreIsNotAllowedIt(string method, string headers, string refused)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(Preflight(Relayed(started, "app", "http://hc.station.example.jp/p/vote"), method, headers));
+        string[] allowed =
+        [
+            .. new[] { HeaderNames.AccessControlAllowMethods, HeaderNames.AccessControlAllowHeaders }
+                .SelectMany(name => response.Headers.TryGetValues(name, out IEnumerable<string>? values) ? values : [])
+                .SelectMany(value => value.Split(','))
+                .Select(value => value.Trim()),
+        ];
+
+        Assert.DoesNotContain(refused, allowed, StringComparer.OrdinalIgnoreCase);
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowCredentials));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: no other route answers another origin, whether it carries a ticket in its path, is asked for plainly or is preflighted")]
+    [InlineData("GET", "/api/health")]
+    [InlineData("GET", "/api/live/32736-1024/with-ticket/{ticket}/live.ts")]
+    [InlineData("GET", "/api/videos/sample/with-ticket/{ticket}/video.mp4")]
+    [InlineData("OPTIONS", "/api/live/32736-1024/with-ticket/{ticket}/live.ts")]
+    [InlineData("OPTIONS", "/api/live/32736-1024/data-broadcast/app/ticket")]
+    [InlineData("OPTIONS", "/api/reservations")]
+    public async Task NoOtherRouteAnswersAnotherOrigin(string method, string path)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        Uri target = new(path.Replace("{ticket}", started.GetProperty("inTheClear").GetString(), StringComparison.Ordinal), UriKind.Relative);
+        using HttpRequestMessage asking = method == "OPTIONS" ? Preflight(target, "GET", string.Empty) : new HttpRequestMessage(HttpMethod.Get, target);
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+
+        using HttpResponseMessage response = await feature.Viewer.SendAsync(asking);
+
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowOrigin));
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowMethods));
+    }
+
+    [Fact(DisplayName = "BR-BD-011: the frame posts through its relay from an origin of its own with no cookie either way, and the answer is handed back as a fetch's is")]
+    public async Task TheFramePostsThroughItsRelay()
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        feature.Relay.Fetched = address => new RelayedBody(RelayResult.Answered, 200, "text/html; charset=utf-8", "<html><head></head><body>済</body></html>"u8.ToArray(), address);
+        using HttpRequestMessage asking = new(HttpMethod.Post, Relayed(started, "app", "http://hc.station.example.jp/p/vote"))
+        {
+            Content = new StringContent("choice=2", Encoding.UTF8, "application/x-www-form-urlencoded"),
+        };
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Cookie, "carina_session=held");
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+        string page = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("*", response.Headers.GetValues(HeaderNames.AccessControlAllowOrigin).Single());
+        Assert.StartsWith("sandbox allow-scripts allow-forms;", response.Headers.GetValues(HeaderNames.ContentSecurityPolicy).Single(), StringComparison.Ordinal);
+        Assert.False(response.Headers.Contains(HeaderNames.SetCookie));
+        Assert.Contains("data-hybridcast-relay", page, StringComparison.Ordinal);
+        Assert.Equal(
+            "post 32736-1024 http://hc.station.example.jp/p/vote application/x-www-form-urlencoded; charset=utf-8 choice=2",
+            feature.Relay.Asked.Last());
+    }
+
+    [Fact(DisplayName = "BR-BD-011: a post that names no type is relayed with none")]
+    public async Task APostThatNamesNoTypeIsRelayedWithNone()
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        using HttpRequestMessage asking = new(HttpMethod.Post, Relayed(started, "app", "http://hc.station.example.jp/p/beacon"));
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("post 32736-1024 http://hc.station.example.jp/p/beacon untyped ", feature.Relay.Asked.Last());
+    }
+
+    [Fact(DisplayName = "BR-BD-011: a posted body is read no further than one byte past the most the relay sends")]
+    public async Task APostedBodyIsReadNoFurtherThanTheRelaySends()
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        using HttpRequestMessage asking = new(HttpMethod.Post, Relayed(started, "app", "http://hc.station.example.jp/p/vote"))
+        {
+            Content = new ByteArrayContent(new byte[1024 * 1024]),
+        };
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+
+        Assert.Equal(HybridcastRelaySettings.Default.LargestSent + 1, Assert.Single(feature.Relay.Posts).Bytes.Length);
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a post outside the application's boundary, or with a ticket that started nothing, is refused and asked of nobody")]
+    [InlineData("http://elsewhere.example/p/vote", false)]
+    [InlineData("http://hc.station.example.jp/p/vote", true)]
+    public async Task APostOutsideIsRefused(string address, bool anotherTicket)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        string relayed = Relayed(started, "app", address).OriginalString;
+        Uri target = anotherTicket ? new Uri(relayed.Replace(started.GetProperty("inTheClear").GetString()!, new string('A', 43), StringComparison.Ordinal), UriKind.Relative) : new Uri(relayed, UriKind.Relative);
+        int askedBefore = feature.Relay.Asked.Count;
+        using HttpRequestMessage asking = new(HttpMethod.Post, target) { Content = new StringContent("a=1") };
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(askedBefore, feature.Relay.Asked.Count);
+    }
+
+    [Theory(DisplayName = "BR-BA-004: the frame's WebSocket is opened from an origin of null, from this installation or from no origin at all")]
+    [InlineData("null")]
+    [InlineData("http://localhost")]
+    [InlineData(null)]
+    public async Task TheFramesWebSocketIsOpenedFromAnOriginOfNull(string? origin)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        WebSocketClient client = feature.Served.Server.CreateWebSocketClient();
+
+        if (origin is not null)
+        {
+            client.ConfigureRequest += request => request.Headers[HeaderNames.Origin] = origin;
+        }
+
+        using WebSocket socket = await client.ConnectAsync(Socket(started, "ws://hc.station.example.jp/live"), CancellationToken.None);
+        await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
+
+        Assert.Equal("socket 32736-1024 ws://hc.station.example.jp/live ", feature.Relay.Asked.Last());
+    }
+
+    [Fact(DisplayName = "BR-BA-004: the frame's WebSocket asked for from another named origin is refused 403 and opened to nobody")]
+    public async Task TheFramesWebSocketFromAnotherOriginIsRefused()
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        WebSocketClient client = feature.Served.Server.CreateWebSocketClient();
+        client.ConfigureRequest += request => request.Headers[HeaderNames.Origin] = "https://elsewhere.example";
+        int askedBefore = feature.Relay.Asked.Count;
+
+        InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => client.ConnectAsync(Socket(started, "ws://hc.station.example.jp/live"), CancellationToken.None));
+
+        Assert.Contains("403", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(askedBefore, feature.Relay.Asked.Count);
+    }
+
     [Fact(DisplayName = "no log line names the ticket an application's frame carries, however finely the logs are turned up")]
     public async Task NoLogLineNamesTheTicket()
     {
@@ -577,11 +781,36 @@ public sealed class LiveHybridcastRelayTests
 
         using HttpResponseMessage entered = await feature.Frame.GetAsync(new Uri(started.GetProperty("address").GetString()!, UriKind.Relative));
         using HttpResponseMessage outside = await feature.Frame.GetAsync(new Uri(HybridcastRelayFeature.Opening(started, "http://elsewhere.example/a.js"), UriKind.Relative));
+        using HttpResponseMessage preflight = await feature.Frame.SendAsync(Preflight(Relayed(started, "app", "http://hc.station.example.jp/p/vote"), "POST", "content-type"));
+        using HttpRequestMessage posting = new(HttpMethod.Post, Relayed(started, "app", "http://hc.station.example.jp/p/vote")) { Content = new StringContent("a=1") };
+        posting.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+        using HttpResponseMessage posted = await feature.Frame.SendAsync(posting);
 
         Assert.Equal(HttpStatusCode.OK, entered.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, preflight.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, posted.StatusCode);
         Assert.NotEmpty(heard.Everything);
         Assert.DoesNotContain(heard.Everything, line => line.Text.Contains(ticket, StringComparison.Ordinal)
             || line.Values.Any(value => value.Value?.ToString()?.Contains(ticket, StringComparison.Ordinal) is true));
+    }
+
+    private static Uri Relayed(JsonElement started, string relay, string address)
+        => new(
+            $"/api/live/32736-1024/data-broadcast/{relay}/{started.GetProperty("inTheClear").GetString()}?uri={Uri.EscapeDataString(address)}",
+            UriKind.Relative);
+
+    private static HttpRequestMessage Preflight(Uri target, string method, string headers)
+    {
+        HttpRequestMessage asking = new(HttpMethod.Options, target);
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+        asking.Headers.TryAddWithoutValidation(HeaderNames.AccessControlRequestMethod, method);
+
+        if (headers.Length > 0)
+        {
+            asking.Headers.TryAddWithoutValidation(HeaderNames.AccessControlRequestHeaders, headers);
+        }
+
+        return asking;
     }
 
     private static Uri Socket(JsonElement started, string address)

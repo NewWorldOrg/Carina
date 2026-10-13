@@ -4,6 +4,7 @@ using Carina.Api.Authentication;
 using Carina.Api.Live;
 using Carina.Api.Playback;
 using Carina.Api.Tests.Unit;
+using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Http;
 
@@ -26,6 +27,23 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     public void NoRoutedSurfaceChangesStateOnAMethodThatOnlyReads()
     {
         Assert.Empty(EndpointRules.SurfacesChangingStateWithoutAskingForIt(Inventory()));
+    }
+
+    [Fact(DisplayName = "BR-BA-004: the Hybridcast frame's two relays are the only surfaces open to another origin, and they only read")]
+    public void TheFramesRelaysAreTheOnlySurfacesOpenToAnotherOrigin()
+    {
+        RoutedSurface[] open = [.. Inventory().Where(surface => surface.OpenToTheFrame).OrderBy(surface => surface.ToString(), StringComparer.Ordinal)];
+
+        string ticket = $"{{ticket:length({Unguessable.Length})}}";
+
+        Assert.Equal(
+            [
+                $"GET /api/live/{{networkId:int}}-{{serviceId:int}}/data-broadcast/app/{ticket}",
+                $"GET /api/live/{{networkId:int}}-{{serviceId:int}}/data-broadcast/ws/{ticket}",
+                $"POST /api/live/{{networkId:int}}-{{serviceId:int}}/data-broadcast/app/{ticket}",
+            ],
+            open.Select(surface => surface.ToString()).ToArray());
+        Assert.All(open, surface => Assert.Equal(EndpointEffect.Reading, surface.Effect));
     }
 
     [Fact]
