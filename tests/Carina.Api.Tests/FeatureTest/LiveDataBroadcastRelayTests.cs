@@ -2,9 +2,11 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 
+using Carina.Api.Authentication;
 using Carina.Api.Live;
 using Carina.Contracts;
 using Carina.Domain.Channels;
@@ -70,6 +72,31 @@ internal sealed class ScriptedCardReader : IConditionalAccessCardReader
     }
 }
 
+/// <summary>
+/// The network as the application's own relay sees it: it keeps every name it is asked to resolve and every address
+/// it is asked to connect to, and reaches nothing.
+/// </summary>
+internal sealed class UnreachedNetwork : IRelayNetwork
+{
+    public ConcurrentQueue<string> Asked { get; } = new();
+
+    public Task<IReadOnlyList<IPAddress>> ResolveAsync(string host, CancellationToken cancellationToken)
+    {
+        Asked.Enqueue(host);
+
+        return Task.FromException<IReadOnlyList<IPAddress>>(new SocketException((int)SocketError.HostNotFound));
+    }
+
+    public IReadOnlyCollection<IPAddress> OwnAddresses() => [];
+
+    public Task<Stream> ConnectAsync(IPEndPoint endpoint, CancellationToken cancellationToken)
+    {
+        Asked.Enqueue(endpoint.ToString());
+
+        return Task.FromException<Stream>(new SocketException((int)SocketError.ConnectionRefused));
+    }
+}
+
 internal sealed class DataBroadcastRelayFeature : IAsyncDisposable
 {
     public const string ReceiverId = "/api/live/32736-1024/data-broadcast/receiver-id";
@@ -83,16 +110,30 @@ internal sealed class DataBroadcastRelayFeature : IAsyncDisposable
     private readonly TestingWebApplicationFactory factory = new();
 
     public DataBroadcastRelayFeature()
+        : this(null)
     {
-        Built = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+    }
+
+    private DataBroadcastRelayFeature(string? publicOrigin)
+    {
+        Built = factory.WithWebHostBuilder(builder =>
         {
-            services.RemoveAll<IHostedService>();
-            services.AddSingleton<TimeProvider>(Clock);
-            services.AddSingleton<IBroadcastServiceRepository>(Services);
-            services.AddSingleton<ICandidateChannelRepository>(Candidates);
-            services.AddSingleton<IBroadcasterRelay>(Relay);
-            services.AddSingleton<IConditionalAccessCardReader>(Cards);
-        }));
+            builder.UseSetting(PublicOrigin.Key, publicOrigin ?? string.Empty);
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostedService>();
+                services.AddSingleton<TimeProvider>(Clock);
+                services.AddSingleton<IBroadcastServiceRepository>(Services);
+                services.AddSingleton<ICandidateChannelRepository>(Candidates);
+                services.AddSingleton<IConditionalAccessCardReader>(Cards);
+                services.AddSingleton<IRelayNetwork>(Network);
+
+                if (publicOrigin is null)
+                {
+                    services.AddSingleton<IBroadcasterRelay>(Relay);
+                }
+            });
+        });
 
         Client = Built.CreateAuthenticatedClient();
         Seed(1024, ServiceCategory.Television);
@@ -111,7 +152,11 @@ internal sealed class DataBroadcastRelayFeature : IAsyncDisposable
 
     public ScriptedRelay Relay { get; } = new();
 
+    public UnreachedNetwork Network { get; } = new();
+
     public ScriptedCardReader Cards { get; } = new();
+
+    public static DataBroadcastRelayFeature ThroughTheRelay(string publicOrigin) => new(publicOrigin);
 
     public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
 
@@ -344,6 +389,24 @@ public sealed class LiveDataBroadcastRelayTests
         Assert.Equal(HttpStatusCode.BadGateway, status);
         Assert.Equal(numbered, data.GetProperty("result").GetInt32());
         Assert.Equal(httpStatus, data.GetProperty("httpStatus").ValueKind is JsonValueKind.Null ? null : data.GetProperty("httpStatus").GetInt32());
+    }
+
+    [Fact(DisplayName = "BR-BD-011: a document asking for this installation's own host, as its public origin names it, is answered -1 and nothing is asked of the network")]
+    public async Task ADocumentAskingForItsOwnHostIsRefused()
+    {
+        await using DataBroadcastRelayFeature feature = DataBroadcastRelayFeature.ThroughTheRelay("https://Carina.Example");
+        feature.Allow();
+
+        (HttpStatusCode transmitted, JsonElement body) = await feature.TransmitAsync(new { uri = "http://carina.example./api/health", text = "x", charset = "EUC-JP" });
+        using HttpResponseMessage response = await feature.Client.GetAsync(
+            new Uri(DataBroadcastRelayFeature.Fetch + "?uri=https%3A%2F%2FCARINA.example%3A443%2Fapi%2Fhealth", UriKind.Relative));
+        (HttpStatusCode fetched, JsonElement refused) = await DataBroadcastRelayFeature.ReadAsync(response);
+
+        Assert.Equal(HttpStatusCode.OK, transmitted);
+        Assert.Equal(-1, body.GetProperty("data").GetProperty("result").GetInt32());
+        Assert.Equal(HttpStatusCode.BadGateway, fetched);
+        Assert.Equal(-1, refused.GetProperty("data").GetProperty("result").GetInt32());
+        Assert.Empty(feature.Network.Asked);
     }
 
     [Fact(DisplayName = "a fetch that names no address is refused and relays nothing")]

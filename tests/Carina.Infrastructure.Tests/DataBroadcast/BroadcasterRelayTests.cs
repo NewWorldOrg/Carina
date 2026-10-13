@@ -16,6 +16,10 @@ public sealed class BroadcasterRelayTests
 
     private static readonly IPAddress Public = IPAddress.Parse("203.0.113.7");
 
+    private static readonly OwnHost Own = OwnHost.Of([new Uri("https://carina.example:8443"), new Uri("https://日本.example")]);
+
+    private static readonly IPAddress[] Mine = [IPAddress.Parse("198.51.100.9"), IPAddress.Parse("3fff::9")];
+
     [Fact(DisplayName = "BR-BD-011: an empty text asks with GET and sends no body")]
     public async Task AnEmptyTextAsksWithGet()
     {
@@ -203,6 +207,85 @@ public sealed class BroadcasterRelayTests
 
         Assert.Equal(RelayResult.RefusedOrTooLarge, relayed.Result);
         Assert.Empty(rig.Network.Connected);
+    }
+
+    [Theory(DisplayName = "BR-BD-011: an address naming this installation's own host is -1 whatever its case, trailing dot, script or port, and nothing is resolved or connected to")]
+    [InlineData("http://carina.example/api/health")]
+    [InlineData("https://carina.example/")]
+    [InlineData("http://CARINA.Example./")]
+    [InlineData("http://carina.example:443/")]
+    [InlineData("https://carina.example:80/")]
+    [InlineData("http://ＣＡＲＩＮＡ.example/")]
+    [InlineData("http://日本.example/")]
+    [InlineData("http://xn--wgv71a.example./")]
+    public async Task AnAddressNamingItsOwnHostIsMinus1(string uri)
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, "1"));
+
+        RelayedText transmitted = await rig.Relay.TransmitAsync(Channel, uri, "x", "EUC-JP", CancellationToken.None);
+        RelayedResource fetched = await rig.Relay.FetchAsync(Channel, uri, CancellationToken.None);
+
+        Assert.Equal(RelayedText.Failed(RelayResult.RefusedOrTooLarge), transmitted);
+        Assert.Equal(RelayedResource.Failed(RelayResult.RefusedOrTooLarge), fetched);
+        Assert.Empty(rig.Network.Resolved);
+        Assert.Empty(rig.Network.Connected);
+    }
+
+    [Theory(DisplayName = "BR-BD-011: a name that resolves to an address this machine answers at is -1, judged as the connection opens, and nothing is connected to")]
+    [InlineData("198.51.100.9")]
+    [InlineData("::ffff:198.51.100.9")]
+    [InlineData("3fff::9")]
+    public async Task ANameThatResolvesToThisMachineIsMinus1(string mine)
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, "1"));
+        rig.Network.Names["mirror.example"] = [Public, IPAddress.Parse(mine)];
+
+        RelayedText relayed = await rig.Relay.TransmitAsync(Channel, "http://mirror.example/", string.Empty, "EUC-JP", CancellationToken.None);
+
+        Assert.Equal(RelayedText.Failed(RelayResult.RefusedOrTooLarge), relayed);
+        Assert.Equal(["mirror.example"], rig.Network.Resolved);
+        Assert.Empty(rig.Network.Connected);
+    }
+
+    [Theory(DisplayName = "BR-BD-011: an address this machine answers at, written in the address, is -1 and nothing is connected to")]
+    [InlineData("http://198.51.100.9/")]
+    [InlineData("https://[3fff::9]/")]
+    public async Task AnAddressOfThisMachineIsMinus1(string uri)
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, "1"));
+
+        RelayedText relayed = await rig.Relay.TransmitAsync(Channel, uri, string.Empty, "EUC-JP", CancellationToken.None);
+
+        Assert.Equal(RelayedText.Failed(RelayResult.RefusedOrTooLarge), relayed);
+        Assert.Empty(rig.Network.Connected);
+    }
+
+    [Fact(DisplayName = "BR-BD-011: where this installation's host is written as an address, that address is -1 however it is reached")]
+    public async Task AHostWrittenAsAnAddressIsMinus1HoweverReached()
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, "1"), own: OwnHost.Of([new Uri("http://203.0.113.50:8080")]));
+        rig.Network.Names["pointed.example"] = [IPAddress.Parse("203.0.113.50")];
+
+        RelayedText written = await rig.Relay.TransmitAsync(Channel, "http://203.0.113.50/", string.Empty, "EUC-JP", CancellationToken.None);
+        RelayedText named = await rig.Relay.TransmitAsync(Channel, "http://pointed.example/", string.Empty, "EUC-JP", CancellationToken.None);
+
+        Assert.Equal(RelayedText.Failed(RelayResult.RefusedOrTooLarge), written);
+        Assert.Equal(RelayedText.Failed(RelayResult.RefusedOrTooLarge), named);
+        Assert.Empty(rig.Network.Connected);
+    }
+
+    [Theory(DisplayName = "BR-BD-011: a redirect to this installation's own host is not followed and is answered as it came")]
+    [InlineData("http://carina.example/")]
+    [InlineData("https://Carina.Example.:443/api/health")]
+    public async Task ARedirectToItsOwnHostIsNotFollowed(string location)
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Of(302, [], $"Location: {location}"));
+
+        RelayedText relayed = await rig.Relay.TransmitAsync(Channel, $"http://{Host}/", string.Empty, "EUC-JP", CancellationToken.None);
+
+        Assert.Equal(new RelayedText(RelayResult.Answered, 302, string.Empty), relayed);
+        Assert.Single(rig.Server.Heard);
+        Assert.DoesNotContain("carina.example", rig.Network.Resolved);
     }
 
     [Fact(DisplayName = "BR-BD-011: a text of 16 KiB is sent, and one byte more is -1 and never leaves")]
@@ -445,22 +528,27 @@ public sealed class BroadcasterRelayTests
         public RelayRig(
             Func<HeardRequest, CannedAnswer> answer,
             Func<BroadcasterRelaySettings, BroadcasterRelaySettings>? adjust = null,
-            System.Security.Cryptography.X509Certificates.X509Certificate2? certificate = null)
-            : this(request => Task.FromResult(answer(request)), adjust, certificate)
+            System.Security.Cryptography.X509Certificates.X509Certificate2? certificate = null,
+            OwnHost? own = null)
+            : this(request => Task.FromResult(answer(request)), adjust, certificate, own)
         {
         }
 
         public RelayRig(
             Func<HeardRequest, Task<CannedAnswer>> answer,
             Func<BroadcasterRelaySettings, BroadcasterRelaySettings>? adjust = null,
-            System.Security.Cryptography.X509Certificates.X509Certificate2? certificate = null)
+            System.Security.Cryptography.X509Certificates.X509Certificate2? certificate = null,
+            OwnHost? own = null)
         {
             Server = new BroadcasterServerStandIn(answer, certificate);
             Network = new PointedNetwork(Server.Port);
             Network.Names[Host] = [Public];
             Network.Names["elsewhere.example"] = [IPAddress.Parse("198.51.100.20")];
+            Network.Names["carina.example"] = [Public];
+            Network.Names["xn--wgv71a.example"] = [Public];
+            Network.Mine.AddRange(Mine);
             BroadcasterRelaySettings settings = (adjust ?? (given => given))(BroadcasterRelaySettings.Default);
-            Relay = new BroadcasterRelay(Network, settings, TimeProvider.System, Log);
+            Relay = new BroadcasterRelay(Network, own ?? Own, settings, TimeProvider.System, Log);
         }
 
         public BroadcasterServerStandIn Server { get; }

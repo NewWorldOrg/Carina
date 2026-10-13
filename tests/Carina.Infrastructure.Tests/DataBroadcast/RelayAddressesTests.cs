@@ -65,6 +65,17 @@ public sealed class RelayAddressesTests
     public void OnlyHttpAndHttpsOnTheTwoPortsAreAdmitted(string address, bool admitted)
         => Assert.Equal(admitted, RelayDestination.Admit(address) is not null);
 
+    [Fact(DisplayName = "BR-BD-011: the addresses this machine answers at are read from its network interfaces")]
+    public void TheAddressesOfThisMachineAreReadFromItsInterfaces()
+        => Assert.Contains(IPAddress.Loopback, new SystemRelayNetwork().OwnAddresses());
+
+    [Fact(DisplayName = "BR-BD-011: an address that carries an IPv4 one is compared as the IPv4 one, and any other as itself")]
+    public void AnAddressCarryingAnIpv4OneIsComparedAsIt()
+    {
+        Assert.Equal(IPAddress.Parse("198.51.100.9"), RelayAddresses.Unmapped(IPAddress.Parse("::ffff:198.51.100.9")));
+        Assert.Equal(IPAddress.Parse("3fff::9"), RelayAddresses.Unmapped(IPAddress.Parse("3fff::9")));
+    }
+
     [Fact(DisplayName = "BR-BD-011: an address longer than the relay takes is not admitted")]
     public void AnAddressTooLongIsNotAdmitted()
         => Assert.Null(RelayDestination.Admit("http://bc.example.jp/" + new string('a', RelayDestination.LongestAddress)));

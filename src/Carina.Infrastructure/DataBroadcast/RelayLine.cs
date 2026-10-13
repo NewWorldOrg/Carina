@@ -39,9 +39,11 @@ public sealed record RelayExchange(RelayResult Result, int? Status, byte[]? Body
 
 /// <summary>
 /// The connection both relays to broadcasters' servers go out on. Only a public address on port 80 or 443 is
-/// connected to, judged on the addresses a name resolves to as the connection is opened, so a name that is pointed
-/// inwards between two asks is still refused. Redirects are followed only where the asker says so and judged again.
-/// Nothing is retried, no cookie is kept, and the relay introduces itself by the one name it is given.
+/// connected to, and never this installation: not a host it is reached by, whatever the address writes after it,
+/// nor an address this machine answers at. Addresses are judged on what a name resolves to as the connection is
+/// opened, so a name that is pointed inwards between two asks is still refused. Redirects are followed only where
+/// the asker says so and judged again. Nothing is retried, no cookie is kept, and the relay introduces itself by the
+/// one name it is given.
 /// </summary>
 public sealed class RelayLine : IDisposable
 {
@@ -49,17 +51,21 @@ public sealed class RelayLine : IDisposable
 
     private readonly IRelayNetwork network;
 
+    private readonly OwnHost own;
+
     private readonly TimeProvider clock;
 
     private readonly ConcurrentDictionary<string, SemaphoreSlim> lanes = new(StringComparer.Ordinal);
 
-    public RelayLine(IRelayNetwork network, string userAgent, TimeProvider clock)
+    public RelayLine(IRelayNetwork network, OwnHost own, string userAgent, TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(own);
         ArgumentException.ThrowIfNullOrEmpty(userAgent);
         ArgumentNullException.ThrowIfNull(clock);
 
         this.network = network;
+        this.own = own;
         this.clock = clock;
         UserAgent = userAgent;
         Client = new HttpMessageInvoker(
@@ -111,7 +117,7 @@ public sealed class RelayLine : IDisposable
     {
         ArgumentNullException.ThrowIfNull(ask);
 
-        if (ask.Destination is null)
+        if (ask.Destination is null || own.IsNamedBy(ask.Destination))
         {
             return RelayExchange.Failed(RelayResult.RefusedOrTooLarge);
         }
@@ -157,7 +163,7 @@ public sealed class RelayLine : IDisposable
         }
     }
 
-    private static Uri? Redirected(Uri at, HttpResponseMessage response, Func<Uri, Uri, bool> follows)
+    private Uri? Redirected(Uri at, HttpResponseMessage response, Func<Uri, Uri, bool> follows)
     {
         if (response.StatusCode is not (HttpStatusCode.MovedPermanently or HttpStatusCode.Found or HttpStatusCode.SeeOther
                 or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect)
@@ -168,7 +174,7 @@ public sealed class RelayLine : IDisposable
 
         Uri next = location.IsAbsoluteUri ? location : new Uri(at, location);
 
-        return RelayDestination.Admits(next) && follows(at, next) ? next : null;
+        return RelayDestination.Admits(next) && !own.IsNamedBy(next) && follows(at, next) ? next : null;
     }
 
     private static bool KeepsTheMethod(HttpStatusCode status)
@@ -247,9 +253,16 @@ public sealed class RelayLine : IDisposable
     private async ValueTask<Stream> ConnectAsync(SocketsHttpConnectionContext context, CancellationToken cancellationToken)
     {
         DnsEndPoint endpoint = context.DnsEndPoint;
-        IReadOnlyList<IPAddress> addresses = await AddressesOfAsync(endpoint.Host, cancellationToken);
 
-        if (!addresses.All(RelayAddresses.IsPublic))
+        if (own.IsNamedBy(endpoint.Host))
+        {
+            throw new RelayFailureException(RelayResult.RefusedOrTooLarge, "The name is one this installation is reached by.");
+        }
+
+        IReadOnlyList<IPAddress> addresses = await AddressesOfAsync(endpoint.Host, cancellationToken);
+        IPAddress[] machine = [.. network.OwnAddresses().Select(RelayAddresses.Unmapped)];
+
+        if (!addresses.All(address => ConnectsTo(RelayAddresses.Unmapped(address), machine)))
         {
             throw new RelayFailureException(RelayResult.RefusedOrTooLarge, "The name resolves to an address the relay does not connect to.");
         }
@@ -270,6 +283,9 @@ public sealed class RelayLine : IDisposable
 
         throw last ?? new SocketException((int)SocketError.HostUnreachable);
     }
+
+    private bool ConnectsTo(IPAddress address, IPAddress[] machine)
+        => RelayAddresses.IsPublic(address) && !own.IsAt(address) && !machine.Contains(address);
 
     private async Task<IReadOnlyList<IPAddress>> AddressesOfAsync(string host, CancellationToken cancellationToken)
     {

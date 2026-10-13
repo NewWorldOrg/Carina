@@ -11,7 +11,7 @@ namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
 /// Talks to a broadcaster's server for a Hybridcast application started from a live channel, over the
-/// <see cref="RelayLine"/> that connects to public addresses only. It reads the AIT a document names, and carries the
+/// <see cref="RelayLine"/> that connects to public addresses only and never to this installation. It reads the AIT a document names, and carries the
 /// application's documents, resources and WebSockets only inside the application's boundary; a redirect is followed
 /// only where it stays inside too. Each exchange is written to the log by its channel, host, path, method, result,
 /// status, sizes and time, never by its query, its bodies or a cookie, and nothing is retried.
@@ -28,6 +28,8 @@ public sealed class HybridcastRelay : IHybridcastRelay, IDisposable
 
     private readonly HybridcastRelaySettings settings;
 
+    private readonly OwnHost own;
+
     private readonly TimeProvider clock;
 
     private readonly ILogger<HybridcastRelay> logger;
@@ -42,19 +44,22 @@ public sealed class HybridcastRelay : IHybridcastRelay, IDisposable
 
     public HybridcastRelay(
         IRelayNetwork network,
+        OwnHost own,
         HybridcastRelaySettings settings,
         TimeProvider clock,
         ILogger<HybridcastRelay> logger)
     {
         ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(own);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(logger);
 
         this.settings = settings;
+        this.own = own;
         this.clock = clock;
         this.logger = logger;
-        line = new RelayLine(network, settings.UserAgent, clock);
+        line = new RelayLine(network, own, settings.UserAgent, clock);
         aits = new RelayLimits(settings.AtOnce, settings.Time, settings.LargestAit, settings.Redirects);
         resources = new RelayLimits(settings.AtOnce, settings.Time, settings.LargestReceived, settings.Redirects);
     }
@@ -107,7 +112,7 @@ public sealed class HybridcastRelay : IHybridcastRelay, IDisposable
 
         long started = clock.GetTimestamp();
 
-        if (!RelayDestination.AdmitsSocket(address) || !boundary.Admits(address) || !TookASocket(channel))
+        if (!RelayDestination.AdmitsSocket(address) || own.IsNamedBy(address) || !boundary.Admits(address) || !TookASocket(channel))
         {
             Write(channel, address, Socket, RelayResult.RefusedOrTooLarge, null, 0, 0, started);
 

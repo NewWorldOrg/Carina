@@ -3,6 +3,7 @@ using System.Net;
 using Carina.Api.Authentication;
 using Carina.Api.Events;
 using Carina.Api.Services;
+using Carina.Infrastructure.DataBroadcast;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Options;
@@ -107,6 +108,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(provider =>
             provider.GetRequiredService<IOptions<PublicOriginOptions>>().Value.Read());
+        services.AddSingleton(provider =>
+            provider.GetRequiredService<PublicOrigin>().Address is { } address ? OwnHost.Of([address]) : OwnHost.Unnamed);
 
         services.AddHostedService<PublicOriginDiagnosis>();
 

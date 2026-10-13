@@ -21,6 +21,18 @@ public sealed class HybridcastRelayTests
         new Uri($"http://{Host}/p/index.html"),
         [new HybridcastPermission(0x1fff, ["http://station.example.jp", "ws://station.example.jp"])]);
 
+    private static readonly HybridcastBoundary ReachingInwards = HybridcastBoundary.Of(
+        new Uri($"http://{Host}/p/index.html"),
+        [
+            new HybridcastPermission(
+                0x1fff,
+                ["http://station.example.jp", "http://carina.example", "https://carina.example", "http://日本.example", "http://mirror.example"]),
+        ]);
+
+    private static readonly OwnHost Own = OwnHost.Of([new Uri("https://carina.example"), new Uri("https://日本.example")]);
+
+    private static readonly IPAddress Mine = IPAddress.Parse("198.51.100.9");
+
     private static readonly string Ait =
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?><isdb:ServiceDiscovery xmlns:isdb=\"urn:arib:isdb:2012\" xmlns:mhp=\"urn:dvb:mhp:2009\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">"
         + "<isdb:ApplicationDiscovery DomainName=\"station.example.jp\"><isdb:ApplicationList><isdb:Application>"
@@ -232,6 +244,98 @@ public sealed class HybridcastRelayTests
         Assert.Empty(rig.Network.Connected);
     }
 
+    [Theory(DisplayName = "BR-BD-011: an AIT at this installation's own host is refused whatever its case, trailing dot or port, and nothing is resolved or connected to")]
+    [InlineData("http://carina.example/app.ait")]
+    [InlineData("https://Carina.Example./app.ait")]
+    [InlineData("http://carina.example:443/app.ait")]
+    [InlineData("http://xn--wgv71a.example/app.ait")]
+    public async Task AnAitAtItsOwnHostIsRefused(string uri)
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, Ait));
+
+        RelayedAit read = await rig.Relay.ReadAitAsync(Channel, uri, CancellationToken.None);
+
+        Assert.Equal(RelayedAit.Failed(RelayResult.RefusedOrTooLarge), read);
+        Assert.Empty(rig.Network.Resolved);
+        Assert.Empty(rig.Network.Connected);
+    }
+
+    [Theory(DisplayName = "BR-BD-011: a resource at this installation's own host is refused even where the boundary takes it in, and nothing is resolved or connected to")]
+    [InlineData("http://carina.example/api/health")]
+    [InlineData("https://CARINA.example/p/a.js")]
+    [InlineData("http://日本.example/p/a.js")]
+    public async Task AResourceAtItsOwnHostIsRefusedInsideTheBoundary(string uri)
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, "x"));
+
+        RelayedBody fetched = await rig.Relay.FetchAsync(Channel, new Uri(uri), ReachingInwards, CancellationToken.None);
+
+        Assert.Equal(RelayedBody.Failed(RelayResult.RefusedOrTooLarge), fetched);
+        Assert.Empty(rig.Network.Resolved);
+        Assert.Empty(rig.Network.Connected);
+    }
+
+    [Theory(DisplayName = "BR-BD-011: a redirect inside the boundary to this installation's own host is not followed, and the answer that asked for it is handed back")]
+    [InlineData("http://carina.example/api/health")]
+    [InlineData("https://Carina.Example.:443/api/health")]
+    public async Task ARedirectToItsOwnHostIsNotFollowed(string location)
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Of(302, [], $"Location: {location}"));
+
+        RelayedBody fetched = await rig.Relay.FetchAsync(Channel, new Uri($"http://{Host}/p/a.js"), ReachingInwards, CancellationToken.None);
+
+        Assert.Equal(RelayResult.Answered, fetched.Result);
+        Assert.Equal(302, fetched.HttpStatus);
+        Assert.Single(rig.Server.Heard);
+        Assert.Equal([Host], rig.Network.Resolved);
+    }
+
+    [Fact(DisplayName = "BR-BD-011: a redirect inside the boundary to a name that resolves to this machine is refused as the connection opens")]
+    public async Task ARedirectToANameResolvingToThisMachineIsRefused()
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Of(302, [], "Location: http://mirror.example/api/health"));
+        rig.Network.Names["mirror.example"] = [Mine];
+
+        RelayedBody fetched = await rig.Relay.FetchAsync(Channel, new Uri($"http://{Host}/p/a.js"), ReachingInwards, CancellationToken.None);
+
+        Assert.Equal(RelayedBody.Failed(RelayResult.RefusedOrTooLarge), fetched);
+        Assert.Single(rig.Server.Heard);
+        Assert.Single(rig.Network.Connected);
+    }
+
+    [Theory(DisplayName = "BR-BD-011: a WebSocket to this installation's own host is refused before anything is resolved or connected to, even where the boundary takes it in")]
+    [InlineData("ws://carina.example/live")]
+    [InlineData("ws://Carina.Example/live")]
+    [InlineData("wss://carina.example/live")]
+    [InlineData("ws://日本.example/live")]
+    public async Task AWebSocketToItsOwnHostIsRefused(string address)
+    {
+        await using SocketRig rig = new(BroadcasterSocketStandIn.EchoAsync);
+
+        RelayedSocket opened = await rig.Relay.OpenSocketAsync(Channel, new Uri(address), ReachingInwards, [], CancellationToken.None);
+
+        Assert.Equal(RelayedSocket.Failed(RelayResult.RefusedOrTooLarge), opened);
+        Assert.Empty(rig.Network.Resolved);
+        Assert.Empty(rig.Network.Connected);
+        Assert.Empty(rig.Server.Heard);
+    }
+
+    [Fact(DisplayName = "BR-BD-011: a WebSocket to a name that resolves to this machine is refused as the connection opens, and gives its place back")]
+    public async Task AWebSocketToANameResolvingToThisMachineIsRefused()
+    {
+        await using SocketRig rig = new(BroadcasterSocketStandIn.EchoAsync, settings => settings with { SocketsAtOnce = 1 });
+        rig.Network.Names["mirror.example"] = [Mine];
+
+        RelayedSocket refused = await rig.Relay.OpenSocketAsync(Channel, new Uri("ws://mirror.example/live"), ReachingInwards, [], CancellationToken.None);
+        RelayedSocket after = await rig.Relay.OpenSocketAsync(Channel, new Uri($"ws://{Host}/live"), Boundary, [], CancellationToken.None);
+
+        Assert.Equal(RelayedSocket.Failed(RelayResult.RefusedOrTooLarge), refused);
+        Assert.Equal(["mirror.example", Host], rig.Network.Resolved);
+        Assert.Single(rig.Network.Connected);
+        Assert.NotNull(after.Socket);
+        await after.Socket!.DisposeAsync();
+    }
+
     [Fact(DisplayName = "BR-BD-011: a channel holds a bounded number of WebSockets open at once")]
     public async Task AChannelHoldsABoundedNumberOfWebSockets()
     {
@@ -324,7 +428,10 @@ public sealed class HybridcastRelayTests
             Network.Names[Host] = [Public];
             Network.Names["cdn.station.example.jp"] = [Public];
             Network.Names["elsewhere.example"] = [IPAddress.Parse("198.51.100.20")];
-            Relay = new HybridcastRelay(Network, (adjust ?? (given => given))(HybridcastRelaySettings.Default), TimeProvider.System, Log);
+            Network.Names["carina.example"] = [Public];
+            Network.Names["xn--wgv71a.example"] = [Public];
+            Network.Mine.Add(Mine);
+            Relay = new HybridcastRelay(Network, Own, (adjust ?? (given => given))(HybridcastRelaySettings.Default), TimeProvider.System, Log);
         }
 
         public BroadcasterServerStandIn Server { get; }
@@ -349,7 +456,10 @@ public sealed class HybridcastRelayTests
             Server = new BroadcasterSocketStandIn(serve);
             Network = new PointedNetwork(Server.Port);
             Network.Names[Host] = [Public];
-            Relay = new HybridcastRelay(Network, (adjust ?? (given => given))(HybridcastRelaySettings.Default), TimeProvider.System, Log);
+            Network.Names["carina.example"] = [Public];
+            Network.Names["xn--wgv71a.example"] = [Public];
+            Network.Mine.Add(Mine);
+            Relay = new HybridcastRelay(Network, Own, (adjust ?? (given => given))(HybridcastRelaySettings.Default), TimeProvider.System, Log);
         }
 
         public BroadcasterSocketStandIn Server { get; }
