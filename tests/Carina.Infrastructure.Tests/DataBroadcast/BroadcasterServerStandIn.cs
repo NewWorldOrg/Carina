@@ -180,11 +180,14 @@ internal sealed class BroadcasterServerStandIn : IAsyncDisposable
 
 /// <summary>
 /// The network as the relay sees it in a test: names resolve to the addresses written here, an unknown name does
-/// not resolve, and every connection, to whichever address, reaches the stand-in on the loopback interface.
+/// not resolve, the machine answers at the addresses written as its own, and every connection, to whichever address,
+/// reaches the stand-in on the loopback interface.
 /// </summary>
 internal sealed class PointedNetwork(int port) : IRelayNetwork
 {
     public Dictionary<string, IPAddress[]> Names { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public List<IPAddress> Mine { get; } = [];
 
     public ConcurrentQueue<string> Resolved { get; } = new();
 
@@ -200,6 +203,8 @@ internal sealed class PointedNetwork(int port) : IRelayNetwork
             ? Task.FromResult<IReadOnlyList<IPAddress>>(addresses)
             : Task.FromException<IReadOnlyList<IPAddress>>(new SocketException((int)SocketError.HostNotFound));
     }
+
+    public IReadOnlyCollection<IPAddress> OwnAddresses() => Mine;
 
     public async Task<Stream> ConnectAsync(IPEndPoint endpoint, CancellationToken cancellationToken)
     {

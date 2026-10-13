@@ -419,7 +419,7 @@ public sealed class ServiceCollectionExtensionsTests
             scope.ServiceProvider.GetRequiredService<ILearningSwitch>());
     }
 
-    [Fact(DisplayName = "BR-BD-011: registers one relay to broadcasters' servers over the system's own network")]
+    [Fact(DisplayName = "BR-BD-011: registers one relay to broadcasters' servers over the system's own network, knowing no host of its own by name until one is given")]
     public void RegistersTheRelay()
     {
         using ServiceProvider provider = Build(ValidSettings());
@@ -427,6 +427,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.IsType<BroadcasterRelay>(provider.GetRequiredService<IBroadcasterRelay>());
         Assert.Same(provider.GetRequiredService<IBroadcasterRelay>(), provider.GetRequiredService<IBroadcasterRelay>());
         Assert.IsType<SystemRelayNetwork>(provider.GetRequiredService<IRelayNetwork>());
+        Assert.Same(OwnHost.Unnamed, provider.GetRequiredService<OwnHost>());
         Assert.Equal(BroadcasterRelaySettings.Default, provider.GetRequiredService<BroadcasterRelaySettings>());
     }
 

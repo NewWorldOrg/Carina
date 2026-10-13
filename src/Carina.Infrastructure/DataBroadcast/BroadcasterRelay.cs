@@ -10,7 +10,7 @@ namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
 /// Talks to a broadcaster's server for a document shown on a live channel, over the <see cref="RelayLine"/> that
-/// connects to public addresses only. Redirects are followed on the same host only. Each exchange is written to the
+/// connects to public addresses only and never to this installation. Redirects are followed on the same host only. Each exchange is written to the
 /// log by its channel, host, path, method, result, status, sizes and time, never by its query, its bodies or a
 /// cookie, and nothing is retried.
 /// </summary>
@@ -38,11 +38,13 @@ public sealed class BroadcasterRelay : IBroadcasterRelay, IDisposable
 
     public BroadcasterRelay(
         IRelayNetwork network,
+        OwnHost own,
         BroadcasterRelaySettings settings,
         TimeProvider clock,
         ILogger<BroadcasterRelay> logger)
     {
         ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(own);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(logger);
@@ -51,7 +53,7 @@ public sealed class BroadcasterRelay : IBroadcasterRelay, IDisposable
         this.clock = clock;
         this.logger = logger;
         limits = new RelayLimits(settings.AtOnce, settings.Time, settings.LargestReceived, settings.Redirects);
-        line = new RelayLine(network, settings.UserAgent, clock);
+        line = new RelayLine(network, own, settings.UserAgent, clock);
     }
 
     public async Task<RelayedText> TransmitAsync(

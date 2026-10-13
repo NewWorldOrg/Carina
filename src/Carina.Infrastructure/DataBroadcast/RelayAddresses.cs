@@ -41,6 +41,13 @@ public static class RelayAddresses
 
     private static readonly AddressRange SixToFour = new([0x20, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 16);
 
+    public static IPAddress Unmapped(IPAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        return address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
+    }
+
     public static bool IsPublic(IPAddress address)
     {
         ArgumentNullException.ThrowIfNull(address);

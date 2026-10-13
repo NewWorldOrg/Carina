@@ -341,6 +341,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IDataBroadcastTaker, TransportStreamDataBroadcastTaker>();
         services.TryAddSingleton(BroadcasterRelaySettings.Default);
         services.TryAddSingleton<IRelayNetwork, SystemRelayNetwork>();
+        services.TryAddSingleton(OwnHost.Unnamed);
         services.TryAddSingleton<IBroadcasterRelay, BroadcasterRelay>();
         services.TryAddSingleton(HybridcastRelaySettings.Default);
         services.TryAddSingleton<IHybridcastRelay, HybridcastRelay>();
