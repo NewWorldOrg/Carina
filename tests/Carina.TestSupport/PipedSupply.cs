@@ -36,6 +36,18 @@ public sealed class PipedSupply : ILiveSupply
     public TaskCompletionSource? HeldUntil { get; set; }
 
     /// <summary>
+    /// Writes into the newest stream handed out that has not been let go, and answers whether there was one. A
+    /// session that ends lets its stream go on its own thread, so the newest stream may already be gone while the
+    /// next one has not been asked for.
+    /// </summary>
+    public async Task<bool> FeedAsync(byte[] bytes)
+    {
+        IReadOnlyList<PipedTransportStream> handed = Opened;
+
+        return handed.Count > 0 && await handed[^1].WriteWhileOpenAsync(bytes);
+    }
+
+    /// <summary>
     /// Set, an opening held by <see cref="HeldUntil"/> that its caller gives up on goes on holding the one
     /// tuner, and answers its caller, until this is completed, as the driver does while it is told to let
     /// go of a session it was still starting.
@@ -113,6 +125,8 @@ public sealed class PipedTransportStream : ILiveTransportStream
 {
     private readonly Pipe pipe = new();
 
+    private readonly Lock gate = new();
+
     private bool completed;
 
     public PipedTransportStream(NetworkId network, ServiceId service)
@@ -152,6 +166,27 @@ public sealed class PipedTransportStream : ILiveTransportStream
         await pipe.Writer.WriteAsync(bytes);
     }
 
+    public async Task<bool> WriteWhileOpenAsync(byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+
+        ValueTask<FlushResult> writing;
+
+        lock (gate)
+        {
+            if (completed)
+            {
+                return false;
+            }
+
+            writing = pipe.Writer.WriteAsync(bytes);
+        }
+
+        await writing;
+
+        return true;
+    }
+
     public Task<bool> HoldOpenUntilAsync(DateTimeOffset until, CancellationToken cancellationToken)
     {
         HeldOpenUntil.Add(until);
@@ -174,12 +209,15 @@ public sealed class PipedTransportStream : ILiveTransportStream
 
     private void Complete()
     {
-        if (completed)
+        lock (gate)
         {
-            return;
-        }
+            if (completed)
+            {
+                return;
+            }
 
-        completed = true;
-        pipe.Writer.Complete();
+            completed = true;
+            pipe.Writer.Complete();
+        }
     }
 }

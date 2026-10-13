@@ -211,11 +211,7 @@ public sealed class LiveTicketReachTests
 
         while (!opening.IsCompleted)
         {
-            if (supply.Opened.Count > 0)
-            {
-                await supply.Opened[^1].WriteAsync(Mouthful());
-            }
-
+            await supply.FeedAsync(Mouthful());
             await Task.WhenAny(opening, Task.Delay(TimeSpan.FromMilliseconds(20)));
         }
 
