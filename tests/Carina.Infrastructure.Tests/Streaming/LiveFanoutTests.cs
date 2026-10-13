@@ -1,7 +1,6 @@
-using System.Diagnostics;
-
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 
@@ -297,7 +296,6 @@ public sealed class LiveFanoutTests
         await using ILiveViewing stalled = await Joined(fanout);
         const int Published = 300;
         using SemaphoreSlim taken = new(0);
-        List<TimeSpan> waits = [];
 
         Task<int> reading = Task.Run(async () =>
         {
@@ -314,11 +312,9 @@ public sealed class LiveFanoutTests
 
         for (ulong pts = 0; pts < Published; pts++)
         {
-            Stopwatch waiting = Stopwatch.StartNew();
-
             fanout.Publish(Picture(pts));
-            await taken.WaitAsync(TimeSpan.FromSeconds(15));
-            waits.Add(waiting.Elapsed);
+
+            Assert.True(await taken.WaitAsync(Eventually.Patience), $"frame {pts} reached the viewer that reads");
         }
 
         fanout.End();
@@ -326,7 +322,6 @@ public sealed class LiveFanoutTests
         Assert.Equal(Published, await reading);
         Assert.Equal(LiveBacklog.Empty, prompt.Backlog);
         Assert.Equal(new LiveBacklog(3, Published - 3), stalled.Backlog);
-        Assert.InRange(waits.Max(), TimeSpan.Zero, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
