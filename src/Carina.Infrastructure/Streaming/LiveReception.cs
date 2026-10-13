@@ -138,11 +138,13 @@ internal sealed class LiveReception
 
     /// <summary>
     /// Shows the channel's data broadcast to the fan-out, and hands back what shows it. The first time it is asked
-    /// for, and again after the one before it stopped, a data broadcast is raised that takes a seat of its own.
+    /// for, and again once the one before it has stopped, a data broadcast is raised that takes a seat of its own.
+    /// One that has stopped is replaced even before it has said so here, and its seat is let go of with it.
     /// </summary>
     internal DataBroadcastSession? ShowDataBroadcastTo(LiveFanout fanout)
     {
         DataBroadcastSession shown;
+        LiveSeat? stale = null;
         bool raised = false;
 
         lock (gate)
@@ -152,13 +154,20 @@ internal sealed class LiveReception
                 return null;
             }
 
-            if (dataBroadcast is null)
+            if (dataBroadcast is null || dataBroadcast.HasStopped)
             {
+                stale = dataBroadcastSeat;
                 dataBroadcast = new DataBroadcastSession(service, logger, DataBroadcastStopped);
+                dataBroadcastSeat = null;
                 raised = true;
             }
 
             shown = dataBroadcast;
+        }
+
+        if (stale is not null)
+        {
+            Drop(stale);
         }
 
         if (raised)

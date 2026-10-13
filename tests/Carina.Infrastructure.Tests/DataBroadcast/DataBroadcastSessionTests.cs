@@ -377,6 +377,25 @@ public sealed class DataBroadcastSessionTests
         Assert.Throws<ObjectDisposedException>(() => session.Seat.Write(Carrying().Bytes));
     }
 
+    [Fact(DisplayName = "BR-BD-004: a fan-out first shown a data broadcast that has already stopped is told there is none, and is handed nothing read after")]
+    public async Task AFanoutFirstShownAStoppedDataBroadcastIsToldThereIsNone()
+    {
+        DataBroadcastSession session = Session();
+        session.Read(Carrying().Listed(1, Startup).Delivered(Startup).Bytes);
+        session.Stop();
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        await using ILiveViewing watching = await Joined(fanout);
+
+        session.Show(fanout);
+        session.Read(new CarouselBroadcast().At(2 * Second).Listed(2, Startup, Logo).Bytes);
+
+        LiveFrame none = Assert.Single(Taken(watching.Frames));
+        Assert.Equal([DataBroadcastFrames.AbsentKind], none.Payload.ToArray());
+        Assert.Equal((ulong)Second, none.Pts.Value);
+        Assert.Empty(fanout.Kept);
+        Assert.True(session.HasStopped);
+    }
+
     [Fact(DisplayName = "BR-BV-001: a failure while reading is written down with what failed, nothing more is read, and the reading is told it stopped")]
     public void AFailureWhileReadingIsWrittenDownAndNothingMoreIsRead()
     {
