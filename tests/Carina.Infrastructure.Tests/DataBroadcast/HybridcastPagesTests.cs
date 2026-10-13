@@ -240,6 +240,42 @@ public sealed class HybridcastPagesTests
         Assert.True(over.Equals(HybridcastPages.Script(over)));
     }
 
+    [Theory(DisplayName = "BR-BA-004: a broadcast video object has its type kept under data-hybridcast-type, however the attribute is written")]
+    [InlineData("<object type=\"video/x-iptvf-broadcast\" id=\"v\"></object>", "<object data-hybridcast-type=\"video/x-iptvf-broadcast\" id=\"v\"></object>")]
+    [InlineData("<object id=\"v\" type='video/broadcast'>", "<object id=\"v\" data-hybridcast-type='video/broadcast'>")]
+    [InlineData("<object type=video/broadcast width=960>", "<object data-hybridcast-type=video/broadcast width=960>")]
+    [InlineData("<OBJECT TYPE = \"Video/X-IPTVF-Broadcast\">", "<OBJECT data-hybridcast-type = \"Video/X-IPTVF-Broadcast\">")]
+    [InlineData("<object\ttype=\" video/broadcast \"\nclass=\"tv\">", "<object\tdata-hybridcast-type=\" video/broadcast \"\nclass=\"tv\">")]
+    public void ABroadcastVideoObjectKeepsItsTypeUnderAnotherName(string tag, string expected)
+    {
+        Assert.Equal(Injected + expected, Document(tag));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: another object, another element, and an object written in a comment or a script are left as they are")]
+    [InlineData("<object type=\"application/pdf\" id=\"d\"></object>")]
+    [InlineData("<object type=\"video/broadcast-like\"></object>")]
+    [InlineData("<embed type=\"video/broadcast\">")]
+    [InlineData("<div type=\"video/broadcast\" data-type=\"video/broadcast\">")]
+    [InlineData("<object data-type=\"video/broadcast\" typeof=\"video/broadcast\">")]
+    [InlineData("<!-- <object type=\"video/broadcast\"> -->")]
+    [InlineData("<script>var s = '<object type=\"video/broadcast\">';</script>")]
+    public void AnotherObjectIsLeftAsItIs(string document)
+    {
+        string page = Document(document);
+
+        Assert.Equal(document, page.Replace(Injected, string.Empty, StringComparison.Ordinal));
+        Assert.DoesNotContain("data-hybridcast-type", page, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-BA-004: a document in Shift_JIS around a broadcast video object passes through byte for byte except the attribute's name")]
+    public void AShiftJisDocumentAroundABroadcastObjectPassesThrough()
+    {
+        byte[] document = [.. "<p>"u8, 0x83, 0x5C, 0x83, 0x74, .. "</p><object type=\"video/broadcast\"></object>"u8];
+        byte[] expected = [.. Encoding.ASCII.GetBytes(Injected), .. "<p>"u8, 0x83, 0x5C, 0x83, 0x74, .. "</p><object data-hybridcast-type=\"video/broadcast\"></object>"u8];
+
+        Assert.Equal(expected, HybridcastPages.Document(document, At, target => HybridcastPages.Address(Relay, target), Injected, shiftJis: true));
+    }
+
     [Fact(DisplayName = "FR-016: a style sheet in the document and in an attribute is relayed where its addresses point")]
     public void AStyleSheetInTheDocumentIsRelayed()
     {

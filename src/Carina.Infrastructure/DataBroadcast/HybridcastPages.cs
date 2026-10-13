@@ -13,9 +13,11 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// the document was taken from and pointed at the relay, so it reaches the same server it would have reached had the
 /// application been opened there. A script, whether handed over on its own, written into the document or written into
 /// an event handler, has its location pointed at the receiver script's stand-in (<see cref="HybridcastScripts"/>)
-/// and is otherwise left alone; what it asks for at run time is the receiver script's to point. The receiver script is put into the head once, as its first element, and where there is no
-/// head, before the first thing the document shows. The bytes are read one to one as Latin-1, so a document in any
-/// character set built on ASCII passes through unchanged except where an address is rewritten.
+/// and is otherwise left alone; what it asks for at run time is the receiver script's to point. An object element of
+/// the broadcast video type keeps its type under data-hybridcast-type instead, so the browser does not try to load
+/// it as a plug-in and the receiver script can find it. The receiver script is put into the head once, as its first
+/// element, and where there is no head, before the first thing the document shows. The bytes are read one to one as
+/// Latin-1, so a document in any character set built on ASCII passes through unchanged except where it is rewritten.
 /// </summary>
 public static partial class HybridcastPages
 {
@@ -27,6 +29,11 @@ public static partial class HybridcastPages
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> RawText = new[] { "script", "style" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private const string BroadcastObjectType = "data-hybridcast-type";
+
+    private static readonly FrozenSet<string> BroadcastObjectTypes =
+        new[] { "video/x-iptvf-broadcast", "video/broadcast" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> ShiftJisNames = new[]
     {
@@ -306,7 +313,7 @@ public static partial class HybridcastPages
 
             Placed(name, closing);
             Encoded(name, closing, tag.Groups["attributes"].Value);
-            Written.Append('<').Append(tag.Groups["closing"].Value).Append(name).Append(Attributes(tag.Groups["attributes"].Value)).Append('>');
+            Written.Append('<').Append(tag.Groups["closing"].Value).Append(name).Append(Attributes(name, tag.Groups["attributes"].Value)).Append('>');
             Opening(name, closing);
 
             if (closing || !RawText.Contains(name))
@@ -367,6 +374,11 @@ public static partial class HybridcastPages
                    && attributes[after] != '/';
         }
 
+        private static bool IsBroadcastObjectType(string element, string name, string value)
+            => string.Equals(element, "object", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(name, "type", StringComparison.OrdinalIgnoreCase)
+               && BroadcastObjectTypes.Contains(value.Trim());
+
         private static bool IsHandler(string name)
             => name.Length > 2 && name.StartsWith("on", StringComparison.OrdinalIgnoreCase) && name.All(char.IsAsciiLetter);
 
@@ -417,15 +429,20 @@ public static partial class HybridcastPages
             return string.Equals(attribute, "content", StringComparison.OrdinalIgnoreCase) ? CharsetOf(value) : null;
         }
 
-        private string Attributes(string attributes)
-            => Substituted(Attribute(), attributes, found => Rewritten(found, attributes) ?? found.Value);
+        private string Attributes(string element, string attributes)
+            => Substituted(Attribute(), attributes, found => Rewritten(element, found, attributes) ?? found.Value);
 
-        private string? Rewritten(Match found, string attributes)
+        private string? Rewritten(string element, Match found, string attributes)
         {
             string name = found.Groups["name"].Value;
             string written = found.Groups["value"].Value;
             char quote = written[0] is '"' or '\'' ? written[0] : '"';
             string value = Unquoted(written);
+
+            if (IsBroadcastObjectType(element, name, value))
+            {
+                return $"{found.Groups["lead"].Value}{BroadcastObjectType}{found.Groups["equals"].Value}{written}";
+            }
 
             if (IsHandler(name))
             {
