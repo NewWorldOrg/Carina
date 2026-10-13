@@ -16,10 +16,11 @@ namespace Carina.Api.Live;
 /// and a ticket opens only the application it started, on its own channel, for the viewer who started it. A post is
 /// read no further than one byte past the most the relay sends, and carries its media type and nothing else of the
 /// request. An address outside the application's boundary is refused 403 and asked of nobody. A document has every
-/// address in its markup and style sheets pointed back at this path and the receiver script put first into its head;
-/// a style sheet has its addresses pointed back too, and a script, in the document or on its own, reads the
-/// receiver script's stand-in for its location. Everything handed over is sandboxed by its own policy, so a page opened here outside the frame still runs
-/// with no origin of its own, and may load from and connect to nothing but this application's relay.
+/// address in its markup and style sheets pointed back at this path, and the receiver script put first into its
+/// head when it is loaded as a page into the frame rather than fetched as markup by a script; a style sheet has its
+/// addresses pointed back too, and a script, in the document or on its own, reads the receiver script's stand-in for
+/// its location. Everything handed over is sandboxed by its own policy, so a page opened here outside the frame still
+/// runs with no origin of its own, and may load from and connect to nothing but this application's relay.
 /// </summary>
 public static class HybridcastAppDelivery
 {
@@ -30,6 +31,10 @@ public static class HybridcastAppDelivery
     public const string ServerOutOfReach = "The broadcaster's server could not be reached.";
 
     private const string Bytes = "application/octet-stream";
+
+    private const string FetchDestination = "Sec-Fetch-Dest";
+
+    private const string FetchMode = "Sec-Fetch-Mode";
 
     public static string RelayOf(int networkId, int serviceId, string ticket) => $"/api/live/{networkId}-{serviceId}/data-broadcast/app/{ticket}";
 
@@ -49,6 +54,18 @@ public static class HybridcastAppDelivery
                 context,
                 DataBroadcastRelayService.ApplicationTargetOf(channel.Network, channel.Service),
                 (viewer, _) => ServeAsync(context, channel, viewer, uri, relay));
+    }
+
+    public static bool LoadsAPage(HttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.Headers[FetchDestination] is [string destination])
+        {
+            return destination.Equals("iframe", StringComparison.OrdinalIgnoreCase) || destination.Equals("document", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return request.Headers[FetchMode] is not [string mode] || mode.Equals("navigate", StringComparison.OrdinalIgnoreCase);
     }
 
     public static Task RefuseAsync(HttpContext context, int status, string said)
@@ -125,13 +142,14 @@ public static class HybridcastAppDelivery
         context.Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
         context.Response.Headers["Referrer-Policy"] = "no-referrer";
 
-        await context.Response.Body.WriteAsync(frame.Handed(fetched.ContentType, fetched.Body, at), context.RequestAborted);
+        await context.Response.Body.WriteAsync(frame.Handed(fetched.ContentType, fetched.Body, at, LoadsAPage(context.Request)), context.RequestAborted);
     }
 }
 
 /// <summary>
 /// The relay a started application's frame is on: where its documents and resources and its WebSockets are asked
-/// for, what its documents and style sheets are turned into, and the policy everything handed to it is given.
+/// for, what its documents, scripts and style sheets are turned into, and the policy everything handed to it is given.
+/// Only a document loaded as a page is given the receiver script.
 /// </summary>
 public sealed record HybridcastFrame(LiveDataBroadcastChannel Channel, string Ticket, HybridcastLaunch Launch)
 {
@@ -139,7 +157,7 @@ public sealed record HybridcastFrame(LiveDataBroadcastChannel Channel, string Ti
 
     public string Socket => HybridcastSocketDelivery.RelayOf(Channel.Network.Value, Channel.Service.Value, Ticket);
 
-    public ReadOnlyMemory<byte> Handed(string? contentType, ReadOnlyMemory<byte> body, Uri at)
+    public ReadOnlyMemory<byte> Handed(string? contentType, ReadOnlyMemory<byte> body, Uri at, bool page)
     {
         ArgumentNullException.ThrowIfNull(at);
 
@@ -149,7 +167,7 @@ public sealed record HybridcastFrame(LiveDataBroadcastChannel Channel, string Ti
                 body.Span,
                 at,
                 Pointed,
-                HybridcastPages.Injection(Launch.ReceiverScript, Relay, Socket, at),
+                page ? HybridcastPages.Injection(Launch.ReceiverScript, Relay, Socket, at) : string.Empty,
                 HybridcastPages.DeclaredShiftJis(contentType));
         }
 
