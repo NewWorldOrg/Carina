@@ -184,8 +184,8 @@ public sealed class FfmpegEncodeRunTests : IDisposable
     public async Task WhoTheProgrammeIsIsHandedOverBeforeItsProgressIsRead()
     {
         RunningProgramme? began = null;
+        DateTime? startedAsTheSystemHasIt = null;
         bool progressCameFirst = false;
-        DateTime before = DateTime.UtcNow.AddSeconds(-2);
         string programme = Standing("""
             echo $$ > "$0.pid"
             printf 'out_time_us=1000000\nprogress=end\n'
@@ -204,6 +204,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
             spawned =>
             {
                 began = spawned;
+                startedAsTheSystemHasIt = StartedAsTheSystemHasIt(spawned.ProcessId);
                 File.WriteAllText(programme + ".identified", string.Empty);
 
                 return Task.CompletedTask;
@@ -220,7 +221,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.True(ran.Succeeded);
         Assert.NotNull(began);
         Assert.False(progressCameFirst, "the programme was identified before its progress was read");
-        Assert.InRange(began.StartedAt, before, DateTime.UtcNow.AddSeconds(2));
+        Assert.Equal(startedAsTheSystemHasIt, began.StartedAt);
         string wroteItsOwnId = Directory.EnumerateFiles(tree.Root, "*.pid").Single();
         Assert.Equal(began.ProcessId, int.Parse(File.ReadAllText(wroteItsOwnId).Trim(), System.Globalization.CultureInfo.InvariantCulture));
     }
@@ -325,6 +326,13 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.Null(ran.ExitCode);
         Assert.NotNull(ran.Reached);
         Assert.False(File.Exists(marker));
+    }
+
+    private static DateTime StartedAsTheSystemHasIt(int processId)
+    {
+        using Process alive = Process.GetProcessById(processId);
+
+        return alive.StartTime.ToUniversalTime();
     }
 
     private string Standing(string script)
