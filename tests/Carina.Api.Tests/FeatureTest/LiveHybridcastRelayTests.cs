@@ -430,6 +430,51 @@ public sealed class LiveHybridcastRelayTests
         Assert.Equal($"fetch 32736-1024 {Entry}", feature.Relay.Asked.Last());
     }
 
+    [Theory(DisplayName = "BR-BA-004: the receiver script is put into a page loaded into the frame, and not into markup a script fetches, while every page is still pointed at the relay")]
+    [InlineData("iframe", null, true)]
+    [InlineData("document", null, true)]
+    [InlineData("IFRAME", "navigate", true)]
+    [InlineData("empty", null, false)]
+    [InlineData("empty", "navigate", false)]
+    [InlineData("script", "no-cors", false)]
+    [InlineData(null, "navigate", true)]
+    [InlineData(null, "cors", false)]
+    [InlineData(null, "same-origin", false)]
+    [InlineData(null, null, true)]
+    public async Task TheReceiverScriptIsPutOnlyIntoAPageLoadedIntoTheFrame(string? destination, string? mode, bool injected)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        feature.Relay.Fetched = address => new RelayedBody(
+            RelayResult.Answered,
+            200,
+            "text/html; charset=utf-8",
+            "<div class=\"item\"><img src=\"img/a.png\"><object type=\"video/broadcast\"></object><script>var h = location.host;</script></div>"u8.ToArray(),
+            address);
+        using HttpRequestMessage asking = new(HttpMethod.Get, Relayed(started, "app", "http://hc.station.example.jp/p/item-app.html"));
+
+        if (destination is not null)
+        {
+            asking.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", destination);
+        }
+
+        if (mode is not null)
+        {
+            asking.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", mode);
+        }
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+        string page = await response.Content.ReadAsStringAsync();
+        string relay = started.GetProperty("address").GetString()!.Split('?')[0];
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(injected, page.Contains("data-hybridcast-relay", StringComparison.Ordinal));
+        Assert.Equal(injected, !page.StartsWith("<div class=\"item\">", StringComparison.Ordinal));
+        Assert.Contains($"<img src=\"{relay}?uri={Uri.EscapeDataString("http://hc.station.example.jp/p/img/a.png")}\">", page, StringComparison.Ordinal);
+        Assert.Contains("<object data-hybridcast-type=\"video/broadcast\"></object>", page, StringComparison.Ordinal);
+        Assert.Contains("<script>var h = __hcLocation.host;</script>", page, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "BR-BA-004: what is handed to the frame is sandboxed, never stored, and may reach nothing but this application's relay")]
     public async Task WhatIsHandedIsSandboxed()
     {
