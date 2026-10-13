@@ -13,7 +13,7 @@ public sealed class SignalledWait(TimeProvider clock)
 
     public void Signal()
     {
-        Volatile.Write(ref signalled, 1);
+        Interlocked.Exchange(ref signalled, 1);
 
         try
         {
