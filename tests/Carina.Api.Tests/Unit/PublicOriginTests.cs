@@ -1,7 +1,9 @@
 using Carina.Api.Authentication;
 using Carina.Api.Extensions;
+using Carina.Infrastructure.DataBroadcast;
 
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
@@ -82,6 +84,13 @@ public sealed class PublicOriginTests
     }
 
     [Fact]
+    public void TheNamedOriginIsReadableAsAnAddressAndNothingIsWhereNoneIsNamed()
+    {
+        Assert.Equal(new Uri("https://carina.example:8443"), PublicOrigin.Named("https://carina.example:8443/").Address);
+        Assert.Null(PublicOrigin.Named(null).Address);
+    }
+
+    [Fact]
     public void WhatIsPublicIsSayableSoTheStartupDiagnosisCanSayIt()
     {
         Assert.Equal("https://carina.example", PublicOrigin.Named("https://carina.example").ToString());
@@ -110,6 +119,25 @@ public sealed class PublicOriginTests
         Assert.Contains(PublicOrigin.Key, refusal.Message, StringComparison.Ordinal);
     }
 
+    [Theory(DisplayName = "BR-BD-011: the host of the named origin is the one the data broadcast relay refuses as this installation's own")]
+    [InlineData("https://Carina.Example:8443", "http://carina.example/", true)]
+    [InlineData("https://carina.example", "https://carina.example./api/health", true)]
+    [InlineData("https://carina.example", "http://station.example/", false)]
+    public void TheNamedOriginIsTheHostTheRelayRefuses(string setting, string address, bool refused)
+    {
+        using IHost host = Hosted(setting);
+
+        Assert.Equal(refused, host.Services.GetRequiredService<OwnHost>().IsNamedBy(new Uri(address)));
+    }
+
+    [Fact(DisplayName = "BR-BD-011: where no origin is named, the relay knows no host of its own by name")]
+    public void WhereNoOriginIsNamedTheRelayKnowsNoHostByName()
+    {
+        using IHost host = Hosted(null);
+
+        Assert.Same(OwnHost.Unnamed, host.Services.GetRequiredService<OwnHost>());
+    }
+
     [Fact]
     public void AnUnreadableSettingFailsValidationWithTheMessageNamingIt()
     {
@@ -119,5 +147,14 @@ public sealed class PublicOriginTests
 
         Assert.True(result.Failed);
         Assert.Contains(PublicOrigin.Key, result.FailureMessage!, StringComparison.Ordinal);
+    }
+
+    private static IHost Hosted(string? origin)
+    {
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+        builder.Configuration.AddInMemoryCollection([new KeyValuePair<string, string?>(PublicOrigin.Key, origin)]);
+        builder.Services.AddPublicOrigin(builder.Configuration);
+
+        return builder.Build();
     }
 }

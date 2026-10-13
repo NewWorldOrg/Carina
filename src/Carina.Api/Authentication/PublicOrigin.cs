@@ -12,6 +12,8 @@ public sealed class PublicOrigin
 
     public bool IsGuessed => named is null;
 
+    public Uri? Address => named is null ? null : new Uri(named);
+
     public static PublicOrigin Named(string? setting)
     {
         if (string.IsNullOrWhiteSpace(setting))
