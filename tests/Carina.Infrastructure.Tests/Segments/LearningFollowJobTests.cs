@@ -202,6 +202,37 @@ public sealed class LearningFollowJobTests : IDisposable
         Assert.Equal(LearningExtractionState.Following, harness.Records.Row(first.Id)?.State);
     }
 
+    [Fact(DisplayName = "the driver telling of a recording's progress while a look is under way wakes the next look once that one is over")]
+    public async Task ProgressToldDuringALookWakesTheNextLook()
+    {
+        await harness.LearningAsync(true);
+        Recording first = harness.Recording(eventId: 7310);
+        System.Collections.Concurrent.ConcurrentQueue<Recording> begunDuringTheLook = new();
+        harness.Worklist.WhileLooking = _ =>
+        {
+            if (begunDuringTheLook.IsEmpty)
+            {
+                begunDuringTheLook.Enqueue(harness.Recording(eventId: 7311));
+                harness.Signals.Publish(DriverEvents.RecordingProgress);
+            }
+        };
+        using LearningFollowJob job = harness.Job(new LearningFollowSettings
+        {
+            BeforeFirstLook = TimeSpan.FromMilliseconds(10),
+            BetweenLooks = TimeSpan.FromHours(1),
+        });
+        using CancellationTokenSource stopping = new();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(
+            () => begunDuringTheLook.TryPeek(out Recording? second) && harness.Records.Row(second.Id) is not null,
+            "the progress told during the first look never woke a second");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.NotNull(harness.Records.Row(first.Id));
+    }
+
     [Fact(DisplayName = "a change to a record that moved after it was read is made again on the record as it stands")]
     public async Task AChangeToARecordThatMovedIsMadeAgain()
     {

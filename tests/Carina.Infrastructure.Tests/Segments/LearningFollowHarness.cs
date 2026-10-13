@@ -26,6 +26,11 @@ internal sealed class HeldLearningWorklist : ILearningWorklist
 
     public Dictionary<RecordingId, DateTime> Ends { get; } = [];
 
+    /// <summary>
+    /// Run as a look reads when a recording's programme ends, which is part way through the look.
+    /// </summary>
+    public Action<Recording>? WhileLooking { get; set; }
+
     public Task<IReadOnlyList<Recording>> BeingRecordedAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<Recording>>(
             [.. Recordings.Where(recording => recording.IsInFlight && withinReach.Contains(recording.OutputRoot))]);
@@ -39,7 +44,11 @@ internal sealed class HeldLearningWorklist : ILearningWorklist
         });
 
     public Task<DateTime?> ProgrammeEndsAtAsync(Recording recording, CancellationToken cancellationToken)
-        => Task.FromResult(Ends.TryGetValue(recording.Id, out DateTime ends) ? ends : (DateTime?)null);
+    {
+        WhileLooking?.Invoke(recording);
+
+        return Task.FromResult(Ends.TryGetValue(recording.Id, out DateTime ends) ? ends : (DateTime?)null);
+    }
 }
 
 /// <summary>

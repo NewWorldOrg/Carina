@@ -364,10 +364,10 @@ public sealed class LearningBacklogJobTests : IDisposable
         LearningBacklogJob job = harness.Job();
 
         LearningBacklogLook look = await job.LookAsync(Cancel);
+        await Eventually.Happens(() => harness.Reader.Found.ContainsKey(partway.Id), "the reading never began");
 
-        LearningExtraction record = Assert.IsType<LearningExtraction>(harness.Records.Row(partway.Id));
         Assert.Equal(partway.Id, look.Began);
-        Assert.Equal((LearningExtractionState.Reading, TimeSpan.Zero, 0), (record.State, record.ReadThrough, record.Gaps.Count));
+        Assert.Equal((LearningExtractionState.Reading, TimeSpan.Zero, 0), harness.Reader.Found[partway.Id]);
     }
 
     [Fact(DisplayName = "a record done the way it is done now, or out of tries, is not read again")]

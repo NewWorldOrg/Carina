@@ -3,6 +3,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
+using Carina.Infrastructure.Driver;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -47,7 +48,7 @@ public sealed class LearningFollowJob(
 
     private readonly Dictionary<RecordingId, Follow> follows = [];
 
-    private CancellationTokenSource? waking;
+    private readonly SignalledWait wait = new(clock);
 
     private bool recovered;
 
@@ -336,44 +337,13 @@ public sealed class LearningFollowJob(
 
     private void Woken(string name)
     {
-        if (!WakesOn(name))
+        if (WakesOn(name))
         {
-            return;
-        }
-
-        try
-        {
-            Volatile.Read(ref waking)?.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            return;
+            wait.Signal();
         }
     }
 
-    private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)
-    {
-        using CancellationTokenSource woken = new();
-
-        Volatile.Write(ref waking, woken);
-
-        try
-        {
-            using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(woken.Token, stoppingToken);
-
-            await Task.Delay(waiting, clock, linked.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            return !stoppingToken.IsCancellationRequested;
-        }
-        finally
-        {
-            Volatile.Write(ref waking, null);
-        }
-
-        return true;
-    }
+    private Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken) => wait.WaitAsync(waiting, stoppingToken);
 
     private void Told(LearningLook look)
     {
