@@ -76,6 +76,11 @@ internal sealed class HeldReader(LearningRecords records, DateTime at) : ILearni
 
     public ConcurrentQueue<RecordingId> Stopped { get; } = new();
 
+    /// <summary>
+    /// Each record as the reading found it, before the reading wrote anything to it.
+    /// </summary>
+    public ConcurrentDictionary<RecordingId, (LearningExtractionState State, TimeSpan ReadThrough, int Gaps)> Found { get; } = new();
+
     public bool LeavesItsRecord { get; set; }
 
     public void Release(RecordingId id) => Released(id).TrySetResult();
@@ -84,7 +89,13 @@ internal sealed class HeldReader(LearningRecords records, DateTime at) : ILearni
     {
         Asked.Enqueue(recording);
 
-        await ChangeAsync(recording, record => record.Reached(ReadsAtOnce, at));
+        await ChangeAsync(
+            recording,
+            record =>
+            {
+                Found[recording.Id] = (record.State, record.ReadThrough, record.Gaps.Count);
+                record.Reached(ReadsAtOnce, at);
+            });
 
         try
         {
