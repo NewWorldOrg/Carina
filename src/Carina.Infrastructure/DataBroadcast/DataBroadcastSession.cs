@@ -19,8 +19,9 @@ namespace Carina.Infrastructure.DataBroadcast;
 /// Each fan-out is handed the frames on the clock of the pictures it carries: the transcoder behind it counts from
 /// the raw clock where it began, so the times are moved back by the wraps the clock had made by the time the
 /// fan-out was first shown the data broadcast. The state goes on being read while no fan-out is showing it, so a fan-out that comes later starts from
-/// where the channel is. Once reading stops, every fan-out shown it is told there is no data broadcast, nothing
-/// is kept for a viewer joining later, and the reading that raised it is told so it can raise another.
+/// where the channel is. Once reading stops, every fan-out shown it, then or afterwards, is told there is no data
+/// broadcast, nothing is kept for a viewer joining later, and the reading that raised it is told so it can raise
+/// another.
 /// </remarks>
 public sealed class DataBroadcastSession
 {
@@ -85,6 +86,20 @@ public sealed class DataBroadcastSession
         }
     }
 
+    /// <summary>
+    /// Whether reading has stopped, after which a fan-out shown it is only told there is none.
+    /// </summary>
+    public bool HasStopped
+    {
+        get
+        {
+            lock (gate)
+            {
+                return broken;
+            }
+        }
+    }
+
     public void Show(LiveFanout fanout)
     {
         ArgumentNullException.ThrowIfNull(fanout);
@@ -92,6 +107,13 @@ public sealed class DataBroadcastSession
         lock (gate)
         {
             Shown shown = new(fanout, Laps(reader.Now ?? 0) * Lap);
+
+            if (broken)
+            {
+                fanout.Publish(shown.Moved(DataBroadcastFrames.Absent(latest)), standing);
+
+                return;
+            }
 
             showing.Add(shown);
 
@@ -114,9 +136,13 @@ public sealed class DataBroadcastSession
         }
     }
 
+    /// <summary>
+    /// Reads what the reading of the channel wrote. A failure stops the data broadcast: the fan-outs shown it are
+    /// told there is none, and only then is the failure written down and the reading told.
+    /// </summary>
     public void Read(ReadOnlySpan<byte> bytes)
     {
-        bool halted = false;
+        Exception? failed = null;
 
         lock (gate)
         {
@@ -131,13 +157,13 @@ public sealed class DataBroadcastSession
             }
             catch (Exception failure) when (failure is not OutOfMemoryException)
             {
-                logger.LogWarning(failure, "The data broadcast of service {Service} stopped being read: reading it failed.", reader.Service.Value);
-                halted = Halt();
+                failed = Halt() ? failure : null;
             }
         }
 
-        if (halted)
+        if (failed is not null)
         {
+            logger.LogWarning(failed, "The data broadcast of service {Service} stopped being read: reading it failed.", reader.Service.Value);
             stopped(this);
         }
     }

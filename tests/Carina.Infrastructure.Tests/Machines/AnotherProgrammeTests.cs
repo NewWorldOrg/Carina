@@ -16,14 +16,13 @@ public sealed class AnotherProgrammeTests : IDisposable
     [Fact(DisplayName = "a programme that started is handed back with its id and when it began, as the operating system has them")]
     public void AProgrammeThatStartedIsHandedBackWithItsIdAndStart()
     {
-        DateTime before = DateTime.UtcNow.AddSeconds(-2);
-
         ProgrammeStart start = AnotherProgramme.Start("sleep", ["30"]);
         using Process running = start.Process!;
+        using Process asTheSystemHasIt = Process.GetProcessById(running.Id);
 
         RunningProgramme began = Assert.IsType<RunningProgramme>(start.Began);
         Assert.Equal(running.Id, began.ProcessId);
-        Assert.InRange(began.StartedAt, before, DateTime.UtcNow.AddSeconds(2));
+        Assert.Equal(asTheSystemHasIt.StartTime.ToUniversalTime(), began.StartedAt);
         Assert.Equal(DateTimeKind.Utc, began.StartedAt.Kind);
         AnotherProgramme.GiveUpOn(running);
     }
