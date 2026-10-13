@@ -15,9 +15,10 @@ namespace Carina.Api.Live;
 /// through the relay. The frame has no cookie, so the ticket the application was started with travels in the path,
 /// and a ticket opens only the application it started, on its own channel, for the viewer who started it. A post is
 /// read no further than one byte past the most the relay sends, and carries its media type and nothing else of the
-/// request. An address outside the application's boundary is refused 403 and asked of nobody. A document has every address in its markup and style sheets pointed
-/// back at this path and the receiver script put first into its head; a style sheet has its addresses pointed back
-/// too. Everything handed over is sandboxed by its own policy, so a page opened here outside the frame still runs
+/// request. An address outside the application's boundary is refused 403 and asked of nobody. A document has every
+/// address in its markup and style sheets pointed back at this path and the receiver script put first into its head;
+/// a style sheet has its addresses pointed back too, and a script, in the document or on its own, reads the
+/// receiver script's stand-in for its location. Everything handed over is sandboxed by its own policy, so a page opened here outside the frame still runs
 /// with no origin of its own, and may load from and connect to nothing but this application's relay.
 /// </summary>
 public static class HybridcastAppDelivery
@@ -144,7 +145,17 @@ public sealed record HybridcastFrame(LiveDataBroadcastChannel Channel, string Ti
 
         if (HybridcastPages.IsDocument(contentType))
         {
-            return HybridcastPages.Document(body.Span, at, Pointed, HybridcastPages.Injection(Launch.ReceiverScript, Relay, Socket, at));
+            return HybridcastPages.Document(
+                body.Span,
+                at,
+                Pointed,
+                HybridcastPages.Injection(Launch.ReceiverScript, Relay, Socket, at),
+                HybridcastPages.DeclaredShiftJis(contentType));
+        }
+
+        if (HybridcastPages.IsScript(contentType))
+        {
+            return HybridcastPages.Script(body, HybridcastPages.DeclaredShiftJis(contentType));
         }
 
         return HybridcastPages.IsStyle(contentType) ? HybridcastPages.Style(body.Span, at, Pointed) : body;

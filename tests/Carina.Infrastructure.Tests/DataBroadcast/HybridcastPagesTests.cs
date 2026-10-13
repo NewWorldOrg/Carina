@@ -96,12 +96,148 @@ public sealed class HybridcastPagesTests
         Assert.Equal(Injected + tag, Document(tag));
     }
 
-    [Fact(DisplayName = "FR-016: a script's own text is left alone, and an address inside it is not touched")]
+    [Fact(DisplayName = "FR-016: an address inside a script's own text is not touched")]
     public void AScriptsTextIsLeftAlone()
     {
         string script = "<script>if (a<b && c>d) { load(\"/x.js\"); } var t = '<img src=\"/y.png\">';</script>";
 
         Assert.Equal(Injected + script, Document(script));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a script in the document is pointed at the frame's stand-in for its location, by whichever type it is named a script")]
+    [InlineData("<script>if(location.hostname==\"a\"){}</script>", "<script>if(__hcLocation.hostname==\"a\"){}</script>")]
+    [InlineData("<script type=\"text/javascript\">var h = window.location.host;</script>", "<script type=\"text/javascript\">var h = window.__hcLocation.host;</script>")]
+    [InlineData("<SCRIPT type=module>location.reload()</SCRIPT>", "<SCRIPT type=module>__hcLocation.reload()</SCRIPT>")]
+    [InlineData("<script type='text/javascript; charset=Shift_JIS'>location.href</script>", "<script type='text/javascript; charset=Shift_JIS'>__hcLocation.href</script>")]
+    [InlineData("<script language=\"JavaScript\">\n<!--\nlocation.href = 'a.html';\n//-->\n</script>", "<script language=\"JavaScript\">\n<!--\n__hcLocation.href = 'a.html';\n//-->\n</script>")]
+    public void AScriptInTheDocumentIsPointedAtTheStandIn(string document, string expected)
+    {
+        Assert.Equal(Injected + expected, Document(document));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a script block of another type, and a script with no location to point, are left as they are")]
+    [InlineData("<script type=\"text/template\"><p>{{location.href}}</p></script>")]
+    [InlineData("<script type=\"application/ld+json\">{\"a\": location}</script>")]
+    [InlineData("<script>var a = 'location.href';</script>")]
+    public void AScriptBlockOfAnotherTypeIsLeftAsItIs(string document)
+    {
+        Assert.Equal(Injected + document, Document(document));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: an event handler is pointed at the stand-in, its entities read and kept as they were written")]
+    [InlineData("<a onclick=\"location.href='a.html'\">", "<a onclick=\"__hcLocation.href='a.html'\">")]
+    [InlineData("<a onclick=\"location.href=&quot;a.html&quot;\">", "<a onclick=\"__hcLocation.href=&quot;a.html&quot;\">")]
+    [InlineData("<body ONLOAD='if(location.search){go()}'>", "<body ONLOAD='if(__hcLocation.search){go()}'>")]
+    [InlineData("<button onclick=location.reload()>", "<button onclick=\"__hcLocation.reload()\">")]
+    [InlineData("<a onclick=\"go&#40;location&#41;\">", "<a onclick=\"go&#40;__hcLocation&#41;\">")]
+    [InlineData("<a onclick=\"go(&#x6c;ocation)\">", "<a onclick=\"go(__hcLocation)\">")]
+    [InlineData("<a onclick=\"x=a&location;\">", "<a onclick=\"x=a&__hcLocation;\">")]
+    public void AnEventHandlerIsPointedAtTheStandIn(string document, string expected)
+    {
+        Assert.Equal(Injected + expected, Document(document));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a handler naming the location only in a string, and an attribute that is not a handler, are left as they are")]
+    [InlineData("<a onclick=\"alert(&quot;location.href&quot;)\">")]
+    [InlineData("<a onclick=\"alert('location')\">")]
+    [InlineData("<div title=\"location.href\" data-onclick=\"location\" on=\"location\">")]
+    [InlineData("<button onclick=location.href='a.html'>")]
+    public void AHandlerNamingTheLocationOnlyInAStringIsLeftAsItIs(string document)
+    {
+        Assert.Equal(Injected + document, Document(document));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a document in Shift_JIS, by its type, by its own meta element or by its bytes, has its scripts read with their second bytes kept apart")]
+    [InlineData("text/html; charset=Shift_JIS", "")]
+    [InlineData("text/html; charset=Shift_JIS", "<meta charset=\"utf-8\">")]
+    [InlineData("text/html", "<meta charset=\"Shift_JIS\">")]
+    [InlineData("text/html", "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=shift_jis\">")]
+    [InlineData("text/html", "")]
+    public void ADocumentInShiftJisKeepsItsSecondBytesApart(string contentType, string meta)
+    {
+        byte[] document = [.. Encoding.ASCII.GetBytes($"<head>{meta}<script>var a=\""), 0x95, 0x5C, .. "\",b=\"location\";location.href</script></head>"u8];
+
+        string page = Encoding.Latin1.GetString(HybridcastPages.Document(document, At, target => HybridcastPages.Address(Relay, target), Injected, HybridcastPages.DeclaredShiftJis(contentType)));
+
+        Assert.Contains("b=\"location\";__hcLocation.href</script>", page, StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a document whose type names a character set other than Shift_JIS is read in it, whatever a meta element says")]
+    [InlineData("text/html; charset=utf-8", "<meta charset=\"Shift_JIS\">")]
+    [InlineData("text/html", "<meta charset=\"utf-8\">")]
+    [InlineData("text/html", "")]
+    public void ADocumentNamedAnotherCharacterSetIsReadInIt(string contentType, string meta)
+    {
+        byte[] document = Encoding.UTF8.GetBytes($"<head>{meta}<script>var a=\"表あ\",b=\"location\";location.href</script></head>");
+
+        string page = Encoding.UTF8.GetString(HybridcastPages.Document(document, At, target => HybridcastPages.Address(Relay, target), Injected, HybridcastPages.DeclaredShiftJis(contentType)));
+
+        Assert.Contains("var a=\"表あ\",b=\"location\";__hcLocation.href</script>", page, StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a script that names no character set is read in Shift_JIS only where its bytes are neither UTF-8 nor EUC-JP")]
+    [InlineData(new byte[] { 0x95, 0x5C }, true)]
+    [InlineData(new byte[] { 0x83, 0x5C, 0x83, 0x74, 0x83, 0x67 }, true)]
+    [InlineData(new byte[] { 0xE3, 0x81, 0x82, 0xE8, 0xA1, 0xA8 }, false)]
+    [InlineData(new byte[] { 0xA4, 0xA2, 0xC9, 0xBD, 0xE5, 0xA1 }, false)]
+    [InlineData(new byte[] { 0x41 }, false)]
+    public void AScriptNamingNoCharacterSetIsReadByItsBytes(byte[] text, bool shiftJis)
+    {
+        byte[] script = [.. "var a=\""u8, .. text, .. "\",b=\"location\";location.href"u8];
+
+        ReadOnlyMemory<byte> handed = HybridcastPages.Script(script, HybridcastPages.DeclaredShiftJis("application/javascript"));
+
+        Assert.Equal([.. "var a=\""u8, .. text, .. "\",b=\"location\";__hcLocation.href"u8], handed.ToArray());
+        Assert.Equal(shiftJis, HybridcastPages.LooksShiftJis(script));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: the character set a server names is Shift_JIS by any of its names, another, or none")]
+    [InlineData("application/javascript; charset=Shift_JIS", true)]
+    [InlineData("text/javascript; charset=\"windows-31j\"", true)]
+    [InlineData("text/html; charset=x-sjis", true)]
+    [InlineData("text/html; charset=utf-8", false)]
+    [InlineData("text/html", null)]
+    [InlineData(null, null)]
+    public void TheNamedCharacterSetIsShiftJisAnotherOrNone(string? contentType, bool? shiftJis)
+    {
+        Assert.Equal(shiftJis, HybridcastPages.DeclaredShiftJis(contentType));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: a script handed over is JavaScript or ECMAScript by any of the types a server names it")]
+    [InlineData("application/javascript", true)]
+    [InlineData("text/javascript; charset=Shift_JIS", true)]
+    [InlineData("application/x-javascript", true)]
+    [InlineData("text/ecmascript", true)]
+    [InlineData("application/ecmascript", true)]
+    [InlineData("application/json", false)]
+    [InlineData("text/html", false)]
+    [InlineData(null, false)]
+    public void AScriptIsJavaScriptOrEcmaScript(string? contentType, bool script)
+    {
+        Assert.Equal(script, HybridcastPages.IsScript(contentType));
+    }
+
+    [Fact(DisplayName = "BR-BA-004: a script handed over is pointed at the stand-in, and passes through byte for byte everywhere else")]
+    public void AScriptHandedOverIsPointedAtTheStandIn()
+    {
+        ReadOnlyMemory<byte> script = Encoding.UTF8.GetBytes("var s = \"天気\"; if (location.hostname.indexOf(\"nhk\") >= 0) { go(); }");
+
+        ReadOnlyMemory<byte> handed = HybridcastPages.Script(script);
+
+        Assert.Equal("var s = \"天気\"; if (__hcLocation.hostname.indexOf(\"nhk\") >= 0) { go(); }", Encoding.UTF8.GetString(handed.Span));
+    }
+
+    [Fact(DisplayName = "BR-BA-004: a script with no location to point, and one over 2 MiB, are handed back as the very bytes they came as")]
+    public void AScriptWithNothingToPointIsHandedBackAsItCame()
+    {
+        ReadOnlyMemory<byte> plain = Encoding.UTF8.GetBytes("var a = 'location.href'; // location");
+        byte[] large = new byte[HybridcastScripts.Largest + 1];
+        Array.Fill(large, (byte)' ');
+        Encoding.ASCII.GetBytes("location.href").CopyTo(large, 0);
+        ReadOnlyMemory<byte> over = large;
+
+        Assert.True(plain.Equals(HybridcastPages.Script(plain)));
+        Assert.True(over.Equals(HybridcastPages.Script(over)));
     }
 
     [Fact(DisplayName = "FR-016: a style sheet in the document and in an attribute is relayed where its addresses point")]

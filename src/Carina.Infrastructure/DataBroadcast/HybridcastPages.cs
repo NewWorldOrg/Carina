@@ -3,15 +3,17 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Text.Unicode;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
-/// Turns a Hybridcast application's document and style sheets into ones that are read through the relay. Every
-/// address the markup and the style sheets name — from the root, relative or whole — is resolved against where the
-/// document was taken from and pointed at the relay, so it reaches the same server it would have reached had the
-/// application been opened there. A script's own text is left alone; what it asks for at run time is the receiver
-/// script's to point. The receiver script is put into the head once, as its first element, and where there is no
+/// Turns a Hybridcast application's document, style sheets and scripts into ones that are read through the relay.
+/// Every address the markup and the style sheets name — from the root, relative or whole — is resolved against where
+/// the document was taken from and pointed at the relay, so it reaches the same server it would have reached had the
+/// application been opened there. A script, whether handed over on its own, written into the document or written into
+/// an event handler, has its location pointed at the receiver script's stand-in (<see cref="HybridcastScripts"/>)
+/// and is otherwise left alone; what it asks for at run time is the receiver script's to point. The receiver script is put into the head once, as its first element, and where there is no
 /// head, before the first thing the document shows. The bytes are read one to one as Latin-1, so a document in any
 /// character set built on ASCII passes through unchanged except where an address is rewritten.
 /// </summary>
@@ -26,11 +28,42 @@ public static partial class HybridcastPages
 
     private static readonly FrozenSet<string> RawText = new[] { "script", "style" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    private static readonly FrozenSet<string> ShiftJisNames = new[]
+    {
+        "shift_jis", "shift-jis", "sjis", "x-sjis", "windows-31j", "cp932", "ms_kanji", "csshiftjis",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
     private static readonly FrozenSet<string> DocumentTypes = new[] { "text/html", "application/xhtml+xml" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenSet<string> ScriptTypes = new[]
+    {
+        "application/javascript", "text/javascript", "application/x-javascript", "text/x-javascript",
+        "application/ecmascript", "text/ecmascript",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     public static bool IsDocument(string? contentType) => MediaTypeOf(contentType) is { } type && DocumentTypes.Contains(type);
 
     public static bool IsStyle(string? contentType) => string.Equals(MediaTypeOf(contentType), "text/css", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsScript(string? contentType) => MediaTypeOf(contentType) is { } type && ScriptTypes.Contains(type);
+
+    public static bool? DeclaredShiftJis(string? contentType)
+        => CharsetOf(contentType) is { } charset ? IsShiftJisName(charset) : null;
+
+    public static bool LooksShiftJis(ReadOnlySpan<byte> bytes)
+        => bytes.IndexOfAnyInRange((byte)0x80, (byte)0xFF) >= 0 && !Utf8.IsValid(bytes) && !IsEucJp(bytes);
+
+    public static ReadOnlyMemory<byte> Script(ReadOnlyMemory<byte> script, bool? shiftJis = null)
+    {
+        if (script.Length > HybridcastScripts.Largest)
+        {
+            return script;
+        }
+
+        string? rewritten = HybridcastScripts.Rewritten(Encoding.Latin1.GetString(script.Span), shiftJis ?? LooksShiftJis(script.Span));
+
+        return rewritten is null ? script : Encoding.Latin1.GetBytes(rewritten);
+    }
 
     public static string Address(string relay, Uri target)
     {
@@ -49,14 +82,14 @@ public static partial class HybridcastPages
                + $"data-hybridcast-document=\"{WebUtility.HtmlEncode(document.AbsoluteUri)}\"></script>";
     }
 
-    public static byte[] Document(ReadOnlySpan<byte> document, Uri at, Func<Uri, string> relayed, string injected)
+    public static byte[] Document(ReadOnlySpan<byte> document, Uri at, Func<Uri, string> relayed, string injected, bool? shiftJis = null)
     {
         ArgumentNullException.ThrowIfNull(at);
         ArgumentNullException.ThrowIfNull(relayed);
         ArgumentNullException.ThrowIfNull(injected);
 
         string text = Encoding.Latin1.GetString(document);
-        Markup markup = new(text, at, relayed);
+        Markup markup = new(text, at, relayed, shiftJis, shiftJis ?? LooksShiftJis(document));
         markup.Walk();
 
         return Encoding.Latin1.GetBytes(markup.Written.Insert(markup.InjectAt, injected).ToString());
@@ -72,6 +105,86 @@ public static partial class HybridcastPages
 
     private static string? MediaTypeOf(string? contentType)
         => contentType is not null && MediaTypeHeaderValue.TryParse(contentType, out MediaTypeHeaderValue? parsed) ? parsed.MediaType : null;
+
+    private static bool IsScriptBlock(string attributes)
+    {
+        Match? type = Attribute().Matches(attributes).FirstOrDefault(found => string.Equals(found.Groups["name"].Value, "type", StringComparison.OrdinalIgnoreCase));
+
+        if (type is null)
+        {
+            return true;
+        }
+
+        string value = Unquoted(type.Groups["value"].Value).Trim();
+
+        return value.Length == 0 || string.Equals(value, "module", StringComparison.OrdinalIgnoreCase) || IsScript(value);
+    }
+
+    private static string Unquoted(string written) => written[0] is '"' or '\'' ? written[1..^1] : written;
+
+    private static bool IsShiftJisName(string charset) => ShiftJisNames.Contains(charset.Trim('"', ' '));
+
+    private static string? CharsetOf(string? contentType)
+        => contentType is not null && MediaTypeHeaderValue.TryParse(contentType, out MediaTypeHeaderValue? parsed) ? parsed.CharSet : null;
+
+    private static bool IsEucJp(ReadOnlySpan<byte> bytes)
+    {
+        int at = 0;
+
+        while (at < bytes.Length && EucJpLength(bytes[at..]) is int length and > 0)
+        {
+            at += length;
+        }
+
+        return at >= bytes.Length;
+    }
+
+    private static int EucJpLength(ReadOnlySpan<byte> rest)
+    {
+        static bool IsEucByte(byte b) => b is >= 0xA1 and <= 0xFE;
+
+        return rest[0] switch
+        {
+            < 0x80 => 1,
+            0x8E => rest.Length > 1 && rest[1] is >= 0xA1 and <= 0xDF ? 2 : 0,
+            0x8F => rest.Length > 2 && IsEucByte(rest[1]) && IsEucByte(rest[2]) ? 3 : 0,
+            >= 0xA1 and <= 0xFE => rest.Length > 1 && IsEucByte(rest[1]) ? 2 : 0,
+            _ => 0,
+        };
+    }
+
+    private static string? Handler(string raw, bool shiftJis)
+    {
+        (string decoded, int[] at) = Decoded(raw);
+        IReadOnlyList<ScriptEdit> edits = HybridcastScripts.Edits(decoded, shiftJis);
+
+        return edits.Count == 0
+            ? null
+            : HybridcastScripts.Applied(raw, [.. edits.Select(edit => edit with { Start = at[edit.Start], End = at[edit.End] })]);
+    }
+
+    private static (string Decoded, int[] At) Decoded(string raw)
+    {
+        StringBuilder decoded = new(raw.Length);
+        List<int> at = new(raw.Length + 1);
+        int from = 0;
+
+        while (from < raw.Length)
+        {
+            Match entity = raw[from] == '&' ? Entity().Match(raw, from) : Match.Empty;
+            string read = entity.Success ? WebUtility.HtmlDecode(entity.Value) : raw[from].ToString();
+            bool known = entity.Success && read != entity.Value;
+            read = known ? read : raw[from].ToString();
+
+            decoded.Append(read);
+            at.AddRange(Enumerable.Repeat(from, read.Length));
+            from += known ? entity.Length : 1;
+        }
+
+        at.Add(raw.Length);
+
+        return (decoded.ToString(), [.. at]);
+    }
 
     private static string StyleText(string sheet, Uri at, Func<Uri, string> relayed, char quote)
     {
@@ -116,14 +229,19 @@ public static partial class HybridcastPages
     [GeneratedRegex("""(?<lead>\s)(?<name>[^\s"'>/=]+)(?<equals>\s*=\s*)(?<value>"[^"]*"|'[^']*'|[^\s"'=<>`]+)""")]
     private static partial Regex Attribute();
 
+    [GeneratedRegex("""\G&(?:#[0-9]{1,7}|#[xX][0-9A-Fa-f]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});""")]
+    private static partial Regex Entity();
+
     [GeneratedRegex("""url\(\s*(?<quote>["']?)(?<value>[^"')]*)\k<quote>\s*\)""", RegexOptions.IgnoreCase)]
     private static partial Regex StyleUrl();
 
     [GeneratedRegex("""@import\s+(?<quote>["'])(?<value>[^"']*)\k<quote>""", RegexOptions.IgnoreCase)]
     private static partial Regex StyleImport();
 
-    private sealed class Markup(string text, Uri at, Func<Uri, string> relayed)
+    private sealed class Markup(string text, Uri at, Func<Uri, string> relayed, bool? declared, bool sniffed)
     {
+        private bool inShiftJis = sniffed;
+
         private int? afterHead;
 
         private int? afterHtml;
@@ -187,6 +305,7 @@ public static partial class HybridcastPages
             int after = tag.Index + tag.Length;
 
             Placed(name, closing);
+            Encoded(name, closing, tag.Groups["attributes"].Value);
             Written.Append('<').Append(tag.Groups["closing"].Value).Append(name).Append(Attributes(tag.Groups["attributes"].Value)).Append('>');
             Opening(name, closing);
 
@@ -197,11 +316,20 @@ public static partial class HybridcastPages
 
             int end = text.IndexOf("</" + name, after, StringComparison.OrdinalIgnoreCase);
             int stops = end < 0 ? text.Length : end;
-            string inside = text[after..stops];
 
-            Written.Append(string.Equals(name, "style", StringComparison.OrdinalIgnoreCase) ? StyleText(inside, at, relayed, '"') : inside);
+            Written.Append(RawTextOf(name, tag.Groups["attributes"].Value, text[after..stops]));
 
             return stops;
+        }
+
+        private string RawTextOf(string name, string attributes, string inside)
+        {
+            if (string.Equals(name, "style", StringComparison.OrdinalIgnoreCase))
+            {
+                return StyleText(inside, at, relayed, '"');
+            }
+
+            return IsScriptBlock(attributes) ? HybridcastScripts.Rewritten(inside, inShiftJis) ?? inside : inside;
         }
 
         private void Placed(string name, bool closing)
@@ -229,6 +357,19 @@ public static partial class HybridcastPages
             }
         }
 
+        private static bool RunsOn(Match found, string attributes)
+        {
+            int after = found.Index + found.Length;
+
+            return found.Groups["value"].Value[0] is not ('"' or '\'')
+                   && after < attributes.Length
+                   && !char.IsWhiteSpace(attributes[after])
+                   && attributes[after] != '/';
+        }
+
+        private static bool IsHandler(string name)
+            => name.Length > 2 && name.StartsWith("on", StringComparison.OrdinalIgnoreCase) && name.All(char.IsAsciiLetter);
+
         private static bool IsFrame(string name)
             => string.Equals(name, "head", StringComparison.OrdinalIgnoreCase) || string.Equals(name, "html", StringComparison.OrdinalIgnoreCase);
 
@@ -250,15 +391,48 @@ public static partial class HybridcastPages
             Written.Append(text, from, to - from);
         }
 
-        private string Attributes(string attributes)
-            => Substituted(Attribute(), attributes, found => Rewritten(found) ?? found.Value);
+        private void Encoded(string name, bool closing, string attributes)
+        {
+            if (closing || declared is not null || !string.Equals(name, "meta", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
 
-        private string? Rewritten(Match found)
+            foreach (Match found in Attribute().Matches(attributes))
+            {
+                inShiftJis = CharsetNamedBy(found) is { } charset ? IsShiftJisName(charset) : inShiftJis;
+            }
+        }
+
+        private static string? CharsetNamedBy(Match found)
+        {
+            string attribute = found.Groups["name"].Value;
+            string value = Unquoted(found.Groups["value"].Value);
+
+            if (string.Equals(attribute, "charset", StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+
+            return string.Equals(attribute, "content", StringComparison.OrdinalIgnoreCase) ? CharsetOf(value) : null;
+        }
+
+        private string Attributes(string attributes)
+            => Substituted(Attribute(), attributes, found => Rewritten(found, attributes) ?? found.Value);
+
+        private string? Rewritten(Match found, string attributes)
         {
             string name = found.Groups["name"].Value;
             string written = found.Groups["value"].Value;
             char quote = written[0] is '"' or '\'' ? written[0] : '"';
-            string value = written[0] is '"' or '\'' ? written[1..^1] : written;
+            string value = Unquoted(written);
+
+            if (IsHandler(name))
+            {
+                return RunsOn(found, attributes) || Handler(value, inShiftJis) is not { } handled
+                    ? null
+                    : $"{found.Groups["lead"].Value}{name}{found.Groups["equals"].Value}{quote}{handled}{quote}";
+            }
 
             if (string.Equals(name, "style", StringComparison.OrdinalIgnoreCase))
             {
