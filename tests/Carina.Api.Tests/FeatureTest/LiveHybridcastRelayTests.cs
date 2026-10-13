@@ -595,9 +595,121 @@ public sealed class LiveHybridcastRelayTests
         Assert.False(response.Headers.Contains(HeaderNames.AccessControlExposeHeaders));
     }
 
+    [Fact(DisplayName = "BR-BA-004: a script handed to the frame, and the scripts and handlers in its document, read the frame's stand-in for the location")]
+    public async Task AScriptHandedToTheFrameReadsTheStandIn()
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        feature.Relay.Fetched = address => address.AbsolutePath.EndsWith(".js", StringComparison.Ordinal)
+            ? new RelayedBody(RelayResult.Answered, 200, "application/javascript; charset=utf-8", "if(location.hostname.indexOf(\"nhk\")>=0){go(\"location\")}"u8.ToArray(), address)
+            : new RelayedBody(
+                RelayResult.Answered,
+                200,
+                "text/html; charset=utf-8",
+                "<html><head><script>var h = window.location.host;</script></head><body onload=\"location.hash='a'\"></body></html>"u8.ToArray(),
+                address);
+
+        using HttpResponseMessage script = await feature.Frame.GetAsync(new Uri(HybridcastRelayFeature.Opening(started, "http://hc.station.example.jp/p/index.js"), UriKind.Relative));
+        using HttpResponseMessage page = await feature.Frame.GetAsync(new Uri(started.GetProperty("address").GetString()!, UriKind.Relative));
+        string document = await page.Content.ReadAsStringAsync();
+
+        Assert.Equal("if(__hcLocation.hostname.indexOf(\"nhk\")>=0){go(\"location\")}", await script.Content.ReadAsStringAsync());
+        Assert.Equal("application/javascript; charset=utf-8", script.Content.Headers.ContentType?.ToString());
+        Assert.Contains("<script>var h = window.__hcLocation.host;</script>", document, StringComparison.Ordinal);
+        Assert.Contains("<body onload=\"__hcLocation.hash='a'\">", document, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-BA-004: a script handed to the frame in Shift_JIS has its second bytes kept apart from the code")]
+    public async Task AShiftJisScriptKeepsItsSecondBytesApart()
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        byte[] script = [.. "var a=\""u8, 0x95, 0x5C, .. "\",b=\"location\";location.href"u8];
+        feature.Relay.Fetched = address => new RelayedBody(RelayResult.Answered, 200, "text/javascript; charset=Shift_JIS", script, address);
+
+        using HttpResponseMessage handed = await feature.Frame.GetAsync(new Uri(HybridcastRelayFeature.Opening(started, "http://hc.station.example.jp/p/index.js"), UriKind.Relative));
+
+        Assert.Equal(
+            [.. "var a=\""u8, 0x95, 0x5C, .. "\",b=\"location\";__hcLocation.href"u8],
+            await handed.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact(DisplayName = "BR-BA-004: a script library's request from the frame is answered with the type the server named, and nothing of its headers is asked of the relay")]
+    public async Task AScriptLibrarysRequestIsAnsweredWithTheServersType()
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        feature.Relay.Fetched = address => new RelayedBody(RelayResult.Answered, 200, "application/json; charset=utf-8", "{\"a\":1}"u8.ToArray(), address);
+        using HttpRequestMessage asking = new(HttpMethod.Get, Relayed(started, "app", "http://hc.station.example.jp/p/list.json"));
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+        asking.Headers.TryAddWithoutValidation(HeaderNames.XRequestedWith, "XMLHttpRequest");
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Accept, "application/json, text/javascript, */*; q=0.01");
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        Assert.Equal("{\"a\":1}", await response.Content.ReadAsStringAsync());
+        Assert.Equal("*", response.Headers.GetValues(HeaderNames.AccessControlAllowOrigin).Single());
+        Assert.Equal("fetch 32736-1024 http://hc.station.example.jp/p/list.json", feature.Relay.Asked.Last());
+    }
+
+    [Theory(DisplayName = "BR-BA-004: every answer of the frame's relays carries the CORS headers, whatever refused or failed it")]
+    [InlineData("GET", "app", "outside the boundary", 403)]
+    [InlineData("POST", "app", "outside the boundary", 403)]
+    [InlineData("GET", "app", "a name that did not resolve", 502)]
+    [InlineData("GET", "app", "a refused address", 502)]
+    [InlineData("POST", "app", "a server out of reach", 502)]
+    [InlineData("GET", "app", "no address", 400)]
+    [InlineData("GET", "app", "a ticket that started nothing", 403)]
+    [InlineData("GET", "app", "a ticket that is not one", 401)]
+    [InlineData("GET", "app", "another channel", 403)]
+    [InlineData("GET", "app", "a failure nothing answered for", 500)]
+    [InlineData("POST", "app", "a failure nothing answered for", 500)]
+    [InlineData("GET", "ws", "a page and not a WebSocket", 400)]
+    [InlineData("GET", "ws", "a ticket that started nothing", 400)]
+    public async Task EveryAnswerOfTheFramesRelaysCarriesTheCorsHeaders(string method, string relay, string what, int status)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        string ticket = started.GetProperty("inTheClear").GetString()!;
+        feature.Relay.Fetched = what switch
+        {
+            "a name that did not resolve" => _ => RelayedBody.Failed(RelayResult.NameNotResolved),
+            "a refused address" => _ => RelayedBody.Failed(RelayResult.RefusedOrTooLarge),
+            "a server out of reach" => _ => RelayedBody.Failed(RelayResult.Disconnected),
+            "a failure nothing answered for" => _ => throw new InvalidOperationException("The relay failed."),
+            _ => feature.Relay.Fetched,
+        };
+        string address = what == "outside the boundary" ? "http://elsewhere.example/a.js" : "http://hc.station.example.jp/p/a.js";
+        string path = what switch
+        {
+            "no address" => $"/api/live/32736-1024/data-broadcast/{relay}/{ticket}",
+            "a ticket that started nothing" => $"/api/live/32736-1024/data-broadcast/{relay}/{new string('A', 43)}?uri={Uri.EscapeDataString(address)}",
+            "a ticket that is not one" => $"/api/live/32736-1024/data-broadcast/{relay}/{new string('~', 43)}?uri={Uri.EscapeDataString(address)}",
+            "another channel" => $"/api/live/32736-1025/data-broadcast/{relay}/{ticket}?uri={Uri.EscapeDataString(address)}",
+            _ => Relayed(started, relay, address).OriginalString,
+        };
+        using HttpRequestMessage asking = new(new HttpMethod(method), new Uri(path, UriKind.Relative));
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+
+        if (method == "POST")
+        {
+            asking.Content = new StringContent("a=1", Encoding.UTF8, "application/x-www-form-urlencoded");
+        }
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Equal("*", response.Headers.GetValues(HeaderNames.AccessControlAllowOrigin).Single());
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowCredentials));
+    }
+
     [Theory(DisplayName = "BR-BA-004: a preflight from the frame is answered for GET and POST, the safe request headers and the content type, and asks nothing of the server")]
     [InlineData("POST", "content-type")]
     [InlineData("GET", "accept,accept-language,content-language")]
+    [InlineData("GET", "x-requested-with")]
+    [InlineData("POST", "content-type,x-requested-with")]
     public async Task APreflightFromTheFrameIsAnswered(string method, string headers)
     {
         await using HybridcastRelayFeature feature = new();
@@ -619,7 +731,7 @@ public sealed class LiveHybridcastRelayTests
     [Theory(DisplayName = "BR-BA-004: a preflight asking for another method or for a header beyond the safe ones and the content type is not allowed it")]
     [InlineData("PUT", "", "PUT")]
     [InlineData("DELETE", "", "DELETE")]
-    [InlineData("POST", "x-requested-with", "x-requested-with")]
+    [InlineData("POST", "x-custom", "x-custom")]
     [InlineData("POST", "authorization", "authorization")]
     [InlineData("POST", "content-type,cookie", "cookie")]
     public async Task APreflightAskingForMoreIsNotAllowedIt(string method, string headers, string refused)

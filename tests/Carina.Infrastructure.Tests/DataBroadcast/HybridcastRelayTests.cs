@@ -315,6 +315,19 @@ public sealed class HybridcastRelayTests
         Assert.Empty(rig.Network.Connected);
     }
 
+    [Fact(DisplayName = "BR-BD-011: what goes to the server names its host, the relay and, with a body, its type and length, and nothing else")]
+    public async Task WhatGoesToTheServerNamesNothingElse()
+    {
+        await using RelayRig rig = new(_ => CannedAnswer.Text(200, "1"));
+
+        await rig.Relay.FetchAsync(Channel, new Uri($"http://{Host}/p/list.json"), Boundary, CancellationToken.None);
+        await rig.Relay.PostAsync(Channel, new Uri($"http://{Host}/p/vote"), Boundary, new PostedBody("a=1"u8.ToArray(), "text/plain"), CancellationToken.None);
+
+        HeardRequest[] heard = [.. rig.Server.Heard];
+        Assert.Equal(["Host", "User-Agent"], heard[0].Headers.Keys.Order(StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(["Content-Length", "Content-Type", "Host", "User-Agent"], heard[1].Headers.Keys.Order(StringComparer.OrdinalIgnoreCase));
+    }
+
     [Fact(DisplayName = "BR-BD-011: no cookie is sent with a post, and one the server sets is never sent back")]
     public async Task NoCookieIsSentWithAPost()
     {
