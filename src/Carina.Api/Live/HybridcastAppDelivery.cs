@@ -11,17 +11,18 @@ using Microsoft.Net.Http.Headers;
 namespace Carina.Api.Live;
 
 /// <summary>
-/// Hands a Hybridcast application's frame the documents and resources it asks for, through the relay. The frame
-/// has no cookie, so the ticket the application was started with travels in the path, and a ticket opens only the
-/// application it started, on its own channel, for the viewer who started it. An address outside the application's
-/// boundary is refused 403 and asked of nobody. A document has every address in its markup and style sheets pointed
+/// Hands a Hybridcast application's frame the documents and resources it asks for, and the answers to what it posts,
+/// through the relay. The frame has no cookie, so the ticket the application was started with travels in the path,
+/// and a ticket opens only the application it started, on its own channel, for the viewer who started it. A post is
+/// read no further than one byte past the most the relay sends, and carries its media type and nothing else of the
+/// request. An address outside the application's boundary is refused 403 and asked of nobody. A document has every address in its markup and style sheets pointed
 /// back at this path and the receiver script put first into its head; a style sheet has its addresses pointed back
 /// too. Everything handed over is sandboxed by its own policy, so a page opened here outside the frame still runs
 /// with no origin of its own, and may load from and connect to nothing but this application's relay.
 /// </summary>
 public static class HybridcastAppDelivery
 {
-    public const string Path = "/api/live/{networkId:int}-{serviceId:int}/data-broadcast/app/{ticket}";
+    public const string Path = "/api/live/{networkId:int}-{serviceId:int}/data-broadcast/app/{ticket:length(43)}";
 
     public const string WhatIsRelayed = "An application names the address of the document or resource it asks for as uri.";
 
@@ -84,7 +85,9 @@ public static class HybridcastAppDelivery
             return;
         }
 
-        ServiceResult<RelayedBody, DataBroadcastRelayRefusal> relayed = await relay.FetchApplicationAsync(launch, address, context.RequestAborted);
+        ServiceResult<RelayedBody, DataBroadcastRelayRefusal> relayed = HttpMethods.IsPost(context.Request.Method)
+            ? await relay.PostApplicationAsync(launch, address, await PostedAsync(context), context.RequestAborted)
+            : await relay.FetchApplicationAsync(launch, address, context.RequestAborted);
 
         if (!relayed.IsSuccess)
         {
@@ -94,6 +97,14 @@ public static class HybridcastAppDelivery
         }
 
         await AnswerAsync(context, new HybridcastFrame(channel, ticket, launch), relayed.Data!);
+    }
+
+    private static async Task<PostedBody> PostedAsync(HttpContext context)
+    {
+        byte[] kept = new byte[context.RequestServices.GetRequiredService<HybridcastRelaySettings>().LargestSent + 1];
+        int read = await context.Request.Body.ReadAtLeastAsync(kept, kept.Length, throwOnEndOfStream: false, context.RequestAborted);
+
+        return new PostedBody(kept.AsMemory(0, read), context.Request.ContentType);
     }
 
     private static async Task AnswerAsync(HttpContext context, HybridcastFrame frame, RelayedBody fetched)

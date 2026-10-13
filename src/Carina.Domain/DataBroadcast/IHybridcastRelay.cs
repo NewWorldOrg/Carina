@@ -21,6 +21,12 @@ public sealed record RelayedBody(RelayResult Result, int? HttpStatus, string? Co
 }
 
 /// <summary>
+/// What a Hybridcast application posts to a broadcaster's server: the bytes, and the media type it named them by
+/// where it named one.
+/// </summary>
+public sealed record PostedBody(ReadOnlyMemory<byte> Bytes, string? ContentType);
+
+/// <summary>
 /// A WebSocket opened to a broadcaster's server for a Hybridcast application, waiting for the application's own
 /// to be accepted on the subprotocol the server chose and carried both ways until either side closes.
 /// </summary>
@@ -42,13 +48,16 @@ public sealed record RelayedSocket(RelayResult Result, int? HttpStatus, IHybridc
 
 /// <summary>
 /// Talks to a broadcaster's server for a Hybridcast application started from a live channel: it reads the AIT a
-/// document names, and carries the application's documents, resources and WebSockets, never beyond its boundary.
+/// document names, and carries the application's documents, resources, posts and WebSockets, never beyond its
+/// boundary.
 /// </summary>
 public interface IHybridcastRelay
 {
     Task<RelayedAit> ReadAitAsync(string channel, string uri, CancellationToken cancellationToken);
 
     Task<RelayedBody> FetchAsync(string channel, Uri address, HybridcastBoundary boundary, CancellationToken cancellationToken);
+
+    Task<RelayedBody> PostAsync(string channel, Uri address, HybridcastBoundary boundary, PostedBody posted, CancellationToken cancellationToken);
 
     Task<RelayedSocket> OpenSocketAsync(
         string channel,

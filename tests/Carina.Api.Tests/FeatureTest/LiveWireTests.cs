@@ -71,8 +71,10 @@ public sealed class LiveWireTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Fact]
-    public async Task AHandshakeNamingAnotherOriginIsRefused()
+    [Theory]
+    [InlineData("http://elsewhere.invalid")]
+    [InlineData("null")]
+    public async Task AHandshakeNamingAnotherOriginIsRefused(string origin)
     {
         var held = new HeldLiveSource();
         await using AuthProbe probe = Wiring(held);
@@ -80,7 +82,7 @@ public sealed class LiveWireTests
 
         WebSocketClient client = Carrying(probe, cookie);
 
-        client.ConfigureRequest += request => request.Headers[HeaderNames.Origin] = "http://elsewhere.invalid";
+        client.ConfigureRequest += request => request.Headers[HeaderNames.Origin] = origin;
 
         InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(
             () => client.ConnectAsync(Handshake, Patiently()));

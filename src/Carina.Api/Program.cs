@@ -36,6 +36,7 @@ builder.Services
     .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = UnreadableInputRefusal.Answer);
 builder.Services.ConfigureHttpJsonOptions(options => WireJson.Configure(options.SerializerOptions));
 builder.Services.AddApplicationServices();
+builder.Services.AddFrameSurfaces();
 builder.Services.AddTrustedProxies(builder.Configuration);
 builder.Services.AddPublicOrigin(builder.Configuration);
 builder.Services.AddAnonymousNetworks(builder.Configuration);
@@ -63,6 +64,7 @@ app.UseWebSockets();
 app.UseMiddleware<UnhandledFailureMiddleware>();
 app.UseForwardedHeaders();
 app.UseMiddleware<ForwardedHeadersDiagnosticMiddleware>();
+app.UseCors();
 app.UseCookiePolicy(SessionCookiePolicy.Options);
 app.UseAuthentication();
 app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
@@ -113,13 +115,15 @@ app.MapGet(
     .WithEffect(EndpointEffect.Reading)
     .Ticketed();
 
-app.MapGet(
+app.MapMethods(
         HybridcastAppDelivery.Path,
+        FrameSurfaces.Methods,
         (HttpContext context, int networkId, int serviceId, string? uri, DataBroadcastRelayService relay) =>
             HybridcastAppDelivery.Invoke(context, networkId, serviceId, uri, relay))
     .ExcludeFromDescription()
     .WithEffect(EndpointEffect.Reading)
-    .Ticketed();
+    .Ticketed()
+    .OpenToTheFrame();
 
 app.MapGet(
         HybridcastSocketDelivery.Path,
@@ -127,7 +131,8 @@ app.MapGet(
             HybridcastSocketDelivery.Invoke(context, networkId, serviceId, uri, relay))
     .ExcludeFromDescription()
     .WithEffect(EndpointEffect.Reading)
-    .Ticketed();
+    .Ticketed()
+    .OpenToTheFrame();
 
 app.MapMethods(VideoDelivery.Path, VideoDelivery.Methods, (HttpContext context, string id, PlaybackService playback) =>
     VideoDelivery.Invoke(context, id, playback)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading).Ticketed();

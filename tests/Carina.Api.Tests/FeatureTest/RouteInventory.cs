@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 using Carina.Api.Authentication;
@@ -31,16 +32,20 @@ internal static partial class RouteInventory
     [GeneratedRegex(@"\{\*?([^{}]+)\}")]
     private static partial Regex Parameter();
 
+    [GeneratedRegex(@"^length\((\d+)\)$")]
+    private static partial Regex Length();
+
     private static IEnumerable<RoutedSurface> Surfaces(RouteEndpoint endpoint)
     {
         EndpointEffect? effect = endpoint.DeclaredEffect();
+        bool open = endpoint.IsOpenToTheFrame();
         string pattern = $"/{endpoint.RoutePattern.RawText?.TrimStart('/')}";
         IReadOnlyList<string> methods =
             endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? [];
 
         return methods.Count == 0
-            ? [new RoutedSurface(HttpMethods.Get, pattern, effect)]
-            : methods.Select(method => new RoutedSurface(method, pattern, effect));
+            ? [new RoutedSurface(HttpMethods.Get, pattern, effect, open)]
+            : methods.Select(method => new RoutedSurface(method, pattern, effect, open));
     }
 
     private static string Sample(string parameter)
@@ -55,6 +60,9 @@ internal static partial class RouteInventory
         {
             "guid" => Guid.Empty.ToString(),
             "int" or "long" => "1",
+            _ when Length().Match(constraint) is { Success: true } length => OfLength(int.Parse(length.Groups[1].Value, CultureInfo.InvariantCulture)),
             _ => "sample",
         };
+
+    private static string OfLength(int length) => "sample".PadRight(length, '~')[..length];
 }
