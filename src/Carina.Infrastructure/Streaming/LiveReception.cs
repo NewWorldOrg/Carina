@@ -167,7 +167,7 @@ internal sealed class LiveReception
 
         if (stale is not null)
         {
-            Drop(stale);
+            LetGoOfTheDataBroadcast(stale);
         }
 
         if (raised)
@@ -301,7 +301,7 @@ internal sealed class LiveReception
 
         if (!stillShown)
         {
-            Drop(seat);
+            LetGoOfTheDataBroadcast(seat);
         }
     }
 
@@ -321,8 +321,18 @@ internal sealed class LiveReception
 
         if (seat is not null)
         {
-            Drop(seat);
+            LetGoOfTheDataBroadcast(seat);
         }
+    }
+
+    /// <summary>
+    /// Takes the data broadcast's seat out of the reading and closes what it writes into once what it is writing
+    /// has been written, so that the data broadcast is read to its end.
+    /// </summary>
+    private void LetGoOfTheDataBroadcast(LiveSeat seat)
+    {
+        Drop(seat);
+        seat.NoMore();
     }
 
     private void LeftBehindByTheDataBroadcast(DataBroadcastSession raised, LiveSupplyEnding why)

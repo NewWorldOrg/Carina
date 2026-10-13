@@ -136,9 +136,13 @@ public sealed class DataBroadcastSession
         }
     }
 
+    /// <summary>
+    /// Reads what the reading of the channel wrote. A failure stops the data broadcast: the fan-outs shown it are
+    /// told there is none, and only then is the failure written down and the reading told.
+    /// </summary>
     public void Read(ReadOnlySpan<byte> bytes)
     {
-        bool halted = false;
+        Exception? failed = null;
 
         lock (gate)
         {
@@ -153,13 +157,13 @@ public sealed class DataBroadcastSession
             }
             catch (Exception failure) when (failure is not OutOfMemoryException)
             {
-                logger.LogWarning(failure, "The data broadcast of service {Service} stopped being read: reading it failed.", reader.Service.Value);
-                halted = Halt();
+                failed = Halt() ? failure : null;
             }
         }
 
-        if (halted)
+        if (failed is not null)
         {
+            logger.LogWarning(failed, "The data broadcast of service {Service} stopped being read: reading it failed.", reader.Service.Value);
             stopped(this);
         }
     }

@@ -24,6 +24,8 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
 
     private static readonly LiveSessionKey EveryField = new(new NetworkId(32736), new ServiceId(CarouselBroadcast.ProgramNumber), LiveProfile.Hd60);
 
+    private static readonly LiveSessionKey Sharper = new(new NetworkId(32736), new ServiceId(CarouselBroadcast.ProgramNumber), LiveProfile.FullHd30);
+
     private static readonly CarouselModule Startup = new(
         0x0000,
         1,
@@ -31,7 +33,7 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
 
     private readonly PipedSupply supply = new();
 
-    private readonly RefusingTheFirstCarouselLeftOut logger = new();
+    private readonly WatchingWhatTheDataBroadcastSays logger = new();
 
     private readonly LiveSessionManager manager;
 
@@ -50,7 +52,12 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
             logger);
     }
 
-    public ValueTask DisposeAsync() => manager.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        logger.Release();
+        await manager.DisposeAsync();
+        logger.Dispose();
+    }
 
     [Fact(DisplayName = "BR-BD-004: two profiles of one channel are both handed the data broadcast read once from the one reading")]
     public async Task TwoProfilesOfOneChannelAreHandedTheOneDataBroadcast()
@@ -128,6 +135,41 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
         Assert.Equal(1, logger.Refused);
     }
 
+    [Fact(DisplayName = "BR-BD-004: a viewer joining before the reading has heard that its data broadcast stopped raises another with a seat of its own, the stopped one's seat is let go of once, and the word arriving late changes nothing")]
+    public async Task AViewerJoiningBeforeTheStopIsHeardRaisesAnother()
+    {
+        const long Largest = 16 * 1024 * 1024;
+        await using ILiveViewing first = await Joined(EveryFrame);
+        logger.HoldTheWordThatReadingStopped();
+        await supply.Opened[0].WriteAsync(new CarouselBroadcast()
+            .Associated()
+            .Mapped()
+            .At(Second)
+            .Sections(
+                CarouselBroadcast.CarouselPid,
+                new DiiWriter { Modules = [.. Enumerable.Range(0, 5).Select(id => DiiModule.Of(id, Largest, 1))] }.ToSection().ToBytes())
+            .Bytes);
+        await logger.Holding.WaitAsync(Eventually.Patience);
+
+        await using ILiveViewing next = await Joined(EveryField);
+        await supply.Opened[0].WriteAsync(new CarouselBroadcast().Associated().Mapped(version: 1).At(2 * Second).Listed(1, Startup).Delivered(Startup).Bytes);
+        LiveFrame[] afresh = [await Next(next), await Next(next), await Next(next)];
+        int endedWhileHeld = logger.Ended;
+
+        logger.Release();
+        await logger.FirstEnded.WaitAsync(Eventually.Patience);
+        await using ILiveViewing sharper = await Joined(Sharper);
+        LiveFrame[] standing = [await Next(sharper), await Next(sharper)];
+
+        Assert.Equal(
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind],
+            afresh.Select(SideChannelReading.KindOf));
+        Assert.Equal(0, endedWhileHeld);
+        Assert.Equal([DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind], standing.Select(SideChannelReading.KindOf));
+        Assert.Equal(1, logger.Ended);
+        Assert.Single(supply.Opened);
+    }
+
     private async Task<ILiveViewing> Joined(LiveSessionKey key)
     {
         LiveJoin join = await manager.JoinAsync(key, CancellationToken.None);
@@ -151,11 +193,35 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
         return await viewing.Frames.ReadAsync(patience.Token);
     }
 
-    private sealed class RefusingTheFirstCarouselLeftOut : ILogger<LiveSessionManager>
+    /// <summary>
+    /// Refuses the first carousel left out, so that reading the data broadcast fails; counts the data broadcasts
+    /// read to their end; and, once asked, holds the word that reading stopped until it is released.
+    /// </summary>
+    private sealed class WatchingWhatTheDataBroadcastSays : ILogger<LiveSessionManager>, IDisposable
     {
+        private readonly ManualResetEventSlim released = new(initialState: true);
+
+        private readonly TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private readonly TaskCompletionSource firstEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         private int refused;
 
+        private int ended;
+
         public int Refused => Volatile.Read(ref refused);
+
+        public int Ended => Volatile.Read(ref ended);
+
+        public Task Holding => holding.Task;
+
+        public Task FirstEnded => firstEnded.Task;
+
+        public void HoldTheWordThatReadingStopped() => released.Reset();
+
+        public void Release() => released.Set();
+
+        public void Dispose() => released.Dispose();
 
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull
@@ -165,7 +231,21 @@ public sealed class LiveDataBroadcastTests : IAsyncDisposable
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            if (formatter(state, exception).Contains("was left out", StringComparison.Ordinal) && Interlocked.Exchange(ref refused, 1) is 0)
+            string said = formatter(state, exception);
+
+            if (said.Contains("was read to its end", StringComparison.Ordinal))
+            {
+                Interlocked.Increment(ref ended);
+                firstEnded.TrySetResult();
+            }
+
+            if (said.Contains("stopped being read: reading it failed", StringComparison.Ordinal) && !released.IsSet)
+            {
+                holding.TrySetResult();
+                released.Wait(Eventually.Patience);
+            }
+
+            if (said.Contains("was left out", StringComparison.Ordinal) && Interlocked.Exchange(ref refused, 1) is 0)
             {
                 throw new InvalidOperationException("the first carousel left out is refused for the test.");
             }
