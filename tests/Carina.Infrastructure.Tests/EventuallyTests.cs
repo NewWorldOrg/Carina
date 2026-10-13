@@ -6,21 +6,36 @@ public sealed class EventuallyTests
 {
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(50);
 
-    [Fact(DisplayName = "a condition that comes true as the patience runs out is taken as having happened")]
+    [Fact(DisplayName = "a condition that comes true as the patience runs out is taken as having happened, however long each look takes")]
     public async Task AConditionThatComesTrueAsThePatienceRunsOutIsTakenAsHavingHappened()
     {
         long start = Environment.TickCount64;
 
-        await Eventually.Happens(() => Environment.TickCount64 - start >= Short.TotalMilliseconds, "the span passes", Short);
+        await Eventually.Happens(
+            () =>
+            {
+                bool passed = Environment.TickCount64 - start >= Short.TotalMilliseconds;
+                Thread.Sleep(Short);
+
+                return passed;
+            },
+            "the span passes",
+            Short);
     }
 
-    [Fact(DisplayName = "an answer that arrives as the patience runs out is handed back rather than refused")]
+    [Fact(DisplayName = "an answer that arrives as the patience runs out is handed back rather than refused, however long it takes to come")]
     public async Task AnAnswerThatArrivesAsThePatienceRunsOutIsHandedBack()
     {
         long start = Environment.TickCount64;
 
         long waited = await Eventually.Yields(
-            () => Task.FromResult(Environment.TickCount64 - start),
+            async () =>
+            {
+                long elapsed = Environment.TickCount64 - start;
+                await Task.Delay(Short);
+
+                return elapsed;
+            },
             elapsed => elapsed >= Short.TotalMilliseconds,
             elapsed => $"{elapsed} ms",
             "the span passes",
