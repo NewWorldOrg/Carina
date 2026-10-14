@@ -82,7 +82,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
             .HasColumnName(ProgrammeConfiguration.Marks);
     }
 
-    public const string BothLayers = """
+    public static readonly string BothLayers = $"""
         SELECT
             layered.network_id,
             layered.service_id,
@@ -168,6 +168,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
               AND held.service_id = layered.service_id
               AND held.event_id = layered.event_id
               AND held.start_at = layered.start_at)
+          AND (layered.is_archived OR {SupersededProgrammes.StandsIn("layered")})
         """;
 
     private static IReadOnlyList<T> Read<T>(string stored)

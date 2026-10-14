@@ -148,6 +148,16 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
 
         builder.HasIndex(programme => programme.StartsAt);
         builder.HasIndex(programme => programme.UpdatedAt);
+
+        builder.HasIndex(programme => new
+        {
+            programme.NetworkId,
+            programme.ServiceId,
+            programme.StartsAt,
+            programme.EventId,
+        })
+            .HasFilter("NOT is_shadow")
+            .IncludeProperties(programme => programme.EndsAt);
     }
 
     public const string Searchable = "searchable";

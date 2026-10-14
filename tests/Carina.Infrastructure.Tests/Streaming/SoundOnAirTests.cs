@@ -64,6 +64,18 @@ public sealed class SoundOnAirTests
         Assert.Equal(SoundPlacement.WholeStream(0), SoundArrangement.Of(announced).Reaching(SoundTrack.Main));
     }
 
+    [Fact(DisplayName = "the sound on air is the replacement's, not that of the programme it took the place of")]
+    public async Task TheSoundOnAirIsTheReplacementsNotThatOfTheProgrammeItTookThePlaceOf()
+    {
+        var start = new DateTime(2026, 9, 13, 4, 0, 0, DateTimeKind.Utc);
+        programmes.Programmes.AddRange(ReplacedSchedule.On(4, 1049, start));
+
+        AnnouncedSound announced = await new SoundOnAir(programmes, new HandTurnedClock(start.AddMinutes(130)))
+            .AnnouncedAsync(new NetworkId(4), new ServiceId(1049), Cancel);
+
+        Assert.Equal(new AnnouncedSound(AudioMode.Stereo, 1), announced);
+    }
+
     private Task<AnnouncedSound> OnAirAsync()
         => new SoundOnAir(programmes, new HandTurnedClock(Noon)).AnnouncedAsync(Network, Service, Cancel);
 

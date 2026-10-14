@@ -22,8 +22,22 @@ public interface IAnnouncedProgrammes
 
 public interface IProgrammeRepository : IAnnouncedProgrammes
 {
+    /// <summary>
+    /// Finds a programme as the guide shows it, so one a programme heard later has superseded is not found
+    /// (see <see cref="ProgrammeSupersession"/>).
+    /// </summary>
+    Task<Programme?> FindUnlessSupersededAsync(ProgrammeId id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lists the service's programmes that touch the window, leaving out those a programme heard later has
+    /// superseded.
+    /// </summary>
     Task<IReadOnlyList<Programme>> ListAsync(ProgrammeWindow window, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Lists the programmes the guide shows for these services in the window: placeholders and the programmes
+    /// a programme heard later has superseded are left out.
+    /// </summary>
     Task<IReadOnlyList<Programme>> ListForServicesAsync(
         IReadOnlyList<ProgrammeService> services,
         DateTime from,
