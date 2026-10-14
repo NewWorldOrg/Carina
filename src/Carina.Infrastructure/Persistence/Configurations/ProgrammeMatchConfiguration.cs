@@ -131,7 +131,8 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 genre_kinds,
                 broadcast_dow,
                 marks,
-                false AS is_archived
+                false AS is_archived,
+                false AS is_superseded
             FROM programme
             UNION ALL
             SELECT
@@ -157,7 +158,8 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 kept.genre_kinds,
                 kept.broadcast_dow,
                 kept.marks,
-                true
+                true,
+                kept.superseded
             FROM archived_programme AS kept
         ) AS layered
         WHERE NOT EXISTS (
@@ -169,6 +171,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
               AND held.event_id = layered.event_id
               AND held.start_at = layered.start_at)
           AND (layered.is_archived OR {SupersededProgrammes.StandsIn("layered")})
+          AND NOT layered.is_superseded
         """;
 
     private static IReadOnlyList<T> Read<T>(string stored)

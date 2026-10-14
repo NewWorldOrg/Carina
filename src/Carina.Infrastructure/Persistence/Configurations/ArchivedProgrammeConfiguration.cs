@@ -95,18 +95,20 @@ public sealed class ArchivedProgrammeConfiguration : IEntityTypeConfiguration<Ar
             .HasColumnName(ProgrammeConfiguration.Marks)
             .HasComputedColumnSql(ProgrammeConfiguration.MarksSql, stored: true);
 
+        builder.Property<bool>(Superseded).HasColumnName(Superseded).HasDefaultValue(false).IsRequired();
+
         builder.HasIndex(programme => programme.EndsAt)
             .IncludeProperties(
-                programme => new
-                {
-                    programme.NetworkId,
-                    programme.ServiceId,
-                    programme.EventId,
-                    programme.StartsAt,
-                });
+                nameof(ArchivedProgramme.NetworkId),
+                nameof(ArchivedProgramme.ServiceId),
+                nameof(ArchivedProgramme.EventId),
+                nameof(ArchivedProgramme.StartsAt),
+                Superseded);
 
         builder.HasIndex(programme => programme.StartsAt);
     }
+
+    public const string Superseded = "superseded";
 
     private static IReadOnlyList<T> Read<T>(string stored)
         => JsonSerializer.Deserialize<List<T>>(stored, ProgrammeJson.Options) ?? [];

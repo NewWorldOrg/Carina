@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
 using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
@@ -63,6 +64,41 @@ public sealed class SupersededProgrammeEndpointTests
         Assert.Equal(HttpStatusCode.OK, standing);
         Assert.Equal("差し替えの番組", body.GetProperty("data").GetProperty("name").GetString());
     }
+
+    [Fact]
+    public async Task APastDayDrawsTheKeptReplacementAndNotTheScheduleItReplaced()
+    {
+        await using EpgFeature feature = Replaced();
+        feature.Archived.Programmes.AddRange(feature.Programmes.Programmes.Select(Kept));
+        feature.Programmes.Programmes.Clear();
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/programs?type=isdbT&{TheDay}");
+        JsonElement programmes = body.GetProperty("data").GetProperty("programmes");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["4-1049-1", "4-1049-101", "4-1049-102"], Ids(programmes));
+        Assert.All(programmes.EnumerateArray(), programme => Assert.True(programme.GetProperty("isArchived").GetBoolean()));
+    }
+
+    [Fact]
+    public async Task AHistorySearchFindsTheKeptReplacementAndNotTheScheduleItReplaced()
+    {
+        await using EpgFeature feature = Replaced();
+        feature.Archived.Programmes.AddRange(feature.Programmes.Programmes.Select(Kept));
+        feature.Programmes.Programmes.Clear();
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/programs/search?keyword=番組&{TheDay}");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(3, data.GetProperty("total").GetInt32());
+        Assert.Equal(
+            ["前の番組", "差し替えの番組", "次の番組"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("name").GetString() ?? string.Empty));
+    }
+
+    private static ArchivedProgramme Kept(Programme programme)
+        => ArchivedProgramme.Of(new EndedProgramme(programme, programme.EndsAt!.Value), Start.AddDays(2))!;
 
     private static EpgFeature Replaced()
     {

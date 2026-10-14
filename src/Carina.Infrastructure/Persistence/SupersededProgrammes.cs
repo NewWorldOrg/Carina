@@ -8,7 +8,8 @@ namespace Carina.Infrastructure.Persistence;
 /// <see cref="ProgrammeSupersession"/> written in SQL, for every read that shows the guide. Two programmes of one
 /// service share airtime only where, in start order, one begins before the latest end so far or ends after the
 /// next one begins, so a single ordered pass over the service's programmes finds them, and the heard marks are
-/// compared among those alone rather than across the whole service.
+/// compared among those alone rather than across the whole service. The archive is judged when programmes move
+/// into it, and its reads filter on the verdict kept beside each row.
 /// </summary>
 public static class SupersededProgrammes
 {
@@ -30,12 +31,13 @@ public static class SupersededProgrammes
                 start_at,
                 {End} AS ends,
                 max({End}) OVER earlier AS earlier_end,
-                lead(start_at) OVER schedule AS next_start
+                lead(start_at) OVER earlier AS next_start
             FROM programme
             WHERE NOT is_shadow
-            WINDOW
-                schedule AS (PARTITION BY network_id, service_id ORDER BY start_at, event_id),
-                earlier AS (schedule ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)),
+            WINDOW earlier AS (
+                PARTITION BY network_id, service_id
+                ORDER BY start_at, event_id
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)),
         sharing AS (
             SELECT
                 ordered.network_id,

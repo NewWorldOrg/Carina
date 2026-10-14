@@ -231,6 +231,122 @@ public sealed class ArchiveTransferTests(RepositoryDatabase database)
         await Empty(reading);
     }
 
+    [Fact]
+    public async Task TheOldScheduleStaysLeftOutAfterItAndThenItsReplacementMoveToTheArchive()
+    {
+        int network = BroadcastIds.NextNetwork();
+        DateTime start = Now.AddDays(-3);
+        await using CarinaDbContext context = database.Open();
+
+        await Empty(context);
+        await AddAllAsync(context, ReplacedSchedule.On(network, 1049, start));
+
+        await MoveAsync(context, start.AddDays(1).AddMinutes(245));
+
+        await using (CarinaDbContext reading = database.Open())
+        {
+            int[] kept = await KeptAsync(reading, network, start);
+
+            Assert.Equal([ReplacedSchedule.Before], kept);
+        }
+
+        await MoveAsync(context, start.AddDays(1).AddMinutes(255));
+
+        await using (CarinaDbContext reading = database.Open())
+        {
+            int[] kept = await KeptAsync(reading, network, start);
+
+            Assert.Equal([ReplacedSchedule.Before, ReplacedSchedule.Replacement], kept);
+            Assert.Equal(
+                ReplacedSchedule.Replaced.Count + 2,
+                await reading.Set<ArchivedProgramme>().CountAsync(
+                    programme => programme.NetworkId == new NetworkId(network),
+                    Cancel));
+        }
+
+        await Empty(context);
+    }
+
+    [Fact]
+    public async Task AnOldScheduleKeptWithoutHeardTimesIsLeftOutOnceItsReplacementMovesBesideIt()
+    {
+        int network = BroadcastIds.NextNetwork();
+        DateTime start = Now.AddDays(-3);
+        IReadOnlyList<Programme> schedule = ReplacedSchedule.On(network, 1049, start);
+        await using CarinaDbContext context = database.Open();
+
+        await Empty(context);
+        await KeepUnjudgedAsync(
+            context,
+            schedule.Where(programme => ReplacedSchedule.Replaced.Contains(programme.EventId.Value)));
+        await AddAllAsync(
+            context,
+            schedule.Where(programme => !ReplacedSchedule.Replaced.Contains(programme.EventId.Value)));
+
+        await using (CarinaDbContext reading = database.Open())
+        {
+            int[] kept = await KeptAsync(reading, network, start);
+
+            Assert.Equal(ReplacedSchedule.Replaced, kept);
+        }
+
+        await MoveAsync(context, start.AddDays(1).AddMinutes(255));
+
+        await using (CarinaDbContext reading = database.Open())
+        {
+            int[] kept = await KeptAsync(reading, network, start);
+
+            Assert.Equal([ReplacedSchedule.Before, ReplacedSchedule.Replacement], kept);
+        }
+
+        await Empty(context);
+    }
+
+    private static async Task MoveAsync(CarinaDbContext context, DateTime at)
+        => await new ArchiveTransfer(
+            new ProgrammeRepository(context),
+            new ArchivedProgrammeRepository(context),
+            new DatabaseAtomicWrite(context),
+            new CollectionSettings(),
+            new FixedClock(at),
+            NullLogger<ArchiveTransfer>.Instance).RunAsync(Cancel);
+
+    private static async Task<int[]> KeptAsync(CarinaDbContext reading, int network, DateTime start)
+        =>
+        [
+            .. (await new ArchivedProgrammeRepository(reading).ListAsync(
+                    [new ProgrammeService(network, 1049)],
+                    start.AddHours(-2),
+                    start.AddHours(6),
+                    Cancel))
+                .Select(programme => programme.EventId.Value)
+                .Order(),
+        ];
+
+    private static async Task AddAllAsync(CarinaDbContext context, IEnumerable<Programme> programmes)
+    {
+        await context.AddRangeAsync(programmes, Cancel);
+        await context.SaveChangesAsync(Cancel);
+    }
+
+    private static async Task KeepUnjudgedAsync(CarinaDbContext context, IEnumerable<Programme> programmes)
+    {
+        foreach (Programme programme in programmes)
+        {
+            await context.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO archived_programme (
+                    network_id, service_id, event_id, start_at, end_at, name, summary, has_subtitles, genres, items,
+                    archived_at, superseded)
+                VALUES (
+                    {programme.NetworkId.Value}, {programme.ServiceId.Value}, {programme.EventId.Value},
+                    {programme.StartsAt}, {programme.EndsAt}, {programme.Name}, {programme.Summary}, false,
+                    '[]'::jsonb, '[]'::jsonb, {programme.StartsAt}, false)
+                """,
+                Cancel);
+        }
+    }
+
     private static async Task Add(
         CarinaDbContext context,
         int network,

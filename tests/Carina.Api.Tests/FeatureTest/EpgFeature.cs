@@ -32,6 +32,7 @@ internal sealed class EpgFeature : IAsyncDisposable
         ProgrammeFeedSettings? feed = null,
         IBoundedRead? reads = null)
     {
+        Archived = new HeldArchive(Programmes);
         Streams = new HeldStreams(streams ?? []);
         configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -81,7 +82,7 @@ internal sealed class EpgFeature : IAsyncDisposable
 
     public HeldProgrammes Programmes { get; } = new();
 
-    public HeldArchive Archived { get; } = new();
+    public HeldArchive Archived { get; }
 
     public HeldEpochs Epochs { get; } = new();
 

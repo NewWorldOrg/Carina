@@ -94,6 +94,69 @@ public sealed class SupersededProgrammeTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task TheOldScheduleStaysLeftOutOfThePastDayAfterItAndItsReplacementMoveToTheArchive()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await KeepAsync([], [.. ReplacedSchedule.On(network, Service, Start).Select(Moved)]);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<ArchivedProgramme> pastDay = await PastDayAsync(reading, network);
+        PaginatedList<ProgrammeMatch> history = await HistoryAsync(reading, network);
+
+        Assert.Equal(ReplacedSchedule.Standing, Events(pastDay));
+        Assert.Equal(["前の番組", "差し替えの番組", "次の番組"], Names(history));
+        Assert.Equal(3, history.Total);
+    }
+
+    [Fact]
+    public async Task AnOldScheduleKeptBeforeHeardTimesWereKeptIsLeftOutBesideAReplacementThatHasOne()
+    {
+        int network = BroadcastIds.NextNetwork();
+        int stillInTheGuide = BroadcastIds.NextNetwork();
+        Programme[] schedule = [.. ReplacedSchedule.On(network, Service, Start)];
+        Programme[] another = [.. ReplacedSchedule.On(stillInTheGuide, Service, Start)];
+        await KeepAsync(
+            [another.Single(programme => programme.EventId.Value == ReplacedSchedule.Replacement)],
+            [
+                .. schedule.Select(programme => Unheard(Moved(programme), heardAnyway: programme.EventId.Value
+                    is ReplacedSchedule.Replacement or ReplacedSchedule.After)),
+                .. another
+                    .Where(programme => ReplacedSchedule.Replaced.Contains(programme.EventId.Value))
+                    .Select(programme => Unheard(Moved(programme))),
+            ]);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<ArchivedProgramme> pastDay = await PastDayAsync(reading, network);
+        IReadOnlyList<ArchivedProgramme> besideTheGuide = await PastDayAsync(reading, stillInTheGuide);
+        PaginatedList<ProgrammeMatch> history = await HistoryAsync(reading, network);
+        PaginatedList<ProgrammeMatch> historyBesideTheGuide = await HistoryAsync(reading, stillInTheGuide);
+
+        Assert.Equal(ReplacedSchedule.Standing, Events(pastDay));
+        Assert.Empty(besideTheGuide);
+        Assert.Equal(["前の番組", "差し替えの番組", "次の番組"], Names(history));
+        Assert.Equal(["差し替えの番組"], Names(historyBesideTheGuide));
+    }
+
+    [Fact]
+    public async Task TwoKeptProgrammesWithoutAHeardTimeBothStay()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await KeepAsync(
+            [],
+            [
+                Unheard(Moved(On(network, 1, Start, Start.AddHours(1), null))),
+                Unheard(Moved(On(network, 2, Start.AddMinutes(30), Start.AddHours(2), null))),
+            ]);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<ArchivedProgramme> pastDay = await PastDayAsync(reading, network);
+        PaginatedList<ProgrammeMatch> history = await HistoryAsync(reading, network);
+
+        Assert.Equal([1, 2], Events(pastDay));
+        Assert.Equal(2, history.Total);
+    }
+
+    [Fact]
     public async Task TheStoreLeavesOutTheSameProgrammesAsTheCode()
     {
         int network = BroadcastIds.NextNetwork();
@@ -101,13 +164,25 @@ public sealed class SupersededProgrammeTests(RepositoryDatabase database)
         ArchivedProgramme[] kept = Kept(network);
         await KeepAsync(held, kept);
         var code = new HeldProgrammes();
-        var archive = new HeldArchive();
         code.Programmes.AddRange(held);
-        archive.Programmes.AddRange(kept);
         ProgrammeService[] both = [new ProgrammeService(network, Service), new ProgrammeService(network, Neighbour)];
 
         await using CarinaDbContext reading = database.Open();
         var store = new ProgrammeRepository(reading);
+        var storeArchive = new ArchivedProgrammeRepository(reading);
+        var codeArchive = new HeldArchive(code);
+        codeArchive.Programmes.AddRange(kept);
+        IReadOnlyList<ArchivedProgramme> pastDays = await storeArchive.ListAsync(
+            both,
+            Start.AddDays(-3),
+            Start,
+            Cancel);
+
+        Assert.Equal([41, 43, 44, 46, 47, 48, 49, 50, 51, 52], Events(pastDays));
+        Assert.Equal(
+            Faces(await codeArchive.ListAsync(both, Start.AddDays(-3), Start, Cancel)),
+            Faces(pastDays));
+
         IReadOnlyList<Programme> guide = await store.ListForServicesAsync(
             both,
             Start.AddDays(-1),
@@ -136,12 +211,13 @@ public sealed class SupersededProgrammeTests(RepositoryDatabase database)
         ProgrammeSearch search = Everything(network);
         PaginatedList<ProgrammeMatch> stored = await new ProgrammeSearchRepository(reading)
             .SearchAsync(search, Start, Cancel);
-        PaginatedList<ProgrammeMatch> read = await new HeldSearches(code, archive)
+        PaginatedList<ProgrammeMatch> read = await new HeldSearches(code, codeArchive)
             .SearchAsync(search, Start, Cancel);
 
         Assert.Equal(read.Total, stored.Total);
         Assert.Equal(Names(read), Names(stored));
         Assert.Contains(stored.Items, match => match.IsArchived);
+        Assert.Equal(Names(stored), await PageByPageAsync(new ProgrammeSearchRepository(reading), network));
     }
 
     private static Programme[] Varied(int network)
@@ -192,19 +268,103 @@ public sealed class SupersededProgrammeTests(RepositoryDatabase database)
     private static ArchivedProgramme[] Kept(int network)
         =>
         [
-            ArchivedProgramme.Rehydrate(
-                new NetworkId(network),
-                new ServiceId(Service),
-                new EventId(90),
-                Start.AddHours(-20).AddMinutes(30),
-                Start.AddHours(-19).AddMinutes(30),
-                "保存された番組",
-                string.Empty,
-                false,
-                [],
-                [],
-                Start),
+            Kept(network, 90, Start.AddHours(-20).AddMinutes(30), Start.AddHours(-19).AddMinutes(30), null),
+
+            Kept(network, 41, Start.AddHours(-48), Start.AddHours(-47), HeardToday.AddDays(-2)),
+            Kept(network, 42, Start.AddHours(-48), Start.AddHours(-47), HeardTwoDaysBefore.AddDays(-2)),
+            Kept(network, 43, Start.AddHours(-47), Start.AddHours(-46), HeardTwoDaysBefore.AddDays(-2)),
+
+            Kept(network, 44, Start.AddHours(-45), Start.AddHours(-44), null),
+            Kept(network, 45, Start.AddHours(-44).AddMinutes(30), Start.AddHours(-43), null),
+            Kept(network, 46, Start.AddHours(-44).AddMinutes(30), Start.AddHours(-43), HeardTheDayBefore.AddDays(-2)),
+
+            Kept(network, 47, Start.AddHours(-30), Start.AddHours(-29), HeardTwoDaysBefore),
+            Kept(network, 48, Start.AddHours(-30), Start.AddHours(-29), HeardTwoDaysBefore, service: Neighbour),
+            Kept(network, 49, Start.AddHours(-29), Start.AddHours(-28), null),
+            Kept(network, 50, Start.AddHours(-29).AddMinutes(30), Start.AddHours(-28), null),
+
+            Kept(network, 51, Start.AddHours(-26), Start.AddHours(-25), HeardTwoDaysBefore),
+            Kept(network, 52, Start.AddHours(-25), Start.AddHours(-24), HeardTwoDaysBefore),
         ];
+
+    private static ArchivedProgramme Kept(
+        int network,
+        int eventId,
+        DateTime startsAt,
+        DateTime endsAt,
+        DateTime? heard,
+        int service = Service)
+        => ArchivedProgramme.Rehydrate(
+            new NetworkId(network),
+            new ServiceId(service),
+            new EventId(eventId),
+            startsAt,
+            endsAt,
+            $"保存された番組{eventId}",
+            string.Empty,
+            false,
+            [],
+            [],
+            Start,
+            heard);
+
+    private static ArchivedProgramme Moved(Programme programme)
+        => ArchivedProgramme.Of(new EndedProgramme(programme, programme.EndsAt!.Value), Start.AddDays(2))!;
+
+    private static ArchivedProgramme Unheard(ArchivedProgramme kept, bool heardAnyway = false)
+        => heardAnyway
+            ? kept
+            : ArchivedProgramme.Rehydrate(
+                kept.NetworkId,
+                kept.ServiceId,
+                kept.EventId,
+                kept.StartsAt,
+                kept.EndsAt,
+                kept.Name,
+                kept.Summary,
+                kept.HasSubtitles,
+                kept.Genres,
+                kept.Items,
+                kept.ArchivedAt);
+
+    private static async Task<IReadOnlyList<ArchivedProgramme>> PastDayAsync(CarinaDbContext reading, int network)
+        => await new ArchivedProgrammeRepository(reading).ListAsync(
+            [new ProgrammeService(network, Service)],
+            Start.AddHours(-2),
+            Start.AddHours(6),
+            Cancel);
+
+    private static async Task<PaginatedList<ProgrammeMatch>> HistoryAsync(CarinaDbContext reading, int network)
+        => await new ProgrammeSearchRepository(reading).SearchAsync(Everything(network), Start.AddDays(2), Cancel);
+
+    private static async Task<string[]> PageByPageAsync(ProgrammeSearchRepository searches, int network)
+    {
+        List<string> read = [];
+
+        for (int page = 1; page <= 20; page++)
+        {
+            ProgrammeSearch asking = ProgrammeSearch.For(
+                null,
+                Start.AddDays(-3),
+                Start.AddDays(3),
+                page: page,
+                perPage: 4,
+                conditions: new ProgrammeConditions
+                {
+                    Channels = [new ProgrammeService(network, Service), new ProgrammeService(network, Neighbour)],
+                })!;
+            PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(asking, Start, Cancel);
+
+            read.AddRange(Names(found));
+
+            if (found.Items.Count < 4)
+            {
+                break;
+            }
+        }
+
+        return [.. read];
+    }
 
     private async Task KeepAsync(IReadOnlyList<Programme> held, IReadOnlyList<ArchivedProgramme> kept)
     {
@@ -236,13 +396,24 @@ public sealed class SupersededProgrammeTests(RepositoryDatabase database)
         return found;
     }
 
+    private static string[] Faces(IEnumerable<ArchivedProgramme> programmes)
+        =>
+        [
+            .. programmes
+                .Select(programme => $"{programme.ServiceId.Value}-{programme.EventId.Value}")
+                .Order(StringComparer.Ordinal),
+        ];
+
+    private static int[] Events(IEnumerable<ArchivedProgramme> programmes)
+        => [.. programmes.Select(programme => programme.EventId.Value).Order()];
+
     private static IEnumerable<Programme> Touching(IReadOnlyList<Programme> programmes, DateTime at)
         => programmes.Where(programme => programme.StartsAt <= at && (programme.EndsAt is not { } ends || ends > at));
 
     private static ProgrammeSearch Everything(int network)
         => ProgrammeSearch.For(
             null,
-            Start.AddDays(-2),
+            Start.AddDays(-3),
             Start.AddDays(3),
             perPage: 100,
             conditions: new ProgrammeConditions
