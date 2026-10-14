@@ -112,7 +112,7 @@ public sealed class ArchivedProgrammeSearchColumnsTests
 
         Assert.Equal(
             "CREATE INDEX ix_archived_programme_end_at ON public.archived_programme "
-            + "USING btree (end_at) INCLUDE (network_id, service_id, event_id, start_at)",
+            + "USING btree (end_at) INCLUDE (network_id, service_id, event_id, start_at, superseded)",
             (string?)await command.ExecuteScalarAsync(Cancel));
     }
 

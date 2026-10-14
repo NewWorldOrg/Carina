@@ -15,6 +15,9 @@ public sealed class HeldProgrammes : IProgrammeRepository
     public Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken)
         => Task.FromResult(Programmes.FirstOrDefault(programme => programme.Id.Equals(id)));
 
+    public Task<Programme?> FindUnlessSupersededAsync(ProgrammeId id, CancellationToken cancellationToken)
+        => Task.FromResult(Standing().FirstOrDefault(programme => programme.Id.Equals(id)));
+
     public Task<IReadOnlyList<Programme>> ListAsync(
         ProgrammeWindow window,
         CancellationToken cancellationToken)
@@ -23,7 +26,7 @@ public sealed class HeldProgrammes : IProgrammeRepository
 
         return Task.FromResult<IReadOnlyList<Programme>>(
         [
-            .. Programmes.Where(programme =>
+            .. Standing().Where(programme =>
                 programme.Id.NetworkId.Value == window.NetworkId
                 && programme.Id.ServiceId.Value == window.ServiceId),
         ]);
@@ -41,7 +44,7 @@ public sealed class HeldProgrammes : IProgrammeRepository
 
         return Task.FromResult<IReadOnlyList<Programme>>(
         [
-            .. Programmes
+            .. Standing()
                 .Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))
                 .Where(programme => !programme.IsShadow)
                 .Where(programme => programme.StartsAt < to)
@@ -188,6 +191,8 @@ public sealed class HeldProgrammes : IProgrammeRepository
 
         return Task.FromResult(0);
     }
+
+    public IReadOnlyList<Programme> Standing() => ProgrammeSupersession.Standing(Programmes);
 }
 
 public sealed class HeldEpochs : ICollectionEpochRepository
@@ -205,8 +210,10 @@ public sealed class HeldEpochs : ICollectionEpochRepository
     }
 }
 
-public sealed class HeldArchive : IArchivedProgrammeRepository
+public sealed class HeldArchive(HeldProgrammes? guide = null) : IArchivedProgrammeRepository
 {
+    private readonly HeldProgrammes held = guide ?? new HeldProgrammes();
+
     public List<ArchivedProgramme> Programmes { get; } = [];
 
     public Task<IReadOnlyList<ArchivedProgramme>> ListAsync(
@@ -221,12 +228,14 @@ public sealed class HeldArchive : IArchivedProgrammeRepository
 
         return Task.FromResult<IReadOnlyList<ArchivedProgramme>>(
         [
-            .. Programmes
+            .. Standing()
                 .Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))
                 .Where(programme => programme.StartsAt < to && programme.EndsAt > from)
                 .OrderBy(programme => programme.StartsAt),
         ]);
     }
+
+    public IReadOnlyList<ArchivedProgramme> Standing() => ProgrammeSupersession.Standing(Programmes, held.Programmes);
 
     public Task<int> KeepAsync(IReadOnlyList<ArchivedProgramme> programmes, CancellationToken cancellationToken)
     {
@@ -254,8 +263,18 @@ public sealed class HeldSearches(HeldProgrammes programmes, HeldArchive archive)
         ProgrammeSearch search,
         DateTime now,
         CancellationToken cancellationToken)
-        => Task.FromResult(ProgrammeSearchMatching.Search(
-            ProgrammeSearchMatching.Layered(programmes.Programmes, archive.Programmes),
+    {
+        HashSet<ProgrammeId> standing = [.. programmes.Standing().Select(programme => programme.Id)];
+        HashSet<(ProgrammeId, DateTime)> kept =
+            [.. archive.Standing().Select(programme => (Id(programme), programme.StartsAt))];
+
+        return Task.FromResult(ProgrammeSearchMatching.Search(
+            ProgrammeSearchMatching.Layered(programmes.Programmes, archive.Programmes)
+                .Where(match => match.IsArchived ? kept.Contains((match.Id, match.StartsAt)) : standing.Contains(match.Id)),
             search,
             now));
+    }
+
+    private static ProgrammeId Id(ArchivedProgramme programme)
+        => new(programme.NetworkId, programme.ServiceId, programme.EventId);
 }

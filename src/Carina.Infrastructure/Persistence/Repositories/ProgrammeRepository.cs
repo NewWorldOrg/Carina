@@ -27,6 +27,18 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
                 cancellationToken);
     }
 
+    public async Task<Programme?> FindUnlessSupersededAsync(ProgrammeId id, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        return await Standing()
+            .FirstOrDefaultAsync(
+                programme => programme.NetworkId == id.NetworkId
+                    && programme.ServiceId == id.ServiceId
+                    && programme.EventId == id.EventId,
+                cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Programme>> ListAsync(
         ProgrammeWindow window,
         CancellationToken cancellationToken)
@@ -36,7 +48,7 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         var networkId = new NetworkId(window.NetworkId);
         var serviceId = new ServiceId(window.ServiceId);
 
-        return await context.Set<Programme>()
+        return await Standing()
             .Where(programme => programme.NetworkId == networkId && programme.ServiceId == serviceId)
             .Where(programme => programme.StartsAt < window.To)
             .Where(programme => programme.EndsAt == null || programme.EndsAt > window.From)
@@ -228,7 +240,7 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
 
         List<NetworkId> networks = [.. services.Select(service => new NetworkId(service.NetworkId)).Distinct()];
         List<ServiceId> carried = [.. services.Select(service => new ServiceId(service.ServiceId)).Distinct()];
-        List<Programme> found = await context.Set<Programme>()
+        List<Programme> found = await Standing()
             .Where(programme => networks.Contains(programme.NetworkId))
             .Where(programme => carried.Contains(programme.ServiceId))
             .Where(programme => !programme.IsShadow)
@@ -309,4 +321,7 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             .Where(programme => programme.NetworkId == network && programme.ServiceId == service)
             .MaxAsync(programme => (DateTime?)(programme.EndsAt ?? programme.StartsAt), cancellationToken);
     }
+
+    private IQueryable<Programme> Standing()
+        => context.Set<Programme>().FromSqlRaw(SupersededProgrammes.StandingSql);
 }

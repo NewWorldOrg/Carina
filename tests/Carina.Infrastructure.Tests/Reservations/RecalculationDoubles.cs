@@ -63,6 +63,9 @@ internal sealed class WatchedProgrammes : IProgrammeRepository
     public Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken)
         => held.FindAsync(id, cancellationToken);
 
+    public Task<Programme?> FindUnlessSupersededAsync(ProgrammeId id, CancellationToken cancellationToken)
+        => held.FindUnlessSupersededAsync(id, cancellationToken);
+
     public Task<IReadOnlyList<Programme>> ListAsync(ProgrammeWindow window, CancellationToken cancellationToken)
         => held.ListAsync(window, cancellationToken);
 

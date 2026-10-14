@@ -1598,6 +1598,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("items");
 
+                    b.Property<DateTime?>("LastHeardAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_heard_at");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(512)
@@ -1634,13 +1638,19 @@ namespace Carina.Db.Migrations
                         .HasColumnName("searchable")
                         .HasComputedColumnSql("lower(pg_catalog.normalize(name || ' ' || summary, 'NFKC'))", true);
 
+                    b.Property<bool>("superseded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("superseded");
+
                     b.HasKey("NetworkId", "ServiceId", "EventId", "StartsAt")
                         .HasName("pk_archived_programme");
 
                     b.HasIndex("EndsAt")
                         .HasDatabaseName("ix_archived_programme_end_at");
 
-                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("EndsAt"), new[] { "NetworkId", "ServiceId", "EventId", "StartsAt" });
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("EndsAt"), new[] { "NetworkId", "ServiceId", "EventId", "StartsAt", "superseded" });
 
                     b.HasIndex("StartsAt")
                         .HasDatabaseName("ix_archived_programme_start_at");
@@ -1820,6 +1830,12 @@ namespace Carina.Db.Migrations
                     b.HasIndex("UpdatedAt")
                         .HasDatabaseName("ix_programme_updated_at");
 
+                    b.HasIndex("NetworkId", "ServiceId", "StartsAt", "EventId")
+                        .HasDatabaseName("ix_programme_network_id_service_id_start_at_event_id")
+                        .HasFilter("NOT is_shadow");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("NetworkId", "ServiceId", "StartsAt", "EventId"), new[] { "EndsAt" });
+
                     b.ToTable("programme", null, t =>
                         {
                             t.HasCheckConstraint("ck_programme_aspect", "aspect IN ('Undetermined', 'FourByThree', 'SixteenByNineWithPanVector', 'SixteenByNine', 'WiderThanSixteenByNine')");
@@ -1942,7 +1958,7 @@ namespace Carina.Db.Migrations
 
                     b.ToTable((string)null);
 
-                    b.ToSqlQuery("SELECT\n    layered.network_id,\n    layered.service_id,\n    layered.event_id,\n    layered.start_at,\n    layered.end_at,\n    layered.name,\n    layered.summary,\n    layered.is_shadow,\n    layered.has_subtitles,\n    layered.audio,\n    layered.sounds,\n    layered.video,\n    layered.aspect,\n    layered.source,\n    layered.revision,\n    layered.genres,\n    layered.items,\n    layered.related,\n    layered.searchable,\n    layered.genre_kinds,\n    layered.broadcast_dow,\n    layered.marks,\n    layered.is_archived\nFROM (\n    SELECT\n        network_id,\n        service_id,\n        event_id,\n        start_at,\n        end_at,\n        name,\n        summary,\n        is_shadow,\n        has_subtitles,\n        audio,\n        sounds,\n        video,\n        aspect,\n        source,\n        revision,\n        genres,\n        items,\n        related,\n        searchable,\n        genre_kinds,\n        broadcast_dow,\n        marks,\n        false AS is_archived\n    FROM programme\n    UNION ALL\n    SELECT\n        kept.network_id,\n        kept.service_id,\n        kept.event_id,\n        kept.start_at,\n        kept.end_at,\n        kept.name,\n        kept.summary,\n        false,\n        kept.has_subtitles,\n        'Undetermined'::character varying(32),\n        0,\n        'Undetermined'::character varying(32),\n        'Undetermined'::character varying(32),\n        NULL::character varying(32),\n        NULL::bigint,\n        kept.genres,\n        kept.items,\n        '[]'::jsonb,\n        kept.searchable,\n        kept.genre_kinds,\n        kept.broadcast_dow,\n        kept.marks,\n        true\n    FROM archived_programme AS kept\n) AS layered\nWHERE NOT EXISTS (\n    SELECT 1\n    FROM programme AS held\n    WHERE layered.is_archived\n      AND held.network_id = layered.network_id\n      AND held.service_id = layered.service_id\n      AND held.event_id = layered.event_id\n      AND held.start_at = layered.start_at)");
+                    b.ToSqlQuery("SELECT\n    layered.network_id,\n    layered.service_id,\n    layered.event_id,\n    layered.start_at,\n    layered.end_at,\n    layered.name,\n    layered.summary,\n    layered.is_shadow,\n    layered.has_subtitles,\n    layered.audio,\n    layered.sounds,\n    layered.video,\n    layered.aspect,\n    layered.source,\n    layered.revision,\n    layered.genres,\n    layered.items,\n    layered.related,\n    layered.searchable,\n    layered.genre_kinds,\n    layered.broadcast_dow,\n    layered.marks,\n    layered.is_archived\nFROM (\n    SELECT\n        network_id,\n        service_id,\n        event_id,\n        start_at,\n        end_at,\n        name,\n        summary,\n        is_shadow,\n        has_subtitles,\n        audio,\n        sounds,\n        video,\n        aspect,\n        source,\n        revision,\n        genres,\n        items,\n        related,\n        searchable,\n        genre_kinds,\n        broadcast_dow,\n        marks,\n        false AS is_archived,\n        false AS is_superseded\n    FROM programme\n    UNION ALL\n    SELECT\n        kept.network_id,\n        kept.service_id,\n        kept.event_id,\n        kept.start_at,\n        kept.end_at,\n        kept.name,\n        kept.summary,\n        false,\n        kept.has_subtitles,\n        'Undetermined'::character varying(32),\n        0,\n        'Undetermined'::character varying(32),\n        'Undetermined'::character varying(32),\n        NULL::character varying(32),\n        NULL::bigint,\n        kept.genres,\n        kept.items,\n        '[]'::jsonb,\n        kept.searchable,\n        kept.genre_kinds,\n        kept.broadcast_dow,\n        kept.marks,\n        true,\n        kept.superseded\n    FROM archived_programme AS kept\n) AS layered\nWHERE NOT EXISTS (\n    SELECT 1\n    FROM programme AS held\n    WHERE layered.is_archived\n      AND held.network_id = layered.network_id\n      AND held.service_id = layered.service_id\n      AND held.event_id = layered.event_id\n      AND held.start_at = layered.start_at)\n  AND (layered.is_archived OR ((layered.network_id::bigint << 32) | (layered.service_id::bigint << 16) | layered.event_id) <> ALL (ARRAY(WITH ordered AS MATERIALIZED (\n    SELECT\n        network_id,\n        service_id,\n        event_id,\n        start_at,\n        COALESCE(end_at, start_at + INTERVAL '3600 seconds') AS ends,\n        max(COALESCE(end_at, start_at + INTERVAL '3600 seconds')) OVER earlier AS earlier_end,\n        lead(start_at) OVER earlier AS next_start\n    FROM programme\n    WHERE NOT is_shadow\n    WINDOW earlier AS (\n        PARTITION BY network_id, service_id\n        ORDER BY start_at, event_id\n        ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)),\nsharing AS (\n    SELECT\n        ordered.network_id,\n        ordered.service_id,\n        ordered.event_id,\n        ordered.start_at,\n        ordered.ends,\n        (SELECT heard.last_heard_at\n         FROM programme AS heard\n         WHERE heard.network_id = ordered.network_id\n           AND heard.service_id = ordered.service_id\n           AND heard.event_id = ordered.event_id) AS last_heard_at\n    FROM ordered\n    WHERE ordered.earlier_end > ordered.start_at OR ordered.next_start < ordered.ends)\nSELECT ((older.network_id::bigint << 32) | (older.service_id::bigint << 16) | older.event_id)\nFROM sharing AS older\nWHERE EXISTS (\n    SELECT 1\n    FROM sharing AS newer\n    WHERE newer.network_id = older.network_id\n      AND newer.service_id = older.service_id\n      AND newer.last_heard_at > COALESCE(older.last_heard_at, '-infinity'::timestamptz)\n      AND newer.start_at < older.ends\n      AND newer.ends > older.start_at))))\n  AND NOT layered.is_superseded");
                 });
 
             modelBuilder.Entity("Carina.Domain.Programmes.StreamVisit", b =>

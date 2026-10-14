@@ -31,6 +31,33 @@ public sealed class ArchivedProgrammeTests
             At));
 
     [Fact]
+    public void TheMoveCarriesWhenTheProgrammeWasLastHeard()
+    {
+        Programme programme = Programme(endsAt: At.AddMinutes(30));
+        programme.Heard(At.AddHours(-2));
+
+        Assert.Equal(
+            At.AddHours(-2),
+            ArchivedProgramme.Of(new EndedProgramme(programme, At.AddMinutes(30)), At)?.LastHeardAt);
+    }
+
+    [Fact]
+    public void AProgrammeNoWholeReadingMarkedIsKeptWithoutAHeardTime()
+        => Assert.Null(ArchivedProgramme.Of(
+            new EndedProgramme(Programme(endsAt: At.AddMinutes(30)), At.AddMinutes(30)),
+            At)?.LastHeardAt);
+
+    [Fact]
+    public void KeepingTheSameProgrammeAgainKeepsTheLaterHeardTime()
+    {
+        ArchivedProgramme held = Archived("ニュース", string.Empty, heard: At.AddHours(-1));
+
+        Assert.False(held.AbsorbTheRicherOf(Archived("ニュース", string.Empty, heard: At.AddHours(-3))));
+        Assert.True(held.AbsorbTheRicherOf(Archived("ニュース", string.Empty, heard: At)));
+        Assert.Equal(At, held.LastHeardAt);
+    }
+
+    [Fact]
     public void TheFullerNameWins()
     {
         ArchivedProgramme held = Archived("ニュース", string.Empty);
@@ -69,7 +96,11 @@ public sealed class ArchivedProgrammeTests
         Assert.True(held.HasSubtitles);
     }
 
-    private static ArchivedProgramme Archived(string name, string summary, bool hasSubtitles = false)
+    private static ArchivedProgramme Archived(
+        string name,
+        string summary,
+        bool hasSubtitles = false,
+        DateTime? heard = null)
         => ArchivedProgramme.Rehydrate(
             new NetworkId(4),
             new ServiceId(1049),
@@ -81,7 +112,8 @@ public sealed class ArchivedProgrammeTests
             hasSubtitles,
             [],
             [],
-            At);
+            At,
+            heard);
 
     private static Programme Programme(DateTime? endsAt, bool isShadow = false)
         => Domain.Programmes.Programme.Discover(
