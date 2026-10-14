@@ -1598,6 +1598,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("items");
 
+                    b.Property<DateTime?>("LastHeardAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_heard_at");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(512)

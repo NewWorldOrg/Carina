@@ -31,6 +31,8 @@ public sealed class ArchivedProgramme
 
     public DateTime ArchivedAt { get; private set; }
 
+    public DateTime? LastHeardAt { get; private set; }
+
     public static ArchivedProgramme? Of(EndedProgramme ended, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(ended);
@@ -55,7 +57,8 @@ public sealed class ArchivedProgramme
             programme.HasSubtitles,
             programme.Genres,
             programme.Items,
-            at);
+            at,
+            programme.LastHeardAt);
     }
 
     public static ArchivedProgramme Rehydrate(
@@ -69,7 +72,8 @@ public sealed class ArchivedProgramme
         bool hasSubtitles,
         IReadOnlyList<ProgrammeGenre>? genres,
         IReadOnlyList<ProgrammeItem>? items,
-        DateTime archivedAt)
+        DateTime archivedAt,
+        DateTime? lastHeardAt = null)
     {
         ArgumentNullException.ThrowIfNull(networkId);
         ArgumentNullException.ThrowIfNull(serviceId);
@@ -88,6 +92,7 @@ public sealed class ArchivedProgramme
             Genres = genres ?? [],
             Items = items ?? [],
             ArchivedAt = UtcTimes.Required(archivedAt, nameof(archivedAt)),
+            LastHeardAt = UtcTimes.Optional(lastHeardAt, nameof(lastHeardAt)),
         };
     }
 
@@ -100,13 +105,15 @@ public sealed class ArchivedProgramme
         IReadOnlyList<ProgrammeGenre> genres = Richer(Genres, arriving.Genres);
         IReadOnlyList<ProgrammeItem> items = Richer(Items, arriving.Items);
         bool hasSubtitles = HasSubtitles || arriving.HasSubtitles;
+        DateTime? lastHeardAt = Later(LastHeardAt, arriving.LastHeardAt);
 
         if (Name == name
             && Summary == summary
             && HasSubtitles == hasSubtitles
             && Genres.SequenceEqual(genres)
             && Items.SequenceEqual(items)
-            && EndsAt == arriving.EndsAt)
+            && EndsAt == arriving.EndsAt
+            && LastHeardAt == lastHeardAt)
         {
             return false;
         }
@@ -117,9 +124,13 @@ public sealed class ArchivedProgramme
         Genres = genres;
         Items = items;
         EndsAt = arriving.EndsAt;
+        LastHeardAt = lastHeardAt;
 
         return true;
     }
+
+    private static DateTime? Later(DateTime? held, DateTime? arriving)
+        => arriving is not { } after || held > after ? held : arriving;
 
     private static string Richer(string held, string arriving)
         => arriving.Length > held.Length ? arriving : held;

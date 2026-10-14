@@ -131,12 +131,53 @@ public sealed class ProgrammeSupersessionTests
     }
 
     [Fact]
+    public void TheOldScheduleStaysLeftOutAfterItAndItsReplacementMoveToTheArchive()
+    {
+        Programme replacement = On(101, Start, Start.AddMinutes(250), HeardToday);
+        Programme after = On(102, Start.AddMinutes(250), Start.AddHours(5), HeardToday);
+        ArchivedProgramme[] kept = [.. new[] { replacement, after }.Concat(OldSchedule(HeardTheDayBefore)).Select(Moved)];
+
+        Assert.Equal([101, 102], Events(ProgrammeSupersession.Standing(kept, [])));
+    }
+
+    [Fact]
+    public void AnOldScheduleKeptWithoutAHeardTimeIsLeftOutBesideAReplacementThatHasOne()
+    {
+        ArchivedProgramme[] unheard = [.. OldSchedule(null).Select(Moved)];
+        Programme replacement = On(101, Start, Start.AddMinutes(250), HeardToday);
+
+        Assert.Equal([101], Events(ProgrammeSupersession.Standing([.. unheard, Moved(replacement)], [])));
+        Assert.Empty(ProgrammeSupersession.Standing(unheard, [replacement]));
+    }
+
+    [Fact]
+    public void TwoKeptProgrammesWithoutAHeardTimeBothStay()
+    {
+        ArchivedProgramme one = Moved(On(1, Start, Start.AddHours(1), null));
+        ArchivedProgramme other = Moved(On(2, Start.AddMinutes(30), Start.AddHours(2), null));
+
+        Assert.Equal([1, 2], Events(ProgrammeSupersession.Standing([one, other], [])));
+    }
+
+    [Fact]
+    public void AKeptProgrammeIsComparedWithTheGuideOnlyThroughProgrammesThatAreNotPlaceholders()
+    {
+        ArchivedProgramme kept = Moved(On(1, Start, Start.AddHours(1), HeardTheDayBefore));
+        Programme placeholder = On(101, Start, Start.AddHours(1), HeardToday, shadow: true);
+        Programme openEnded = On(102, Start.AddMinutes(-59), null, HeardToday);
+        Programme touching = On(103, Start.AddHours(1), Start.AddHours(2), HeardToday);
+
+        Assert.Single(ProgrammeSupersession.Standing([kept], [placeholder, touching]));
+        Assert.Empty(ProgrammeSupersession.Standing([kept], [openEnded]));
+    }
+
+    [Fact]
     public void AnEndNotAnnouncedIsTheSameHourTheReservationsCountOn()
         => Assert.Equal(
             Reservation.ProvisionalLengthWhenTheEndIsNotAnnounced,
             ProgrammeSupersession.LengthWhenTheEndIsNotAnnounced);
 
-    private static Programme[] OldSchedule(DateTime heard)
+    private static Programme[] OldSchedule(DateTime? heard)
         =>
         [
             .. OldScheduleMinutes.Zip(OldScheduleMinutes.Skip(1)).Select((minutes, index) => On(
@@ -148,6 +189,12 @@ public sealed class ProgrammeSupersessionTests
 
     private static int[] Events(IReadOnlyList<Programme> programmes)
         => [.. programmes.Select(programme => programme.EventId.Value).Order()];
+
+    private static int[] Events(IReadOnlyList<ArchivedProgramme> programmes)
+        => [.. programmes.Select(programme => programme.EventId.Value).Order()];
+
+    private static ArchivedProgramme Moved(Programme programme)
+        => ArchivedProgramme.Of(new EndedProgramme(programme, programme.EndsAt!.Value), Start.AddDays(2))!;
 
     private static Programme On(
         int eventId,

@@ -34,6 +34,27 @@ public sealed class ArchivedProgrammeRepositoryTests(RepositoryDatabase database
     }
 
     [Fact]
+    public async Task WhatWasKeptComesBackWithTheTimeItWasLastHeard()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ArchivedProgrammeRepository(context);
+
+        await repository.KeepAsync(
+            [Archived(network, 1, "ニュース", heard: At.AddHours(-2)), Archived(network, 2, "天気", startsAt: At.AddHours(1))],
+            Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<ArchivedProgramme> found = await new ArchivedProgrammeRepository(reading).ListAsync(
+            [new ProgrammeService(network, 1049)],
+            At.AddHours(-1),
+            At.AddHours(2),
+            Cancel);
+
+        Assert.Equal([At.AddHours(-2), null], found.Select(programme => programme.LastHeardAt));
+    }
+
+    [Fact]
     public async Task AProgrammeOutsideTheWindowIsNotCarried()
     {
         int network = BroadcastIds.NextNetwork();
@@ -117,7 +138,8 @@ public sealed class ArchivedProgrammeRepositoryTests(RepositoryDatabase database
         int carried,
         string name,
         int service = 1049,
-        DateTime? startsAt = null)
+        DateTime? startsAt = null,
+        DateTime? heard = null)
     {
         DateTime began = startsAt ?? At;
 
@@ -132,6 +154,7 @@ public sealed class ArchivedProgrammeRepositoryTests(RepositoryDatabase database
             false,
             [],
             [],
-            At);
+            At,
+            heard);
     }
 }

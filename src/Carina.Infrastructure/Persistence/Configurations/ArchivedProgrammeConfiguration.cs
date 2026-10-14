@@ -77,6 +77,8 @@ public sealed class ArchivedProgrammeConfiguration : IEntityTypeConfiguration<Ar
 
         builder.Property(programme => programme.ArchivedAt).HasColumnName("archived_at").IsRequired();
 
+        builder.Property(programme => programme.LastHeardAt).HasColumnName("last_heard_at");
+
         builder.Property<string>(ProgrammeConfiguration.Searchable)
             .HasColumnName(ProgrammeConfiguration.Searchable)
             .HasComputedColumnSql(ProgrammeConfiguration.SearchableSql, stored: true);
