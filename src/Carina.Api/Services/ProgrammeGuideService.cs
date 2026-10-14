@@ -74,7 +74,7 @@ public sealed class ProgrammeGuideService(
     public async Task<ServiceResult<Programme>> FindAsync(
         ProgrammeId id,
         CancellationToken cancellationToken)
-        => await programmes.FindAsync(id, cancellationToken) is { } programme
+        => await programmes.FindUnlessSupersededAsync(id, cancellationToken) is { } programme
             ? ServiceResult<Programme>.Success(programme)
             : ServiceResult<Programme>.Failure("No programme is held under that name.");
 
