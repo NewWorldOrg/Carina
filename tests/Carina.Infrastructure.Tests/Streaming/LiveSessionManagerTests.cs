@@ -1408,30 +1408,6 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public async Task ATranscoderWhoseOutputEndsBeforeItIsKnownToHaveExitedIsGivenTheStopGraceToSayHowItExited()
-    {
-        await using ILiveViewing viewing = await Joined(EveryFrame);
-
-        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
-        transcoders.Raised[0].EndOutput();
-
-        await Eventually.Happens(
-            () => supply.Opened[0].Disposed && clock.Waiting.Contains(StopGrace),
-            "the reading is let go and the teardown waits on the transcoder");
-
-        Assert.False(transcoders.Raised[0].Disposed);
-
-        transcoders.Raised[0].Fail(134, "the line it kept");
-
-        await Told();
-
-        IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Endings);
-
-        Assert.Equal(134, told["ExitCode"]);
-        Assert.Equal("the line it kept", told["KeptErrorLines"]);
-    }
-
-    [Fact]
     public async Task ASupplyThatEndsLeavesOneWarningSayingWhyAndHowTheTranscoderExited()
     {
         await using ILiveViewing viewing = await Joined(EveryFrame);
@@ -1457,24 +1433,14 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public async Task OutputThatIsNoFragmentLeavesOneWarningNamingWhatWasWrongWithItOnceTheTranscoderIsCalledOff()
+    public async Task OutputThatIsNoFragmentLeavesOneWarningNamingWhatWasWrongWithIt()
     {
         await using ILiveViewing viewing = await Joined(EveryFrame);
 
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
 
-        await Eventually.Happens(
-            () => supply.Opened[0].Disposed && clock.Waiting.Contains(StopGrace),
-            "the reading is let go and the teardown waits on the transcoder");
-
-        Assert.False(transcoders.Raised[0].Disposed);
-
-        clock.Turn(StopGrace);
-
         await Assert.ThrowsAsync<InvalidOperationException>(() => Drained(viewing));
         await Told();
-
-        Assert.True(transcoders.Raised[0].Disposed);
 
         IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Endings);
 

@@ -222,15 +222,6 @@ public sealed class HeldTranscoder : ILiveTranscoder
     }
 
     /// <summary>
-    /// Ends what the transcoder writes, as a programme does the moment it dies, before it is known to have exited.
-    /// </summary>
-    public void EndOutput()
-    {
-        Complete();
-        captions.Writer.TryComplete();
-    }
-
-    /// <summary>
     /// Ends the transcoder as a programme that exited <paramref name="exitCode"/> on its own, having kept
     /// <paramref name="complaint"/>.
     /// </summary>

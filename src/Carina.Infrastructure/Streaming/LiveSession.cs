@@ -635,41 +635,12 @@ internal sealed class LiveSession
 
         try
         {
-            if (unasked is not null)
-            {
-                await ExitedOnItsOwnAsync(running);
-            }
-
             await StopTranscodingAsync(running, carried, captioned);
         }
         finally
         {
             TellHowItEnded(unasked, running);
             fanout.End();
-        }
-    }
-
-    /// <summary>
-    /// Gives a transcoder whose session ended without being stopped the stop grace to be seen to exit on its own,
-    /// because a programme that dies closes what it writes before its exit is known, and one called off in between
-    /// would say it was called off rather than how it ended.
-    /// </summary>
-    private async Task ExitedOnItsOwnAsync(ILiveTranscoder? running)
-    {
-        if (running is null)
-        {
-            return;
-        }
-
-        using CancellationTokenSource deadline = new(transcoding.StopGrace, clock);
-
-        try
-        {
-            await running.Completion.WaitAsync(deadline.Token);
-        }
-        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
-        {
-            return;
         }
     }
 

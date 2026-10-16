@@ -187,16 +187,19 @@ public sealed class LiveTranscoder : ILiveTranscoder
         }
         catch (OperationCanceledException)
         {
-            await GiveUpAsync();
+            bool killed = await GiveUpAsync();
             await DrawnToTheEndAsync();
 
-            return TranscoderExit.CalledOff(Complaint);
+            return killed || running.ExitCode is 0 ? TranscoderExit.CalledOff(Complaint) : Exited();
         }
 
         await DrawnToTheEndAsync();
 
-        return running.ExitCode is 0 ? TranscoderExit.Finished() : TranscoderExit.Refused(running.ExitCode, Complaint);
+        return Exited();
     }
+
+    private TranscoderExit Exited()
+        => running.ExitCode is 0 ? TranscoderExit.Finished() : TranscoderExit.Refused(running.ExitCode, Complaint);
 
     /// <summary>
     /// Waits for the programme's output to be read to its end after the programme exits, for no longer
@@ -229,18 +232,25 @@ public sealed class LiveTranscoder : ILiveTranscoder
         }
     }
 
-    private async Task GiveUpAsync()
+    /// <summary>
+    /// Asks the programme to stop by ending its input, kills it when it has not stopped within the grace, and says
+    /// whether it had to be killed. A programme that stopped without being killed and exited other than 0 ended of
+    /// its own accord, whether before it was asked or while it was, and its exit is its own answer.
+    /// </summary>
+    private async Task<bool> GiveUpAsync()
     {
         Hush();
 
         if (await WaitedOutAsync(stopGrace))
         {
-            return;
+            return false;
         }
 
         Kill();
 
         await WaitedOutAsync(stopGrace);
+
+        return true;
     }
 
     private async Task<bool> WaitedOutAsync(TimeSpan grace)
