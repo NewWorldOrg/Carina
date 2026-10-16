@@ -47,14 +47,6 @@ public sealed class DriverLiveSupplyTests
     }
 
     [Fact]
-    public async Task TheLiveSessionNamesTheServiceItsViewerWaitsFor()
-    {
-        await Supply().OpenAsync(Network, Service, CancellationToken.None);
-
-        Assert.Equal(Service.Value, Assert.Single(driver.Started).AwaitedService);
-    }
-
-    [Fact]
     public async Task WhatTheDriverSendsComesThroughUnchangedHoweverItIsCutUp()
     {
         byte[] sent = [.. Enumerable.Range(0, 5_000).Select(at => (byte)(at * 31 % 251))];

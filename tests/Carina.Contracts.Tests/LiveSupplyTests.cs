@@ -92,56 +92,6 @@ public sealed class LiveSupplyTests
     }
 
     [Fact]
-    public void ALiveRequestOnATypedTuneNamesTheServiceItsViewerWaitsFor()
-    {
-        var request = new StartSessionRequest
-        {
-            SessionId = SessionId.Parse("live-1"),
-            Purpose = SessionPurpose.Live,
-            Tuning = TuneParams.Terrestrial(27).ToLegacyRequest(),
-            Tune = TuneParams.Terrestrial(27),
-            AwaitedService = 1024,
-        };
-
-        Assert.Empty(request.Validate(Now));
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(65536)]
-    public void AnAwaitedServiceNoProgrammeCouldCarryIsRefused(int service)
-    {
-        var request = new StartSessionRequest
-        {
-            SessionId = SessionId.Parse("live-1"),
-            Purpose = SessionPurpose.Live,
-            Tuning = TuneParams.Terrestrial(27).ToLegacyRequest(),
-            Tune = TuneParams.Terrestrial(27),
-            AwaitedService = service,
-        };
-
-        Assert.StartsWith("awaitedService:", Assert.Single(request.Validate(Now)), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void OnlyALiveViewerWaitsForOneService()
-    {
-        var request = new StartSessionRequest
-        {
-            SessionId = SessionId.Parse("rec-1"),
-            Purpose = SessionPurpose.Recording,
-            Tuning = TuneParams.Terrestrial(27).ToLegacyRequest(),
-            Tune = TuneParams.Terrestrial(27),
-            OutputRoot = "primary",
-            RecordingId = "k-1",
-            EndsAt = Now.AddHours(1),
-            AwaitedService = 1024,
-        };
-
-        Assert.StartsWith("awaitedService:", Assert.Single(request.Validate(Now)), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void ALiveRequestCarriesNoWayToAskForMeasurement()
     {
         string[] asked =
@@ -153,7 +103,7 @@ public sealed class LiveSupplyTests
         ];
 
         Assert.Equal(
-            ["AwaitedService", "DeviceId", "EndsAt", "OutputRoot", "Purpose", "RecordingId", "SessionId", "Tune", "Tuning"],
+            ["DeviceId", "EndsAt", "OutputRoot", "Purpose", "RecordingId", "SessionId", "Tune", "Tuning"],
             asked);
     }
 
