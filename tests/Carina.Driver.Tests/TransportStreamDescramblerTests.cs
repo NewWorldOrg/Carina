@@ -423,6 +423,120 @@ public sealed class TransportStreamDescramblerTests
     }
 
     [Fact]
+    public void AnEcmThatPassedBeforeItsPmtIsAnsweredFromTheHeldPacketsRatherThanAtItsNextRepetition()
+    {
+        SyntheticScrambledStream stream = new SyntheticScrambledStream()
+            .Scrambled(VideoPid, FirstEcm, odd: false, seed: 100)
+            .Ecm(EcmPid, FirstEcm)
+            .Scrambled(AudioPid, FirstEcm, odd: true, seed: 101)
+            .Pat((1, PmtPid))
+            .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null), (AudioPid, null)])
+            .Scrambled(VideoPid, FirstEcm, odd: true, seed: 102);
+        int beforeTheRepetition = stream.PacketCount;
+        stream.Ecm(EcmPid, FirstEcm).Scrambled(AudioPid, FirstEcm, odd: false, seed: 103);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection card);
+
+        Assert.Equal(
+            Head(stream.Output, beforeTheRepetition),
+            descrambler.Descramble(Head(stream.Input, beforeTheRepetition))
+        );
+        Assert.Equal(
+            After(stream.Output, beforeTheRepetition),
+            descrambler.Descramble(After(stream.Input, beforeTheRepetition))
+        );
+        Assert.Equal([FirstEcm], card.EcmBodies);
+    }
+
+    [Fact]
+    public void APmtThatPassedBeforeThePatIsReadFromTheHeldPacketsAndSoIsTheEcmItNames()
+    {
+        SyntheticScrambledStream stream = new SyntheticScrambledStream()
+            .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null)])
+            .Scrambled(VideoPid, FirstEcm, odd: false, seed: 104)
+            .Ecm(EcmPid, FirstEcm)
+            .Scrambled(VideoPid, FirstEcm, odd: true, seed: 105)
+            .Pat((1, PmtPid))
+            .Scrambled(VideoPid, FirstEcm, odd: false, seed: 106);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection card);
+
+        Assert.Equal(stream.Output, descrambler.Descramble(stream.Input));
+        Assert.Equal([FirstEcm], card.EcmBodies);
+    }
+
+    [Fact]
+    public void OnlyTheLatestEcmTheHeldPacketsCarryIsTakenToTheCard()
+    {
+        SyntheticScrambledStream stream = new SyntheticScrambledStream()
+            .Ecm(EcmPid, FirstEcm)
+            .Ecm(EcmPid, SecondEcm)
+            .Scrambled(VideoPid, SecondEcm, odd: true, seed: 107)
+            .Pat((1, PmtPid))
+            .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null)])
+            .Scrambled(VideoPid, SecondEcm, odd: false, seed: 108);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection card);
+
+        Assert.Equal(stream.Output, descrambler.Descramble(stream.Input));
+        Assert.Equal([SecondEcm], card.EcmBodies);
+    }
+
+    [Fact]
+    public void AnEcmWhoseFirstPacketWasHeldBeforeItsPmtIsFinishedByThePacketsThatFollow()
+    {
+        byte[] longEcm = [.. Enumerable.Range(0, 230).Select(index => (byte)(index ^ 0x3C))];
+        byte[] ecm = new SyntheticScrambledStream().Ecm(EcmPid, longEcm).Input;
+        SyntheticScrambledStream stream = new SyntheticScrambledStream()
+            .Pat((1, PmtPid))
+            .Unchanged(ecm[..SyntheticScrambledStream.PacketLength])
+            .Scrambled(VideoPid, longEcm, odd: true, seed: 109)
+            .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null)])
+            .Unchanged(ecm[SyntheticScrambledStream.PacketLength..])
+            .Scrambled(VideoPid, longEcm, odd: false, seed: 110);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection card);
+
+        Assert.Equal(stream.Output, descrambler.Descramble(stream.Input));
+        Assert.Equal([longEcm], card.EcmBodies);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(187)]
+    [InlineData(189)]
+    [InlineData(1000)]
+    public void WhatALiveViewerIsHandedIsEveryPacketInTheOrderReadHoweverTheReadsAreCut(int chunk)
+    {
+        SyntheticScrambledStream stream = new SyntheticScrambledStream()
+            .Scrambled(VideoPid, FirstEcm, odd: false, seed: 111)
+            .Ecm(EcmPid, FirstEcm)
+            .Clear(OtherVideoPid, 112)
+            .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null), (AudioPid, null)])
+            .Scrambled(AudioPid, FirstEcm, odd: true, seed: 113)
+            .Pat((1, PmtPid), (2, OtherPmtPid))
+            .Scrambled(VideoPid, FirstEcm, odd: true, seed: 114)
+            .Clear(OtherVideoPid, 115);
+        for (int seed = 116; seed < 140; seed++)
+        {
+            stream.Scrambled(seed % 2 is 0 ? VideoPid : AudioPid, FirstEcm, odd: seed % 3 is 0, seed: seed);
+        }
+
+        stream.Pmt(OtherPmtPid, 2, null, [(OtherVideoPid, null)]).Clear(OtherVideoPid, 140);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection card, hold: HeadHold.ForProgramme(1));
+        byte[] input = stream.Input;
+        List<byte> output = [];
+        for (int offset = 0; offset < input.Length; offset += chunk)
+        {
+            output.AddRange(descrambler.Descramble(input.AsSpan(offset, Math.Min(chunk, input.Length - offset))));
+        }
+
+        Assert.Equal(stream.Output, output);
+        Assert.Equal([FirstEcm], card.EcmBodies);
+    }
+
+    [Fact]
     public void AnEmptyReadGivesNothing()
     {
         using TransportStreamDescrambler descrambler = Open(out FakeCardConnection _);

@@ -38,6 +38,8 @@ public sealed class ProgramMap(int caSystemId)
 
     public IReadOnlyCollection<int> EcmPids => ecmPids;
 
+    public IEnumerable<int> PmtPids => pmtPids.Values.Distinct();
+
     /// <summary>
     /// The PAT lists the programme, and its PMT has been read.
     /// </summary>
