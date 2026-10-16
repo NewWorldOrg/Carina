@@ -162,6 +162,45 @@ public sealed class DvbTunerDeviceTests
     }
 
     [Fact]
+    public void AReaderThatOverflowedBeforeTheLockIsStillReadOffToTheEndOfWhatCameBeforeIt()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        calls.Reads.Enqueue(SyscallOutcome.Failed(Errno.Overflowed));
+        calls.Deliver([0x47, 0x9F, 0xFF]);
+
+        using DvbTunerDevice device = Open(calls, clock, ReadFromTheLock);
+        calls.Deliver([0x47, 0x01, 0x00]);
+
+        Assert.Equal([0x47, 0x01, 0x00], device.Read(188, CancellationToken.None));
+    }
+
+    [Fact]
+    public void AReaderWithNothingBeforeTheLockIsAskedOnceAndLeftAtTheFirstReadThatWouldWait()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+
+        using DvbTunerDevice device = Open(calls, clock, ReadFromTheLock);
+
+        Assert.Equal(1, calls.ReadsMade);
+    }
+
+    [Fact]
+    public void AReaderThatNeverRunsDryBeforeTheLockIsReadOffNoMoreThanABoundedNumberOfTimes()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+
+        for (int overflow = 0; overflow < 4096; overflow++)
+        {
+            calls.Reads.Enqueue(SyscallOutcome.Failed(Errno.Overflowed));
+        }
+
+        using DvbTunerDevice device = Open(calls, clock, ReadFromTheLock);
+
+        Assert.InRange(calls.ReadsMade, 2, 1024);
+        Assert.NotEmpty(calls.Reads);
+    }
+
+    [Fact]
     public void AReaderOpenedForTheLockOnAFrontendThatNeverLocksLeavesNoDescriptorBehind()
     {
         (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();

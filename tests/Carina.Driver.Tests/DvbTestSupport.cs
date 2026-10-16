@@ -229,8 +229,12 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
         return SyscallOutcome.Ok(0);
     }
 
+    public int ReadsMade { get; private set; }
+
     public SyscallOutcome ReadBytes(int descriptor, byte[] buffer, int count)
     {
+        ReadsMade++;
+
         if (Reads.Count > 0)
         {
             return Reads.Dequeue();
