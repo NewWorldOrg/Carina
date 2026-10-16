@@ -179,8 +179,8 @@ public sealed class LiveSessionManager(
     /// way out.
     /// </summary>
     /// <remarks>
-    /// A session leaves the ledger the moment it is closed, and the tuner behind it is let go of at the
-    /// end of its teardown, by the reading.
+    /// A session leaves the ledger the moment it is closed, and the tuner behind it is let go of by the
+    /// reading as soon as the session has stopped reading it, before its transcoder has finished.
     /// </remarks>
     private async Task<bool> LetGoOfWhatNobodyIsWatchingAsync(
         LiveSessionKey asked,
@@ -231,7 +231,7 @@ public sealed class LiveSessionManager(
 
         try
         {
-            return await EndedAsync(letting).WaitAsync(leash.Token);
+            return await ReleasedAsync(letting).WaitAsync(leash.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -240,12 +240,12 @@ public sealed class LiveSessionManager(
     }
 
     /// <summary>
-    /// Waits for the sessions to be torn down and for the readings that closed behind them to let
-    /// their supply go, and says whether any reading did.
+    /// Waits for the sessions to stop reading, not for their transcoders to finish, and for the readings
+    /// that closed behind them to let their supply go, and says whether any reading did.
     /// </summary>
-    private static async Task<bool> EndedAsync(IReadOnlyList<LiveSession> letting)
+    private static async Task<bool> ReleasedAsync(IReadOnlyList<LiveSession> letting)
     {
-        await Task.WhenAll(letting.Select(session => QuietlyAsync(session.Life)));
+        await Task.WhenAll(letting.Select(session => session.Released));
 
         LiveReception[] closing =
         [
@@ -258,7 +258,7 @@ public sealed class LiveSessionManager(
     }
 
     /// <summary>
-    /// Waits for a teardown to be over, however it ended.
+    /// Waits for a reading to be over, however it ended.
     /// </summary>
     private static async Task QuietlyAsync(Task ending)
     {
@@ -283,7 +283,7 @@ public sealed class LiveSessionManager(
     }
 
     private static bool HasLetGo(LiveSession gone)
-        => gone.Life.IsCompleted && (!gone.Reception.IsClosed || gone.Reception.Life.IsCompleted);
+        => gone.Released.IsCompleted && (!gone.Reception.IsClosed || gone.Reception.Life.IsCompleted);
 
     private LiveSession Expected(LiveSessionKey key)
     {
