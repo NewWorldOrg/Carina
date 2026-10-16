@@ -4,6 +4,7 @@ namespace Carina.Driver.Tuning.Dvb;
 
 public sealed record DvbTunerSettings(
     TimeSpan LockPatience,
+    TimeSpan LockPollInterval,
     TimeSpan RetryInterval,
     TimeSpan BytePatience,
     int DemuxBufferBytes
@@ -11,6 +12,7 @@ public sealed record DvbTunerSettings(
 {
     public static readonly DvbTunerSettings Default = new(
         TimeSpan.FromSeconds(5),
+        TimeSpan.FromMilliseconds(10),
         TimeSpan.FromMilliseconds(100),
         TimeSpan.FromSeconds(5),
         16 * 1024 * 1024
@@ -90,7 +92,7 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
                 !frontend.WaitForLock(
                     time,
                     settings.LockPatience,
-                    settings.RetryInterval,
+                    settings.LockPollInterval,
                     cancellationToken,
                     out FrontendStatus lastSeen
                 )

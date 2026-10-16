@@ -28,6 +28,7 @@ public sealed class AFrontendThatWillNotMeasureTests
 
     private static readonly DvbTunerSettings Settings = new(
         TimeSpan.FromSeconds(5),
+        TimeSpan.FromMilliseconds(10),
         TimeSpan.FromMilliseconds(100),
         TimeSpan.FromSeconds(5),
         8 * 1024 * 1024
