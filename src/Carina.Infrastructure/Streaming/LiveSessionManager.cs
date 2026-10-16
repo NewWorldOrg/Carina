@@ -92,10 +92,9 @@ public sealed class LiveSessionManager(
 
         LiveJoin join = await SeatedAsync(key, cancellationToken);
 
-        bool freed = join.Refusal is LiveRefusal.NoTunerFree
-                     && await LetGoOfWhatNobodyIsWatchingAsync(key, cancellationToken);
-
-        return freed ? await SeatedAsync(key, cancellationToken) : join;
+        return join.Refusal is LiveRefusal.NoTunerFree
+            ? await SeatedAfterLettingGoAsync(key, join, cancellationToken)
+            : join;
     }
 
     public async Task<LiveHandover> HandOverAsync(LiveChannelKey channel, CancellationToken cancellationToken)
@@ -175,16 +174,55 @@ public sealed class LiveSessionManager(
     }
 
     /// <summary>
-    /// Gives up the readings nobody is watching any more, and waits for the ones already on their
-    /// way out.
+    /// Gives up what nobody is watching and asks again once a tuner has come free. Asked again before the
+    /// transcoders given up have finished, the answer can be a full budget; then it is asked once more after
+    /// they have ended. Both waits run against one deadline, and when it runs out the answer before it stands.
     /// </summary>
     /// <remarks>
-    /// A session leaves the ledger the moment it is closed, and the tuner behind it is let go of at the
-    /// end of its teardown, by the reading.
+    /// Holds its own deadline, disposed of with the waits.
     /// </remarks>
-    private async Task<bool> LetGoOfWhatNobodyIsWatchingAsync(
-        LiveSessionKey asked,
+    private async Task<LiveJoin> SeatedAfterLettingGoAsync(
+        LiveSessionKey key,
+        LiveJoin refused,
         CancellationToken cancellationToken)
+    {
+        IReadOnlyList<LiveSession> letting = LetGoOfWhatNobodyIsWatching(key);
+
+        if (letting.Count is 0)
+        {
+            return refused;
+        }
+
+        using CancellationTokenSource deadline = new(settings.LongestWaitForATunerToComeFree, clock);
+        using CancellationTokenSource leash =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+
+        if (!await WithinAsync(ReleasedAsync(letting), leash.Token, cancellationToken))
+        {
+            return refused;
+        }
+
+        LiveJoin again = await SeatedAsync(key, cancellationToken);
+
+        if (again.Refusal is not LiveRefusal.TooManyAlready || letting.All(session => session.Life.IsCompleted))
+        {
+            return again;
+        }
+
+        return await WithinAsync(EndedAsync(letting), leash.Token, cancellationToken)
+            ? await SeatedAsync(key, cancellationToken)
+            : again;
+    }
+
+    /// <summary>
+    /// Gives up the sessions nobody is watching any more, and hands them back with the ones already on
+    /// their way out.
+    /// </summary>
+    /// <remarks>
+    /// A session leaves the ledger the moment it is closed, and the tuner behind it is let go of by the
+    /// reading as soon as the session has stopped reading it, before its transcoder has finished.
+    /// </remarks>
+    private List<LiveSession> LetGoOfWhatNobodyIsWatching(LiveSessionKey asked)
     {
         List<LiveSession> candidates;
         List<LiveSession> going;
@@ -208,30 +246,20 @@ public sealed class LiveSessionManager(
             }
         }
 
-        List<LiveSession> letting = [.. given, .. going];
-
-        return letting.Count > 0 && await LetGoOfTheTunerAsync(letting, cancellationToken);
+        return [.. given, .. going];
     }
 
     /// <summary>
-    /// Waits for what is being let go of to reach the driver, for no longer than one wait, and says
-    /// whether a tuner came free; when the wait runs out, or every reading behind what was let go of
-    /// is still being read by somebody else, the refusal stands.
+    /// Hands back what the wait answered, or false when the leash ran out first.
     /// </summary>
-    /// <remarks>
-    /// Holds its own deadline, disposed of with the wait.
-    /// </remarks>
-    private async Task<bool> LetGoOfTheTunerAsync(
-        IReadOnlyList<LiveSession> letting,
+    private static async Task<bool> WithinAsync(
+        Task<bool> waiting,
+        CancellationToken leash,
         CancellationToken cancellationToken)
     {
-        using CancellationTokenSource deadline = new(settings.LongestWaitForATunerToComeFree, clock);
-        using CancellationTokenSource leash =
-            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
-
         try
         {
-            return await EndedAsync(letting).WaitAsync(leash.Token);
+            return await waiting.WaitAsync(leash);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -240,12 +268,12 @@ public sealed class LiveSessionManager(
     }
 
     /// <summary>
-    /// Waits for the sessions to be torn down and for the readings that closed behind them to let
-    /// their supply go, and says whether any reading did.
+    /// Waits for the sessions to stop reading, not for their transcoders to finish, and for the readings
+    /// that closed behind them to let their supply go, and says whether any reading did.
     /// </summary>
-    private static async Task<bool> EndedAsync(IReadOnlyList<LiveSession> letting)
+    private static async Task<bool> ReleasedAsync(IReadOnlyList<LiveSession> letting)
     {
-        await Task.WhenAll(letting.Select(session => QuietlyAsync(session.Life)));
+        await Task.WhenAll(letting.Select(session => session.Released));
 
         LiveReception[] closing =
         [
@@ -258,7 +286,17 @@ public sealed class LiveSessionManager(
     }
 
     /// <summary>
-    /// Waits for a teardown to be over, however it ended.
+    /// Waits for the sessions given up to be torn down, transcoders and all.
+    /// </summary>
+    private static async Task<bool> EndedAsync(IReadOnlyList<LiveSession> letting)
+    {
+        await Task.WhenAll(letting.Select(session => QuietlyAsync(session.Life)));
+
+        return true;
+    }
+
+    /// <summary>
+    /// Waits for a teardown or a reading to be over, however it ended.
     /// </summary>
     private static async Task QuietlyAsync(Task ending)
     {
@@ -283,7 +321,7 @@ public sealed class LiveSessionManager(
     }
 
     private static bool HasLetGo(LiveSession gone)
-        => gone.Life.IsCompleted && (!gone.Reception.IsClosed || gone.Reception.Life.IsCompleted);
+        => gone.Released.IsCompleted && (!gone.Reception.IsClosed || gone.Reception.Life.IsCompleted);
 
     private LiveSession Expected(LiveSessionKey key)
     {

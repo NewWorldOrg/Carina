@@ -33,6 +33,8 @@ internal sealed class LiveSession
 
     private readonly TaskCompletionSource<LiveJoin?> raised = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private readonly LiveStartupRecord startup;
 
     private readonly LiveEndingRecord ending = new();
@@ -85,6 +87,11 @@ internal sealed class LiveSession
     internal LiveReception Reception => reception;
 
     public Task Life { get; private set; } = Task.CompletedTask;
+
+    /// <summary>
+    /// Ends once the session has stopped reading the channel, which it does before its transcoder has finished.
+    /// </summary>
+    internal Task Released => released.Task;
 
     public int Viewers => fanout.Viewers;
 
@@ -484,10 +491,7 @@ internal sealed class LiveSession
             seat = null;
         }
 
-        if (given is not null)
-        {
-            await LeftTheReadingAsync(given);
-        }
+        await LeftTheReadingAsync(given);
 
         if (running is not null)
         {
@@ -500,8 +504,13 @@ internal sealed class LiveSession
     /// for no longer than the stop grace. However the write ends, a failure is logged, whether it
     /// ends within the grace or after it has been given up on.
     /// </summary>
-    private async Task LeftTheReadingAsync(LiveSeat given)
+    private async Task LeftTheReadingAsync(LiveSeat? given)
     {
+        if (given is null)
+        {
+            return;
+        }
+
         Task ended = reception.Drop(given).ContinueWith(
             LogFailure,
             logger,
@@ -599,9 +608,13 @@ internal sealed class LiveSession
             seat = null;
         }
 
-        if (given is not null)
+        try
         {
             await LeftTheReadingAsync(given);
+        }
+        finally
+        {
+            LetGoOfTheReading();
         }
 
         try
@@ -610,9 +623,24 @@ internal sealed class LiveSession
         }
         finally
         {
-            StopShowingTheDataBroadcast();
             fanout.End();
+        }
+    }
+
+    /// <summary>
+    /// Stops showing the data broadcast and detaches from the reading, which lets the tuner go when nothing else
+    /// reads the channel, while the transcoder is still finishing what it was given.
+    /// </summary>
+    private void LetGoOfTheReading()
+    {
+        try
+        {
+            StopShowingTheDataBroadcast();
             reception.Detach();
+        }
+        finally
+        {
+            released.TrySetResult();
         }
     }
 

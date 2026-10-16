@@ -327,7 +327,7 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public async Task BrPs001AChannelChangeIsNotRefusedWhileTheOneLeftBehindIsStillBeingTornDown()
+    public async Task BrPs001ASessionBeingTornDownLetsTheTunerGoBeforeItsTranscoderHasFinished()
     {
         supply.AsIfThereWereOneTuner = true;
 
@@ -340,23 +340,118 @@ public sealed class LiveSessionManagerTests
         clock.Turn(Linger);
 
         await Eventually.Happens(
-            () => transcoders.Raised[0].Disposed && clock.Pending is TheHoldOnTheSupply + 1,
-            "the teardown is waiting out what the transcoder left behind");
+            () => supply.Opened[0].Disposed && transcoders.Raised[0].Disposed && clock.Waiting.Contains(StopGrace),
+            "the reading has let the tuner go while the teardown is still waiting out what the transcoder left behind");
 
         Assert.Empty(manager.Keys);
-        Assert.False(supply.Opened[0].Disposed, "the reading being torn down has not let the tuner go yet");
+
+        await using ILiveViewing next = await Joined(AnotherChannel);
+
+        Assert.Equal([AnotherChannel], manager.Keys);
+        Assert.Equal(2, supply.Asked);
+        Assert.Contains(StopGrace, clock.Waiting);
+
+        clock.Turn(StopGrace);
+    }
+
+    [Fact]
+    public async Task BrPs001AChannelChangeIsTriedAgainOnceTheTunerGivenUpIsLetGoAndNotOnceTheTranscoderHasFinished()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing watching = await Joined(EveryFrame);
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        transcoders.Raised[0].OutputOutlivesIt = true;
+        supply.Opened[0].HeldFromBeingLetGo = holding;
+
+        await watching.DisposeAsync();
 
         Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, CancellationToken.None);
 
-        await Eventually.Happens(() => supply.Asked is 2, "the viewer of the other channel reaches the supply");
+        await Eventually.Happens(
+            () => transcoders.Raised[0].Disposed && clock.Waiting.Contains(StopGrace),
+            "the session given up is waiting out what its transcoder left behind");
 
-        clock.Turn(StopGrace);
+        Assert.False(joining.IsCompleted, "the other channel is not asked for again while the driver still holds the tuner");
+        Assert.Equal(2, supply.Asked);
 
-        await using ILiveViewing next = Seated(await joining);
+        holding.SetResult();
+
+        await using ILiveViewing next = Seated(await joining.WaitAsync(Eventually.Patience));
 
         Assert.True(supply.Opened[0].Disposed);
         Assert.Equal([AnotherChannel], manager.Keys);
         Assert.Equal(3, supply.Asked);
+        Assert.Contains(StopGrace, clock.Waiting);
+
+        clock.Turn(StopGrace);
+    }
+
+    [Fact]
+    public async Task BrPs001AChannelChangeRefusedForTheCeilingWhileTheTranscoderLeftBehindIsFinishingIsSeatedOnceItHasEnded()
+    {
+        TaskCompletionSource finishing = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders raising = new(one);
+        await using LiveSessionManager full = Managing(one, raising);
+
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing watching = Seated(await full.JoinAsync(EveryFrame, CancellationToken.None));
+
+        raising.Raised[0].FinishesWhen = finishing;
+
+        await watching.DisposeAsync();
+
+        Task<LiveJoin> joining = full.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => supply.Opened.Count is 2 && supply.Opened[1].Disposed,
+            "the other channel was opened once the tuner came free and refused for want of a place in the budget");
+
+        Assert.False(joining.IsCompleted, "the viewer waits for the transcoder left behind to end");
+        Assert.Equal(1, one.Running);
+
+        finishing.SetResult();
+
+        await using ILiveViewing next = Seated(await joining.WaitAsync(Eventually.Patience));
+
+        Assert.Equal([AnotherChannel], full.Keys);
+        Assert.Equal(2, raising.Started);
+        Assert.Equal(4, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001AChannelChangeRefusedForTheCeilingStaysRefusedWhenTheTranscoderLeftBehindOutlastsTheWait()
+    {
+        TaskCompletionSource finishing = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders raising = new(one);
+        await using LiveSessionManager full = Managing(one, raising);
+
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing watching = Seated(await full.JoinAsync(EveryFrame, CancellationToken.None));
+
+        raising.Raised[0].FinishesWhen = finishing;
+
+        await watching.DisposeAsync();
+
+        Task<LiveJoin> joining = full.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => supply.Opened.Count is 2 && supply.Opened[1].Disposed,
+            "the other channel was refused for want of a place in the budget");
+
+        clock.Turn(WaitForATunerToComeFree);
+
+        LiveJoin refused = await joining.WaitAsync(Eventually.Patience);
+
+        Assert.Equal(LiveRefusal.TooManyAlready, refused.Refusal);
+        Assert.Equal(3, supply.Asked);
+
+        finishing.SetResult();
     }
 
     [Fact]
@@ -1270,16 +1365,14 @@ public sealed class LiveSessionManagerTests
         clock.Turn(Linger);
 
         await Eventually.Happens(
-            () => transcoders.Raised[0].Disposed && clock.Pending is TheHoldOnTheSupply + 1,
+            () => transcoders.Raised[0].Disposed && clock.Waiting.Contains(StopGrace),
             "the teardown is waiting out what the transcoder left behind");
-
-        Assert.False(supply.Opened[0].Disposed);
 
         clock.Turn(StopGrace);
 
         await Eventually.Happens(
-            () => supply.Opened[0].Disposed,
-            "the stream is let go although the output the transcoder left never ended");
+            () => clock.Pending is 0 && supply.Opened[0].Disposed,
+            "the teardown is over although the output the transcoder left never ended");
 
         Assert.Empty(manager.Keys);
     }
