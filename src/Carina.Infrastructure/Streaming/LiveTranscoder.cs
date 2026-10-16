@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Threading.Channels;
 
@@ -18,6 +19,8 @@ public sealed class LiveTranscoder : ILiveTranscoder
     private readonly TimeProvider clock;
 
     private readonly CancellationTokenSource stopping;
+
+    private readonly CancellationTokenSource leavingThePipe = new();
 
     private readonly Channel<LiveFrame> frames = Channel.CreateUnbounded<LiveFrame>();
 
@@ -53,7 +56,7 @@ public sealed class LiveTranscoder : ILiveTranscoder
 
         drawing = captions is null
             ? NothingDrawn()
-            : CaptionFrames.CarryAsync(captions.Pictures, captions.Canvas, frames.Writer, stopping.Token);
+            : DrawnAsync(captions);
 
         Completion = WatchAsync();
     }
@@ -96,8 +99,47 @@ public sealed class LiveTranscoder : ILiveTranscoder
         await Completion;
 
         stopping.Dispose();
+        leavingThePipe.Dispose();
         captions?.Dispose();
         running.Dispose();
+    }
+
+    /// <summary>
+    /// Shows the captions until the transcoder is called off, then goes on reading what it writes and drops it,
+    /// because a programme flushing its last pictures into a pipe nobody reads cannot exit.
+    /// </summary>
+    private async Task<CaptionFlowFault?> DrawnAsync(CaptionPipe pipe)
+    {
+        try
+        {
+            return await CaptionFrames.CarryAsync(pipe.Pictures, pipe.Canvas, frames.Writer, stopping.Token);
+        }
+        catch (OperationCanceledException) when (!leavingThePipe.IsCancellationRequested)
+        {
+            await DroppedToTheEndAsync(pipe.Pictures, leavingThePipe.Token);
+
+            return null;
+        }
+    }
+
+    private static async Task DroppedToTheEndAsync(Stream pictures, CancellationToken cancellationToken)
+    {
+        byte[] dropped = ArrayPool<byte>.Shared.Rent(CaptionFrames.Mouthful);
+
+        try
+        {
+            int read;
+
+            do
+            {
+                read = await pictures.ReadAsync(dropped, cancellationToken);
+            }
+            while (read > 0);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(dropped);
+        }
     }
 
     private Task<CaptionFlowFault?> NothingDrawn()
@@ -146,7 +188,7 @@ public sealed class LiveTranscoder : ILiveTranscoder
         catch (OperationCanceledException)
         {
             await GiveUpAsync();
-            await QuietlyAsync(drawing);
+            await DrawnToTheEndAsync();
 
             return TranscoderExit.CalledOff(Complaint);
         }
@@ -170,6 +212,7 @@ public sealed class LiveTranscoder : ILiveTranscoder
         }
         catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
         {
+            await leavingThePipe.CancelAsync();
             await stopping.CancelAsync();
             await QuietlyAsync(drawing);
         }

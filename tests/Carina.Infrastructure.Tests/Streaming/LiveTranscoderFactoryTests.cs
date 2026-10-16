@@ -449,6 +449,46 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
     }
 
     [Fact]
+    public async Task ATranscoderLetGoWhileItStillHasCaptionsToWriteIsReadToTheEndAndStopsOnItsOwn()
+    {
+        string ended = standIns.Named("ended");
+        HandTurnedClock clock = new();
+
+        ILiveTranscoder running = await Started(
+            standIns.Script($"for a in \"$@\"; do case $a in pipe:[2-9]*|pipe:[1-9][0-9]*) fd=${{a#pipe:}};; esac; done; cat > /dev/null; head -c 1048576 /dev/zero > /proc/self/fd/$fd; echo $$ > {ended}; exit 0"),
+            LiveEncoder.Software,
+            captions: CaptionOutlet.Drawn,
+            clock: clock);
+
+        await running.DisposeAsync().AsTask().WaitAsync(Eventually.Patience);
+
+        Assert.Single(Read(ended));
+    }
+
+    [Fact]
+    public async Task ATranscoderLetGoWhoseCaptionPipeSomebodyElseStillHoldsIsLetGoAfterTheGrace()
+    {
+        string pids = standIns.Named("pids");
+
+        ILiveTranscoder running = await Started(
+            standIns.Script($"for a in \"$@\"; do case $a in pipe:[2-9]*|pipe:[1-9][0-9]*) fd=${{a#pipe:}};; esac; done; (sleep 60 > /proc/self/fd/$fd 2> /dev/null < /dev/null & echo $! > {pids}); cat > /dev/null; sleep 60"),
+            LiveEncoder.Software,
+            grace: TimeSpan.FromMilliseconds(250),
+            captions: CaptionOutlet.Drawn);
+
+        await WaitFor(pids, 1);
+
+        try
+        {
+            await running.DisposeAsync().AsTask().WaitAsync(Eventually.Patience);
+        }
+        finally
+        {
+            KillAll(Read(pids));
+        }
+    }
+
+    [Fact]
     public async Task WithoutCaptionsNoPipeIsOpenedAndTheCaptionsAreOverBeforeTheyBegin()
     {
         string said = standIns.Named("arguments");
@@ -475,6 +515,20 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         }
 
         Assert.Fail($"the stand-in never wrote {howMany} process identifiers");
+    }
+
+    private static void KillAll(IEnumerable<int> pids)
+    {
+        foreach (int holder in pids)
+        {
+            try
+            {
+                Process.GetProcessById(holder).Kill();
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
     }
 
     private static IEnumerable<int> Read(string pids)
