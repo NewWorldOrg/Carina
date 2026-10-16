@@ -40,10 +40,12 @@ public static class FfmpegLiveInvocation
     private const string ProbedMicroseconds = "250000";
 
     /// <summary>
-    /// The most that is read before decoding starts, whatever the quarter of a second holds. It still reaches past
-    /// the service's map in a multiplex sent at twice the terrestrial rate.
+    /// The most that is read before decoding starts. ffmpeg ends the quarter of a second only once one stream has
+    /// told it that much of its own length, and the data streams of the other services can take several times as
+    /// long, so this is what usually ends the reading. It still reaches past the service's map in a multiplex sent
+    /// at twice the terrestrial rate.
     /// </summary>
-    private const string ProbedBytes = "1000000";
+    private const string ProbedBytes = "500000";
 
     private static readonly SoundPlacement TheWholeFirstSound = SoundPlacement.WholeStream(0);
 

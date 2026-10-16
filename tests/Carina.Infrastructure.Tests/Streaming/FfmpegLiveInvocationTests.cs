@@ -58,7 +58,7 @@ public sealed class FfmpegLiveInvocationTests
                 "-loglevel",
                 "level+info",
                 "-probesize",
-                "1000000",
+                "500000",
                 "-analyzeduration",
                 "250000",
                 "-copyts",
@@ -105,7 +105,7 @@ public sealed class FfmpegLiveInvocationTests
                 "-loglevel",
                 "level+info",
                 "-probesize",
-                "1000000",
+                "500000",
                 "-analyzeduration",
                 "250000",
                 "-copyts",
@@ -149,7 +149,7 @@ public sealed class FfmpegLiveInvocationTests
 
     [Theory]
     [MemberData(nameof(EveryProfileOnEveryEncoder))]
-    public void TheInputIsReadForAQuarterOfASecondOfTheBroadcastAndNoMoreThanAMegabyteBeforeAnythingIsDecoded(
+    public void TheInputIsReadForAQuarterOfASecondOfTheBroadcastAndNoMoreThanHalfAMegabyteBeforeAnythingIsDecoded(
         LiveProfile profile,
         LiveEncoder encoder)
     {
@@ -157,7 +157,7 @@ public sealed class FfmpegLiveInvocationTests
         int input = arguments.IndexOf("-i");
 
         Assert.Equal("250000", arguments[arguments.IndexOf("-analyzeduration") + 1]);
-        Assert.Equal("1000000", arguments[arguments.IndexOf("-probesize") + 1]);
+        Assert.Equal("500000", arguments[arguments.IndexOf("-probesize") + 1]);
         Assert.InRange(arguments.IndexOf("-analyzeduration"), 0, input);
         Assert.InRange(arguments.IndexOf("-probesize"), 0, input);
     }
