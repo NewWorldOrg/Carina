@@ -69,7 +69,7 @@ public static class CarouselSplice
         }.ToBytes();
     }
 
-    private static ProgramMapTable FirstMap(byte[] stream, int mapPid)
+    internal static ProgramMapTable FirstMap(byte[] stream, int mapPid)
     {
         SectionAssembler assembler = new(mapPid);
 

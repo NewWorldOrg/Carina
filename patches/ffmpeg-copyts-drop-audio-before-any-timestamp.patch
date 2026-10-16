@@ -1,0 +1,17 @@
+--- a/fftools/ffmpeg_dec.c
++++ b/fftools/ffmpeg_dec.c
+@@ -615,6 +615,14 @@
+                 return AVERROR_INVALIDDATA;
+         }
+ 
++        if (copy_ts && !ifile->format_nots &&
++            dec->codec_type == AVMEDIA_TYPE_AUDIO &&
++            frame->pts == AV_NOPTS_VALUE &&
++            d->last_frame_pts == AV_NOPTS_VALUE) {
++            av_log(ist, AV_LOG_WARNING,
++                   "Dropping an audio frame decoded before any timestamp\n");
++            continue;
++        }
+ 
+         av_assert0(!frame->opaque_ref);
+         fd      = frame_data(frame);

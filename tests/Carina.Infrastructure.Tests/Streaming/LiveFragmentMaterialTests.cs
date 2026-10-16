@@ -23,11 +23,19 @@ public sealed class LiveFragmentMaterialTests : IDisposable
 
     private const string Sound = "soun";
 
+    private const string Ffprobe = "ffprobe";
+
     private const double LongestPieceInSeconds = 0.1;
 
     private static readonly TimeSpan PastTheProbe = TimeSpan.FromSeconds(12);
 
     private static readonly TimeSpan HoursIntoTheDay = TimeSpan.FromHours(13);
+
+    /// <summary>
+    /// An mp4 holds how long a sample lasts in 32 bits, 2^31 - 1 ticks of the sound's 48 kHz or about 12.4 hours, so
+    /// a sound written at zero on a clock this far in is further from the next sound than a sample can last.
+    /// </summary>
+    private static readonly TimeSpan FurtherInThanASampleLasts = TimeSpan.FromHours(13);
 
     private static readonly TimeSpan WhenTheClockComesAround =
         TimeSpan.FromTicks((long)(LivePts.ComesAroundAt * TimeSpan.TicksPerSecond / LivePts.Hertz));
@@ -68,6 +76,36 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         Assert.True(
             measured.SecondsApart <= LongestPieceInSeconds,
             $"the pieces came {measured.SecondsApart:F4} s apart on average");
+    }
+
+    [Fact(DisplayName = "BR-PD-006: a live start that joins the sound part way through a frame, whose leftover reads as the header of another, writes the picture and the sound together with the sound on the broadcast's clock")]
+    public async Task BrPd006AStartPartWayThroughASoundFrameWritesTheSoundOnTheBroadcastsClock()
+    {
+        string written = await (SyntheticBroadcast.AsMeasured() with
+        {
+            Length = PastTheProbe,
+            StartsAt = FurtherInThanASampleLasts,
+            WithCaptions = false,
+            WithSuperimpose = false,
+        }).WriteAsync(Path.Combine(room, "whole.m2ts"));
+        string joined = Path.Combine(room, "joined.m2ts");
+
+        await File.WriteAllBytesAsync(joined, SoundJoinedPartWay.Into(await File.ReadAllBytesAsync(written), SyntheticBroadcast.PmtPid));
+
+        Assert.True(
+            await FirstSoundIsUntimedAsync(joined),
+            "the first sound the decoder gives back from the joined stream carries a time, so the start this test is about never happens");
+
+        Fragments measured = Fragments.Of(await LiveAsync(joined, LiveProfile.Hd30));
+
+        Assert.True(measured.Both > 0, $"the transcoder wrote {measured.Counted} piece(s) and none carried both");
+        Assert.True(measured.FirstPicture is not null && measured.FirstSound is not null, "the transcoder wrote no picture or no sound");
+
+        long apart = (long)measured.FirstSound.Value - (long)measured.FirstPicture.Value;
+
+        Assert.True(
+            Math.Abs(apart) < LivePts.Hertz,
+            string.Create(CultureInfo.InvariantCulture, $"the sound began {apart} ticks from the first picture"));
     }
 
     [Fact(DisplayName = "BR-PD-007: a caption reaches a live viewer on the clock its pictures are carried on, as far after the first picture when the broadcast's clock comes around inside it as when it begins hours into the day")]
@@ -184,6 +222,66 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         return (measured.FirstPicture.Value, carried);
     }
 
+    /// <summary>
+    /// Whether the first sound frame the decoder gives back carries no time when the stream is read the way the live
+    /// transcoder reads it: through a pipe, probed no further than it probes.
+    /// </summary>
+    private static async Task<bool> FirstSoundIsUntimedAsync(string joined)
+    {
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None);
+        var start = new ProcessStartInfo(Ffprobe)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        foreach (string argument in (string[])
+                 [
+                     "-hide_banner",
+                     "-loglevel",
+                     "error",
+                     .. Following(live, "-probesize"),
+                     .. Following(live, "-analyzeduration"),
+                     "-select_streams",
+                     string.Create(CultureInfo.InvariantCulture, $"p:{Service.Value}:a:0"),
+                     "-show_entries",
+                     "frame=pts",
+                     "-of",
+                     "csv=p=0",
+                     "-i",
+                     FfmpegLiveInvocation.Input,
+                 ])
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process probing = Process.Start(start)!;
+
+        Task feeding = Task.Run(async () =>
+        {
+            await using (FileStream source = File.OpenRead(joined))
+            {
+                await source.CopyToAsync(probing.StandardInput.BaseStream);
+            }
+
+            probing.StandardInput.Close();
+        });
+        Task<string> complaint = probing.StandardError.ReadToEndAsync();
+        string answer = await probing.StandardOutput.ReadToEndAsync();
+
+        await feeding;
+        await probing.WaitForExitAsync();
+
+        Assert.True(probing.ExitCode is 0, await complaint);
+
+        return answer.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() is "N/A";
+    }
+
+    private static string[] Following(IReadOnlyList<string> arguments, string option)
+        => [option, arguments[arguments.ToList().IndexOf(option) + 1]];
+
     private static async Task<byte[]> LiveAsync(string written, LiveProfile profile)
     {
         var start = new ProcessStartInfo(FfmpegProgramme.Default)
@@ -219,10 +317,11 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         using MemoryStream delivered = new();
 
         await running.StandardOutput.BaseStream.CopyToAsync(delivered);
-        await feeding;
         await running.WaitForExitAsync();
 
         Assert.True(running.ExitCode is 0, await complaint);
+
+        await feeding;
 
         return delivered.ToArray();
     }
@@ -234,7 +333,8 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         int Neither,
         bool TheLastCarriedBoth,
         double SecondsApart,
-        ulong? FirstPicture)
+        ulong? FirstPicture,
+        ulong? FirstSound)
     {
         public int Counted => Both + PictureAlone + SoundAlone + Neither;
 
@@ -245,6 +345,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
             Dictionary<uint, (string Kind, uint Rate)> tracks = [];
             List<double> pictures = [];
             ulong? firstPicture = null;
+            ulong? firstSound = null;
             int both = 0;
             int pictureAlone = 0;
             int soundAlone = 0;
@@ -283,6 +384,11 @@ public sealed class LiveFragmentMaterialTests : IDisposable
                         pictures.Add((double)stamped.DecodedAt / track.Rate);
                         firstPicture ??= LivePts.Rescaled(stamped.DecodedAt, track.Rate).Value;
                     }
+
+                    if (track.Kind is Sound)
+                    {
+                        firstSound ??= LivePts.Rescaled(stamped.DecodedAt, track.Rate).Value;
+                    }
                 }
 
                 bool picture = carried.Contains(Picture);
@@ -302,7 +408,8 @@ public sealed class LiveFragmentMaterialTests : IDisposable
                 neither,
                 lastCarriedBoth,
                 pictures.Count > 1 ? (pictures[^1] - pictures[0]) / (pictures.Count - 1) : double.PositiveInfinity,
-                firstPicture);
+                firstPicture,
+                firstSound);
         }
 
         private static void Learn(ReadOnlySpan<byte> moov, Dictionary<uint, (string Kind, uint Rate)> tracks)
