@@ -47,7 +47,7 @@ The font is checked against the `SHA256SUMS` of the same release and against
 
 The corresponding source of the FFmpeg binaries is in the image at
 `/usr/share/doc/carina/ffmpeg/source/`: the release archive as downloaded, the
-patch applied to it, and the configure options.
+patches applied to it, and the configure options.
 
 ## .NET
 
