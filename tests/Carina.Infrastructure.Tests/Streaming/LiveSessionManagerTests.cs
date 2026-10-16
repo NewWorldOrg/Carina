@@ -296,6 +296,40 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task AReachedChannelIsReadBeforeAnyViewerAsksForASessionOnIt()
+    {
+        using IDisposable reached = manager.Reach(new LiveChannelKey(EveryFrame.Network, EveryFrame.Service));
+
+        await Eventually.Happens(() => supply.Asked is 1, "the reach opens the supply on its own");
+        Assert.Equal(0, transcoders.Started);
+    }
+
+    [Fact]
+    public async Task AViewerOnAReachedChannelRidesTheReadingTheReachStarted()
+    {
+        IDisposable reached = manager.Reach(new LiveChannelKey(EveryFrame.Network, EveryFrame.Service));
+
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+        reached.Dispose();
+        clock.Turn(Linger);
+
+        Assert.Equal(1, supply.Asked);
+        Assert.False(supply.Opened[0].Disposed);
+    }
+
+    [Fact]
+    public async Task AReachLetGoOfWithNoViewerLetsTheReadingGo()
+    {
+        IDisposable reached = manager.Reach(new LiveChannelKey(EveryFrame.Network, EveryFrame.Service));
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the reach opens the supply");
+
+        reached.Dispose();
+        reached.Dispose();
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the reading is let go once the reach is");
+    }
+
+    [Fact]
     public async Task ASupplyThatRefusesIsPassedOnAndRaisesNoTranscoder()
     {
         supply.Refusing = LiveRefusal.NoTunerFree;
@@ -1723,7 +1757,7 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public void AViewerAsksTheManagerToJoinAKeyOrToHandAChannelOverAndNothingElse()
+    public void AViewerAsksTheManagerToJoinAKeyToHandAChannelOverOrToReachForOneAndNothingElse()
     {
         MethodInfo[] asked =
         [
@@ -1733,7 +1767,7 @@ public sealed class LiveSessionManagerTests
         ];
 
         Assert.Equal(
-            ["DisposeAsync", "HandOverAsync", "JoinAsync", "RunningAsync", "Startup", "Viewers"],
+            ["DisposeAsync", "HandOverAsync", "JoinAsync", "Reach", "RunningAsync", "Startup", "Viewers"],
             asked.Select(method => method.Name).Order());
         Assert.All(
             asked.SelectMany(method => method.GetParameters()),
@@ -1741,7 +1775,7 @@ public sealed class LiveSessionManagerTests
                 parameter.ParameterType,
                 (Type[])[typeof(NetworkId), typeof(ServiceId), typeof(TuningParameters), typeof(LiveProfile)]));
         Assert.Equal(
-            [nameof(ILiveSessionManager.HandOverAsync), nameof(ILiveSessionManager.JoinAsync)],
+            [nameof(ILiveSessionManager.HandOverAsync), nameof(ILiveSessionManager.JoinAsync), nameof(ILiveSessionManager.Reach)],
             typeof(ILiveSessionManager).GetMethods().Select(method => method.Name).Order());
     }
 
