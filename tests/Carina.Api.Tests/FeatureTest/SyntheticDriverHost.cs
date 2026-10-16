@@ -6,6 +6,7 @@ using Carina.Contracts;
 
 using driver::Carina.Driver;
 using driver::Carina.Driver.Configuration;
+using driver::Carina.Driver.Descrambling;
 using driver::Carina.Driver.Ipc;
 using driver::Carina.Driver.Sessions;
 using driver::Carina.Driver.Transport;
@@ -37,7 +38,7 @@ internal sealed class PacedTunerDevice(ITunerDevice carrying, TimeSpan between) 
 [SupportedOSPlatform("linux")]
 internal sealed class PacedTuners(TimeSpan between) : ITunerDeviceFactory
 {
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
     {
         TuningRequest asked = tune?.ToLegacyRequest() ?? tuning;
 
