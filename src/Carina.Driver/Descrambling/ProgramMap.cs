@@ -38,6 +38,8 @@ public sealed class ProgramMap(int caSystemId)
 
     public IReadOnlyCollection<int> EcmPids => ecmPids;
 
+    public IEnumerable<int> PmtPids => pmtPids.Values.Distinct();
+
     public bool IsPmt(int pid) => pmtPids.ContainsValue(pid);
 
     public bool IsEcm(int pid) => ecmPids.Contains(pid);

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 
@@ -586,7 +587,7 @@ public sealed class TunerPoolSessionTests : IDisposable
 
         public IReadOnlyCollection<string> Opened => [.. opened];
 
-        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
         {
             opened.Enqueue(device.Id!);
 
@@ -596,7 +597,7 @@ public sealed class TunerPoolSessionTests : IDisposable
 
     private sealed class OneDeviceFactory(ITunerDevice device) : ITunerDeviceFactory
     {
-        public ITunerDevice Create(DeviceSettings settings, TuningRequest tuning, TuneParams? tune) =>
+        public ITunerDevice Create(DeviceSettings settings, TuningRequest tuning, TuneParams? tune, HeadHold hold) =>
             device;
     }
 
@@ -606,7 +607,7 @@ public sealed class TunerPoolSessionTests : IDisposable
 
         public int Attempts => Volatile.Read(ref attempts);
 
-        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
         {
             Interlocked.Increment(ref attempts);
 
@@ -620,7 +621,7 @@ public sealed class TunerPoolSessionTests : IDisposable
 
         public ManualResetEventSlim Finish { get; } = new(false);
 
-        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
         {
             if (string.Equals(device.Id, slowDeviceId, StringComparison.Ordinal))
             {

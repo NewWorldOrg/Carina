@@ -8,6 +8,7 @@ using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
 using driver::Carina.Driver.Configuration;
+using driver::Carina.Driver.Descrambling;
 using driver::Carina.Driver.Tuning;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -54,7 +55,7 @@ internal sealed class StreamThatEndsItselfOnce(long after) : ITunerDeviceFactory
 
     private int handedOut;
 
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
     {
         TuningRequest asked = tune?.ToLegacyRequest() ?? tuning;
         var paced = new PacedTunerDevice(

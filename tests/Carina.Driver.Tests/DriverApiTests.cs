@@ -4,6 +4,7 @@ using System.Text;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Events;
 using Carina.Driver.Ipc;
 using Carina.Driver.Recording;
@@ -813,7 +814,8 @@ public sealed class DriverApiTests
         public ITunerDevice Create(
             DeviceSettings device,
             TuningRequest tuning,
-            TuneParams? tune
+            TuneParams? tune,
+            HeadHold hold
         ) =>
             throw Tuning.Dvb.DvbFailure.NoLock(
                 "/dev/dvb/adapter0/frontend0: the frontend did not lock within 5 seconds,"

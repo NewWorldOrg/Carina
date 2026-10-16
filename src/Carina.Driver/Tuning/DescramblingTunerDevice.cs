@@ -16,6 +16,8 @@ public sealed class DescramblingTunerDevice : ITunerDevice
 
     private readonly ILogger? logger;
 
+    private readonly HeadHold hold;
+
     private readonly Lock gate = new();
 
     private IDescrambler? descrambler;
@@ -29,7 +31,8 @@ public sealed class DescramblingTunerDevice : ITunerDevice
         IDescrambler? descrambler,
         IDescramblerFactory? cards = null,
         TimeProvider? time = null,
-        ILogger? logger = null
+        ILogger? logger = null,
+        HeadHold? hold = null
     )
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -47,6 +50,7 @@ public sealed class DescramblingTunerDevice : ITunerDevice
         this.cards = cards;
         this.time = time ?? TimeProvider.System;
         this.logger = logger;
+        this.hold = hold ?? HeadHold.EveryProgramme;
         asksAgainAt = this.time.GetUtcNow() + BetweenAsksForTheCard;
     }
 
@@ -107,7 +111,7 @@ public sealed class DescramblingTunerDevice : ITunerDevice
 
             asksAgainAt = now + BetweenAsksForTheCard;
 
-            IDescrambler? answered = cards.Open();
+            IDescrambler? answered = cards.Open(hold);
             if (answered is null)
             {
                 return null;

@@ -19,7 +19,7 @@ public sealed class DriverCardApiTests
     {
         FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection _);
         Descramblers cards = Descramblers.Over(() => service, logger: null);
-        cards.Open()?.Dispose();
+        cards.Open(HeadHold.EveryProgramme)?.Dispose();
 
         await using DriverUnderTest driver = await DriverUnderTest.Start(
             reshapeServices: services => services.AddSingleton<IDescramblerFactory>(cards)

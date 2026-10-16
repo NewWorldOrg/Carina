@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Recording;
 using Carina.Driver.Tuning;
 
@@ -133,7 +134,7 @@ public sealed class OneTunerDeviceFactory(ITunerDevice device) : ITunerDeviceFac
 
     public long Created => Interlocked.Read(ref created);
 
-    public ITunerDevice Create(DeviceSettings settings, TuningRequest tuning, TuneParams? tune)
+    public ITunerDevice Create(DeviceSettings settings, TuningRequest tuning, TuneParams? tune, HeadHold hold)
     {
         Interlocked.Increment(ref created);
 
@@ -165,13 +166,13 @@ public sealed class StubbornTunerDevice(TimeSpan readTakes) : ITunerDevice
 public sealed class ScriptedTunerDeviceFactory(int failAfterReads = int.MaxValue)
     : ITunerDeviceFactory
 {
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold) =>
         new ScriptedTunerDevice(failAfterReads);
 }
 
 public sealed class StubbornTunerDeviceFactory(TimeSpan readTakes) : ITunerDeviceFactory
 {
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold) =>
         new StubbornTunerDevice(readTakes);
 }
 
@@ -179,14 +180,14 @@ public sealed class HeldOpenForOneDeviceFactory(string heldDeviceId) : ITunerDev
 {
     public HeldOpenTunerDevice Held { get; } = new();
 
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold) =>
         device.Id == heldDeviceId ? Held : new ScriptedTunerDevice();
 }
 
 public sealed class SelectiveTunerDeviceFactory(string failingDeviceId, int failAfterReads = 1)
     : ITunerDeviceFactory
 {
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold) =>
         device.Id == failingDeviceId
             ? new ScriptedTunerDevice(failAfterReads)
             : new ScriptedTunerDevice();

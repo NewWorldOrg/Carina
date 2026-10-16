@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
 using Carina.Driver.Recording;
@@ -680,7 +681,12 @@ public sealed class TunerSessionManager(
 
         try
         {
-            ITunerDevice opened = deviceFactory.Create(settings, request.Tuning, request.Tune);
+            ITunerDevice opened = deviceFactory.Create(
+                settings,
+                request.Tuning,
+                request.Tune,
+                HeadHolds.For(request.Purpose)
+            );
 
             if (!pool.Tuned(deviceId, request.SessionId, opened))
             {

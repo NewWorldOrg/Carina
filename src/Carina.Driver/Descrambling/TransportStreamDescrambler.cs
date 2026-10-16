@@ -29,6 +29,8 @@ public sealed class TransportStreamDescrambler : IDescrambler
 
     private readonly int holdLimit;
 
+    private readonly HeadHold hold;
+
     private readonly ProgramMap map;
 
     private readonly Lock gate = new();
@@ -45,9 +47,16 @@ public sealed class TransportStreamDescrambler : IDescrambler
 
     private bool holding = true;
 
+    private bool lookingBack;
+
     private bool disposed;
 
-    public TransportStreamDescrambler(ConditionalAccessCard card, ILogger? logger = null, int holdLimit = LongestHold)
+    public TransportStreamDescrambler(
+        ConditionalAccessCard card,
+        ILogger? logger = null,
+        int holdLimit = LongestHold,
+        HeadHold? hold = null
+    )
     {
         ArgumentNullException.ThrowIfNull(card);
         ArgumentOutOfRangeException.ThrowIfLessThan(holdLimit, PacketLength);
@@ -55,6 +64,7 @@ public sealed class TransportStreamDescrambler : IDescrambler
         this.card = card;
         this.logger = logger;
         this.holdLimit = holdLimit;
+        this.hold = hold ?? HeadHold.EveryProgramme;
         map = new ProgramMap(card.CaSystemId);
     }
 
@@ -188,7 +198,7 @@ public sealed class TransportStreamDescrambler : IDescrambler
             return;
         }
 
-        int pid = ((packet[1] & 0x1F) << 8) | packet[2];
+        int pid = PidOf(packet);
         int scrambling = packet[3] >> 6;
         int adaptation = (packet[3] >> 4) & 0x03;
         int start = PayloadStart(packet, adaptation);
@@ -214,6 +224,8 @@ public sealed class TransportStreamDescrambler : IDescrambler
 
         unkeyed = !TryUnscramble(packet, pid, start) && scrambling is EvenKey or OddKey;
     }
+
+    private static int PidOf(ReadOnlySpan<byte> packet) => ((packet[1] & 0x1F) << 8) | packet[2];
 
     private static int PayloadStart(ReadOnlySpan<byte> packet, int adaptation)
     {
@@ -277,8 +289,18 @@ public sealed class TransportStreamDescrambler : IDescrambler
             collectors[pid] = collector;
         }
 
+        Collect(collector, packet, start, whole => Whole(pid, whole));
+    }
+
+    private static void Collect(
+        SectionCollector collector,
+        ReadOnlySpan<byte> packet,
+        int start,
+        Action<ReadOnlySpan<byte>> whole
+    )
+    {
         bool unitStart = (packet[1] & 0x40) is not 0;
-        collector.Take(packet[start..], unitStart, packet[3] & 0x0F, whole => Whole(pid, whole));
+        collector.Take(packet[start..], unitStart, packet[3] & 0x0F, whole);
     }
 
     private void Whole(int pid, ReadOnlySpan<byte> section)
@@ -298,8 +320,83 @@ public sealed class TransportStreamDescrambler : IDescrambler
 
         if (holding)
         {
+            LookBack();
             UnscrambleWhatWaited();
         }
+    }
+
+    /// <summary>
+    /// Reads what the held packets carried on a PID before it was known to carry sections: every PMT in turn, and only
+    /// the latest ECM, which goes to the card at once rather than at its next repetition.
+    /// </summary>
+    private void LookBack()
+    {
+        if (lookingBack)
+        {
+            return;
+        }
+
+        lookingBack = true;
+
+        try
+        {
+            while (UnreadSectionPid() is int pid)
+            {
+                LookBackOn(pid);
+            }
+        }
+        finally
+        {
+            lookingBack = false;
+        }
+    }
+
+    private int? UnreadSectionPid() =>
+        map.PmtPids.Concat(map.EcmPids).Where(pid => !collectors.ContainsKey(pid)).Cast<int?>().FirstOrDefault();
+
+    private void LookBackOn(int pid)
+    {
+        SectionCollector collector = new();
+        collectors[pid] = collector;
+
+        bool pmt = map.IsPmt(pid);
+        byte[]? latestEcm = null;
+
+        for (int offset = 0; offset < shelf.Length; offset += PacketLength)
+        {
+            ReadOnlySpan<byte> packet = shelf.At(offset, PacketLength);
+            int start = SectionStart(packet);
+            if (PidOf(packet) != pid || start < 0)
+            {
+                continue;
+            }
+
+            Collect(collector, packet, start, whole =>
+            {
+                if (pmt)
+                {
+                    Whole(pid, whole);
+                }
+                else if (whole[0] is EcmTableId)
+                {
+                    latestEcm = whole.ToArray();
+                }
+            });
+        }
+
+        if (latestEcm is not null)
+        {
+            Ask(pid, PsiSection.Body(latestEcm));
+        }
+    }
+
+    private static int SectionStart(ReadOnlySpan<byte> packet)
+    {
+        int adaptation = (packet[3] >> 4) & 0x03;
+        bool damaged = (packet[1] & 0x80) is not 0;
+        bool scrambled = (packet[3] >> 6) is not 0;
+
+        return damaged || scrambled || adaptation is 0x02 ? -1 : PayloadStart(packet, adaptation);
     }
 
     private void Ask(int pid, ReadOnlySpan<byte> body)
@@ -351,15 +448,31 @@ public sealed class TransportStreamDescrambler : IDescrambler
         waiting.RemoveAll(offset =>
         {
             Span<byte> packet = shelf.At(offset, PacketLength);
-            int pid = ((packet[1] & 0x1F) << 8) | packet[2];
             int adaptation = (packet[3] >> 4) & 0x03;
 
-            return TryUnscramble(packet, pid, PayloadStart(packet, adaptation));
+            return TryUnscramble(packet, PidOf(packet), PayloadStart(packet, adaptation));
         });
     }
 
-    private bool HeadIsSettled() =>
-        map.Complete && map.EcmPids.All(ecm => ecms.TryGetValue(ecm, out EcmState? state) && state.Answered);
+    private bool HeadIsSettled() => EveryProgrammeIsSettled() || EverythingHeldCanBeRead();
+
+    private bool EveryProgrammeIsSettled() => map.Complete && Answered(map.EcmPids);
+
+    /// <summary>
+    /// The PAT has been read, a PMT has named an ECM for this card, every ECM named so far has been answered, and every
+    /// scrambled packet held that still has no keys belongs to an ECM the card has already refused.
+    /// </summary>
+    private bool EverythingHeldCanBeRead() =>
+        hold is HeadHold.WhatIsHeld
+        && map.PatSeen
+        && map.EcmPids.Count > 0
+        && Answered(map.EcmPids)
+        && waiting.All(offset => Answered(map.EcmFor(PidOf(shelf.At(offset, PacketLength)))));
+
+    private bool Answered(int? ecm) => ecm is int named && Answered([named]);
+
+    private bool Answered(IEnumerable<int> ecmPids) =>
+        ecmPids.All(ecm => ecms.TryGetValue(ecm, out EcmState? state) && state.Answered);
 
     public void Dispose()
     {

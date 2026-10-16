@@ -1,5 +1,6 @@
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Tuning;
 using Carina.Driver.Tuning.Dvb;
 
@@ -30,7 +31,8 @@ public sealed class TunerDeviceFactoryDvbTests
         using ITunerDevice device = factory.Create(
             new DeviceSettings("fake-terrestrial", DeviceKind.Terrestrial),
             new TuningRequest(TunerKind.Terrestrial, 55),
-            tune: null
+            tune: null,
+            HeadHold.EveryProgramme
         );
 
         Assert.IsType<FakeTunerDevice>(device);
@@ -46,7 +48,8 @@ public sealed class TunerDeviceFactoryDvbTests
         using ITunerDevice device = factory.Create(
             Terrestrial(),
             new TuningRequest(TunerKind.Terrestrial, 55),
-            tune: null
+            tune: null,
+            HeadHold.EveryProgramme
         );
 
         Assert.IsType<DvbTunerDevice>(device);
@@ -64,7 +67,8 @@ public sealed class TunerDeviceFactoryDvbTests
                 factory.Create(
                     new DeviceSettings("pt3-0", DeviceKind.Terrestrial, "/dev/video0"),
                     new TuningRequest(TunerKind.Terrestrial, 55),
-                    tune: null
+                    tune: null,
+                    HeadHold.EveryProgramme
                 )
         );
 
@@ -81,7 +85,7 @@ public sealed class TunerDeviceFactoryDvbTests
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
         DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
-            () => factory.Create(Terrestrial(), new TuningRequest(TunerKind.Terrestrial, 55), tune: null)
+            () => factory.Create(Terrestrial(), new TuningRequest(TunerKind.Terrestrial, 55), tune: null, HeadHold.EveryProgramme)
         );
 
         Assert.Contains("/dev/dvb/adapter0/frontend0", refusal.Message, StringComparison.Ordinal);
@@ -99,7 +103,8 @@ public sealed class TunerDeviceFactoryDvbTests
         using ITunerDevice device = factory.Create(
             new DeviceSettings("pt3-2", DeviceKind.Satellite, "/dev/dvb/adapter2/frontend0"),
             tune.ToLegacyRequest(),
-            tune
+            tune,
+            HeadHold.EveryProgramme
         );
 
         Assert.Equal(LnbVoltage.Off, Assert.Single(calls.VoltagesSet));
@@ -121,7 +126,8 @@ public sealed class TunerDeviceFactoryDvbTests
                 LnbPower: true
             ),
             tune.ToLegacyRequest(),
-            tune
+            tune,
+            HeadHold.EveryProgramme
         );
 
         Assert.Equal(LnbVoltage.Eighteen, Assert.Single(calls.VoltagesSet));
@@ -189,7 +195,8 @@ public sealed class TunerDeviceFactoryDvbTests
         using ITunerDevice device = factory.Create(
             Terrestrial(),
             new TuningRequest(TunerKind.Terrestrial, 55),
-            tune: null
+            tune: null,
+            HeadHold.EveryProgramme
         );
 
         Assert.Equal(4 * 1024 * 1024, Assert.Single(calls.BufferSizesSet));
@@ -265,7 +272,8 @@ public sealed class TunerDeviceFactoryDvbTests
         using ITunerDevice device = factory.Create(
             Terrestrial(),
             new TuningRequest(TunerKind.Terrestrial, 55),
-            tune: null
+            tune: null,
+            HeadHold.EveryProgramme
         );
 
         Assert.NotNull(device.Quality);

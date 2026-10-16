@@ -18,7 +18,7 @@ public interface IDescramblerFactory
     /// </summary>
     CardIdentity? CardInHand { get; }
 
-    IDescrambler? Open();
+    IDescrambler? Open(HeadHold hold);
 }
 
 public sealed class NoDescrambling : IDescramblerFactory
@@ -31,5 +31,5 @@ public sealed class NoDescrambling : IDescramblerFactory
 
     public CardIdentity? CardInHand => null;
 
-    public IDescrambler? Open() => null;
+    public IDescrambler? Open(HeadHold hold) => null;
 }
