@@ -1457,14 +1457,24 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public async Task OutputThatIsNoFragmentLeavesOneWarningNamingWhatWasWrongWithIt()
+    public async Task OutputThatIsNoFragmentLeavesOneWarningNamingWhatWasWrongWithItOnceTheTranscoderIsCalledOff()
     {
         await using ILiveViewing viewing = await Joined(EveryFrame);
 
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
 
+        await Eventually.Happens(
+            () => supply.Opened[0].Disposed && clock.Waiting.Contains(StopGrace),
+            "the reading is let go and the teardown waits on the transcoder");
+
+        Assert.False(transcoders.Raised[0].Disposed);
+
+        clock.Turn(StopGrace);
+
         await Assert.ThrowsAsync<InvalidOperationException>(() => Drained(viewing));
         await Told();
+
+        Assert.True(transcoders.Raised[0].Disposed);
 
         IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Endings);
 
