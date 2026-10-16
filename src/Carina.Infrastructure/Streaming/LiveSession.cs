@@ -335,6 +335,8 @@ internal sealed class LiveSession
 
     private async Task LiveAsync()
     {
+        UnaskedEnding? unasked = null;
+
         try
         {
             if (await RaiseAsync(stopping.Token) is { } refusal)
@@ -347,7 +349,7 @@ internal sealed class LiveSession
 
             raised.SetResult(null);
 
-            await CarryAsync(stopping.Token);
+            unasked = await CarryAsync(stopping.Token);
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
@@ -355,12 +357,15 @@ internal sealed class LiveSession
         }
         catch (Exception failure)
         {
-            raised.TrySetException(failure);
+            if (!raised.TrySetException(failure))
+            {
+                unasked = new UnaskedEnding(null, ending.Current, failure);
+            }
         }
         finally
         {
             Close();
-            await TearDownAsync();
+            await TearDownAsync(unasked);
         }
     }
 
@@ -554,11 +559,15 @@ internal sealed class LiveSession
         }
     }
 
-    private async Task CarryAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Carries what the transcoder writes to the viewers until the session is stopped or the carrying ends on its own,
+    /// and says how it ended when nobody asked it to.
+    /// </summary>
+    private async Task<UnaskedEnding?> CarryAsync(CancellationToken cancellationToken)
     {
         if (await OutputOrRestartAsync(cancellationToken) is not { } output)
         {
-            return;
+            return Unasked(null, cancellationToken);
         }
 
         ILiveTranscoder running;
@@ -589,9 +598,16 @@ internal sealed class LiveSession
         using CancellationTokenRegistration whenStopped = cancellationToken.UnsafeRegister(_ => stopped.TrySetResult(), null);
 
         await Task.WhenAny(carried, stopped.Task);
+
+        return carried.IsCompleted
+            ? Unasked(carried.IsCompletedSuccessfully ? carried.Result : null, cancellationToken)
+            : null;
     }
 
-    private async Task TearDownAsync()
+    private UnaskedEnding? Unasked(LiveFragmentFault? fault, CancellationToken cancellationToken)
+        => cancellationToken.IsCancellationRequested ? null : new UnaskedEnding(fault, ending.Current, null);
+
+    private async Task TearDownAsync(UnaskedEnding? unasked)
     {
         ILiveTranscoder? running;
         LiveSeat? given;
@@ -623,9 +639,40 @@ internal sealed class LiveSession
         }
         finally
         {
+            TellHowItEnded(unasked, running);
             fanout.End();
         }
     }
+
+    /// <summary>
+    /// Logs once, for a session that ended without being stopped, how its transcoder exited and the error lines it
+    /// kept, beside why the supply ended and what broke in the fragments when either had by then.
+    /// </summary>
+    private void TellHowItEnded(UnaskedEnding? unasked, ILiveTranscoder? running)
+    {
+        if (unasked is null)
+        {
+            return;
+        }
+
+        TranscoderExit? exit = running is { Completion.IsCompletedSuccessfully: true } ? running.Completion.Result : null;
+
+        logger.LogWarning(
+            unasked.Failure,
+            "A live session on {Key} ended without being stopped. Transcoder exit code {ExitCode}, supply ending {SupplyEnding} "
+            + "({SupplyNote}), fragment fault {FragmentFault}, first picture shown {FirstPictureShown}. "
+            + "Error lines the transcoder kept: {KeptErrorLines}",
+            Key.ToString(),
+            exit?.ExitCode,
+            unasked.Supply?.Why,
+            unasked.Supply?.Note,
+            unasked.Fault,
+            startup.Current?.Reached(LiveStartupSegment.FirstPicture) is true,
+            OnOneLine(exit?.Note ?? string.Empty));
+    }
+
+    private static string OnOneLine(string kept)
+        => string.Join(" | ", kept.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
     /// <summary>
     /// Stops showing the data broadcast and detaches from the reading, which lets the tuner go when nothing else
@@ -714,6 +761,8 @@ internal sealed class LiveSession
             ArrayPool<byte>.Shared.Return(mouthful);
         }
     }
+
+    private sealed record UnaskedEnding(LiveFragmentFault? Fault, LiveSupplyEnding? Supply, Exception? Failure);
 
     private sealed class Seat(ILiveViewing viewing, Action left) : ILiveViewing
     {

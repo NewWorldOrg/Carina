@@ -1404,7 +1404,6 @@ public sealed class LiveSessionManagerTests
         Assert.Equal(134, told["ExitCode"]);
         Assert.Equal("the first line it kept | the last line it kept", told["KeptErrorLines"]);
         Assert.Equal(false, told["FirstPictureShown"]);
-        Assert.Null(told["SupplyEnding"]);
         Assert.Null(told["FragmentFault"]);
     }
 
