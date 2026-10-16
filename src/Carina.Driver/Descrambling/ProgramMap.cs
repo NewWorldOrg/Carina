@@ -38,6 +38,19 @@ public sealed class ProgramMap(int caSystemId)
 
     public IReadOnlyCollection<int> EcmPids => ecmPids;
 
+    /// <summary>
+    /// The PAT lists the programme, and its PMT has been read.
+    /// </summary>
+    public bool HasRead(int programme) => programs.ContainsKey(programme);
+
+    /// <summary>
+    /// The ECMs the PMT of one programme names for this card, for the programme as a whole or for one of its streams.
+    /// </summary>
+    public IReadOnlyCollection<int> EcmPidsOf(int programme) =>
+        programs.TryGetValue(programme, out IReadOnlyList<(int Pid, int? Ecm)>? streams)
+            ? [.. streams.Select(stream => stream.Ecm).Append(programEcms[programme]).OfType<int>().Distinct()]
+            : [];
+
     public bool IsPmt(int pid) => pmtPids.ContainsValue(pid);
 
     public bool IsEcm(int pid) => ecmPids.Contains(pid);

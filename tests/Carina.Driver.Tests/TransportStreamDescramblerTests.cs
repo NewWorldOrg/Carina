@@ -376,6 +376,53 @@ public sealed class TransportStreamDescramblerTests
     }
 
     [Fact]
+    public void ForALiveViewerTheHeadGoesOnceItsProgrammeCanBeReadThoughAnotherPmtIsStillToCome()
+    {
+        SyntheticScrambledStream stream = WithALatePmt(out int headPackets);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection _, hold: HeadHold.ForProgramme(1));
+
+        Assert.Equal(Head(stream.Output, headPackets), descrambler.Descramble(Head(stream.Input, headPackets)));
+        Assert.Equal(After(stream.Output, headPackets), descrambler.Descramble(After(stream.Input, headPackets)));
+    }
+
+    [Fact]
+    public void ForARecordingTheHeadStillWaitsForThePmtOfEveryProgramme()
+    {
+        SyntheticScrambledStream stream = WithALatePmt(out int headPackets);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection _);
+
+        Assert.Empty(descrambler.Descramble(Head(stream.Input, headPackets)));
+        Assert.Equal(stream.Output, descrambler.Descramble(After(stream.Input, headPackets)));
+    }
+
+    [Fact]
+    public void ALiveViewerStillWaitsForTheCardToAnswerTheEcmItsProgrammeNames()
+    {
+        SyntheticScrambledStream head = new SyntheticScrambledStream()
+            .Pat((1, PmtPid), (2, OtherPmtPid))
+            .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null), (AudioPid, OtherEcmPid)])
+            .Ecm(EcmPid, FirstEcm)
+            .Scrambled(VideoPid, FirstEcm, odd: false, seed: 95);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection _, hold: HeadHold.ForProgramme(1));
+
+        Assert.Empty(descrambler.Descramble(head.Input));
+    }
+
+    [Fact]
+    public void ALiveViewerWaitingForAProgrammeThePatDoesNotListWaitsForEveryProgramme()
+    {
+        SyntheticScrambledStream stream = WithALatePmt(out int headPackets);
+
+        using TransportStreamDescrambler descrambler = Open(out FakeCardConnection _, hold: HeadHold.ForProgramme(3));
+
+        Assert.Empty(descrambler.Descramble(Head(stream.Input, headPackets)));
+        Assert.Equal(stream.Output, descrambler.Descramble(After(stream.Input, headPackets)));
+    }
+
+    [Fact]
     public void AnEmptyReadGivesNothing()
     {
         using TransportStreamDescrambler descrambler = Open(out FakeCardConnection _);
@@ -406,13 +453,38 @@ public sealed class TransportStreamDescramblerTests
             .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null), (AudioPid, null)])
             .Ecm(EcmPid, FirstEcm);
 
+    private static SyntheticScrambledStream WithALatePmt(out int headPackets)
+    {
+        SyntheticScrambledStream stream = new SyntheticScrambledStream()
+            .Pat((1, PmtPid), (2, OtherPmtPid))
+            .Scrambled(VideoPid, FirstEcm, odd: false, seed: 90)
+            .Pmt(PmtPid, 1, EcmPid, [(VideoPid, null), (AudioPid, null)])
+            .Scrambled(AudioPid, FirstEcm, odd: true, seed: 91)
+            .Ecm(EcmPid, FirstEcm)
+            .Scrambled(VideoPid, FirstEcm, odd: true, seed: 92)
+            .Clear(OtherVideoPid, 93);
+        headPackets = stream.PacketCount;
+
+        return stream
+            .Pmt(OtherPmtPid, 2, null, [(OtherVideoPid, null)])
+            .Clear(OtherVideoPid, 94)
+            .Scrambled(VideoPid, FirstEcm, odd: false, seed: 95);
+    }
+
+    private static byte[] Head(byte[] stream, int packets) =>
+        stream[..(packets * SyntheticScrambledStream.PacketLength)];
+
+    private static byte[] After(byte[] stream, int packets) =>
+        stream[(packets * SyntheticScrambledStream.PacketLength)..];
+
     private static TransportStreamDescrambler Open(
         out FakeCardConnection card,
-        int holdLimit = TransportStreamDescrambler.LongestHold
+        int holdLimit = TransportStreamDescrambler.LongestHold,
+        HeadHold? hold = null
     )
     {
         FakeSmartCardService service = FakeSmartCardService.WithOneCard(out card);
 
-        return new TransportStreamDescrambler(ConditionalAccessCard.Open(service), holdLimit: holdLimit);
+        return new TransportStreamDescrambler(ConditionalAccessCard.Open(service), holdLimit: holdLimit, hold: hold);
     }
 }

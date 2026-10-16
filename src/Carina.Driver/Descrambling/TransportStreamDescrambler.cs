@@ -29,6 +29,8 @@ public sealed class TransportStreamDescrambler : IDescrambler
 
     private readonly int holdLimit;
 
+    private readonly HeadHold hold;
+
     private readonly ProgramMap map;
 
     private readonly Lock gate = new();
@@ -47,7 +49,12 @@ public sealed class TransportStreamDescrambler : IDescrambler
 
     private bool disposed;
 
-    public TransportStreamDescrambler(ConditionalAccessCard card, ILogger? logger = null, int holdLimit = LongestHold)
+    public TransportStreamDescrambler(
+        ConditionalAccessCard card,
+        ILogger? logger = null,
+        int holdLimit = LongestHold,
+        HeadHold? hold = null
+    )
     {
         ArgumentNullException.ThrowIfNull(card);
         ArgumentOutOfRangeException.ThrowIfLessThan(holdLimit, PacketLength);
@@ -55,6 +62,7 @@ public sealed class TransportStreamDescrambler : IDescrambler
         this.card = card;
         this.logger = logger;
         this.holdLimit = holdLimit;
+        this.hold = hold ?? HeadHold.EveryProgramme;
         map = new ProgramMap(card.CaSystemId);
     }
 
@@ -358,8 +366,15 @@ public sealed class TransportStreamDescrambler : IDescrambler
         });
     }
 
-    private bool HeadIsSettled() =>
-        map.Complete && map.EcmPids.All(ecm => ecms.TryGetValue(ecm, out EcmState? state) && state.Answered);
+    private bool HeadIsSettled() => EveryProgrammeIsSettled() || AwaitedProgrammeIsSettled();
+
+    private bool EveryProgrammeIsSettled() => map.Complete && Answered(map.EcmPids);
+
+    private bool AwaitedProgrammeIsSettled() =>
+        hold.Programme is int programme && map.HasRead(programme) && Answered(map.EcmPidsOf(programme));
+
+    private bool Answered(IEnumerable<int> ecmPids) =>
+        ecmPids.All(ecm => ecms.TryGetValue(ecm, out EcmState? state) && state.Answered);
 
     public void Dispose()
     {
