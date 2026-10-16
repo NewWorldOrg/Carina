@@ -84,8 +84,9 @@ public static class FfmpegLiveInvocation
         [
             "-nostdin",
             "-hide_banner",
+            "-nostats",
             "-loglevel",
-            "error",
+            "level+info",
             "-probesize",
             ProbedBytes,
             "-analyzeduration",

@@ -16,6 +16,8 @@ internal sealed class SeatedTranscoder(ILiveTranscoder transcoder, ITranscodeSea
 
     public Task<TranscoderExit> Completion => transcoder.Completion;
 
+    public Task Probed => transcoder.Probed;
+
     public async ValueTask DisposeAsync()
     {
         await transcoder.DisposeAsync();

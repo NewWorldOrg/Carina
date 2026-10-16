@@ -162,6 +162,48 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
     }
 
     [Fact]
+    public async Task OnlyWhatTheProgrammeMarkedAsAnErrorIsKeptOfWhatItSaid()
+    {
+        await using ILiveTranscoder running = await Started(
+            standIns.Script(
+                "printf '%s\\n' '[info] Input #0, mpegts, from pipe' '[mpegts @ 0x1] [warning] Could not find codec parameters' "
+                + "'Consider increasing the probesize' '[fatal] Stream map matches no streams.' 'To ignore this, add a trailing mark.' "
+                + "'[error] Error opening output files: Invalid argument' >&2; exit 234"),
+            LiveEncoder.Software);
+
+        TranscoderExit ended = await running.Completion;
+
+        Assert.Equal(
+            "Stream map matches no streams.\nTo ignore this, add a trailing mark.\nError opening output files: Invalid argument",
+            ended.Note);
+    }
+
+    [Fact]
+    public async Task TheTranscoderIsMarkedAsHavingReadItsInputWhenTheProgrammeSaysWhatTheInputHolds()
+    {
+        await using ILiveTranscoder running = await Started(
+            standIns.Script("printf '%s\\n' '[mpegts @ 0x1] [warning] Could not find codec parameters' >&2; sleep 0.2; "
+                + "printf '%s\\n' \"[info] Input #0, mpegts, from 'pipe:0':\" >&2; cat > /dev/null"),
+            LiveEncoder.Software);
+
+        await running.Probed.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(running.Completion.IsCompleted);
+    }
+
+    [Fact]
+    public async Task ATranscoderWhoseProgrammeNeverSaidWhatItsInputHoldsIsNeverMarkedAsHavingReadIt()
+    {
+        await using ILiveTranscoder running = await Started(
+            standIns.Script("printf '%s\\n' '[fatal] Stream map matches no streams.' >&2; exit 234"),
+            LiveEncoder.Software);
+
+        await running.Completion;
+
+        Assert.False(running.Probed.IsCompleted);
+    }
+
+    [Fact]
     public async Task WhatTheProgrammeComplainedOfNamesNoPathOnThisMachine()
     {
         await using ILiveTranscoder running = await Started(

@@ -54,8 +54,9 @@ public sealed class FfmpegLiveInvocationTests
             [
                 "-nostdin",
                 "-hide_banner",
+                "-nostats",
                 "-loglevel",
-                "error",
+                "level+info",
                 "-probesize",
                 "1000000",
                 "-analyzeduration",
@@ -100,8 +101,9 @@ public sealed class FfmpegLiveInvocationTests
             [
                 "-nostdin",
                 "-hide_banner",
+                "-nostats",
                 "-loglevel",
-                "error",
+                "level+info",
                 "-probesize",
                 "1000000",
                 "-analyzeduration",
@@ -158,6 +160,19 @@ public sealed class FfmpegLiveInvocationTests
         Assert.Equal("1000000", arguments[arguments.IndexOf("-probesize") + 1]);
         Assert.InRange(arguments.IndexOf("-analyzeduration"), 0, input);
         Assert.InRange(arguments.IndexOf("-probesize"), 0, input);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheTranscoderSaysWhenItHasReadItsInputAndMarksHowSeriousEachLineIsButNeverHowFarItHasGot(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.Drawn)];
+
+        Assert.Equal("level+info", arguments[arguments.IndexOf("-loglevel") + 1]);
+        Assert.Contains("-nostats", arguments);
+        Assert.DoesNotContain("-stats", arguments);
     }
 
     [Theory]
