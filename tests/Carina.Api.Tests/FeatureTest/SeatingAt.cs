@@ -40,6 +40,17 @@ internal sealed class SeatingAt(ILiveWireSource source) : ILiveSessionManager
 
     public int ReachesLetGo => Volatile.Read(ref reachesLetGo);
 
+    public bool HoldsAReach
+    {
+        get
+        {
+            lock (gate)
+            {
+                return reachesHeld > 0;
+            }
+        }
+    }
+
     public bool ReachHeldWhileJoining => Volatile.Read(ref reachHeldWhileJoining);
 
     public Task<LiveHandover> HandOverAsync(LiveChannelKey channel, CancellationToken cancellationToken)

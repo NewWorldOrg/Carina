@@ -352,6 +352,24 @@ public sealed class LiveWireTests
     }
 
     [Fact]
+    public async Task TheChannelIsAlreadyBeingReachedForWhenTheSoundOnAirIsLookedUp()
+    {
+        SeatingAt seating = new(new HeldLiveSource());
+        SoundAskedWhileReaching sound = new(() => seating.HoldsAReach);
+        await using AuthProbe probe = AuthProbe.OverHttp(services =>
+        {
+            services.AddSingleton<ILiveSessionManager>(seating);
+            services.AddSingleton<ISoundOnAir>(sound);
+        });
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        Assert.Equal(1, sound.Asked);
+        Assert.True(sound.AskedWhileReaching);
+    }
+
+    [Fact]
     public async Task AWireThatAViewerLeftIsCountedAsTheViewerLeaving()
     {
         var held = new HeldLiveSource();
