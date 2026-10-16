@@ -51,6 +51,8 @@ internal sealed class LiveSession
 
     private ITimer? linger;
 
+    private TimeSpan? probed;
+
     private int expected;
 
     private bool closed;
@@ -237,11 +239,60 @@ internal sealed class LiveSession
             case LiveChannel.PictureHeader:
                 startup.Reach(LiveStartupSegment.InitReached);
                 break;
-            case LiveChannel.Picture:
+            case LiveChannel.Picture when startup.Current?.Reached(LiveStartupSegment.FirstPicture) is not true:
                 startup.Reach(LiveStartupSegment.FirstPicture);
+                TellHowItStarted();
                 break;
             default:
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Logs once, when the first picture has reached the viewers, how far into the session each part of its
+    /// startup was reached, the moment the transcoder had read its input among them.
+    /// </summary>
+    private void TellHowItStarted()
+    {
+        LiveStartup? reached = startup.Current;
+        TimeSpan? inputProbed;
+
+        lock (gate)
+        {
+            inputProbed = probed;
+        }
+
+        logger.LogInformation(
+            "A live session on {Key} showed its first picture. Milliseconds into the session: tuner secured {TunerSecuredMs}, "
+            + "channel locked {ChannelLockedMs}, transcoder started {TranscoderStartedMs}, input probed {InputProbedMs}, "
+            + "first header {FirstHeaderMs}, first fragment {FirstFragmentMs}.",
+            Key.ToString(),
+            Milliseconds(reached?.At(LiveStartupSegment.TunerSecured)),
+            Milliseconds(reached?.At(LiveStartupSegment.ChannelLocked)),
+            Milliseconds(reached?.At(LiveStartupSegment.TranscoderStarted)),
+            Milliseconds(inputProbed),
+            Milliseconds(reached?.At(LiveStartupSegment.InitReached)),
+            Milliseconds(reached?.At(LiveStartupSegment.FirstPicture)));
+    }
+
+    private static long? Milliseconds(TimeSpan? elapsed)
+        => elapsed is { } reached ? (long)Math.Round(reached.TotalMilliseconds) : null;
+
+    private void WatchForTheProbe(ILiveTranscoder running)
+        => running.Probed.ContinueWith(
+            static (_, state) => ((LiveSession)state!).Probed(),
+            this,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+    private void Probed()
+    {
+        TimeSpan now = startup.Elapsed;
+
+        lock (gate)
+        {
+            probed = now;
         }
     }
 
@@ -352,6 +403,7 @@ internal sealed class LiveSession
             seat = reception.Take(running.Input, () => startup.Reach(LiveStartupSegment.ChannelLocked), ending.Note);
         }
 
+        WatchForTheProbe(running);
         startup.Reach(LiveStartupSegment.TranscoderStarted);
 
         return null;

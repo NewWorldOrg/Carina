@@ -1110,6 +1110,60 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task ASessionSaysOnceHowFarIntoItEachPartOfItsStartupWasReachedWhenItsFirstPictureArrives()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+        HeldTranscoder raised = transcoders.Raised[0];
+
+        await supply.Opened[0].WriteAsync(new byte[1_000]);
+        raised.Probe();
+        await raised.WriteAsync(Fmp4.Header);
+        await Next(viewing);
+        await Next(viewing);
+
+        Assert.Empty(warnings.Startups);
+
+        await raised.WriteAsync(Fmp4.Fragment(1_000));
+        await Next(viewing);
+        await raised.WriteAsync(Fmp4.Fragment(2_000));
+        await Next(viewing);
+        await Eventually.Happens(() => warnings.Startups.Count > 0, "the first picture is followed by the startup being told");
+
+        IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Startups);
+        LiveStartup done = viewing.Startup!.Current!;
+
+        Assert.Equal(EveryFrame.ToString(), told["Key"]);
+        Assert.Equal(Milliseconds(done.At(LiveStartupSegment.TunerSecured)), told["TunerSecuredMs"]);
+        Assert.Equal(Milliseconds(done.At(LiveStartupSegment.ChannelLocked)), told["ChannelLockedMs"]);
+        Assert.Equal(Milliseconds(done.At(LiveStartupSegment.TranscoderStarted)), told["TranscoderStartedMs"]);
+        Assert.Equal(Milliseconds(done.At(LiveStartupSegment.InitReached)), told["FirstHeaderMs"]);
+        Assert.Equal(Milliseconds(done.At(LiveStartupSegment.FirstPicture)), told["FirstFragmentMs"]);
+        Assert.InRange(
+            Assert.IsType<long>(told["InputProbedMs"]),
+            Assert.IsType<long>(told["TranscoderStartedMs"]),
+            Assert.IsType<long>(told["FirstFragmentMs"]));
+    }
+
+    [Fact]
+    public async Task ASessionWhoseTranscoderNeverSaidItHadReadItsInputStillSaysHowItsStartupWent()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+        await Next(viewing);
+        await Next(viewing);
+        await Next(viewing);
+        await Eventually.Happens(() => warnings.Startups.Count > 0, "the first picture is followed by the startup being told");
+
+        IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Startups);
+
+        Assert.Null(told["InputProbedMs"]);
+        Assert.Null(told["ChannelLockedMs"]);
+        Assert.NotNull(told["FirstFragmentMs"]);
+    }
+
+    [Fact]
     public async Task ASessionMarksTheTunerSecuredWhenTheSupplyOpensAndTheChannelLockedWhenItsFirstBytesArrive()
     {
         await using ILiveViewing viewing = await Joined(EveryFrame);
@@ -1740,11 +1794,27 @@ public sealed class LiveSessionManagerTests
         throw new TimeoutException($"Did not happen within {SoonerThanATranscoderIsCutLooseFor.TotalSeconds}s: {what}.");
     }
 
+    private static long? Milliseconds(TimeSpan? elapsed)
+        => elapsed is { } reached ? (long)Math.Round(reached.TotalMilliseconds) : null;
+
     private sealed class RecordedWarnings : ILogger<LiveSessionManager>
     {
         private readonly Lock gate = new();
 
         private readonly List<Exception> failures = [];
+
+        private readonly List<IReadOnlyDictionary<string, object?>> startups = [];
+
+        public IReadOnlyList<IReadOnlyDictionary<string, object?>> Startups
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. startups];
+                }
+            }
+        }
 
         public IReadOnlyList<Exception> Failures
         {
@@ -1770,6 +1840,18 @@ public sealed class LiveSessionManagerTests
             Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
+            if (logLevel is LogLevel.Information
+                && state is IReadOnlyList<KeyValuePair<string, object?>> said
+                && said.Any(pair => string.Equals(pair.Key, "FirstFragmentMs", StringComparison.Ordinal)))
+            {
+                lock (gate)
+                {
+                    startups.Add(said.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+                }
+
+                return;
+            }
+
             if (logLevel < LogLevel.Warning || exception is null)
             {
                 return;
