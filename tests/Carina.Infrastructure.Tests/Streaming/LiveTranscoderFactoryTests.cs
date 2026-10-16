@@ -253,6 +253,29 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
     }
 
     [Fact]
+    public async Task AProgrammeThatDiesOfItsOwnAccordWhileBeingCalledOffSaysHowItEndedRatherThanThatItWasCalledOff()
+    {
+        string running = standIns.Named("running");
+
+        using var callingOff = new CancellationTokenSource();
+
+        ILiveTranscoder transcoder = await Started(
+            standIns.Script($"printf '%s\\n' '[panic] An assertion failed' >&2; touch {running}; sleep 0.5; kill -ABRT $$"),
+            LiveEncoder.Software,
+            callingOff.Token);
+
+        await Eventually.Happens(() => File.Exists(running), "the stand-in is running");
+        await callingOff.CancelAsync();
+
+        TranscoderExit ended = await transcoder.Completion;
+        await transcoder.DisposeAsync();
+
+        Assert.Equal(TranscoderFault.Refused, ended.Fault);
+        Assert.Equal(134, ended.ExitCode);
+        Assert.Contains("An assertion failed", ended.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ATranscoderThatWillNotStopWhenTheInputEndsIsStoppedAnyway()
     {
         string pids = standIns.Named("pids");
