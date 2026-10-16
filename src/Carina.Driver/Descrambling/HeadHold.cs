@@ -25,4 +25,10 @@ public static class HeadHolds
     /// </summary>
     public static HeadHold For(SessionPurpose purpose) =>
         purpose is SessionPurpose.Live ? HeadHold.WhatIsHeld : HeadHold.EveryProgramme;
+
+    /// <summary>
+    /// Whether the tuner is read from the moment its frontend locks. Only a live viewer is, so a recording keeps
+    /// starting from the bytes that follow the adapter's own start of transfer after the lock.
+    /// </summary>
+    public static bool ReadsFromTheLock(HeadHold hold) => hold is HeadHold.WhatIsHeld;
 }

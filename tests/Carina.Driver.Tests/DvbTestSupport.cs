@@ -24,6 +24,16 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
 
     public List<OpenedNode> Opened { get; } = [];
 
+    /// <summary>
+    /// Each open, tune, filter and status read in the order they were made.
+    /// </summary>
+    public List<string> Made { get; } = [];
+
+    /// <summary>
+    /// Runs on every rest between two status reads, before the scripted clock moves on.
+    /// </summary>
+    public Action? Resting { get; set; }
+
     public List<int> Closed { get; } = [];
 
     public List<DvbPropertyList> PropertiesSet { get; } = [];
@@ -86,6 +96,7 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
 
         int descriptor = nextDescriptor++;
         Opened.Add(new OpenedNode(path, access, descriptor));
+        Made.Add(path);
 
         return SyscallOutcome.Ok(descriptor);
     }
@@ -105,6 +116,7 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
         }
 
         PropertiesSet.Add(DvbPropertyList.Over((byte[])records.Clone()));
+        Made.Add("tune");
 
         return SyscallOutcome.Ok(0);
     }
@@ -153,6 +165,7 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
         }
 
         flags = statusFlags.Count > 0 ? statusFlags.Dequeue() : standingStatus;
+        Made.Add("status");
 
         return SyscallOutcome.Ok(0);
     }
@@ -190,6 +203,7 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
         }
 
         FiltersSet.Add(filter);
+        Made.Add("filter");
 
         return SyscallOutcome.Ok(0);
     }
@@ -215,8 +229,12 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
         return SyscallOutcome.Ok(0);
     }
 
+    public int ReadsMade { get; private set; }
+
     public SyscallOutcome ReadBytes(int descriptor, byte[] buffer, int count)
     {
+        ReadsMade++;
+
         if (Reads.Count > 0)
         {
             return Reads.Dequeue();
@@ -253,6 +271,7 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
 
     public void Rest(TimeSpan interval, CancellationToken cancellationToken)
     {
+        Resting?.Invoke();
         RestedFor += interval;
         clock?.Advance(interval);
     }

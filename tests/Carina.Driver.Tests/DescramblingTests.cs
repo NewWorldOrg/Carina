@@ -380,24 +380,89 @@ public sealed class DescramblingWiringTests
         var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var calls = new ScriptedDvbSystemCalls(clock);
         var descramblers = new OneDescramblerFactory { Answers = false };
-        calls.Deliver([0x47]);
 
         using ITunerDevice opened = Open(descramblers, HeadHold.WhatIsHeld, calls, clock);
+        calls.Deliver([0x47]);
         clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
         opened.Read(188, CancellationToken.None);
 
         Assert.Equal([HeadHold.WhatIsHeld, HeadHold.WhatIsHeld], descramblers.Holds);
     }
 
+    [Fact]
+    public void TheCardIsAskedForWhileTheFrontendIsStillLocking()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var calls = new ScriptedDvbSystemCalls(clock);
+        using var asked = new ManualResetEventSlim();
+        var descramblers = new CardsOnRequest(() =>
+        {
+            asked.Set();
+
+            return new ScriptedDescrambler(_ => [1]);
+        });
+        bool askedWhileLocking = false;
+        calls.ReportStatusesInTurn(FrontendStatus.Signal);
+        calls.Resting = () => askedWhileLocking |= asked.Wait(TimeSpan.FromSeconds(10));
+
+        using ITunerDevice opened = Open(descramblers, HeadHold.WhatIsHeld, calls, clock);
+
+        Assert.True(askedWhileLocking);
+        Assert.IsType<DescramblingTunerDevice>(opened);
+    }
+
+    [Fact]
+    public void ACardAskedForATunerThatWouldNotLockIsLetGoOf()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var calls = new ScriptedDvbSystemCalls(clock);
+        var descrambler = new ScriptedDescrambler(_ => [1]);
+        var descramblers = new CardsOnRequest(() => descrambler);
+
+        Assert.Throws<DvbDeviceException>(() => Open(descramblers, HeadHold.WhatIsHeld, calls, clock, FrontendStatus.Signal));
+
+        Assert.True(SpinWait.SpinUntil(() => descrambler.Disposed, TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
+    public void ATunerWhoseCardCouldNotBeAskedForIsClosedAgain()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var calls = new ScriptedDvbSystemCalls(clock);
+        var descramblers = new CardsOnRequest(() => throw new InvalidOperationException("the reader went away"));
+
+        Assert.Throws<InvalidOperationException>(() => Open(descramblers, HeadHold.WhatIsHeld, calls, clock));
+
+        Assert.NotEmpty(calls.Opened);
+        Assert.Equal(calls.Opened.Select(node => node.Descriptor).Order(), calls.Closed.Order());
+    }
+
+    [Fact]
+    public void ALiveTunerIsFilteringBeforeItIsTunedAndARecordingOnlyOnceItHasLocked()
+    {
+        var liveClock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var live = new ScriptedDvbSystemCalls(liveClock);
+        var recordingClock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var recording = new ScriptedDvbSystemCalls(recordingClock);
+
+        using (Open(new OneDescramblerFactory(), HeadHold.WhatIsHeld, live, liveClock))
+        using (Open(new OneDescramblerFactory(), HeadHold.EveryProgramme, recording, recordingClock))
+        {
+            Assert.True(live.Made.IndexOf("filter") < live.Made.IndexOf("tune"));
+            Assert.True(recording.Made.IndexOf("tune") < recording.Made.IndexOf("filter"));
+        }
+    }
+
     private static ITunerDevice Open(
         IDescramblerFactory descramblers,
         HeadHold? hold = null,
         ScriptedDvbSystemCalls? calls = null,
-        ManualTimeProvider? clock = null)
+        ManualTimeProvider? clock = null,
+        FrontendStatus standing = Locked)
     {
         ManualTimeProvider time = clock ?? new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         ScriptedDvbSystemCalls system = calls ?? new ScriptedDvbSystemCalls(time);
-        system.ReportStatus(Locked);
+        system.ReportStatus(standing);
 
         TunerDeviceFactory factory = TunerDeviceFactory.Using(
             new DriverConfiguration(null, null, 0, new TunerSettings(TunerBackend.Dvb), null),

@@ -2,12 +2,17 @@ using Carina.Driver.Configuration;
 
 namespace Carina.Driver.Tuning.Dvb;
 
+/// <param name="ReadsFromTheLock">
+/// Whether the reader is opened before the frontend is tuned, so that the first bytes after the lock are not held back
+/// while the adapter starts its transfer. What reached the reader before the lock is thrown away.
+/// </param>
 public sealed record DvbTunerSettings(
     TimeSpan LockPatience,
     TimeSpan LockPollInterval,
     TimeSpan RetryInterval,
     TimeSpan BytePatience,
-    int DemuxBufferBytes
+    int DemuxBufferBytes,
+    bool ReadsFromTheLock = false
 )
 {
     public static readonly DvbTunerSettings Default = new(
@@ -29,6 +34,10 @@ public static class LnbPower
 
 public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
 {
+    private const int SpillBytes = 188 * 1024;
+
+    private const int MostSpills = 1024;
+
     private readonly IDvbSystemCalls calls;
     private readonly TimeProvider time;
     private readonly DvbDevicePaths paths;
@@ -81,6 +90,11 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
 
         try
         {
+            if (settings.ReadsFromTheLock)
+            {
+                (demux, dvr) = OpenTheStream(calls, paths, settings);
+            }
+
             if (channel.NeedsSatelliteAerial)
             {
                 frontend.SetLnbVoltage(voltage);
@@ -103,10 +117,14 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
                 );
             }
 
-            demux = OpenNode(calls, paths.Demux, DvbAccess.Control, "the demux");
-            SetBufferSize(calls, paths.Demux, demux, settings.DemuxBufferBytes);
-            StartFilter(calls, paths.Demux, demux);
-            dvr = OpenNode(calls, paths.Dvr, DvbAccess.Stream, "the transport stream reader");
+            if (settings.ReadsFromTheLock)
+            {
+                ThrowAwayWhatCameBeforeTheLock(calls, dvr);
+            }
+            else
+            {
+                (demux, dvr) = OpenTheStream(calls, paths, settings);
+            }
 
             return new DvbTunerDevice(calls, time, paths, settings, frontend, demux, dvr);
         }
@@ -298,6 +316,46 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
                 filtered.Error,
                 "Without the filter the reader would block forever on an adapter that is otherwise working."
             );
+        }
+    }
+
+    private static (int Demux, int Dvr) OpenTheStream(IDvbSystemCalls calls, DvbDevicePaths paths, DvbTunerSettings settings)
+    {
+        int demux = OpenNode(calls, paths.Demux, DvbAccess.Control, "the demux");
+        int dvr = -1;
+
+        try
+        {
+            SetBufferSize(calls, paths.Demux, demux, settings.DemuxBufferBytes);
+            StartFilter(calls, paths.Demux, demux);
+            dvr = OpenNode(calls, paths.Dvr, DvbAccess.Stream, "the transport stream reader");
+
+            return (demux, dvr);
+        }
+        catch
+        {
+            CloseQuietly(calls, demux);
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Reads off what the demodulator put out while it was still finding the signal, which is almost all marked as
+    /// errors, and stops at the first read that would wait.
+    /// </summary>
+    private static void ThrowAwayWhatCameBeforeTheLock(IDvbSystemCalls calls, int dvr)
+    {
+        byte[] spilt = new byte[SpillBytes];
+
+        for (int read = 0; read < MostSpills; read++)
+        {
+            SyscallOutcome taken = calls.ReadBytes(dvr, spilt, spilt.Length);
+
+            if (taken.Refused ? taken.Error is not Errno.Overflowed : taken.Value is 0)
+            {
+                return;
+            }
         }
     }
 
