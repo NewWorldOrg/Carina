@@ -389,6 +389,72 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task BrPs001AChannelChangeRefusedForTheCeilingWhileTheTranscoderLeftBehindIsFinishingIsSeatedOnceItHasEnded()
+    {
+        TaskCompletionSource finishing = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders raising = new(one);
+        await using LiveSessionManager full = Managing(one, raising);
+
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing watching = Seated(await full.JoinAsync(EveryFrame, CancellationToken.None));
+
+        raising.Raised[0].FinishesWhen = finishing;
+
+        await watching.DisposeAsync();
+
+        Task<LiveJoin> joining = full.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => supply.Opened.Count is 2 && supply.Opened[1].Disposed,
+            "the other channel was opened once the tuner came free and refused for want of a place in the budget");
+
+        Assert.False(joining.IsCompleted, "the viewer waits for the transcoder left behind to end");
+        Assert.Equal(1, one.Running);
+
+        finishing.SetResult();
+
+        await using ILiveViewing next = Seated(await joining.WaitAsync(Eventually.Patience));
+
+        Assert.Equal([AnotherChannel], full.Keys);
+        Assert.Equal(2, raising.Started);
+        Assert.Equal(4, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001AChannelChangeRefusedForTheCeilingStaysRefusedWhenTheTranscoderLeftBehindOutlastsTheWait()
+    {
+        TaskCompletionSource finishing = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders raising = new(one);
+        await using LiveSessionManager full = Managing(one, raising);
+
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing watching = Seated(await full.JoinAsync(EveryFrame, CancellationToken.None));
+
+        raising.Raised[0].FinishesWhen = finishing;
+
+        await watching.DisposeAsync();
+
+        Task<LiveJoin> joining = full.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => supply.Opened.Count is 2 && supply.Opened[1].Disposed,
+            "the other channel was refused for want of a place in the budget");
+
+        clock.Turn(WaitForATunerToComeFree);
+
+        LiveJoin refused = await joining.WaitAsync(Eventually.Patience);
+
+        Assert.Equal(LiveRefusal.TooManyAlready, refused.Refusal);
+        Assert.Equal(3, supply.Asked);
+
+        finishing.SetResult();
+    }
+
+    [Fact]
     public async Task BrPs001AChannelChangeIsRefusedWhenTheTunerOnItsWayOutNeverComesFree()
     {
         supply.AsIfThereWereOneTuner = true;

@@ -188,6 +188,12 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public bool OutputOutlivesIt { get; set; }
 
+    /// <summary>
+    /// Set, a transcoder being stopped keeps its place in the budget until this is completed, as one still finishing
+    /// what it was given does.
+    /// </summary>
+    public TaskCompletionSource? FinishesWhen { get; set; }
+
     public bool Disposed { get; private set; }
 
     public async Task WriteAsync(byte[] bytes)
@@ -222,11 +228,11 @@ public sealed class HeldTranscoder : ILiveTranscoder
         exit.TrySetResult(TranscoderExit.Refused(234, HeldTranscoders.NoCaptionStream));
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (Disposed)
         {
-            return ValueTask.CompletedTask;
+            return;
         }
 
         Disposed = true;
@@ -234,9 +240,18 @@ public sealed class HeldTranscoder : ILiveTranscoder
         Complete();
         captions.Writer.TryComplete();
         exit.TrySetResult(TranscoderExit.CalledOff(string.Empty));
+
+        if (FinishesWhen is { } finishing)
+        {
+            await finishing.Task;
+        }
+
         seat.Dispose();
 
-        return FailingToStop is { } failure ? ValueTask.FromException(failure) : ValueTask.CompletedTask;
+        if (FailingToStop is { } failure)
+        {
+            throw failure;
+        }
     }
 
     private void Complete()
