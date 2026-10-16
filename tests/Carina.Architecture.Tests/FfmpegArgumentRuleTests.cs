@@ -39,6 +39,8 @@ public sealed class FfmpegArgumentRuleTests
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {kilobitsPerSecond}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {ordinal}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {programNumber}",
+        "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {rate.Denominator}",
+        "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {rate.Numerator}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {size.Height}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {size.Width}",
         "/Carina.Infrastructure/Thumbnails/FfmpegInvocation.cs {FramesLookedAt}",

@@ -32,6 +32,19 @@ public static class FfmpegLiveInvocation
 
     private const string RecordedFragmentMicroseconds = "200000";
 
+    /// <summary>
+    /// How much of the broadcast is read before decoding starts. Every service's map is repeated at least every
+    /// tenth of a second, so a quarter of a second holds the map of the service asked for after the first map of
+    /// any service in the multiplex.
+    /// </summary>
+    private const string ProbedMicroseconds = "250000";
+
+    /// <summary>
+    /// The most that is read before decoding starts, whatever the quarter of a second holds. It still reaches past
+    /// the service's map in a multiplex sent at twice the terrestrial rate.
+    /// </summary>
+    private const string ProbedBytes = "1000000";
+
     private static readonly SoundPlacement TheWholeFirstSound = SoundPlacement.WholeStream(0);
 
     public static IReadOnlyList<string> Arguments(
@@ -71,10 +84,13 @@ public static class FfmpegLiveInvocation
         [
             "-nostdin",
             "-hide_banner",
+            "-nostats",
             "-loglevel",
-            "error",
-            "-fflags",
-            "nobuffer",
+            "level+info",
+            "-probesize",
+            ProbedBytes,
+            "-analyzeduration",
+            ProbedMicroseconds,
             "-copyts",
             .. Device(encoder, machine.RenderNode),
             .. Decoding(attributes, captions),
@@ -83,6 +99,8 @@ public static class FfmpegLiveInvocation
             .. Mapping(service, taken),
             "-vf",
             Filter(profile, attributes, encoder),
+            "-r",
+            Pace(profile),
             .. Encoding(profile, encoder),
             .. Sound(),
             .. FfmpegPlaybackInvocation.Panning(taken),
@@ -215,6 +233,17 @@ public static class FfmpegLiveInvocation
         }
 
         return string.Join(',', steps);
+    }
+
+    /// <summary>
+    /// The rate the picture is written at. A probe this short can end before the stream has said its own rate,
+    /// and a rate guessed from the clock's ticks would have every frame repeated thousands of times a second.
+    /// </summary>
+    internal static string Pace(LiveProfile profile)
+    {
+        FrameRate rate = profile.Rate;
+
+        return string.Create(CultureInfo.InvariantCulture, $"{rate.Numerator}/{rate.Denominator}");
     }
 
     internal static IReadOnlyList<string> Encoding(LiveProfile profile, LiveEncoder encoder)

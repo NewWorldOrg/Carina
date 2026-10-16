@@ -59,10 +59,12 @@ public sealed class FfmpegPlaybackInvocationTests
         IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
-        Assert.Contains("nobuffer", live);
+        Assert.Contains("-analyzeduration", live);
+        Assert.Contains("-probesize", live);
         Assert.Contains("-copyts", live);
 
-        Assert.DoesNotContain("nobuffer", playing);
+        Assert.DoesNotContain("-analyzeduration", playing);
+        Assert.DoesNotContain("-probesize", playing);
         Assert.DoesNotContain("-copyts", playing);
         Assert.Equal("discardcorrupt", After(playing, "-fflags"));
     }

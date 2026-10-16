@@ -23,6 +23,11 @@ public sealed class LiveStartupRecord(TimeProvider clock) : ILiveStartup
         }
     }
 
+    /// <summary>
+    /// How long ago the record began, on the clock its marks are measured on.
+    /// </summary>
+    public TimeSpan Elapsed => clock.GetElapsedTime(began);
+
     public Task Advanced
     {
         get

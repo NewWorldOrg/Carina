@@ -23,6 +23,10 @@ public sealed class LiveTranscoder : ILiveTranscoder
 
     private readonly Queue<string> complaint = new();
 
+    private readonly TranscoderTalk talk = new();
+
+    private readonly TaskCompletionSource probed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private readonly Lock saying = new();
 
     private readonly Task<CaptionFlowFault?> drawing;
@@ -63,6 +67,8 @@ public sealed class LiveTranscoder : ILiveTranscoder
     public ChannelReader<LiveFrame> Captions => frames.Reader;
 
     public Task<TranscoderExit> Completion { get; }
+
+    public Task Probed => probed.Task;
 
     public Task<CaptionFlowFault?> Drawing => drawing;
 
@@ -108,14 +114,26 @@ public sealed class LiveTranscoder : ILiveTranscoder
             return;
         }
 
+        TranscoderLine heard;
+
         lock (saying)
         {
-            complaint.Enqueue(line.Data);
+            heard = talk.Hear(line.Data);
+
+            if (heard.Kept is { } kept)
+            {
+                complaint.Enqueue(kept);
+            }
 
             while (complaint.Count > LinesKept)
             {
                 complaint.Dequeue();
             }
+        }
+
+        if (heard.InputRead)
+        {
+            probed.TrySetResult();
         }
     }
 

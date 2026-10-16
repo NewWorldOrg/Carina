@@ -54,10 +54,13 @@ public sealed class FfmpegLiveInvocationTests
             [
                 "-nostdin",
                 "-hide_banner",
+                "-nostats",
                 "-loglevel",
-                "error",
-                "-fflags",
-                "nobuffer",
+                "level+info",
+                "-probesize",
+                "1000000",
+                "-analyzeduration",
+                "250000",
                 "-copyts",
                 "-i",
                 "pipe:0",
@@ -67,6 +70,8 @@ public sealed class FfmpegLiveInvocationTests
                 "p:1040:a:0",
                 "-vf",
                 "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1",
+                "-r",
+                "30000/1001",
                 "-c:v",
                 "libx264",
                 "-preset",
@@ -96,10 +101,13 @@ public sealed class FfmpegLiveInvocationTests
             [
                 "-nostdin",
                 "-hide_banner",
+                "-nostats",
                 "-loglevel",
-                "error",
-                "-fflags",
-                "nobuffer",
+                "level+info",
+                "-probesize",
+                "1000000",
+                "-analyzeduration",
+                "250000",
                 "-copyts",
                 "-vaapi_device",
                 RenderNode,
@@ -111,6 +119,8 @@ public sealed class FfmpegLiveInvocationTests
                 "p:1040:a:0",
                 "-vf",
                 "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload",
+                "-r",
+                "60000/1001",
                 "-c:v",
                 "h264_vaapi",
                 "-g",
@@ -125,6 +135,81 @@ public sealed class FfmpegLiveInvocationTests
                 "192k",
             ],
             FfmpegLiveInvocation.Arguments(Service, LiveProfile.FullHd60, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None));
+    }
+
+    public static TheoryData<StreamAttributes> EveryKindOfPicture
+        =>
+        [
+            Interlaced,
+            Progressive,
+            StreamAttributes.SafeSide,
+            new StreamAttributes(new VideoSize(720, 480), ScanType.Interlaced, FrameRate.BroadcastFrames, AudioMode.DualMono),
+            new StreamAttributes(new VideoSize(1920, 1080), ScanType.Undetermined, FrameRate.BroadcastFrames, AudioMode.Surround),
+        ];
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheInputIsReadForAQuarterOfASecondOfTheBroadcastAndNoMoreThanAMegabyteBeforeAnythingIsDecoded(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+        int input = arguments.IndexOf("-i");
+
+        Assert.Equal("250000", arguments[arguments.IndexOf("-analyzeduration") + 1]);
+        Assert.Equal("1000000", arguments[arguments.IndexOf("-probesize") + 1]);
+        Assert.InRange(arguments.IndexOf("-analyzeduration"), 0, input);
+        Assert.InRange(arguments.IndexOf("-probesize"), 0, input);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheTranscoderSaysWhenItHasReadItsInputAndMarksHowSeriousEachLineIsButNeverHowFarItHasGot(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.Drawn)];
+
+        Assert.Equal("level+info", arguments[arguments.IndexOf("-loglevel") + 1]);
+        Assert.Contains("-nostats", arguments);
+        Assert.DoesNotContain("-stats", arguments);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void WhatTheProbeReadIsDecodedRatherThanThrownAwaySoAPictureStartingInsideItIsNotWaitedForAgain(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.Drawn)];
+
+        Assert.DoesNotContain("nobuffer", arguments);
+        Assert.DoesNotContain("-fflags", arguments);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryKindOfPicture))]
+    public void TheProbeIsTheSameWhateverTheStreamIsSaidToCarryBecauseTheServicesOwnMapSaysWhatItCarries(
+        StreamAttributes attributes)
+    {
+        foreach (LiveEncoder encoder in Enum.GetValues<LiveEncoder>())
+        {
+            string[] said = [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, attributes, encoder, Machine, CaptionOutlet.None)];
+            string[] safe = [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, StreamAttributes.SafeSide, encoder, Machine, CaptionOutlet.None)];
+
+            Assert.Equal(safe.Take(safe.IndexOf("-i") + 2), said.Take(said.IndexOf("-i") + 2));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void ThePictureIsWrittenAtTheProfilesOwnRateWhateverRateTheShortProbeGuessed(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.Single(arguments, argument => string.Equals(argument, "-r", StringComparison.Ordinal));
+        Assert.Equal(profile.Rate.ToString(), arguments[arguments.IndexOf("-r") + 1]);
+        Assert.True(arguments.IndexOf("-r") > arguments.IndexOf("-i"));
     }
 
     [Theory]
