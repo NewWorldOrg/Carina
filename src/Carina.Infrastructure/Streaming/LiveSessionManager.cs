@@ -131,6 +131,22 @@ public sealed class LiveSessionManager(
         return LiveHandover.Carrying(new LiveHandedOverReading(reading, settings, clock));
     }
 
+    public IDisposable Reach(LiveChannelKey channel)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+
+        LiveReception reading;
+
+        lock (gate)
+        {
+            reading = Receiving(channel.Network, channel.Service);
+        }
+
+        reading.Open();
+
+        return new Reached(reading);
+    }
+
     public async ValueTask DisposeAsync()
     {
         List<LiveSession> closing;
@@ -409,6 +425,19 @@ public sealed class LiveSessionManager(
         if (forgotten)
         {
             events.Signal(AppEventName.Live);
+        }
+    }
+
+    private sealed class Reached(LiveReception reading) : IDisposable
+    {
+        private int letGo;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref letGo, 1) is 0)
+            {
+                reading.Detach();
+            }
         }
     }
 }

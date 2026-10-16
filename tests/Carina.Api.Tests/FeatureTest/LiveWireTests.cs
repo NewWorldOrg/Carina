@@ -338,6 +338,20 @@ public sealed class LiveWireTests
     }
 
     [Fact]
+    public async Task TheChannelInTheHandshakeIsReachedForUntilItsSessionIsJoined()
+    {
+        HeldLiveSource held = new();
+        await using AuthProbe probe = Wiring(held);
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        Assert.Equal([new LiveChannelKey(new NetworkId(32736), new ServiceId(1024))], Seating(probe).Reached);
+        Assert.True(Seating(probe).ReachHeldWhileJoining);
+        Assert.Equal(1, Seating(probe).ReachesLetGo);
+    }
+
+    [Fact]
     public async Task AWireThatAViewerLeftIsCountedAsTheViewerLeaving()
     {
         var held = new HeldLiveSource();

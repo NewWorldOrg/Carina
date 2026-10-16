@@ -216,9 +216,15 @@ internal sealed class LiveReception
     /// Opens the supply once however many sessions ask, and hands every asker the same answer.
     /// </summary>
     internal Task<LiveSupplyStart> OpenAsync(CancellationToken cancellationToken)
-    {
-        Task<LiveSupplyStart> answering;
+        => Opening().WaitAsync(cancellationToken);
 
+    /// <summary>
+    /// Starts opening the supply without waiting for its answer.
+    /// </summary>
+    internal void Open() => Opening();
+
+    private Task<LiveSupplyStart> Opening()
+    {
         lock (gate)
         {
             if (opening is null)
@@ -227,10 +233,8 @@ internal sealed class LiveReception
                 Life = LivedAsync(opening);
             }
 
-            answering = opening;
+            return opening;
         }
-
-        return answering.WaitAsync(cancellationToken);
     }
 
     internal LiveSeat Take(Stream into, TimeSpan patience)
