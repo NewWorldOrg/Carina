@@ -8,9 +8,13 @@ public static class DualMonoAdts
 
     public const int HeaderLength = 7;
 
+    public const int Stereo = 2;
+
     private const int LowComplexity = 1;
 
     private const int FortyEightKilohertz = 3;
+
+    private const int ChannelsTheFrameDescribes = 0;
 
     public static byte[] Silence(TimeSpan length)
     {
@@ -23,9 +27,16 @@ public static class DualMonoAdts
     public static byte[] SilentFrame()
     {
         byte[] block = RawDataBlock();
-        int length = HeaderLength + block.Length;
 
-        byte[] header = new BitWriter()
+        return [.. Header(HeaderLength + block.Length, ChannelsTheFrameDescribes), .. block];
+    }
+
+    /// <summary>
+    /// The header of a low complexity frame at 48 kHz, <paramref name="frameLength"/> bytes long with the header
+    /// counted, carrying the channels <paramref name="channelConfiguration"/> names.
+    /// </summary>
+    public static byte[] Header(int frameLength, int channelConfiguration)
+        => new BitWriter()
             .Bits(0xFFF, 12)
             .Bits(0, 1)
             .Bits(0, 2)
@@ -33,18 +44,18 @@ public static class DualMonoAdts
             .Bits(LowComplexity, 2)
             .Bits(FortyEightKilohertz, 4)
             .Bits(0, 1)
-            .Bits(0, 3)
+            .Bits(channelConfiguration, 3)
             .Bits(0, 1)
             .Bits(0, 1)
             .Bits(0, 1)
             .Bits(0, 1)
-            .Bits(length, 13)
+            .Bits(frameLength, 13)
             .Bits(0x7FF, 11)
             .Bits(0, 2)
             .ToArray();
 
-        return [.. header, .. block];
-    }
+    public static int FrameLengthOf(ReadOnlySpan<byte> header)
+        => ((header[3] & 0x03) << 11) | (header[4] << 3) | (header[5] >> 5);
 
     private static byte[] RawDataBlock()
     {
