@@ -22,6 +22,7 @@ public sealed class DvbTunerDeviceTests
 
     private static readonly DvbTunerSettings Settings = new(
         TimeSpan.FromSeconds(5),
+        TimeSpan.FromMilliseconds(10),
         TimeSpan.FromMilliseconds(100),
         TimeSpan.FromSeconds(5),
         8 * 1024 * 1024
@@ -78,6 +79,24 @@ public sealed class DvbTunerDeviceTests
         Assert.Equal(TuningFailure.NoLock, refusal.Failure);
         Assert.Contains("last status it reported while waiting", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("Carrier", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheLockIsAskedForAfterEveryShortRestRatherThanAtThePaceOfARetriedRead()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        calls.ReportStatusesInTurn(FrontendStatus.Signal, FrontendStatus.Signal | FrontendStatus.Carrier);
+
+        using DvbTunerDevice device = Open(calls, clock);
+
+        Assert.Equal(2 * Settings.LockPollInterval, calls.RestedFor);
+    }
+
+    [Fact]
+    public void ByDefaultTheLockIsAskedForEveryTenMillisecondsAndAReadIsRetriedEveryHundred()
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(10), DvbTunerSettings.Default.LockPollInterval);
+        Assert.Equal(TimeSpan.FromMilliseconds(100), DvbTunerSettings.Default.RetryInterval);
     }
 
     [Fact]
