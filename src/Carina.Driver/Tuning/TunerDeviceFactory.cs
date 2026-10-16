@@ -180,6 +180,10 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
                 {
                     answered.Result?.Dispose();
                 }
+                else
+                {
+                    _ = answered.Exception;
+                }
             },
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,

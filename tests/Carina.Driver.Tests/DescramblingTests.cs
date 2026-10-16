@@ -425,6 +425,19 @@ public sealed class DescramblingWiringTests
     }
 
     [Fact]
+    public void ATunerWhoseCardCouldNotBeAskedForIsClosedAgain()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var calls = new ScriptedDvbSystemCalls(clock);
+        var descramblers = new CardsOnRequest(() => throw new InvalidOperationException("the reader went away"));
+
+        Assert.Throws<InvalidOperationException>(() => Open(descramblers, HeadHold.WhatIsHeld, calls, clock));
+
+        Assert.NotEmpty(calls.Opened);
+        Assert.Equal(calls.Opened.Select(node => node.Descriptor).Order(), calls.Closed.Order());
+    }
+
+    [Fact]
     public void ALiveTunerIsFilteringBeforeItIsTunedAndARecordingOnlyOnceItHasLocked()
     {
         var liveClock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
