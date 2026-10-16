@@ -122,29 +122,72 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
     private static ITunerDevice Synthetic(TuningRequest tuning) =>
         new FakeTunerDevice(tuning.PhysicalChannel, tuning.ServiceId);
 
+    /// <summary>
+    /// Tunes the device while the card is asked for, so that the card's answer to the initial setting is not added to
+    /// the time the frontend takes to lock. A card that answers after the tuning has failed is let go of.
+    /// </summary>
     private ITunerDevice OpenDvb(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
     {
-        ITunerDevice opened = DvbTunerDevice.Open(
-            systemCalls.Value,
-            time,
-            PathsOf(device),
-            DvbTuneRequest.Resolve(tune, tuning),
-            LnbPower.For(device.Kind, device.LnbPower),
-            settings,
-            CancellationToken.None
-        );
+        DvbDevicePaths paths = PathsOf(device);
+        Task<IDescrambler?>? asking = descramblers.Unscrambles ? Task.Run(() => descramblers.Open(hold)) : null;
+        ITunerDevice opened;
 
-        return Unscrambling(opened, hold);
-    }
+        try
+        {
+            opened = DvbTunerDevice.Open(
+                systemCalls.Value,
+                time,
+                paths,
+                DvbTuneRequest.Resolve(tune, tuning),
+                LnbPower.For(device.Kind, device.LnbPower),
+                settings with { ReadsFromTheLock = HeadHolds.ReadsFromTheLock(hold) },
+                CancellationToken.None
+            );
+        }
+        catch
+        {
+            LetGoOnceAnswered(asking);
 
-    private ITunerDevice Unscrambling(ITunerDevice opened, HeadHold hold)
-    {
-        if (!descramblers.Unscrambles)
+            throw;
+        }
+
+        if (asking is null)
         {
             return opened;
         }
 
-        IDescrambler? descrambler = descramblers.Open(hold);
+        IDescrambler? descrambler;
+
+        try
+        {
+            descrambler = asking.GetAwaiter().GetResult();
+        }
+        catch
+        {
+            opened.Dispose();
+
+            throw;
+        }
+
+        return Unscrambling(opened, descrambler, hold);
+    }
+
+    private static void LetGoOnceAnswered(Task<IDescrambler?>? asking) =>
+        asking?.ContinueWith(
+            static answered =>
+            {
+                if (answered.IsCompletedSuccessfully)
+                {
+                    answered.Result?.Dispose();
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default
+        );
+
+    private ITunerDevice Unscrambling(ITunerDevice opened, IDescrambler? descrambler, HeadHold hold)
+    {
         if (descrambler is null)
         {
             logger?.LogWarning(

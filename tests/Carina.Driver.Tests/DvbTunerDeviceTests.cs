@@ -28,6 +28,8 @@ public sealed class DvbTunerDeviceTests
         8 * 1024 * 1024
     );
 
+    private static readonly DvbTunerSettings ReadFromTheLock = Settings with { ReadsFromTheLock = true };
+
     [Fact]
     public void OpeningTakesTheFrontendThenTheDemuxThenTheReader()
     {
@@ -118,6 +120,68 @@ public sealed class DvbTunerDeviceTests
 
         Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
 
+        Assert.Equal(calls.Opened.Select(node => node.Descriptor).Order(), calls.Closed.Order());
+    }
+
+    [Fact]
+    public void ByDefaultTheReaderIsOpenedOnlyOnceTheFrontendHasLocked()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+
+        using DvbTunerDevice device = Open(calls, clock);
+
+        Assert.True(calls.Made.IndexOf("tune") < calls.Made.IndexOf("filter"));
+        Assert.True(calls.Made.LastIndexOf("status") < calls.Made.IndexOf("/dev/dvb/adapter0/demux0"));
+    }
+
+    [Fact]
+    public void AReaderOpenedForTheLockIsFilteringBeforeTheFrontendIsTuned()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+
+        using DvbTunerDevice device = Open(calls, clock, ReadFromTheLock);
+
+        Assert.Equal(
+            ["/dev/dvb/adapter0/frontend0", "/dev/dvb/adapter0/demux0", "filter", "/dev/dvb/adapter0/dvr0", "tune"],
+            calls.Made.Take(5)
+        );
+        Assert.Equal(8 * 1024 * 1024, Assert.Single(calls.BufferSizesSet));
+    }
+
+    [Fact]
+    public void WhatReachedAReaderOpenedForTheLockBeforeTheLockIsNeverReadBack()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        calls.Deliver([0x47, 0x9F, 0xFF]);
+        calls.Deliver([0x47, 0x80, 0x00]);
+
+        using DvbTunerDevice device = Open(calls, clock, ReadFromTheLock);
+        calls.Deliver([0x47, 0x01, 0x00]);
+
+        Assert.Equal([0x47, 0x01, 0x00], device.Read(188, CancellationToken.None));
+    }
+
+    [Fact]
+    public void AReaderOpenedForTheLockOnAFrontendThatNeverLocksLeavesNoDescriptorBehind()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        calls.ReportStatus(FrontendStatus.Signal);
+
+        Assert.Throws<DvbDeviceException>(() => Open(calls, clock, ReadFromTheLock));
+
+        Assert.Equal(3, calls.Opened.Count);
+        Assert.Equal(calls.Opened.Select(node => node.Descriptor).Order(), calls.Closed.Order());
+    }
+
+    [Fact]
+    public void AReaderOpenedForTheLockThatWillNotFilterLeavesTheFrontendUntuned()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        calls.RefuseFilterWith = Errno.NoSuchDevice;
+
+        Assert.Throws<DvbDeviceException>(() => Open(calls, clock, ReadFromTheLock));
+
+        Assert.DoesNotContain("tune", calls.Made);
         Assert.Equal(calls.Opened.Select(node => node.Descriptor).Order(), calls.Closed.Order());
     }
 
@@ -381,14 +445,17 @@ public sealed class DvbTunerDeviceTests
         return (calls, clock);
     }
 
-    private static DvbTunerDevice Open(ScriptedDvbSystemCalls calls, ManualTimeProvider clock) =>
+    private static DvbTunerDevice Open(
+        ScriptedDvbSystemCalls calls,
+        ManualTimeProvider clock,
+        DvbTunerSettings? settings = null) =>
         DvbTunerDevice.Open(
             calls,
             clock,
             Paths,
             DvbChannel.Terrestrial(55),
             LnbVoltage.Off,
-            Settings,
+            settings ?? Settings,
             CancellationToken.None
         );
 }
