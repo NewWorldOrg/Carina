@@ -55,6 +55,7 @@ public sealed class DriverLiveSupply(
                     Purpose = SessionPurpose.Live,
                     Tuning = tune.ToLegacyRequest(),
                     Tune = tune,
+                    AwaitedService = service.Value,
                 },
                 cancellationToken);
         }

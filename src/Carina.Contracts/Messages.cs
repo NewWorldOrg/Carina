@@ -105,6 +105,13 @@ public sealed record StartSessionRequest
 
     public string? RecordingId { get; init; }
 
+    /// <summary>
+    /// The service a live viewer waits to see. A typed tune names a multiplex rather than a service, so this is how
+    /// the driver learns which programme to wait for before it hands the stream on; a driver that does not know the
+    /// field waits for every programme the multiplex carries.
+    /// </summary>
+    public int? AwaitedService { get; init; }
+
     public IReadOnlyList<string> Validate(DateTimeOffset now)
     {
         var problems = new List<string>();
@@ -128,6 +135,7 @@ public sealed record StartSessionRequest
 
         problems.AddRange(OutputRootProblems());
         problems.AddRange(RecordingIdProblems());
+        problems.AddRange(AwaitedServiceProblems());
 
         if (Tuning is null)
         {
@@ -229,6 +237,26 @@ public sealed record StartSessionRequest
         return WireName.IsUsable(OutputRoot)
             ? []
             : [$"outputRoot: expected {WireName.Description}; got '{OutputRoot}'."];
+    }
+
+    private IReadOnlyList<string> AwaitedServiceProblems()
+    {
+        if (AwaitedService is not int service)
+        {
+            return [];
+        }
+
+        if (Purpose is not SessionPurpose.Live)
+        {
+            return
+            [
+                $"awaitedService: only a live viewer waits for one service, and this request is a {Purpose.ToString().ToLowerInvariant()} one; got {service}.",
+            ];
+        }
+
+        return service is < 1 or > MaxServiceId
+            ? [$"awaitedService: expected 1 to {MaxServiceId}, got {service}."]
+            : [];
     }
 
     private IReadOnlyList<string> RecordingIdProblems()

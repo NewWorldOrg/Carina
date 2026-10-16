@@ -685,7 +685,7 @@ public sealed class TunerSessionManager(
                 settings,
                 request.Tuning,
                 request.Tune,
-                HeadHold.For(request.Purpose, request.Tuning.ServiceId)
+                HeadHold.For(request.Purpose, request.AwaitedService ?? request.Tuning.ServiceId)
             );
 
             if (!pool.Tuned(deviceId, request.SessionId, opened))

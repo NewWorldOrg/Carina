@@ -151,7 +151,7 @@ public sealed class WireStabilityTests
         IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(LegacyRequest));
 
         Assert.Equal(StartSessionRequestFields, fields.Take(StartSessionRequestFields.Length));
-        Assert.Equal(["tune", "recordingId"], fields.Skip(StartSessionRequestFields.Length));
+        Assert.Equal(["tune", "recordingId", "awaitedService"], fields.Skip(StartSessionRequestFields.Length));
     }
 
     [Fact]
@@ -232,7 +232,7 @@ public sealed class WireStabilityTests
     public void TheValuesOfASessionRequestAreUntouchedByTheNewField()
     {
         Assert.Equal(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55,"serviceId":50001},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00","tune":null,"recordingId":"k-90210"}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55,"serviceId":50001},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00","tune":null,"recordingId":"k-90210","awaitedService":null}""",
             DriverJson.Serialize(LegacyRequest)
         );
     }

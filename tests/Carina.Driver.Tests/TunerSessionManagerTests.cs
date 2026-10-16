@@ -156,6 +156,29 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public void ALiveSessionOnATypedTuneHasItsTunerHoldTheHeadForTheServiceItsViewerWaitsFor()
+    {
+        HoldNotingDeviceFactory factory = new(Configuration);
+        TunerSessionManager manager = Manager(Configuration, factory);
+
+        SessionStart start = manager.Begin(
+            new StartSessionRequest
+            {
+                SessionId = SessionId.Parse("live-2"),
+                Purpose = SessionPurpose.Live,
+                Tuning = TuneParams.Terrestrial(55).ToLegacyRequest(),
+                Tune = TuneParams.Terrestrial(55),
+                DeviceId = "adapter0",
+                AwaitedService = 1024,
+            }
+        );
+
+        Assert.True(start.TryGetSession(out TunerSession? session));
+        StopAndWait(session);
+        Assert.Equal([HeadHold.ForProgramme(1024)], factory.Holds);
+    }
+
+    [Fact]
     public void ARecordingHasItsTunerHoldTheHeadForEveryProgramme()
     {
         HoldNotingDeviceFactory factory = new(Configuration);
