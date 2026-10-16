@@ -78,11 +78,11 @@ public sealed class Descramblers : IDescramblerFactory
 
     public CardIdentity? CardInHand => Volatile.Read(ref cardInHand);
 
-    public IDescrambler? Open()
+    public IDescrambler? Open(HeadHold hold)
     {
         try
         {
-            return new TransportStreamDescrambler(TheCard(), logger);
+            return new TransportStreamDescrambler(TheCard(), logger, hold: hold);
         }
         catch (DescramblingException error)
         {

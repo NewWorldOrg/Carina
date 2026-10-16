@@ -115,7 +115,7 @@ public sealed class DescramblingTests
     public void ADriverWithNoCardOffersNothingAndHandsOutNothing()
     {
         Assert.False(NoDescrambling.Instance.Unscrambles);
-        Assert.Null(NoDescrambling.Instance.Open());
+        Assert.Null(NoDescrambling.Instance.Open(HeadHold.EveryProgramme));
     }
 
     [Fact]
@@ -159,6 +159,26 @@ public sealed class DescramblingTests
         clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
 
         Assert.Equal([12], device.Read(1, CancellationToken.None));
+    }
+
+    [Fact]
+    public void ACardAskedForAgainIsAskedToHoldTheHeadAsTheTunerWasOpenedTo()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var source = new ChunkByChunkTunerDevice([[1]]);
+        var cards = new CardsOnRequest(() => null);
+
+        using var device = new DescramblingTunerDevice(
+            source,
+            descrambler: null,
+            cards,
+            clock,
+            hold: HeadHold.ForProgramme(1024));
+
+        clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
+        device.Read(1, CancellationToken.None);
+
+        Assert.Equal([HeadHold.ForProgramme(1024)], cards.Holds);
     }
 
     [Fact]
@@ -276,15 +296,17 @@ public sealed class ThrowingDescrambler : IDescrambler
 
 public sealed class CardsOnRequest(Func<IDescrambler?> answer) : IDescramblerFactory
 {
-    public int Asked { get; private set; }
+    public List<HeadHold> Holds { get; } = [];
+
+    public int Asked => Holds.Count;
 
     public bool Unscrambles => true;
 
     public CardIdentity? CardInHand => null;
 
-    public IDescrambler? Open()
+    public IDescrambler? Open(HeadHold hold)
     {
-        Asked++;
+        Holds.Add(hold);
 
         return answer();
     }
@@ -342,34 +364,70 @@ public sealed class DescramblingWiringTests
         opened.Dispose();
     }
 
-    private static ITunerDevice Open(IDescramblerFactory descramblers)
+    [Fact]
+    public void TheCardIsAskedToHoldTheHeadAsTheTunerIsOpenedTo()
+    {
+        var descramblers = new OneDescramblerFactory();
+
+        using ITunerDevice opened = Open(descramblers, HeadHold.ForProgramme(1024));
+
+        Assert.Equal([HeadHold.ForProgramme(1024)], descramblers.Holds);
+    }
+
+    [Fact]
+    public void ATunerOpenedWhileNoCardAnswersAsksAgainWithTheSameHold()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var calls = new ScriptedDvbSystemCalls(clock);
-        calls.ReportStatus(Locked);
+        var descramblers = new OneDescramblerFactory { Answers = false };
+        calls.Deliver([0x47]);
+
+        using ITunerDevice opened = Open(descramblers, HeadHold.ForProgramme(1024), calls, clock);
+        clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
+        opened.Read(188, CancellationToken.None);
+
+        Assert.Equal([HeadHold.ForProgramme(1024), HeadHold.ForProgramme(1024)], descramblers.Holds);
+    }
+
+    private static ITunerDevice Open(
+        IDescramblerFactory descramblers,
+        HeadHold? hold = null,
+        ScriptedDvbSystemCalls? calls = null,
+        ManualTimeProvider? clock = null)
+    {
+        ManualTimeProvider time = clock ?? new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        ScriptedDvbSystemCalls system = calls ?? new ScriptedDvbSystemCalls(time);
+        system.ReportStatus(Locked);
 
         TunerDeviceFactory factory = TunerDeviceFactory.Using(
             new DriverConfiguration(null, null, 0, new TunerSettings(TunerBackend.Dvb), null),
-            clock,
-            calls,
+            time,
+            system,
             descramblers);
 
         return factory.Create(
             new DeviceSettings("pt3-0", DeviceKind.Terrestrial, "/dev/dvb/adapter0/frontend0"),
             new TuningRequest(TunerKind.Terrestrial, 27),
-            tune: null);
+            tune: null,
+            hold ?? HeadHold.EveryProgramme);
     }
 
     private sealed class OneDescramblerFactory : IDescramblerFactory
     {
         public bool Answers { get; set; } = true;
 
+        public List<HeadHold> Holds { get; } = [];
+
         public bool Unscrambles => true;
 
         public CardIdentity? CardInHand => null;
 
-        public IDescrambler? Open() =>
-            Answers ? new ScriptedDescrambler(_ => [1]) : null;
+        public IDescrambler? Open(HeadHold hold)
+        {
+            Holds.Add(hold);
+
+            return Answers ? new ScriptedDescrambler(_ => [1]) : null;
+        }
     }
 }
 
@@ -391,7 +449,7 @@ public sealed class DescramblersTests
         FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection _);
         Descramblers descramblers = Descramblers.Over(() => service, logger: null);
 
-        using IDescrambler? descrambler = descramblers.Open();
+        using IDescrambler? descrambler = descramblers.Open(HeadHold.EveryProgramme);
 
         Assert.NotNull(descrambler);
         Assert.Equal(SyntheticCardKeys.CaSystemId, descramblers.CardInHand!.CaSystemId);
@@ -406,12 +464,28 @@ public sealed class DescramblersTests
         Queue<FakeSmartCardService> services = new([answering, empty]);
         Descramblers descramblers = Descramblers.Over(services.Dequeue, logger: null);
 
-        using IDescrambler? first = descramblers.Open();
-        using IDescrambler? second = descramblers.Open();
+        using IDescrambler? first = descramblers.Open(HeadHold.EveryProgramme);
+        using IDescrambler? second = descramblers.Open(HeadHold.EveryProgramme);
 
         Assert.NotNull(first);
         Assert.Null(second);
         Assert.Equal("0A0B0C0D0E0F", descramblers.CardInHand!.CardId);
+    }
+
+    [Fact]
+    public void ACardOpenedForALiveViewerHandsOnTheHeadOnceThatViewersProgrammeCanBeRead()
+    {
+        FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection _);
+        Descramblers descramblers = Descramblers.Over(() => service, logger: null);
+        SyntheticScrambledStream head = new SyntheticScrambledStream()
+            .Pat((1, 0x0101), (2, 0x0102))
+            .Pmt(0x0101, 1, 0x0901, [(0x0111, null)])
+            .Ecm(0x0901, [0x01, 0x02, 0x03])
+            .Scrambled(0x0111, [0x01, 0x02, 0x03], odd: true, seed: 1);
+
+        using IDescrambler? descrambler = descramblers.Open(HeadHold.ForProgramme(1));
+
+        Assert.Equal(head.Output, descrambler!.Descramble(head.Input));
     }
 
     [Fact]
@@ -428,11 +502,11 @@ public sealed class DescramblingOnThisMachineTests
     {
         IDescramblerFactory descramblers = Descramblers.Probe(logger: null);
 
-        using IDescrambler? descrambler = descramblers.Open();
+        using IDescrambler? descrambler = descramblers.Open(HeadHold.EveryProgramme);
 
         if (descrambler is null)
         {
-            Assert.Null(NoDescrambling.Instance.Open());
+            Assert.Null(NoDescrambling.Instance.Open(HeadHold.EveryProgramme));
 
             return;
         }

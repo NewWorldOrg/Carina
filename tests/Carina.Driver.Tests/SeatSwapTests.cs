@@ -1,5 +1,6 @@
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Diagnostics;
 using Carina.Driver.Ipc;
 using Carina.Driver.Recording;
@@ -87,7 +88,7 @@ public sealed class BlockingTunerDeviceFactory(ITunerDevice device) : ITunerDevi
     private readonly SemaphoreSlim asked = new(0);
     private readonly SemaphoreSlim released = new(0);
 
-    public ITunerDevice Create(DeviceSettings settings, TuningRequest tuning, TuneParams? tune)
+    public ITunerDevice Create(DeviceSettings settings, TuningRequest tuning, TuneParams? tune, HeadHold hold)
     {
         asked.Release();
         released.Wait();

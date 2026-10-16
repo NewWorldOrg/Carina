@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 
@@ -241,7 +242,7 @@ public sealed class SessionStartRaceTests : IDisposable
 
         public int OpeningsOf(string deviceId) => openings.GetValueOrDefault(deviceId);
 
-        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
         {
             openings.AddOrUpdate(device.Id!, 1, (_, opened) => opened + 1);
 
@@ -333,7 +334,7 @@ public sealed class SessionStartRaceTests : IDisposable
             }
         }
 
-        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
         {
             if (Interlocked.Increment(ref holding) > 1)
             {

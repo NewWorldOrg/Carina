@@ -3,6 +3,7 @@ using System.Threading.Channels;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Events;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
@@ -141,6 +142,28 @@ public sealed class TunerSessionManagerTests : IDisposable
         Assert.True(manager.TryGet(SessionId.Parse("s-1"), out _));
 
         StopAndWait(session);
+    }
+
+    [Fact]
+    public void ALiveSessionHasItsTunerHoldTheHeadOnlyForTheServiceItAskedFor()
+    {
+        HoldNotingDeviceFactory factory = new(Configuration);
+        TunerSessionManager manager = Manager(Configuration, factory);
+
+        StopAndWait(Begin(manager, "live-1", "adapter0", SessionPurpose.Live));
+
+        Assert.Equal([HeadHold.ForProgramme(50001)], factory.Holds);
+    }
+
+    [Fact]
+    public void ARecordingHasItsTunerHoldTheHeadForEveryProgramme()
+    {
+        HoldNotingDeviceFactory factory = new(Configuration);
+        TunerSessionManager manager = Manager(Configuration, factory);
+
+        StopAndWait(Begin(manager, "s-1", "adapter0"));
+
+        Assert.Equal([HeadHold.EveryProgramme], factory.Holds);
     }
 
     [Fact]
@@ -1462,5 +1485,19 @@ public sealed class TunerSessionManagerTests : IDisposable
             Tune = tune,
             DeviceId = deviceId,
         };
+    }
+}
+
+internal sealed class HoldNotingDeviceFactory(DriverConfiguration configuration) : ITunerDeviceFactory
+{
+    private readonly TunerDeviceFactory synthetic = new(configuration, TimeProvider.System);
+
+    public List<HeadHold> Holds { get; } = [];
+
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
+    {
+        Holds.Add(hold);
+
+        return synthetic.Create(device, tuning, tune, hold);
     }
 }

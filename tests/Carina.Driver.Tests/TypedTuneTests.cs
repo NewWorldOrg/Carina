@@ -1,5 +1,6 @@
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Tuning;
 using Carina.Driver.Tuning.Dvb;
 
@@ -208,7 +209,7 @@ public sealed class TypedTuneTests
         var tune = TuneParams.Terrestrial(UnassignedTerrestrialChannel);
 
         using ITunerDevice device = Factory(calls, clock)
-            .Create(Terrestrial(), tune.ToLegacyRequest(), tune);
+            .Create(Terrestrial(), tune.ToLegacyRequest(), tune, HeadHold.EveryProgramme);
 
         DvbPropertyList properties = Assert.Single(calls.PropertiesSet);
 
@@ -229,7 +230,7 @@ public sealed class TypedTuneTests
         (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var tune = TuneParams.Bs(15, SyntheticStream);
 
-        using ITunerDevice device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
+        using ITunerDevice device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune, HeadHold.EveryProgramme);
 
         DvbPropertyList properties = Assert.Single(calls.PropertiesSet);
 
@@ -251,7 +252,7 @@ public sealed class TypedTuneTests
         (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var tune = TuneParams.Cs110(24);
 
-        using ITunerDevice device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
+        using ITunerDevice device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune, HeadHold.EveryProgramme);
 
         DvbPropertyList properties = Assert.Single(calls.PropertiesSet);
 
@@ -269,7 +270,7 @@ public sealed class TypedTuneTests
         (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var tune = TuneParams.Cs110(24);
 
-        using ITunerDevice device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
+        using ITunerDevice device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune, HeadHold.EveryProgramme);
 
         Assert.Equal(LnbVoltage.Off, Assert.Single(calls.VoltagesSet));
     }
@@ -281,7 +282,7 @@ public sealed class TypedTuneTests
         var tune = TuneParams.Cs110(24);
 
         using ITunerDevice device = Factory(calls, clock)
-            .Create(Satellite() with { LnbPower = true }, tune.ToLegacyRequest(), tune);
+            .Create(Satellite() with { LnbPower = true }, tune.ToLegacyRequest(), tune, HeadHold.EveryProgramme);
 
         Assert.Equal(LnbVoltage.Eighteen, Assert.Single(calls.VoltagesSet));
     }
@@ -293,7 +294,7 @@ public sealed class TypedTuneTests
         var tune = TuneParams.Terrestrial(UnassignedTerrestrialChannel);
 
         using ITunerDevice device = Factory(calls, clock)
-            .Create(Terrestrial(), tune.ToLegacyRequest(), tune);
+            .Create(Terrestrial(), tune.ToLegacyRequest(), tune, HeadHold.EveryProgramme);
 
         Assert.Empty(calls.VoltagesSet);
     }
@@ -308,7 +309,8 @@ public sealed class TypedTuneTests
             factory.Create(
                 Terrestrial(),
                 TuneParams.Terrestrial(UnassignedTerrestrialChannel).ToLegacyRequest(),
-                TuneParams.Terrestrial(UnassignedTerrestrialChannel)
+                TuneParams.Terrestrial(UnassignedTerrestrialChannel),
+                HeadHold.EveryProgramme
             )
         )
         { }
@@ -317,7 +319,8 @@ public sealed class TypedTuneTests
             factory.Create(
                 Satellite(),
                 TuneParams.Bs(15, SyntheticStream).ToLegacyRequest(),
-                TuneParams.Bs(15, SyntheticStream)
+                TuneParams.Bs(15, SyntheticStream),
+                HeadHold.EveryProgramme
             )
         )
         { }
@@ -326,7 +329,8 @@ public sealed class TypedTuneTests
             factory.Create(
                 Satellite(),
                 TuneParams.Cs110(24).ToLegacyRequest(),
-                TuneParams.Cs110(24)
+                TuneParams.Cs110(24),
+                HeadHold.EveryProgramme
             )
         )
         { }

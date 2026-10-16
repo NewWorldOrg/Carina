@@ -1,3 +1,5 @@
+using Carina.Contracts;
+
 namespace Carina.Driver.Descrambling;
 
 /// <summary>
@@ -16,4 +18,10 @@ public sealed record HeadHold
     public int? Programme { get; }
 
     public static HeadHold ForProgramme(int programme) => new(programme);
+
+    /// <summary>
+    /// A live viewer waits for the service it asked for; every other purpose waits for every programme.
+    /// </summary>
+    public static HeadHold For(SessionPurpose purpose, int? service) =>
+        purpose is SessionPurpose.Live && service is int programme ? ForProgramme(programme) : EveryProgramme;
 }

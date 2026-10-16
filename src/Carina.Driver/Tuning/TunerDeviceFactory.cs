@@ -18,7 +18,7 @@ public interface ITunerDevice : IDisposable
 
 public interface ITunerDeviceFactory
 {
-    ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune);
+    ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold);
 }
 
 public interface ITunerDeviceCheck
@@ -86,11 +86,11 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
             descramblers ?? NoDescrambling.Instance
         );
 
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold) =>
         backend switch
         {
             TunerBackend.Fake => Synthetic(tune?.ToLegacyRequest() ?? tuning),
-            TunerBackend.Dvb => OpenDvb(device, tuning, tune),
+            TunerBackend.Dvb => OpenDvb(device, tuning, tune, hold),
             _ => throw BackendNeverEstablished(),
         };
 
@@ -122,7 +122,7 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
     private static ITunerDevice Synthetic(TuningRequest tuning) =>
         new FakeTunerDevice(tuning.PhysicalChannel, tuning.ServiceId);
 
-    private ITunerDevice OpenDvb(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+    private ITunerDevice OpenDvb(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
     {
         ITunerDevice opened = DvbTunerDevice.Open(
             systemCalls.Value,
@@ -134,17 +134,17 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
             CancellationToken.None
         );
 
-        return Unscrambling(opened);
+        return Unscrambling(opened, hold);
     }
 
-    private ITunerDevice Unscrambling(ITunerDevice opened)
+    private ITunerDevice Unscrambling(ITunerDevice opened, HeadHold hold)
     {
         if (!descramblers.Unscrambles)
         {
             return opened;
         }
 
-        IDescrambler? descrambler = descramblers.Open();
+        IDescrambler? descrambler = descramblers.Open(hold);
         if (descrambler is null)
         {
             logger?.LogWarning(
@@ -154,7 +154,7 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
 
         try
         {
-            return new DescramblingTunerDevice(opened, descrambler, descramblers, time, logger);
+            return new DescramblingTunerDevice(opened, descrambler, descramblers, time, logger, hold);
         }
         catch
         {

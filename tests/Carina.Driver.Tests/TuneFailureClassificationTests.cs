@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Ipc;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
@@ -340,7 +341,7 @@ public sealed class TuneFailureClassificationTests
 
     private sealed class FailingChannelDeviceFactory(int deadChannel) : ITunerDeviceFactory
     {
-        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold) =>
             tuning.PhysicalChannel == deadChannel
                 ? throw DvbFailure.NoLock("the frontend did not lock within 5 seconds.")
                 : new ScriptedTunerDevice();
@@ -368,14 +369,15 @@ public sealed class TuneFailureClassificationTests
         public ITunerDevice Create(
             DeviceSettings device,
             TuningRequest tuning,
-            TuneParams? tune
+            TuneParams? tune,
+            HeadHold hold
         ) => throw failure();
     }
 
     private sealed class QueuedDeviceFactory(ConcurrentQueue<ITunerDevice> devices)
         : ITunerDeviceFactory
     {
-        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
         {
             Assert.True(devices.TryDequeue(out ITunerDevice? next), "The test scripted too few devices.");
 

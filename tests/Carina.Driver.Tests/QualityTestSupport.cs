@@ -1,5 +1,6 @@
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Tuning;
 using Carina.Driver.Tuning.Dvb;
 
@@ -121,7 +122,7 @@ public sealed class PacedTunerDeviceFactory(Func<ScriptedQualitySource?> signal)
 
     public PacedTunerDevice Last => made[^1];
 
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
     {
         var paced = new PacedTunerDevice { Signal = signal() };
         made.Add(paced);
