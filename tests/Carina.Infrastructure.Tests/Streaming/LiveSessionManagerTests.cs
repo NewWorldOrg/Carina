@@ -1388,6 +1388,81 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task ATranscoderThatExitsOnItsOwnLeavesOneWarningWithItsExitCodeAndTheErrorLinesItKept()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].Fail(134, "the first line it kept\nthe last line it kept");
+
+        await Drained(viewing);
+        await Told();
+
+        IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Endings);
+
+        Assert.Equal(EveryFrame.ToString(), told["Key"]);
+        Assert.Equal(134, told["ExitCode"]);
+        Assert.Equal("the first line it kept | the last line it kept", told["KeptErrorLines"]);
+        Assert.Equal(false, told["FirstPictureShown"]);
+        Assert.Null(told["FragmentFault"]);
+    }
+
+    [Fact]
+    public async Task ASupplyThatEndsLeavesOneWarningSayingWhyAndHowTheTranscoderExited()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        supply.Opened[0].Ending = LiveSupplyEnding.Of(LiveSupplyEnd.TunerFailed, "the tuner stopped answering.");
+        supply.Opened[0].NoMore();
+
+        await Eventually.Happens(() => viewing.Ending!.Current is not null, "the ending is noted when the supply ends");
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+        transcoders.Raised[0].NoMore();
+
+        await Drained(viewing);
+        await Told();
+
+        IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Endings);
+
+        Assert.Equal(0, told["ExitCode"]);
+        Assert.Equal(LiveSupplyEnd.TunerFailed, told["SupplyEnding"]);
+        Assert.Equal("the tuner stopped answering.", told["SupplyNote"]);
+        Assert.Equal(true, told["FirstPictureShown"]);
+    }
+
+    [Fact]
+    public async Task OutputThatIsNoFragmentLeavesOneWarningNamingWhatWasWrongWithIt()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Drained(viewing));
+        await Told();
+
+        IReadOnlyDictionary<string, object?> told = Assert.Single(warnings.Endings);
+
+        Assert.Equal(LiveFragmentFault.NotTheContainerItWasAskedFor, told["FragmentFault"]);
+        Assert.Null(told["ExitCode"]);
+    }
+
+    [Fact]
+    public async Task SessionsStoppedWithTheManagerLeaveNoWarningAboutHowTheyEnded()
+    {
+        await using ILiveViewing one = await Joined(EveryFrame);
+        await using ILiveViewing another = await Joined(EveryField);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await transcoders.Raised[1].WriteAsync(Fmp4.Header);
+        await manager.DisposeAsync();
+
+        Assert.Equal(0, budget.Running);
+        Assert.Empty(warnings.Endings);
+    }
+
+    [Fact]
     public async Task ATranscoderWhoseOutputOutlivesItDoesNotHoldTheTeardownPastTheStopGrace()
     {
         ILiveViewing viewing = await Joined(EveryFrame);
@@ -1796,6 +1871,18 @@ public sealed class LiveSessionManagerTests
         }
     }
 
+    /// <summary>
+    /// Waits for a session's ending to be told and for the session to be torn down, so that a second line about
+    /// the same ending would have been written by then.
+    /// </summary>
+    private async Task Told()
+    {
+        await Eventually.Happens(() => warnings.Endings.Count > 0, "how the session ended is told");
+        await Eventually.Happens(
+            () => budget.Running is 0 && supply.Opened.All(opened => opened.Disposed) && manager.Keys.Count is 0,
+            "the session is torn down, its transcoder gone and its stream let go");
+    }
+
     private static async Task<LiveFrame> Next(ILiveViewing viewing)
     {
         using CancellationTokenSource patience = new(Eventually.Patience);
@@ -1932,6 +2019,19 @@ public sealed class LiveSessionManagerTests
 
         private readonly List<IReadOnlyDictionary<string, object?>> startups = [];
 
+        private readonly List<IReadOnlyDictionary<string, object?>> endings = [];
+
+        public IReadOnlyList<IReadOnlyDictionary<string, object?>> Endings
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. endings];
+                }
+            }
+        }
+
         public IReadOnlyList<IReadOnlyDictionary<string, object?>> Startups
         {
             get
@@ -1974,6 +2074,18 @@ public sealed class LiveSessionManagerTests
                 lock (gate)
                 {
                     startups.Add(said.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+                }
+
+                return;
+            }
+
+            if (logLevel is LogLevel.Warning
+                && state is IReadOnlyList<KeyValuePair<string, object?>> ended
+                && ended.Any(pair => string.Equals(pair.Key, "KeptErrorLines", StringComparison.Ordinal)))
+            {
+                lock (gate)
+                {
+                    endings.Add(ended.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
                 }
 
                 return;
