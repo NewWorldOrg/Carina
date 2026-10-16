@@ -454,12 +454,22 @@ public sealed class TransportStreamDescrambler : IDescrambler
         });
     }
 
-    private bool HeadIsSettled() => EveryProgrammeIsSettled() || AwaitedProgrammeIsSettled();
+    private bool HeadIsSettled() => EveryProgrammeIsSettled() || EverythingHeldCanBeRead();
 
     private bool EveryProgrammeIsSettled() => map.Complete && Answered(map.EcmPids);
 
-    private bool AwaitedProgrammeIsSettled() =>
-        hold.Programme is int programme && map.HasRead(programme) && Answered(map.EcmPidsOf(programme));
+    /// <summary>
+    /// The PAT has been read, a PMT has named an ECM for this card, every ECM named so far has been answered, and every
+    /// scrambled packet held that still has no keys belongs to an ECM the card has already refused.
+    /// </summary>
+    private bool EverythingHeldCanBeRead() =>
+        hold is HeadHold.WhatIsHeld
+        && map.PatSeen
+        && map.EcmPids.Count > 0
+        && Answered(map.EcmPids)
+        && waiting.All(offset => Answered(map.EcmFor(PidOf(shelf.At(offset, PacketLength)))));
+
+    private bool Answered(int? ecm) => ecm is int named && Answered([named]);
 
     private bool Answered(IEnumerable<int> ecmPids) =>
         ecmPids.All(ecm => ecms.TryGetValue(ecm, out EcmState? state) && state.Answered);

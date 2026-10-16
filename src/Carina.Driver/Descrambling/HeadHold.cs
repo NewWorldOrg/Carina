@@ -3,25 +3,26 @@ using Carina.Contracts;
 namespace Carina.Driver.Descrambling;
 
 /// <summary>
-/// What the head of a stream is held for before any of it is handed on: every programme the PAT lists, or the one
-/// programme a viewer waits for.
+/// What the head of a stream is held for before any of it is handed on: every programme the PAT lists, or no more than
+/// it takes for every scrambled packet held to be readable.
 /// </summary>
-public sealed record HeadHold
+public enum HeadHold
 {
-    public static readonly HeadHold EveryProgramme = new(programme: null);
-
-    private HeadHold(int? programme) => Programme = programme;
+    EveryProgramme,
 
     /// <summary>
-    /// The programme number the head waits for alone, or null when it waits for every programme.
+    /// The head goes once every scrambled packet held so far can be read, which no programme that has not sent a packet
+    /// yet holds back. Every programme the tuner is carrying has sent packets by then, so a session that comes to share
+    /// the tuner gets none of its own still scrambled.
     /// </summary>
-    public int? Programme { get; }
+    WhatIsHeld,
+}
 
-    public static HeadHold ForProgramme(int programme) => new(programme);
-
+public static class HeadHolds
+{
     /// <summary>
-    /// A live viewer waits for the service it asked for; every other purpose waits for every programme.
+    /// A live viewer waits for no more than what is held; every other purpose waits for every programme.
     /// </summary>
-    public static HeadHold For(SessionPurpose purpose, int? service) =>
-        purpose is SessionPurpose.Live && service is int programme ? ForProgramme(programme) : EveryProgramme;
+    public static HeadHold For(SessionPurpose purpose) =>
+        purpose is SessionPurpose.Live ? HeadHold.WhatIsHeld : HeadHold.EveryProgramme;
 }

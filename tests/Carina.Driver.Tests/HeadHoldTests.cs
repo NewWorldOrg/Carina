@@ -6,15 +6,9 @@ namespace Carina.Driver.Tests;
 public sealed class HeadHoldTests
 {
     [Fact]
-    public void ALiveViewerWaitsForTheServiceItAskedFor()
+    public void ALiveViewerWaitsForNoMoreThanWhatIsHeld()
     {
-        Assert.Equal(HeadHold.ForProgramme(1024), HeadHold.For(SessionPurpose.Live, service: 1024));
-    }
-
-    [Fact]
-    public void ALiveViewerThatNamesNoServiceWaitsForEveryProgramme()
-    {
-        Assert.Equal(HeadHold.EveryProgramme, HeadHold.For(SessionPurpose.Live, service: null));
+        Assert.Equal(HeadHold.WhatIsHeld, HeadHolds.For(SessionPurpose.Live));
     }
 
     [Theory]
@@ -23,8 +17,8 @@ public sealed class HeadHoldTests
     [InlineData(SessionPurpose.SurveyNow)]
     [InlineData(SessionPurpose.Scan)]
     [InlineData(SessionPurpose.Logo)]
-    public void EveryOtherPurposeWaitsForEveryProgrammeWhateverServiceItNames(SessionPurpose purpose)
+    public void EveryOtherPurposeWaitsForEveryProgramme(SessionPurpose purpose)
     {
-        Assert.Equal(HeadHold.EveryProgramme, HeadHold.For(purpose, service: 1024));
+        Assert.Equal(HeadHold.EveryProgramme, HeadHolds.For(purpose));
     }
 }

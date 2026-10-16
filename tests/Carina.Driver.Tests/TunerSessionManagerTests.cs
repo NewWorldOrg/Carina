@@ -145,14 +145,14 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
-    public void ALiveSessionHasItsTunerHoldTheHeadOnlyForTheServiceItAskedFor()
+    public void ALiveSessionHasItsTunerHoldTheHeadOnlyForWhatItHolds()
     {
         HoldNotingDeviceFactory factory = new(Configuration);
         TunerSessionManager manager = Manager(Configuration, factory);
 
         StopAndWait(Begin(manager, "live-1", "adapter0", SessionPurpose.Live));
 
-        Assert.Equal([HeadHold.ForProgramme(50001)], factory.Holds);
+        Assert.Equal([HeadHold.WhatIsHeld], factory.Holds);
     }
 
     [Fact]

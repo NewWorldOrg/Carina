@@ -173,12 +173,12 @@ public sealed class DescramblingTests
             descrambler: null,
             cards,
             clock,
-            hold: HeadHold.ForProgramme(1024));
+            hold: HeadHold.WhatIsHeld);
 
         clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
         device.Read(1, CancellationToken.None);
 
-        Assert.Equal([HeadHold.ForProgramme(1024)], cards.Holds);
+        Assert.Equal([HeadHold.WhatIsHeld], cards.Holds);
     }
 
     [Fact]
@@ -369,9 +369,9 @@ public sealed class DescramblingWiringTests
     {
         var descramblers = new OneDescramblerFactory();
 
-        using ITunerDevice opened = Open(descramblers, HeadHold.ForProgramme(1024));
+        using ITunerDevice opened = Open(descramblers, HeadHold.WhatIsHeld);
 
-        Assert.Equal([HeadHold.ForProgramme(1024)], descramblers.Holds);
+        Assert.Equal([HeadHold.WhatIsHeld], descramblers.Holds);
     }
 
     [Fact]
@@ -382,11 +382,11 @@ public sealed class DescramblingWiringTests
         var descramblers = new OneDescramblerFactory { Answers = false };
         calls.Deliver([0x47]);
 
-        using ITunerDevice opened = Open(descramblers, HeadHold.ForProgramme(1024), calls, clock);
+        using ITunerDevice opened = Open(descramblers, HeadHold.WhatIsHeld, calls, clock);
         clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
         opened.Read(188, CancellationToken.None);
 
-        Assert.Equal([HeadHold.ForProgramme(1024), HeadHold.ForProgramme(1024)], descramblers.Holds);
+        Assert.Equal([HeadHold.WhatIsHeld, HeadHold.WhatIsHeld], descramblers.Holds);
     }
 
     private static ITunerDevice Open(
@@ -483,7 +483,7 @@ public sealed class DescramblersTests
             .Ecm(0x0901, [0x01, 0x02, 0x03])
             .Scrambled(0x0111, [0x01, 0x02, 0x03], odd: true, seed: 1);
 
-        using IDescrambler? descrambler = descramblers.Open(HeadHold.ForProgramme(1));
+        using IDescrambler? descrambler = descramblers.Open(HeadHold.WhatIsHeld);
 
         Assert.Equal(head.Output, descrambler!.Descramble(head.Input));
     }
