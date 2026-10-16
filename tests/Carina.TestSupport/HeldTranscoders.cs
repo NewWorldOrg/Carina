@@ -221,6 +221,17 @@ public sealed class HeldTranscoder : ILiveTranscoder
         exit.TrySetResult(TranscoderExit.Finished());
     }
 
+    /// <summary>
+    /// Ends the transcoder as a programme that exited <paramref name="exitCode"/> on its own, having kept
+    /// <paramref name="complaint"/>.
+    /// </summary>
+    public void Fail(int exitCode, string complaint)
+    {
+        Complete();
+        captions.Writer.TryComplete();
+        exit.TrySetResult(TranscoderExit.Refused(exitCode, complaint));
+    }
+
     public void RefuseForWantOfACaptionStream()
     {
         Complete();
