@@ -51,6 +51,10 @@ public static class SegmentFeature
 
     public const string PastCmShare = "pastCmShare";
 
+    public const string PastOpeningShare = "pastOpeningShare";
+
+    public const string PastEndingShare = "pastEndingShare";
+
     public const string CaptionShare = "captionShare";
 
     public const string ChannelCorrelation = "channelCorrelation";
@@ -98,6 +102,8 @@ public static class SegmentFeature
         .. Enumerable.Range(0, GenreKinds).Select(Genre),
         MultipleOf15sWithoutLogo,
         CatalogCmMultipleOf15s,
+        PastOpeningShare,
+        PastEndingShare,
     ];
 
     private static readonly HashSet<string> Known = new(Listed, StringComparer.Ordinal);
