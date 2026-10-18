@@ -8,9 +8,10 @@ namespace Carina.Domain.Segments;
 public sealed record RecordingPieces(IReadOnlyList<SegmentPiece> Pieces, IReadOnlyList<TimeSpan> Snaps, TimeSpan Length, string Station, string? Series);
 
 /// <summary>
-/// Detects the breaks in one recording with one version of the model: finds the boundary candidates,
-/// computes the features of the segments between them, scores each segment as a break by logistic
-/// regression, decides the sequence by dynamic programming and judges it. The logo is read only where it
+/// Detects the breaks, the opening and the ending in one recording with one version of the model: finds the
+/// boundary candidates, computes the features of the segments between them, scores how likely each segment is
+/// to be each kind the version tells apart by logistic regression, decides the sequence by dynamic programming
+/// and judges it. The logo is read only where it
 /// tells programme from break. Reading the segments and scoring them are apart, so that one reading
 /// serves every model learned with the same thresholds.
 /// </summary>
@@ -45,11 +46,11 @@ public static class SegmentDetector
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(model);
 
-        double[] scores = [.. read.Pieces.Select(piece => model.BreakScore(piece.Features, read.Station, read.Series))];
-        SegmentKind[] kinds = SegmentSequence.Decide(read.Pieces, scores, model.Thresholds);
+        SegmentChances[] chances = [.. read.Pieces.Select(piece => model.Chances(piece.Features, read.Station, read.Series))];
+        SegmentKind[] kinds = SegmentSequence.Decide(read.Pieces, chances, model.Thresholds);
 
         return SegmentDetection.Judged(
-            SegmentSequence.Spans(read.Pieces, kinds, scores, read.Length, model.Thresholds),
+            SegmentSequence.Spans(read.Pieces, kinds, chances, read.Length, model.Thresholds),
             read.Length,
             read.Snaps);
     }
