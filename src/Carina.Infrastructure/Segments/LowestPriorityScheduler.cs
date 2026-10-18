@@ -7,7 +7,7 @@ namespace Carina.Infrastructure.Segments;
 /// Runs work one piece at a time on a thread of its own, at the lowest priority the thread can be given: the
 /// lowest the runtime names, and on Linux, where the runtime leaves the thread as it is, the highest nice
 /// value a thread may take for itself. <see cref="Lowered"/> says which nice value the thread took, or null
-/// when it could take none.
+/// when it could take none, and <see cref="Ran"/> how many pieces of work it has run.
 /// </summary>
 public sealed class LowestPriorityScheduler : TaskScheduler, IDisposable
 {
@@ -20,6 +20,8 @@ public sealed class LowestPriorityScheduler : TaskScheduler, IDisposable
     private readonly TaskCompletionSource<int?> lowered = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private readonly Thread thread;
+
+    private long ran;
 
     public LowestPriorityScheduler()
     {
@@ -34,6 +36,8 @@ public sealed class LowestPriorityScheduler : TaskScheduler, IDisposable
 
     public Task<int?> Lowered => lowered.Task;
 
+    public long Ran => Interlocked.Read(ref ran);
+
     public override int MaximumConcurrencyLevel => 1;
 
     public Task<T> Run<T>(Func<T> work, CancellationToken cancellationToken)
@@ -44,7 +48,7 @@ public sealed class LowestPriorityScheduler : TaskScheduler, IDisposable
     protected override void QueueTask(Task task) => queued.Add(task);
 
     protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
-        => Thread.CurrentThread == thread && TryExecuteTask(task);
+        => Thread.CurrentThread == thread && Execute(task);
 
     protected override IEnumerable<Task> GetScheduledTasks() => queued.ToArray();
 
@@ -54,8 +58,15 @@ public sealed class LowestPriorityScheduler : TaskScheduler, IDisposable
 
         foreach (Task task in queued.GetConsumingEnumerable())
         {
-            TryExecuteTask(task);
+            Execute(task);
         }
+    }
+
+    private bool Execute(Task task)
+    {
+        Interlocked.Increment(ref ran);
+
+        return TryExecuteTask(task);
     }
 
     private static int? LowerThisThread()

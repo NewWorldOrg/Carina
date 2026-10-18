@@ -247,6 +247,44 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(followed, harness.Worklist.Heard[0]);
     }
 
+    [Fact(DisplayName = "the running job matches the recordings waiting for spare time on its own looks, the next soon after a match")]
+    public async Task TheRunningJobMatchesTheWaitingRecordingsOnItsOwnLooks()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        RecordingId older = await harness.ReadAsync(Sound(1), 3, "架空のクイズ");
+        RecordingId newer = await harness.ReadAsync(Sound(2), 1, "架空の物語");
+        CatalogMatchingJob job = harness.Job(new CatalogMatchingSettings
+        {
+            BeforeFirstLook = TimeSpan.FromMilliseconds(10),
+            BetweenLooks = TimeSpan.FromHours(1),
+            AfterAMatch = TimeSpan.FromMilliseconds(10),
+        });
+
+        await job.StartAsync(CancellationToken.None);
+        await Eventually.Happens(
+            () => harness.Records.Row(older)?.AwaitsMatching is false && harness.Records.Row(newer)?.AwaitsMatching is false,
+            "the recordings waiting for spare time were never both matched");
+        await job.StopAsync(CancellationToken.None);
+
+        Assert.Equal(newer, harness.Worklist.Heard[0]);
+    }
+
+    [Fact(DisplayName = "the counting of a match runs on the lowest priority scheduler: making the matcher, the entries, each other recording, the recording itself and the catalog change")]
+    public async Task TheCountingOfAMatchRunsOnTheLowestPriorityScheduler()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        uint[] earlier = Sound(1);
+        await harness.ReadAsync(earlier, 7, "架空のクイズ");
+        RecordingId heard = await harness.ReadAsync(Sharing(Sound(2), earlier, 5_000, 9_000, Advert), 0, "架空の物語");
+
+        CatalogMatchingLook look = await harness.Job().LookAsync(CancellationToken.None);
+
+        Assert.Equal(heard, look.Matched?.Recording);
+        Assert.Equal(5, harness.Lowest.Ran);
+    }
+
     [Fact(DisplayName = "the counting runs on a thread of its own at the lowest priority, and on Linux at the highest nice value")]
     public async Task TheCountingRunsAtTheLowestPriority()
     {
@@ -257,6 +295,7 @@ public sealed class CatalogMatchingJobTests
             CancellationToken.None);
 
         Assert.NotEqual(Environment.CurrentManagedThreadId, seen.Thread);
+        Assert.Equal(1, lowest.Ran);
         Assert.Equal(ThreadPriority.Lowest, seen.Priority);
         Assert.Equal(OperatingSystem.IsLinux() ? LowestPriorityScheduler.LowestNice : null, await lowest.Lowered);
         Assert.Equal(OperatingSystem.IsLinux() ? "19" : null, seen.Nice);
