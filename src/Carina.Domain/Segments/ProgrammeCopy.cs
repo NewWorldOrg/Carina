@@ -100,6 +100,17 @@ public sealed record ProgrammeCopy
             SeriesNames.Of(recording.SnapshotName));
     }
 
+    /// <summary>
+    /// What says which series the recording of this programme is of: its station, its series name, made from
+    /// its programme's name when the copy was kept before series names were made, and when it started.
+    /// </summary>
+    public SeriesMember MemberAs(RecordingId recordingId)
+    {
+        ArgumentNullException.ThrowIfNull(recordingId);
+
+        return new SeriesMember(recordingId, NetworkId, ServiceId, SeriesName ?? SeriesNames.Of(Name), RecordingStartedAt);
+    }
+
     public bool Equals(ProgrammeCopy? other)
         => other is not null
            && NetworkId.Equals(other.NetworkId)

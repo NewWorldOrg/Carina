@@ -3922,6 +3922,182 @@ namespace Carina.Db.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Carina.Domain.Segments.RecordingDetection", b =>
+                {
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recording_id");
+
+                    b.Property<int>("ModelVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("model_version");
+
+                    b.Property<DateTime>("CatalogUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("catalog_until");
+
+                    b.Property<double>("CmShare")
+                        .HasColumnType("double precision")
+                        .HasColumnName("cm_share");
+
+                    b.Property<DateTime>("DetectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("detected_at");
+
+                    b.Property<int>("ExtractionVersionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("extraction_version");
+
+                    b.Property<string>("Segments")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("segments");
+
+                    b.Property<string>("Snaps")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snaps");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("state");
+
+                    b.HasKey("RecordingId", "ModelVersion")
+                        .HasName("pk_segment_detection");
+
+                    b.HasIndex("DetectedAt")
+                        .HasDatabaseName("ix_segment_detection_detected_at");
+
+                    b.HasIndex("ModelVersion")
+                        .HasDatabaseName("ix_segment_detection_model_version");
+
+                    b.ToTable("segment_detection", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_segment_detection_cm_share", "cm_share BETWEEN 0 AND 1");
+
+                            t.HasCheckConstraint("ck_segment_detection_extraction_version", "extraction_version >= 1");
+
+                            t.HasCheckConstraint("ck_segment_detection_segments", "jsonb_typeof(segments) = 'array'\nAND jsonb_array_length(segments) >= 1\nAND (state <> 'Marked' OR jsonb_array_length(segments) >= 2)\nAND jsonb_typeof(snaps) = 'array'");
+
+                            t.HasCheckConstraint("ck_segment_detection_state", "state IN ('Marked', 'NothingFound', 'Discarded')");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Segments.SegmentModelVersion", b =>
+                {
+                    b.Property<int>("Number")
+                        .HasColumnType("integer")
+                        .HasColumnName("number");
+
+                    b.Property<DateTime?>("AdoptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("adopted_at");
+
+                    b.Property<bool>("ByHand")
+                        .HasColumnType("boolean")
+                        .HasColumnName("by_hand");
+
+                    b.Property<DateTime?>("ChosenByHandAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("chosen_by_hand_at");
+
+                    b.Property<string>("Evidence")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence");
+
+                    b.Property<short>("Kinds")
+                        .HasColumnType("smallint")
+                        .HasColumnName("kinds");
+
+                    b.Property<string>("Metrics")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("metrics");
+
+                    b.Property<decimal?>("RecommendedThreshold")
+                        .HasColumnType("numeric(3,2)")
+                        .HasColumnName("recommended_threshold");
+
+                    b.Property<DateTime?>("RetiredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("retired_at");
+
+                    b.Property<string>("Rollback")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("rollback");
+
+                    b.Property<DateTime?>("RolledBackAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("rolled_back_at");
+
+                    b.Property<string>("SeriesOffsets")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("series_offsets");
+
+                    b.Property<string>("Standardisation")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("standardisation");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("StationOffsets")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("station_offsets");
+
+                    b.Property<string>("Stations")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("stations");
+
+                    b.Property<string>("Thresholds")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("thresholds");
+
+                    b.Property<DateTime>("TrainedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("trained_at");
+
+                    b.Property<string>("Weights")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("weights");
+
+                    b.HasKey("Number")
+                        .HasName("pk_segment_model_version");
+
+                    b.HasIndex("State")
+                        .IsUnique()
+                        .HasDatabaseName("ux_segment_model_version_active")
+                        .HasFilter("state = 'Active'");
+
+                    b.ToTable("segment_model_version", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_segment_model_version_by_hand", "NOT by_hand OR (state = 'Active' AND chosen_by_hand_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_segment_model_version_evaluation", "(metrics IS NULL OR jsonb_typeof(metrics) = 'object')\nAND (stations IS NULL OR jsonb_typeof(stations) = 'array')\nAND (evidence IS NULL OR jsonb_typeof(evidence) = 'object')\nAND (rollback IS NULL OR jsonb_typeof(rollback) = 'object')\nAND (recommended_threshold IS NULL OR recommended_threshold BETWEEN 0 AND 1)");
+
+                            t.HasCheckConstraint("ck_segment_model_version_kinds", "kinds IN (2, 4)");
+
+                            t.HasCheckConstraint("ck_segment_model_version_number", "number >= 1");
+
+                            t.HasCheckConstraint("ck_segment_model_version_parameters", "jsonb_typeof(weights) = 'object'\nAND jsonb_typeof(station_offsets) = 'object'\nAND jsonb_typeof(series_offsets) = 'object'\nAND jsonb_typeof(thresholds) = 'object'\nAND jsonb_typeof(standardisation) = 'object'");
+
+                            t.HasCheckConstraint("ck_segment_model_version_rollback", "(rolled_back_at IS NULL) = (rollback IS NULL) AND (rolled_back_at IS NULL OR state = 'Retired')");
+
+                            t.HasCheckConstraint("ck_segment_model_version_state", "state IN ('Candidate', 'Active', 'Retired')");
+
+                            t.HasCheckConstraint("ck_segment_model_version_times", "(adopted_at IS NULL) = (state = 'Candidate')\nAND (retired_at IS NOT NULL) = (state = 'Retired')\nAND (adopted_at IS NULL OR adopted_at >= trained_at)\nAND (retired_at IS NULL OR retired_at >= adopted_at)");
+                        });
+                });
+
             modelBuilder.Entity("Carina.Domain.Segments.SegmentSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -4139,6 +4315,16 @@ namespace Carina.Db.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_segment_catalog_occurrence_segment_catalog_entry_entry_id");
+                });
+
+            modelBuilder.Entity("Carina.Domain.Segments.RecordingDetection", b =>
+                {
+                    b.HasOne("Carina.Domain.Segments.SegmentModelVersion", null)
+                        .WithMany()
+                        .HasForeignKey("ModelVersion")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_segment_detection_segment_model_version_model_version");
                 });
 
             modelBuilder.Entity("Carina.Domain.Programmes.StreamVisit", b =>

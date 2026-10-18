@@ -432,6 +432,30 @@ public sealed class ServiceCollectionExtensionsTests
             service => ReferenceEquals(service, provider.GetRequiredService<CatalogMatchingJob>()));
     }
 
+    [Fact(DisplayName = "registers where the versions of the model and the detections are kept, what detection reads, and the detecting")]
+    public void RegistersTheDetection()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<SegmentModelVersionRepository>(scope.ServiceProvider.GetRequiredService<ISegmentModelVersionRepository>());
+        Assert.IsType<RecordingDetectionRepository>(scope.ServiceProvider.GetRequiredService<IRecordingDetectionRepository>());
+        Assert.IsType<DetectionWorklist>(scope.ServiceProvider.GetRequiredService<IDetectionWorklist>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentDetecting>());
+    }
+
+    [Fact(DisplayName = "registers the detection of segments as the same job that is stopped with the app, told by the matching what it matched at once")]
+    public void RegistersTheSegmentDetectionJob()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Same(SegmentDetectionSettings.Default, provider.GetRequiredService<SegmentDetectionSettings>());
+        Assert.Same(provider.GetRequiredService<MatchedAtOnce>(), provider.GetRequiredService<MatchedAtOnce>());
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<SegmentDetectionJob>()));
+    }
+
     [Fact(DisplayName = "registers where the segment settings are kept and the switch that says whether learning is on")]
     public void RegistersTheSegmentSettingsAndTheLearningSwitch()
     {

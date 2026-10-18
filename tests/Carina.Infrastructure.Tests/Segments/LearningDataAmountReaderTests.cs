@@ -240,7 +240,7 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
             .SqlQueryRaw<long>(
                 """
                 SELECT sum(pg_total_relation_size(name::regclass))::bigint AS "Value"
-                FROM unnest(ARRAY['segment_catalog_entry', 'segment_catalog_occurrence', 'segment_extraction', 'segment_learning_data', 'segment_settings']) AS name
+                FROM unnest(ARRAY['segment_catalog_entry', 'segment_catalog_occurrence', 'segment_detection', 'segment_extraction', 'segment_learning_data', 'segment_model_version', 'segment_settings']) AS name
                 """)
             .SingleAsync(Cancel);
     }

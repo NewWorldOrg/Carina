@@ -104,6 +104,20 @@ public sealed class SeriesLinks
         ];
     }
 
+    /// <summary>
+    /// The members among <paramref name="others"/> of the series of <paramref name="judged"/>, joined to it
+    /// through one another, in the order they were handed over.
+    /// </summary>
+    public IReadOnlyList<SeriesMember> SeriesOf(SeriesMember judged, IReadOnlyList<SeriesMember> others)
+    {
+        ArgumentNullException.ThrowIfNull(judged);
+        ArgumentNullException.ThrowIfNull(others);
+
+        IReadOnlyList<SeriesMember> series = Group([judged, .. others.Where(other => !other.RecordingId.Equals(judged.RecordingId))])[0];
+
+        return [.. series.Skip(1)];
+    }
+
     private bool ShareSound(SeriesMember one, SeriesMember other)
         => soundGroups.TryGetValue(one.RecordingId, out int oneGroup)
            && soundGroups.TryGetValue(other.RecordingId, out int otherGroup)

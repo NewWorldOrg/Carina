@@ -85,6 +85,19 @@ public sealed class SeriesLinksTests
         Assert.Equal([elsewhere], groups[1]);
     }
 
+    [Fact(DisplayName = "the series of a recording is the others joined to it through one another, in the order handed over, never itself")]
+    public void TheSeriesOfARecordingIsTheOthersJoinedToIt()
+    {
+        SeriesMember judged = Member(1, "架空の物語", Evening.AddDays(14).AddMinutes(160));
+        SeriesMember week1 = Member(1, "架空の物語", Evening);
+        SeriesMember week2 = Member(1, "架空の物語", Evening.AddDays(7).AddMinutes(80));
+        SeriesMember elsewhere = Member(2, "架空の物語", Evening);
+        SeriesMember another = Member(1, "架空のクイズ", Evening);
+
+        Assert.Equal([week1, week2], SeriesLinks.None.SeriesOf(judged, [week1, elsewhere, judged, another, week2]));
+        Assert.Empty(SeriesLinks.None.SeriesOf(judged, [elsewhere, another]));
+    }
+
     private static SeriesMember Member(int station, string? series, DateTime startedAt)
         => new(RecordingId.New(), new NetworkId(station), new ServiceId(station), series, startedAt);
 }

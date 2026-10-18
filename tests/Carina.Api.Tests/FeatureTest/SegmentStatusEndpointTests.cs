@@ -26,6 +26,7 @@ internal sealed class SegmentStatusFeature : IAsyncDisposable
             services.RemoveAll<IHostedService>();
             services.AddSingleton<ILearningDataAmountReader>(LearningData);
             services.AddSingleton<ICatalogCountsReader>(Catalog);
+            services.AddSingleton<ISegmentModelVersionRepository>(Versions);
         }));
 
         Client = Built.WithTestScheme().CreateClient();
@@ -39,6 +40,8 @@ internal sealed class SegmentStatusFeature : IAsyncDisposable
     public HeldLearningDataAmount LearningData { get; } = new();
 
     public HeldCatalogCounts Catalog { get; } = new();
+
+    public HeldSegmentModelVersions Versions { get; } = new();
 
     public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
 
@@ -123,7 +126,7 @@ public sealed class SegmentStatusEndpointTests
         JsonElement catalog = data.GetProperty("catalog");
 
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(["catalog", "learningData"], data.EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(["catalog", "learningData", "version"], data.EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
             ["cm", "ending", "opening", "programmeFixture", "stationFixture", "unknown"],
             catalog.EnumerateObject().Select(kind => kind.Name).Order(StringComparer.Ordinal).ToArray());
@@ -149,6 +152,42 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(133, catalog.GetProperty("unknown").GetInt32());
     }
 
+    [Fact(DisplayName = "BR-CS-003: the version in use is answered by its number, where it stands, whether it was chosen by hand, and when it was made and put in use")]
+    public async Task TheVersionInUseIsAnswered()
+    {
+        await using var feature = new SegmentStatusFeature();
+
+        (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
+        JsonElement version = data.GetProperty("version");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            ["adoptedAt", "byHand", "number", "state", "trainedAt"],
+            version.EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(1, version.GetProperty("number").GetInt32());
+        Assert.Equal("active", version.GetProperty("state").GetString());
+        Assert.False(version.GetProperty("byHand").GetBoolean());
+        Assert.Equal("2026-10-18T00:00:00Z", version.GetProperty("trainedAt").GetString());
+        Assert.Equal("2026-10-18T00:00:00Z", version.GetProperty("adoptedAt").GetString());
+        Assert.Equal(1, feature.Versions.Reads);
+    }
+
+    [Fact(DisplayName = "a version chosen by hand is answered as such, with when it was made and put in use")]
+    public async Task AVersionChosenByHandIsAnswered()
+    {
+        await using var feature = new SegmentStatusFeature();
+        DateTime trained = new(2026, 11, 1, 18, 0, 0, DateTimeKind.Utc);
+        feature.Versions.Active = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Active, true, SegmentModel.First, trained, trained.AddMinutes(5), null, trained.AddDays(1), null);
+
+        (_, JsonElement data) = await feature.DataAsync();
+        JsonElement version = data.GetProperty("version");
+
+        Assert.Equal(3, version.GetProperty("number").GetInt32());
+        Assert.True(version.GetProperty("byHand").GetBoolean());
+        Assert.Equal("2026-11-01T18:00:00Z", version.GetProperty("trainedAt").GetString());
+        Assert.Equal("2026-11-01T18:05:00Z", version.GetProperty("adoptedAt").GetString());
+    }
+
     [Fact(DisplayName = "a caller who has not signed in cannot read the status, and nothing is counted for them")]
     public async Task ACallerWhoHasNotSignedInCannotReadTheStatus()
     {
@@ -161,5 +200,6 @@ public sealed class SegmentStatusEndpointTests
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());
         Assert.Equal(0, feature.LearningData.Reads);
         Assert.Equal(0, feature.Catalog.Reads);
+        Assert.Equal(0, feature.Versions.Reads);
     }
 }

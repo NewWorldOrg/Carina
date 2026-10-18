@@ -92,6 +92,18 @@ public sealed class ProgrammeCopyTests
                 null));
     }
 
+    [Fact(DisplayName = "the recording of a programme belongs to a series by its station, its series name and when it started, the name made from the programme's when none was kept")]
+    public void TheRecordingOfAProgrammeBelongsToASeries()
+    {
+        RecordingId recording = RecordingId.New();
+
+        SeriesMember named = Copy(null, "架空の連続物").MemberAs(recording);
+        SeriesMember unnamed = Copy(null, null).MemberAs(recording);
+
+        Assert.Equal(new SeriesMember(recording, new NetworkId(40_001), new ServiceId(60_001), "架空の連続物", Noon), named);
+        Assert.Equal(SeriesNames.Of("架空の番組"), unnamed.SeriesName);
+    }
+
     private static ProgrammeCopy Copy(int? episode, string? seriesName)
         => new(
             new NetworkId(40_001),
