@@ -102,6 +102,18 @@ public sealed class SegmentLearningTests
         Assert.Equal(AdoptionVerdict.TooLittleEvidence, learned.Verdict);
     }
 
+    [Fact(DisplayName = "a version chosen by hand stays in use whatever a round of learning makes")]
+    public void AVersionChosenByHandStaysWhateverIsLearned()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> sounds) = Taught(Weeks);
+        SegmentModelVersion chosen = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, true, SegmentModel.First, InUse.TrainedAt, InUse.AdoptedAt, null, InUse.AdoptedAt, null);
+
+        SegmentLearned learned = SegmentLearning.Learn(recordings, new LearningCatalog(sounds, SeriesLinks.None), chosen, OneSetting, SegmentSettingsStanding.DefaultSkipThreshold, Now);
+
+        Assert.Equal(AdoptionVerdict.ChosenByHand, learned.Verdict);
+        Assert.NotNull(learned.Evaluation.Metrics);
+    }
+
     [Fact(DisplayName = "the search keeps the setting that finds the most boundaries, wherever among the settings it is tried")]
     public void TheSearchKeepsTheSettingThatFindsTheMost()
     {

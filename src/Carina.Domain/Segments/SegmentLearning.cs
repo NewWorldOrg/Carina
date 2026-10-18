@@ -46,7 +46,7 @@ public static class SegmentLearning
         Learner[] learners = [.. recordings.OrderBy(recording => recording.StartedAt).ThenBy(recording => recording.Id.Value).Select(recording => new Learner(recording, catalog))];
         int[] judged = [.. Enumerable.Range(0, learners.Length).Where(at => learners[at].Judged)];
         DateTime? labelsUntil = LabelsUntil(recordings);
-        Judging judging = new(learners, judged, skipThreshold, labelsUntil);
+        Judging judging = new(learners, skipThreshold, labelsUntil);
         SegmentEvaluation inUse = judging.Evaluated(
             [.. judged.Select(at => learners[at].Compared(SegmentDetector.Detect(learners[at].Read(active.Thresholds), active.Model)))],
             learner => SkipReturns.Of(learner.Recording.Actions, active.Number, now - ReturnsOver, now));
@@ -166,22 +166,21 @@ public static class SegmentLearning
             => new(context.NetworkId, context.ServiceId, recording.Answer!.Segments, detection);
     }
 
-    private sealed class Judging(Learner[] learners, int[] judged, double skipThreshold, DateTime? labelsUntil)
+    private sealed class Judging(Learner[] learners, double skipThreshold, DateTime? labelsUntil)
     {
         public SegmentEvaluation Evaluated(IReadOnlyList<SegmentComparison> compared, Func<Learner, SkipReturns> returns)
         {
             StationMetrics[] stations =
             [
-                .. judged
-                    .Select((learner, at) => (Learner: learners[learner], Compared: compared[at]))
-                    .GroupBy(pair => (pair.Compared.NetworkId.Value, pair.Compared.ServiceId.Value))
-                    .OrderBy(group => group.Key.Item1)
-                    .ThenBy(group => group.Key.Item2)
+                .. compared
+                    .GroupBy(comparison => (Network: comparison.NetworkId.Value, Service: comparison.ServiceId.Value))
+                    .OrderBy(group => group.Key.Network)
+                    .ThenBy(group => group.Key.Service)
                     .Select(group => new StationMetrics(
-                        group.First().Compared.NetworkId,
-                        group.First().Compared.ServiceId,
+                        group.First().NetworkId,
+                        group.First().ServiceId,
                         group.Count(),
-                        SegmentMetrics.Of([.. group.Select(pair => pair.Compared)], skipThreshold, Summed(learners.Where(learner => SameStation(learner, group.First().Compared)), returns))!)),
+                        SegmentMetrics.Of([.. group], skipThreshold, Summed(learners.Where(learner => SameStation(learner, group.First())), returns))!)),
             ];
 
             return new SegmentEvaluation(

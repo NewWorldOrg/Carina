@@ -74,7 +74,7 @@ public static class SegmentRegression
         double[] walked = Moved(theta, step, scale);
         double reached = design.Objective(walked, pull);
 
-        for (int halving = 0; halving < MostHalvings && reached < objective; halving++)
+        for (int halving = 0; halving < MostHalvings && !(reached >= objective); halving++)
         {
             scale /= 2;
             walked = Moved(theta, step, scale);
