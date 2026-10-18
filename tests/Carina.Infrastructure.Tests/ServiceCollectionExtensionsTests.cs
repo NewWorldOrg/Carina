@@ -466,6 +466,20 @@ public sealed class ServiceCollectionExtensionsTests
             service => ReferenceEquals(service, provider.GetRequiredService<SegmentDetectionJob>()));
     }
 
+    [Fact(DisplayName = "registers the day's round of learning as the same job that is stopped with the app, where the rounds taken are kept, and the learning it runs")]
+    public void RegistersTheSegmentTrainingJob()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.Same(SegmentTrainingSettings.Default, provider.GetRequiredService<SegmentTrainingSettings>());
+        Assert.IsType<SegmentLearningRoundRepository>(scope.ServiceProvider.GetRequiredService<ISegmentLearningRoundRepository>());
+        Assert.IsType<SegmentTrainer>(scope.ServiceProvider.GetRequiredService<ISegmentTrainer>());
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<SegmentTrainingJob>()));
+    }
+
     [Fact(DisplayName = "registers where the segment settings are kept and the switch that says whether learning is on")]
     public void RegistersTheSegmentSettingsAndTheLearningSwitch()
     {
