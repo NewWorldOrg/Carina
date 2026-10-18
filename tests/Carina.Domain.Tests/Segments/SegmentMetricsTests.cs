@@ -152,6 +152,20 @@ public sealed class SegmentMetricsTests
         Assert.Null(SkipReturns.None.Share);
     }
 
+    [Fact(DisplayName = "BR-CD-008: the figures read with what viewers did lately keep every other figure and take the share that came back and the skips from it")]
+    public void TheFiguresReadWithWhatViewersDidLatelyKeepTheRest()
+    {
+        SegmentMetrics evaluated = new(0.93, 0.85, 1.2, 2.1, [new KindMetrics(SegmentKind.Break, 0.95, 0.97)], 0.5, 4);
+
+        SegmentMetrics lately = evaluated.WithReturns(new SkipReturns(64, 2));
+        SegmentMetrics none = evaluated.WithReturns(SkipReturns.None);
+
+        Assert.Equal((0.93, 0.85, 1.2, 2.1), (lately.BoundaryRecallWithin2s!.Value, lately.BoundaryRecallWithin1s!.Value, lately.ExtraBoundariesPerRecording, lately.ProgrammeSkippedSecondsPerHour));
+        Assert.Equal(evaluated.Kinds, lately.Kinds);
+        Assert.Equal((2 / 64d, 64), (lately.ReturnedAfterSkipShare!.Value, lately.Skips));
+        Assert.Equal(((double?)null, 0), (none.ReturnedAfterSkipShare, none.Skips));
+    }
+
     private static ViewerAction Action(ViewerActionKind action, int days, int? version)
         => new(Evening.AddDays(days), action, SegmentKind.Break, TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(690), version);
 

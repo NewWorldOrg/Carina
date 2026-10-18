@@ -407,6 +407,20 @@ public sealed class ServiceCollectionExtensionsTests
             scope.ServiceProvider.GetRequiredService<ILearningDataAmountReader>());
     }
 
+    [Fact(DisplayName = "registers what reads what viewers did with the skip buttons and what the answers give an evaluation to stand on, both answering nothing while neither is kept")]
+    public async Task RegistersWhatReadsTheSkipsAndTheAnswers()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+        ISkipReturnsReader skips = scope.ServiceProvider.GetRequiredService<ISkipReturnsReader>();
+        IAnswerEvidenceReader answers = scope.ServiceProvider.GetRequiredService<IAnswerEvidenceReader>();
+
+        Assert.IsType<NoSkipReturns>(skips);
+        Assert.IsType<NoAnswerEvidence>(answers);
+        Assert.Equal(SkipReturns.None, await skips.ReadAsync(1, DateTime.UnixEpoch, DateTime.UnixEpoch, CancellationToken.None));
+        Assert.Equal(new EvaluationEvidence(0, 0, null), await answers.ReadAsync(CancellationToken.None));
+    }
+
     [Fact(DisplayName = "registers where the catalog is kept, what counts it, and what matching reads")]
     public void RegistersTheCatalog()
     {
