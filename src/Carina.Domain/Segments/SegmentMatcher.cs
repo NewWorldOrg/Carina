@@ -257,12 +257,12 @@ public sealed class SegmentMatcher
         int starts = votes[0];
         int ends = itself ? Math.Min(votes[^1] + 1, starts + offset) : votes[^1] + 1;
 
-        if (ends - starts < 1 || diagonal.Errors(there, masked, starts, ends) >= MostBitErrors)
+        if (ends - starts is < 1 or > MostFrames || diagonal.Errors(there, masked, starts, ends) >= MostBitErrors)
         {
             return null;
         }
 
-        while (starts > diagonal.Low && diagonal.Agrees(there, masked, starts - 1) && (!itself || ends <= starts - 1 + offset))
+        while (starts > diagonal.Low && diagonal.Agrees(there, masked, starts - 1) && (!itself || ends <= starts - 1 + offset) && ends - starts <= MostFrames)
         {
             starts--;
         }
