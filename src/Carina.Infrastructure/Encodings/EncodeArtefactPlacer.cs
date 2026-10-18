@@ -218,13 +218,47 @@ public sealed class EncodeArtefactPlacer(
     /// it was.
     /// </summary>
     public RenameVerdict PutCaptionedInPlace(EncodeJob job, string captioned)
+        => PutInPlace(job, captioned, "has a text track put into it");
+
+    /// <summary>
+    /// Puts a copy of a standing artefact with its chapters written again where the artefact stands, the same
+    /// way as <see cref="PutCaptionedInPlace"/>, and settles the copy in the ledger as having become the
+    /// artefact once it is renamed over it.
+    /// </summary>
+    public async Task<RenameVerdict> PutChapteredInPlaceAsync(
+        EncodeJob job,
+        EncodeFileName chaptered,
+        string rewritten,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(chaptered);
+
+        RenameVerdict rename = PutInPlace(job, rewritten, "has its chapters written again");
+
+        if (!rename.IsARename)
+        {
+            return rename;
+        }
+
+        IReadOnlyList<EncodeScratchFile> owed = await ledger.ListOwedAsync(job.Id, cancellationToken);
+
+        if (owed.FirstOrDefault(scratch => scratch.Kind is EncodeScratchKind.ChapteredWork && scratch.FileName.Equals(chaptered)) is { } copy)
+        {
+            copy.Settle(EncodeScratchFate.BecameTheArtefact, Now());
+            await ledger.SaveAsync(copy, cancellationToken);
+        }
+
+        return rename;
+    }
+
+    private RenameVerdict PutInPlace(EncodeJob job, string copy, string what)
     {
         ArgumentNullException.ThrowIfNull(job);
-        ArgumentException.ThrowIfNullOrEmpty(captioned);
+        ArgumentException.ThrowIfNullOrEmpty(copy);
 
         if (!job.StandsAsTheArtefact)
         {
-            throw new InvalidOperationException($"Only an artefact that stands has a text track put into it, and job {job.Id.Wire} stands at {job.Status}.");
+            throw new InvalidOperationException($"Only an artefact that stands {what}, and job {job.Id.Wire} stands at {job.Status}.");
         }
 
         if (places.WhereTheArtefactGoes(job.OutputRoot) is not { } room || places.WhereTheWorkGoes(job.OutputRoot) is not { } workshop)
@@ -236,7 +270,7 @@ public sealed class EncodeArtefactPlacer(
 
         if (rename.IsARename)
         {
-            Move(captioned, Path.Combine(room, job.ArtefactName!.Value), replacing: true);
+            Move(copy, Path.Combine(room, job.ArtefactName!.Value), replacing: true);
         }
 
         return rename;

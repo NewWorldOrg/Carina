@@ -367,6 +367,33 @@ public sealed class EncodeJob
         Chapters = reading;
     }
 
+    /// <summary>
+    /// Writes down what the chapters this job's artefact carries stand for, once they were compared with the
+    /// segments again after the artefact stood, and written into it again when they had moved.
+    /// </summary>
+    public void Rechaptered(ChapterReading reading)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+
+        if (!StandsAsTheArtefact)
+        {
+            throw new InvalidOperationException(
+                $"The chapters of an artefact that stands are compared again, and this job stands at {Status}.");
+        }
+
+        if (reading.Detector is not ChapterDetectorName.Segments)
+        {
+            throw new ArgumentException("The chapters of an artefact that stands are compared with the segments only.", nameof(reading));
+        }
+
+        if (reading.DecidedAt < EndedAt)
+        {
+            throw new ArgumentOutOfRangeException(nameof(reading), reading.DecidedAt, "The chapters are compared again after the job ended.");
+        }
+
+        Chapters = reading;
+    }
+
     public void Measured(TimeSpan artefactLength)
     {
         Only(EncodeJobStatus.Running, "measure its artefact");

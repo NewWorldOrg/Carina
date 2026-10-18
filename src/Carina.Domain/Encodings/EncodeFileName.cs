@@ -7,8 +7,9 @@ namespace Carina.Domain.Encodings;
 
 /// <summary>
 /// The name of a file this domain writes under an output root. A work file, the chapters an attempt
-/// reads, the text of captions a track is made from and the artefact with that track put in are named
-/// for the recording, the job and the attempt; the artefact is named for the recording and the profile.
+/// reads, the text of captions a track is made from, the artefact with that track put in and the artefact
+/// with its chapters written again are named for the recording, the job and the attempt; the artefact is
+/// named for the recording and the profile.
 /// </summary>
 public sealed class EncodeFileName : CommonValueObject<string>
 {
@@ -23,6 +24,8 @@ public sealed class EncodeFileName : CommonValueObject<string>
     public const string CaptionTrackExtension = ".vtt";
 
     public const string CaptionedExtension = ".captioned";
+
+    public const string ChapteredExtension = ".chaptered";
 
     private static readonly char[] Separators = ['/', '\\', '\0'];
 
@@ -71,6 +74,18 @@ public sealed class EncodeFileName : CommonValueObject<string>
     /// </summary>
     public static EncodeFileName Captioned(RecordingId recording, EncodeJobId job, int attempt, EncodeScratchFileId tried)
         => Attempted(recording, job, attempt, Tried(tried) + CaptionedExtension);
+
+    /// <summary>
+    /// The chapters a standing artefact is written again with, named also for the try.
+    /// </summary>
+    public static EncodeFileName Chapters(RecordingId recording, EncodeJobId job, int attempt, EncodeScratchFileId tried)
+        => Attempted(recording, job, attempt, Tried(tried) + ChaptersExtension);
+
+    /// <summary>
+    /// A standing artefact with its chapters written again, named also for the try.
+    /// </summary>
+    public static EncodeFileName Chaptered(RecordingId recording, EncodeJobId job, int attempt, EncodeScratchFileId tried)
+        => Attempted(recording, job, attempt, Tried(tried) + ChapteredExtension);
 
     public static EncodeFileName Artefact(RecordingId recording, EncodeProfileId profile)
     {

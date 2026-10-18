@@ -563,6 +563,22 @@ public sealed class EncodeJobTests
             null,
             null,
             null));
+
+    [Fact(DisplayName = "BR-CD-010: the chapters of an artefact that stands are written down again as the segments' once compared after the job ended, and of no other job")]
+    public void TheChaptersOfAStandingArtefactAreWrittenDownAgain()
+    {
+        EncodeJob job = Named();
+        job.Judged(new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.Marked, 0.2, Started));
+        job.Complete(Ended);
+        ChapterReading again = new(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, Ended.AddHours(1), 2);
+
+        job.Rechaptered(again);
+
+        Assert.Equal(again, job.Chapters);
+        Assert.Throws<ArgumentOutOfRangeException>(() => job.Rechaptered(new ChapterReading(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, Ended.AddSeconds(-1), 2)));
+        Assert.Throws<ArgumentException>(() => job.Rechaptered(new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.Marked, 0.1, Ended.AddHours(1))));
+        Assert.Throws<InvalidOperationException>(() => Running().Rechaptered(again));
+    }
 }
 
 public sealed class EncodeJobRunMarkTests

@@ -6,6 +6,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
+using Carina.Domain.Segments;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Machines;
 
@@ -125,6 +126,142 @@ public sealed class ChapterEmbeddingMaterialTests
         Assert.Equal(["h264", "aac"], await CodecsOfAsync(harness.ArtefactPathOf(job)));
         Assert.Equal(ChapterVerdict.NotAsked, job.Chapters!.Verdict);
         Assert.Empty(harness.Chapters.Chapters);
+    }
+
+    [Fact(DisplayName = "BR-CD-010: an artefact encoded from a detection carries its stretches at the recording's own time less the head skip, titled for the programme and the break")]
+    public async Task AnArtefactEncodedFromADetectionCarriesItsStretchesWhereTheyWereDetected()
+    {
+        using var harness = new EncodeHarness();
+        (EncodeJob job, TimeSpan length) = await EncodedFromADetectionAsync(harness, PodOpens, PodCloses);
+        TimeSpan artefactLength = length - HeadOfItsOwn;
+
+        IReadOnlyList<(TimeSpan Starts, TimeSpan Ends, string Title)> carried = await ChaptersOfAsync(harness.ArtefactPathOf(job));
+
+        Assert.Equal(["本編", "CM", "本編"], carried.Select(chapter => chapter.Title));
+        AssertNear([(TimeSpan.Zero, PodOpens - HeadOfItsOwn), (PodOpens - HeadOfItsOwn, PodCloses - HeadOfItsOwn), (PodCloses - HeadOfItsOwn, artefactLength)], carried);
+        Assert.Equal((ChapterDetectorName.Segments, ChapterVerdict.Marked, 1), (job.Chapters!.Detector, job.Chapters.Verdict, job.Chapters.ModelVersion));
+        Assert.Equal(
+            carried.Select(chapter => chapter.Starts.TotalSeconds).Select(Rounded),
+            harness.Chapters.Chapters.Select(chapter => chapter.StartsAt.TotalSeconds).Select(Rounded));
+        Assert.Equal(["h264", "aac", "bin_data"], await CodecsOfAsync(harness.ArtefactPathOf(job)));
+    }
+
+    [Fact(DisplayName = "BR-CD-010: once the detection moves the artefact is written again with the new chapters and the same picture and sound, and a copy dropped because the machine was needed leaves the artefact as it was")]
+    public async Task OnceTheDetectionMovesTheArtefactIsWrittenAgain()
+    {
+        using var harness = new EncodeHarness();
+        (EncodeJob job, TimeSpan length) = await EncodedFromADetectionAsync(harness, PodOpens, PodCloses);
+        string artefact = harness.ArtefactPathOf(job);
+        await CaptionedAsync(harness, artefact);
+        byte[] before = await File.ReadAllBytesAsync(artefact, Cancel);
+        TimeSpan movedOpens = PodOpens + TimeSpan.FromSeconds(2);
+        RecordingDetection moved = harness.Detected(
+            harness.Recordings.Rows[0],
+            SegmentDetectionState.Marked,
+            new SegmentSpan(TimeSpan.Zero, movedOpens, SegmentKind.Programme, 0.9),
+            new SegmentSpan(movedOpens, PodCloses, SegmentKind.Break, 0.9),
+            new SegmentSpan(PodCloses, length, SegmentKind.Programme, 0.9));
+        var rewrites = new ChapterRewriteHarness(harness);
+        rewrites.Worklist.Subjects.Add(new ChapterRewriteSubject(job, moved, null));
+        int asked = 0;
+
+        ChapterRewriteRound dropped = await rewrites.Rewrites.RewriteAsync(1, 4, [], _ => Task.FromResult(++asked is 1), Cancel);
+
+        Assert.Equal(1, dropped.Abandoned);
+        Assert.Equal(before, await File.ReadAllBytesAsync(artefact, Cancel));
+        Assert.Equal([artefact], Directory.EnumerateFiles(harness.Shelf.Root));
+
+        ChapterRewriteRound round = await rewrites.Rewrites.RewriteAsync(1, 4, [], _ => Task.FromResult(true), Cancel);
+
+        Assert.Equal(1, round.Rewritten);
+        IReadOnlyList<(TimeSpan Starts, TimeSpan Ends, string Title)> carried = await ChaptersOfAsync(artefact);
+        Assert.Equal(["本編", "CM", "本編"], carried.Select(chapter => chapter.Title));
+        AssertNear([(TimeSpan.Zero, movedOpens - HeadOfItsOwn), (movedOpens - HeadOfItsOwn, PodCloses - HeadOfItsOwn), (PodCloses - HeadOfItsOwn, length - HeadOfItsOwn)], carried);
+        Assert.Equal(["h264", "aac", "mov_text", "bin_data"], await CodecsOfAsync(artefact));
+        Assert.Equal([new CarriedSubtitle(FfmpegCaptionTrackInvocation.Codec, FfmpegCaptionTrackInvocation.Language, false)], (await CarriedAsync(artefact)).Subtitles);
+        Assert.Equal(
+            carried.Select(chapter => chapter.Starts.TotalSeconds).Select(Rounded),
+            harness.Chapters.Chapters.Select(chapter => chapter.StartsAt.TotalSeconds).Select(Rounded));
+        Assert.Equal((ChapterDetectorName.Segments, rewrites.Now), (job.Chapters!.Detector, job.Chapters.DecidedAt));
+        Assert.Contains(harness.Scratch.Files, scratch => scratch.Kind is EncodeScratchKind.ChapteredWork && scratch.Fate is EncodeScratchFate.BecameTheArtefact);
+        Assert.Equal([artefact], Directory.EnumerateFiles(harness.Shelf.Root));
+
+        SourceLengthReading made = await harness.LengthReader.ReadAsync(artefact, Cancel);
+        Assert.InRange(made.Length!.Value, length - HeadOfItsOwn - TimeSpan.FromSeconds(1), length - HeadOfItsOwn + TimeSpan.FromSeconds(1));
+    }
+
+    private static async Task<(EncodeJob Job, TimeSpan Length)> EncodedFromADetectionAsync(EncodeHarness harness, TimeSpan opens, TimeSpan closes)
+    {
+        var machine = new MachineSettings();
+        harness.Programmes = machine;
+        harness.MachineReader = new MachineCapabilityReader(machine, TimeProvider.System);
+        harness.LengthReader = new FfprobeSourceLength(machine, TimeProvider.System);
+        harness.HeadReader = new AHeadOfItsOwn(new FfprobeSourceHead(machine, TimeProvider.System), HeadOfItsOwn);
+        harness.Learning(true);
+
+        string broadcast = await new SyntheticBroadcast
+        {
+            Picture = SyntheticPicture.StandardDefinition,
+            WithCaptions = false,
+            WithSuperimpose = false,
+            Length = Whole,
+            QuietBreaks = [opens, closes],
+        }.WriteAsync(harness.Room.Under($"broadcast{SyntheticBroadcast.TransportStream}"), Cancel);
+
+        SourceLengthReading source = await harness.LengthReader.ReadAsync(broadcast, Cancel);
+        Assert.True(source.Measured, source.Note);
+        TimeSpan length = source.Length!.Value;
+
+        Recording recording = harness.RecordedFrom(broadcast, SyntheticBroadcast.SomeProgramNumber);
+        harness.Detected(
+            recording,
+            SegmentDetectionState.Marked,
+            new SegmentSpan(TimeSpan.Zero, opens, SegmentKind.Programme, 0.9),
+            new SegmentSpan(opens, closes, SegmentKind.Break, 0.9),
+            new SegmentSpan(closes, length, SegmentKind.Programme, 0.9));
+        EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
+
+        Assert.Equal(EncodeJobStatus.Completed, await harness.Runner.RunAsync(job, Cancel));
+        Assert.Equal(HeadOfItsOwn, job.Timeline!.HeadSkip);
+
+        return (job, length);
+    }
+
+    /// <summary>
+    /// Puts a text track of captions into the artefact the way a standing artefact has one put in, turned off
+    /// by default.
+    /// </summary>
+    private static async Task CaptionedAsync(EncodeHarness harness, string artefact)
+    {
+        string captions = harness.Room.Under("captions.vtt");
+        string captioned = Path.Combine(harness.Shelf.Root, "captioned.mp4");
+        await File.WriteAllTextAsync(captions, "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\n字幕\n", Cancel);
+
+        ProgrammeSaid said = await AnotherProgramme.SayAsync(
+            "ffmpeg",
+            FfmpegCaptionTrackInvocation.Arguments(artefact, captions, captioned),
+            TimeSpan.FromSeconds(60),
+            TimeProvider.System,
+            Cancel);
+
+        Assert.Equal(0, said.ExitCode);
+        Assert.Equal(1, Mp4TrackFlags.TurnOffSubtitles(captioned));
+        File.Move(captioned, artefact, overwrite: true);
+        Assert.Equal(["h264", "aac", "mov_text", "bin_data"], await CodecsOfAsync(artefact));
+    }
+
+    private static async Task<CaptionTrackCarried> CarriedAsync(string file)
+        => CaptionTrackCarried.Read(await AskedAsync(FfmpegCaptionTrackInvocation.Carried(file).Skip(3).ToList()))!;
+
+    private static void AssertNear(IReadOnlyList<(TimeSpan Starts, TimeSpan Ends)> meant, IReadOnlyList<(TimeSpan Starts, TimeSpan Ends, string Title)> carried)
+    {
+        Assert.Equal(meant.Count, carried.Count);
+
+        foreach (((TimeSpan Starts, TimeSpan Ends) wanted, (TimeSpan Starts, TimeSpan Ends, string Title) read) in meant.Zip(carried))
+        {
+            Assert.InRange(read.Starts, wanted.Starts - Tolerance, wanted.Starts + Tolerance);
+            Assert.InRange(read.Ends, wanted.Ends - Tolerance, wanted.Ends + Tolerance);
+        }
     }
 
     private static double Rounded(double seconds) => Math.Round(seconds, 1);

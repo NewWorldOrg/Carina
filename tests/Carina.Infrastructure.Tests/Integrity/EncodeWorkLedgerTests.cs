@@ -98,6 +98,34 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database) : IAsyncL
         Assert.Equal([new DeclaredFile(Primary, job.ArtefactName!.Value)], await ReadAsync());
     }
 
+    [Fact(DisplayName = "BR-CD-010: what is written to write the chapters of an artefact already made again is declared until it is removed")]
+    public async Task WhatIsWrittenToWriteTheChaptersOfAnArtefactAgainIsDeclaredUntilItIsRemoved()
+    {
+        Recording recording = await RecordedAsync();
+        EncodeJob job = await CompletedAsync(await QueuedAsync(recording.Id));
+        EncodeScratchFileId tried = EncodeScratchFileId.New();
+        EncodeScratchFile chapters = await WritingAsync(job, EncodeScratchKind.Chapters, EncodeFileName.Chapters(job.RecordingId, job.Id, job.Attempt, tried));
+        EncodeScratchFile chaptered = await WritingAsync(job, EncodeScratchKind.ChapteredWork, EncodeFileName.Chaptered(job.RecordingId, job.Id, job.Attempt, tried));
+
+        IReadOnlyList<DeclaredFile> declared = await ReadAsync();
+
+        Assert.Contains(new DeclaredFile(Primary, chapters.FileName.Value), declared);
+        Assert.Contains(new DeclaredFile(Primary, chaptered.FileName.Value), declared);
+
+        await using (CarinaDbContext settling = database.Open())
+        {
+            EncodeScratchLedger ledger = new(settling);
+
+            foreach (EncodeScratchFile owed in await ledger.ListOwedAsync(job.Id, Cancel))
+            {
+                owed.Settle(owed.Kind is EncodeScratchKind.ChapteredWork ? EncodeScratchFate.BecameTheArtefact : EncodeScratchFate.Removed, Ended);
+                await ledger.SaveAsync(owed, Cancel);
+            }
+        }
+
+        Assert.Equal([new DeclaredFile(Primary, job.ArtefactName!.Value)], await ReadAsync());
+    }
+
     [Fact]
     public async Task AFileOfAJobSomebodyCalledOffIsNotDeclaredAnyMore()
     {
