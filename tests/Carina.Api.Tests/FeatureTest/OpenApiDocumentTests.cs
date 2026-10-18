@@ -204,6 +204,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "logIn",
                 "logOut",
                 "patchSegmentSettings",
+                "patchSegmentVersion",
                 "patchTuner",
                 "playVideo",
                 "previewRules",
@@ -650,6 +651,20 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal("byte", schemas["DataBroadcastEventResponder"]!["properties"]!["privateData"]!["format"]!.GetValue<string>());
     }
 
+    [Fact(DisplayName = "BR-CV-002: the segment settings are described with learning and the skip threshold, each with when it last changed, and a change may name either")]
+    public async Task TheSegmentSettingsAreDescribedWithTheSkipThreshold()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["learning", "learningChangedAt", "skipThreshold", "skipThresholdChangedAt"],
+            schemas["SegmentSettingsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["learning", "skipThreshold"],
+            schemas["PatchSegmentSettingsRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
     [Fact(DisplayName = "the status of CM, OP and ED detection is described with the learning data kept, the catalog's count of each kind and the version of the model in use")]
     public async Task TheSegmentStatusIsDescribedWithTheCatalog()
     {
@@ -657,7 +672,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         JsonNode schemas = document["components"]!["schemas"]!;
 
         Assert.Equal(
-            ["learningData", "catalog", "version"],
+            ["learning", "learningData", "catalog", "version", "evidence", "metrics", "stations", "versions", "skipThreshold"],
             schemas["SegmentStatusResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal(
             ["number", "state", "byHand", "trainedAt", "adoptedAt"],
@@ -669,6 +684,49 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             ["cm", "opening", "ending", "programmeFixture", "stationFixture", "unknown"],
             schemas["CatalogResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
+
+    [Fact(DisplayName = "BR-CD-008: the status of CM, OP and ED detection describes the evidence, the figures overall and by station, every version and the threshold recommended")]
+    public async Task TheSegmentStatusDescribesTheEvaluation()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["confirmedRecordings", "boundaries", "enough", "recordingsNeeded", "boundariesNeeded"],
+            Properties(schemas, "SegmentEvidenceResponder"));
+        Assert.Equal(
+            ["boundaryRecallWithin2s", "boundaryRecallWithin1s", "extraBoundariesPerRecording", "programmeSkippedSecondsPerHour", "kinds", "returnedAfterSkipShare", "skips"],
+            Properties(schemas, "SegmentMetricsResponder"));
+        Assert.Equal(["kind", "recall", "precision"], Properties(schemas, "SegmentKindMetricsResponder"));
+        Assert.Equal(["networkId", "serviceId", "confirmedRecordings", "metrics"], Properties(schemas, "SegmentStationResponder"));
+        Assert.Equal(["boundaryRecallWithin2s", "programmeSkippedSecondsPerHour"], Properties(schemas, "SegmentMetricsSummaryResponder"));
+        Assert.Equal(
+            ["number", "state", "byHand", "trainedAt", "adoptedAt", "retiredAt", "rolledBack", "metrics"],
+            Properties(schemas, "SegmentVersionHistoryResponder"));
+        Assert.Equal(["at", "returnedAfterSkipShare", "previousShare", "skips"], Properties(schemas, "SegmentRolledBackResponder"));
+        Assert.Equal(["current", "recommended"], Properties(schemas, "SkipThresholdResponder"));
+    }
+
+    [Fact(DisplayName = "BR-CS-003: choosing the version in use is described by the number or the choice left to learning it takes, and answers the version in use, or why not")]
+    public async Task ChoosingTheVersionInUseIsDescribed()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonObject path = document["paths"]!["/api/segments/version"]!.AsObject();
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(["patch"], path.Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
+        Assert.Equal(
+            ["200", "400", "401", "404", "409", "500"],
+            path["patch"]!["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(["number", "byHand"], Properties(schemas, "PatchSegmentVersionRequest"));
+        Assert.EndsWith(
+            "BaseResponderOfSegmentVersionResponder",
+            path["patch"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!["$ref"]!.GetValue<string>(),
+            StringComparison.Ordinal);
+    }
+
+    private static string[] Properties(JsonNode schemas, string name)
+        => [.. schemas[name]!["properties"]!.AsObject().Select(entry => entry.Key)];
 
     [Fact(DisplayName = "the stretches of a recording are read on a path of their own, described by where they come from, how they stand and the stretches in the recording's own time")]
     public async Task TheStretchesOfARecordingAreDescribed()

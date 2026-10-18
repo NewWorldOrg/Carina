@@ -41,4 +41,11 @@ public sealed class HeldSkipEvents : ISkipEventRepository
             return Task.FromResult(true);
         }
     }
+
+    public Task<SkipReturns> ReturnsAsync(int modelVersion, DateTime from, DateTime until, CancellationToken cancellationToken)
+        => Task.FromResult(SkipReturns.Of(
+            Taken.Select(skip => new ViewerAction(skip.HappenedAt, skip.Event, skip.Kind, skip.From, skip.To, skip.ModelVersion)),
+            modelVersion,
+            from,
+            until));
 }

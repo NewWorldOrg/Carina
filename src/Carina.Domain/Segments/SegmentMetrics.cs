@@ -61,6 +61,23 @@ public sealed record SegmentMetrics
     public int Skips { get; }
 
     /// <summary>
+    /// These figures beside what viewers did with the version's buttons as <paramref name="returns"/> counts.
+    /// </summary>
+    public SegmentMetrics WithReturns(SkipReturns returns)
+    {
+        ArgumentNullException.ThrowIfNull(returns);
+
+        return new SegmentMetrics(
+            BoundaryRecallWithin2s,
+            BoundaryRecallWithin1s,
+            ExtraBoundariesPerRecording,
+            ProgrammeSkippedSecondsPerHour,
+            Kinds,
+            returns.Share,
+            returns.Skips);
+    }
+
+    /// <summary>
     /// The figures of <paramref name="compared"/> with buttons offered from <paramref name="skipThreshold"/>,
     /// beside what viewers did with the version's buttons; none for no recording.
     /// </summary>

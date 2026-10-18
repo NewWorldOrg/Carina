@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Segments;
 
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -8,9 +9,9 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 namespace Carina.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// The shapes the segment tables keep in jsonb: the parameters of a version of the model, the stretches of a
-/// detection and its boundary candidates, seconds written as numbers to <see cref="SecondDigits"/> places and
-/// kinds by their names.
+/// The shapes the segment tables keep in jsonb: the parameters of a version of the model, the figures of its
+/// evaluation and what a rollback from it measured, the stretches of a detection and its boundary candidates,
+/// seconds written as numbers to <see cref="SecondDigits"/> places and kinds by their names.
 /// </summary>
 internal static class SegmentJson
 {
@@ -62,6 +63,36 @@ internal static class SegmentJson
     public static IReadOnlyDictionary<string, FeatureScale> Standardisation(string stored)
         => Deserialised<Dictionary<string, ScaleShape>>(stored).ToDictionary(pair => pair.Key, pair => new FeatureScale(pair.Value.Mean, pair.Value.Sd), StringComparer.Ordinal);
 
+    public static string Written(SegmentMetrics metrics) => Serialised(MetricsShape.Of(metrics));
+
+    public static SegmentMetrics Metrics(string stored) => Deserialised<MetricsShape>(stored).Read();
+
+    public static string Written(IReadOnlyList<StationMetrics> stations)
+        => Serialised(stations.Select(station => new StationShape(station.NetworkId.Value, station.ServiceId.Value, station.ConfirmedRecordings, MetricsShape.Of(station.Metrics))).ToList());
+
+    public static IReadOnlyList<StationMetrics> Stations(string stored)
+        => [.. Deserialised<List<StationShape>>(stored).Select(shape => new StationMetrics(new NetworkId(shape.NetworkId), new ServiceId(shape.ServiceId), shape.ConfirmedRecordings, shape.Metrics.Read()))];
+
+    public static string Written(EvaluationEvidence evidence)
+        => Serialised(new EvidenceShape(evidence.ConfirmedRecordings, evidence.Boundaries, evidence.LabelsUntil));
+
+    public static EvaluationEvidence Evidence(string stored)
+    {
+        EvidenceShape shape = Deserialised<EvidenceShape>(stored);
+
+        return new EvaluationEvidence(shape.ConfirmedRecordings, shape.Boundaries, shape.LabelsUntil);
+    }
+
+    public static string Written(SegmentRollback rollback)
+        => Serialised(new RollbackShape(rollback.ReturnedAfterSkipShare, rollback.PreviousShare, rollback.Skips, rollback.BackTo));
+
+    public static SegmentRollback Rollback(string stored)
+    {
+        RollbackShape shape = Deserialised<RollbackShape>(stored);
+
+        return new SegmentRollback(shape.ReturnedAfterSkipShare, shape.PreviousShare, shape.Skips, shape.BackTo);
+    }
+
     public static string Written(IReadOnlyList<SegmentSpan> segments)
         => Serialised(segments.Select(segment => new SpanShape(Seconds(segment.Starts), Seconds(segment.Ends), segment.Kind, segment.Probability)).ToList());
 
@@ -104,6 +135,44 @@ internal static class SegmentJson
         double LambdaSeries);
 
     private sealed record ScaleShape(double Mean, double Sd);
+
+    private sealed record MetricsShape(
+        double? BoundaryRecallWithin2s,
+        double? BoundaryRecallWithin1s,
+        double ExtraBoundariesPerRecording,
+        double ProgrammeSkippedSecondsPerHour,
+        List<KindShape> Kinds,
+        double? ReturnedAfterSkipShare,
+        int Skips)
+    {
+        public static MetricsShape Of(SegmentMetrics metrics)
+            => new(
+                metrics.BoundaryRecallWithin2s,
+                metrics.BoundaryRecallWithin1s,
+                metrics.ExtraBoundariesPerRecording,
+                metrics.ProgrammeSkippedSecondsPerHour,
+                [.. metrics.Kinds.Select(kind => new KindShape(kind.Kind, kind.Recall, kind.Precision))],
+                metrics.ReturnedAfterSkipShare,
+                metrics.Skips);
+
+        public SegmentMetrics Read()
+            => new(
+                BoundaryRecallWithin2s,
+                BoundaryRecallWithin1s,
+                ExtraBoundariesPerRecording,
+                ProgrammeSkippedSecondsPerHour,
+                [.. Kinds.Select(kind => new KindMetrics(kind.Kind, kind.Recall, kind.Precision))],
+                ReturnedAfterSkipShare,
+                Skips);
+    }
+
+    private sealed record KindShape(SegmentKind Kind, double? Recall, double? Precision);
+
+    private sealed record StationShape(int NetworkId, int ServiceId, int ConfirmedRecordings, MetricsShape Metrics);
+
+    private sealed record EvidenceShape(int ConfirmedRecordings, int Boundaries, DateTime? LabelsUntil);
+
+    private sealed record RollbackShape(double ReturnedAfterSkipShare, double PreviousShare, int Skips, int BackTo);
 
     private sealed record SpanShape(
         double StartsAtSec,

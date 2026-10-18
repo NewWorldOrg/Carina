@@ -59,4 +59,11 @@ public sealed class SegmentAnswerRepository(CarinaDbContext context) : ISegmentA
             $"UPDATE segment_answer SET withdrawn_at = {at} WHERE recording_id = {id} AND withdrawn_at IS NULL",
             cancellationToken) is 1;
     }
+
+    public async Task<EvaluationEvidence> EvidenceAsync(CancellationToken cancellationToken)
+        => EvaluationEvidence.OfAnswers(
+            await context.Set<RecordingAnswer>()
+                .AsNoTracking()
+                .Where(answer => answer.Confirmed && answer.WithdrawnAt == null)
+                .ToListAsync(cancellationToken));
 }

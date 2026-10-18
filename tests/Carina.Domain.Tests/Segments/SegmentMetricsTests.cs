@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
 namespace Carina.Domain.Tests.Segments;
@@ -132,6 +133,25 @@ public sealed class SegmentMetricsTests
         Assert.True(new EvaluationEvidence(10, 100, null).Enough);
     }
 
+    [Fact(DisplayName = "BR-CD-008: the answers give an evaluation the confirmed ones that stand, the boundaries of breaks they draw, and the latest of them sent")]
+    public void TheAnswersGiveTheConfirmedOnesThatStand()
+    {
+        SegmentSpan[] twoBreaks = [Span(0, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Break), Span(360, 900, SegmentKind.Programme), Span(900, 960, SegmentKind.Break), Span(960, 1800, SegmentKind.Programme)];
+        SegmentSpan[] oneBreak = [Span(0, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Break), Span(360, 1800, SegmentKind.Programme)];
+        RecordingAnswer[] answers =
+        [
+            Answered(twoBreaks, confirmed: true, Evening),
+            Answered(oneBreak, confirmed: true, Evening.AddHours(2)),
+            Answered(twoBreaks, confirmed: false, Evening.AddHours(3)),
+            Answered(twoBreaks, confirmed: true, Evening.AddHours(4), withdrawnAt: Evening.AddHours(5)),
+        ];
+
+        EvaluationEvidence evidence = EvaluationEvidence.OfAnswers(answers);
+
+        Assert.Equal(new EvaluationEvidence(2, 6, Evening.AddHours(2)), evidence);
+        Assert.Equal(new EvaluationEvidence(0, 0, null), EvaluationEvidence.OfAnswers([]));
+    }
+
     [Fact(DisplayName = "skips and returns are counted on one version's buttons within the days asked for")]
     public void SkipsAndReturnsAreCountedForOneVersion()
     {
@@ -151,6 +171,23 @@ public sealed class SegmentMetricsTests
         Assert.Equal((2, 1, 0.5), (returns.Skips, returns.Returned, returns.Share!.Value));
         Assert.Null(SkipReturns.None.Share);
     }
+
+    [Fact(DisplayName = "BR-CD-008: the figures read with what viewers did lately keep every other figure and take the share that came back and the skips from it")]
+    public void TheFiguresReadWithWhatViewersDidLatelyKeepTheRest()
+    {
+        SegmentMetrics evaluated = new(0.93, 0.85, 1.2, 2.1, [new KindMetrics(SegmentKind.Break, 0.95, 0.97)], 0.5, 4);
+
+        SegmentMetrics lately = evaluated.WithReturns(new SkipReturns(64, 2));
+        SegmentMetrics none = evaluated.WithReturns(SkipReturns.None);
+
+        Assert.Equal((0.93, 0.85, 1.2, 2.1), (lately.BoundaryRecallWithin2s!.Value, lately.BoundaryRecallWithin1s!.Value, lately.ExtraBoundariesPerRecording, lately.ProgrammeSkippedSecondsPerHour));
+        Assert.Equal(evaluated.Kinds, lately.Kinds);
+        Assert.Equal((2 / 64d, 64), (lately.ReturnedAfterSkipShare!.Value, lately.Skips));
+        Assert.Equal(((double?)null, 0), (none.ReturnedAfterSkipShare, none.Skips));
+    }
+
+    private static RecordingAnswer Answered(SegmentSpan[] segments, bool confirmed, DateTime at, DateTime? withdrawnAt = null)
+        => RecordingAnswer.Rehydrate(RecordingId.New(), segments, segments[^1].Ends, confirmed, confirmed ? at : null, at, 1, withdrawnAt);
 
     private static ViewerAction Action(ViewerActionKind action, int days, int? version)
         => new(Evening.AddDays(days), action, SegmentKind.Break, TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(690), version);

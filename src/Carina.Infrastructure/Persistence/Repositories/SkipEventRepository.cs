@@ -32,4 +32,15 @@ public sealed class SkipEventRepository(CarinaDbContext context) : ISkipEventRep
             """,
             cancellationToken) is 1;
     }
+
+    public async Task<SkipReturns> ReturnsAsync(int modelVersion, DateTime from, DateTime until, CancellationToken cancellationToken)
+    {
+        IQueryable<SkipEvent> offered = context.Set<SkipEvent>()
+            .AsNoTracking()
+            .Where(skip => skip.ModelVersion == modelVersion && skip.HappenedAt >= from && skip.HappenedAt <= until);
+
+        return new SkipReturns(
+            await offered.CountAsync(skip => skip.Event == ViewerActionKind.Skipped, cancellationToken),
+            await offered.CountAsync(skip => skip.Event == ViewerActionKind.Returned, cancellationToken));
+    }
 }

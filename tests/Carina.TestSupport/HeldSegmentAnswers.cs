@@ -64,4 +64,12 @@ public sealed class HeldSegmentAnswers : ISegmentAnswerRepository
             return Task.FromResult(true);
         }
     }
+
+    public Task<EvaluationEvidence> EvidenceAsync(CancellationToken cancellationToken)
+    {
+        lock (gate)
+        {
+            return Task.FromResult(EvaluationEvidence.OfAnswers([.. held.Values]));
+        }
+    }
 }

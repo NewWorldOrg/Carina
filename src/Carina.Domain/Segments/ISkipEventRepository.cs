@@ -11,4 +11,11 @@ public interface ISkipEventRepository
     /// that happened within <see cref="SkipEvent.Within"/> before it, and says whether it was kept.
     /// </summary>
     Task<bool> TakeAsync(SkipEvent skip, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The skips and returns on the buttons of the version numbered <paramref name="modelVersion"/> that happened
+    /// from <paramref name="from"/> up to and including <paramref name="until"/>, as <see cref="SkipReturns.Of"/>
+    /// counts them.
+    /// </summary>
+    Task<SkipReturns> ReturnsAsync(int modelVersion, DateTime from, DateTime until, CancellationToken cancellationToken);
 }

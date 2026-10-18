@@ -18,10 +18,12 @@ public enum SegmentModelVersionState
 /// <summary>
 /// One version of the model segments are detected with, kept for good: its number, counted from
 /// <see cref="FirstNumber"/>; where it stands; whether it was chosen by hand, which only the version in use
-/// can be; its parameters and the number of kinds they tell apart; when it was made, put in use, chosen by
-/// hand, taken out of use and rolled back from. Only a candidate has never been put in use, and only a
-/// version used before has been taken out of use or rolled back from. Exactly one version is in use at a
-/// time, which the store holds; the first holds <see cref="SegmentModel.First"/>.
+/// can be; its parameters and the number of kinds they tell apart; how it did when it was evaluated, if it
+/// was; when it was made, put in use, chosen by hand, taken out of use and rolled back from, and what the
+/// rollback measured. Only a candidate has never been put in use, and only a version used before has been
+/// taken out of use or rolled back from. Exactly one version is in use at a time, which the store holds; the
+/// first holds <see cref="SegmentModel.First"/>. The version in use changes only through
+/// <see cref="Change"/>.
 /// </summary>
 public sealed class SegmentModelVersion
 {
@@ -61,7 +63,19 @@ public sealed class SegmentModelVersion
 
     public DateTime? RolledBackAt { get; private set; }
 
+    public SegmentRollback? Rollback { get; private set; }
+
+    public SegmentMetrics? Metrics { get; private set; }
+
+    public IReadOnlyList<StationMetrics>? Stations { get; private set; }
+
+    public EvaluationEvidence? Evidence { get; private set; }
+
+    public double? RecommendedThreshold { get; private set; }
+
     public SegmentModel Model => model ??= new SegmentModel(Weights, StationOffsets, SeriesOffsets, Thresholds, Standardisation);
+
+    public SegmentEvaluation? Evaluation => Evidence is null ? null : new SegmentEvaluation(Metrics, Stations ?? [], Evidence, RecommendedThreshold);
 
     public static SegmentModelVersion Rehydrate(
         int number,
@@ -72,7 +86,9 @@ public sealed class SegmentModelVersion
         DateTime? adoptedAt,
         DateTime? retiredAt,
         DateTime? chosenByHandAt,
-        DateTime? rolledBackAt)
+        DateTime? rolledBackAt,
+        SegmentEvaluation? evaluation = null,
+        SegmentRollback? rollback = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(number, FirstNumber);
         ArgumentNullException.ThrowIfNull(model);
@@ -87,7 +103,7 @@ public sealed class SegmentModelVersion
         DateTime? retired = UtcTimes.Optional(retiredAt, nameof(retiredAt));
         DateTime? chosen = UtcTimes.Optional(chosenByHandAt, nameof(chosenByHandAt));
         DateTime? rolledBack = UtcTimes.Optional(rolledBackAt, nameof(rolledBackAt));
-        string? fault = Fault(state, byHand, trained, adopted, retired, chosen, rolledBack);
+        string? fault = Fault(state, byHand, trained, adopted, retired, chosen, rolledBack) ?? RollbackFault(rolledBack, rollback);
 
         if (fault is not null)
         {
@@ -110,9 +126,90 @@ public sealed class SegmentModelVersion
             RetiredAt = retired,
             ChosenByHandAt = chosen,
             RolledBackAt = rolledBack,
+            Rollback = rollback,
+            Metrics = evaluation?.Metrics,
+            Stations = evaluation is null ? null : [.. evaluation.Stations],
+            Evidence = evaluation?.Evidence,
+            RecommendedThreshold = evaluation?.RecommendedThreshold,
             model = model,
         };
     }
+
+    /// <summary>
+    /// The versions <paramref name="change"/> moves when it is made at <paramref name="at"/> to the versions
+    /// <paramref name="kept"/>, the one leaving use first, and the version in use after it; none when it names
+    /// a number no version has. A version chosen by hand is put in use, or only marked chosen when it already
+    /// is; the one it takes the place of is taken out of use and no longer chosen. Leaving the choice to
+    /// learning keeps the version in use and no longer marks it chosen. Learning puts only a candidate in use
+    /// and goes back only to a version used before, and never moves a version chosen by hand; a rollback is
+    /// kept on the version it leaves. A version put in use again sheds what an earlier rollback from it
+    /// measured. A change that moves nothing writes nothing.
+    /// </summary>
+    public static SegmentVersionChanged? Change(IReadOnlyList<SegmentModelVersion> kept, SegmentVersionChange change, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(kept);
+        ArgumentNullException.ThrowIfNull(change);
+
+        SegmentModelVersion[] active = [.. kept.Where(version => version.State is SegmentModelVersionState.Active)];
+
+        if (active is not [SegmentModelVersion inUse])
+        {
+            throw new InvalidOperationException("Exactly one version is in use.");
+        }
+
+        if (change.To is not int number)
+        {
+            return inUse.ByHand
+                ? Changed(inUse.Chosen(false, null))
+                : Changed([], inUse);
+        }
+
+        return kept.FirstOrDefault(version => version.Number == number) is { } to
+            ? Moved(inUse, to, change, at)
+            : null;
+    }
+
+    private static SegmentVersionChanged Moved(SegmentModelVersion inUse, SegmentModelVersion to, SegmentVersionChange change, DateTime at)
+    {
+        if (!change.ByHand)
+        {
+            Learned(inUse, to, change);
+        }
+
+        if (to.Number == inUse.Number)
+        {
+            return inUse.ByHand ? Changed([], inUse) : Changed(inUse.Chosen(true, at));
+        }
+
+        SegmentModelVersion left = inUse.Restated(SegmentModelVersionState.Retired, inUse.AdoptedAt, at, change.Rollback is null ? null : at, change.Rollback);
+        SegmentModelVersion put = to.Restated(SegmentModelVersionState.Active, at, null, null, null, change.ByHand, change.ByHand ? at : null);
+
+        return new SegmentVersionChanged([left, put], put);
+    }
+
+    private static void Learned(SegmentModelVersion inUse, SegmentModelVersion to, SegmentVersionChange change)
+    {
+        if (inUse.ByHand)
+        {
+            throw new InvalidOperationException("A version chosen by hand is moved only by another choice by hand.");
+        }
+
+        SegmentModelVersionState from = change.Rollback is null ? SegmentModelVersionState.Candidate : SegmentModelVersionState.Retired;
+
+        if (to.State != from)
+        {
+            throw new InvalidOperationException("Learning puts only a candidate in use, and goes back only to a version used before.");
+        }
+    }
+
+    private static SegmentVersionChanged Changed(SegmentModelVersion moved) => new([moved], moved);
+
+    private static SegmentVersionChanged Changed(IReadOnlyList<SegmentModelVersion> written, SegmentModelVersion inUse) => new(written, inUse);
+
+    private static string? RollbackFault(DateTime? rolledBack, SegmentRollback? rollback)
+        => (rolledBack is null) != (rollback is null)
+            ? "A version rolled back from keeps what the rollback measured, and only then."
+            : null;
 
     private static string? Fault(
         SegmentModelVersionState state,
@@ -147,4 +244,57 @@ public sealed class SegmentModelVersion
             ? "Only a version used before has been rolled back from."
             : null;
     }
+
+    private SegmentModelVersion Chosen(bool byHand, DateTime? at)
+        => Restated(State, AdoptedAt, RetiredAt, RolledBackAt, Rollback, byHand, at);
+
+    private SegmentModelVersion Restated(
+        SegmentModelVersionState state,
+        DateTime? adoptedAt,
+        DateTime? retiredAt,
+        DateTime? rolledBackAt,
+        SegmentRollback? rollback,
+        bool byHand = false,
+        DateTime? chosenByHandAt = null)
+        => Rehydrate(Number, state, byHand, Model, TrainedAt, adoptedAt, retiredAt, chosenByHandAt, rolledBackAt, Evaluation, rollback);
 }
+
+/// <summary>
+/// A change to which version of the model is in use, or to how it came to be: learning putting a candidate in
+/// use, a rollback going back to the version before, a version chosen by hand, or the choice left to learning
+/// again. <see cref="To"/> is the version moved to, none when the version in use stays.
+/// </summary>
+public sealed record SegmentVersionChange
+{
+    private SegmentVersionChange(int? to, bool byHand, SegmentRollback? rollback)
+    {
+        To = to;
+        ByHand = byHand;
+        Rollback = rollback;
+    }
+
+    public static SegmentVersionChange LeftToLearning { get; } = new(null, false, null);
+
+    public int? To { get; }
+
+    public bool ByHand { get; }
+
+    public SegmentRollback? Rollback { get; }
+
+    public static SegmentVersionChange Adopting(int candidate) => new(candidate, false, null);
+
+    public static SegmentVersionChange GoingBack(SegmentRollback rollback)
+    {
+        ArgumentNullException.ThrowIfNull(rollback);
+
+        return new SegmentVersionChange(rollback.BackTo, false, rollback);
+    }
+
+    public static SegmentVersionChange ChosenByHand(int number) => new(number, true, null);
+}
+
+/// <summary>
+/// What a change to the version in use moved: the versions to write, the one leaving use first, and the version
+/// in use after it.
+/// </summary>
+public sealed record SegmentVersionChanged(IReadOnlyList<SegmentModelVersion> Written, SegmentModelVersion Active);

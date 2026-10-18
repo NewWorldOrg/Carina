@@ -34,9 +34,25 @@ public sealed record EvaluationEvidence
     {
         ArgumentNullException.ThrowIfNull(compared);
 
-        return new EvaluationEvidence(
-            compared.Count,
-            compared.Sum(comparison => SegmentMetrics.Boundaries(comparison.Answer).Count(boundary => boundary.From is SegmentKind.Break || boundary.To is SegmentKind.Break)),
-            labelsUntil);
+        return new EvaluationEvidence(compared.Count, compared.Sum(comparison => BreakBoundaries(comparison.Answer)), labelsUntil);
     }
+
+    /// <summary>
+    /// What the answers kept give an evaluation to stand on: those confirmed and not withdrawn, the boundaries of
+    /// breaks they draw, and the latest moment one of them was sent.
+    /// </summary>
+    public static EvaluationEvidence OfAnswers(IReadOnlyList<RecordingAnswer> answers)
+    {
+        ArgumentNullException.ThrowIfNull(answers);
+
+        RecordingAnswer[] judged = [.. answers.Where(answer => answer.Confirmed && answer.Stands)];
+
+        return new EvaluationEvidence(
+            judged.Length,
+            judged.Sum(answer => BreakBoundaries(answer.Segments)),
+            judged.Length is 0 ? null : judged.Max(answer => answer.AnsweredAt));
+    }
+
+    private static int BreakBoundaries(IReadOnlyList<SegmentSpan> answer)
+        => SegmentMetrics.Boundaries(answer).Count(boundary => boundary.From is SegmentKind.Break || boundary.To is SegmentKind.Break);
 }

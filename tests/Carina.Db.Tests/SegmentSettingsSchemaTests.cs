@@ -11,7 +11,7 @@ public sealed class SegmentSettingsSchemaTests(MigratedScratchDatabase database)
 {
     private const string Changed = "timestamptz '2026-10-07 12:00:00+00'";
 
-    [Fact(DisplayName = "the migrated settings table carries the check that holds it to one row, and no other")]
+    [Fact(DisplayName = "the migrated settings table carries the checks that hold it to one row and the threshold to its range, and no other")]
     public async Task TheMigratedSettingsTableCarriesTheSingleRowCheck()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -31,7 +31,47 @@ public sealed class SegmentSettingsSchemaTests(MigratedScratchDatabase database)
             names.Add(row.GetString(0));
         }
 
-        Assert.Equal([SegmentSettingsConfiguration.SingleRowCheck], names);
+        Assert.Equal([SegmentSettingsConfiguration.SingleRowCheck, SegmentSettingsConfiguration.SkipThresholdCheck], names);
+    }
+
+    [Fact(DisplayName = "BR-CV-002: a row written without the threshold stands at 0.70, changed by nobody, and learning need not have been switched")]
+    public async Task ARowWrittenWithoutTheThresholdStandsAtItsDefault()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await RunAsync(connection, $"DELETE FROM {SegmentSettingsConfiguration.TableName}");
+
+        await RunAsync(connection, $"INSERT INTO {SegmentSettingsConfiguration.TableName} (id, learning) VALUES (1, false)");
+
+        Assert.Equal(
+            "0.70 NULL NULL",
+            await ScalarAsync(connection, $"SELECT concat_ws(' ', skip_threshold::text, coalesce(skip_threshold_changed_at::text, 'NULL'), coalesce(learning_changed_at::text, 'NULL')) FROM {SegmentSettingsConfiguration.TableName}"));
+    }
+
+    [Theory(DisplayName = "BR-CV-002: the migrated settings table keeps a threshold from 0.50 to 0.95, in hundredths, and refuses one outside")]
+    [InlineData("0.50", "0.50")]
+    [InlineData("0.95", "0.95")]
+    [InlineData("0.654", "0.65")]
+    [InlineData("0.49", null)]
+    [InlineData("0.96", null)]
+    [InlineData("0", null)]
+    public async Task TheMigratedSettingsTableKeepsTheThresholdInItsRange(string written, string? kept)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await RunAsync(connection, $"DELETE FROM {SegmentSettingsConfiguration.TableName}");
+        string inserting = $"INSERT INTO {SegmentSettingsConfiguration.TableName} (id, learning, skip_threshold, skip_threshold_changed_at) VALUES (1, false, {written}, {Changed})";
+
+        if (kept is null)
+        {
+            PostgresException refused = await Assert.ThrowsAsync<PostgresException>(() => RunAsync(connection, inserting));
+
+            Assert.Equal((PostgresErrorCodes.CheckViolation, SegmentSettingsConfiguration.SkipThresholdCheck), (refused.SqlState, refused.ConstraintName));
+
+            return;
+        }
+
+        await RunAsync(connection, inserting);
+
+        Assert.Equal(kept, await ScalarAsync(connection, $"SELECT skip_threshold::text FROM {SegmentSettingsConfiguration.TableName}"));
     }
 
     [Theory(DisplayName = "the migrated settings table is one row, whichever way learning stands")]
@@ -59,5 +99,19 @@ public sealed class SegmentSettingsSchemaTests(MigratedScratchDatabase database)
         }
 
         Assert.Equal(refusedBy, (await Assert.ThrowsAsync<PostgresException>(writing.ExecuteNonQueryAsync)).ConstraintName);
+    }
+
+    private static async Task RunAsync(NpgsqlConnection connection, string sql)
+    {
+        await using var running = new NpgsqlCommand(sql, connection);
+
+        await running.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<string> ScalarAsync(NpgsqlConnection connection, string sql)
+    {
+        await using var reading = new NpgsqlCommand(sql, connection);
+
+        return Convert.ToString(await reading.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture)!;
     }
 }
