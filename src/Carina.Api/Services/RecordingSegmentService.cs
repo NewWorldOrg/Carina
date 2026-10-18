@@ -38,6 +38,6 @@ public sealed class RecordingSegmentService(
         SegmentModelVersion version = await versions.ActiveAsync(cancellationToken);
         RecordingDetection? detection = await detections.FindAsync(id, version.Number, cancellationToken);
 
-        return ServiceResult<RecordingSegments, RecordingSegmentFailure>.Success(new RecordingSegments(recording.Written, SegmentStanding.Of(detection)));
+        return ServiceResult<RecordingSegments, RecordingSegmentFailure>.Success(new RecordingSegments(recording.Written, SegmentStanding.Of(null, detection)));
     }
 }

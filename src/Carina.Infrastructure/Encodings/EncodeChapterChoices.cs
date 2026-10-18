@@ -21,6 +21,6 @@ public sealed class EncodeChapterChoices(
         SegmentModelVersion version = await versions.ActiveAsync(cancellationToken);
         RecordingDetection? detection = await detections.FindAsync(recording, version.Number, cancellationToken);
 
-        return EncodeChapterChoice.Of(on, version.Number, SegmentStanding.Of(detection));
+        return EncodeChapterChoice.Of(on, version.Number, SegmentStanding.Of(null, detection));
     }
 }

@@ -31,7 +31,7 @@ public sealed class PlaybackChapterService(
         EncodeJobId? artefact = offer.Plan.Route is PlaybackRoute.Direct ? offer.Artefact : null;
         SegmentSettingsStanding standing = SegmentSettingsStanding.Over(await settings.ReadAsync(cancellationToken));
         SegmentModelVersion version = await versions.ActiveAsync(cancellationToken);
-        SegmentStanding segments = SegmentStanding.Of(await detections.FindAsync(id, version.Number, cancellationToken));
+        SegmentStanding segments = SegmentStanding.Of(null, await detections.FindAsync(id, version.Number, cancellationToken));
 
         if (segments.Source is SegmentSource.None && !standing.Learning && artefact is { } encoded)
         {
