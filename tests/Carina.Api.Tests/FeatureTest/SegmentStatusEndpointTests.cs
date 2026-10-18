@@ -25,6 +25,7 @@ internal sealed class SegmentStatusFeature : IAsyncDisposable
         {
             services.RemoveAll<IHostedService>();
             services.AddSingleton<ILearningDataAmountReader>(LearningData);
+            services.AddSingleton<ICatalogCountsReader>(Catalog);
         }));
 
         Client = Built.WithTestScheme().CreateClient();
@@ -37,15 +38,24 @@ internal sealed class SegmentStatusFeature : IAsyncDisposable
 
     public HeldLearningDataAmount LearningData { get; } = new();
 
+    public HeldCatalogCounts Catalog { get; } = new();
+
     public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
 
     public async Task<(HttpStatusCode Status, JsonElement LearningData)> GetAsync()
+    {
+        (HttpStatusCode status, JsonElement data) = await DataAsync();
+
+        return (status, data.GetProperty("learningData"));
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Data)> DataAsync()
     {
         using HttpResponseMessage response = await Client.GetAsync(new Uri(Path, UriKind.Relative));
         string body = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(body);
 
-        return (response.StatusCode, document.RootElement.GetProperty("data").GetProperty("learningData").Clone());
+        return (response.StatusCode, document.RootElement.GetProperty("data").Clone());
     }
 
     public async ValueTask DisposeAsync()
@@ -104,6 +114,41 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(12, learningData.GetProperty("waiting").GetInt32());
     }
 
+    [Fact(DisplayName = "with an empty catalog every kind counts zero, and only the six kinds are answered")]
+    public async Task WithAnEmptyCatalogEveryKindCountsZero()
+    {
+        await using var feature = new SegmentStatusFeature();
+
+        (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
+        JsonElement catalog = data.GetProperty("catalog");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["catalog", "learningData"], data.EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["cm", "ending", "opening", "programmeFixture", "stationFixture", "unknown"],
+            catalog.EnumerateObject().Select(kind => kind.Name).Order(StringComparer.Ordinal).ToArray());
+        Assert.All(catalog.EnumerateObject(), kind => Assert.Equal(0, kind.Value.GetInt32()));
+        Assert.Equal(1, feature.Catalog.Reads);
+    }
+
+    [Fact(DisplayName = "the catalog is answered as the entries of each kind it holds")]
+    public async Task TheCatalogIsAnsweredByKind()
+    {
+        await using var feature = new SegmentStatusFeature();
+        feature.Catalog.Counts = new CatalogCounts(820, 0, 0, 40, 6, 133);
+
+        (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
+        JsonElement catalog = data.GetProperty("catalog");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(820, catalog.GetProperty("cm").GetInt32());
+        Assert.Equal(0, catalog.GetProperty("opening").GetInt32());
+        Assert.Equal(0, catalog.GetProperty("ending").GetInt32());
+        Assert.Equal(40, catalog.GetProperty("programmeFixture").GetInt32());
+        Assert.Equal(6, catalog.GetProperty("stationFixture").GetInt32());
+        Assert.Equal(133, catalog.GetProperty("unknown").GetInt32());
+    }
+
     [Fact(DisplayName = "a caller who has not signed in cannot read the status, and nothing is counted for them")]
     public async Task ACallerWhoHasNotSignedInCannotReadTheStatus()
     {
@@ -115,5 +160,6 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());
         Assert.Equal(0, feature.LearningData.Reads);
+        Assert.Equal(0, feature.Catalog.Reads);
     }
 }

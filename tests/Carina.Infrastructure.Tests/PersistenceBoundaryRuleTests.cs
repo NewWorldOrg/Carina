@@ -243,24 +243,29 @@ public sealed class PersistenceBoundaryRuleTests
             StringComparer.Ordinal);
     }
 
-    [Fact(DisplayName = "the segment tables are the learning data and the settings, and none of them holds a key into another domain")]
-    public void TheSegmentTablesAreTheLearningDataAndTheSettingsAndNoneOfThemHoldsAKeyIntoAnotherDomain()
+    [Fact(DisplayName = "the segment tables are the learning data, the settings and the catalog, and the only key among them is a stretch's into its entry")]
+    public void TheSegmentTablesHoldNoKeyIntoAnotherDomain()
     {
         using CarinaDbContext context = Carina();
 
         Assert.Equal(
-            ["segment_extraction", "segment_learning_data", "segment_settings"],
+            ["segment_catalog_entry", "segment_catalog_occurrence", "segment_extraction", "segment_learning_data", "segment_settings"],
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Segments));
 
-        Assert.Empty(context.Model
-            .GetEntityTypes()
-            .Where(entityType => entityType.GetTableName() is { } table && table.StartsWith("segment_", StringComparison.Ordinal))
-            .SelectMany(entityType => entityType.GetForeignKeys()));
+        Assert.Equal(
+            ["segment_catalog_occurrence -> segment_catalog_entry"],
+            context.Model
+                .GetEntityTypes()
+                .SelectMany(entityType => entityType.GetForeignKeys())
+                .Where(key => key.DeclaringEntityType.GetTableName()?.StartsWith("segment_", StringComparison.Ordinal) is true
+                              || key.PrincipalEntityType.GetTableName()?.StartsWith("segment_", StringComparison.Ordinal) is true)
+                .Select(key => $"{key.DeclaringEntityType.GetTableName()} -> {key.PrincipalEntityType.GetTableName()}"));
     }
 
     [Theory(DisplayName = "the learning data reaches the recording it was taken from by value, not by key")]
     [InlineData("segment_extraction")]
     [InlineData("segment_learning_data")]
+    [InlineData("segment_catalog_occurrence")]
     public void TheLearningDataReachesTheRecordingByValue(string table)
     {
         using CarinaDbContext context = Carina();
@@ -270,7 +275,8 @@ public sealed class PersistenceBoundaryRuleTests
         Assert.Contains("recording_id", learning.GetProperties().Select(property => property.GetColumnName()), StringComparer.Ordinal);
         Assert.DoesNotContain(
             context.Model.GetEntityTypes().SelectMany(entityType => entityType.GetForeignKeys()),
-            key => key.DeclaringEntityType == learning || key.PrincipalEntityType == learning);
+            key => (key.DeclaringEntityType == learning || key.PrincipalEntityType == learning)
+                   && key.Properties.Any(property => property.GetColumnName() == "recording_id"));
     }
 
     [Fact(DisplayName = "the room the learning data takes is measured over every segment table, and over no other")]

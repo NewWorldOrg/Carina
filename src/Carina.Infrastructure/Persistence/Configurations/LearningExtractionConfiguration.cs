@@ -73,6 +73,7 @@ public sealed class LearningExtractionConfiguration : IEntityTypeConfiguration<L
                 AND jsonb_typeof(marks) = 'array'
                 """);
             table.HasCheckConstraint("ck_segment_extraction_times", "updated_at >= created_at");
+            table.HasCheckConstraint("ck_segment_extraction_matched", "matched_at IS NULL OR matched_at >= created_at");
         });
 
         builder.Property<uint>(ConcurrencyToken)
@@ -172,8 +173,10 @@ public sealed class LearningExtractionConfiguration : IEntityTypeConfiguration<L
 
         builder.Property(extraction => extraction.CreatedAt).IsRequired();
         builder.Property(extraction => extraction.UpdatedAt).IsRequired();
+        builder.Property(extraction => extraction.MatchedAt).HasColumnName("matched_at");
 
         builder.Ignore(extraction => extraction.CanRetry);
+        builder.Ignore(extraction => extraction.AwaitsMatching);
 
         builder.HasIndex(extraction => extraction.State)
             .IsUnique()

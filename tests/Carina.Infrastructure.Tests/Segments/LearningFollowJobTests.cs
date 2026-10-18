@@ -162,6 +162,28 @@ public sealed class LearningFollowJobTests : IDisposable
             "the settled follows were never let go");
     }
 
+    [Fact(DisplayName = "a follow that comes to its end is told to the matching against the catalog, and a follow stopped is not")]
+    public async Task AFollowThatComesToItsEndIsToldToTheMatching()
+    {
+        await harness.LearningAsync(true);
+        Recording ending = harness.Recording(eventId: 7306);
+        Recording stopped = harness.Recording(eventId: 7307);
+        LearningFollowJob job = harness.Job();
+        await job.LookAsync(Cancel);
+        await Eventually.Happens(() => harness.Follower.Asked.Count is 2, "the follows never began");
+
+        End(ending);
+        await job.LookAsync(Cancel);
+        await Eventually.Happens(() => harness.Records.Row(ending.Id)?.State is LearningExtractionState.Done, "the ended follow never settled");
+        await harness.LearningAsync(false);
+        await job.LookAsync(Cancel);
+
+        await Eventually.Happens(() => harness.Follower.Stopped.Contains(stopped.Id), "the other follow was never stopped");
+        Assert.True(harness.Finished.TryTake(out RecordingId? told));
+        Assert.Equal(ending.Id, told);
+        Assert.False(harness.Finished.TryTake(out _));
+    }
+
     [Fact(DisplayName = "a recording under a root this process does not mount is not looked at, and one whose file is not there yet is not followed yet")]
     public async Task ARecordingOutOfReachOrWithoutItsFileIsNotFollowed()
     {

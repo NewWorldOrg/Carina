@@ -23,14 +23,27 @@ public sealed record LearningDataResponder(int Recordings, long Seconds, long By
 }
 
 /// <summary>
+/// How many entries the catalog of repeated sound holds of each kind.
+/// </summary>
+public sealed record CatalogResponder(int Cm, int Opening, int Ending, int ProgrammeFixture, int StationFixture, int Unknown)
+{
+    public static CatalogResponder Of(CatalogCounts counts)
+    {
+        ArgumentNullException.ThrowIfNull(counts);
+
+        return new CatalogResponder(counts.Cm, counts.Opening, counts.Ending, counts.ProgrammeFixture, counts.StationFixture, counts.Unknown);
+    }
+}
+
+/// <summary>
 /// Where CM, OP and ED detection stands.
 /// </summary>
-public sealed record SegmentStatusResponder(LearningDataResponder LearningData)
+public sealed record SegmentStatusResponder(LearningDataResponder LearningData, CatalogResponder Catalog)
 {
     public static SegmentStatusResponder Of(SegmentStatus status)
     {
         ArgumentNullException.ThrowIfNull(status);
 
-        return new SegmentStatusResponder(LearningDataResponder.Of(status.LearningData));
+        return new SegmentStatusResponder(LearningDataResponder.Of(status.LearningData), CatalogResponder.Of(status.Catalog));
     }
 }

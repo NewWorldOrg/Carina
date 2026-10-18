@@ -407,6 +407,31 @@ public sealed class ServiceCollectionExtensionsTests
             scope.ServiceProvider.GetRequiredService<ILearningDataAmountReader>());
     }
 
+    [Fact(DisplayName = "registers where the catalog is kept, what counts it, and what matching reads")]
+    public void RegistersTheCatalog()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<CatalogRepository>(scope.ServiceProvider.GetRequiredService<ICatalogRepository>());
+        Assert.IsType<CatalogCountsReader>(scope.ServiceProvider.GetRequiredService<ICatalogCountsReader>());
+        Assert.IsType<CatalogWorklist>(scope.ServiceProvider.GetRequiredService<ICatalogWorklist>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CatalogMatching>());
+    }
+
+    [Fact(DisplayName = "registers the matching against the catalog as the same job that is stopped with the app")]
+    public void RegistersTheCatalogMatchingJob()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Same(CatalogMatchingSettings.Default, provider.GetRequiredService<CatalogMatchingSettings>());
+        Assert.Same(provider.GetRequiredService<FollowedToTheEnd>(), provider.GetRequiredService<FollowedToTheEnd>());
+        Assert.Same(provider.GetRequiredService<LowestPriorityScheduler>(), provider.GetRequiredService<LowestPriorityScheduler>());
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<CatalogMatchingJob>()));
+    }
+
     [Fact(DisplayName = "registers where the segment settings are kept and the switch that says whether learning is on")]
     public void RegistersTheSegmentSettingsAndTheLearningSwitch()
     {

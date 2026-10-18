@@ -18,7 +18,7 @@ namespace Carina.Db.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -3546,6 +3546,165 @@ namespace Carina.Db.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Carina.Domain.Segments.CatalogEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<double?>("Confidence")
+                        .HasColumnType("double precision")
+                        .HasColumnName("confidence");
+
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("decided_by");
+
+                    b.Property<byte[]>("Fingerprint")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("fingerprint");
+
+                    b.Property<DateTime>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_seen_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<TimeSpan>("Length")
+                        .HasColumnType("interval")
+                        .HasColumnName("length");
+
+                    b.Property<int>("OccurrenceCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("occurrences");
+
+                    b.Property<int>("SeriesCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("series_count");
+
+                    b.Property<int>("StationCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("station_count");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_segment_catalog_entry");
+
+                    b.HasIndex("Kind")
+                        .HasDatabaseName("ix_segment_catalog_entry_kind");
+
+                    b.HasIndex("LastSeenAt")
+                        .HasDatabaseName("ix_segment_catalog_entry_last_seen_at");
+
+                    b.ToTable("segment_catalog_entry", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_segment_catalog_entry_confidence", "(confidence IS NULL) = (kind = 'Unknown') AND (confidence IS NULL OR confidence BETWEEN 0 AND 1)");
+
+                            t.HasCheckConstraint("ck_segment_catalog_entry_counts", "occurrences >= 2 AND series_count >= 1 AND station_count >= 1");
+
+                            t.HasCheckConstraint("ck_segment_catalog_entry_decided_by", "(decided_by IS NULL) = (kind = 'Unknown') AND (decided_by IS NULL OR decided_by IN ('Answer', 'Pattern'))");
+
+                            t.HasCheckConstraint("ck_segment_catalog_entry_fingerprint", "octet_length(fingerprint) BETWEEN 4 AND 45000 AND octet_length(fingerprint) % 4 = 0");
+
+                            t.HasCheckConstraint("ck_segment_catalog_entry_kind", "kind IN ('Cm', 'Opening', 'Ending', 'ProgrammeFixture', 'StationFixture', 'Unknown')");
+
+                            t.HasCheckConstraint("ck_segment_catalog_entry_length", "length > interval '0'");
+
+                            t.HasCheckConstraint("ck_segment_catalog_entry_seen", "last_seen_at >= first_seen_at");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Segments.CatalogOccurrence", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<float>("BitErrorRate")
+                        .HasColumnType("real")
+                        .HasColumnName("bit_error_rate");
+
+                    b.Property<TimeSpan>("EndsAt")
+                        .HasColumnType("interval")
+                        .HasColumnName("ends_at");
+
+                    b.Property<Guid>("EntryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entry_id");
+
+                    b.Property<string>("KindOverride")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind_override");
+
+                    b.Property<DateTime>("MatchedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("matched_at");
+
+                    b.Property<int>("NetworkId")
+                        .HasColumnType("integer")
+                        .HasColumnName("network_id");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recording_id");
+
+                    b.Property<DateTime>("RecordingStartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recording_started_at");
+
+                    b.Property<string>("SeriesName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("series_name");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("service_id");
+
+                    b.Property<TimeSpan>("StartsAt")
+                        .HasColumnType("interval")
+                        .HasColumnName("starts_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_segment_catalog_occurrence");
+
+                    b.HasIndex("RecordingId")
+                        .HasDatabaseName("ix_segment_catalog_occurrence_recording_id");
+
+                    b.HasIndex("RecordingStartedAt")
+                        .HasDatabaseName("ix_segment_catalog_occurrence_recording_started_at");
+
+                    b.HasIndex("EntryId", "RecordingId", "StartsAt")
+                        .IsUnique()
+                        .HasDatabaseName("ux_segment_catalog_occurrence_place");
+
+                    b.ToTable("segment_catalog_occurrence", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_segment_catalog_occurrence_bit_error_rate", "bit_error_rate BETWEEN 0 AND 0.3::real");
+
+                            t.HasCheckConstraint("ck_segment_catalog_occurrence_kind_override", "kind_override IS NULL OR kind_override IN ('Programme', 'Break', 'Opening', 'Ending')");
+
+                            t.HasCheckConstraint("ck_segment_catalog_occurrence_span", "starts_at >= interval '0' AND ends_at > starts_at");
+                        });
+                });
+
             modelBuilder.Entity("Carina.Domain.Segments.LearningDataBlock", b =>
                 {
                     b.Property<Guid>("RecordingId")
@@ -3617,6 +3776,10 @@ namespace Carina.Db.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("gaps");
+
+                    b.Property<DateTime?>("MatchedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("matched_at");
 
                     b.Property<TimeSpan>("ReadThrough")
                         .HasColumnType("interval")
@@ -3744,6 +3907,8 @@ namespace Carina.Db.Migrations
                     b.ToTable("segment_extraction", null, t =>
                         {
                             t.HasCheckConstraint("ck_segment_extraction_failure", "failures >= 0\nAND (failure IS NULL) = (failure_reason IS NULL)\nAND (failure IS NULL) = (failures = 0)\nAND (failure IS NULL OR failure IN ('FfmpegMissing', 'StreamMissing', 'TimingMismatch', 'Other'))\nAND (state <> 'Failed' OR failure IS NOT NULL)\nAND (state NOT IN ('Done', 'Partial') OR failures = 0)");
+
+                            t.HasCheckConstraint("ck_segment_extraction_matched", "matched_at IS NULL OR matched_at >= created_at");
 
                             t.HasCheckConstraint("ck_segment_extraction_programme", "(programme_ends_at IS NULL OR programme_ends_at > programme_starts_at)\nAND (episode IS NULL OR episode >= 0)\nAND audio IN ('Undetermined', 'Mono', 'Stereo', 'DualMono', 'Surround')\nAND jsonb_typeof(genres) = 'array'\nAND jsonb_typeof(marks) = 'array'");
 
@@ -3964,6 +4129,16 @@ namespace Carina.Db.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_scan_run_attempt_scan_run_scan_run_id");
+                });
+
+            modelBuilder.Entity("Carina.Domain.Segments.CatalogOccurrence", b =>
+                {
+                    b.HasOne("Carina.Domain.Segments.CatalogEntry", null)
+                        .WithMany()
+                        .HasForeignKey("EntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_segment_catalog_occurrence_segment_catalog_entry_entry_id");
                 });
 
             modelBuilder.Entity("Carina.Domain.Programmes.StreamVisit", b =>

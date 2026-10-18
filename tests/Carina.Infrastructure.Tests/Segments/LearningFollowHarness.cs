@@ -129,6 +129,8 @@ internal sealed class LearningFollowHarness : IDisposable
 
     public HeldFollower Follower { get; }
 
+    public FollowedToTheEnd Finished { get; } = new();
+
     public DriverSignalRelay Signals { get; } = new(NullLogger<DriverSignalRelay>.Instance);
 
     public IntegritySettings Mounts => new() { OutputRoots = [new StorageRootPath(Mounted, tree.Root)] };
@@ -137,6 +139,7 @@ internal sealed class LearningFollowHarness : IDisposable
         => new(
             provider.GetRequiredService<IServiceScopeFactory>(),
             Follower,
+            Finished,
             Store,
             Mounts,
             settings ?? LearningFollowSettings.Default,

@@ -57,12 +57,26 @@ public sealed class CatalogTests
         CatalogChange change = Catalog.Absorb(Heard, Sound, [match], Knowing(entry, occurrences), Now.AddDays(1));
 
         Assert.Empty(change.Started);
+        Assert.Empty(change.Overridden);
         Assert.Same(entry, Assert.Single(change.Reestimated));
         CatalogOccurrence found = Assert.Single(change.Found);
         Assert.Equal(entry.Id, found.EntryId);
         Assert.Equal(Heard, found.RecordingId);
         Assert.Equal(3, entry.OccurrenceCount);
         Assert.Equal(Now.AddDays(1), entry.UpdatedAt);
+    }
+
+    [Fact(DisplayName = "a stretch already kept that is no longer taken for another kind on its own is handed back to be written again")]
+    public void AStretchWhoseOwnKindChangesIsHandedBack()
+    {
+        (CatalogEntry entry, CatalogOccurrence[] occurrences) = Kept(Drama.Episode(0), Drama.Episode(1));
+        occurrences[0].Override(SegmentKind.Break);
+        SoundMatch match = new(Span(10, 25), new EntrySound(entry.Id), Span(0, 15), 0.04);
+
+        CatalogChange change = Catalog.Absorb(Heard, Sound, [match], Knowing(entry, occurrences), Now);
+
+        Assert.Same(occurrences[0], Assert.Single(change.Overridden));
+        Assert.Null(occurrences[0].KindOverride);
     }
 
     [Fact(DisplayName = "a recording matched over the same stretch as an entry joins that entry rather than starting another")]
