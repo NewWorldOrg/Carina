@@ -37,6 +37,7 @@ internal sealed class SeamProbe : IAsyncDisposable
             services.AddSingleton<IQualityThresholdRepository>(Thresholds);
             services.AddSingleton<IQualityThresholdChangeRepository>(Changes);
             services.AddSingleton<ILearningDataAmountReader>(LearningData);
+            services.AddSingleton<ICatalogCountsReader>(Catalog);
         }));
 
         Client = credentialled ? wired.CreateAuthenticatedClient() : wired.WithTestScheme().CreateClient();
@@ -65,6 +66,8 @@ internal sealed class SeamProbe : IAsyncDisposable
     public HeldQualityThresholdChanges Changes { get; } = new();
 
     public HeldLearningDataAmount LearningData { get; } = new();
+
+    public HeldCatalogCounts Catalog { get; } = new();
 
     public static SeamProbe CarryingNoCredentials() => new(credentialled: false);
 

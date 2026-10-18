@@ -646,6 +646,23 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal("byte", schemas["DataBroadcastEventResponder"]!["properties"]!["privateData"]!["format"]!.GetValue<string>());
     }
 
+    [Fact(DisplayName = "the status of CM, OP and ED detection is described with the learning data kept beside the catalog's count of each kind")]
+    public async Task TheSegmentStatusIsDescribedWithTheCatalog()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["learningData", "catalog"],
+            schemas["SegmentStatusResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["recordings", "seconds", "bytes", "waiting"],
+            schemas["LearningDataResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["cm", "opening", "ending", "programmeFixture", "stationFixture", "unknown"],
+            schemas["CatalogResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
     [Fact(DisplayName = "BR-BV-004: a module of a recording's data broadcast is described by the numbers that name it, and its bytes are left out of the JSON the document describes")]
     public async Task AModuleOfADataBroadcastIsDescribedByTheNumbersThatNameIt()
     {
