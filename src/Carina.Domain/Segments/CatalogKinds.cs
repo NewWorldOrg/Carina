@@ -28,12 +28,12 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// (<see cref="WholeWithin"/>) count; a shorter one is taken on its own.
 /// <para>
 /// The series are those the links join, except that a sound heard as an opening or an ending joins the
-/// series that hears it so most often with every other series that hears it in two episodes or only in that
-/// half and is either in its slot (<see cref="SeriesLinks.InOneSlot"/>), whatever it is called, or of a name
-/// that links to its own (<see cref="SeriesNames.Link"/>), on whatever station: the sound links them. When
-/// every whole stretch is of that one series and in that half, the opening or ending comes before the
-/// advert of two stations, so that a series whose opening fills a slot on the grid, broadcast on two
-/// stations, keeps its opening. When the entry is an opening or an ending, a whole stretch in a series that
+/// series that hears it so most often with every other series of a name that links to its own
+/// (<see cref="SeriesNames.Link"/>), on whatever station, and with every series in its slot
+/// (<see cref="SeriesLinks.InOneSlot"/>), whatever it is called, that hears it in two episodes or only in that
+/// half: the sound links those. When every whole stretch is of that one series, the opening or ending comes
+/// before the advert of two stations, so that a series whose opening fills a slot on the grid, broadcast on
+/// two stations, keeps its opening. When the entry is an opening or an ending, a whole stretch in a series that
 /// hears it so is taken for the kind of the half it is heard in, so that the opening sung at the end of a
 /// last episode is that episode's ending, and a shorter one on the grid heard outside those series is an
 /// advert there, the song played in another series' break.
@@ -203,9 +203,9 @@ public static class CatalogKinds
     /// <summary>
     /// The opening or ending a sound of its length is heard as, when two episodes of one series hear it in
     /// the same half of their programmes; the series it is heard as that in, with every other series of the
-    /// one that hears it so most often, by slot or by name, that hears it in two episodes or only in that half;
-    /// the series once those are joined into one; and whether every whole stretch is of that one series and in
-    /// that half.
+    /// name of the one that hears it so most often, and every series in its slot that hears it in two episodes
+    /// or only in that half; the series once those are joined into one; and whether every whole stretch is of
+    /// that one series.
     /// </summary>
     private static Theme? ThemeOf(TimeSpan length, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> linked)
     {
@@ -227,7 +227,7 @@ public static class CatalogKinds
         IReadOnlyList<PlacedOccurrence> main = recurring.Where(group => Recurs(group, kind)).MaxBy(group => Episodes(group, kind))!;
         IReadOnlyList<PlacedOccurrence>[] joined =
         [
-            .. linked.Where(group => ReferenceEquals(group, main) || (OfTheSeriesOf(group, main) && (Recurs(group, kind) || HeardOnlyAs(group, kind)))),
+            .. linked.Where(group => ReferenceEquals(group, main) || NamedAs(group, main) || (InTheSlotOf(group, main) && (Recurs(group, kind) || HeardOnlyAs(group, kind)))),
         ];
         PlacedOccurrence[] slot = [.. joined.SelectMany(group => group)];
         IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series =
@@ -235,7 +235,7 @@ public static class CatalogKinds
             .. linked.Where(group => !joined.Contains(group) || ReferenceEquals(group, joined[0])).Select(group => joined.Contains(group) ? slot : group),
         ];
 
-        bool prevails = joined.Length == linked.Count && slot.All(placed => PlaceOf(placed) == kind);
+        bool prevails = joined.Length == linked.Count;
 
         return new Theme(kind, [.. slot, .. recurring.Where(group => !joined.Contains(group)).SelectMany(group => group)], series, prevails);
     }
@@ -248,9 +248,11 @@ public static class CatalogKinds
     private static bool HeardOnlyAs(IReadOnlyList<PlacedOccurrence> group, CatalogKind place)
         => group.Any(placed => PlaceOf(placed) == place) && group.All(placed => PlaceOf(placed) is null || PlaceOf(placed) == place);
 
-    private static bool OfTheSeriesOf(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
-        => group.Any(placed => main.Any(member => SeriesLinks.InOneSlot(member.Occurrence.Member, placed.Occurrence.Member)
-                                                  || SeriesNames.Link(member.Occurrence.SeriesName, placed.Occurrence.SeriesName)));
+    private static bool InTheSlotOf(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
+        => group.Any(placed => main.Any(member => SeriesLinks.InOneSlot(member.Occurrence.Member, placed.Occurrence.Member)));
+
+    private static bool NamedAs(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
+        => group.Any(placed => main.Any(member => SeriesNames.Link(member.Occurrence.SeriesName, placed.Occurrence.SeriesName)));
 
     /// <summary>
     /// What the place of a stretch makes a theme heard there: an opening in the first half of its programme,

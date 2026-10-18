@@ -314,7 +314,7 @@ public sealed class CatalogKindsTests
         Assert.Equal(2, pattern.SeriesCount);
     }
 
-    [Fact(DisplayName = "the same series on another station hears the opening there, a stretch in the other half keeping the advert of two stations ahead of it on the grid")]
+    [Fact(DisplayName = "the same series on another station hears the opening there, off the grid and on it")]
     public void TheSeriesOnAnotherStationIsJoinedByItsName()
     {
         PlacedOccurrence[] offTheGrid = [.. Weekly(Drama, 2, 0, 85), .. Weekly(Elsewhere, 2, 0, 85, firstWeek: 1)];
@@ -327,7 +327,18 @@ public sealed class CatalogKindsTests
         Assert.Equal((1, 2), (off.SeriesCount, off.StationCount));
         Assert.Equal(SegmentKind.Ending, off.Overrides[^1]);
         Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), on.Estimate);
-        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.9, CatalogDecision.Pattern), Estimated(89, [.. onTheGrid, At(Entry, Elsewhere.Episode(3), 1700, 89)]).Estimate);
+    }
+
+    [Fact(DisplayName = "BR-CD-005: a sound of 90 seconds on the grid in the first half of three episodes on two stations and at the end of the last is the opening, and the last stretch its ending")]
+    public void AnOpeningOnTwoStationsSungAtTheEndOfTheLastEpisodeStaysTheOpening()
+    {
+        PlacedOccurrence last = At(Entry, Elsewhere.Episode(3), 1710, 90);
+
+        CatalogPattern pattern = Estimated(90, [.. Weekly(Drama, 2, 0, 90), At(Entry, Elsewhere.Episode(2), 0, 90), last]);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), pattern.Estimate);
+        Assert.Equal((1, 2), (pattern.SeriesCount, pattern.StationCount));
+        Assert.Equal([null, null, null, SegmentKind.Ending], pattern.Overrides);
     }
 
     [Fact(DisplayName = "BR-CD-011: recordings that share an opening count as one series for another entry")]
