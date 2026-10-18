@@ -14,6 +14,8 @@ public enum EncodeScratchKind
     Captions = 4,
 
     CaptionedWork = 5,
+
+    ChapteredWork = 6,
 }
 
 public enum EncodeScratchFate

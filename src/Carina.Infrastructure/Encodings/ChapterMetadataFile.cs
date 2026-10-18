@@ -2,13 +2,14 @@ using System.Globalization;
 using System.Text;
 
 using Carina.Domain.Encodings;
+using Carina.Domain.Segments;
 
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
 /// Writes the chapters of one artefact in the shape ffmpeg reads chapters from. Every moment goes
-/// down in whole milliseconds on the clock <see cref="ChapterClock.InTheMetadata"/> puts it on, and
-/// every chapter is titled from two constants.
+/// down in whole milliseconds on the clock <see cref="ChapterClock.InTheMetadata"/> puts it on, which is
+/// the recording's own time, and every chapter is titled from two constants.
 /// </summary>
 public static class ChapterMetadataFile
 {
@@ -22,28 +23,26 @@ public static class ChapterMetadataFile
 
     public const string BreakTitle = "CM";
 
+    private static readonly UTF8Encoding Utf8 = new(false);
+
     public static string Written(IReadOnlyList<ChapterSegment> segments, TimeSpan headSkip)
     {
         ArgumentNullException.ThrowIfNull(segments);
 
-        if (segments.Count is 0)
-        {
-            throw new ArgumentException("A chapters file is written for chapters, and there are none.", nameof(segments));
-        }
+        return Lines([.. segments.Select(segment => (
+            ChapterClock.InTheMetadata(segment.Starts, headSkip),
+            ChapterClock.InTheMetadata(segment.Ends, headSkip),
+            Titled(segment.Kind)))]);
+    }
 
-        var written = new StringBuilder();
-        written.Append(Header).Append('\n');
+    /// <summary>
+    /// The stretches of a recording as chapters, written in the recording's own time as they are.
+    /// </summary>
+    public static string InRecordingTime(IReadOnlyList<SegmentSpan> stretches)
+    {
+        ArgumentNullException.ThrowIfNull(stretches);
 
-        foreach (ChapterSegment segment in segments)
-        {
-            written.Append(Opening).Append('\n');
-            written.Append(TimeBase).Append('\n');
-            written.Append("START=").Append(Milliseconds(segment.Starts, headSkip)).Append('\n');
-            written.Append("END=").Append(Milliseconds(segment.Ends, headSkip)).Append('\n');
-            written.Append("title=").Append(Titled(segment.Kind)).Append('\n');
-        }
-
-        return written.ToString();
+        return Lines([.. stretches.Select(stretch => (stretch.Starts, stretch.Ends, Titled(EncodeChapterChoice.KindOf(stretch.Kind))))]);
     }
 
     public static Task WriteAsync(
@@ -51,15 +50,40 @@ public static class ChapterMetadataFile
         IReadOnlyList<ChapterSegment> segments,
         TimeSpan headSkip,
         CancellationToken cancellationToken)
+        => WriteAsync(path, Written(segments, headSkip), cancellationToken);
+
+    public static Task WriteAsync(string path, string written, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
+        ArgumentException.ThrowIfNullOrEmpty(written);
 
-        return File.WriteAllTextAsync(path, Written(segments, headSkip), new UTF8Encoding(false), cancellationToken);
+        return File.WriteAllTextAsync(path, written, Utf8, cancellationToken);
+    }
+
+    private static string Lines(IReadOnlyList<(TimeSpan Starts, TimeSpan Ends, string Title)> chapters)
+    {
+        if (chapters.Count is 0)
+        {
+            throw new ArgumentException("A chapters file is written for chapters, and there are none.", nameof(chapters));
+        }
+
+        var written = new StringBuilder();
+        written.Append(Header).Append('\n');
+
+        foreach ((TimeSpan starts, TimeSpan ends, string title) in chapters)
+        {
+            written.Append(Opening).Append('\n');
+            written.Append(TimeBase).Append('\n');
+            written.Append("START=").Append(Milliseconds(starts)).Append('\n');
+            written.Append("END=").Append(Milliseconds(ends)).Append('\n');
+            written.Append("title=").Append(title).Append('\n');
+        }
+
+        return written.ToString();
     }
 
     private static string Titled(ChapterKind kind) => kind is ChapterKind.Break ? BreakTitle : ProgrammeTitle;
 
-    private static string Milliseconds(TimeSpan onTheArtefact, TimeSpan headSkip)
-        => ((long)Math.Round(ChapterClock.InTheMetadata(onTheArtefact, headSkip).TotalMilliseconds))
-            .ToString(CultureInfo.InvariantCulture);
+    private static string Milliseconds(TimeSpan inTheMetadata)
+        => ((long)Math.Round(inTheMetadata.TotalMilliseconds)).ToString(CultureInfo.InvariantCulture);
 }

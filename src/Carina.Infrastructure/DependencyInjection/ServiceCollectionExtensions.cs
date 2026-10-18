@@ -245,6 +245,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
         services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();
+        services.AddScoped<EncodeChapterChoices>();
         services.AddScoped<EncodeJobRunner>();
         services.AddScoped<EncodeRestart>();
         services.AddScoped<EncodeIntakeRound>();

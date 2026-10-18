@@ -820,6 +820,10 @@ namespace Carina.Db.Migrations
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Chapters", "Carina.Domain.Encodings.EncodeJob.Chapters#ChapterReading", b1 =>
                         {
+                            b1.Property<DateTime?>("AnsweredAt")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("chapters_answered_at");
+
                             b1.Property<double>("BreakShare")
                                 .HasColumnType("double precision")
                                 .HasColumnName("chapters_break_share");
@@ -833,6 +837,10 @@ namespace Carina.Db.Migrations
                                 .HasMaxLength(32)
                                 .HasColumnType("character varying(32)")
                                 .HasColumnName("chapters_detector");
+
+                            b1.Property<int?>("ModelVersion")
+                                .HasColumnType("integer")
+                                .HasColumnName("chapters_model_version");
 
                             b1.Property<string>("Verdict")
                                 .IsRequired()
@@ -961,7 +969,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_encode_job_caption_track", "(caption_track IS NULL) = (caption_track_from IS NULL)\nAND (caption_track IS NULL OR caption_track IN ('Added', 'Withheld', 'Failed'))\nAND caption_track_attempts >= 0\nAND (caption_track_attempts = 0 OR caption_track = 'Failed')");
 
-                            t.HasCheckConstraint("ck_encode_job_chapters", "((chapters_verdict IS NULL) = (chapters_decided_at IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_detector IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_break_share IS NULL))\nAND (chapters_verdict IS NULL OR status <> 'Queued')\nAND (chapters_verdict IS NULL OR chapters_verdict IN ('NotAsked', 'Marked', 'NothingFound', 'Discarded', 'Unreadable'))\nAND (chapters_detector IS NULL OR chapters_detector IN ('Nobody', 'Ffmpeg'))\nAND (chapters_break_share IS NULL OR chapters_break_share BETWEEN 0 AND 1)\nAND (chapters_decided_at IS NULL OR chapters_decided_at >= started_at)");
+                            t.HasCheckConstraint("ck_encode_job_chapters", "((chapters_verdict IS NULL) = (chapters_decided_at IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_detector IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_break_share IS NULL))\nAND (chapters_verdict IS NULL OR status <> 'Queued')\nAND (chapters_verdict IS NULL OR chapters_verdict IN ('NotAsked', 'Marked', 'NothingFound', 'Discarded', 'Unreadable'))\nAND (chapters_detector IS NULL OR chapters_detector IN ('Nobody', 'Ffmpeg', 'Segments'))\nAND (chapters_break_share IS NULL OR chapters_break_share BETWEEN 0 AND 1)\nAND (chapters_decided_at IS NULL OR chapters_decided_at >= started_at)\nAND (chapters_model_version IS NULL OR chapters_model_version >= 1)\nAND ((chapters_model_version IS NULL AND chapters_answered_at IS NULL) OR chapters_detector = 'Segments')\nAND (chapters_detector IS DISTINCT FROM 'Segments'\n    OR ((chapters_model_version IS NOT NULL OR chapters_answered_at IS NOT NULL) = (chapters_verdict <> 'NotAsked')))");
 
                             t.HasCheckConstraint("ck_encode_job_failure", "((status = 'Failed') = (failure IS NOT NULL))\nAND ((failure IS NULL) = (failure_note IS NULL))\nAND ((failure IS NULL) = (failure_noticed_at IS NULL))\nAND (failure IS NULL OR failure IN ('FfmpegExitedNonZero', 'NotEnoughRoom', 'SourceMissing', 'CapabilityUnavailable', 'TimedOut', 'DestinationCollision', 'HeadTooFar', 'EndingNotKept'))");
 
@@ -1101,7 +1109,7 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("encode_scratch_file", null, t =>
                         {
-                            t.HasCheckConstraint("ck_encode_scratch_file_kind", "kind IN ('WorkFile', 'Chapters', 'ReplacedArtefact', 'Captions', 'CaptionedWork')");
+                            t.HasCheckConstraint("ck_encode_scratch_file_kind", "kind IN ('WorkFile', 'Chapters', 'ReplacedArtefact', 'Captions', 'CaptionedWork', 'ChapteredWork')");
 
                             t.HasCheckConstraint("ck_encode_scratch_file_name", "btrim(file_name) = file_name\nAND length(file_name) > 0\nAND file_name <> '.'\nAND strpos(file_name, '/') = 0\nAND strpos(file_name, chr(92)) = 0\nAND strpos(file_name, '..') = 0");
 

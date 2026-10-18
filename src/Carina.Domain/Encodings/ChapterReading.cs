@@ -1,4 +1,5 @@
 using Carina.Domain.Base;
+using Carina.Domain.Segments;
 
 namespace Carina.Domain.Encodings;
 
@@ -10,6 +11,8 @@ public enum ChapterDetectorName
     Nobody = 1,
 
     Ffmpeg = 2,
+
+    Segments = 3,
 }
 
 /// <summary>
@@ -17,9 +20,19 @@ public enum ChapterDetectorName
 /// they answered, how much of the length the answer took for breaks, and when. It is kept whatever
 /// the answer; <see cref="BreakShare"/> is kept even when the reading was thrown away.
 /// </summary>
+/// <remarks>
+/// A reading taken from the segments says which version of the model detected what it embedded, or when the
+/// answer it embedded was given; one that found nothing to embed says neither. No other reader says either.
+/// </remarks>
 public sealed record ChapterReading
 {
-    public ChapterReading(ChapterDetectorName detector, ChapterVerdict verdict, double breakShare, DateTime decidedAt)
+    public ChapterReading(
+        ChapterDetectorName detector,
+        ChapterVerdict verdict,
+        double breakShare,
+        DateTime decidedAt,
+        int? modelVersion = null,
+        DateTime? answeredAt = null)
     {
         if (!Enum.IsDefined(detector))
         {
@@ -39,10 +52,22 @@ public sealed record ChapterReading
                 "A share of the length lies between none of it and all of it.");
         }
 
+        if (modelVersion < SegmentModelVersion.FirstNumber)
+        {
+            throw new ArgumentOutOfRangeException(nameof(modelVersion), modelVersion, $"The versions of the model are numbered from {SegmentModelVersion.FirstNumber}.");
+        }
+
+        if (Unsourced(detector, verdict, modelVersion, answeredAt) is { } fault)
+        {
+            throw new ArgumentException(fault, nameof(modelVersion));
+        }
+
         Detector = detector;
         Verdict = verdict;
         BreakShare = breakShare;
         DecidedAt = UtcTimes.Required(decidedAt, nameof(decidedAt));
+        ModelVersion = modelVersion;
+        AnsweredAt = UtcTimes.Optional(answeredAt, nameof(answeredAt));
     }
 
     public ChapterDetectorName Detector { get; }
@@ -53,6 +78,10 @@ public sealed record ChapterReading
 
     public DateTime DecidedAt { get; }
 
+    public int? ModelVersion { get; }
+
+    public DateTime? AnsweredAt { get; }
+
     public bool Marks => Verdict is ChapterVerdict.Marked;
 
     public static ChapterReading Of(ChapterDetectorName detector, ChapterDetection detection, DateTime at)
@@ -60,5 +89,19 @@ public sealed record ChapterReading
         ArgumentNullException.ThrowIfNull(detection);
 
         return new ChapterReading(detector, detection.Verdict, detection.BreakShare, at);
+    }
+
+    private static string? Unsourced(ChapterDetectorName detector, ChapterVerdict verdict, int? modelVersion, DateTime? answeredAt)
+    {
+        bool sourced = modelVersion is not null || answeredAt is not null;
+
+        if (detector is not ChapterDetectorName.Segments)
+        {
+            return sourced ? "Only a reading taken from the segments says which version or answer it came from." : null;
+        }
+
+        return sourced == (verdict is not ChapterVerdict.NotAsked)
+            ? null
+            : "A reading taken from the segments came from a version's detection or an answer exactly when it found something to embed or leave out.";
     }
 }

@@ -1,6 +1,7 @@
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
+using Carina.Domain.Segments;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -99,6 +100,10 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
                 AND (chapters_detector IS NULL OR chapters_detector IN ({EncodeVocabulary.Of<ChapterDetectorName>()}))
                 AND (chapters_break_share IS NULL OR chapters_break_share BETWEEN 0 AND 1)
                 AND (chapters_decided_at IS NULL OR chapters_decided_at >= started_at)
+                AND (chapters_model_version IS NULL OR chapters_model_version >= {SegmentModelVersion.FirstNumber})
+                AND ((chapters_model_version IS NULL AND chapters_answered_at IS NULL) OR chapters_detector = '{nameof(ChapterDetectorName.Segments)}')
+                AND (chapters_detector IS DISTINCT FROM '{nameof(ChapterDetectorName.Segments)}'
+                    OR ((chapters_model_version IS NOT NULL OR chapters_answered_at IS NOT NULL) = (chapters_verdict <> '{nameof(ChapterVerdict.NotAsked)}')))
                 """);
             table.HasCheckConstraint(
                 "ck_encode_job_artefact",
@@ -249,6 +254,8 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
 
             chapters.Property(reading => reading.BreakShare).HasColumnName("chapters_break_share");
             chapters.Property(reading => reading.DecidedAt).HasColumnName("chapters_decided_at");
+            chapters.Property(reading => reading.ModelVersion).HasColumnName("chapters_model_version");
+            chapters.Property(reading => reading.AnsweredAt).HasColumnName("chapters_answered_at");
 
             chapters.Ignore(reading => reading.Marks);
         });

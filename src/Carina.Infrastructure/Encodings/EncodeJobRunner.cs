@@ -6,6 +6,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
+using Carina.Domain.Segments;
 
 using Microsoft.Extensions.Logging;
 
@@ -20,14 +21,17 @@ namespace Carina.Infrastructure.Encodings;
 /// </summary>
 /// <remarks>
 /// The run writes on the job where it ran, each programme's id and start before its output is read,
-/// and its headway at every tenth and at least every <see cref="HeartbeatEvery"/>. The chapter
-/// reading goes into the ledger before the encode starts, whatever the answer; any chapters are
+/// and its headway at every tenth and at least every <see cref="HeartbeatEvery"/>. The chapters come
+/// from the recording's detection by the version of the model in use, as <see cref="EncodeChapterChoice"/>
+/// decides; while learning is off and nothing detected the recording, the source is looked at instead. Where
+/// they came from goes into the ledger before the encode starts, whatever the answer; any chapters are
 /// handed to the encode as a metadata file recorded as a scratch file. Before the artefact is placed, the
 /// text of the recording's captions is put into the work file as a text track when it was taken by then.
-/// The look is handed the
+/// A look at the source is handed the
 /// station watermark learned ahead from another recording of the same service, and the watermark it
 /// learns from this recording is kept once the reading is in the ledger; failing to read or keep a
-/// watermark does not fail the job. Once a job has completed, what earlier jobs of the recording
+/// watermark does not fail the job. Chapters taken from a detection take no watermark: the detection
+/// judged the station's logo from the corners of the station's other recordings. Once a job has completed, what earlier jobs of the recording
 /// made is replaced; a failure there leaves the job completed and is settled at the next start.
 /// </remarks>
 public sealed class EncodeJobRunner(
@@ -43,6 +47,7 @@ public sealed class EncodeJobRunner(
     ISourceLengthReader lengths,
     ISourceHeadReader heads,
     IChapterDetector detector,
+    EncodeChapterChoices choices,
     IEncodeChapterRepository chapters,
     IStationWatermarkRepository watermarks,
     ICaptionRecords captionRecords,
@@ -157,44 +162,13 @@ public sealed class EncodeJobRunner(
 
         int cores = Math.Min((await autoRun.ReadAsync(cancellationToken)).MostCores, programmes.Cores);
 
-        WatermarkMask? learnedAhead = await LearnedAheadAsync(job, recording, cancellationToken);
-
-        ChapterDetection marks = await MarkedAsync(
-            source.FullName,
-            recording.ServiceId,
-            timeline,
-            learnedAhead,
-            cores,
-            spawned => SpawnedAsync(job, spawned, cancellationToken),
-            cancellationToken);
-
-        if (marks.Verdict is not ChapterVerdict.NotAsked)
-        {
-            logger.LogInformation(
-                "Job {Job} was read for the breaks in it and came back {Verdict} with {Chapters} chapter(s) over {Share} of its length: {Note}",
-                job.Id.Wire,
-                marks.Verdict,
-                marks.Segments.Count,
-                marks.BreakShare.ToString("0.000", CultureInfo.InvariantCulture),
-                marks.Note);
-        }
-
-        job.Judged(ChapterReading.Of(detector.Name, marks, clock.GetUtcNow().UtcDateTime));
-        await jobs.SaveAsync(job, cancellationToken);
-
-        if (marks.Learned is { } learned)
-        {
-            await KeepAsync(job, recording, learned, cancellationToken);
-        }
-
-        await chapters.RecordAsync(
-            job.Id,
-            marks.Marks ? EncodeChapter.Mark(job.Id, marks.Segments) : [],
-            cancellationToken);
-
+        EncodeChapterChoice choice = await choices.ReadAsync(recording.Id, cancellationToken);
+        string? metadata = choice.AsksTheReader
+            ? await LookedAsync(job, recording, source.FullName, timeline, cores, cancellationToken)
+            : await ChosenAsync(job, choice, timeline, cancellationToken);
         string? breaks = null;
 
-        if (marks.Marks)
+        if (metadata is not null)
         {
             if (await scratch.RecordAsync(job, EncodeScratchKind.Chapters, job.ChaptersFileName, cancellationToken) is not { } written)
             {
@@ -205,7 +179,7 @@ public sealed class EncodeJobRunner(
                     cancellationToken);
             }
 
-            await ChapterMetadataFile.WriteAsync(written, marks.Segments, timeline.HeadSkip, cancellationToken);
+            await ChapterMetadataFile.WriteAsync(written, metadata, cancellationToken);
             breaks = written;
         }
 
@@ -305,6 +279,93 @@ public sealed class EncodeJobRunner(
                 job.Id.Wire,
                 job.RecordingId.Wire);
         }
+    }
+
+    /// <summary>
+    /// Asks the reader of the source the machine is set up with where the breaks are and writes its answer down
+    /// whatever it was, handing back the chapters it marked on the clock the metadata is read on, or none.
+    /// </summary>
+    private async Task<string?> LookedAsync(
+        EncodeJob job,
+        Recording recording,
+        string source,
+        EncodeTimeline timeline,
+        int cores,
+        CancellationToken cancellationToken)
+    {
+        WatermarkMask? learnedAhead = await LearnedAheadAsync(job, recording, cancellationToken);
+
+        ChapterDetection marks = await MarkedAsync(
+            source,
+            recording.ServiceId,
+            timeline,
+            learnedAhead,
+            cores,
+            spawned => SpawnedAsync(job, spawned, cancellationToken),
+            cancellationToken);
+
+        if (marks.Verdict is not ChapterVerdict.NotAsked)
+        {
+            logger.LogInformation(
+                "Job {Job} was read for the breaks in it and came back {Verdict} with {Chapters} chapter(s) over {Share} of its length: {Note}",
+                job.Id.Wire,
+                marks.Verdict,
+                marks.Segments.Count,
+                marks.BreakShare.ToString("0.000", CultureInfo.InvariantCulture),
+                marks.Note);
+        }
+
+        job.Judged(ChapterReading.Of(detector.Name, marks, clock.GetUtcNow().UtcDateTime));
+        await jobs.SaveAsync(job, cancellationToken);
+
+        if (marks.Learned is { } learned)
+        {
+            await KeepAsync(job, recording, learned, cancellationToken);
+        }
+
+        await chapters.RecordAsync(
+            job.Id,
+            marks.Marks ? EncodeChapter.Mark(job.Id, marks.Segments) : [],
+            cancellationToken);
+
+        return marks.Marks ? ChapterMetadataFile.Written(marks.Segments, timeline.HeadSkip) : null;
+    }
+
+    /// <summary>
+    /// Writes down that the chapters come from the recording's detection by the version in use, or from nothing,
+    /// and hands back the stretches embedded in the recording's own time, or none.
+    /// </summary>
+    private async Task<string?> ChosenAsync(
+        EncodeJob job,
+        EncodeChapterChoice choice,
+        EncodeTimeline timeline,
+        CancellationToken cancellationToken)
+    {
+        PlaybackFileClock onTheArtefact = PlaybackFileClock.Of(timeline);
+        IReadOnlyList<SegmentSpan> embedded = choice.Embedded(onTheArtefact);
+
+        job.Judged(choice.Reading(clock.GetUtcNow().UtcDateTime));
+        await jobs.SaveAsync(job, cancellationToken);
+        await chapters.RecordAsync(job.Id, EncodeChapter.Mark(job.Id, choice.Chapters(onTheArtefact)), cancellationToken);
+
+        if (choice.Standing.Detection is { } detection)
+        {
+            logger.LogInformation(
+                "Job {Job} takes its chapters from the detection of its recording by version {Version}, which came to {State}: {Chapters} chapter(s) embedded.",
+                job.Id.Wire,
+                detection.ModelVersion,
+                detection.State,
+                embedded.Count);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Job {Job} is encoded with no chapters, because learning is on and version {Version} has not detected its recording; they are written into the artefact once it has.",
+                job.Id.Wire,
+                choice.ModelVersion);
+        }
+
+        return embedded.Count is 0 ? null : ChapterMetadataFile.InRecordingTime(embedded);
     }
 
     private static EncodeFailure WhatAnUnreadHeadIsCalled(SourceHeadReading head)
