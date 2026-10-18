@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
@@ -63,6 +65,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         Assert.Equal(Fifteen, kept.Frames());
         Assert.Equal((2, 2, 1), (kept.OccurrenceCount, kept.SeriesCount, kept.StationCount));
         Assert.Equal((entry.FirstSeenAt, entry.LastSeenAt, entry.UpdatedAt), (kept.FirstSeenAt, kept.LastSeenAt, kept.UpdatedAt));
+        Assert.Equal(CatalogKinds.Version, kept.KindsVersion);
         Assert.True(stretch.Id > 0);
         Assert.Equal(entry.Id, stretch.EntryId);
         Assert.Equal((TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(615)), (stretch.StartsAt, stretch.EndsAt));
@@ -172,6 +175,40 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         Assert.DoesNotContain(sharers, group => group.Intersect([themed[2], themed[3], .. advertised]).Any());
     }
 
+    [Fact(DisplayName = "BR-CD-005: the entry first seen earliest of those estimated with an earlier version is the next to estimate again, until it is written with this one")]
+    public async Task TheEarliestEntryEstimatedWithAnEarlierVersionIsNext()
+    {
+        Guid current = Guid.NewGuid();
+        Guid earlier = Guid.NewGuid();
+        Guid later = Guid.NewGuid();
+        await InsertAsync("segment_catalog_entry", Seen(current, "2001-01-01", CatalogKinds.Version));
+        await InsertAsync("segment_catalog_entry", Seen(earlier, "2001-01-02", null));
+        await InsertAsync("segment_catalog_entry", Seen(later, "2001-01-03", CatalogKinds.FirstVersion));
+        await InsertAsync("segment_catalog_occurrence", Stretch(earlier, Guid.NewGuid()));
+        await InsertAsync("segment_catalog_occurrence", Stretch(earlier, Guid.NewGuid()));
+
+        CatalogEntry next;
+        IReadOnlyList<CatalogOccurrence> stretches;
+
+        await using (CarinaDbContext reading = Context())
+        {
+            CatalogRepository catalog = new(reading);
+            next = (await catalog.NextToReestimateAsync(CancellationToken.None))!;
+            stretches = await catalog.OccurrencesOfAsync([next.Id], CancellationToken.None);
+        }
+
+        Assert.Equal(earlier, next.Id.Value);
+        Assert.Equal(CatalogKinds.FirstVersion, next.KindsVersion);
+        Assert.Equal(4, next.Fingerprint.Length);
+
+        next.Reestimate([.. stretches.Select(stretch => PlacedOccurrence.Of(stretch, null, null))], SeriesLinks.None, Noon);
+        await KeepAsync(new CatalogChange([], [next], [], []));
+
+        await using CarinaDbContext context = Context();
+        Assert.Equal(later, (await new CatalogRepository(context).NextToReestimateAsync(CancellationToken.None))?.Id.Value);
+        Assert.Equal(CatalogKinds.Version, (await new CatalogRepository(context).EntriesAsync([next.Id], CancellationToken.None)).Single().KindsVersion);
+    }
+
     [Theory(DisplayName = "the entry table refuses a kind, confidence, reason, length, fingerprint or count that does not hold")]
     [InlineData("kind", "'Jingle'", "ck_segment_catalog_entry_kind")]
     [InlineData("confidence", "NULL", "ck_segment_catalog_entry_confidence")]
@@ -181,6 +218,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
     [InlineData("fingerprint", "'\\x010203'::bytea", "ck_segment_catalog_entry_fingerprint")]
     [InlineData("occurrences", "1", "ck_segment_catalog_entry_counts")]
     [InlineData("last_seen_at", "timestamptz '2026-09-01T00:00:00Z'", "ck_segment_catalog_entry_seen")]
+    [InlineData("kinds_version", "0", "ck_segment_catalog_entry_kinds_version")]
     public async Task TheEntryTableRefusesWhatDoesNotHold(string column, string value, string constraint)
     {
         Dictionary<string, string> row = new(StringComparer.Ordinal)
@@ -414,6 +452,20 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             ["updated_at"] = "timestamptz '2026-10-02T00:00:00Z'",
         };
 
+    private static Dictionary<string, string> Seen(Guid id, string firstSeen, int? kindsVersion)
+    {
+        Dictionary<string, string> row = Entry(id);
+        row["first_seen_at"] = $"timestamptz '{firstSeen}T00:00:00Z'";
+        row["last_seen_at"] = $"timestamptz '{firstSeen}T00:00:00Z'";
+
+        if (kindsVersion is int version)
+        {
+            row["kinds_version"] = version.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return row;
+    }
+
     /// <summary>
     /// An entry of <paramref name="kind"/> and <paramref name="seconds"/>, heard from the start of each
     /// recording named for as long as the length beside it.
@@ -438,7 +490,8 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             1,
             Noon,
             Noon.AddDays(7 * (recordings.Length - 1)),
-            Noon);
+            Noon,
+            CatalogKinds.Version);
 
         return (entry, occurrences);
     }

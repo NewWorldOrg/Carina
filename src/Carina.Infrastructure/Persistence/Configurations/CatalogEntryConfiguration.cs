@@ -30,6 +30,7 @@ public sealed class CatalogEntryConfiguration : IEntityTypeConfiguration<Catalog
                 $"octet_length(fingerprint) BETWEEN 4 AND {CatalogEntry.MostFrames * sizeof(uint)} AND octet_length(fingerprint) % 4 = 0");
             table.HasCheckConstraint("ck_segment_catalog_entry_counts", "occurrences >= 2 AND series_count >= 1 AND station_count >= 1");
             table.HasCheckConstraint("ck_segment_catalog_entry_seen", "last_seen_at >= first_seen_at");
+            table.HasCheckConstraint("ck_segment_catalog_entry_kinds_version", $"kinds_version >= {CatalogKinds.FirstVersion}");
         });
 
         builder.HasKey(entry => entry.Id);
@@ -58,6 +59,8 @@ public sealed class CatalogEntryConfiguration : IEntityTypeConfiguration<Catalog
         builder.Property(entry => entry.FirstSeenAt).IsRequired();
         builder.Property(entry => entry.LastSeenAt).IsRequired();
         builder.Property(entry => entry.UpdatedAt).IsRequired();
+        builder.Property(entry => entry.KindsVersion).HasDefaultValue(CatalogKinds.FirstVersion).IsRequired();
+        builder.Ignore(entry => entry.AwaitsReestimation);
 
         builder.HasIndex(entry => entry.Kind);
         builder.HasIndex(entry => entry.LastSeenAt);

@@ -26,6 +26,8 @@ internal sealed class HeldCatalog : ICatalogRepository
 
     public int Keeps { get; private set; }
 
+    public Action? WhileReading { get; set; }
+
     public Task<IReadOnlyList<CatalogEntry>> ListEntriesAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<CatalogEntry>>([.. Entries]);
 
@@ -33,7 +35,11 @@ internal sealed class HeldCatalog : ICatalogRepository
         => Task.FromResult<IReadOnlyList<CatalogEntry>>([.. Entries.Where(entry => entries.Contains(entry.Id))]);
 
     public Task<IReadOnlyList<CatalogOccurrence>> OccurrencesOfAsync(IReadOnlyCollection<CatalogEntryId> entries, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => entries.Contains(occurrence.EntryId))]);
+    {
+        WhileReading?.Invoke();
+
+        return Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => entries.Contains(occurrence.EntryId))]);
+    }
 
     public Task<IReadOnlyList<CatalogOccurrence>> OccurrencesInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => recordings.Contains(occurrence.RecordingId))]);
@@ -51,6 +57,9 @@ internal sealed class HeldCatalog : ICatalogRepository
                 ])
                 .Where(group => group.Count > 0),
         ]);
+
+    public Task<CatalogEntry?> NextToReestimateAsync(CancellationToken cancellationToken)
+        => Task.FromResult(Entries.Where(entry => entry.AwaitsReestimation).OrderBy(entry => entry.FirstSeenAt).ThenBy(entry => entry.Id.Value).FirstOrDefault());
 
     public Task KeepAsync(CatalogChange change, CancellationToken cancellationToken)
     {

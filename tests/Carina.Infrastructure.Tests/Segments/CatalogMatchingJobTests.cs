@@ -365,6 +365,94 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(SegmentKind.Break, stretch.KindOverride);
     }
 
+    [Fact(DisplayName = "BR-CD-005: in spare time with no recording waiting, an entry estimated before the rows for openings and endings is estimated again, once")]
+    public async Task AnEntryEstimatedBeforeTheThemesIsEstimatedAgainOnce()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        CatalogEntry entry = await OutdatedAsync(harness);
+        CatalogMatchingJob job = harness.Job();
+
+        CatalogMatchingLook first = await job.LookAsync(CancellationToken.None);
+        CatalogMatchingLook second = await job.LookAsync(CancellationToken.None);
+
+        Assert.Same(entry, first.Reestimated);
+        Assert.Null(first.Matched);
+        Assert.Equal((CatalogKind.Opening, 0.8, CatalogDecision.Pattern), (entry.Kind, entry.Confidence, entry.DecidedBy));
+        Assert.Equal(CatalogKinds.Version, entry.KindsVersion);
+        Assert.Equal(Now, entry.UpdatedAt);
+        Assert.Equal(new CatalogMatchingLook(SpareTimeVerdict.Spare, null, false), second);
+        Assert.Equal(1, harness.Catalog.Keeps);
+    }
+
+    [Fact(DisplayName = "BR-CD-004: no entry is estimated again while something is being recorded or while learning is off")]
+    public async Task NoEntryIsEstimatedAgainOutsideSpareTime()
+    {
+        using CatalogMatchingHarness harness = new();
+        CatalogEntry entry = await OutdatedAsync(harness);
+        CatalogMatchingJob job = harness.Job();
+
+        CatalogMatchingLook off = await job.LookAsync(CancellationToken.None);
+        await harness.LearningAsync(true);
+        harness.Recording = true;
+        CatalogMatchingLook recording = await job.LookAsync(CancellationToken.None);
+
+        Assert.Equal(new CatalogMatchingLook(SpareTimeVerdict.LearningOff, null, false), off);
+        Assert.Equal(new CatalogMatchingLook(SpareTimeVerdict.Recording, null, false), recording);
+        Assert.True(entry.AwaitsReestimation);
+        Assert.Equal(0, harness.Catalog.Keeps);
+    }
+
+    [Fact(DisplayName = "a recording waiting to be matched is matched before an entry is estimated again")]
+    public async Task ARecordingWaitingIsMatchedFirst()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        CatalogEntry entry = await OutdatedAsync(harness);
+        RecordingId waiting = await harness.ReadAsync(Sound(3), 0, "架空のクイズ");
+        CatalogMatchingJob job = harness.Job();
+
+        CatalogMatchingLook first = await job.LookAsync(CancellationToken.None);
+        CatalogMatchingLook second = await job.LookAsync(CancellationToken.None);
+
+        Assert.Equal(waiting, first.Matched?.Recording);
+        Assert.Null(first.Reestimated);
+        Assert.Same(entry, second.Reestimated);
+    }
+
+    [Fact(DisplayName = "an entry estimated again takes the kind the answer standing for one of its recordings gives its stretch there")]
+    public async Task AnEntryEstimatedAgainReadsTheAnswers()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        CatalogEntry entry = await OutdatedAsync(harness);
+        CatalogOccurrence answered = harness.Catalog.Occurrences[0];
+        SentStretch[] sent = [new(0, Into.TotalSeconds, SegmentKind.Programme), new(Into.TotalSeconds, (Into + Heard).TotalSeconds, SegmentKind.Break), new((Into + Heard).TotalSeconds, Minutes * 60, SegmentKind.Programme)];
+        await harness.Answers.AnswerAsync(
+            RecordingAnswer.Given(answered.RecordingId, AnsweredStretches.Read(sent, TimeSpan.FromMinutes(Minutes)).Stretches!, true, Now),
+            CancellationToken.None);
+
+        CatalogMatchingLook look = await harness.Job().LookAsync(CancellationToken.None);
+
+        Assert.Same(entry, look.Reestimated);
+        Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
+        Assert.Equal(SegmentKind.Break, answered.KindOverride);
+    }
+
+    [Fact(DisplayName = "BR-CD-013: an entry estimated again after learning was switched off is not kept")]
+    public async Task AnEstimateFinishedAfterLearningWasSwitchedOffIsNotKept()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        await OutdatedAsync(harness);
+        harness.Catalog.WhileReading = () => harness.LearningAsync(false).GetAwaiter().GetResult();
+
+        CatalogMatchingLook look = await harness.Job().LookAsync(CancellationToken.None);
+
+        Assert.Equal(new CatalogMatchingLook(SpareTimeVerdict.LearningOff, null, false), look);
+        Assert.Equal(0, harness.Catalog.Keeps);
+    }
+
     private static string? NiceOfThisThread()
     {
         if (!OperatingSystem.IsLinux())
@@ -375,6 +463,61 @@ public sealed class CatalogMatchingJobTests
         string stat = File.ReadAllText("/proc/thread-self/stat");
 
         return stat[(stat.LastIndexOf(')') + 2)..].Split(' ')[16];
+    }
+
+    private static readonly TimeSpan Into = TimeSpan.FromSeconds(35);
+
+    private static readonly TimeSpan Heard = TimeSpan.FromSeconds(59);
+
+    /// <summary>
+    /// An entry kept from before the rows for openings and endings, an advert of one series: a minute heard
+    /// near the start of two weekly episodes, both matched already.
+    /// </summary>
+    private static async Task<CatalogEntry> OutdatedAsync(CatalogMatchingHarness harness)
+    {
+        CatalogEntryId id = CatalogEntryId.New();
+        List<CatalogOccurrence> heard = [];
+
+        foreach (int week in new[] { 2, 1 })
+        {
+            RecordingId recording = await harness.ReadAsync(Sound(10 + week), 7 * week, "架空の物語");
+            LearningExtraction record = harness.Records.Row(recording)!;
+            record.Matched(Now);
+            harness.Records.Hold(record);
+            heard.Add(CatalogOccurrence.Rehydrate(
+                heard.Count + 1,
+                id,
+                recording,
+                Into,
+                Into + Heard,
+                record.Programme.NetworkId,
+                record.Programme.ServiceId,
+                record.Programme.SeriesName,
+                record.Programme.RecordingStartedAt,
+                0.05f,
+                null,
+                Now));
+        }
+
+        CatalogEntry entry = CatalogEntry.Rehydrate(
+            id,
+            CatalogKind.Cm,
+            0.5,
+            CatalogDecision.Pattern,
+            Heard,
+            CatalogFingerprint.Write(Sound(1).AsSpan(0, (int)(Heard / SegmentMatcher.Frame))),
+            heard.Count,
+            1,
+            1,
+            heard[0].RecordingStartedAt,
+            heard[^1].RecordingStartedAt,
+            Now.AddDays(-1),
+            CatalogKinds.FirstVersion);
+
+        harness.Catalog.Entries.Add(entry);
+        harness.Catalog.Occurrences.AddRange(heard);
+
+        return entry;
     }
 
     private static void Reread(CatalogMatchingHarness harness, RecordingId recording, RecordingId heard)

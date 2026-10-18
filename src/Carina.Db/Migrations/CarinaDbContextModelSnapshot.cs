@@ -3584,6 +3584,12 @@ namespace Carina.Db.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("kind");
 
+                    b.Property<int>("KindsVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("kinds_version");
+
                     b.Property<DateTime>("LastSeenAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_seen_at");
@@ -3628,6 +3634,8 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_segment_catalog_entry_fingerprint", "octet_length(fingerprint) BETWEEN 4 AND 45000 AND octet_length(fingerprint) % 4 = 0");
 
                             t.HasCheckConstraint("ck_segment_catalog_entry_kind", "kind IN ('Cm', 'Opening', 'Ending', 'ProgrammeFixture', 'StationFixture', 'Unknown')");
+
+                            t.HasCheckConstraint("ck_segment_catalog_entry_kinds_version", "kinds_version >= 1");
 
                             t.HasCheckConstraint("ck_segment_catalog_entry_length", "length > interval '0'");
 

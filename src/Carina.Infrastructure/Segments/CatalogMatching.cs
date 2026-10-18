@@ -11,9 +11,9 @@ public sealed record CatalogMatched(RecordingId Recording, int Matches, CatalogC
 /// <summary>
 /// Matches the learning data of one recording against every catalog entry, against the stretches of the
 /// recordings started within the window around it that no entry explains yet, and against itself, one
-/// recording's data read at a time; then works out what the matches change in the catalog. Every stretch is
-/// read beside the answer standing for its recording, read against the detection the version in use made of
-/// it. The counting is done on the
+/// recording's data read at a time; then works out what the matches change in the catalog. Estimates a kept
+/// entry again from the stretches it has. Every stretch is read beside the answer standing for its recording,
+/// read against the detection the version in use made of it. The counting is done on the
 /// <see cref="LowestPriorityScheduler"/>, so that it gives way to everything else the machine does. Nothing
 /// is written here.
 /// </summary>
@@ -56,6 +56,19 @@ public sealed class CatalogMatching(
         CatalogKnowledge known = await KnowingAsync([.. entries.Where(entry => named.Contains(entry.Id))], occurrences, involved, cancellationToken);
 
         return new CatalogMatched(id, matches.Count, await lowest.Run(() => Catalog.Absorb(id, sound, matches, known, at), cancellationToken));
+    }
+
+    /// <summary>
+    /// What estimating <paramref name="entry"/> again from every stretch it has changes in the catalog.
+    /// </summary>
+    public async Task<CatalogChange> ReestimateAsync(CatalogEntry entry, DateTime at, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        IReadOnlyList<CatalogOccurrence> occurrences = await catalog.OccurrencesOfAsync([entry.Id], cancellationToken);
+        CatalogKnowledge known = await KnowingAsync([entry], occurrences, [.. occurrences.Select(occurrence => occurrence.RecordingId).Distinct()], cancellationToken);
+
+        return await lowest.Run(() => Catalog.Reestimate(entry, known, at), cancellationToken);
     }
 
     private async Task<CatalogKnowledge> KnowingAsync(

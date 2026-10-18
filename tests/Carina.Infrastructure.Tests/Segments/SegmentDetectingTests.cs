@@ -170,7 +170,8 @@ public sealed class SegmentDetectingTests
             2,
             Now,
             Now,
-            Now);
+            Now,
+            CatalogKinds.Version);
 
     private static CatalogOccurrence Overridden(CatalogOccurrence found, SegmentKind kind)
         => CatalogOccurrence.Rehydrate(

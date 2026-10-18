@@ -80,6 +80,14 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
         ];
     }
 
+    public async Task<CatalogEntry?> NextToReestimateAsync(CancellationToken cancellationToken)
+        => await context.Set<CatalogEntry>()
+            .AsNoTracking()
+            .Where(entry => entry.KindsVersion < CatalogKinds.Version)
+            .OrderBy(entry => entry.FirstSeenAt)
+            .ThenBy(entry => entry.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public async Task KeepAsync(CatalogChange change, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(change);

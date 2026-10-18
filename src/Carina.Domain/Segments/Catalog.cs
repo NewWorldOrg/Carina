@@ -52,6 +52,23 @@ public sealed record CatalogChange(
 /// </summary>
 public static class Catalog
 {
+    /// <summary>
+    /// Estimates a kept entry again from every stretch it has, as the estimation now stands, and hands it
+    /// back with the stretches whose own kind changed.
+    /// </summary>
+    public static CatalogChange Reestimate(CatalogEntry entry, CatalogKnowledge known, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(known);
+
+        CatalogOccurrence[] own = [.. known.Occurrences.Where(occurrence => occurrence.EntryId.Equals(entry.Id))];
+        SegmentKind?[] before = [.. own.Select(occurrence => occurrence.KindOverride)];
+
+        entry.Reestimate([.. own.Select(known.Placed)], known.Links, at);
+
+        return new CatalogChange([], [entry], [], [.. own.Where((occurrence, index) => occurrence.KindOverride != before[index])]);
+    }
+
     public static CatalogChange Absorb(
         RecordingId heard,
         SoundTrack sound,

@@ -234,6 +234,44 @@ public sealed class CatalogTests
         Assert.Same(occurrences[1], Assert.Single(change.Overridden));
     }
 
+    [Fact(DisplayName = "BR-CD-005: an entry estimated before the rows for openings, heard at the start of each episode, is the opening once it is estimated again")]
+    public void AnEntryEstimatedBeforeTheThemesBecomesTheOpening()
+    {
+        CatalogEntryId id = CatalogEntryId.New();
+        CatalogEntry entry = KeptBeforeThemes(id, 3);
+        CatalogOccurrence[] stretches = [.. Enumerable.Range(0, 3).Select(week => At(id, Drama.Episode(week), 0, 59).Occurrence)];
+        Dictionary<RecordingId, ProgrammeCopy> programmes = stretches.Select((stretch, week) => (stretch.RecordingId, Drama.Episode(week))).ToDictionary();
+
+        Assert.True(entry.AwaitsReestimation);
+
+        CatalogChange change = Catalog.Reestimate(entry, Knowing(entry, stretches, programmes: programmes), Now.AddDays(1));
+
+        Assert.Equal((CatalogKind.Opening, 0.8, CatalogDecision.Pattern), (entry.Kind, entry.Confidence, entry.DecidedBy));
+        Assert.Equal(CatalogKinds.Version, entry.KindsVersion);
+        Assert.False(entry.AwaitsReestimation);
+        Assert.Equal(Now.AddDays(1), entry.UpdatedAt);
+        Assert.Empty(change.Started);
+        Assert.Empty(change.Found);
+        Assert.Same(entry, Assert.Single(change.Reestimated));
+        Assert.Empty(change.Overridden);
+    }
+
+    [Fact(DisplayName = "an entry estimated again keeps the kind an answer gives it, and hands back the stretches whose own kind changed")]
+    public void AnEntryEstimatedAgainKeepsItsAnswer()
+    {
+        CatalogEntryId id = CatalogEntryId.New();
+        CatalogEntry entry = KeptBeforeThemes(id, 3);
+        CatalogOccurrence[] stretches = [.. Enumerable.Range(0, 3).Select(week => At(id, Drama.Episode(week), week is 2 ? 1700 : 0, 59).Occurrence)];
+        Dictionary<RecordingId, ProgrammeCopy> programmes = stretches.Select((stretch, week) => (stretch.RecordingId, Drama.Episode(week))).ToDictionary();
+        Dictionary<RecordingId, GivenAnswer> answers = new() { [stretches[0].RecordingId] = Answer(stretches[0].Span, SegmentKind.Break, TimeSpan.FromMinutes(32)) };
+
+        CatalogChange change = Catalog.Reestimate(entry, Knowing(entry, stretches, answers, programmes), Now.AddDays(1));
+
+        Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
+        Assert.Equal(SegmentKind.Break, stretches[0].KindOverride);
+        Assert.Same(stretches[0], Assert.Single(change.Overridden));
+    }
+
     [Fact(DisplayName = "a match naming an entry that was not handed over is refused")]
     public void AMatchNamingAnUnknownEntryIsRefused()
     {
@@ -262,6 +300,22 @@ public sealed class CatalogTests
             Now,
             false,
             null);
+
+    private static CatalogEntry KeptBeforeThemes(CatalogEntryId id, int occurrences)
+        => CatalogEntry.Rehydrate(
+            id,
+            CatalogKind.Cm,
+            0.5,
+            CatalogDecision.Pattern,
+            TimeSpan.FromSeconds(59),
+            CatalogFingerprint.Write([.. Enumerable.Range(1, 3688).Select(value => (uint)value)]),
+            occurrences,
+            1,
+            1,
+            Evening,
+            Evening.AddDays(7),
+            Now,
+            CatalogKinds.FirstVersion);
 
     private static (CatalogEntry Entry, CatalogOccurrence[] Occurrences) Kept(ProgrammeCopy one, ProgrammeCopy other, RecordingId? otherRecording = null)
     {

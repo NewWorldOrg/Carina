@@ -34,6 +34,12 @@ public interface ICatalogRepository
     Task<IReadOnlyList<IReadOnlyList<RecordingId>>> SoundSharersAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// The entry first seen earliest of those that <see cref="CatalogEntry.AwaitsReestimation"/>, with its
+    /// fingerprint; null when none does.
+    /// </summary>
+    Task<CatalogEntry?> NextToReestimateAsync(CancellationToken cancellationToken);
+
+    /// <summary>
     /// Writes the change whole or not at all: the entries started and the stretches found are added, the
     /// entries estimated again and the stretches taken for another kind are written as they now stand.
     /// </summary>

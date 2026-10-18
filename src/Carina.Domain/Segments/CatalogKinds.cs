@@ -38,6 +38,17 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// </summary>
 public static class CatalogKinds
 {
+    /// <summary>
+    /// The version of these rows an entry was estimated with before the rows for openings and endings were
+    /// applied.
+    /// </summary>
+    public const int FirstVersion = 1;
+
+    /// <summary>
+    /// The version of these rows: an entry estimated with an earlier one is estimated again.
+    /// </summary>
+    public const int Version = 2;
+
     public static readonly TimeSpan Grid = TimeSpan.FromSeconds(15);
 
     public static readonly TimeSpan ShortOfTheGrid = TimeSpan.FromSeconds(1.5);
