@@ -28,7 +28,8 @@ public sealed record CatalogChange(
 /// stretch of that entry. A stretch matched in another recording, or elsewhere in itself, joins the
 /// entry already heard over the same stretch of the recording, when one is, and otherwise starts an
 /// entry whose fingerprint is that stretch of the recording: the matches with entries are taken
-/// first, then the longest. A stretch an entry already has in a recording is not added again, and a
+/// first, then those within the recording itself, which join both of their stretches, then those with
+/// other recordings, each kind the longest first. A stretch an entry already has in a recording is not added again, and a
 /// recording whose programme is not known adds none. An entry started is estimated from its first
 /// stretches, and one already kept is estimated again from all of them.
 /// </summary>
@@ -55,13 +56,20 @@ public static class Catalog
 
         Absorption absorption = new(heard, known, at);
 
-        foreach (SoundMatch match in matches.OrderBy(match => match.Other is EntrySound ? 0 : 1).ThenByDescending(match => match.Heard.Length).ThenBy(match => match.BitErrorRate))
+        foreach (SoundMatch match in matches.OrderBy(match => Rank(match, heard)).ThenByDescending(match => match.Heard.Length).ThenBy(match => match.BitErrorRate))
         {
             absorption.Take(match, sound);
         }
 
         return absorption.Settled(entries);
     }
+
+    private static int Rank(SoundMatch match, RecordingId heard) => match.Other switch
+    {
+        EntrySound => 0,
+        RecordedSound recorded when recorded.Recording.Equals(heard) => 1,
+        _ => 2,
+    };
 
     private sealed class Absorption(RecordingId heard, CatalogKnowledge known, DateTime at)
     {
@@ -134,6 +142,7 @@ public static class Catalog
 
             Add(entry, heard, match.Heard, claimed is null ? 0 : match.BitErrorRate);
             Add(entry, heard, match.There, match.BitErrorRate);
+            claims.Add((match.Heard, entry));
             claims.Add((match.There, entry));
         }
 

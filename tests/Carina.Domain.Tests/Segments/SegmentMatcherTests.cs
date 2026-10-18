@@ -144,6 +144,41 @@ public sealed class SegmentMatcherTests
         Assert.Empty(SegmentMatcher.For(heard).Against(Other, other.Fingerprints, []));
     }
 
+    [Fact(DisplayName = "a vote at the other sound's first frame from the offset beside the candidate's does not reach before that frame")]
+    public void AVoteAtTheFirstFrameFromTheNextOffsetStaysInReach()
+    {
+        uint[] heard = Random(1, 5_000);
+        uint[] there = Random(2, 3_000);
+        heard[999] = heard[1_000];
+        heard.AsSpan(1_000, 938).CopyTo(there);
+
+        SoundMatch match = Assert.Single(SegmentMatcher.For(SoundTrack.Of(heard, [])).Against(Other, there, []));
+
+        Assert.Equal(SegmentMatcher.Frame * 1_000, match.Heard.Starts);
+        Assert.Equal(TimeSpan.Zero, match.There.Starts);
+    }
+
+    [Fact(DisplayName = "a vote at the other sound's last frame from the offset before the candidate's does not reach past that frame")]
+    public void AVoteAtTheLastFrameFromThePreviousOffsetStaysInReach()
+    {
+        uint[] heard = Random(1, 5_000);
+        uint[] there = Random(2, 3_000);
+        heard.AsSpan(1_000, 938).CopyTo(there.AsSpan(3_000 - 938));
+        heard[1_938] = heard[1_937];
+
+        SoundMatch match = Assert.Single(SegmentMatcher.For(SoundTrack.Of(heard, [])).Against(Other, there, []));
+
+        Assert.Equal(SegmentMatcher.Frame * 1_938, match.Heard.Ends);
+        Assert.Equal(SegmentMatcher.Frame * 3_000, match.There.Ends);
+    }
+
+    private static uint[] Random(int seed, int frames)
+    {
+        Random random = new(seed);
+
+        return [.. Enumerable.Range(0, frames).Select(_ => (uint)random.NextInt64(1, uint.MaxValue))];
+    }
+
     private static void Near(double starts, double ends, SoundSpan span)
     {
         Assert.InRange(span.Starts, SoundScenes.Seconds(starts) - Slack, SoundScenes.Seconds(starts) + Slack);

@@ -123,6 +123,28 @@ public sealed class CatalogTests
         Assert.Equal(3, entry.OccurrenceCount);
     }
 
+    public static TheoryData<int, int, int> EveryOrder => new() { { 0, 1, 2 }, { 0, 2, 1 }, { 1, 0, 2 }, { 1, 2, 0 }, { 2, 0, 1 }, { 2, 1, 0 } };
+
+    [Theory(DisplayName = "a piece heard twice in the recording and once in another starts one entry with three stretches, whatever order the matches come in")]
+    [MemberData(nameof(EveryOrder))]
+    public void APieceHeardTwiceAndElsewhereStartsOneEntry(int first, int second, int third)
+    {
+        SoundMatch[] matches =
+        [
+            new(Span(10, 25), new RecordedSound(First), Span(300, 315), 0.05),
+            new(Span(70, 85), new RecordedSound(First), Span(300, 315), 0.06),
+            new(Span(10, 25), new RecordedSound(Heard), Span(70, 85), 0.08),
+        ];
+
+        CatalogChange change = Catalog.Absorb(Heard, Sound, [matches[first], matches[second], matches[third]], Knowing(), Now);
+
+        CatalogEntry entry = Assert.Single(change.Started);
+        Assert.Equal(3, entry.OccurrenceCount);
+        Assert.Equal(
+            [(Heard, Span(10, 25).Starts), (Heard, Span(70, 85).Starts), (First, Span(300, 315).Starts)],
+            change.Found.Select(occurrence => (occurrence.RecordingId, occurrence.StartsAt)).OrderBy(found => found.RecordingId.Equals(First)).ThenBy(found => found.StartsAt));
+    }
+
     [Fact(DisplayName = "separate stretches start separate entries")]
     public void SeparateStretchesStartSeparateEntries()
     {
