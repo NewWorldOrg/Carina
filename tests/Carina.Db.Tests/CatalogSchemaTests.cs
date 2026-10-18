@@ -143,8 +143,8 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         Assert.Equal(before with { Cm = before.Cm + 1 }, after);
     }
 
-    [Fact(DisplayName = "the programme fixtures are read as the recordings each is heard in")]
-    public async Task TheProgrammeFixturesAreReadAsTheirRecordings()
+    [Fact(DisplayName = "BR-CD-011: the openings, endings and programme fixtures are read as the recordings their whole stretches are heard in, leaving out a stretch taken for an advert and every advert")]
+    public async Task TheSoundsThatLinkSeriesAreReadAsTheirRecordings()
     {
         CatalogEntryId id = CatalogEntryId.New();
         RecordingId first = RecordingId.New();
@@ -155,14 +155,21 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             Placed(id, second, Copy("架空の物語", Noon.AddDays(7)), 70, 20),
         ];
         CatalogEntry fixture = CatalogEntry.Start(id, Fifteen[..625], placed, SeriesLinks.None, Noon);
+        RecordingId[] themed = [RecordingId.New(), RecordingId.New(), RecordingId.New(), RecordingId.New()];
+        (CatalogEntry opening, CatalogOccurrence[] heard) = Kept(CatalogKind.Opening, 89, themed, [89, 89, 15, 89]);
+        heard[3].Override(SegmentKind.Break);
+        RecordingId[] advertised = [RecordingId.New(), RecordingId.New()];
+        (CatalogEntry advert, CatalogOccurrence[] aired) = Kept(CatalogKind.Cm, 89, advertised, [89, 89]);
 
-        await KeepAsync(new CatalogChange([fixture], [], [.. placed.Select(place => place.Occurrence)], []));
+        await KeepAsync(new CatalogChange([fixture, opening, advert], [], [.. placed.Select(place => place.Occurrence), .. heard, .. aired], []));
 
         await using CarinaDbContext context = Context();
-        IReadOnlyList<IReadOnlyList<RecordingId>> sharers = await new CatalogRepository(context).FixtureSharersAsync(CancellationToken.None);
+        IReadOnlyList<IReadOnlyList<RecordingId>> sharers = await new CatalogRepository(context).SoundSharersAsync(CancellationToken.None);
 
         Assert.Equal(CatalogKind.ProgrammeFixture, fixture.Kind);
         Assert.Contains(sharers, group => group.ToHashSet().SetEquals([first, second]));
+        Assert.Contains(sharers, group => group.ToHashSet().SetEquals(themed[..2]));
+        Assert.DoesNotContain(sharers, group => group.Intersect([themed[2], themed[3], .. advertised]).Any());
     }
 
     [Theory(DisplayName = "the entry table refuses a kind, confidence, reason, length, fingerprint or count that does not hold")]
@@ -406,6 +413,35 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             ["last_seen_at"] = "timestamptz '2026-10-02T00:00:00Z'",
             ["updated_at"] = "timestamptz '2026-10-02T00:00:00Z'",
         };
+
+    /// <summary>
+    /// An entry of <paramref name="kind"/> and <paramref name="seconds"/>, heard from the start of each
+    /// recording named for as long as the length beside it.
+    /// </summary>
+    private static (CatalogEntry Entry, CatalogOccurrence[] Occurrences) Kept(CatalogKind kind, double seconds, RecordingId[] recordings, double[] lengths)
+    {
+        CatalogEntryId id = CatalogEntryId.New();
+        CatalogOccurrence[] occurrences =
+        [
+            .. recordings.Select((recording, at) => CatalogOccurrence.Found(id, recording, Span(60, 60 + lengths[at]), Copy("架空の物語", Noon.AddDays(7 * at)), 0.05, Noon)),
+        ];
+        uint[] frames = [.. Enumerable.Range(1, (int)(TimeSpan.FromSeconds(seconds) / SegmentMatcher.Frame)).Select(frame => (uint)frame)];
+        CatalogEntry entry = CatalogEntry.Rehydrate(
+            id,
+            kind,
+            0.8,
+            CatalogDecision.Pattern,
+            TimeSpan.FromSeconds(seconds),
+            CatalogFingerprint.Write(frames),
+            occurrences.Length,
+            1,
+            1,
+            Noon,
+            Noon.AddDays(7 * (recordings.Length - 1)),
+            Noon);
+
+        return (entry, occurrences);
+    }
 
     private static Dictionary<string, string> Stretch(Guid entry, Guid recording)
         => new(StringComparer.Ordinal)

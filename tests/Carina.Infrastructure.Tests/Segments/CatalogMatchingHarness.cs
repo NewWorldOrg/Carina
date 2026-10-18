@@ -38,12 +38,18 @@ internal sealed class HeldCatalog : ICatalogRepository
     public Task<IReadOnlyList<CatalogOccurrence>> OccurrencesInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => recordings.Contains(occurrence.RecordingId))]);
 
-    public Task<IReadOnlyList<IReadOnlyList<RecordingId>>> FixtureSharersAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyList<IReadOnlyList<RecordingId>>> SoundSharersAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<IReadOnlyList<RecordingId>>>(
         [
             .. Entries
-                .Where(entry => entry.Kind is CatalogKind.ProgrammeFixture)
-                .Select(entry => (IReadOnlyList<RecordingId>)[.. Occurrences.Where(occurrence => occurrence.EntryId.Equals(entry.Id)).Select(occurrence => occurrence.RecordingId).Distinct()]),
+                .Select(entry => (IReadOnlyList<RecordingId>)
+                [
+                    .. Occurrences
+                        .Where(occurrence => occurrence.EntryId.Equals(entry.Id) && CatalogKinds.LinksSeries(entry.Kind, entry.Length, occurrence))
+                        .Select(occurrence => occurrence.RecordingId)
+                        .Distinct(),
+                ])
+                .Where(group => group.Count > 0),
         ]);
 
     public Task KeepAsync(CatalogChange change, CancellationToken cancellationToken)

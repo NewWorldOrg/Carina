@@ -70,9 +70,11 @@ public sealed class CatalogKindsTests
     [Fact(DisplayName = "a piece of 30 seconds or more at the same place is not a programme fixture")]
     public void ALongerPieceIsNotAProgrammeFixture()
     {
-        CatalogPattern pattern = Estimated(31, At(Entry, Drama.Episode(0), 60, 31), At(Entry, Drama.Episode(1), 60, 31));
+        CatalogPattern early = Estimated(31, At(Entry, Drama.Episode(0), 60, 31), At(Entry, Drama.Episode(1), 60, 31));
+        CatalogPattern middle = Estimated(31, At(Entry, Drama.Episode(0), 870, 31), At(Entry, Drama.Episode(1), 895, 31));
 
-        Assert.Equal(CatalogKind.Unknown, pattern.Estimate.Kind);
+        Assert.Equal(CatalogKind.Opening, early.Estimate.Kind);
+        Assert.Equal(CatalogKind.Unknown, middle.Estimate.Kind);
     }
 
     [Theory(DisplayName = "a brief piece within 15 seconds of the start or end of programmes in two series is a station fixture, 0.6")]
@@ -155,18 +157,195 @@ public sealed class CatalogKindsTests
         Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 1.0, CatalogDecision.Answer), programmeAnswered.Estimate);
     }
 
-    [Fact(DisplayName = "an opening is not estimated in this phase: its sound falls to the rows below")]
-    public void AnOpeningIsNotEstimated()
+    [Theory(DisplayName = "BR-CD-005: a piece of 30 seconds to 3 minutes heard in the first half of two episodes of one series is its opening, 0.8")]
+    [InlineData(30.0, 0)]
+    [InlineData(85.0, 0)]
+    [InlineData(89.0, 0)]
+    [InlineData(90.0, 120)]
+    [InlineData(180.0, 300)]
+    public void APieceInTheFirstHalfOfEachEpisodeIsTheOpening(double seconds, double fromProgrammeStart)
     {
-        PlacedOccurrence[] heardAsItWas = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 0, 89))];
-        PlacedOccurrence[] wholeSlot = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 0, 90))];
-        PlacedOccurrence[] offTheGrid = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 0, 85))];
-        PlacedOccurrence[] closing = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 1700, 89))];
+        CatalogPattern pattern = Estimated(seconds, Weekly(Drama, 3, fromProgrammeStart, seconds));
 
-        Assert.Equal(CatalogEstimate.Unknown, Estimated(89, heardAsItWas).Estimate);
-        Assert.Equal(CatalogEstimate.Unknown, Estimated(90, wholeSlot).Estimate);
-        Assert.Equal(CatalogEstimate.Unknown, Estimated(85, offTheGrid).Estimate);
-        Assert.Equal(CatalogEstimate.Unknown, Estimated(89, closing).Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), pattern.Estimate);
+        Assert.Equal(1, pattern.SeriesCount);
+        Assert.All(pattern.Overrides, Assert.Null);
+    }
+
+    [Theory(DisplayName = "BR-CD-005: the same piece in the second half of two episodes is the ending, 0.8")]
+    [InlineData(89.0, 1700)]
+    [InlineData(60.0, 1620)]
+    [InlineData(45.0, 960)]
+    public void APieceInTheSecondHalfOfEachEpisodeIsTheEnding(double seconds, double fromProgrammeStart)
+    {
+        CatalogPattern pattern = Estimated(seconds, Weekly(Drama, 2, fromProgrammeStart, seconds));
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Ending, 0.8, CatalogDecision.Pattern), pattern.Estimate);
+    }
+
+    [Theory(DisplayName = "a piece shorter than 30 seconds or longer than 3 minutes is neither an opening nor an ending")]
+    [InlineData(30.0, CatalogKind.Opening, CatalogKind.Ending)]
+    [InlineData(29.9, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(25.0, CatalogKind.Unknown, CatalogKind.Unknown)]
+    [InlineData(180.0, CatalogKind.Opening, CatalogKind.Ending)]
+    [InlineData(180.1, CatalogKind.Unknown, CatalogKind.Unknown)]
+    public void APieceOutsideTheLengthsIsNoTheme(double seconds, CatalogKind early, CatalogKind late)
+    {
+        CatalogPattern first = Estimated(seconds, At(Entry, Drama.Episode(0), 0, seconds), At(Entry, Drama.Episode(1), 200, seconds));
+        CatalogPattern second = Estimated(seconds, At(Entry, Drama.Episode(0), 1400, seconds), At(Entry, Drama.Episode(1), 1600, seconds));
+
+        Assert.Equal((early, late), (first.Estimate.Kind, second.Estimate.Kind));
+    }
+
+    [Fact(DisplayName = "a piece heard in one episode, or once in each half, is neither an opening nor an ending")]
+    public void APieceNotRepeatedInOneHalfIsNoTheme()
+    {
+        Assert.Equal(CatalogKind.Unknown, Estimated(89, At(Entry, Drama.Episode(0), 0, 89), At(Entry, Drama.Episode(0), 1700, 89)).Estimate.Kind);
+        Assert.Equal(CatalogKind.Unknown, Estimated(89, At(Entry, Drama.Episode(0), 0, 89), At(Entry, Drama.Episode(1), 1700, 89)).Estimate.Kind);
+    }
+
+    [Fact(DisplayName = "the half more of the episodes hear it in decides between opening and ending, the opening on a tie")]
+    public void TheHalfHeardMoreOftenDecides()
+    {
+        PlacedOccurrence[] mostlyAtTheEnd = [.. Weekly(Drama, 2, 0, 89), .. Weekly(Drama, 3, 1700, 89, firstWeek: 2)];
+        PlacedOccurrence[] even = [.. Weekly(Drama, 2, 0, 89), .. Weekly(Drama, 2, 1700, 89, firstWeek: 2)];
+
+        Assert.Equal(CatalogKind.Ending, Estimated(89, mostlyAtTheEnd).Estimate.Kind);
+        Assert.Equal(CatalogKind.Opening, Estimated(89, even).Estimate.Kind);
+    }
+
+    [Fact(DisplayName = "BR-CD-005: the opening sung at the end of the last episode is that episode's ending, and the series' opening still")]
+    public void TheOpeningAtTheEndOfTheLastEpisodeIsItsEnding()
+    {
+        PlacedOccurrence[] weeks = Weekly(Drama, 3, 0, 89);
+        PlacedOccurrence last = At(Entry, Drama.Episode(3), 1710, 89);
+
+        CatalogPattern pattern = Estimated(89, [.. weeks, last]);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), pattern.Estimate);
+        Assert.Equal([null, null, null, SegmentKind.Ending], pattern.Overrides);
+    }
+
+    [Fact(DisplayName = "a last episode with another opening leaves the series' opening as it was, and an ending sung at the start of the first episode is its opening")]
+    public void ALastEpisodeWithAnotherOpeningLeavesTheSeriesOpening()
+    {
+        CatalogPattern opening = Estimated(89, Weekly(Drama, 3, 0, 89));
+        CatalogPattern ending = Estimated(89, [At(Entry, Drama.Episode(0), 0, 89), .. Weekly(Drama, 3, 1700, 89, firstWeek: 1)]);
+
+        Assert.Equal(CatalogKind.Opening, opening.Estimate.Kind);
+        Assert.All(opening.Overrides, Assert.Null);
+        Assert.Equal(CatalogKind.Ending, ending.Estimate.Kind);
+        Assert.Equal([SegmentKind.Opening, null, null, null], ending.Overrides);
+    }
+
+    [Theory(DisplayName = "BR-CD-005: part of the opening heard in another series' break leaves the entry an opening and is an advert there, when it is on the grid")]
+    [InlineData(14.0, SegmentKind.Break)]
+    [InlineData(29.0, SegmentKind.Break)]
+    [InlineData(20.0, null)]
+    public void PartOfTheOpeningInAnotherSeriesIsAnAdvertThere(double seconds, SegmentKind? taken)
+    {
+        PlacedOccurrence advertised = At(Entry, Quiz.Episode(0), 600, seconds);
+        PlacedOccurrence cutShortAtHome = At(Entry, Drama.Episode(2), 0, seconds);
+
+        CatalogPattern pattern = Estimated(89, [.. Weekly(Drama, 2, 0, 89), advertised, cutShortAtHome]);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), pattern.Estimate);
+        Assert.Equal((1, 1), (pattern.SeriesCount, pattern.StationCount));
+        Assert.Equal([null, null, taken, null], pattern.Overrides);
+    }
+
+    [Fact(DisplayName = "BR-CD-011: an episode called otherwise in the slot of the series, hearing the opening in the same half, is joined to the series by the sound")]
+    public void ARenamedEpisodeInTheSlotIsJoinedByTheSound()
+    {
+        CatalogSeries renamed = new(1, "まるで違う架空の名前", Evening.AddMinutes(30));
+        CatalogPattern once = Estimated(89, [.. Weekly(Drama, 2, 0, 89), At(Entry, renamed.Episode(2), 0, 89)]);
+        CatalogPattern twice = Estimated(89, [.. Weekly(Drama, 2, 0, 89), At(Entry, renamed.Episode(2), 0, 89), At(Entry, renamed.Episode(3), 30, 89)]);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.9, CatalogDecision.Pattern), Estimated(89, At(Entry, Drama.Episode(0), 0, 89), At(Entry, renamed.Episode(2), 0, 89)).Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), once.Estimate);
+        Assert.Equal((1, 1), (once.SeriesCount, once.StationCount));
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), twice.Estimate);
+        Assert.Equal(1, twice.SeriesCount);
+    }
+
+    [Fact(DisplayName = "BR-CD-011: a series in another slot, or one that hears the sound in the other half, is not joined, and a sound on the grid in two series is an advert")]
+    public void OnlyTheSlotHearingItInTheSameHalfIsJoined()
+    {
+        CatalogSeries renamed = new(1, "まるで違う架空の名前", Evening);
+        PlacedOccurrence[] anotherSlot = [.. Weekly(Drama, 2, 0, 89), At(Entry, Quiz.Episode(2), 0, 89)];
+        PlacedOccurrence[] otherHalf = [.. Weekly(Drama, 2, 0, 89), At(Entry, renamed.Episode(2), 1700, 89)];
+        PlacedOccurrence[] offTheGrid = [.. Weekly(Drama, 2, 0, 85), At(Entry, Quiz.Episode(2), 0, 85)];
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.9, CatalogDecision.Pattern), Estimated(89, anotherSlot).Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.9, CatalogDecision.Pattern), Estimated(89, otherHalf).Estimate);
+        Assert.Equal((CatalogKind.Opening, 2), (Estimated(85, offTheGrid).Estimate.Kind, Estimated(85, offTheGrid).SeriesCount));
+    }
+
+    [Fact(DisplayName = "the same series on another station hears the opening there, but a length on the grid on two stations stays an advert")]
+    public void TheSeriesOnAnotherStationIsNotJoinedByTheSound()
+    {
+        PlacedOccurrence[] offTheGrid = [.. Weekly(Drama, 2, 0, 85), .. Weekly(Elsewhere, 2, 0, 85, firstWeek: 1)];
+        PlacedOccurrence[] onTheGrid = [.. Weekly(Drama, 2, 0, 89), .. Weekly(Elsewhere, 2, 0, 89, firstWeek: 1)];
+        PlacedOccurrence lastOnTheOtherStation = At(Entry, Elsewhere.Episode(3), 1700, 85);
+
+        CatalogPattern off = Estimated(85, [.. offTheGrid, lastOnTheOtherStation]);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), off.Estimate);
+        Assert.Equal((2, 2), (off.SeriesCount, off.StationCount));
+        Assert.Equal(SegmentKind.Ending, off.Overrides[^1]);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.9, CatalogDecision.Pattern), Estimated(89, onTheGrid).Estimate);
+    }
+
+    [Fact(DisplayName = "BR-CD-011: recordings that share an opening count as one series for another entry")]
+    public void OpeningSoundJoinsSeriesForAnotherEntry()
+    {
+        CatalogSeries renamed = new(1, "まるで違う架空の名前", Evening);
+        CatalogEntryId opening = CatalogEntryId.New();
+        PlacedOccurrence first = At(Entry, Drama.Episode(0), 600, 15);
+        PlacedOccurrence second = At(Entry, renamed.Episode(1), 900, 15);
+        CatalogOccurrence[] theme =
+        [
+            At(opening, Drama.Episode(0), 0, 89, recording: first.Occurrence.RecordingId).Occurrence,
+            At(opening, renamed.Episode(1), 0, 89, recording: second.Occurrence.RecordingId).Occurrence,
+        ];
+        SeriesLinks links = SeriesLinks.SharingSound(
+        [
+            [.. theme.Where(stretch => CatalogKinds.LinksSeries(CatalogKind.Opening, TimeSpan.FromSeconds(89), stretch)).Select(stretch => stretch.RecordingId)],
+        ]);
+
+        Assert.Equal(0.9, CatalogKinds.Estimate(TimeSpan.FromSeconds(15), [first, second], SeriesLinks.None).Estimate.Confidence);
+        Assert.Equal(0.5, CatalogKinds.Estimate(TimeSpan.FromSeconds(15), [first, second], links).Estimate.Confidence);
+    }
+
+    [Fact(DisplayName = "BR-CD-011: a stretch links series when its entry is an opening, an ending or a programme fixture, it is whole, and it is not an advert on its own")]
+    public void WhichStretchesLinkSeries()
+    {
+        CatalogOccurrence whole = At(Entry, Drama.Episode(0), 0, 89).Occurrence;
+        CatalogOccurrence part = At(Entry, Quiz.Episode(0), 600, 15).Occurrence;
+        CatalogOccurrence advertised = At(Entry, Quiz.Episode(1), 0, 89).Occurrence;
+        advertised.Override(SegmentKind.Break);
+        TimeSpan length = TimeSpan.FromSeconds(89);
+
+        Assert.True(CatalogKinds.LinksSeries(CatalogKind.Opening, length, whole));
+        Assert.True(CatalogKinds.LinksSeries(CatalogKind.Ending, length, whole));
+        Assert.True(CatalogKinds.LinksSeries(CatalogKind.ProgrammeFixture, length, whole));
+        Assert.False(CatalogKinds.LinksSeries(CatalogKind.Opening, length, part));
+        Assert.False(CatalogKinds.LinksSeries(CatalogKind.Opening, length, advertised));
+        Assert.False(CatalogKinds.LinksSeries(CatalogKind.Cm, length, whole));
+        Assert.False(CatalogKinds.LinksSeries(CatalogKind.StationFixture, length, whole));
+        Assert.False(CatalogKinds.LinksSeries(CatalogKind.Unknown, length, whole));
+    }
+
+    [Fact(DisplayName = "an answer of opening decides outright, and its stretches still take the kind of the half they are heard in")]
+    public void AnAnsweredOpeningKeepsThePlaceOfEachStretch()
+    {
+        PlacedOccurrence answered = At(Entry, Drama.Episode(0), 0, 89, SegmentKind.Opening);
+        PlacedOccurrence last = At(Entry, Drama.Episode(1), 1700, 89);
+
+        CatalogPattern pattern = Estimated(89, answered, last);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 1.0, CatalogDecision.Answer), pattern.Estimate);
+        Assert.Equal([SegmentKind.Opening, SegmentKind.Ending], pattern.Overrides);
     }
 
     [Fact(DisplayName = "a stretch that covers only part of the entry does not count towards its kind")]
@@ -198,4 +377,7 @@ public sealed class CatalogKindsTests
 
     private static CatalogPattern Estimated(double seconds, params PlacedOccurrence[] occurrences)
         => CatalogKinds.Estimate(TimeSpan.FromSeconds(seconds), occurrences, SeriesLinks.None);
+
+    private static PlacedOccurrence[] Weekly(CatalogSeries series, int weeks, double fromProgrammeStart, double seconds, int firstWeek = 0)
+        => [.. Enumerable.Range(firstWeek, weeks).Select(week => At(Entry, series.Episode(week), fromProgrammeStart, seconds))];
 }

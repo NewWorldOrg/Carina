@@ -28,9 +28,10 @@ public interface ICatalogRepository
     Task<IReadOnlyList<CatalogOccurrence>> OccurrencesInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The recordings each fixed part of a programme is heard in, one group per entry.
+    /// The recordings each opening, ending and fixed part of a programme links into one series, one group per
+    /// entry: those its stretches that link series are heard in (<see cref="CatalogKinds.LinksSeries"/>).
     /// </summary>
-    Task<IReadOnlyList<IReadOnlyList<RecordingId>>> FixtureSharersAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<IReadOnlyList<RecordingId>>> SoundSharersAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Writes the change whole or not at all: the entries started and the stretches found are added, the

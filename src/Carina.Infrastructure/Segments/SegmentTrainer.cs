@@ -202,7 +202,7 @@ public sealed class SegmentTrainer(
                 [.. stretches[entry.Id].Select(occurrence => Placed(occurrence, copies, given))])),
         ];
 
-        return new LearningCatalog(sounds, SeriesLinks.SharingSound(await catalog.FixtureSharersAsync(cancellationToken)));
+        return new LearningCatalog(sounds, SeriesLinks.SharingSound(await catalog.SoundSharersAsync(cancellationToken)));
     }
 
     private static PlacedOccurrence Placed(

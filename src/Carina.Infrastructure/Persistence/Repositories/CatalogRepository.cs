@@ -60,21 +60,23 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<IReadOnlyList<RecordingId>>> FixtureSharersAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<IReadOnlyList<RecordingId>>> SoundSharersAsync(CancellationToken cancellationToken)
     {
+        CatalogKind[] linking = [CatalogKind.Opening, CatalogKind.Ending, CatalogKind.ProgrammeFixture];
         var heard = await (
                 from occurrence in context.Set<CatalogOccurrence>().AsNoTracking()
                 join entry in context.Set<CatalogEntry>().AsNoTracking() on occurrence.EntryId equals entry.Id
-                where entry.Kind == CatalogKind.ProgrammeFixture
+                where linking.Contains(entry.Kind)
                 orderby occurrence.Id
-                select new { occurrence.EntryId, occurrence.RecordingId })
+                select new { entry.Kind, entry.Length, Occurrence = occurrence })
             .ToListAsync(cancellationToken);
 
         return
         [
             .. heard
-                .GroupBy(pair => pair.EntryId)
-                .Select(group => (IReadOnlyList<RecordingId>)[.. group.Select(pair => pair.RecordingId).Distinct()]),
+                .Where(pair => CatalogKinds.LinksSeries(pair.Kind, pair.Length, pair.Occurrence))
+                .GroupBy(pair => pair.Occurrence.EntryId)
+                .Select(group => (IReadOnlyList<RecordingId>)[.. group.Select(pair => pair.Occurrence.RecordingId).Distinct()]),
         ];
     }
 

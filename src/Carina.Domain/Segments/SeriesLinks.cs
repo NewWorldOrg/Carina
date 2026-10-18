@@ -10,10 +10,9 @@ public sealed record SeriesMember(RecordingId RecordingId, NetworkId NetworkId, 
 
 /// <summary>
 /// Which recordings are of one series. Two stretches of one recording are; so are recordings known to
-/// share the sound of a programme fixture, whatever their names; and so are two recordings on the same
-/// station whose series names link (<see cref="SeriesNames.Link"/>) and which start within
-/// <see cref="StartsWithin"/> of each other in the time of day. Series are what these links join,
-/// through one another.
+/// share the sound of an opening, an ending or a programme fixture, whatever their names and stations;
+/// and so are two recordings in one slot (<see cref="InOneSlot"/>) whose series names link
+/// (<see cref="SeriesNames.Link"/>). Series are what these links join, through one another.
 /// </summary>
 public sealed class SeriesLinks
 {
@@ -31,8 +30,8 @@ public sealed class SeriesLinks
     public static SeriesLinks None { get; } = new([]);
 
     /// <summary>
-    /// The links that also join each group of recordings known to share the sound of a programme
-    /// fixture. A recording named in two groups joins both.
+    /// The links that also join each group of recordings known to share a sound that links series
+    /// (<see cref="CatalogKinds.LinksSeries"/>). A recording named in two groups joins both.
     /// </summary>
     public static SeriesLinks SharingSound(IEnumerable<IReadOnlyCollection<RecordingId>> groups)
     {
@@ -123,11 +122,22 @@ public sealed class SeriesLinks
            && soundGroups.TryGetValue(other.RecordingId, out int otherGroup)
            && oneGroup == otherGroup;
 
+    /// <summary>
+    /// Whether two recordings are on the same station and start within <see cref="StartsWithin"/> of each
+    /// other in the time of day: the slot a weekly series keeps, whatever it is called.
+    /// </summary>
+    public static bool InOneSlot(SeriesMember one, SeriesMember other)
+    {
+        ArgumentNullException.ThrowIfNull(one);
+        ArgumentNullException.ThrowIfNull(other);
+
+        return one.NetworkId.Equals(other.NetworkId)
+               && one.ServiceId.Equals(other.ServiceId)
+               && ApartInTheDay(one.StartedAt, other.StartedAt) <= StartsWithin;
+    }
+
     private static bool Neighbours(SeriesMember one, SeriesMember other)
-        => one.NetworkId.Equals(other.NetworkId)
-           && one.ServiceId.Equals(other.ServiceId)
-           && SeriesNames.Link(one.SeriesName, other.SeriesName)
-           && ApartInTheDay(one.StartedAt, other.StartedAt) <= StartsWithin;
+        => InOneSlot(one, other) && SeriesNames.Link(one.SeriesName, other.SeriesName);
 
     private static TimeSpan ApartInTheDay(DateTime one, DateTime other)
     {

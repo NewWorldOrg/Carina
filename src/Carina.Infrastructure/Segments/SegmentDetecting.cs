@@ -112,7 +112,7 @@ public sealed class SegmentDetecting(
         int modelVersion,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<IReadOnlyList<RecordingId>> sharers = await catalog.FixtureSharersAsync(cancellationToken);
+        IReadOnlyList<IReadOnlyList<RecordingId>> sharers = await catalog.SoundSharersAsync(cancellationToken);
         RecordingId[] sharing = [.. sharers.Where(group => group.Contains(judged.RecordingId)).SelectMany(group => group).Distinct()];
         IReadOnlyList<LearningExtraction> elsewhere = sharing.Length is 0 ? [] : await worklist.RecordsAsync(sharing, cancellationToken);
         Dictionary<RecordingId, ProgrammeCopy> copies = earlier

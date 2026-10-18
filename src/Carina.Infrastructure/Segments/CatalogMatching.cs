@@ -49,7 +49,7 @@ public sealed class CatalogMatching(ICatalogWorklist worklist, ICatalogRepositor
             [.. entries.Where(entry => named.Contains(entry.Id))],
             occurrences,
             await worklist.ProgrammesAsync(involved, cancellationToken),
-            SeriesLinks.SharingSound(await catalog.FixtureSharersAsync(cancellationToken)));
+            SeriesLinks.SharingSound(await catalog.SoundSharersAsync(cancellationToken)));
 
         return new CatalogMatched(id, matches.Count, await lowest.Run(() => Catalog.Absorb(id, sound, matches, known, at), cancellationToken));
     }
