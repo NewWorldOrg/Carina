@@ -193,6 +193,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
             harness.LengthReader,
             harness.HeadReader,
             harness.ChapterDetector,
+            harness.ChapterChoices,
             harness.Chapters,
             new StationWatermarkRepository(context),
             harness.CaptionShelf,

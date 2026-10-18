@@ -1,4 +1,5 @@
 using Carina.Domain.Encodings;
+using Carina.Domain.Segments;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Tests.Integrity;
 
@@ -62,6 +63,38 @@ public sealed class ChapterMetadataFileTests
 
             """.ReplaceLineEndings("\n"),
             ChapterMetadataFile.Written(ThreeChapters, TimeSpan.Zero));
+
+    [Fact(DisplayName = "BR-CD-010: the stretches of a recording go down in the recording's own time, titled for the programme and a break")]
+    public void TheStretchesOfARecordingGoDownInItsOwnTime()
+    {
+        Assert.Equal(
+            """
+            ;FFMETADATA1
+            [CHAPTER]
+            TIMEBASE=1/1000
+            START=0
+            END=912300
+            title=本編
+            [CHAPTER]
+            TIMEBASE=1/1000
+            START=912300
+            END=1002300
+            title=CM
+            [CHAPTER]
+            TIMEBASE=1/1000
+            START=1002300
+            END=1800000
+            title=本編
+
+            """.ReplaceLineEndings("\n"),
+            ChapterMetadataFile.InRecordingTime(
+            [
+                new SegmentSpan(TimeSpan.Zero, TimeSpan.FromSeconds(912.3), SegmentKind.Programme, 0.98),
+                new SegmentSpan(TimeSpan.FromSeconds(912.3), TimeSpan.FromSeconds(1002.3), SegmentKind.Break, 0.93),
+                new SegmentSpan(TimeSpan.FromSeconds(1002.3), TimeSpan.FromSeconds(1800), SegmentKind.Programme, 0.97),
+            ]));
+        Assert.Throws<ArgumentException>(() => ChapterMetadataFile.InRecordingTime([]));
+    }
 
     [Fact(DisplayName = "a chapter is titled from two constants, so nothing a broadcaster wrote reaches the artefact")]
     public void AChapterIsTitledFromTwoConstants()

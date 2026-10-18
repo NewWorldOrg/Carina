@@ -717,6 +717,37 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(refusedBy, refusal.ConstraintName);
     }
 
+    [Theory(DisplayName = "BR-CD-010: a reading taken from the segments names the version or the answer it embedded exactly when it found something, and no other reader names either")]
+    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "2, NULL", null)]
+    [InlineData("'Segments', 'Discarded', 0.6, " + Ended, "2, NULL", null)]
+    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "NULL, " + Ended, null)]
+    [InlineData("'Segments', 'NotAsked', 0, " + Ended, "NULL, NULL", null)]
+    [InlineData("'Ffmpeg', 'Marked', 0.31, " + Ended, "NULL, NULL", null)]
+    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "NULL, NULL", "ck_encode_job_chapters")]
+    [InlineData("'Segments', 'NotAsked', 0, " + Ended, "2, NULL", "ck_encode_job_chapters")]
+    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "0, NULL", "ck_encode_job_chapters")]
+    [InlineData("'Ffmpeg', 'Marked', 0.31, " + Ended, "2, NULL", "ck_encode_job_chapters")]
+    [InlineData("'Nobody', 'NotAsked', 0, " + Ended, "NULL, " + Ended, "ck_encode_job_chapters")]
+    [InlineData("NULL, NULL, NULL, NULL", "2, NULL", "ck_encode_job_chapters")]
+    public async Task AReadingFromTheSegmentsNamesWhereItCameFrom(string chapters, string source, string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+
+        Task writing = MarkedJobAsync(connection, "'Running'", Started, "NULL, NULL", "NULL, NULL, NULL", "NULL, NULL, NULL", Unaligned, chapters, source);
+
+        if (refusedBy is null)
+        {
+            await writing;
+
+            return;
+        }
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => writing);
+        Assert.Equal(refusedBy, refusal.ConstraintName);
+    }
+
     [Theory]
     [MemberData(nameof(Verdicts))]
     public async Task EveryWayAReadingCanEndIsOneTheLedgerTakes(string verdict)
@@ -901,6 +932,8 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
 
     private const string Unjudged = "NULL, NULL, NULL, NULL";
 
+    private const string Unsourced = "NULL, NULL";
+
     private static Task MarkedJobAsync(
         NpgsqlConnection connection,
         string status,
@@ -909,7 +942,8 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         string headway,
         string route,
         string timeline,
-        string chapters = Unjudged)
+        string chapters = Unjudged,
+        string source = Unsourced)
     {
         bool ended = status is "'Completed'" or "'Failed'";
         var recording = Guid.NewGuid();
@@ -924,11 +958,12 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 process_id, process_started_at, progress_portion, progress_left, progress_at,
                 encoder_asked, encoder_ran, swerve,
                 source_start, head_skip, source_length, artefact_length,
-                chapters_detector, chapters_verdict, chapters_break_share, chapters_decided_at)
+                chapters_detector, chapters_verdict, chapters_break_share, chapters_decided_at,
+                chapters_model_version, chapters_answered_at)
             VALUES (
                 '{Guid.NewGuid()}', '{recording}', '{Profile}', '{Destination}', 'primary', {status}, 1,
                 {Queued}, {started}, {(ended ? Ended : "NULL")}, {failure}, {artefact},
-                {programme}, {headway}, {route}, {timeline}, {chapters})
+                {programme}, {headway}, {route}, {timeline}, {chapters}, {source})
             """,
             connection).ExecuteNonQueryAsync();
     }

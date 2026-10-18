@@ -245,6 +245,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
         services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();
+        services.AddScoped<EncodeChapterChoices>();
+        services.AddScoped<ChapterRewriteMux>();
+        services.AddScoped<IChapterRewriteWorklist, ChapterRewriteWorklist>();
+        services.AddScoped<ArtefactChapterRewrites>();
         services.AddScoped<EncodeJobRunner>();
         services.AddScoped<EncodeRestart>();
         services.AddScoped<EncodeIntakeRound>();
@@ -330,6 +334,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IStrayFileEraser, PlacedStrayFileEraser>();
         services.TryAddSingleton<IPlaybackFileStore, LocalPlaybackFileStore>();
         services.TryAddSingleton<IArtefactOpenings, ArtefactOpenings>();
+        services.TryAddSingleton<IFreeSpaceReader, DriveFreeSpace>();
         services.TryAddSingleton<IArtefactCodecReader>(provider => new FfprobeArtefactCodecs(
             provider.GetRequiredService<IPlaybackFileStore>(),
             provider.GetRequiredService<MachineSettings>(),
@@ -434,6 +439,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(SegmentDetectionSettings.Default);
         services.TryAddSingleton<MatchedAtOnce>();
         services.AddSingleton<SegmentDetectionJob>();
+        services.TryAddSingleton(ChapterRewriteSettings.Default);
+        services.AddSingleton<ChapterRewriteJob>();
         services.TryAddSingleton<IThumbnailRemaker>(provider =>
             provider.GetRequiredService<ThumbnailJob>());
         services.TryAddSingleton<CollectionSettings>(provider =>
@@ -472,6 +479,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(provider => provider.GetRequiredService<LearningBacklogJob>());
         services.AddHostedService(provider => provider.GetRequiredService<CatalogMatchingJob>());
         services.AddHostedService(provider => provider.GetRequiredService<SegmentDetectionJob>());
+        services.AddHostedService(provider => provider.GetRequiredService<ChapterRewriteJob>());
         services.AddHostedService(provider =>
             provider.GetRequiredService<ReservationRecalculationHostedService>());
 

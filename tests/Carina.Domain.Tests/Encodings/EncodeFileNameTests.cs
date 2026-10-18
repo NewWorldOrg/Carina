@@ -60,6 +60,20 @@ public sealed class EncodeFileNameTests
         Assert.NotEqual(second, another);
     }
 
+    [Fact(DisplayName = "the chapters a standing artefact is written again with, and the copy written, are named also for the try, so no two tries share a name")]
+    public void TheChaptersWrittenAgainAreNamedForTheTry()
+    {
+        EncodeScratchFileId tried = EncodeScratchFileId.New();
+        EncodeFileName chapters = EncodeFileName.Chapters(Recording, Job, 3, tried);
+        EncodeFileName chaptered = EncodeFileName.Chaptered(Recording, Job, 3, tried);
+
+        Assert.EndsWith(EncodeFileName.ChaptersExtension, chapters.Value, StringComparison.Ordinal);
+        Assert.EndsWith(EncodeFileName.ChapteredExtension, chaptered.Value, StringComparison.Ordinal);
+        Assert.True(chaptered.Names(Recording) && chaptered.Names(Job));
+        Assert.NotEqual(EncodeFileName.Chapters(Recording, Job, 3), chapters);
+        Assert.NotEqual(chaptered, EncodeFileName.Chaptered(Recording, Job, 3, EncodeScratchFileId.New()));
+    }
+
     [Fact]
     public void AnAttemptBeforeTheFirstNamesNoChapters()
         => Assert.Throws<ArgumentOutOfRangeException>(() => EncodeFileName.Chapters(Recording, Job, 0));

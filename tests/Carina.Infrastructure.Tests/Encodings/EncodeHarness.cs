@@ -8,8 +8,10 @@ using Carina.Domain.Integrity;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Domain.Segments;
 using Carina.Infrastructure.Captions;
 using Carina.Infrastructure.Encodings;
+using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Tests.Thumbnails;
 using Carina.TestSupport;
@@ -95,6 +97,14 @@ internal sealed class EncodeHarness : IDisposable
 
     public HeldEncodeChapters Chapters { get; } = new();
 
+    public HeldSegmentSettings SegmentRows { get; } = new();
+
+    public HeldSegmentModelVersions Versions { get; } = new();
+
+    public HeldRecordingDetections Detections { get; } = new();
+
+    public EncodeChapterChoices ChapterChoices => new(new LearningSwitch(SegmentRows), Versions, Detections);
+
     public HeldStationWatermarks Watermarks { get; } = new();
 
     public MachineSettings Programmes { get; set; } = new();
@@ -134,6 +144,7 @@ internal sealed class EncodeHarness : IDisposable
         LengthReader,
         HeadReader,
         ChapterDetector,
+        ChapterChoices,
         Chapters,
         Watermarks,
         CaptionShelf,
@@ -143,6 +154,34 @@ internal sealed class EncodeHarness : IDisposable
         AutoRun,
         Clock,
         RunnerLog);
+
+    /// <summary>
+    /// Switches learning on or off, as the developer switch does.
+    /// </summary>
+    public void Learning(bool on)
+        => SegmentRows.SaveAsync(SegmentSettings.LearningSwitched(on, Queued), CancellationToken.None).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Keeps a detection of the recording by the version in use, standing as it is told, its stretches given
+    /// in the recording's own time.
+    /// </summary>
+    public RecordingDetection Detected(Recording recording, SegmentDetectionState state, params SegmentSpan[] stretches)
+    {
+        double breaks = stretches.Where(stretch => stretch.Kind is SegmentKind.Break).Sum(stretch => stretch.Length.Ticks);
+        RecordingDetection detection = RecordingDetection.Rehydrate(
+            recording.Id,
+            Versions.Active.Number,
+            state,
+            stretches,
+            breaks / stretches[^1].Ends.Ticks,
+            [],
+            2,
+            Queued,
+            Queued);
+        Detections.KeepAsync(detection, CancellationToken.None).GetAwaiter().GetResult();
+
+        return detection;
+    }
 
     public EncodeProfile Defined(EncodeCodec codec = EncodeCodec.H264)
     {
