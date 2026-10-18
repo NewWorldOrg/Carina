@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 using IRecordingDetectionRepository = Carina.Domain.Segments.IRecordingDetectionRepository;
+using ISegmentAnswerRepository = Carina.Domain.Segments.ISegmentAnswerRepository;
 using ISegmentModelVersionRepository = Carina.Domain.Segments.ISegmentModelVersionRepository;
 using ISegmentSettingsRepository = Carina.Domain.Segments.ISegmentSettingsRepository;
 
@@ -160,6 +161,7 @@ internal sealed class PlayFeature : IAsyncDisposable
                 services.AddSingleton<ISegmentSettingsRepository>(SegmentSettings);
                 services.AddSingleton<ISegmentModelVersionRepository>(Versions);
                 services.AddSingleton<IRecordingDetectionRepository>(Detections);
+                services.AddSingleton<ISegmentAnswerRepository>(Answers);
             }));
 
         WebApplicationFactory<Program> serving = configured.WithTestScheme();
@@ -196,6 +198,8 @@ internal sealed class PlayFeature : IAsyncDisposable
     public HeldSegmentModelVersions Versions { get; } = new();
 
     public HeldRecordingDetections Detections { get; } = new();
+
+    public HeldSegmentAnswers Answers { get; } = new();
 
     public string MountedAt => mounted.FullName;
 
@@ -253,7 +257,8 @@ internal sealed class PlayFeature : IAsyncDisposable
         bool onDisk = true,
         EncodeCodec? fileReadAs = null,
         string? taggedAs = null,
-        EncodeTimeline? timeline = null)
+        EncodeTimeline? timeline = null,
+        ChapterReading? chapters = null)
     {
         EncodeProfile profile = EncodedArtefact.Profile(codec, RecordingFeature.Noon.AddHours(-1));
         Profiles.Profiles.Add(profile);
@@ -262,7 +267,8 @@ internal sealed class PlayFeature : IAsyncDisposable
             recording,
             profile,
             RecordingFeature.Noon.AddHours(1).AddMinutes(minutesLater),
-            timeline);
+            timeline,
+            chapters);
         Jobs.Jobs.Add(job);
 
         if (fileReadAs is { } read)

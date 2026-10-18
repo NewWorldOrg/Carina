@@ -20,6 +20,8 @@ public sealed class DeletionTakesOneRecordingWholeTests(TestingWebApplicationFac
 
     private static readonly string[] WhereARecordingIsReached = ["/api/recordings", "/api/library"];
 
+    private const string WithdrawingTheAnswerOfOneRecording = "DELETE /api/recordings/{id}/segments/answer";
+
     [Fact]
     public void TheRecordingSurfaceIsTheOneThisSweepWatches()
     {
@@ -32,7 +34,16 @@ public sealed class DeletionTakesOneRecordingWholeTests(TestingWebApplicationFac
         Assert.Empty(Deleting()
             .Where(surface => !surface.Pattern.EndsWith('}'))
             .Select(surface => surface.ToString())
+            .Where(surface => surface != WithdrawingTheAnswerOfOneRecording)
             .Order(StringComparer.Ordinal));
+    }
+
+    [Fact(DisplayName = "BR-CA-001: the one other delete under a recording withdraws the one answer it has, named by the recording alone")]
+    public void TheOneOtherDeleteUnderARecordingWithdrawsItsAnswer()
+    {
+        Assert.Equal(
+            [WithdrawingTheAnswerOfOneRecording],
+            EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings").Where(surface => surface != "DELETE /api/recordings/{id}"));
     }
 
     [Fact]
@@ -58,7 +69,7 @@ public sealed class DeletionTakesOneRecordingWholeTests(TestingWebApplicationFac
     {
         Assert.Equal(
             ["DELETE /api/recordings/{id}"],
-            EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings"));
+            EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings").Where(surface => surface != WithdrawingTheAnswerOfOneRecording));
     }
 
     [Fact]

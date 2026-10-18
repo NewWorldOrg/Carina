@@ -103,7 +103,9 @@ internal sealed class EncodeHarness : IDisposable
 
     public HeldRecordingDetections Detections { get; } = new();
 
-    public EncodeChapterChoices ChapterChoices => new(new LearningSwitch(SegmentRows), Versions, Detections);
+    public HeldSegmentAnswers Answers { get; } = new();
+
+    public EncodeChapterChoices ChapterChoices => new(new LearningSwitch(SegmentRows), Versions, Detections, Answers);
 
     public HeldStationWatermarks Watermarks { get; } = new();
 
@@ -181,6 +183,18 @@ internal sealed class EncodeHarness : IDisposable
         Detections.KeepAsync(detection, CancellationToken.None).GetAwaiter().GetResult();
 
         return detection;
+    }
+
+    /// <summary>
+    /// Keeps the answer given for the recording at <paramref name="at"/>, its stretches given in the recording's
+    /// own time with no probability.
+    /// </summary>
+    public RecordingAnswer Answered(Recording recording, DateTime at, params SegmentSpan[] stretches)
+    {
+        RecordingAnswer answer = RecordingAnswer.Rehydrate(recording.Id, stretches, stretches[^1].Ends, true, at, at, 1, null);
+        Answers.AnswerAsync(answer, CancellationToken.None).GetAwaiter().GetResult();
+
+        return answer;
     }
 
     public EncodeProfile Defined(EncodeCodec codec = EncodeCodec.H264)

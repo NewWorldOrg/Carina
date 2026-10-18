@@ -101,9 +101,28 @@ internal sealed class ChapterRewriteHarness : IDisposable
             2,
             Now,
             Now);
-        Worklist.Subjects.Add(new ChapterRewriteSubject(job, detection, lastRewrittenAt));
+        Worklist.Subjects.Add(new ChapterRewriteSubject(job, detection, null, lastRewrittenAt));
 
         return detection;
+    }
+
+    /// <summary>
+    /// Puts the job in the worklist beside the answer given for its recording at <paramref name="answeredAt"/>,
+    /// withdrawn when that is given, and beside the detection given, if any; the answer's stretches are given in
+    /// the recording's own time.
+    /// </summary>
+    public RecordingAnswer Answered(
+        EncodeJob job,
+        RecordingDetection? detection,
+        DateTime answeredAt,
+        DateTime? withdrawnAt,
+        params SegmentSpan[] stretches)
+    {
+        RecordingAnswer answer = RecordingAnswer.Rehydrate(job.RecordingId, stretches, stretches[^1].Ends, true, answeredAt, answeredAt, 1, withdrawnAt);
+        Worklist.Subjects.RemoveAll(subject => subject.Job.Id.Equals(job.Id));
+        Worklist.Subjects.Add(new ChapterRewriteSubject(job, detection, answer, null));
+
+        return answer;
     }
 
     public void Dispose() => Encodes.Dispose();

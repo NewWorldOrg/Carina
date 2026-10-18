@@ -3930,6 +3930,58 @@ namespace Carina.Db.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Carina.Domain.Segments.RecordingAnswer", b =>
+                {
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recording_id");
+
+                    b.Property<DateTime>("AnsweredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("answered_at");
+
+                    b.Property<int>("Answers")
+                        .HasColumnType("integer")
+                        .HasColumnName("answers");
+
+                    b.Property<bool>("Confirmed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("confirmed");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<TimeSpan>("Length")
+                        .HasColumnType("interval")
+                        .HasColumnName("length");
+
+                    b.Property<string>("Segments")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("segments");
+
+                    b.Property<DateTime?>("WithdrawnAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("withdrawn_at");
+
+                    b.HasKey("RecordingId")
+                        .HasName("pk_segment_answer");
+
+                    b.HasIndex("ConfirmedAt")
+                        .HasDatabaseName("ix_segment_answer_confirmed")
+                        .HasFilter("confirmed AND withdrawn_at IS NULL");
+
+                    b.ToTable("segment_answer", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_segment_answer_answers", "answers >= 1");
+
+                            t.HasCheckConstraint("ck_segment_answer_confirmed", "confirmed = (confirmed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_segment_answer_segments", "jsonb_typeof(segments) = 'array' AND jsonb_array_length(segments) >= 1");
+                        });
+                });
+
             modelBuilder.Entity("Carina.Domain.Segments.RecordingDetection", b =>
                 {
                     b.Property<Guid>("RecordingId")
@@ -4126,6 +4178,69 @@ namespace Carina.Db.Migrations
                     b.ToTable("segment_settings", null, t =>
                         {
                             t.HasCheckConstraint("ck_segment_settings_single_row", "id = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Segments.SkipEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Event")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("event");
+
+                    b.Property<TimeSpan>("From")
+                        .HasColumnType("interval")
+                        .HasColumnName("from_at");
+
+                    b.Property<DateTime>("HappenedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("happened_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<int?>("ModelVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("model_version");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recording_id");
+
+                    b.Property<TimeSpan>("To")
+                        .HasColumnType("interval")
+                        .HasColumnName("to_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_segment_skip_event");
+
+                    b.HasIndex("HappenedAt")
+                        .HasDatabaseName("ix_segment_skip_event_happened_at");
+
+                    b.HasIndex("ModelVersion")
+                        .HasDatabaseName("ix_segment_skip_event_model_version");
+
+                    b.HasIndex("RecordingId", "HappenedAt")
+                        .HasDatabaseName("ix_segment_skip_event_recording_id_happened_at");
+
+                    b.ToTable("segment_skip_event", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_segment_skip_event_event", "event IN ('Skipped', 'Dismissed', 'Returned')");
+
+                            t.HasCheckConstraint("ck_segment_skip_event_kind", "kind IN ('Break', 'Opening', 'Ending')");
+
+                            t.HasCheckConstraint("ck_segment_skip_event_moments", "from_at >= interval '0' AND to_at >= interval '0'");
                         });
                 });
 
@@ -4333,6 +4448,15 @@ namespace Carina.Db.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_segment_detection_segment_model_version_model_version");
+                });
+
+            modelBuilder.Entity("Carina.Domain.Segments.SkipEvent", b =>
+                {
+                    b.HasOne("Carina.Domain.Segments.SegmentModelVersion", null)
+                        .WithMany()
+                        .HasForeignKey("ModelVersion")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_segment_skip_event_segment_model_version_model_version");
                 });
 
             modelBuilder.Entity("Carina.Domain.Programmes.StreamVisit", b =>

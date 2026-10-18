@@ -76,6 +76,15 @@ public sealed class RecordingFenceRuleTests
             RecordingFenceRules.RoutesThatThrowARecordingAway(RepositoryLayout.SourceDirectory));
     }
 
+    [Fact(DisplayName = "BR-CD-002: the delete method under a recording besides throwing it away withdraws an answer on its own route, and withdrawing marks the answer's row rather than removing it")]
+    public void TheOtherDeleteUnderARecordingWithdrawsAnAnswerAndRemovesNoRow()
+    {
+        (IReadOnlyList<string> routes, bool removesARow) = RecordingFenceRules.HowAnAnswerIsWithdrawn(RepositoryLayout.SourceDirectory);
+
+        Assert.Equal([RecordingFenceRules.TheOneRouteThatWithdrawsAnAnswer], routes);
+        Assert.False(removesARow);
+    }
+
     [Fact(DisplayName = "that route cannot reach the ledger without the mount checks first")]
     public void ThatRouteCannotReachTheLedgerWithoutTheMountChecksFirst()
     {

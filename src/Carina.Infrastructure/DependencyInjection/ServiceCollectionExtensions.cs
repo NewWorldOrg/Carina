@@ -204,6 +204,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICatalogWorklist, CatalogWorklist>();
         services.AddScoped<ISegmentModelVersionRepository, SegmentModelVersionRepository>();
         services.AddScoped<IRecordingDetectionRepository, RecordingDetectionRepository>();
+        services.AddScoped<ISegmentAnswerRepository, SegmentAnswerRepository>();
+        services.AddScoped<ISkipEventRepository, SkipEventRepository>();
         services.AddScoped<IDetectionWorklist, DetectionWorklist>();
         services.AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>();
         services.AddScoped<IMigrationRecordRepository, MigrationRecordRepository>();

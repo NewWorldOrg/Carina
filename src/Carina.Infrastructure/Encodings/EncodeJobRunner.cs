@@ -22,8 +22,9 @@ namespace Carina.Infrastructure.Encodings;
 /// <remarks>
 /// The run writes on the job where it ran, each programme's id and start before its output is read,
 /// and its headway at every tenth and at least every <see cref="HeartbeatEvery"/>. The chapters come
-/// from the recording's detection by the version of the model in use, as <see cref="EncodeChapterChoice"/>
-/// decides; while learning is off and nothing detected the recording, the source is looked at instead. Where
+/// from the answer standing for the recording, or else its detection by the version of the model in use, as
+/// <see cref="EncodeChapterChoice"/> decides; while learning is off and the recording stands with neither, the
+/// source is looked at instead. Where
 /// they came from goes into the ledger before the encode starts, whatever the answer; any chapters are
 /// handed to the encode as a metadata file recorded as a scratch file. Before the artefact is placed, the
 /// text of the recording's captions is put into the work file as a text track when it was taken by then.
@@ -332,8 +333,8 @@ public sealed class EncodeJobRunner(
     }
 
     /// <summary>
-    /// Writes down that the chapters come from the recording's detection by the version in use, or from nothing,
-    /// and hands back the stretches embedded in the recording's own time, or none.
+    /// Writes down that the chapters come from the answer standing for the recording, its detection by the version
+    /// in use, or nothing, and hands back the stretches embedded in the recording's own time, or none.
     /// </summary>
     private async Task<string?> ChosenAsync(
         EncodeJob job,
@@ -348,7 +349,15 @@ public sealed class EncodeJobRunner(
         await jobs.SaveAsync(job, cancellationToken);
         await chapters.RecordAsync(job.Id, EncodeChapter.Mark(job.Id, choice.Chapters(onTheArtefact)), cancellationToken);
 
-        if (choice.Standing.Detection is { } detection)
+        if (choice.Standing.Answer is { } answer)
+        {
+            logger.LogInformation(
+                "Job {Job} takes its chapters from the answer given for its recording at {AnsweredAt:O}: {Chapters} chapter(s) embedded.",
+                job.Id.Wire,
+                answer.AnsweredAt,
+                embedded.Count);
+        }
+        else if (choice.Standing.Detection is { } detection)
         {
             logger.LogInformation(
                 "Job {Job} takes its chapters from the detection of its recording by version {Version}, which came to {State}: {Chapters} chapter(s) embedded.",
