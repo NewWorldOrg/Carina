@@ -8,8 +8,9 @@ namespace Carina.Api.Services;
 
 /// <summary>
 /// The chapters a playback offer plays, on the clock of the file it hands over: the stretches the recording
-/// stands with by the version of the model in use, placed by <see cref="PlaybackFileClock"/> and offered to be
-/// skipped by the threshold the settings stand at. While learning is off and the recording stands with nothing,
+/// stands with, by the answer a person gave while it stands and otherwise by the version of the model in use,
+/// placed by <see cref="PlaybackFileClock"/> and offered to be skipped by the threshold the settings stand at, a
+/// stretch an answer gave whatever the threshold. While learning is off and the recording stands with nothing,
 /// an artefact is played with the chapters its encode marked, each taken as certain. An artefact whose timeline
 /// was not kept has no stretch placed on it. Nothing here writes.
 /// </summary>
@@ -17,6 +18,7 @@ public sealed class PlaybackChapterService(
     ISegmentSettingsRepository settings,
     ISegmentModelVersionRepository versions,
     IRecordingDetectionRepository detections,
+    ISegmentAnswerRepository answers,
     IEncodeJobRepository jobs,
     IEncodeChapterRepository marked)
 {
@@ -31,7 +33,9 @@ public sealed class PlaybackChapterService(
         EncodeJobId? artefact = offer.Plan.Route is PlaybackRoute.Direct ? offer.Artefact : null;
         SegmentSettingsStanding standing = SegmentSettingsStanding.Over(await settings.ReadAsync(cancellationToken));
         SegmentModelVersion version = await versions.ActiveAsync(cancellationToken);
-        SegmentStanding segments = SegmentStanding.Of(null, await detections.FindAsync(id, version.Number, cancellationToken));
+        SegmentStanding segments = SegmentStanding.Of(
+            await answers.FindAsync(id, cancellationToken),
+            await detections.FindAsync(id, version.Number, cancellationToken));
 
         if (segments.Source is SegmentSource.None && !standing.Learning && artefact is { } encoded)
         {

@@ -27,7 +27,8 @@ public sealed record RecordingSegmentResponder(double StartsAtSec, double EndsAt
 /// The stretches of a recording in its own time: how long the recording was written for; where its stretches come
 /// from and how they stand; the version of the model that detected them, whether they are confirmed and when they
 /// were answered, detected and how much of the programme breaks took; the stretches, none when the sequence was
-/// thrown away; and the boundary candidates' seconds a boundary is drawn to.
+/// thrown away; and the boundary candidates' seconds a boundary is drawn to. Stretches an answer gave name no
+/// version and no time of detection, but keep the boundary candidates the detection found.
 /// </summary>
 public sealed record RecordingSegmentsResponder(
     double LengthSec,
@@ -47,16 +48,17 @@ public sealed record RecordingSegmentsResponder(
 
         SegmentStanding standing = segments.Standing;
         RecordingDetection? detection = standing.Detection;
+        RecordingAnswer? answer = standing.Answer;
 
         return new RecordingSegmentsResponder(
             RecordingSegmentResponder.Seconds(segments.Length),
             standing.Source,
             standing.State,
-            detection?.ModelVersion,
-            false,
-            null,
-            detection?.DetectedAt,
-            detection is null ? null : Math.Round(detection.CmShare, 4, MidpointRounding.AwayFromZero),
+            standing.ModelVersion,
+            answer?.Confirmed ?? false,
+            answer?.AnsweredAt,
+            answer is null ? detection?.DetectedAt : null,
+            standing.Source is SegmentSource.None ? null : Math.Round(standing.BreakShare, 4, MidpointRounding.AwayFromZero),
             [.. standing.Played.Select(RecordingSegmentResponder.Of)],
             [.. (detection?.Snaps ?? []).Select(RecordingSegmentResponder.Seconds)]);
     }

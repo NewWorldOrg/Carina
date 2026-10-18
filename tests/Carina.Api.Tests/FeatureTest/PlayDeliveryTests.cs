@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 using IRecordingDetectionRepository = Carina.Domain.Segments.IRecordingDetectionRepository;
+using ISegmentAnswerRepository = Carina.Domain.Segments.ISegmentAnswerRepository;
 using ISegmentModelVersionRepository = Carina.Domain.Segments.ISegmentModelVersionRepository;
 using ISegmentSettingsRepository = Carina.Domain.Segments.ISegmentSettingsRepository;
 
@@ -160,6 +161,7 @@ internal sealed class PlayFeature : IAsyncDisposable
                 services.AddSingleton<ISegmentSettingsRepository>(SegmentSettings);
                 services.AddSingleton<ISegmentModelVersionRepository>(Versions);
                 services.AddSingleton<IRecordingDetectionRepository>(Detections);
+                services.AddSingleton<ISegmentAnswerRepository>(Answers);
             }));
 
         WebApplicationFactory<Program> serving = configured.WithTestScheme();
@@ -196,6 +198,8 @@ internal sealed class PlayFeature : IAsyncDisposable
     public HeldSegmentModelVersions Versions { get; } = new();
 
     public HeldRecordingDetections Detections { get; } = new();
+
+    public HeldSegmentAnswers Answers { get; } = new();
 
     public string MountedAt => mounted.FullName;
 

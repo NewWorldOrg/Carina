@@ -19,6 +19,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 using IRecordingDetectionRepository = Carina.Domain.Segments.IRecordingDetectionRepository;
+using ISegmentAnswerRepository = Carina.Domain.Segments.ISegmentAnswerRepository;
 using ISegmentModelVersionRepository = Carina.Domain.Segments.ISegmentModelVersionRepository;
 using ISegmentSettingsRepository = Carina.Domain.Segments.ISegmentSettingsRepository;
 
@@ -71,6 +72,7 @@ internal sealed class CaptionFeature : IAsyncDisposable
                 services.AddSingleton<ISegmentSettingsRepository>(new HeldSegmentSettings());
                 services.AddSingleton<ISegmentModelVersionRepository>(new HeldSegmentModelVersions());
                 services.AddSingleton<IRecordingDetectionRepository>(new HeldRecordingDetections());
+                services.AddSingleton<ISegmentAnswerRepository>(new HeldSegmentAnswers());
             }));
 
         Client = configured.WithTestScheme().CreateClient();

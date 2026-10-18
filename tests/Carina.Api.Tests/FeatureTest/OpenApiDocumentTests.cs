@@ -120,6 +120,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             [
                 "addCandidateChannel",
+                "addSkipEvent",
                 "applyRuleNow",
                 "applyScan",
                 "cancelEncodeJob",
@@ -209,6 +210,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "putEncodeSettings",
                 "putOidcConfig",
                 "putPlaybackPosition",
+                "putRecordingSegments",
                 "putSelectedChannel",
                 "putTunerHealthSettings",
                 "putTunerLnbPower",
@@ -231,6 +233,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "stopRecording",
                 "switchRule",
                 "transmitLiveDataBroadcast",
+                "withdrawSegmentAnswer",
             ],
             named.Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(named.Length, named.Distinct(StringComparer.Ordinal).Count());
@@ -674,17 +677,46 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         JsonObject path = document["paths"]!["/api/recordings/{id}/segments"]!.AsObject();
         JsonNode schemas = document["components"]!["schemas"]!;
 
-        Assert.Equal(["get"], path.Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
+        Assert.Equal(["get", "put"], path.Select(entry => entry.Key).Where(key => key is not "parameters").Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
             ["lengthSec", "source", "state", "modelVersion", "confirmed", "answeredAt", "detectedAt", "cmShare", "segments", "snaps"],
             schemas["RecordingSegmentsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal(
             ["startsAtSec", "endsAtSec", "kind", "probability"],
             schemas["RecordingSegmentResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
-        Assert.Equal(["none", "detected"], schemas["SegmentSource"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(["none", "detected", "answered"], schemas["SegmentSource"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
         Assert.Equal(
-            ["none", "marked", "nothingFound", "discarded"],
+            ["none", "marked", "nothingFound", "discarded", "answered"],
             schemas["SegmentStandingState"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-CA-001: an answer is sent and withdrawn, and a skip event taken, under the recording, each described by what it is sent and answers")]
+    public async Task TheAnswerAndTheSkipEventsAreDescribed()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode paths = document["paths"]!;
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(["delete"], paths["/api/recordings/{id}/segments/answer"]!.AsObject().Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
+        Assert.Equal(["post"], paths["/api/recordings/{id}/skips"]!.AsObject().Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
+        Assert.Equal(
+            ["segments", "confirmed"],
+            schemas["PutRecordingSegmentsRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["startsAtSec", "endsAtSec", "kind"],
+            schemas["AnsweredSegmentRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["startsAtSec", "endsAtSec"],
+            schemas["AnsweredSegmentRequest"]!["required"]!.AsArray().Select(value => value!.GetValue<string>()).Order(StringComparer.Ordinal).Reverse().ToArray());
+        Assert.Equal(
+            ["event", "kind", "fromSec", "toSec", "modelVersion"],
+            schemas["AddSkipEventRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["happenedAt", "event", "kind", "fromSec", "toSec", "modelVersion"],
+            schemas["SkipEventResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["skipped", "dismissed", "returned"],
+            schemas["ViewerActionKind"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
     [Fact(DisplayName = "BR-BV-004: a module of a recording's data broadcast is described by the numbers that name it, and its bytes are left out of the JSON the document describes")]
