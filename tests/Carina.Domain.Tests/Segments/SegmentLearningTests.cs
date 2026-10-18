@@ -9,11 +9,26 @@ public sealed class SegmentLearningTests
 {
     private const int Weeks = 5;
 
+    /// <summary>
+    /// <see cref="JudgedAnswer"/> with an opening from 360 to 450, where the recordings learned from have programme
+    /// that nothing but the earlier episodes tells from it.
+    /// </summary>
+    private static readonly SegmentSpan[] ThemedAnswer =
+    [
+        Span(0, 120, SegmentKind.Programme),
+        Span(120, 150, SegmentKind.Break),
+        Span(150, 330, SegmentKind.Programme),
+        Span(330, 360, SegmentKind.Break),
+        Span(360, 450, SegmentKind.Opening),
+        Span(450, 525, SegmentKind.Break),
+        Span(525, Length, SegmentKind.Programme),
+    ];
+
     private const double PinnedWithin = 1e-6;
 
     private const double PinnedBias = -3.4620117697283472;
 
-    private const string PinnedFigures = "0.846153846 0.846153846 0.000000000 0.000000 Break:0.840909:1.000000  0";
+    private const string PinnedFigures = "0.846153846 0.846153846 0.000000000 0.000000 Break:0.840909:1.000000,Opening::,Ending::  0";
 
     /// <summary>
     /// The weights learning made of the recordings of <see cref="LearningTakenAStepAtATimeComesToTheSame"/> while it
@@ -165,6 +180,72 @@ public sealed class SegmentLearningTests
         Assert.True(answeredInBetween.Evaluation.Metrics!.BoundaryRecallWithin2s > unanswered.Evaluation.Metrics!.BoundaryRecallWithin2s);
     }
 
+    [Fact(DisplayName = "BR-CD-007: with openings labelled the candidate tells four kinds apart and finds the judged recording's opening, which the version in use, telling two, cannot")]
+    public void OpeningsLabelledMakeAFourKindCandidate()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> sounds) = Opened(Weeks);
+        (LearningRecording judged, CatalogSound heard) = JudgedOpened(RecordingId.New(), Weeks);
+
+        SegmentLearned learned = Learn([.. recordings, judged], [.. sounds, heard]);
+
+        Assert.Equal(4, learned.Candidate.Kinds);
+        Assert.True(learned.Evaluation.Metrics!.Kinds.Single(kind => kind.Kind is SegmentKind.Opening).Recall > 0.9);
+        Assert.Equal(new KindMetrics(SegmentKind.Opening, 0, null), learned.InUse.Metrics!.Kinds.Single(kind => kind.Kind is SegmentKind.Opening));
+        Assert.True(learned.Evaluation.Metrics.BoundaryRecallWithin2s > learned.InUse.Metrics.BoundaryRecallWithin2s);
+    }
+
+    [Fact(DisplayName = "A-051: each confirmed recording is judged by a model learned from the others alone, its own opening included, and a model that learned from it too would score it higher")]
+    public void EachRecordingIsJudgedWithoutItsOwnOpening()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> sounds) = Opened(Weeks);
+        (LearningRecording judged, CatalogSound heard) = JudgedOpened(RecordingId.New(), Weeks);
+        recordings.Add(judged);
+        sounds.Add(heard);
+        LearningCatalog catalog = new(sounds, SeriesLinks.None);
+
+        SegmentLearned learned = Learn(recordings, sounds);
+        SegmentComparison[] apart =
+        [
+            .. recordings.Select(left => Compared(left, catalog, Learn([.. recordings.Where(recording => recording != left)], sounds).Candidate)),
+        ];
+        SegmentComparison[] together = [.. recordings.Select(recording => Compared(recording, catalog, learned.Candidate))];
+
+        Assert.Equal(Figures(SegmentMetrics.Of(apart, SegmentSettingsStanding.DefaultSkipThreshold, SkipReturns.None)), Figures(learned.Evaluation.Metrics));
+        Assert.True(Recall(together) >= learned.Evaluation.Metrics!.BoundaryRecallWithin2s);
+    }
+
+    [Fact(DisplayName = "A-051: an opening the judged recording itself answered on a stretch of the catalog is not heard, and the same answer given on an earlier recording raises the score")]
+    public void TheJudgedRecordingsOwnOpeningIsNotHeard()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> sounds) = Opened(Weeks);
+        (LearningRecording judged, _) = JudgedOpened(RecordingId.New(), Weeks);
+        recordings.Add(judged);
+
+        SegmentLearned unanswered = Learn(recordings, [.. sounds, Theme(judged.Id, null, null)]);
+        SegmentLearned answeredByItself = Learn(recordings, [.. sounds, Theme(judged.Id, SegmentKind.Opening, null)]);
+        SegmentLearned answeredEarlier = Learn(recordings, [.. sounds, Theme(judged.Id, null, SegmentKind.Opening)]);
+
+        Assert.Equal(Figures(unanswered.Evaluation.Metrics), Figures(answeredByItself.Evaluation.Metrics));
+        Assert.True(answeredEarlier.Evaluation.Metrics!.BoundaryRecallWithin2s > unanswered.Evaluation.Metrics!.BoundaryRecallWithin2s);
+    }
+
+    [Fact(DisplayName = "A-051: no label of a later recording stands on the judged recording's answer through the earlier episodes it remembers, and the same answer remembered of another recording raises the score")]
+    public void NoLaterLabelStandsOnTheJudgedAnswerThroughThePast()
+    {
+        (List<LearningRecording> taught, List<CatalogSound> sounds) = Taught(Weeks + 2);
+        RecordingId judged = taught[Weeks].Id;
+        RecordingId later = taught[Weeks + 1].Id;
+        List<LearningRecording> recordings = [.. taught.Take(Weeks), Judged(judged, Weeks, past: [Themed(RecordingId.New())], answer: ThemedAnswer)];
+
+        SegmentLearned forgetting = Learn([.. recordings, Remembering(later, Weeks + 1, ThemedAnswer, [])], sounds);
+        SegmentLearned rememberingTheJudged = Learn([.. recordings, Remembering(later, Weeks + 1, ThemedAnswer, [Themed(judged)])], sounds);
+        SegmentLearned rememberingAnother = Learn([.. recordings, Remembering(later, Weeks + 1, ThemedAnswer, [Themed(RecordingId.New())])], sounds);
+
+        Assert.Equal(4, rememberingAnother.Candidate.Kinds);
+        Assert.Equal(Figures(forgetting.Evaluation.Metrics), Figures(rememberingTheJudged.Evaluation.Metrics));
+        Assert.True(rememberingAnother.Evaluation.Metrics!.BoundaryRecallWithin2s > forgetting.Evaluation.Metrics!.BoundaryRecallWithin2s);
+    }
+
     [Fact(DisplayName = "the version in use is judged on the same recordings beside the skips viewers made with its buttons in the last seven days, and a candidate has offered none")]
     public void TheVersionInUseIsJudgedOnTheSameRecordings()
     {
@@ -250,6 +331,25 @@ public sealed class SegmentLearningTests
                 Heard(sound, StoryEarlier, Weeks + 1, 330.5, 29, answer: betweenAnswer),
                 Heard(sound, Story, Weeks + 1, 330.5, 29, later),
             ]);
+
+    /// <summary>
+    /// A sound of 85 seconds heard in the judged recording where its opening is, and in an earlier episode in the
+    /// second half of the programme, so that where it is heard says nothing of its kind.
+    /// </summary>
+    private static CatalogSound Theme(RecordingId judged, SegmentKind? judgedAnswer, SegmentKind? earlierAnswer)
+    {
+        CatalogEntryId sound = CatalogEntryId.New();
+
+        return new(
+            sound,
+            TimeSpan.FromSeconds(85),
+            [Heard(sound, Story, Weeks, 365, 85, judged, judgedAnswer), Heard(sound, StoryEarlier, Weeks, CatalogSeries.Lead.TotalSeconds + CatalogSeries.Midpoint + 100, 85, answer: earlierAnswer)]);
+    }
+
+    /// <summary>
+    /// An earlier episode of <paramref name="recording"/> remembered by <see cref="ThemedAnswer"/> alone.
+    /// </summary>
+    private static PastEpisode Themed(RecordingId recording) => new(recording, TimeSpan.Zero, null, null, ThemedAnswer);
 
     private static SegmentComparison Compared(LearningRecording recording, LearningCatalog catalog, SegmentModel model)
         => new(

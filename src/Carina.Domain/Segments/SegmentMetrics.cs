@@ -11,8 +11,9 @@ public sealed record KindMetrics(SegmentKind Kind, double? Recall, double? Preci
 /// with a detected boundary turning the same way within <see cref="NearWithin"/> and within
 /// <see cref="CloseWithin"/>, not known without one; the detected boundaries with no answered boundary
 /// within <see cref="NearWithin"/>, per recording; the seconds answered as programme that a button would
-/// offer to skip, per hour of the recordings; the seconds of breaks found; and the share of skips on its
-/// buttons that viewers came back from, and how many skips that is of. A detection thrown away shows
+/// offer to skip, per hour of the recordings; the seconds of breaks, of openings and of endings found, the
+/// kind a recording's answer does not hold counting neither as found nor as missed there; and the share of
+/// skips on its buttons that viewers came back from, and how many skips that is of. A detection thrown away shows
 /// nothing, so it has no boundaries and offers no skip.
 /// </summary>
 public sealed record SegmentMetrics
@@ -24,6 +25,8 @@ public sealed record SegmentMetrics
     public static readonly TimeSpan CloseWithin = TimeSpan.FromSeconds(1);
 
     private const int ThresholdSteps = 100;
+
+    private static readonly SegmentKind[] Measured = [SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending];
 
     public SegmentMetrics(
         double? boundaryRecallWithin2s,
@@ -100,7 +103,7 @@ public sealed record SegmentMetrics
             Recall(answered, detected, CloseWithin),
             extra / (double)compared.Count,
             ProgrammeSkippedAnHour(compared, skipThreshold),
-            [Seconds(compared, SegmentKind.Break)],
+            [.. Measured.Select(kind => Seconds(compared, kind))],
             returns.Share,
             returns.Skips);
     }

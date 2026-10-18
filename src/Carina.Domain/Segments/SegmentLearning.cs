@@ -11,10 +11,11 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// <summary>
 /// Learns a candidate from every recording handed over and judges it on the confirmed ones. Each recording
 /// is read with the catalog as it would have heard it (<see cref="LearningCatalog"/>) and labelled by
-/// <see cref="SegmentLabels"/>; only labels of programme and of breaks are learned from. Every setting of the
-/// search is judged by leave-one-out in time: each confirmed recording is detected again with a model fitted
-/// to every other recording's labels, none of them read with its answer through the catalog, and compared
-/// with its answer. The setting chosen skips no more than
+/// <see cref="SegmentLabels"/>; labels of the programme, of breaks, of openings and of endings are learned
+/// from, and with an opening or an ending among them the candidate tells four kinds apart. Every setting of
+/// the search is judged by leave-one-out in time: each confirmed recording is detected again with a model
+/// fitted to every other recording's labels, none of them read with its answer, through the catalog or
+/// through the earlier episodes they remember, and compared with its answer. The setting chosen skips no more than
 /// <see cref="SegmentAdoption.MostMoreProgrammeSkippedSecondsAnHour"/> second of programme an hour more than
 /// the version in use, where one does, then finds the most boundaries within two seconds, then the fewest
 /// extra ones, then skips the least programme; a tie keeps the setting tried first. With nothing confirmed,
@@ -77,15 +78,15 @@ public static class SegmentLearning
 
     /// <summary>
     /// What is learned from when <paramref name="left"/> is judged, beside every other recording's labels as they
-    /// are: the labels of each other recording whose hearing stands on the answer of the one judged, read again
-    /// where that answer is set aside.
+    /// are: the labels of each other recording whose hearing or whose earlier episodes stand on the answer of the
+    /// one judged, read again where that answer is set aside.
     /// </summary>
     private static Dictionary<int, IReadOnlyList<SegmentSample>> ReadAgain(Labelled[] labelled, int left, SegmentThresholds reading)
     {
         Learner judged = labelled[left].Learner;
 
         return Enumerable.Range(0, labelled.Length)
-            .Where(at => at != left && labelled[at].Learner.Hears(judged))
+            .Where(at => at != left && labelled[at].Learner.StandsOn(judged))
             .ToDictionary(at => at, at => labelled[at].Learner.Labelled(reading, judged.Recording.Id).Samples);
     }
 
@@ -278,11 +279,18 @@ public static class SegmentLearning
 
         public RecordingPieces Read(SegmentThresholds thresholds) => SegmentDetector.Read(recording.Evidence, context, thresholds);
 
-        public bool Hears(Learner other) => catalog.HearsTheAnswerOf(recording.Id, recording.StartedAt, other.Recording.Id);
+        /// <summary>
+        /// Whether what this recording hears, or the earlier episodes it remembers, stand on the answer of
+        /// <paramref name="other"/>.
+        /// </summary>
+        public bool StandsOn(Learner other)
+            => catalog.HearsTheAnswerOf(recording.Id, recording.StartedAt, other.Recording.Id) || recording.Context.RemembersTheAnswerOf(other.Recording.Id);
 
         public Labelled Labelled(SegmentThresholds thresholds, RecordingId? heldOut = null)
         {
-            SegmentContext heard = heldOut is null ? context : recording.Context.Hearing(catalog.HeardBy(recording.Id, recording.StartedAt, heldOut));
+            SegmentContext heard = heldOut is null
+                ? context
+                : recording.Context.WithoutTheAnswerOf(heldOut).Hearing(catalog.HeardBy(recording.Id, recording.StartedAt, heldOut));
             RecordingPieces pieces = SegmentDetector.Read(recording.Evidence, heard, thresholds);
             IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces.Pieces, heard, recording.Answer, recording.Actions);
             string? series = pieces.Series is string named && SegmentModel.IsASeries(named) ? named : null;
@@ -290,7 +298,7 @@ public static class SegmentLearning
             [
                 .. pieces.Pieces
                     .Zip(labels)
-                    .Where(pair => pair.Second is { Kind: SegmentKind.Programme or SegmentKind.Break })
+                    .Where(pair => pair.Second is not null)
                     .Select(pair => new SegmentSample(pair.First.Features, pieces.Station, series, pair.Second!.Kind, pair.Second.Weight)),
             ];
 
