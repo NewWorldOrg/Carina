@@ -129,6 +129,7 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(JsonValueKind.Null, data.GetProperty("learningChangedAt").ValueKind);
         Assert.Equal(0.65, read.GetProperty("data").GetProperty("skipThreshold").GetDouble());
         Assert.Equal(1, feature.Settings.Saves);
+        Assert.Equal(1, feature.Settings.Turns);
     }
 
     [Theory(DisplayName = "BR-CV-002: a threshold is taken to the hundredth")]
@@ -164,6 +165,7 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Contains("skipThreshold", body.GetProperty("message").GetString()!, StringComparison.Ordinal);
         Assert.Equal(JsonValueKind.Null, body.GetProperty("data").ValueKind);
         Assert.Equal(0, feature.Settings.Saves);
+        Assert.Equal(0, feature.Settings.Turns);
     }
 
     [Fact(DisplayName = "BR-CV-002: sending the threshold that stands writes nothing and keeps when it last changed; a new one moves only its own time")]
@@ -186,6 +188,7 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(SegmentSettingsFeature.Noon.AddMinutes(5), data.GetProperty("skipThresholdChangedAt").GetDateTime());
         Assert.Equal(SegmentSettingsFeature.Noon, data.GetProperty("learningChangedAt").GetDateTime());
         Assert.Equal(2, feature.Settings.Saves);
+        Assert.Equal(4, feature.Settings.Turns);
     }
 
     [Fact(DisplayName = "BR-CV-002: learning and the threshold changed together are written at once, each with the time of the change")]
@@ -202,6 +205,7 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(SegmentSettingsFeature.Noon, data.GetProperty("learningChangedAt").GetDateTime());
         Assert.Equal(SegmentSettingsFeature.Noon, data.GetProperty("skipThresholdChangedAt").GetDateTime());
         Assert.Equal(1, feature.Settings.Saves);
+        Assert.Equal(1, feature.Settings.Turns);
     }
 
     [Fact(DisplayName = "BR-CV-002: switching learning keeps the threshold as it stood, and when it changed")]
@@ -217,6 +221,7 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(0.6, data.GetProperty("skipThreshold").GetDouble());
         Assert.Equal(SegmentSettingsFeature.Noon, data.GetProperty("skipThresholdChangedAt").GetDateTime());
         Assert.Equal(SegmentSettingsFeature.Noon.AddMinutes(5), data.GetProperty("learningChangedAt").GetDateTime());
+        Assert.Equal(2, feature.Settings.Turns);
     }
 
     [Fact(DisplayName = "switching learning on writes the row, answers when it changed, and is read back")]
@@ -232,6 +237,7 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(SegmentSettingsFeature.Noon, body.GetProperty("data").GetProperty("learningChangedAt").GetDateTime());
         Assert.True(read.GetProperty("data").GetProperty("learning").GetBoolean());
         Assert.Equal(1, feature.Settings.Saves);
+        Assert.Equal(1, feature.Settings.Turns);
     }
 
     [Fact(DisplayName = "switching learning off again writes when it changed")]
@@ -268,6 +274,7 @@ public sealed class SegmentSettingsEndpointTests
         Assert.False(off.GetProperty("data").GetProperty("learning").GetBoolean());
         Assert.Equal(JsonValueKind.Null, off.GetProperty("data").GetProperty("learningChangedAt").ValueKind);
         Assert.Equal(0, untouched.Settings.Saves);
+        Assert.Equal((2, 1), (feature.Settings.Turns, untouched.Settings.Turns));
     }
 
     [Theory(DisplayName = "a change that names nothing, or names learning as anything but true or false, is refused")]
@@ -286,6 +293,7 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, status);
         Assert.Contains("learning", body.GetProperty("message").GetString()!, StringComparison.Ordinal);
         Assert.Equal(0, feature.Settings.Saves);
+        Assert.Equal(0, feature.Settings.Turns);
     }
 
     [Theory(DisplayName = "a change naming the threshold as anything but a number is refused naming it")]

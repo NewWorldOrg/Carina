@@ -8,6 +8,7 @@ using Carina.Infrastructure.Persistence.Configurations;
 using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 using Npgsql;
 
@@ -47,6 +48,53 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
         Assert.False(held.Learning);
         Assert.Equal(Noon.AddHours(3), held.LearningChangedAt);
         Assert.Equal(1, await reading.Set<SegmentSettings>().CountAsync(Cancel));
+    }
+
+    [Fact(DisplayName = "BR-CV-002: a threshold and learning never switched are kept as written and read back so, and switching learning later keeps the threshold")]
+    public async Task AThresholdAndLearningNeverSwitchedAreReadBack()
+    {
+        await ClearAsync();
+
+        await SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, false, null, 0.65, Noon));
+        SegmentSettings? set = await ReadAsync();
+        await SaveAsync(SegmentSettingsStanding.Over(set).Set(true, null, Noon.AddHours(1))!);
+        SegmentSettings? switched = await ReadAsync();
+
+        Assert.Equal((false, (DateTime?)null, 0.65, (DateTime?)Noon), (set!.Learning, set.LearningChangedAt, set.SkipThreshold, set.SkipThresholdChangedAt));
+        Assert.Equal((true, (DateTime?)Noon.AddHours(1), 0.65, (DateTime?)Noon), (switched!.Learning, switched.LearningChangedAt, switched.SkipThreshold, switched.SkipThresholdChangedAt));
+    }
+
+    [Fact(DisplayName = "BR-CV-002: a change of the settings holds its turn until its transaction ends, so a change made at the same time reads it, and both are kept")]
+    public async Task AChangeHoldsItsTurnSoBothChangesAreKept()
+    {
+        await ClearAsync();
+        await using CarinaDbContext first = database.Open();
+        await using CarinaDbContext second = database.Open();
+        await using IDbContextTransaction holding = await first.Database.BeginTransactionAsync(Cancel);
+        SegmentSettingsRepository switching = new(first);
+        await switching.TakeTurnAsync(Cancel);
+        SegmentSettingsStanding before = SegmentSettingsStanding.Over(await switching.ReadAsync(Cancel));
+
+        Task moving = Task.Run(
+            async () =>
+            {
+                await using IDbContextTransaction waiting = await second.Database.BeginTransactionAsync(Cancel);
+                SegmentSettingsRepository threshold = new(second);
+                await threshold.TakeTurnAsync(Cancel);
+                SegmentSettingsStanding seen = SegmentSettingsStanding.Over(await threshold.ReadAsync(Cancel));
+                await threshold.SaveAsync(seen.Set(null, 0.65, Noon.AddMinutes(1))!, Cancel);
+                await waiting.CommitAsync(Cancel);
+            },
+            Cancel);
+
+        Assert.NotSame(moving, await Task.WhenAny(moving, Task.Delay(TimeSpan.FromMilliseconds(300), Cancel)));
+
+        await switching.SaveAsync(before.Set(true, null, Noon)!, Cancel);
+        await holding.CommitAsync(Cancel);
+        await moving.WaitAsync(TimeSpan.FromSeconds(10), Cancel);
+
+        SegmentSettings? both = await ReadAsync();
+        Assert.Equal((true, (DateTime?)Noon, 0.65, (DateTime?)Noon.AddMinutes(1)), (both!.Learning, both.LearningChangedAt, both.SkipThreshold, both.SkipThresholdChangedAt));
     }
 
     [Fact(DisplayName = "the table itself refuses a second row")]
@@ -174,6 +222,13 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
     {
         await using CarinaDbContext writing = database.Open();
         await new SegmentSettingsRepository(writing).SaveAsync(settings, Cancel);
+    }
+
+    private async Task<SegmentSettings?> ReadAsync()
+    {
+        await using CarinaDbContext reading = database.Open();
+
+        return await new SegmentSettingsRepository(reading).ReadAsync(Cancel);
     }
 
     private async Task RunAsync(string sql)
