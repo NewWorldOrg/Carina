@@ -175,6 +175,66 @@ public sealed class SegmentChapterPlaybackTests
         Assert.Empty(plan.GetProperty("chapters").EnumerateArray());
     }
 
+    [Fact(DisplayName = "BR-CD-001: the plan of an artefact says how far the recording's time stands ahead of the artefact's, the head the job that made it skipped, by which its chapters were moved")]
+    public async Task TheArtefactsPlanSaysHowFarTheRecordingsTimeStandsAhead()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, timeline: Skipped(0.533));
+        await DetectedAsync(feature, recording.Id, (0, 912.3, SegmentKind.Programme, 0.98), (912.3, 1002.3, SegmentKind.Break, 0.93), (1002.3, 1800, SegmentKind.Programme, 0.99));
+
+        JsonElement plan = await PlanAsync(feature, recording);
+
+        Assert.Equal("direct", plan.GetProperty("route").GetString());
+        Assert.Equal(0.533, plan.GetProperty("recordingOffsetSec").GetDouble());
+        Assert.Equal([0d, 911.77d, 1001.77d], plan.GetProperty("chapters").EnumerateArray().Select(chapter => chapter.GetProperty("startsAtSec").GetDouble()));
+    }
+
+    [Fact(DisplayName = "BR-CD-001: the plan says the head skipped by the artefact it hands over, not by a newer one it could not hand over, whatever chapters it carries")]
+    public async Task ThePlanSaysTheHeadSkippedByTheArtefactItHandsOver()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, timeline: Skipped(0.533));
+        feature.Encoded(recording, minutesLater: 10, onDisk: false, timeline: Skipped(1.2));
+
+        JsonElement plan = await PlanAsync(feature, recording);
+
+        Assert.Equal("direct", plan.GetProperty("route").GetString());
+        Assert.Equal(0.533, plan.GetProperty("recordingOffsetSec").GetDouble());
+    }
+
+    [Fact(DisplayName = "BR-CD-001: the plan of the recording itself says its time is the recording's own, whether or not an artefact was made of it")]
+    public async Task TheRecordingsOwnPlanSaysItsTimeIsTheRecordingsOwn()
+    {
+        await using var feature = new PlayFeature();
+        Recording alone = feature.Ended(RecordingOutcome.Complete);
+        Recording encoded = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(encoded, timeline: Skipped(0.533));
+        await DetectedAsync(feature, encoded.Id, (0, 300, SegmentKind.Programme, 0.98), (300, 360, SegmentKind.Break, 0.93), (360, 1800, SegmentKind.Programme, 0.99));
+
+        JsonElement transcoded = await PlanAsync(feature, alone);
+        JsonElement asRecorded = await PlanAsync(feature, encoded, "?source=recording");
+
+        Assert.True(transcoded.GetProperty("transcodes").GetBoolean());
+        Assert.Equal(0d, transcoded.GetProperty("recordingOffsetSec").GetDouble());
+        Assert.Equal("recording", asRecorded.GetProperty("source").GetString());
+        Assert.Equal(0d, asRecorded.GetProperty("recordingOffsetSec").GetDouble());
+    }
+
+    [Fact(DisplayName = "an artefact whose timeline was not kept says nothing of how far the recording's time stands ahead of its own")]
+    public async Task AnArtefactWithoutATimelineSaysNoOffset()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+
+        JsonElement plan = await PlanAsync(feature, recording);
+
+        Assert.Equal("direct", plan.GetProperty("route").GetString());
+        Assert.Equal(JsonValueKind.Null, plan.GetProperty("recordingOffsetSec").ValueKind);
+    }
+
     [Fact(DisplayName = "BR-CD-009: an answer that stands is played in place of the detection, a break it gives offered to be skipped whatever the threshold when something follows it")]
     public async Task AnAnswerIsPlayedInPlaceOfTheDetection()
     {
@@ -276,6 +336,9 @@ public sealed class SegmentChapterPlaybackTests
         Assert.Equal(0, feature.SegmentSettings.Saves);
         Assert.Equal(0, feature.Answers.Writes);
     }
+
+    private static EncodeTimeline Skipped(double head)
+        => new(TimeSpan.FromSeconds(1.4), TimeSpan.FromSeconds(head), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30) - TimeSpan.FromSeconds(head));
 
     private static async Task<JsonElement> PlanAsync(PlayFeature feature, Recording recording, string query = "")
         => (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording, query))).GetProperty("data");

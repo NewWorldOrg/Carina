@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 
 using Carina.Api.Authentication;
 using Carina.Api.Common;
+using Carina.Api.Responder.Playback;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -541,6 +542,29 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             ["startsAtSec", "endsAtSec", "kind", "skippable"],
             schemas["PlaybackChapterResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-CD-001: the plan keeps every name it had and adds how far the recording's time stands ahead of the file's, seconds or nothing as the plan's other seconds are, described in the document")]
+    public async Task ThePlanAddsHowFarTheRecordingsTimeStandsAhead()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode plan = document["components"]!["schemas"]!["PlaybackPlanResponder"]!;
+        JsonNode offset = plan["properties"]!["recordingOffsetSec"]!;
+
+        Assert.Equal(
+            [
+                "standing", "route", "source", "alternative", "externalPlayerSources", "seeking", "canSeek", "transcodes",
+                "showsAsAWholeRecording", "mediaType", "bytes", "resumeAtSec", "sounds", "chapters", "captions", "artefactFile",
+                "recordingOffsetSec",
+            ],
+            plan["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        string[] types = [.. offset["type"]!.AsArray().Select(type => type!.GetValue<string>())];
+
+        Assert.Contains("number", types, StringComparer.Ordinal);
+        Assert.Contains("null", types, StringComparer.Ordinal);
+        Assert.True(JsonNode.DeepEquals(plan["properties"]!["resumeAtSec"]!["type"], offset["type"]));
+        Assert.Contains("recordingOffsetSec", plan["required"]!.AsArray().Select(name => name!.GetValue<string>()), StringComparer.Ordinal);
+        Assert.Equal(PlaybackPlanResponder.HowFarTheRecordingsTimeStandsAhead, offset["description"]!.GetValue<string>());
     }
 
     [Fact(DisplayName = "the plan says which of the two files it plays and which other one it could be asked for")]
