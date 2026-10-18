@@ -161,7 +161,7 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
         }
     }
 
-    private static bool IsAStation(string key)
+    internal static bool IsAStation(string key)
     {
         string[] parts = key.Split(':');
 
@@ -171,5 +171,5 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
     private static bool IsAnId(string part)
         => int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out int id) && id is >= NetworkId.MinValue and <= NetworkId.MaxValue;
 
-    private static bool IsASeries(string key) => key.Length is > 0 and <= Reservation.NameMaxLength;
+    internal static bool IsASeries(string key) => key.Length is > 0 and <= Reservation.NameMaxLength;
 }
