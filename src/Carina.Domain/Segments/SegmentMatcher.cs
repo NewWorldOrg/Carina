@@ -9,8 +9,10 @@ namespace Carina.Domain.Segments;
 /// somewhere in the recording votes for the offset between the two, in frames; an offset that gathers
 /// <see cref="LeastVotes"/> votes together with the offsets on either side of it is a candidate. The
 /// frames voting for a candidate are cut into stretches where they lie no more than two seconds apart,
-/// and each stretch is widened both ways while the share of disagreeing bits over the second around
-/// its end stays under <see cref="MostBitErrors"/>. A stretch whose votes mostly fall on silence or on
+/// and each stretch is widened both ways, a frame at a time, while the share of disagreeing bits over the
+/// second centred on the next frame stays under <see cref="MostBitErrors"/>; it is not widened into a frame
+/// that is silence on either side, and the silence at its ends is cut off, so that a stretch between two
+/// silences is as long as the sound between them. A stretch whose votes mostly fall on silence or on
 /// a sound that repeats itself within a second, one shorter than <see cref="Shortest"/> or longer than
 /// <see cref="Longest"/>, and one whose bits disagree that much over its whole length are not matches.
 /// Silence, and a value heard at more than <see cref="MostPlacesOfOneValue"/> frames of the recording,
@@ -269,17 +271,44 @@ public sealed class SegmentMatcher
             return null;
         }
 
-        while (starts > diagonal.Low && diagonal.Agrees(there, masked, starts - 1) && (!itself || ends <= starts - 1 + offset) && ends - starts <= MostFrames)
+        while (starts > diagonal.Low && Reaches(there, masked, diagonal, starts - 1, itself) && (!itself || ends <= starts - 1 + offset) && ends - starts <= MostFrames)
         {
             starts--;
         }
 
-        while (ends < diagonal.High && diagonal.Agrees(there, masked, ends) && (!itself || ends + 1 <= starts + offset) && ends - starts <= MostFrames)
+        while (ends < diagonal.High && Reaches(there, masked, diagonal, ends, itself) && (!itself || ends + 1 <= starts + offset) && ends - starts <= MostFrames)
         {
             ends++;
         }
 
+        while (starts < ends && Silent(there, diagonal, starts, itself))
+        {
+            starts++;
+        }
+
+        while (ends > starts && Silent(there, diagonal, ends - 1, itself))
+        {
+            ends--;
+        }
+
         return Kept(there, masked, diagonal, starts, ends, votes);
+    }
+
+    private bool Reaches(ReadOnlySpan<uint> there, bool[]? masked, Diagonal diagonal, int frame, bool itself)
+        => !Silent(there, diagonal, frame, itself) && diagonal.Agrees(there, masked, frame);
+
+    /// <summary>
+    /// Whether a frame of the stretch is silence on either side: the recording heard is silent there, or
+    /// either fingerprint has no bit set, as silence has none.
+    /// </summary>
+    private bool Silent(ReadOnlySpan<uint> there, Diagonal diagonal, int frame, bool itself)
+    {
+        int other = frame + diagonal.Offset;
+
+        return fingerprints[frame] == 0
+               || there[other] == 0
+               || heard.IsSilentAt(frame)
+               || (itself && heard.IsSilentAt(other));
     }
 
     private Stretch? Kept(ReadOnlySpan<uint> there, bool[]? masked, Diagonal diagonal, int starts, int ends, int[] votes)

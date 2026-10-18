@@ -27,6 +27,38 @@ public sealed class SegmentMatcherTests
         Assert.InRange(match.BitErrorRate, 0, 0.1);
     }
 
+    [Theory(DisplayName = "an advert with half a second of silence either side matches for its own length, not its silence")]
+    [InlineData(15)]
+    [InlineData(30)]
+    public void AnAdvertBetweenSilencesMatchesForItsOwnLength(int seconds)
+    {
+        short[] advert = SoundScenes.Joined(SoundScenes.Silence(0.5), SoundScenes.Piece(103, seconds), SoundScenes.Silence(0.5));
+        SoundTrack heard = SoundScenes.Track(SoundScenes.Laid(SoundScenes.Programme(1, 90), advert, 10));
+        SoundTrack other = SoundScenes.Track(SoundScenes.Laid(SoundScenes.Programme(2, 90), advert, 37));
+
+        SoundMatch match = Assert.Single(SegmentMatcher.For(heard).Against(Other, other.Fingerprints, []));
+
+        Near(10.5, 10.5 + seconds, match.Heard);
+        Near(37.5, 37.5 + seconds, match.There);
+        Assert.InRange(match.Heard.Length, TimeSpan.FromSeconds(seconds - 0.3), TimeSpan.FromSeconds(seconds + 0.3));
+    }
+
+    [Fact(DisplayName = "a match whose sound goes on past the advert without a silence is still widened over what follows")]
+    public void AMatchGoingOnWithoutASilenceIsStillWidened()
+    {
+        short[] advert = SoundScenes.Piece(104, 15);
+        short[] after = SoundScenes.Piece(105, 5);
+        SoundTrack heard = SoundScenes.Track(SoundScenes.Laid(SoundScenes.Programme(1, 60), SoundScenes.Joined(advert, after), 10));
+        short[] noisyAfter = SoundScenes.Laid(SoundScenes.Joined(advert, after), after, 15, noise: 1600, noiseSeed: 9);
+        SoundTrack other = SoundScenes.Track(SoundScenes.Laid(SoundScenes.Programme(2, 60), noisyAfter, 37));
+
+        SoundMatch match = Assert.Single(SegmentMatcher.For(heard).Against(Other, other.Fingerprints, []));
+
+        Assert.InRange(match.Heard.Starts, SoundScenes.Seconds(10) - Slack, SoundScenes.Seconds(10) + Slack);
+        Assert.InRange(match.Heard.Ends, SoundScenes.Seconds(29), SoundScenes.Seconds(30) + Slack);
+        Assert.Equal(match.Heard.Length, match.There.Length);
+    }
+
     [Fact(DisplayName = "the same piece is found though one copy is half as loud and carries a little noise")]
     public void TheSamePieceIsFoundThroughGainAndNoise()
     {
