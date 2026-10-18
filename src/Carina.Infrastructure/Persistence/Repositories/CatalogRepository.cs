@@ -14,6 +14,22 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
             .ThenBy(entry => entry.Id)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<CatalogEntry>> EntriesAsync(
+        IReadOnlyCollection<CatalogEntryId> entries,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        CatalogEntryId[] named = [.. entries];
+
+        return await context.Set<CatalogEntry>()
+            .AsNoTracking()
+            .Where(entry => named.Contains(entry.Id))
+            .OrderBy(entry => entry.FirstSeenAt)
+            .ThenBy(entry => entry.Id)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<CatalogOccurrence>> OccurrencesOfAsync(
         IReadOnlyCollection<CatalogEntryId> entries,
         CancellationToken cancellationToken)

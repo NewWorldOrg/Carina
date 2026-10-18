@@ -243,17 +243,25 @@ public sealed class PersistenceBoundaryRuleTests
             StringComparer.Ordinal);
     }
 
-    [Fact(DisplayName = "the segment tables are the learning data, the settings and the catalog, and the only key among them is a stretch's into its entry")]
+    [Fact(DisplayName = "the segment tables are the learning data, the settings, the catalog, the versions of the model and the detections, and the only keys among them are a stretch's into its entry and a detection's into its version")]
     public void TheSegmentTablesHoldNoKeyIntoAnotherDomain()
     {
         using CarinaDbContext context = Carina();
 
         Assert.Equal(
-            ["segment_catalog_entry", "segment_catalog_occurrence", "segment_extraction", "segment_learning_data", "segment_settings"],
+            [
+                "segment_catalog_entry",
+                "segment_catalog_occurrence",
+                "segment_detection",
+                "segment_extraction",
+                "segment_learning_data",
+                "segment_model_version",
+                "segment_settings",
+            ],
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Segments));
 
         Assert.Equal(
-            ["segment_catalog_occurrence -> segment_catalog_entry"],
+            ["segment_catalog_occurrence -> segment_catalog_entry", "segment_detection -> segment_model_version"],
             context.Model
                 .GetEntityTypes()
                 .SelectMany(entityType => entityType.GetForeignKeys())
@@ -266,6 +274,7 @@ public sealed class PersistenceBoundaryRuleTests
     [InlineData("segment_extraction")]
     [InlineData("segment_learning_data")]
     [InlineData("segment_catalog_occurrence")]
+    [InlineData("segment_detection")]
     public void TheLearningDataReachesTheRecordingByValue(string table)
     {
         using CarinaDbContext context = Carina();

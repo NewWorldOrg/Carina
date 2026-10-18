@@ -13,6 +13,11 @@ public interface ICatalogRepository
     Task<IReadOnlyList<CatalogEntry>> ListEntriesAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// The entries named, with their fingerprints.
+    /// </summary>
+    Task<IReadOnlyList<CatalogEntry>> EntriesAsync(IReadOnlyCollection<CatalogEntryId> entries, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Every stretch of the entries named.
     /// </summary>
     Task<IReadOnlyList<CatalogOccurrence>> OccurrencesOfAsync(IReadOnlyCollection<CatalogEntryId> entries, CancellationToken cancellationToken);
