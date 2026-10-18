@@ -16,6 +16,10 @@ internal static class SoundScenes
 
     public static short[] Silence(int seconds) => new short[seconds * SampleRate];
 
+    public static short[] Silence(double seconds) => new short[(int)(seconds * SampleRate)];
+
+    public static short[] Joined(params short[][] pieces) => [.. pieces.SelectMany(piece => piece)];
+
     public static short[] Tone(double hertz, int seconds) => SyntheticSound.Sine(hertz, 6000, seconds * SampleRate);
 
     public static short[] Laid(short[] programme, short[] piece, double atSecond, double gain = 1, int noise = 0, int noiseSeed = 0)

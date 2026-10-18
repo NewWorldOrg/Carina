@@ -48,6 +48,24 @@ public sealed class CatalogTests
         Assert.Contains(change.Found, occurrence => occurrence.RecordingId.Equals(First) && occurrence.StartsAt == Span(300, 315).Starts && occurrence.BitErrorRate == 0.08f);
     }
 
+    [Theory(DisplayName = "an advert with half a second of silence either side, heard in two series, starts an advert entry of its own length")]
+    [InlineData(15)]
+    [InlineData(30)]
+    public void AnAdvertBetweenSilencesStartsAnAdvertEntry(int seconds)
+    {
+        short[] advert = SoundScenes.Joined(SoundScenes.Silence(0.5), SoundScenes.Piece(103, seconds), SoundScenes.Silence(0.5));
+        SoundTrack heard = SoundScenes.Track(SoundScenes.Laid(SoundScenes.Programme(1, 90), advert, 10));
+        SoundTrack other = SoundScenes.Track(SoundScenes.Laid(SoundScenes.Programme(2, 90), advert, 37));
+        IReadOnlyList<SoundMatch> matches = SegmentMatcher.For(heard).Against(new RecordedSound(First), other.Fingerprints, []);
+
+        CatalogChange change = Catalog.Absorb(Heard, heard, matches, Knowing(), Now);
+
+        CatalogEntry entry = Assert.Single(change.Started);
+        Assert.InRange(entry.Length, TimeSpan.FromSeconds(seconds - 0.3), TimeSpan.FromSeconds(seconds + 0.3));
+        Assert.All(change.Found, occurrence => Assert.InRange(occurrence.Length, TimeSpan.FromSeconds(seconds - 0.3), TimeSpan.FromSeconds(seconds + 0.3)));
+        Assert.Equal((CatalogKind.Cm, 0.9), (entry.Kind, entry.Confidence));
+    }
+
     [Fact(DisplayName = "a stretch matched in a catalog entry adds a stretch to that entry and estimates it again")]
     public void AMatchWithAnEntryAddsToIt()
     {
