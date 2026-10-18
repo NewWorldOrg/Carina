@@ -58,10 +58,45 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
             new[] { byTheReader.Id, unread.Id, byAnotherVersion.Id, before.Id }.Select(id => id.Wire).Order(StringComparer.Ordinal),
             awaiting.Select(subject => subject.Job.Id.Wire).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(awaiting, subject => new[] { since.Id, notDetected.Id, noTimeline.Id }.Contains(subject.Job.Id));
-        Assert.All(awaiting, subject => Assert.Equal((subject.Job.RecordingId, SegmentModelVersion.FirstNumber), (subject.Detection.RecordingId, subject.Detection.ModelVersion)));
+        Assert.All(awaiting, subject => Assert.Equal((subject.Job.RecordingId, SegmentModelVersion.FirstNumber), (subject.Detection!.RecordingId, subject.Detection.ModelVersion)));
+        Assert.All(awaiting, subject => Assert.Null(subject.Answer));
         Assert.All(awaiting, subject => Assert.Null(subject.LastRewrittenAt));
         Assert.Single(await AwaitingAsync([], atMost: 1));
         Assert.DoesNotContain(await AwaitingAsync([unread.Id]), subject => subject.Job.Id.Equals(unread.Id));
+    }
+
+    [Fact(DisplayName = "BR-CS-002: an artefact awaits a comparison when an answer stands that its chapters were not decided from, or the answer they were decided from was withdrawn, whether or not the version in use detected the recording")]
+    public async Task AnArtefactAwaitsAComparisonWhenTheAnswerChanged()
+    {
+        DateTime answeredAt = Detected.AddHours(2);
+        EncodeJob fromTheDetection = await StandingAsync(Segments(1, Detected.AddHours(1)));
+        EncodeJob fromThisAnswer = await StandingAsync(FromAnAnswer(answeredAt));
+        EncodeJob fromAnEarlierAnswer = await StandingAsync(FromAnAnswer(answeredAt.AddMinutes(-5)));
+        EncodeJob withdrawn = await StandingAsync(FromAnAnswer(answeredAt));
+        EncodeJob withdrawnUndetected = await StandingAsync(FromAnAnswer(answeredAt), detected: false);
+        EncodeJob answeredUndetected = await StandingAsync(Read(ChapterDetectorName.Ffmpeg, EncodeHarness.Started), detected: false);
+        EncodeJob unanswered = await StandingAsync(Segments(1, Detected.AddHours(1)));
+        await AnsweredAsync(fromTheDetection, answeredAt);
+        await AnsweredAsync(fromThisAnswer, answeredAt);
+        await AnsweredAsync(fromAnEarlierAnswer, answeredAt);
+        await AnsweredAsync(withdrawn, answeredAt, withdrawnAt: answeredAt.AddHours(1));
+        await AnsweredAsync(withdrawnUndetected, answeredAt, withdrawnAt: answeredAt.AddHours(1));
+        await AnsweredAsync(answeredUndetected, answeredAt);
+
+        IReadOnlyList<ChapterRewriteSubject> awaiting = await AwaitingAsync([]);
+
+        Assert.Equal(
+            new[] { fromTheDetection.Id, fromAnEarlierAnswer.Id, withdrawn.Id, withdrawnUndetected.Id, answeredUndetected.Id }.Select(id => id.Wire).Order(StringComparer.Ordinal),
+            awaiting.Select(subject => subject.Job.Id.Wire).Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(awaiting, subject => new[] { fromThisAnswer.Id, unanswered.Id }.Contains(subject.Job.Id));
+        ChapterRewriteSubject answeredOverTheDetection = Assert.Single(awaiting, subject => subject.Job.Id.Equals(fromTheDetection.Id));
+        Assert.Equal((SegmentSource.Answered, answeredAt), (answeredOverTheDetection.Standing.Source, answeredOverTheDetection.Answer!.AnsweredAt));
+        Assert.NotNull(answeredOverTheDetection.Detection);
+        Assert.Equal(SegmentSource.Detected, Assert.Single(awaiting, subject => subject.Job.Id.Equals(withdrawn.Id)).Standing.Source);
+        ChapterRewriteSubject nothingLeft = Assert.Single(awaiting, subject => subject.Job.Id.Equals(withdrawnUndetected.Id));
+        Assert.Equal((SegmentSource.None, false), (nothingLeft.Standing.Source, nothingLeft.Answer!.Stands));
+        Assert.Null(nothingLeft.Detection);
+        Assert.Equal(SegmentSource.Answered, Assert.Single(awaiting, subject => subject.Job.Id.Equals(answeredUndetected.Id)).Standing.Source);
     }
 
     [Fact(DisplayName = "BR-CD-010: an artefact written again within the day is left out, and one written again before that says when")]
@@ -125,6 +160,34 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
     private static ChapterReading Read(ChapterDetectorName detector, DateTime at) => new(detector, ChapterVerdict.Marked, 0.1, at);
 
     private static ChapterReading Segments(int version, DateTime at) => new(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, at, version);
+
+    private static ChapterReading FromAnAnswer(DateTime answeredAt) => new(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, answeredAt, null, answeredAt);
+
+    private async Task AnsweredAsync(EncodeJob job, DateTime at, DateTime? withdrawnAt = null)
+    {
+        RecordingAnswer answer = RecordingAnswer.Rehydrate(
+            job.RecordingId,
+            [
+                new SegmentSpan(TimeSpan.Zero, TimeSpan.FromSeconds(600), SegmentKind.Programme, null),
+                new SegmentSpan(TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(690), SegmentKind.Break, null),
+                new SegmentSpan(TimeSpan.FromSeconds(690), TimeSpan.FromMinutes(30), SegmentKind.Programme, null),
+            ],
+            TimeSpan.FromMinutes(30),
+            false,
+            null,
+            at,
+            1,
+            null);
+
+        await using CarinaDbContext writing = database.Open();
+        SegmentAnswerRepository answers = new(writing);
+        await answers.AnswerAsync(answer, Cancel);
+
+        if (withdrawnAt is { } withdrawing)
+        {
+            Assert.True(await answers.WithdrawAsync(job.RecordingId, withdrawing, Cancel));
+        }
+    }
 
     private async Task<IReadOnlyList<ChapterRewriteSubject>> AwaitingAsync(IReadOnlyCollection<EncodeJobId> passedOver, int atMost = 64)
     {
@@ -214,5 +277,6 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
         await clearing.Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
         await clearing.Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
         await clearing.Set<RecordingDetection>().ExecuteDeleteAsync(Cancel);
+        await clearing.Set<RecordingAnswer>().ExecuteDeleteAsync(Cancel);
     }
 }

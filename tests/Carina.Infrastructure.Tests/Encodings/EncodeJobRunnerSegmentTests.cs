@@ -7,9 +7,9 @@ using Carina.TestSupport;
 namespace Carina.Infrastructure.Tests.Encodings;
 
 /// <summary>
-/// Where an encode takes its chapters from: the recording's detection by the version of the model in use when
-/// there is one, nothing while learning is on and there is none, and the look at the source the machine is set
-/// up with while learning is off and there is none.
+/// Where an encode takes its chapters from: the answer standing for the recording, else its detection by the
+/// version of the model in use when there is one, nothing while learning is on and there is neither, and the look
+/// at the source the machine is set up with while learning is off and there is neither.
 /// </summary>
 public sealed class EncodeJobRunnerSegmentTests
 {
@@ -129,6 +129,62 @@ public sealed class EncodeJobRunnerSegmentTests
         }
     }
 
+    [Fact(DisplayName = "BR-CD-010: an answer standing is embedded in place of the detection whether learning is on or off, and the ledger keeps when it was given rather than a version")]
+    public async Task AnAnswerStandingIsEmbeddedInPlaceOfTheDetection()
+    {
+        foreach (bool learning in new[] { true, false })
+        {
+            using var harness = new EncodeHarness();
+            Run run = Watched(harness);
+            harness.Learning(learning);
+            var looked = new ScriptedChapters { Answers = () => APodInTheMiddle };
+            harness.ChapterDetector = looked;
+            Recording recording = harness.Recorded();
+            harness.Heads.Reading = SourceHeadReading.Read(MeasuredHeads.Start, MeasuredHeads.Start + Skipped);
+            harness.Detected(recording, SegmentDetectionState.Marked, Span(0, 3, SegmentKind.Programme), Span(3, 6.25, SegmentKind.Break), Span(6.25, 10, SegmentKind.Programme));
+            DateTime answeredAt = EncodeHarness.Queued.AddMinutes(-5);
+            RecordingAnswer answer = harness.Answered(recording, answeredAt, Given(0, 4, SegmentKind.Programme), Given(4, 7, SegmentKind.Break), Given(7, 10, SegmentKind.Programme));
+            EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
+
+            Assert.Equal(EncodeJobStatus.Completed, await harness.Runner.RunAsync(job, Cancel));
+
+            string chapters = File.ReadAllText(run.Chapters);
+            Assert.Contains("START=4000\nEND=7000\ntitle=CM", chapters, StringComparison.Ordinal);
+            Assert.DoesNotContain("START=3000", chapters, StringComparison.Ordinal);
+            Assert.Equal(
+                (ChapterDetectorName.Segments, ChapterVerdict.Marked, (int?)null, (DateTime?)answeredAt),
+                (job.Chapters!.Detector, job.Chapters.Verdict, job.Chapters.ModelVersion, job.Chapters.AnsweredAt));
+            Assert.Equal(answer.BreakShare, job.Chapters.BreakShare);
+            Assert.Equal(
+                [TimeSpan.Zero, TimeSpan.FromSeconds(3.5), TimeSpan.FromSeconds(6.5)],
+                harness.Chapters.Chapters.Select(chapter => chapter.StartsAt));
+            Assert.Empty(looked.Asked);
+        }
+    }
+
+    [Fact(DisplayName = "BR-CD-013: while learning is off an answer of the programme alone is encoded with no chapters, and the source is not looked at")]
+    public async Task WhileLearningIsOffAnAnswerOfTheProgrammeAloneIsEncodedWithNoChapters()
+    {
+        string[] none = await NoChaptersTodayAsync();
+        using var harness = new EncodeHarness();
+        Run run = Watched(harness);
+        harness.Learning(false);
+        var looked = new ScriptedChapters { Answers = () => APodInTheMiddle };
+        harness.ChapterDetector = looked;
+        Recording recording = harness.Recorded();
+        harness.Answered(recording, EncodeHarness.Queued, Given(0, 10, SegmentKind.Programme));
+        EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
+
+        Assert.Equal(EncodeJobStatus.Completed, await harness.Runner.RunAsync(job, Cancel));
+
+        Assert.Equal(none, run.Handed(harness, job));
+        Assert.Empty(looked.Asked);
+        Assert.Equal(
+            (ChapterDetectorName.Segments, ChapterVerdict.NothingFound, (int?)null, (DateTime?)EncodeHarness.Queued),
+            (job.Chapters!.Detector, job.Chapters.Verdict, job.Chapters.ModelVersion, job.Chapters.AnsweredAt));
+        Assert.Empty(harness.Chapters.Chapters);
+    }
+
     [Fact(DisplayName = "BR-CD-010: with learning on and no detection the encode has no chapters, its arguments are those of a run with no chapters today, and the source is not looked at")]
     public async Task WithLearningOnAndNoDetectionTheEncodeHasNoChapters()
     {
@@ -216,6 +272,9 @@ public sealed class EncodeJobRunnerSegmentTests
 
         return new Run(arguments, chapters);
     }
+
+    private static SegmentSpan Given(double starts, double ends, SegmentKind kind)
+        => new(TimeSpan.FromSeconds(starts), TimeSpan.FromSeconds(ends), kind, null);
 
     private static SegmentSpan Span(double starts, double ends, SegmentKind kind)
         => new(TimeSpan.FromSeconds(starts), TimeSpan.FromSeconds(ends), kind, 0.9);

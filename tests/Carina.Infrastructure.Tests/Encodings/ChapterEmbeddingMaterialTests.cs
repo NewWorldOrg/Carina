@@ -163,7 +163,7 @@ public sealed class ChapterEmbeddingMaterialTests
             new SegmentSpan(movedOpens, PodCloses, SegmentKind.Break, 0.9),
             new SegmentSpan(PodCloses, length, SegmentKind.Programme, 0.9));
         var rewrites = new ChapterRewriteHarness(harness);
-        rewrites.Worklist.Subjects.Add(new ChapterRewriteSubject(job, moved, null));
+        rewrites.Worklist.Subjects.Add(new ChapterRewriteSubject(job, moved, null, null));
         int asked = 0;
 
         ChapterRewriteRound dropped = await rewrites.Rewrites.RewriteAsync(1, 4, [], _ => Task.FromResult(++asked is 1), Cancel);
