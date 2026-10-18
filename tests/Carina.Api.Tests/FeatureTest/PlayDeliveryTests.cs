@@ -257,7 +257,8 @@ internal sealed class PlayFeature : IAsyncDisposable
         bool onDisk = true,
         EncodeCodec? fileReadAs = null,
         string? taggedAs = null,
-        EncodeTimeline? timeline = null)
+        EncodeTimeline? timeline = null,
+        ChapterReading? chapters = null)
     {
         EncodeProfile profile = EncodedArtefact.Profile(codec, RecordingFeature.Noon.AddHours(-1));
         Profiles.Profiles.Add(profile);
@@ -266,7 +267,8 @@ internal sealed class PlayFeature : IAsyncDisposable
             recording,
             profile,
             RecordingFeature.Noon.AddHours(1).AddMinutes(minutesLater),
-            timeline);
+            timeline,
+            chapters);
         Jobs.Jobs.Add(job);
 
         if (fileReadAs is { } read)

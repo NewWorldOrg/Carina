@@ -11,8 +11,10 @@ namespace Carina.Api.Services;
 /// stands with, by the answer a person gave while it stands and otherwise by the version of the model in use,
 /// placed by <see cref="PlaybackFileClock"/> and offered to be skipped by the threshold the settings stand at, a
 /// stretch an answer gave whatever the threshold. While learning is off and the recording stands with nothing,
-/// an artefact is played with the chapters its encode marked, each taken as certain. An artefact whose timeline
-/// was not kept has no stretch placed on it. Nothing here writes.
+/// an artefact is played with the chapters its encode marked, each taken as certain, only when the reader of the
+/// source marked them; chapters an encode took from the segments, an answer since withdrawn or a detection by
+/// another version, are not played. An artefact whose timeline was not kept has no stretch placed on it. Nothing
+/// here writes.
 /// </summary>
 public sealed class PlaybackChapterService(
     ISegmentSettingsRepository settings,
@@ -54,7 +56,14 @@ public sealed class PlaybackChapterService(
         => await jobs.FindAsync(artefact, cancellationToken) is { Timeline: { } timeline } ? PlaybackFileClock.Of(timeline) : null;
 
     private async Task<IReadOnlyList<SegmentSpan>> MarkedAsync(EncodeJobId artefact, CancellationToken cancellationToken)
-        => [.. (await marked.ListForJobAsync(artefact, cancellationToken)).Select(chapter => new SegmentSpan(chapter.StartsAt, chapter.EndsAt, KindOf(chapter.Kind), 1))];
+    {
+        if (await jobs.FindAsync(artefact, cancellationToken) is not { Chapters: null or { Detector: not ChapterDetectorName.Segments, AnsweredAt: null } })
+        {
+            return [];
+        }
+
+        return [.. (await marked.ListForJobAsync(artefact, cancellationToken)).Select(chapter => new SegmentSpan(chapter.StartsAt, chapter.EndsAt, KindOf(chapter.Kind), 1))];
+    }
 
     private static SegmentKind KindOf(ChapterKind kind) => kind is ChapterKind.Break ? SegmentKind.Break : SegmentKind.Programme;
 }

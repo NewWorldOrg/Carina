@@ -202,6 +202,41 @@ public sealed class SegmentChapterPlaybackTests
         Assert.Equal([0d, 300d, 360d], withdrawn.GetProperty("chapters").EnumerateArray().Select(chapter => chapter.GetProperty("startsAtSec").GetDouble()));
     }
 
+    [Fact(DisplayName = "BR-CS-002: while learning is off, chapters an encode took from an answer since withdrawn are not played on the artefact")]
+    public async Task ChaptersEncodedFromAWithdrawnAnswerAreNotPlayed()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        RecordingAnswer answer = await AnsweredAsync(feature, recording.Id, (0, 600.5, SegmentKind.Programme), (600.5, 660.5, SegmentKind.Break), (660.5, 1800, SegmentKind.Programme));
+        EncodeChapterChoice choice = EncodeChapterChoice.Of(false, SegmentModelVersion.FirstNumber, SegmentStanding.Of(answer, null));
+        feature.Encoded(recording, timeline: HalfASecondSkipped, chapters: choice.Reading(RecordingFeature.Noon.AddHours(2)));
+        await feature.MarkedAsync(feature.Jobs.Jobs[0], [.. choice.Chapters(PlaybackFileClock.Of(HalfASecondSkipped))]);
+        JsonElement answered = await PlanAsync(feature, recording);
+
+        await feature.Answers.WithdrawAsync(recording.Id, RecordingFeature.Noon.AddHours(3), CancellationToken.None);
+        JsonElement withdrawn = await PlanAsync(feature, recording);
+
+        Assert.Equal([0d, 600d, 660d], answered.GetProperty("chapters").EnumerateArray().Select(chapter => chapter.GetProperty("startsAtSec").GetDouble()));
+        Assert.Empty(withdrawn.GetProperty("chapters").EnumerateArray());
+    }
+
+    [Fact(DisplayName = "BR-CD-013: while learning is off, chapters the reader of the source marked are still played once an answer is withdrawn")]
+    public async Task ChaptersTheReaderMarkedArePlayedOnceAnAnswerIsWithdrawn()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, timeline: HalfASecondSkipped, chapters: new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.Marked, 0.03, RecordingFeature.Noon.AddHours(1)));
+        await feature.MarkedAsync(feature.Jobs.Jobs[0], new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(90), ChapterKind.Programme), new ChapterSegment(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(150), ChapterKind.Break), new ChapterSegment(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(1799.5), ChapterKind.Programme));
+        await AnsweredAsync(feature, recording.Id, (0, 1800, SegmentKind.Programme));
+        await feature.Answers.WithdrawAsync(recording.Id, RecordingFeature.Noon.AddHours(3), CancellationToken.None);
+
+        JsonElement plan = await PlanAsync(feature, recording);
+
+        Assert.Equal(
+            [(0d, 90d, "programme", false), (90d, 150d, "break", true), (150d, 1799.5d, "programme", false)],
+            plan.GetProperty("chapters").EnumerateArray().Select(Read));
+    }
+
     [Fact(DisplayName = "BR-CA-001: asking for the plan writes nothing: no detection is kept and no setting saved")]
     public async Task AskingForThePlanWritesNothing()
     {
@@ -228,14 +263,18 @@ public sealed class SegmentChapterPlaybackTests
             chapter.GetProperty("kind").GetString()!,
             chapter.GetProperty("skippable").GetBoolean());
 
-    private static async Task AnsweredAsync(PlayFeature feature, RecordingId recording, params (double Starts, double Ends, SegmentKind Kind)[] stretches)
-        => await feature.Answers.AnswerAsync(
-            RecordingAnswer.Given(
-                recording,
-                AnsweredStretches.Read([.. stretches.Select(stretch => new SentStretch(stretch.Starts, stretch.Ends, stretch.Kind))], TimeSpan.FromMinutes(30)).Stretches!,
-                true,
-                RecordingFeature.Noon.AddHours(2)),
-            CancellationToken.None);
+    private static async Task<RecordingAnswer> AnsweredAsync(PlayFeature feature, RecordingId recording, params (double Starts, double Ends, SegmentKind Kind)[] stretches)
+    {
+        RecordingAnswer answer = RecordingAnswer.Given(
+            recording,
+            AnsweredStretches.Read([.. stretches.Select(stretch => new SentStretch(stretch.Starts, stretch.Ends, stretch.Kind))], TimeSpan.FromMinutes(30)).Stretches!,
+            true,
+            RecordingFeature.Noon.AddHours(2));
+
+        await feature.Answers.AnswerAsync(answer, CancellationToken.None);
+
+        return answer;
+    }
 
     private static async Task DetectedAsync(PlayFeature feature, RecordingId recording, params (double Starts, double Ends, SegmentKind Kind, double Probability)[] stretches)
     {
