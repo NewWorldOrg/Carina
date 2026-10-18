@@ -13,7 +13,7 @@ public sealed class SegmentSettingsRollbackTests
 {
     private const string ScratchDatabase = "carina_segment_settings_rollback_test";
 
-    private const string BeforeTheThreshold = "20261018102824_TheChaptersOfAnArtefactSayWhichDetectionTheyCameFrom";
+    private const string BeforeTheThreshold = "20261018165013_TheAnswersAndTheSkipsAreKeptWithoutAKeyIntoTheRecording";
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
