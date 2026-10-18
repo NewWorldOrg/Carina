@@ -128,7 +128,7 @@ internal sealed class SegmentTrainingHarness : IDisposable
 
     public static SegmentEvaluation Evaluated(double recall, double extra, double skipped, EvaluationEvidence? evidence = null)
         => new(
-            new SegmentMetrics(recall, recall - 0.1, extra, skipped, [new KindMetrics(SegmentKind.Break, 0.9, 0.9)], null, 0),
+            new SegmentMetrics(recall, Math.Round(recall - 0.1, 2), extra, skipped, [new KindMetrics(SegmentKind.Break, 0.9, 0.9)], null, 0),
             [],
             evidence ?? Enough,
             0.65);
