@@ -74,6 +74,18 @@ public sealed class SegmentAdoptionTests
         Assert.Null(SegmentRollback.Judge(InUse, Before, actions, Adopted.AddDays(daysOn)));
     }
 
+    [Theory(DisplayName = "one and a half times the share before is counted in whole numbers: exactly that stays, and more goes back")]
+    [InlineData(9, false)]
+    [InlineData(10, true)]
+    public void OneAndAHalfTimesIsCountedExactly(int returned, bool goesBack)
+    {
+        ViewerAction[] actions = [.. Actions(2, Adopted.AddDays(1), 20, returned), .. Actions(1, Adopted.AddDays(-3), 20, 6)];
+
+        SegmentRollback? rollback = SegmentRollback.Judge(InUse, Before, actions, Adopted.AddDays(2));
+
+        Assert.Equal(goesBack ? new SegmentRollback(returned / 20.0, 6 / 20.0, 20, 1) : null, rollback);
+    }
+
     [Fact(DisplayName = "a version chosen by hand does not go back, and nothing is compared with a version before it nobody skipped with")]
     public void AVersionChosenByHandOrWithoutAComparisonStays()
     {

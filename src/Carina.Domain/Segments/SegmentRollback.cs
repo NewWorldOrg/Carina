@@ -14,6 +14,10 @@ public sealed record SegmentRollback(double ReturnedAfterSkipShare, double Previ
 
     public const int FewestSkips = 20;
 
+    private const int TimesOver = 3;
+
+    private const int TimesUnder = 2;
+
     public static readonly TimeSpan Within = TimeSpan.FromDays(7);
 
     public static SegmentRollback? Judge(SegmentModelVersion active, SegmentModelVersion previous, IReadOnlyList<ViewerAction> actions, DateTime now)
@@ -40,8 +44,15 @@ public sealed record SegmentRollback(double ReturnedAfterSkipShare, double Previ
         SkipReturns since = SkipReturns.Of(actions, active.Number, adopted, now);
         SkipReturns before = SkipReturns.Of(actions, previous.Number, adopted - Within, adopted.AddTicks(-1));
 
-        return since is { Skips: >= FewestSkips, Share: double share } && before.Share is double earlier && share > MostTimesThePrevious * earlier
+        return since is { Skips: >= FewestSkips, Share: double share } && before.Share is double earlier && MoreThanTimesThePrevious(since, before)
             ? new SegmentRollback(share, earlier, since.Skips, previous.Number)
             : null;
     }
+
+    /// <summary>
+    /// Whether the share that came back since is more than one and a half times the share before, in whole
+    /// numbers, so that exactly one and a half times never rounds over.
+    /// </summary>
+    private static bool MoreThanTimesThePrevious(SkipReturns since, SkipReturns before)
+        => (long)TimesUnder * since.Returned * before.Skips > (long)TimesOver * before.Returned * since.Skips;
 }
