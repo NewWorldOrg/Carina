@@ -71,6 +71,30 @@ public sealed class LearningCatalogTests
         Assert.Equal(2, answeredEarlier.HeardBy(judged, Story.Episode(1).RecordingStartedAt).Count);
     }
 
+    [Fact(DisplayName = "the answer of a recording held out is set aside too, so an entry it decided falls back to what its stretches say")]
+    public void TheAnswerOfARecordingHeldOutIsSetAside()
+    {
+        CatalogEntryId advert = CatalogEntryId.New();
+        RecordingId first = RecordingId.New();
+        RecordingId judged = RecordingId.New();
+        LearningCatalog catalog = new(
+        [
+            new CatalogSound(advert, TimeSpan.FromSeconds(29), [
+                CatalogSeries.At(advert, Story.Episode(0), 300, 29, SegmentKind.Break, first),
+                CatalogSeries.At(advert, Story.Episode(1), 900, 29, recording: judged),
+            ]),
+        ],
+        SeriesLinks.None);
+        DateTime startedAt = Story.Episode(1).RecordingStartedAt;
+
+        Assert.Equal(1.0, Assert.Single(catalog.HeardBy(judged, startedAt)).Confidence);
+        Assert.Equal(0.5, Assert.Single(catalog.HeardBy(judged, startedAt, first)).Confidence);
+        Assert.True(catalog.HearsTheAnswerOf(judged, startedAt, first));
+        Assert.False(catalog.HearsTheAnswerOf(first, Story.Episode(0).RecordingStartedAt, judged));
+        Assert.False(catalog.HearsTheAnswerOf(judged, startedAt, judged));
+        Assert.False(catalog.HearsTheAnswerOf(judged, Story.Episode(0).RecordingStartedAt.AddTicks(-1), first));
+    }
+
     [Fact(DisplayName = "an empty catalog hears nothing, and a context told what it hears keeps everything else")]
     public void AContextHearsWhatItIsTold()
     {

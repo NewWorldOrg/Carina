@@ -1,3 +1,5 @@
+using Carina.Domain.Recordings;
+
 namespace Carina.Domain.Segments;
 
 /// <summary>
@@ -11,7 +13,8 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// is read with the catalog as it would have heard it (<see cref="LearningCatalog"/>) and labelled by
 /// <see cref="SegmentLabels"/>; only labels of programme and of breaks are learned from. Every setting of the
 /// search is judged by leave-one-out in time: each confirmed recording is detected again with a model fitted
-/// to every other recording's labels, and compared with its answer. The setting chosen skips no more than
+/// to every other recording's labels, none of them read with its answer through the catalog, and compared
+/// with its answer. The setting chosen skips no more than
 /// <see cref="SegmentAdoption.MostMoreProgrammeSkippedSecondsAnHour"/> second of programme an hour more than
 /// the version in use, where one does, then finds the most boundaries within two seconds, then the fewest
 /// extra ones, then skips the least programme; a tie keeps the setting tried first. With nothing confirmed,
@@ -63,10 +66,11 @@ public static class SegmentLearning
         foreach (IGrouping<(double, double, double, double, double), SegmentThresholds> reading in settings.GroupBy(setting => (setting.SilenceDbfs, setting.BlackLevel, setting.SceneChange, setting.GridToleranceSec, setting.GridPenalty)))
         {
             Labelled[] labelled = [.. learners.Select(learner => learner.Labelled(reading.First()))];
+            Labelled[][] folds = [.. judged.Select(left => Fold(labelled, left, reading.First()))];
 
             foreach (SegmentThresholds setting in reading)
             {
-                Trial trial = Tried(labelled, judged, setting, skipThreshold);
+                Trial trial = Tried(labelled, folds, judged, setting, skipThreshold);
 
                 if (best is null || Better(trial.Metrics, best.Metrics, inUse))
                 {
@@ -78,14 +82,25 @@ public static class SegmentLearning
         return best ?? throw new ArgumentException("A search tries at least one setting.", nameof(settings));
     }
 
-    private static Trial Tried(Labelled[] labelled, int[] judged, SegmentThresholds setting, double skipThreshold)
+    /// <summary>
+    /// What is learned from when <paramref name="left"/> is judged: every other recording, read again where
+    /// what it hears stands on the answer of the one judged.
+    /// </summary>
+    private static Labelled[] Fold(Labelled[] labelled, int left, SegmentThresholds reading)
+    {
+        Learner judged = labelled[left].Learner;
+
+        return [.. labelled.Where((_, at) => at != left).Select(each => each.Learner.Hears(judged) ? each.Learner.Labelled(reading, judged.Recording.Id) : each)];
+    }
+
+    private static Trial Tried(Labelled[] labelled, Labelled[][] folds, int[] judged, SegmentThresholds setting, double skipThreshold)
     {
         SegmentFit full = SegmentRegression.Fit([.. labelled.SelectMany(each => each.Samples)], setting);
         SegmentComparison[] compared =
         [
-            .. judged.Select(left => labelled[left].Learner.Compared(SegmentDetector.Detect(
+            .. judged.Select((left, fold) => labelled[left].Learner.Compared(SegmentDetector.Detect(
                 labelled[left].Pieces,
-                SegmentRegression.Fit([.. labelled.Where((_, at) => at != left).SelectMany(each => each.Samples)], setting, full.Model).Model))),
+                SegmentRegression.Fit([.. folds[fold].SelectMany(each => each.Samples)], setting, full.Model).Model))),
         ];
 
         return new Trial(full.Model, compared, SegmentMetrics.Of(compared, skipThreshold, SkipReturns.None));
@@ -146,10 +161,13 @@ public static class SegmentLearning
 
         public RecordingPieces Read(SegmentThresholds thresholds) => SegmentDetector.Read(recording.Evidence, context, thresholds);
 
-        public Labelled Labelled(SegmentThresholds thresholds)
+        public bool Hears(Learner other) => catalog.HearsTheAnswerOf(recording.Id, recording.StartedAt, other.Recording.Id);
+
+        public Labelled Labelled(SegmentThresholds thresholds, RecordingId? heldOut = null)
         {
-            RecordingPieces pieces = Read(thresholds);
-            IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces.Pieces, context, recording.Answer, recording.Actions);
+            SegmentContext heard = heldOut is null ? context : recording.Context.Hearing(catalog.HeardBy(recording.Id, recording.StartedAt, heldOut));
+            RecordingPieces pieces = SegmentDetector.Read(recording.Evidence, heard, thresholds);
+            IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces.Pieces, heard, recording.Answer, recording.Actions);
             string? series = pieces.Series is string named && SegmentModel.IsASeries(named) ? named : null;
             SegmentSample[] samples =
             [

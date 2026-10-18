@@ -36,7 +36,9 @@ public sealed record CatalogSound
 /// the stretches of recordings started no later than it count, so each entry it hears is estimated again
 /// from those (<see cref="CatalogKinds"/>), and one with fewer than two of them by then is not heard at
 /// all. The answer given on the recording itself is set aside, so that no recording is read with the
-/// answer it is learned or judged by.
+/// answer it is learned or judged by, and so is the answer of a recording held out, so that no label
+/// learned from stands on the answer the held-out recording is judged by: an entry its answer decided
+/// falls back to what the rest of its stretches say, and a stretch its answer gave a kind loses it.
 /// </summary>
 public sealed class LearningCatalog
 {
@@ -62,20 +64,35 @@ public sealed class LearningCatalog
 
     public static LearningCatalog Empty { get; } = new([], SeriesLinks.None);
 
-    public IReadOnlyList<CatalogHeard> HeardBy(RecordingId recording, DateTime startedAt)
+    public IReadOnlyList<CatalogHeard> HeardBy(RecordingId recording, DateTime startedAt, RecordingId? heldOut = null)
     {
         ArgumentNullException.ThrowIfNull(recording);
 
-        return [.. soundsIn[recording].SelectMany(sound => Heard(sound, recording, startedAt))];
+        return [.. soundsIn[recording].SelectMany(sound => Heard(sound, recording, startedAt, heldOut))];
     }
 
-    private IEnumerable<CatalogHeard> Heard(CatalogSound sound, RecordingId recording, DateTime startedAt)
+    /// <summary>
+    /// Whether what <paramref name="recording"/> hears stands on an answer given on a stretch of
+    /// <paramref name="answering"/>, another recording started no later than it.
+    /// </summary>
+    public bool HearsTheAnswerOf(RecordingId recording, DateTime startedAt, RecordingId answering)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(answering);
+
+        return !recording.Equals(answering)
+               && soundsIn[recording].Any(sound => sound.Occurrences.Any(placed => placed.Answer is not null
+                                                                                   && placed.Occurrence.RecordingId.Equals(answering)
+                                                                                   && placed.Occurrence.RecordingStartedAt <= startedAt));
+    }
+
+    private IEnumerable<CatalogHeard> Heard(CatalogSound sound, RecordingId recording, DateTime startedAt, RecordingId? heldOut)
     {
         PlacedOccurrence[] kept =
         [
             .. sound.Occurrences
                 .Where(placed => placed.Occurrence.RecordingStartedAt <= startedAt)
-                .Select(placed => placed.Occurrence.RecordingId.Equals(recording) ? placed with { Answer = null } : placed),
+                .Select(placed => SetsAside(placed, recording, heldOut) ? placed with { Answer = null } : placed),
         ];
 
         if (kept.Length < CatalogEntry.FewestOccurrences)
@@ -98,4 +115,7 @@ public sealed class LearningCatalog
                 pattern.StationCount,
                 pattern.Estimate.Confidence));
     }
+
+    private static bool SetsAside(PlacedOccurrence placed, RecordingId recording, RecordingId? heldOut)
+        => placed.Occurrence.RecordingId.Equals(recording) || placed.Occurrence.RecordingId.Equals(heldOut);
 }

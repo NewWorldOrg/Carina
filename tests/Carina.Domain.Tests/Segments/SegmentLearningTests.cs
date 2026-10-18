@@ -77,6 +77,24 @@ public sealed class SegmentLearningTests
         Assert.True(answeredEarlier.Evaluation.Metrics!.BoundaryRecallWithin2s > unanswered.Evaluation.Metrics!.BoundaryRecallWithin2s);
     }
 
+    [Fact(DisplayName = "no label of a later recording stands on the judged recording's answer through the catalog, and the same answer given on another recording raises the score")]
+    public void NoLaterLabelStandsOnTheJudgedAnswer()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> sounds) = Taught(Weeks, adverts: false);
+        RecordingId judged = RecordingId.New();
+        RecordingId later = RecordingId.New();
+        recordings.Add(Judged(judged, Weeks));
+        recordings.Add(Unanswered(later, Weeks + 1));
+        CatalogEntryId sting = CatalogEntryId.New();
+
+        SegmentLearned unanswered = Learn(recordings, [.. sounds, Sting(sting, judged, later, null, null)]);
+        SegmentLearned answeredByTheJudged = Learn(recordings, [.. sounds, Sting(sting, judged, later, SegmentKind.Break, null)]);
+        SegmentLearned answeredInBetween = Learn(recordings, [.. sounds, Sting(sting, judged, later, null, SegmentKind.Break)]);
+
+        Assert.Equal(Figures(unanswered.Evaluation.Metrics), Figures(answeredByTheJudged.Evaluation.Metrics));
+        Assert.True(answeredInBetween.Evaluation.Metrics!.BoundaryRecallWithin2s > unanswered.Evaluation.Metrics!.BoundaryRecallWithin2s);
+    }
+
     [Fact(DisplayName = "the version in use is judged on the same recordings beside the skips viewers made with its buttons in the last seven days, and a candidate has offered none")]
     public void TheVersionInUseIsJudgedOnTheSameRecordings()
     {
@@ -152,6 +170,16 @@ public sealed class SegmentLearningTests
 
     private static CatalogSound Sound(CatalogEntryId sound, RecordingId judged, SegmentKind? ownAnswer, SegmentKind? earlierAnswer)
         => new(sound, TimeSpan.FromSeconds(75), [Heard(sound, Story, Weeks, 450, 75, judged, ownAnswer), Heard(sound, StoryEarlier, Weeks, 100, 75, answer: earlierAnswer)]);
+
+    private static CatalogSound Sting(CatalogEntryId sound, RecordingId judged, RecordingId later, SegmentKind? judgedAnswer, SegmentKind? betweenAnswer)
+        => new(
+            sound,
+            TimeSpan.FromSeconds(29),
+            [
+                Heard(sound, Story, Weeks, 330.5, 29, judged, judgedAnswer),
+                Heard(sound, StoryEarlier, Weeks + 1, 330.5, 29, answer: betweenAnswer),
+                Heard(sound, Story, Weeks + 1, 330.5, 29, later),
+            ]);
 
     private static SegmentComparison Compared(LearningRecording recording, LearningCatalog catalog, SegmentModel model)
         => new(
