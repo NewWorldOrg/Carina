@@ -99,6 +99,58 @@ public sealed class FourKindVersionMigrationTests
         await context.Database.EnsureDeletedAsync(Cancel);
     }
 
+    [Fact(DisplayName = "BR-CD-008: the version of four kinds is numbered under the lock a round of learning keeps its candidate under, so a candidate kept the same night takes the number before it")]
+    public async Task TheVersionIsNumberedUnderTheLockOfTheRound()
+    {
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
+        await context.Database.EnsureDeletedAsync(Cancel);
+        IMigrator migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(BeforeTheVersionWasMade, Cancel);
+        Task migrated;
+
+        await using (NpgsqlConnection round = await OpenAsync())
+        {
+            await using NpgsqlTransaction keeping = await round.BeginTransactionAsync(Cancel);
+            await ExecuteAsync(round, $"SELECT pg_advisory_xact_lock({SegmentModelVersionRepository.WriterLock})");
+            await ExecuteAsync(round, Version(2, "'Candidate'", "NULL", "NULL", $"'{Learned}'"));
+
+            migrated = migrator.MigrateAsync(cancellationToken: Cancel);
+            await WaitingAsync();
+
+            Assert.False(migrated.IsCompleted);
+            await keeping.CommitAsync(Cancel);
+        }
+
+        await migrated;
+
+        await using (NpgsqlConnection after = await OpenAsync())
+        {
+            Assert.Equal("1:Retired 2:Candidate 3:Active", await StatesAsync(after));
+        }
+
+        await context.Database.EnsureDeletedAsync(Cancel);
+    }
+
+    /// <summary>
+    /// Waits until a session waits for an advisory lock another holds.
+    /// </summary>
+    private static async Task WaitingAsync()
+    {
+        await using NpgsqlConnection watching = await OpenAsync();
+
+        for (int look = 0; look < 200; look++)
+        {
+            if (await ScalarAsync(watching, "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted") is not "0")
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50), Cancel);
+        }
+
+        throw new TimeoutException("The migration never waited for the lock the round holds.");
+    }
+
     private static string Version(int number, string state, string adoptedAt, string chosenByHandAt, string evidence)
         => $"""
             INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, adopted_at, chosen_by_hand_at, evidence)
