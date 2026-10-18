@@ -64,7 +64,7 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
     {
         using HttpResponseMessage response = await Client.GetAsync(new Uri(SegmentStatusFeature.Path, UriKind.Relative));
         string body = await response.Content.ReadAsStringAsync();
-        using var document = JsonDocument.Parse(body);
+        using JsonDocument document = JsonDocument.Parse(body);
 
         return (response.StatusCode, document.RootElement.GetProperty("data").Clone());
     }
