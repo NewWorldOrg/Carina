@@ -10,8 +10,8 @@ namespace Carina.Infrastructure.Tests.Segments;
 
 /// <summary>
 /// Learning as a test sets it: what a candidate and the version in use came to on the confirmed recordings, or
-/// nothing to learn from, judged against the version in use as learning judges it; and what to do while
-/// learning, failing included.
+/// nothing to learn from, judged against the version in use as learning judges it; what to do while learning,
+/// failing included; and one boundary after it, where learning asks whether it may go on.
 /// </summary>
 internal sealed class HeldTrainer : ISegmentTrainer
 {
@@ -25,7 +25,12 @@ internal sealed class HeldTrainer : ISegmentTrainer
 
     public List<(int Active, double Threshold, DateTime Now)> Asked { get; } = [];
 
-    public async Task<SegmentLearned?> TrainAsync(SegmentModelVersion active, double skipThreshold, DateTime now, CancellationToken cancellationToken)
+    public async Task<Trained> TrainAsync(
+        SegmentModelVersion active,
+        double skipThreshold,
+        DateTime now,
+        Func<CancellationToken, Task<bool>> mayGoOn,
+        CancellationToken cancellationToken)
     {
         Asked.Add((active.Number, skipThreshold, now));
 
@@ -39,9 +44,14 @@ internal sealed class HeldTrainer : ISegmentTrainer
             throw failure;
         }
 
+        if (!await mayGoOn(cancellationToken))
+        {
+            return Trained.StoppedPartway;
+        }
+
         return Candidate is { } candidate
-            ? new SegmentLearned(SegmentModel.First, candidate, InUse, SegmentAdoption.Judge(active, InUse, candidate))
-            : null;
+            ? new Trained(new SegmentLearned(SegmentModel.First, candidate, InUse, SegmentAdoption.Judge(active, InUse, candidate)), false)
+            : Trained.NothingToLearnFrom;
     }
 }
 
@@ -101,6 +111,7 @@ internal sealed class SegmentTrainingHarness : IDisposable
             .AddSingleton<ISegmentModelVersionRepository>(Versions)
             .AddSingleton<ISkipEventRepository>(Skips)
             .AddSingleton<ISegmentLearningRoundRepository>(Rounds)
+            .AddSingleton<ILearningMaterialChanges>(Changes)
             .AddSingleton<ISegmentTrainer>(Trainer)
             .BuildServiceProvider();
         LearningAsync(true).GetAwaiter().GetResult();
@@ -119,6 +130,8 @@ internal sealed class SegmentTrainingHarness : IDisposable
     public HeldSegmentLearningRounds Rounds { get; } = new();
 
     public HeldTrainer Trainer { get; } = new();
+
+    public HeldLearningMaterialChanges Changes { get; } = new();
 
     public KeptLines<SegmentTrainingJob> Log { get; } = new();
 

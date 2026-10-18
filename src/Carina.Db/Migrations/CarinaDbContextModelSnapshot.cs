@@ -4051,6 +4051,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("date")
                         .HasColumnName("day");
 
+                    b.Property<int?>("Candidate")
+                        .HasColumnType("integer")
+                        .HasColumnName("candidate");
+
                     b.Property<DateTime>("TakenAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("taken_at");

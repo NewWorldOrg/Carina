@@ -12,29 +12,48 @@ namespace Carina.Infrastructure.Segments;
 public sealed record TrainingMaterial(IReadOnlyList<LearningRecording> Recordings, LearningCatalog Catalog);
 
 /// <summary>
+/// What learning came to: the candidate learned; or nothing, when there was nothing to learn from or learning
+/// stopped partway, what was done thrown away.
+/// </summary>
+public sealed record Trained(SegmentLearned? Learned, bool Stopped)
+{
+    public static Trained NothingToLearnFrom { get; } = new(null, false);
+
+    public static Trained StoppedPartway { get; } = new(null, true);
+}
+
+/// <summary>
 /// Learns a candidate beside the version in use.
 /// </summary>
 public interface ISegmentTrainer
 {
     /// <summary>
-    /// What learning against <paramref name="active"/> at <paramref name="now"/> made; none when there was
-    /// nothing to learn from.
+    /// What learning against <paramref name="active"/> at <paramref name="now"/> came to. Learning asks
+    /// <paramref name="mayGoOn"/> after each recording it reads and after each step it takes, and stops the
+    /// first time it is told no.
     /// </summary>
-    Task<SegmentLearned?> TrainAsync(SegmentModelVersion active, double skipThreshold, DateTime now, CancellationToken cancellationToken);
+    Task<Trained> TrainAsync(
+        SegmentModelVersion active,
+        double skipThreshold,
+        DateTime now,
+        Func<CancellationToken, Task<bool>> mayGoOn,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// Gathers what learning reads and learns from it with <see cref="SegmentLearning"/>. The recordings learned
-/// from are those whose learning data was read to its end or as far as it could be, whether or not the
-/// recording is still kept, that have an answer standing, a stretch the catalog heard in them or a skip event;
-/// each is read the way detection reads it (<see cref="SegmentDetecting.GatherAsync"/>), with the earlier
-/// episodes the version in use detected, and an answer not confirmed is read against the detection the version
-/// in use made of it. Every catalog entry is handed over with all its stretches, each placed in its programme
-/// beside the kind the answer on its recording gives it. A recording whose data cannot be read is left out and
-/// said so. The learning runs on the <see cref="LowestPriorityScheduler"/>. Nothing is written here.
+/// Gathers what learning reads and learns from it with <see cref="SegmentLearning"/>, a step at a time. The
+/// recordings learned from are those <see cref="LearningSelection"/> chooses among the candidates of
+/// <see cref="ITrainingWorklist"/>, read the way detection reads them (<see cref="SegmentDetecting.GatherAsync"/>),
+/// with the earlier episodes the version in use detected; only their answers and skip events are read, and an
+/// answer not confirmed is read against the detection the version in use made of it. Every catalog entry is handed
+/// over with all its stretches, each placed in its programme beside the kind the answer on its recording gives it,
+/// when that recording is one learned from. A recording whose data cannot be read is left out and said so. Each
+/// step of the learning is its own piece of work on the <see cref="LowestPriorityScheduler"/>, so that whatever
+/// else waits there goes between them. Nothing is written here.
 /// </summary>
 public sealed class SegmentTrainer(
     SegmentDetecting detecting,
+    ITrainingWorklist candidates,
     IDetectionWorklist worklist,
     ICatalogRepository catalog,
     ICatalogWorklist programmes,
@@ -45,44 +64,85 @@ public sealed class SegmentTrainer(
     SegmentTrainingSettings settings,
     ILogger<SegmentTrainer> logger) : ISegmentTrainer
 {
-    public async Task<SegmentLearned?> TrainAsync(SegmentModelVersion active, double skipThreshold, DateTime now, CancellationToken cancellationToken)
+    public async Task<Trained> TrainAsync(
+        SegmentModelVersion active,
+        double skipThreshold,
+        DateTime now,
+        Func<CancellationToken, Task<bool>> mayGoOn,
+        CancellationToken cancellationToken)
     {
-        TrainingMaterial material = await GatherAsync(active, now, cancellationToken);
+        ArgumentNullException.ThrowIfNull(mayGoOn);
+
+        if (await GatherAsync(active, now, mayGoOn, cancellationToken) is not { } material)
+        {
+            return Trained.StoppedPartway;
+        }
 
         if (material.Recordings.Count is 0)
         {
-            return null;
+            return Trained.NothingToLearnFrom;
         }
 
         SegmentSearch search = settings.Search;
-
-        return await lowest
-            .Run(() => SegmentLearning.Learn(material.Recordings, material.Catalog, active, search, skipThreshold, now), cancellationToken)
+        SegmentLearningRun run = await lowest
+            .Run(() => SegmentLearning.Begin(material.Recordings, material.Catalog, active, search, skipThreshold, now), cancellationToken)
             .WaitAsync(cancellationToken);
+        bool done = false;
+
+        while (!done)
+        {
+            done = await lowest.Run(() => run.Step(cancellationToken), cancellationToken).WaitAsync(cancellationToken);
+
+            if (!await mayGoOn(cancellationToken))
+            {
+                return Trained.StoppedPartway;
+            }
+        }
+
+        return new Trained(await lowest.Run(run.Result, cancellationToken).WaitAsync(cancellationToken), false);
     }
 
-    public async Task<TrainingMaterial> GatherAsync(SegmentModelVersion active, DateTime now, CancellationToken cancellationToken)
+    /// <summary>
+    /// What a round learns from; none when <paramref name="mayGoOn"/> said no after a recording was read.
+    /// </summary>
+    public async Task<TrainingMaterial?> GatherAsync(
+        SegmentModelVersion active,
+        DateTime now,
+        Func<CancellationToken, Task<bool>> mayGoOn,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(active);
+        ArgumentNullException.ThrowIfNull(mayGoOn);
 
-        RecordingAnswer[] standing = [.. (await answers.ListAsync(cancellationToken)).Where(answer => answer.Stands)];
-        ILookup<RecordingId, ViewerAction> actions = (await skips.ListAsync(cancellationToken)).ToLookup(skip => skip.RecordingId, skip => skip.Action());
-        IReadOnlyList<CatalogEntry> entries = await catalog.ListEntriesAsync(cancellationToken);
-        IReadOnlyList<CatalogOccurrence> occurrences = entries.Count is 0
-            ? []
-            : await catalog.OccurrencesOfAsync([.. entries.Select(entry => entry.Id)], cancellationToken);
+        RecordingId[] chosen = [.. LearningSelection.Choose(await candidates.CandidatesAsync(cancellationToken))];
+
+        if (chosen.Length is 0)
+        {
+            return new TrainingMaterial([], LearningCatalog.Empty);
+        }
+
+        RecordingAnswer[] standing = [.. (await answers.ListAsync(chosen, cancellationToken)).Where(answer => answer.Stands)];
+        ILookup<RecordingId, ViewerAction> actions = (await skips.ListAsync(chosen, cancellationToken)).ToLookup(skip => skip.RecordingId, skip => skip.Action());
         IReadOnlyDictionary<RecordingId, GivenAnswer> given = await GivenAsync(standing, active, cancellationToken);
-        RecordingId[] labelled = [.. given.Keys.Concat(actions.Select(group => group.Key)).Concat(occurrences.Select(occurrence => occurrence.RecordingId)).Distinct()];
-        IReadOnlyList<LearningExtraction> records = labelled.Length is 0 ? [] : await worklist.RecordsAsync(labelled, cancellationToken);
         List<LearningRecording> recordings = [];
 
-        foreach (LearningExtraction record in records.Where(record => record.ReadThrough > TimeSpan.Zero && record.Version is not null))
+        foreach (LearningExtraction record in (await worklist.RecordsAsync(chosen, cancellationToken)).Where(record => record.ReadThrough > TimeSpan.Zero && record.Version is not null))
         {
             if (await ReadAsync(record, active, now, given.GetValueOrDefault(record.RecordingId), [.. actions[record.RecordingId]], cancellationToken) is { } read)
             {
                 recordings.Add(read);
             }
+
+            if (!await mayGoOn(cancellationToken))
+            {
+                return null;
+            }
         }
+
+        IReadOnlyList<CatalogEntry> entries = await catalog.ListEntriesAsync(cancellationToken);
+        IReadOnlyList<CatalogOccurrence> occurrences = entries.Count is 0
+            ? []
+            : await catalog.OccurrencesOfAsync([.. entries.Select(entry => entry.Id)], cancellationToken);
 
         return new TrainingMaterial(recordings, await CatalogAsync(entries, occurrences, given, cancellationToken));
     }

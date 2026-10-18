@@ -172,17 +172,84 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Single(harness.Trainer.Asked);
     }
 
-    [Fact(DisplayName = "BR-CD-013: a candidate learned after learning was switched off is not kept and moves nothing")]
-    public async Task ACandidateLearnedAfterLearningWasSwitchedOffIsNotKept()
+    [Fact(DisplayName = "BR-CD-013: learning switched off while a round learns stops it at the next boundary, keeps nothing and moves nothing, and the round is taken again once learning is on")]
+    public async Task LearningSwitchedOffStopsTheRound()
     {
         harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 1.0, 1.5);
         harness.Trainer.WhileLearning = () => harness.LearningAsync(false);
 
+        SegmentTrainingLook stopped = await harness.Job().LookAsync(Cancel);
+        harness.Trainer.WhileLearning = null;
+        await harness.LearningAsync(true);
+        SegmentTrainingLook resumed = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal((SegmentTrainingOutcome.Stopped, (SpareTimeVerdict?)SpareTimeVerdict.LearningOff), (stopped.Round?.Outcome, stopped.Round?.StoppedBy));
+        Assert.Equal(SegmentTrainingOutcome.Adopted, resumed.Round?.Outcome);
+        Assert.Equal([2], harness.Versions.Added.Select(version => version.Number));
+        Assert.Single(harness.Rounds.Taken);
+    }
+
+    [Fact(DisplayName = "BR-CD-004: a recording starting while a round learns stops it at the next boundary, nothing kept and no day taken, and the round is taken again in spare time the same day")]
+    public async Task ARoundStoppedByARecordingIsTakenAgainTheSameDay()
+    {
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        harness.Trainer.WhileLearning = () =>
+        {
+            harness.Recording = true;
+
+            return Task.CompletedTask;
+        };
+
+        SegmentTrainingLook stopped = await harness.Job().LookAsync(Cancel);
+        SegmentTrainingLook busy = await harness.Job().LookAsync(Cancel);
+        harness.Trainer.WhileLearning = null;
+        harness.Recording = false;
+        harness.Clock.Turn(TimeSpan.FromHours(2));
+        SegmentTrainingLook resumed = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal((SegmentTrainingOutcome.Stopped, (SpareTimeVerdict?)SpareTimeVerdict.Recording), (stopped.Round?.Outcome, stopped.Round?.StoppedBy));
+        Assert.Equal(new SegmentTrainingLook(SpareTimeVerdict.Recording, null), busy);
+        Assert.Equal((SegmentTrainingOutcome.Kept, stopped.Round!.Day), (resumed.Round?.Outcome, resumed.Round?.Day));
+        Assert.Equal([2], harness.Versions.Added.Select(version => version.Number));
+        Assert.Equal([(stopped.Round.Day, (int?)2)], harness.Rounds.Taken.Select(round => (round.Day, round.Candidate)));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a round that rolls the version in use back keeps a better candidate but holds it out of use, and so do rounds for seven days after")]
+    public async Task ACandidateIsHeldOutAfterARollback()
+    {
+        await harness.SecondInUseAsync(daysAgo: 3);
+        DateTime adopted = harness.Versions.Active.AdoptedAt!.Value;
+        await harness.SkippedAsync(2, adopted.AddHours(1), skips: 25, returned: 10);
+        await harness.SkippedAsync(1, adopted.AddDays(-3), skips: 40, returned: 4);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.99, 0.5, 0.5);
+
+        SegmentTrainingLook rolledBack = await harness.Job().LookAsync(Cancel);
+        harness.Clock.Turn(TimeSpan.FromDays(6));
+        harness.Changes.LastChanged = harness.Now;
+        SegmentTrainingLook sixDaysOn = await harness.Job().LookAsync(Cancel);
+        harness.Clock.Turn(TimeSpan.FromDays(2));
+        harness.Changes.LastChanged = harness.Now;
+        SegmentTrainingLook eightDaysOn = await harness.Job().LookAsync(Cancel);
+
+        Assert.NotNull(rolledBack.Round?.Rollback);
+        Assert.Equal(
+            [(SegmentTrainingOutcome.HeldAfterRollback, (AdoptionVerdict?)AdoptionVerdict.HeldAfterRollback), (SegmentTrainingOutcome.HeldAfterRollback, AdoptionVerdict.HeldAfterRollback), (SegmentTrainingOutcome.Adopted, AdoptionVerdict.Adopted)],
+            new[] { rolledBack, sixDaysOn, eightDaysOn }.Select(look => (look.Round!.Outcome, look.Round.Verdict)));
+        Assert.Equal([3, 4, 5], harness.Versions.Added.Select(version => version.Number));
+        Assert.Equal(5, harness.Versions.Active.Number);
+    }
+
+    [Fact(DisplayName = "BR-CD-004: while another process takes a round, nothing is learned and no day is taken")]
+    public async Task NothingIsLearnedWhileAnotherProcessTakesARound()
+    {
+        harness.Rounds.HeldElsewhere = true;
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 1.0, 1.5);
+
         SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
 
-        Assert.Equal(SegmentTrainingOutcome.LearningSwitchedOff, look.Round?.Outcome);
-        Assert.Empty(harness.Versions.Added);
-        Assert.Equal(SegmentModelVersion.FirstNumber, harness.Versions.Active.Number);
+        Assert.Equal(new SegmentTrainingLook(null, null), look);
+        Assert.Empty(harness.Trainer.Asked);
+        Assert.Empty(harness.Rounds.Taken);
     }
 
     [Fact(DisplayName = "BR-CD-004: the day's round is taken once, not again after the process starts again, and again once the next day begins at three in the morning in Japan")]
@@ -192,6 +259,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
 
         SegmentTrainingLook first = await harness.Job().LookAsync(Cancel);
         harness.Clock.Turn(TimeSpan.FromHours(23));
+        harness.Changes.LastChanged = harness.Now;
         SegmentTrainingLook again = await harness.Job().LookAsync(Cancel);
         harness.Clock.Turn(TimeSpan.FromHours(1));
         SegmentTrainingLook nextDay = await harness.Job().LookAsync(Cancel);
@@ -200,6 +268,63 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal(new SegmentTrainingLook(null, null), again);
         Assert.Equal(first.Round!.Day.AddDays(1), nextDay.Round?.Day);
         Assert.Equal([2, 3], harness.Versions.Added.Select(version => version.Number));
+        Assert.Equal(2, harness.Trainer.Asked.Count);
+        Assert.Equal([2, 3], harness.Rounds.Taken.Select(round => round.Candidate));
+    }
+
+    [Fact(DisplayName = "BR-CD-004: with nothing changed since the last round that kept a candidate was taken, the next day's round still rolls back and is taken, says so, and learns nothing")]
+    public async Task NothingChangedLearnsNothing()
+    {
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        harness.Changes.LastChanged = SegmentTrainingHarness.Start.AddDays(-1);
+        await harness.Job().LookAsync(Cancel);
+        harness.Clock.Turn(TimeSpan.FromDays(1));
+        harness.Changes.LastChanged = SegmentTrainingHarness.Start;
+        DateTime adopted = harness.Now;
+        await harness.Versions.ChangeAsync(SegmentVersionChange.Adopting(2), adopted, Cancel);
+        await harness.SkippedAsync(2, adopted.AddMinutes(1), skips: 25, returned: 10);
+        await harness.SkippedAsync(1, adopted.AddDays(-3), skips: 40, returned: 4);
+        harness.Clock.Turn(TimeSpan.FromHours(1));
+
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal((SegmentTrainingOutcome.NothingNew, (SegmentModelVersion?)null), (look.Round?.Outcome, look.Round?.Candidate));
+        Assert.Equal(new SegmentRollback(0.4, 0.1, 25, 1), look.Round?.Rollback);
+        Assert.Equal([2], harness.Versions.Added.Select(version => version.Number));
+        Assert.Single(harness.Trainer.Asked);
+        Assert.Equal([(int?)2, null], harness.Rounds.Taken.Select(round => round.Candidate));
+        Assert.Contains(harness.Log.Lines, line => line.Level is LogLevel.Information && line.Line.Contains("learned nothing", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "BR-CD-004: something changed after the last round that kept a candidate was taken, even while it was learning, is learned from the next day")]
+    public async Task SomethingChangedSinceIsLearnedFrom()
+    {
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        harness.Trainer.WhileLearning = () =>
+        {
+            harness.Changes.LastChanged = harness.Now.AddSeconds(1);
+
+            return Task.CompletedTask;
+        };
+        await harness.Job().LookAsync(Cancel);
+        harness.Clock.Turn(TimeSpan.FromDays(1));
+
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal(SegmentTrainingOutcome.Kept, look.Round?.Outcome);
+        Assert.Equal([2, 3], harness.Versions.Added.Select(version => version.Number));
+    }
+
+    [Fact(DisplayName = "BR-CD-004: a round that kept no candidate does not hold the next day back, changed or not")]
+    public async Task ARoundThatKeptNoCandidateDoesNotHoldTheNextBack()
+    {
+        await harness.Job().LookAsync(Cancel);
+        harness.Clock.Turn(TimeSpan.FromDays(1));
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal(SegmentTrainingOutcome.Kept, look.Round?.Outcome);
         Assert.Equal(2, harness.Trainer.Asked.Count);
     }
 

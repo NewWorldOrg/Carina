@@ -39,6 +39,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
             .AddScoped(_ => database.Open())
             .AddScoped<ISegmentModelVersionRepository, SegmentModelVersionRepository>()
             .AddScoped<ISegmentLearningRoundRepository, SegmentLearningRoundRepository>()
+            .AddScoped<ILearningMaterialChanges, LearningMaterialChanges>()
             .AddScoped<ISkipEventRepository, SkipEventRepository>()
             .AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>()
             .AddScoped<ILearningSwitch, LearningSwitch>()
@@ -91,6 +92,24 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
             await ScalarAsync("SELECT concat_ws(' ', day::text, taken_at = '2026-11-01T18:30:00Z'::timestamptz) FROM segment_learning_round"));
     }
 
+    [Fact(DisplayName = "BR-CD-004: two rounds on days apart with nothing learning reads changed between them keep one candidate, and the second round is still taken")]
+    public async Task TwoRoundsOnUnchangedTablesKeepOneCandidate()
+    {
+        HandTurnedClock later = new(new DateTimeOffset(2036, 1, 1, 18, 30, 0, TimeSpan.Zero));
+        trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+
+        SegmentTrainingLook first = await Job(later).LookAsync(Cancel);
+        later.Turn(TimeSpan.FromDays(1));
+        SegmentTrainingLook second = await Job(later).LookAsync(Cancel);
+
+        Assert.Equal((SegmentTrainingOutcome.Kept, SegmentTrainingOutcome.NothingNew), (first.Round?.Outcome, second.Round?.Outcome));
+        Assert.Equal("72", await ScalarAsync($"SELECT string_agg(number::text, ' ') FROM segment_model_version WHERE {Ours} AND number <> 71"));
+        Assert.Equal(
+            "2036-01-02:72 2036-01-03:",
+            await ScalarAsync("SELECT string_agg(day::text || ':' || coalesce(candidate::text, ''), ' ' ORDER BY day) FROM segment_learning_round"));
+        Assert.Single(trainer.Asked);
+    }
+
     [Fact(DisplayName = "BR-CD-008: a rollback counted from the skip events kept goes back through the one change and is kept on the version left")]
     public async Task ARollbackCountedFromTheStoreGoesBack()
     {
@@ -116,7 +135,8 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
                 """));
     }
 
-    private SegmentTrainingJob Job() => new(provider.GetRequiredService<IServiceScopeFactory>(), SegmentTrainingSettings.Default, clock, new KeptLines<SegmentTrainingJob>());
+    private SegmentTrainingJob Job(TimeProvider? at = null)
+        => new(provider.GetRequiredService<IServiceScopeFactory>(), SegmentTrainingSettings.Default, at ?? clock, new KeptLines<SegmentTrainingJob>());
 
     private async Task SkippedAsync(int version, DateTime from, int skips, int returned)
     {

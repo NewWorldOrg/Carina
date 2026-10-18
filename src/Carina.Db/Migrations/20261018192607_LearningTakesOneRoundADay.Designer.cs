@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    [Migration("20261018185117_LearningTakesOneRoundADay")]
+    [Migration("20261018192607_LearningTakesOneRoundADay")]
     partial class LearningTakesOneRoundADay
     {
         /// <inheritdoc />
@@ -4053,6 +4053,10 @@ namespace Carina.Db.Migrations
                     b.Property<DateOnly>("Day")
                         .HasColumnType("date")
                         .HasColumnName("day");
+
+                    b.Property<int?>("Candidate")
+                        .HasColumnType("integer")
+                        .HasColumnName("candidate");
 
                     b.Property<DateTime>("TakenAt")
                         .HasColumnType("timestamp with time zone")

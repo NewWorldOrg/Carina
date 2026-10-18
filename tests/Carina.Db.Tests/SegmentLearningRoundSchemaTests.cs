@@ -38,6 +38,37 @@ public sealed class SegmentLearningRoundSchemaTests(MigratedScratchDatabase data
             await ScalarAsync("SELECT concat_ws(' ', count(*), bool_and(taken_at = '2026-09-02T10:30:00Z'::timestamptz)) FROM segment_learning_round WHERE day = '2026-09-02'"));
     }
 
+    [Fact(DisplayName = "BR-CD-004: a round is kept with the candidate it kept, and the last round that kept one is the latest so kept")]
+    public async Task ARoundIsKeptWithTheCandidateItKept()
+    {
+        DateTime first = new(2026, 9, 5, 10, 30, 0, DateTimeKind.Utc);
+        await TakeAsync(SegmentLearningRound.Taken(first, 2));
+        await TakeAsync(SegmentLearningRound.Taken(first.AddDays(1), 3));
+        await TakeAsync(SegmentLearningRound.Taken(first.AddDays(2)));
+
+        Assert.Equal(first.AddDays(1), await LastLearnedAsync());
+        Assert.Equal(
+            "2 3 NULL",
+            await ScalarAsync("SELECT string_agg(coalesce(candidate::text, 'NULL'), ' ' ORDER BY day) FROM segment_learning_round WHERE day BETWEEN '2026-09-05' AND '2026-09-07'"));
+    }
+
+    [Fact(DisplayName = "BR-CD-004: one process holds the turn to take a round at a time, without waiting, until it lets go")]
+    public async Task OneProcessHoldsTheTurnAtATime()
+    {
+        await using CarinaDbContext first = Context();
+        await using CarinaDbContext second = Context();
+        await using CarinaDbContext third = Context();
+
+        IAsyncDisposable? held = await new SegmentLearningRoundRepository(first).HoldAsync(Cancel);
+        IAsyncDisposable? meanwhile = await new SegmentLearningRoundRepository(second).HoldAsync(Cancel);
+        await held!.DisposeAsync();
+        await using IAsyncDisposable? after = await new SegmentLearningRoundRepository(third).HoldAsync(Cancel);
+
+        Assert.NotNull(held);
+        Assert.Null(meanwhile);
+        Assert.NotNull(after);
+    }
+
     [Fact(DisplayName = "the rounds go back with the migration that made them and come forward again empty")]
     public async Task TheRoundsGoBackAndComeForwardAgain()
     {
@@ -98,6 +129,13 @@ public sealed class SegmentLearningRoundSchemaTests(MigratedScratchDatabase data
         await using CarinaDbContext context = Context();
 
         return await new SegmentLearningRoundRepository(context).TakenAsync(day, Cancel);
+    }
+
+    private async Task<DateTime?> LastLearnedAsync()
+    {
+        await using CarinaDbContext context = Context();
+
+        return await new SegmentLearningRoundRepository(context).LastLearnedAsync(Cancel);
     }
 
     private async Task<bool> TakeAsync(SegmentLearningRound round)

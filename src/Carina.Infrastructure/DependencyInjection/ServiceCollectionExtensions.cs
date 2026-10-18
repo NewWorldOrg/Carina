@@ -209,6 +209,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDetectionWorklist, DetectionWorklist>();
         services.AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>();
         services.AddScoped<ISegmentLearningRoundRepository, SegmentLearningRoundRepository>();
+        services.AddScoped<ILearningMaterialChanges, LearningMaterialChanges>();
+        services.AddScoped<ITrainingWorklist, TrainingWorklist>();
         services.AddScoped<IMigrationRecordRepository, MigrationRecordRepository>();
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
         services.AddScoped<IEncodeDestinationRepository, EncodeDestinationRepository>();

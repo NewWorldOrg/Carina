@@ -39,6 +39,7 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
             services.AddSingleton<ISkipEventRepository>(new HeldSkipEvents());
             services.AddSingleton<ISegmentAnswerRepository>(new HeldSegmentAnswers());
             services.AddSingleton<ISegmentLearningRoundRepository>(new HeldSegmentLearningRounds());
+            services.AddSingleton<ILearningMaterialChanges>(new HeldLearningMaterialChanges());
             services.AddSingleton<IOccupancyReader>(new SegmentVersionFeature.Unoccupied());
             services.AddSingleton<ISegmentTrainer>(Trainer);
         }));
@@ -92,8 +93,13 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
                 new EvaluationEvidence(confirmed, 148, Now.AddDays(-1)),
                 0.65);
 
-        public Task<SegmentLearned?> TrainAsync(SegmentModelVersion active, double skipThreshold, DateTime now, CancellationToken cancellationToken)
-            => Task.FromResult<SegmentLearned?>(new SegmentLearned(SegmentModel.First, Candidate, InUse, SegmentAdoption.Judge(active, InUse, Candidate)));
+        public Task<Trained> TrainAsync(
+            SegmentModelVersion active,
+            double skipThreshold,
+            DateTime now,
+            Func<CancellationToken, Task<bool>> mayGoOn,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new Trained(new SegmentLearned(SegmentModel.First, Candidate, InUse, SegmentAdoption.Judge(active, InUse, Candidate)), false));
     }
 }
 

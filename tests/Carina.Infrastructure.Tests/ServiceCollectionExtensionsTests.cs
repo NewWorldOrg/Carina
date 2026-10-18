@@ -475,6 +475,8 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Same(SegmentTrainingSettings.Default, provider.GetRequiredService<SegmentTrainingSettings>());
         Assert.IsType<SegmentLearningRoundRepository>(scope.ServiceProvider.GetRequiredService<ISegmentLearningRoundRepository>());
         Assert.IsType<SegmentTrainer>(scope.ServiceProvider.GetRequiredService<ISegmentTrainer>());
+        Assert.IsType<LearningMaterialChanges>(scope.ServiceProvider.GetRequiredService<ILearningMaterialChanges>());
+        Assert.IsType<TrainingWorklist>(scope.ServiceProvider.GetRequiredService<ITrainingWorklist>());
         Assert.Contains(
             provider.GetServices<IHostedService>(),
             service => ReferenceEquals(service, provider.GetRequiredService<SegmentTrainingJob>()));

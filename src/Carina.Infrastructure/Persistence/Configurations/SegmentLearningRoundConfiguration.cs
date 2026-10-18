@@ -7,7 +7,8 @@ namespace Carina.Infrastructure.Persistence.Configurations;
 
 /// <summary>
 /// The rounds of learning taken, one row per day, so that a round already taken is not taken again after the
-/// process starts again.
+/// process starts again, each with the candidate it kept, so that a round knows what is new since the last one
+/// that learned.
 /// </summary>
 public sealed class SegmentLearningRoundConfiguration : IEntityTypeConfiguration<SegmentLearningRound>
 {
@@ -27,5 +28,7 @@ public sealed class SegmentLearningRoundConfiguration : IEntityTypeConfiguration
             .ValueGeneratedNever();
 
         builder.Property(round => round.TakenAt).IsRequired();
+
+        builder.Property(round => round.Candidate).HasColumnName("candidate");
     }
 }

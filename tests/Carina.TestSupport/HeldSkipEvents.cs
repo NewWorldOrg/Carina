@@ -1,3 +1,4 @@
+using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
 namespace Carina.TestSupport;
@@ -42,8 +43,8 @@ public sealed class HeldSkipEvents : ISkipEventRepository
         }
     }
 
-    public Task<IReadOnlyList<SkipEvent>> ListAsync(CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<SkipEvent>>([.. Taken.OrderBy(skip => skip.HappenedAt).ThenBy(skip => skip.Id)]);
+    public Task<IReadOnlyList<SkipEvent>> ListAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<SkipEvent>>([.. Taken.Where(skip => recordings.Contains(skip.RecordingId)).OrderBy(skip => skip.HappenedAt).ThenBy(skip => skip.Id)]);
 
     public Task<SkipReturns> ReturnsAsync(int modelVersion, DateTime from, DateTime until, CancellationToken cancellationToken)
         => Task.FromResult(SkipReturns.Of(

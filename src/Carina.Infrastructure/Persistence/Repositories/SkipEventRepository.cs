@@ -1,3 +1,4 @@
+using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
 using Microsoft.EntityFrameworkCore;
@@ -33,12 +34,19 @@ public sealed class SkipEventRepository(CarinaDbContext context) : ISkipEventRep
             cancellationToken) is 1;
     }
 
-    public async Task<IReadOnlyList<SkipEvent>> ListAsync(CancellationToken cancellationToken)
-        => await context.Set<SkipEvent>()
+    public async Task<IReadOnlyList<SkipEvent>> ListAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recordings);
+
+        RecordingId[] named = [.. recordings];
+
+        return await context.Set<SkipEvent>()
             .AsNoTracking()
+            .Where(skip => named.Contains(skip.RecordingId))
             .OrderBy(skip => skip.HappenedAt)
             .ThenBy(skip => skip.Id)
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<SkipReturns> ReturnsAsync(int modelVersion, DateTime from, DateTime until, CancellationToken cancellationToken)
     {

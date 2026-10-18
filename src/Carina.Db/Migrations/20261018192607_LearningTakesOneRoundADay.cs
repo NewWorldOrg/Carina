@@ -20,6 +20,7 @@ public partial class LearningTakesOneRoundADay : Migration
             {
                 day = table.Column<DateOnly>(type: "date", nullable: false),
                 taken_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                candidate = table.Column<int>(type: "integer", nullable: true),
             },
             constraints: table =>
             {
