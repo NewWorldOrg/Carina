@@ -15,7 +15,9 @@ public sealed record RecordedCorners(SeriesMember Member, ReadOnlyMemory<byte> O
 /// Shapes sharing at least <see cref="SameShape"/> of their blocks are one shape, kept when at least
 /// <see cref="FewestRecordings"/> recordings drew it, as the blocks on in at least half of them. A station
 /// may keep several shapes, as its logo changes with the season. A second shows the logo when at least
-/// <see cref="SeenShare"/> of the blocks of one of the shapes are on.
+/// <see cref="SeenShare"/> of the blocks of one of the shapes are on. A logo seen in at least
+/// <see cref="NearlyEverywhere"/> of a recording's seconds, or in no more than <see cref="NearlyNowhere"/>
+/// of them, tells programme from break nowhere in it.
 /// </summary>
 public sealed class CornerLogo
 {
@@ -32,6 +34,10 @@ public sealed class CornerLogo
     public const int FewestRecordings = 2;
 
     public const double SeenShare = 0.5;
+
+    public const double NearlyEverywhere = 0.95;
+
+    public const double NearlyNowhere = 0.05;
 
     private readonly int[][] shapes;
 
@@ -93,6 +99,23 @@ public sealed class CornerLogo
         }
 
         return seen;
+    }
+
+    /// <summary>
+    /// Whether each second of <paramref name="outlines"/> shows the logo, when that tells programme from
+    /// break; null when there is no logo, nothing to look at, or it is seen nearly everywhere or nowhere.
+    /// </summary>
+    public bool[]? Telling(ReadOnlySpan<byte> outlines)
+    {
+        if (shapes.Length is 0 || outlines.IsEmpty)
+        {
+            return null;
+        }
+
+        bool[] seen = Sightings(outlines);
+        double share = seen.Count(second => second) / (double)seen.Length;
+
+        return share is >= NearlyEverywhere or <= NearlyNowhere ? null : seen;
     }
 
     private static bool IsEarlierOnTheStation(SeriesMember member, SeriesMember judged)

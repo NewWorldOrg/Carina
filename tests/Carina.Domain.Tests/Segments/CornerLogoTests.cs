@@ -106,6 +106,18 @@ public sealed class CornerLogoTests
         Assert.Equal(CornerLogo.Learn(Judged, recordings).Sightings(judged), CornerLogo.Learn(Judged, recordings.Reverse()).Sightings(judged));
     }
 
+    [Fact(DisplayName = "a logo on screen in nearly every second or in nearly none tells programme from break nowhere, and no logo tells nothing")]
+    public void ALogoEverywhereOrNowhereTellsNothing()
+    {
+        CornerLogo logo = CornerLogo.Learn(Judged, [Recorded(Member(1, Evening.AddDays(-7)), TopRight, 1), Recorded(Member(1, Evening.AddDays(-1)), TopRight, 2)]);
+
+        Assert.Null(logo.Telling(Drawn(Seconds, TopRight, second => second >= 29, 3)));
+        Assert.Null(logo.Telling(Drawn(Seconds, TopRight, second => second < 30, 3)));
+        Assert.Null(CornerLogo.None.Telling(Drawn(Seconds, TopRight, second => second < 300, 3)));
+        Assert.Null(logo.Telling([]));
+        Assert.Equal(logo.Sightings(Drawn(Seconds, TopRight, second => second >= 31, 3)), logo.Telling(Drawn(Seconds, TopRight, second => second >= 31, 3)));
+    }
+
     [Fact(DisplayName = "outlines that are not whole seconds of corners are refused")]
     public void BrokenOutlinesAreRefused()
         => Assert.Throws<ArgumentException>(() => CornerLogo.None.Sightings(new byte[CornerOutline.Bytes + 1]));
