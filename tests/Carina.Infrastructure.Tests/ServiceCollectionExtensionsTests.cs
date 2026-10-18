@@ -425,6 +425,8 @@ public sealed class ServiceCollectionExtensionsTests
         using ServiceProvider provider = Build(ValidSettings());
 
         Assert.Same(CatalogMatchingSettings.Default, provider.GetRequiredService<CatalogMatchingSettings>());
+        Assert.Same(provider.GetRequiredService<FollowedToTheEnd>(), provider.GetRequiredService<FollowedToTheEnd>());
+        Assert.Same(provider.GetRequiredService<LowestPriorityScheduler>(), provider.GetRequiredService<LowestPriorityScheduler>());
         Assert.Contains(
             provider.GetServices<IHostedService>(),
             service => ReferenceEquals(service, provider.GetRequiredService<CatalogMatchingJob>()));

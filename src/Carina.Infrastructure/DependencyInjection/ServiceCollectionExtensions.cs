@@ -414,6 +414,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CaptionJob>();
         services.AddSingleton<DataBroadcastJob>();
         services.TryAddSingleton(LearningFollowSettings.Default);
+        services.TryAddSingleton<FollowedToTheEnd>();
+        services.TryAddSingleton<LowestPriorityScheduler>();
         services.TryAddSingleton<LearningRecords>();
         services.TryAddSingleton<ILearningFollower, FfmpegLearningFollower>();
         services.AddSingleton<LearningFollowJob>();

@@ -31,12 +31,15 @@ public sealed record LearningLook(int Recovered, int Began, int Stopped, int Wai
 /// recording being written gets a waiting record with the copy of its programme, and the follows
 /// running when learning was switched off are stopped, their chunks kept and their records put back
 /// to waiting. While learning is on, a recording being written whose file is there is followed from
-/// its head, its record made following, and a follow is told when its recording ends or goes. Stopping
-/// the process stops every follow and leaves its record for the next start.
+/// its head, its record made following, and a follow is told when its recording ends or goes. A follow that
+/// comes to its end, rather than being stopped, is told to the matching against the catalog
+/// (<see cref="FollowedToTheEnd"/>). Stopping the process stops every follow and leaves its record for the
+/// next start.
 /// </summary>
 public sealed class LearningFollowJob(
     IServiceScopeFactory scopes,
     ILearningFollower follower,
+    FollowedToTheEnd finished,
     LearningRecords records,
     IntegritySettings mounts,
     LearningFollowSettings settings,
@@ -285,9 +288,19 @@ public sealed class LearningFollowJob(
     {
         FollowedRecording followed = new(recording.Id, source, recording.ServiceId, ExtractionVersion.Current);
         CancellationTokenSource stopping = new();
-        Task running = Task.Run(() => follower.FollowAsync(followed, stopping.Token), CancellationToken.None);
+        Task running = Task.Run(() => FollowToTheEndAsync(followed, stopping.Token), CancellationToken.None);
 
         follows[recording.Id] = new Follow(followed, stopping, running);
+    }
+
+    private async Task FollowToTheEndAsync(FollowedRecording followed, CancellationToken cancellationToken)
+    {
+        await follower.FollowAsync(followed, cancellationToken);
+
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            finished.Tell(followed.Id);
+        }
     }
 
     private void Reap()

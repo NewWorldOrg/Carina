@@ -134,6 +134,7 @@ internal sealed class CatalogMatchingHarness : IDisposable
             .AddScoped<IOccupancyReader, OccupancyReader>()
             .AddSingleton<ICatalogWorklist>(Worklist)
             .AddSingleton<ICatalogRepository>(Catalog)
+            .AddSingleton(Lowest)
             .AddScoped<CatalogMatching>()
             .BuildServiceProvider();
 
@@ -154,13 +155,18 @@ internal sealed class CatalogMatchingHarness : IDisposable
 
     public LearningRecords Store { get; }
 
+    public LowestPriorityScheduler Lowest { get; } = new();
+
+    public FollowedToTheEnd Followed { get; } = new();
+
     public bool Recording { get; set; }
 
-    public CatalogMatchingJob Job()
+    public CatalogMatchingJob Job(CatalogMatchingSettings? settings = null)
         => new(
             provider.GetRequiredService<IServiceScopeFactory>(),
             Store,
-            CatalogMatchingSettings.Default,
+            Followed,
+            settings ?? CatalogMatchingSettings.Default,
             new FixedClock(Now),
             NullLogger<CatalogMatchingJob>.Instance);
 
@@ -232,7 +238,11 @@ internal sealed class CatalogMatchingHarness : IDisposable
         return id;
     }
 
-    public void Dispose() => provider.Dispose();
+    public void Dispose()
+    {
+        provider.Dispose();
+        Lowest.Dispose();
+    }
 
     private sealed class FixedClock(DateTime at) : TimeProvider
     {

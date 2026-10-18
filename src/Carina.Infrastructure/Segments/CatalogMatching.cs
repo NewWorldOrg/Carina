@@ -11,10 +11,11 @@ public sealed record CatalogMatched(RecordingId Recording, int Matches, CatalogC
 /// <summary>
 /// Matches the learning data of one recording against every catalog entry, against the stretches of the
 /// recordings started within the window around it that no entry explains yet, and against itself, one
-/// recording's data read at a time; then works out what the matches change in the catalog. Nothing is
-/// written here.
+/// recording's data read at a time; then works out what the matches change in the catalog. The counting is
+/// done on the <see cref="LowestPriorityScheduler"/>, so that it gives way to everything else the machine
+/// does. Nothing is written here.
 /// </summary>
-public sealed class CatalogMatching(ICatalogWorklist worklist, ICatalogRepository catalog)
+public sealed class CatalogMatching(ICatalogWorklist worklist, ICatalogRepository catalog, LowestPriorityScheduler lowest)
 {
     public async Task<CatalogMatched> MatchAsync(
         LearningExtraction heard,
@@ -26,12 +27,14 @@ public sealed class CatalogMatching(ICatalogWorklist worklist, ICatalogRepositor
 
         RecordingId id = heard.RecordingId;
         SoundTrack sound = await worklist.SoundAsync(id, cancellationToken);
-        SegmentMatcher matcher = SegmentMatcher.For(sound);
+        SegmentMatcher matcher = await lowest.Run(() => SegmentMatcher.For(sound), cancellationToken);
         IReadOnlyList<CatalogEntry> entries = await catalog.ListEntriesAsync(cancellationToken);
-        List<SoundMatch> matches = [.. entries.SelectMany(entry => matcher.Against(new EntrySound(entry.Id), entry.Frames(), []))];
+        List<SoundMatch> matches = await lowest.Run(
+            () => entries.SelectMany(entry => matcher.Against(new EntrySound(entry.Id), entry.Frames(), [])).ToList(),
+            cancellationToken);
 
         matches.AddRange(await AgainstRecordingsAsync(matcher, heard, around, cancellationToken));
-        matches.AddRange(matcher.AgainstItself(new RecordedSound(id)));
+        matches.AddRange(await lowest.Run(() => matcher.AgainstItself(new RecordedSound(id)), cancellationToken));
 
         HashSet<CatalogEntryId> named = [.. matches.Select(match => match.Other).OfType<EntrySound>().Select(entry => entry.Entry)];
         IReadOnlyList<CatalogOccurrence> occurrences = await catalog.OccurrencesOfAsync(named, cancellationToken);
@@ -48,7 +51,7 @@ public sealed class CatalogMatching(ICatalogWorklist worklist, ICatalogRepositor
             await worklist.ProgrammesAsync(involved, cancellationToken),
             SeriesLinks.SharingSound(await catalog.FixtureSharersAsync(cancellationToken)));
 
-        return new CatalogMatched(id, matches.Count, Catalog.Absorb(id, sound, matches, known, at));
+        return new CatalogMatched(id, matches.Count, await lowest.Run(() => Catalog.Absorb(id, sound, matches, known, at), cancellationToken));
     }
 
     private async Task<List<SoundMatch>> AgainstRecordingsAsync(
@@ -67,8 +70,9 @@ public sealed class CatalogMatching(ICatalogWorklist worklist, ICatalogRepositor
             cancellationToken.ThrowIfCancellationRequested();
 
             SoundTrack there = await worklist.SoundAsync(other.RecordingId, cancellationToken);
+            SoundSpan[] explaining = [.. explained[other.RecordingId]];
 
-            matches.AddRange(matcher.Against(new RecordedSound(other.RecordingId), there.Fingerprints, [.. explained[other.RecordingId]]));
+            matches.AddRange(await lowest.Run(() => matcher.Against(new RecordedSound(other.RecordingId), there.Fingerprints, explaining), cancellationToken));
         }
 
         return matches;
