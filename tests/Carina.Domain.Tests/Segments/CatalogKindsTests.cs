@@ -262,6 +262,17 @@ public sealed class CatalogKindsTests
         Assert.Equal([null, null, null, SegmentKind.Ending], pattern.Overrides);
     }
 
+    [Fact(DisplayName = "BR-CD-005: the opening sung in the middle of an episode of its series, an insert song, is the programme there, and the series' opening still")]
+    public void TheOpeningInTheMiddleOfAnEpisodeIsTheProgramme()
+    {
+        PlacedOccurrence inserted = At(Entry, Drama.Episode(2), Midpoint - 120, 89);
+
+        CatalogPattern pattern = Estimated(89, [.. Weekly(Drama, 2, 0, 89), inserted]);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), pattern.Estimate);
+        Assert.Equal([null, null, SegmentKind.Programme], pattern.Overrides);
+    }
+
     [Fact(DisplayName = "a last episode with another opening leaves the series' opening as it was, and an ending sung at the start of the first episode is its opening")]
     public void ALastEpisodeWithAnotherOpeningLeavesTheSeriesOpening()
     {

@@ -39,8 +39,9 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// before the advert of two stations, so that a series whose opening fills a slot on the grid, broadcast
 /// on two stations, keeps its opening. When the entry is an opening or an ending, a whole stretch in a
 /// series that hears it so is taken for the kind of the place it is heard at, so that the opening sung at
-/// the end of a last episode is that episode's ending, and a shorter one on the grid heard outside those
-/// series is an advert there, the song played in another series' break.
+/// the end of a last episode is that episode's ending and one sung in the middle of an episode, an insert
+/// song, is the programme there, and a shorter one on the grid heard outside those series is an advert
+/// there, the song played in another series' break.
 /// </para>
 /// </summary>
 public static class CatalogKinds
@@ -350,11 +351,18 @@ public static class CatalogKinds
 
         return (IsWhole(placed.Occurrence.Length, length), atHome) switch
         {
-            (true, true) => PlaceOf(placed) is CatalogKind place && place != kind ? CatalogHeard.CountsAs(place) : null,
+            (true, true) => ByPlace(placed, kind),
             (false, false) => OnTheGrid(placed.Occurrence.Length) ? SegmentKind.Break : null,
             _ => null,
         };
     }
+
+    private static SegmentKind? ByPlace(PlacedOccurrence placed, CatalogKind kind) => PlaceOf(placed) switch
+    {
+        CatalogKind.Unknown => SegmentKind.Programme,
+        CatalogKind place when place != kind => CatalogHeard.CountsAs(place),
+        _ => null,
+    };
 
     private sealed record Theme(CatalogKind Kind, IReadOnlyList<PlacedOccurrence> Own, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> Series, bool Prevails);
 }
