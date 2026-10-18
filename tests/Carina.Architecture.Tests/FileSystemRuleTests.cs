@@ -18,6 +18,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Domain/Segments/PictureReader.cs .CopyTo(",
         "/Carina.Domain/Segments/SeriesNames.cs .Replace(",
         "/Carina.Domain/Segments/SoundSpectrum.cs .CopyTo(",
+        "/Carina.Domain/Segments/SoundTrack.cs .CopyTo(",
         "/Carina.Domain/Streaming/LiveCaptions.cs .CopyTo(",
         "/Carina.Domain/Streaming/LiveFrame.cs .CopyTo(",
         "/Carina.Driver/Configuration/AtomicFile.cs File.Delete",
