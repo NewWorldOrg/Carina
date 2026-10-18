@@ -23,8 +23,8 @@ public sealed class SegmentStatusService(
     ICatalogCountsReader catalog,
     ISegmentModelVersionRepository versions,
     ISegmentSettingsRepository settings,
-    ISkipReturnsReader skips,
-    IAnswerEvidenceReader answers,
+    ISkipEventRepository skips,
+    ISegmentAnswerRepository answers,
     TimeProvider clock)
 {
     public async Task<ServiceResult<SegmentStatus>> ReadAsync(CancellationToken cancellationToken)
@@ -38,7 +38,7 @@ public sealed class SegmentStatusService(
             await catalog.ReadAsync(cancellationToken),
             active,
             await MetricsAsync(active, cancellationToken),
-            kept.FirstOrDefault(version => version.Evidence is not null)?.Evidence ?? await answers.ReadAsync(cancellationToken),
+            kept.FirstOrDefault(version => version.Evidence is not null)?.Evidence ?? await answers.EvidenceAsync(cancellationToken),
             kept));
     }
 
@@ -51,6 +51,6 @@ public sealed class SegmentStatusService(
 
         DateTime now = clock.GetUtcNow().UtcDateTime;
 
-        return evaluated.WithReturns(await skips.ReadAsync(active.Number, now - SegmentLearning.ReturnsOver, now, cancellationToken));
+        return evaluated.WithReturns(await skips.ReturnsAsync(active.Number, now - SegmentLearning.ReturnsOver, now, cancellationToken));
     }
 }

@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Carina.Domain.Channels;
+using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.TestSupport;
 
@@ -31,8 +32,8 @@ internal sealed class SegmentStatusFeature : IAsyncDisposable
             services.AddSingleton<ICatalogCountsReader>(Catalog);
             services.AddSingleton<ISegmentModelVersionRepository>(Versions);
             services.AddSingleton<ISegmentSettingsRepository>(Settings);
-            services.AddSingleton<ISkipReturnsReader>(Skips);
-            services.AddSingleton<IAnswerEvidenceReader>(Answers);
+            services.AddSingleton<ISkipEventRepository>(Skips);
+            services.AddSingleton<ISegmentAnswerRepository>(Answers);
             services.AddSingleton<TimeProvider>(new MovingClock(Now));
         }));
 
@@ -52,9 +53,9 @@ internal sealed class SegmentStatusFeature : IAsyncDisposable
 
     public HeldSegmentSettings Settings { get; } = new();
 
-    public HeldSkipReturns Skips { get; } = new();
+    public HeldSkipEvents Skips { get; } = new();
 
-    public HeldAnswerEvidence Answers { get; } = new();
+    public HeldSegmentAnswers Answers { get; } = new();
 
     public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
 
@@ -207,7 +208,9 @@ public sealed class SegmentStatusEndpointTests
     public async Task WithNoVersionEvaluatedTheEvidenceIsWhatTheAnswersGive()
     {
         await using var feature = new SegmentStatusFeature();
-        feature.Answers.Evidence = new EvaluationEvidence(4, 40, null);
+        await AnsweredAsync(feature, 4, confirmed: true);
+        await AnsweredAsync(feature, 1, confirmed: false);
+        await AnsweredAsync(feature, 1, confirmed: true, withdrawn: true);
 
         (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
         JsonElement evidence = data.GetProperty("evidence");
@@ -226,8 +229,6 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(["current", "recommended"], Names(data.GetProperty("skipThreshold")));
         Assert.Equal(0.70, data.GetProperty("skipThreshold").GetProperty("current").GetDouble());
         Assert.Equal(JsonValueKind.Null, data.GetProperty("skipThreshold").GetProperty("recommended").ValueKind);
-        Assert.Equal(1, feature.Answers.Reads);
-        Assert.Empty(feature.Skips.Asked);
     }
 
     [Fact(DisplayName = "BR-CD-008: with the version in use evaluated, its figures are answered beside what viewers did with its buttons over the last seven days, by station, with every version's history and the threshold it recommends")]
@@ -240,7 +241,12 @@ public sealed class SegmentStatusEndpointTests
         feature.Versions.Others.Add(Version(2, SegmentModelVersionState.Retired, trained.AddDays(-7), trained.AddDays(-7), trained.AddMinutes(5), Evaluation(0.9, 11, 0.7), new SegmentRollback(0.09, 0.03, 25, 1)));
         feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained.AddDays(-7), null, null));
         await feature.Settings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, true, trained, 0.6, trained), CancellationToken.None);
-        feature.Skips.ByVersion[3] = new SkipReturns(64, 2);
+        await AnsweredAsync(feature, 1, confirmed: true);
+        await SkippedAsync(feature, 3, ViewerActionKind.Skipped, 64, SegmentStatusFeature.Now.AddDays(-1));
+        await SkippedAsync(feature, 3, ViewerActionKind.Returned, 2, SegmentStatusFeature.Now.AddDays(-6));
+        await SkippedAsync(feature, 3, ViewerActionKind.Dismissed, 5, SegmentStatusFeature.Now.AddDays(-1));
+        await SkippedAsync(feature, 3, ViewerActionKind.Returned, 9, SegmentStatusFeature.Now.AddDays(-8));
+        await SkippedAsync(feature, 2, ViewerActionKind.Returned, 9, SegmentStatusFeature.Now.AddDays(-1));
 
         (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
         JsonElement metrics = data.GetProperty("metrics");
@@ -258,7 +264,6 @@ public sealed class SegmentStatusEndpointTests
         JsonElement kind = Assert.Single(metrics.GetProperty("kinds").EnumerateArray());
         Assert.Equal(("break", 0.95, 0.97), (kind.GetProperty("kind").GetString(), kind.GetProperty("recall").GetDouble(), kind.GetProperty("precision").GetDouble()));
         Assert.Equal((2 / 64d, 64), (metrics.GetProperty("returnedAfterSkipShare").GetDouble(), metrics.GetProperty("skips").GetInt32()));
-        Assert.Equal([(3, SegmentStatusFeature.Now.AddDays(-7), SegmentStatusFeature.Now)], feature.Skips.Asked);
         Assert.Equal(["networkId", "serviceId", "confirmedRecordings", "metrics"], Names(station));
         Assert.Equal((1, 2, 5), (station.GetProperty("networkId").GetInt32(), station.GetProperty("serviceId").GetInt32(), station.GetProperty("confirmedRecordings").GetInt32()));
         Assert.Equal(["boundaryRecallWithin2s", "programmeSkippedSecondsPerHour"], Names(station.GetProperty("metrics")));
@@ -274,7 +279,6 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(JsonValueKind.Null, versions[3].GetProperty("metrics").ValueKind);
         Assert.Equal(JsonValueKind.Null, versions[3].GetProperty("rolledBack").ValueKind);
         Assert.Equal((0.6, 0.65), (data.GetProperty("skipThreshold").GetProperty("current").GetDouble(), data.GetProperty("skipThreshold").GetProperty("recommended").GetDouble()));
-        Assert.Equal(0, feature.Answers.Reads);
     }
 
     [Fact(DisplayName = "BR-CD-008: a version in use evaluated on no confirmed recording has no figures, and its evidence still stands")]
@@ -284,12 +288,13 @@ public sealed class SegmentStatusEndpointTests
         DateTime trained = new(2026, 11, 1, 18, 0, 0, DateTimeKind.Utc);
         feature.Versions.Active = Version(2, SegmentModelVersionState.Active, trained, trained, null, new SegmentEvaluation(null, [], new EvaluationEvidence(0, 0, null), null));
         feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained, null, null));
+        await AnsweredAsync(feature, 2, confirmed: true);
+        await SkippedAsync(feature, 2, ViewerActionKind.Skipped, 3, SegmentStatusFeature.Now.AddDays(-1));
 
         (_, JsonElement data) = await feature.DataAsync();
 
         Assert.Equal(JsonValueKind.Null, data.GetProperty("metrics").ValueKind);
         Assert.Equal(0, data.GetProperty("evidence").GetProperty("confirmedRecordings").GetInt32());
-        Assert.Equal(0, feature.Answers.Reads);
         Assert.Equal(JsonValueKind.Null, data.GetProperty("versions")[0].GetProperty("metrics").ValueKind);
     }
 
@@ -309,6 +314,46 @@ public sealed class SegmentStatusEndpointTests
     }
 
     private static string[] Names(JsonElement shape) => [.. shape.EnumerateObject().Select(field => field.Name)];
+
+    /// <summary>
+    /// Keeps <paramref name="count"/> answers of half an hour, each with five breaks and so ten boundaries of
+    /// breaks.
+    /// </summary>
+    private static async Task AnsweredAsync(SegmentStatusFeature feature, int count, bool confirmed, bool withdrawn = false)
+    {
+        SegmentSpan[] stretches =
+        [
+            .. Enumerable.Range(0, 5).SelectMany(pod => new[]
+            {
+                new SegmentSpan(TimeSpan.FromSeconds(pod * 300), TimeSpan.FromSeconds((pod * 300) + 240), SegmentKind.Programme, null),
+                new SegmentSpan(TimeSpan.FromSeconds((pod * 300) + 240), TimeSpan.FromSeconds((pod * 300) + 300), SegmentKind.Break, null),
+            }),
+            new SegmentSpan(TimeSpan.FromSeconds(1500), TimeSpan.FromSeconds(1800), SegmentKind.Programme, null),
+        ];
+
+        foreach (int _ in Enumerable.Range(0, count))
+        {
+            RecordingId recording = RecordingId.New();
+            DateTime at = SegmentStatusFeature.Now.AddDays(-2);
+
+            await feature.Answers.AnswerAsync(RecordingAnswer.Rehydrate(recording, stretches, TimeSpan.FromMinutes(30), confirmed, confirmed ? at : null, at, 1, null), CancellationToken.None);
+
+            if (withdrawn)
+            {
+                await feature.Answers.WithdrawAsync(recording, at.AddHours(1), CancellationToken.None);
+            }
+        }
+    }
+
+    private static async Task SkippedAsync(SegmentStatusFeature feature, int version, ViewerActionKind action, int count, DateTime at)
+    {
+        foreach (int _ in Enumerable.Range(0, count))
+        {
+            await feature.Skips.TakeAsync(
+                SkipEvent.Of(RecordingId.New(), new ViewerAction(at, action, SegmentKind.Break, TimeSpan.FromSeconds(300), TimeSpan.FromSeconds(360), version)),
+                CancellationToken.None);
+        }
+    }
 
     private static SegmentEvaluation Evaluation(double recall, int confirmed, double recommended)
         => new(

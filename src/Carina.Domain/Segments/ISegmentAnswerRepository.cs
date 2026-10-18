@@ -23,4 +23,10 @@ public interface ISegmentAnswerRepository
     /// Marks the answer of the recording withdrawn at <paramref name="at"/> when it stands, and says whether it did.
     /// </summary>
     Task<bool> WithdrawAsync(RecordingId recording, DateTime at, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// What the answers kept give an evaluation to stand on now, as <see cref="EvaluationEvidence.OfAnswers"/>
+    /// counts it.
+    /// </summary>
+    Task<EvaluationEvidence> EvidenceAsync(CancellationToken cancellationToken);
 }

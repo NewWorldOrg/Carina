@@ -198,8 +198,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILearningExtractionRepository, LearningExtractionRepository>();
         services.AddScoped<ILearningDataRepository, LearningDataRepository>();
         services.AddScoped<ILearningDataAmountReader, LearningDataAmountReader>();
-        services.AddScoped<ISkipReturnsReader, NoSkipReturns>();
-        services.AddScoped<IAnswerEvidenceReader, NoAnswerEvidence>();
         services.AddScoped<ILearningBacklog, LearningBacklogReader>();
         services.AddScoped<ICatalogRepository, CatalogRepository>();
         services.AddScoped<ICatalogCountsReader, CatalogCountsReader>();
