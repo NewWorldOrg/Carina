@@ -39,6 +39,11 @@ public sealed class SkipEvent
     public int? ModelVersion { get; private set; }
 
     /// <summary>
+    /// What the viewer did, as learning reads it.
+    /// </summary>
+    public ViewerAction Action() => new(HappenedAt, Event, Kind, From, To, ModelVersion);
+
+    /// <summary>
     /// The event, not yet kept, of <paramref name="action"/> on the recording.
     /// </summary>
     public static SkipEvent Of(RecordingId recordingId, ViewerAction action)

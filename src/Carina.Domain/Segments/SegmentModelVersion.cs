@@ -136,6 +136,17 @@ public sealed class SegmentModelVersion
     }
 
     /// <summary>
+    /// The candidate learning made at <paramref name="trainedAt"/> with <paramref name="model"/>, numbered
+    /// <paramref name="number"/>, as <paramref name="evaluation"/> judged it.
+    /// </summary>
+    public static SegmentModelVersion Learned(int number, SegmentModel model, SegmentEvaluation evaluation, DateTime trainedAt)
+    {
+        ArgumentNullException.ThrowIfNull(evaluation);
+
+        return Rehydrate(number, SegmentModelVersionState.Candidate, false, model, trainedAt, null, null, null, null, evaluation);
+    }
+
+    /// <summary>
     /// The versions <paramref name="change"/> moves when it is made at <paramref name="at"/> to the versions
     /// <paramref name="kept"/>, the one leaving use first, and the version in use after it; none when it names
     /// a number no version has. A version chosen by hand is put in use, or only marked chosen when it already

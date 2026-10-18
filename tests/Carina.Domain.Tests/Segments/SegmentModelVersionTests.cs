@@ -22,6 +22,18 @@ public sealed class SegmentModelVersionTests
         Assert.Null(version.RetiredAt);
     }
 
+    [Fact(DisplayName = "BR-CS-003: a version learning makes is a candidate, not chosen by hand, carrying how it was judged")]
+    public void AVersionLearningMakesIsACandidate()
+    {
+        SegmentEvaluation judged = new(null, [], new EvaluationEvidence(3, 20, Noon.AddHours(-2)), null);
+
+        SegmentModelVersion learned = SegmentModelVersion.Learned(5, SegmentModel.First, judged, Noon);
+
+        Assert.Equal((5, SegmentModelVersionState.Candidate, false, Noon, (DateTime?)null), (learned.Number, learned.State, learned.ByHand, learned.TrainedAt, learned.AdoptedAt));
+        Assert.Equal(judged.Evidence, learned.Evaluation?.Evidence);
+        Assert.Throws<ArgumentNullException>(() => SegmentModelVersion.Learned(5, SegmentModel.First, null!, Noon));
+    }
+
     [Fact(DisplayName = "BR-CS-003: only a candidate has never been put in use, and only a version used before has been taken out of use")]
     public void TheStateDecidesWhichTimesAreKnown()
     {

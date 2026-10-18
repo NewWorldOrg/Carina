@@ -174,6 +174,26 @@ public sealed class SegmentLabelsTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new ViewerAction(Evening, ViewerActionKind.Skipped, SegmentKind.Break, Seconds(0), Seconds(10), 0));
     }
 
+    [Fact(DisplayName = "BR-CD-006: the kind an answer gives a stretch of the catalog is the kind it would label a segment lying there with")]
+    public void AnAnswerGivesAStretchTheKindItWouldLabel()
+    {
+        GivenAnswer confirmed = Answer(true, (0, 101, SegmentKind.Programme), (101, 130, SegmentKind.Break), (130, 400, SegmentKind.Programme));
+        GivenAnswer changed = Answer(
+            false,
+            [(0, 100, SegmentKind.Programme), (100, 130, SegmentKind.Break), (130, 400, SegmentKind.Programme)],
+            [(0, 115, SegmentKind.Programme), (115, 130, SegmentKind.Break), (130, 400, SegmentKind.Programme)]);
+        GivenAnswer withdrawn = new(confirmed.Segments, true, Evening, true, null);
+
+        Assert.Equal(SegmentKind.Break, SegmentLabels.AnswerOver(Seconds(100), Seconds(130), confirmed));
+        Assert.Equal(SegmentKind.Programme, SegmentLabels.AnswerOver(Seconds(0), Seconds(100), confirmed));
+        Assert.Null(SegmentLabels.AnswerOver(Seconds(90), Seconds(112), confirmed));
+        Assert.Equal(SegmentKind.Break, SegmentLabels.AnswerOver(Seconds(100), Seconds(115), changed));
+        Assert.Null(SegmentLabels.AnswerOver(Seconds(115), Seconds(130), changed));
+        Assert.Null(SegmentLabels.AnswerOver(Seconds(100), Seconds(130), withdrawn));
+        Assert.Null(SegmentLabels.AnswerOver(Seconds(100), Seconds(130), null));
+        Assert.Null(SegmentLabels.AnswerOver(Seconds(130), Seconds(130), confirmed));
+    }
+
     private static SegmentLabel Programme(double weight, SegmentLabelSource source) => new(SegmentKind.Programme, weight, source);
 
     private static SegmentLabel Break(double weight, SegmentLabelSource source) => new(SegmentKind.Break, weight, source);
