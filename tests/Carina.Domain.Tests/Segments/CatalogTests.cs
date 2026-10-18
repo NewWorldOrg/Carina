@@ -215,6 +215,25 @@ public sealed class CatalogTests
         Assert.Empty(change.Found);
     }
 
+    [Fact(DisplayName = "an answer given for a recording decides the kind of an entry heard there when the entry is estimated again")]
+    public void AnAnswerGivenForARecordingDecidesTheEntry()
+    {
+        (CatalogEntry entry, CatalogOccurrence[] occurrences) = Kept(Drama.Episode(0), Drama.Episode(1));
+        RecordingId answered = occurrences[1].RecordingId;
+        Dictionary<RecordingId, ProgrammeCopy> programmes = new(Programmes) { [occurrences[0].RecordingId] = Drama.Episode(0), [answered] = Drama.Episode(1) };
+        Dictionary<RecordingId, GivenAnswer> answers = new() { [answered] = Answer(occurrences[1].Span, SegmentKind.Programme, TimeSpan.FromMinutes(32)) };
+        SoundMatch match = new(Span(10, 25), new EntrySound(entry.Id), Span(0, 15), 0.04);
+
+        Assert.Equal((CatalogKind.Cm, 0.5), (entry.Kind, entry.Confidence));
+
+        CatalogChange change = Catalog.Absorb(Heard, Sound, [match], Knowing(entry, occurrences, answers, programmes), Now);
+
+        Assert.Same(entry, Assert.Single(change.Reestimated));
+        Assert.Equal((CatalogKind.ProgrammeFixture, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
+        Assert.Equal(SegmentKind.Programme, occurrences[1].KindOverride);
+        Assert.Same(occurrences[1], Assert.Single(change.Overridden));
+    }
+
     [Fact(DisplayName = "a match naming an entry that was not handed over is refused")]
     public void AMatchNamingAnUnknownEntryIsRefused()
     {
@@ -225,8 +244,24 @@ public sealed class CatalogTests
 
     private static SoundSpan Span(double starts, double ends) => new(TimeSpan.FromSeconds(starts), TimeSpan.FromSeconds(ends));
 
-    private static CatalogKnowledge Knowing(CatalogEntry? entry = null, IReadOnlyList<CatalogOccurrence>? occurrences = null)
-        => new(entry is null ? [] : [entry], occurrences ?? [], Programmes, SeriesLinks.None);
+    private static CatalogKnowledge Knowing(
+        CatalogEntry? entry = null,
+        IReadOnlyList<CatalogOccurrence>? occurrences = null,
+        IReadOnlyDictionary<RecordingId, GivenAnswer>? answers = null,
+        IReadOnlyDictionary<RecordingId, ProgrammeCopy>? programmes = null)
+        => new(entry is null ? [] : [entry], occurrences ?? [], programmes ?? Programmes, answers ?? new Dictionary<RecordingId, GivenAnswer>(), SeriesLinks.None);
+
+    private static GivenAnswer Answer(SoundSpan span, SegmentKind kind, TimeSpan length)
+        => new(
+            [
+                new SegmentSpan(TimeSpan.Zero, span.Starts, SegmentKind.Programme, null),
+                new SegmentSpan(span.Starts, span.Ends, kind, null),
+                new SegmentSpan(span.Ends, length, SegmentKind.Programme, null),
+            ],
+            true,
+            Now,
+            false,
+            null);
 
     private static (CatalogEntry Entry, CatalogOccurrence[] Occurrences) Kept(ProgrammeCopy one, ProgrammeCopy other, RecordingId? otherRecording = null)
     {

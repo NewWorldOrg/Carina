@@ -4,14 +4,30 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// What putting a recording's matches into the catalog reads: the entries the matches name and every
-/// stretch they have, the copies of the programmes of the recordings involved, and how series are
-/// linked.
+/// stretch they have, the copies of the programmes of the recordings involved, the answers given for
+/// them, and how series are linked.
 /// </summary>
 public sealed record CatalogKnowledge(
     IReadOnlyList<CatalogEntry> Entries,
     IReadOnlyList<CatalogOccurrence> Occurrences,
     IReadOnlyDictionary<RecordingId, ProgrammeCopy> Programmes,
-    SeriesLinks Links);
+    IReadOnlyDictionary<RecordingId, GivenAnswer> Answers,
+    SeriesLinks Links)
+{
+    /// <summary>
+    /// A stretch beside where its programme starts and ends, and the kind the answer given for its recording
+    /// gives it (<see cref="SegmentLabels.AnswerOver"/>).
+    /// </summary>
+    public PlacedOccurrence Placed(CatalogOccurrence occurrence)
+    {
+        ArgumentNullException.ThrowIfNull(occurrence);
+
+        return PlacedOccurrence.Of(
+            occurrence,
+            Programmes.GetValueOrDefault(occurrence.RecordingId),
+            SegmentLabels.AnswerOver(occurrence.StartsAt, occurrence.EndsAt, Answers.GetValueOrDefault(occurrence.RecordingId)));
+    }
+}
 
 /// <summary>
 /// The entries started, the entries already kept that gained stretches and were estimated again, the
@@ -31,7 +47,8 @@ public sealed record CatalogChange(
 /// first, then those within the recording itself, which join both of their stretches, then those with
 /// other recordings, each kind the longest first. A stretch an entry already has in a recording is not added again, and a
 /// recording whose programme is not known adds none. An entry started is estimated from its first
-/// stretches, and one already kept is estimated again from all of them.
+/// stretches, and one already kept is estimated again from all of them, each stretch beside the kind the
+/// answer given for its recording gives it.
 /// </summary>
 public static class Catalog
 {
@@ -177,7 +194,6 @@ public static class Catalog
             grown.Add(entry);
         }
 
-        private List<PlacedOccurrence> Placed(List<CatalogOccurrence> occurrences)
-            => [.. occurrences.Select(occurrence => PlacedOccurrence.Of(occurrence, known.Programmes.GetValueOrDefault(occurrence.RecordingId), null))];
+        private List<PlacedOccurrence> Placed(List<CatalogOccurrence> occurrences) => [.. occurrences.Select(known.Placed)];
     }
 }

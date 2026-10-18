@@ -333,6 +333,38 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(OperatingSystem.IsLinux() ? "19" : null, seen.Nice);
     }
 
+    [Fact(DisplayName = "an entry a later recording is matched against takes the kind the answer standing for one of its recordings gives its stretch there")]
+    public async Task AnEntryMatchedAgainReadsTheAnswers()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        uint[] source = Sound(1);
+        RecordingId answered = await harness.ReadAsync(Sharing(Sound(3), source, 1_000, 9_000, Advert), 14, "架空のクイズ");
+        await harness.ReadAsync(Sharing(Sound(2), source, 5_000, 9_000, Advert), 7, "架空の物語");
+        CatalogMatchingJob job = harness.Job();
+        await job.LookAsync(CancellationToken.None);
+        await job.LookAsync(CancellationToken.None);
+        CatalogEntry entry = Assert.Single(harness.Catalog.Entries);
+        CatalogOccurrence stretch = harness.Catalog.Occurrences.Single(occurrence => occurrence.RecordingId.Equals(answered));
+        SentStretch[] sent =
+        [
+            new(0, stretch.StartsAt.TotalSeconds, SegmentKind.Programme),
+            new(stretch.StartsAt.TotalSeconds, stretch.EndsAt.TotalSeconds, SegmentKind.Break),
+            new(stretch.EndsAt.TotalSeconds, Minutes * 60, SegmentKind.Programme),
+        ];
+        await harness.Answers.AnswerAsync(
+            RecordingAnswer.Given(answered, AnsweredStretches.Read(sent, TimeSpan.FromMinutes(Minutes)).Stretches!, true, Now),
+            CancellationToken.None);
+        await harness.ReadAsync(Sharing(Sound(4), source, 12_000, 9_000, Advert), 0, "架空の天気", updatedMinutesAgo: 1);
+
+        Assert.Equal((CatalogKind.Cm, 0.9, CatalogDecision.Pattern), (entry.Kind, entry.Confidence, entry.DecidedBy));
+
+        await job.LookAsync(CancellationToken.None);
+
+        Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
+        Assert.Equal(SegmentKind.Break, stretch.KindOverride);
+    }
+
     private static string? NiceOfThisThread()
     {
         if (!OperatingSystem.IsLinux())
