@@ -2,9 +2,11 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// Decides the kind of each segment by dynamic programming over states of kind and how long the run of
-/// breaks so far is, modulo the grid, in whole seconds (<see cref="RunSteps"/> of them). The sequence
-/// chosen has the greatest sum of the log-probabilities of its kinds and of what its moves cost: leaving
-/// a break for the programme after a run further off the grid than the tolerance costs the penalty.
+/// breaks so far is: its real length, the sum of its segments' fitted lengths, rounded to whole seconds
+/// and taken modulo the grid (<see cref="RunSteps"/> states). Each state keeps the real length of the
+/// best run reaching it, so no rounding builds up along a run. The sequence chosen has the greatest sum
+/// of the log-probabilities of its kinds and of what its moves cost: leaving a break for the programme
+/// after a run whose real length lies further off the grid than the tolerance costs the penalty.
 /// Entering a break costs nothing, so a break may start at the recording's zero, and one running on to
 /// the end is never left. A tie keeps the programme. Neighbouring segments of one kind are then one
 /// stretch, whose probability is the length-weighted mean of its segments'. A break that does not run on
@@ -24,33 +26,31 @@ public static class SegmentSequence
         Matched(pieces, scores);
         ArgumentNullException.ThrowIfNull(thresholds);
 
-        double[] best = Unreached();
+        Column best = Column.Starting();
         int[][] came = new int[pieces.Count][];
-
-        best[0] = 0;
 
         for (int at = 0; at < pieces.Count; at++)
         {
-            double[] next = Unreached();
-            int steps = (int)(Math.Round(pieces[at].Fitted.TotalSeconds, MidpointRounding.AwayFromZero) % RunSteps);
-
-            came[at] = new int[States];
+            Column next = new();
 
             for (int state = 0; state < States; state++)
             {
-                if (double.IsNegativeInfinity(best[state]))
+                if (double.IsNegativeInfinity(best.Scores[state]))
                 {
                     continue;
                 }
 
-                Move(next, came[at], state, 0, best[state] + Leaving(state, thresholds) + LogChance(-scores[at]));
-                Move(next, came[at], state, RunSteps + ((Run(state) + steps) % RunSteps), best[state] + LogChance(scores[at]));
+                TimeSpan run = (state >= RunSteps ? best.Runs[state] : TimeSpan.Zero) + pieces[at].Fitted;
+
+                next.Offer(0, state, best.Scores[state] + Leaving(state, best.Runs[state], thresholds) + LogChance(-scores[at]), TimeSpan.Zero);
+                next.Offer(BreakState(run), state, best.Scores[state] + LogChance(scores[at]), run);
             }
 
+            came[at] = next.Came;
             best = next;
         }
 
-        return Traced(came, Array.IndexOf(best, best.Max()));
+        return Traced(came, Array.IndexOf(best.Scores, best.Scores.Max()));
     }
 
     public static IReadOnlyList<SegmentSpan> Spans(
@@ -101,28 +101,13 @@ public static class SegmentSequence
         }
     }
 
-    private static double[] Unreached() => [.. Enumerable.Repeat(double.NegativeInfinity, States)];
+    private static int BreakState(TimeSpan run) => RunSteps + (int)(Math.Round(run.TotalSeconds, MidpointRounding.AwayFromZero) % RunSteps);
 
-    private static int Run(int state) => state >= RunSteps ? state - RunSteps : 0;
-
-    private static double Leaving(int state, SegmentThresholds thresholds)
-    {
-        int run = Run(state);
-        int off = Math.Min(run, RunSteps - run);
-
-        return state >= RunSteps && off > thresholds.GridToleranceSec ? thresholds.GridPenalty : 0;
-    }
+    private static double Leaving(int state, TimeSpan run, SegmentThresholds thresholds)
+        => state >= RunSteps && SegmentGrid.Off(run) > TimeSpan.FromSeconds(thresholds.GridToleranceSec) ? thresholds.GridPenalty : 0;
 
     private static double LogChance(double score) => score >= 0 ? -Math.Log(1 + Math.Exp(-score)) : score - Math.Log(1 + Math.Exp(score));
 
-    private static void Move(double[] next, int[] came, int from, int to, double reached)
-    {
-        if (reached > next[to])
-        {
-            next[to] = reached;
-            came[to] = from;
-        }
-    }
 
     private static SegmentKind[] Traced(int[][] came, int last)
     {
@@ -155,6 +140,34 @@ public static class SegmentSequence
             {
                 stretches[at] = gap with { Ends = pulled };
                 stretches[at + 1] = stretches[at + 1] with { Starts = pulled };
+            }
+        }
+    }
+
+    private sealed class Column
+    {
+        public double[] Scores { get; } = [.. Enumerable.Repeat(double.NegativeInfinity, States)];
+
+        public TimeSpan[] Runs { get; } = new TimeSpan[States];
+
+        public int[] Came { get; } = new int[States];
+
+        public static Column Starting()
+        {
+            Column start = new();
+
+            start.Scores[0] = 0;
+
+            return start;
+        }
+
+        public void Offer(int to, int from, double score, TimeSpan run)
+        {
+            if (score > Scores[to])
+            {
+                Scores[to] = score;
+                Runs[to] = run;
+                Came[to] = from;
             }
         }
     }

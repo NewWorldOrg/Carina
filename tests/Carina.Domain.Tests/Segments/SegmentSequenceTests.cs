@@ -45,6 +45,28 @@ public sealed class SegmentSequenceTests
             SegmentSequence.Decide(Laid(300, 30, 31.6, 1438.4), [Programme, Pod, 0.2, Programme], SegmentThresholds.Initial));
     }
 
+    [Fact(DisplayName = "the run of breaks is counted from its real length, so seven pieces of 14.6 seconds make 102.2 seconds, off the grid, and a doubtful eighth that brings it to 105 joins it")]
+    public void TheRunIsCountedFromItsRealLength()
+    {
+        SegmentPiece[] pieces = Laid(300, 14.6, 14.6, 14.6, 14.6, 14.6, 14.6, 14.6, 2.8, 1394.4);
+        double[] scores = [Programme, 2, 2, 2, 2, 2, 2, 2, -0.5, Programme];
+
+        Assert.Equal(
+            [SegmentKind.Programme, .. Enumerable.Repeat(SegmentKind.Break, 8), SegmentKind.Programme],
+            SegmentSequence.Decide(pieces, scores, SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "a run of 15.0, 15.0 and 14.9 seconds is on the grid, so a doubtful piece that would take it off goes to the programme")]
+    public void ARunJustShortOfTheGridIsOnIt()
+    {
+        SegmentPiece[] pieces = Laid(300, 15, 15, 14.9, 3, 1452.1);
+        double[] scores = [Programme, 2, 2, 2, -0.5, Programme];
+
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Break, SegmentKind.Break, SegmentKind.Break, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(pieces, scores, SegmentThresholds.Initial));
+    }
+
     [Fact(DisplayName = "a break may start at the recording's zero and run on to its end without a cost")]
     public void ABreakMayStartAtZeroAndRunToTheEnd()
     {
