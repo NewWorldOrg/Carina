@@ -19,8 +19,9 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// shorter than 30 seconds heard at about the same place (<see cref="SamePlaceWithin"/>) from the
 /// start of two episodes of one series is a fixed part of the programme, 0.7; a piece shorter than
 /// 15 seconds heard within 15 seconds of the start or end of programmes of two series is a fixed part
-/// of the station's output, 0.6; a length on the grid heard in one series is an advert, 0.5; anything
-/// else is not known. The rows for openings and endings are not applied: their sound falls to the rows
+/// of the station's output, 0.6; a length on the grid of up to a minute heard in one series is an advert,
+/// 0.5, since an opening or ending repeated within a series is often a whole slot of a minute and a half;
+/// anything else is not known. The rows for openings and endings are not applied: their sound falls to the rows
 /// below. Only the stretches that cover the entry whole (<see cref="WholeWithin"/>) count; a shorter
 /// one is taken on its own, and when the entry is an opening or an ending, a shorter one on the grid
 /// heard outside the entry's own series is an advert there, the song played in another series'
@@ -47,6 +48,8 @@ public static class CatalogKinds
     private const int FewestOnTheGrid = 1;
 
     private const int MostOnTheGrid = 8;
+
+    private const int MostInOneSeries = 4;
 
     private const double Certain = 1.0;
 
@@ -83,12 +86,14 @@ public static class CatalogKinds
     /// to the sound it hears, and an advert's slot keeps about half a second of silence at either end, so what
     /// is heard of a slot falls short of the slot rather than over it.
     /// </summary>
-    public static bool OnTheGrid(TimeSpan length)
+    public static bool OnTheGrid(TimeSpan length) => OnTheGrid(length, MostOnTheGrid);
+
+    private static bool OnTheGrid(TimeSpan length, int mostMultiple)
     {
         long multiple = (long)Math.Round((length + ((ShortOfTheGrid - OverTheGrid) / 2)) / Grid, MidpointRounding.AwayFromZero);
         TimeSpan slot = Grid * multiple;
 
-        return multiple is >= FewestOnTheGrid and <= MostOnTheGrid && length >= slot - ShortOfTheGrid && length <= slot + OverTheGrid;
+        return multiple >= FewestOnTheGrid && multiple <= mostMultiple && length >= slot - ShortOfTheGrid && length <= slot + OverTheGrid;
     }
 
     private static bool IsWhole(PlacedOccurrence placed, TimeSpan length) => placed.Occurrence.Length >= length - WholeWithin;
@@ -132,7 +137,7 @@ public static class CatalogKinds
             return new CatalogEstimate(CatalogKind.StationFixture, AtTheEdges, CatalogDecision.Pattern);
         }
 
-        return OnTheGrid(length) && series.Count == 1
+        return OnTheGrid(length, MostInOneSeries) && series.Count == 1
             ? new CatalogEstimate(CatalogKind.Cm, OneSeries, CatalogDecision.Pattern)
             : CatalogEstimate.Unknown;
     }

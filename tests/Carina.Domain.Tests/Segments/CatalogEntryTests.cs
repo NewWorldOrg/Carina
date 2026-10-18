@@ -95,7 +95,7 @@ public sealed class CatalogEntryTests
             SeriesLinks.None,
             Now.AddHours(1));
 
-        Assert.Equal(CatalogKind.Cm, entry.Kind);
+        Assert.Equal(CatalogKind.Unknown, entry.Kind);
         Assert.Null(answered.Occurrence.KindOverride);
         Assert.Null(advertised.Occurrence.KindOverride);
     }

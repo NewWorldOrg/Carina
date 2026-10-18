@@ -23,6 +23,7 @@ public sealed class CatalogKindsTests
     [InlineData(15.5)]
     [InlineData(29.0)]
     [InlineData(29.6)]
+    [InlineData(89.0)]
     [InlineData(118.5)]
     [InlineData(120.5)]
     public void AGridPieceInTwoSeriesIsAnAdvert(double seconds)
@@ -98,12 +99,16 @@ public sealed class CatalogKindsTests
             Estimated(5, At(Entry, Drama.Episode(0), 2, 5), At(Entry, Drama.Episode(1), 2, 5)).Estimate.Kind);
     }
 
-    [Theory(DisplayName = "a piece on the grid heard in one series only is an advert, 0.5, and one off the grid is unknown")]
+    [Theory(DisplayName = "a piece on the grid of up to a minute heard in one series only is an advert, 0.5, and one off the grid or longer is unknown")]
     [InlineData(30.0, CatalogKind.Cm)]
     [InlineData(29.0, CatalogKind.Cm)]
     [InlineData(44.0, CatalogKind.Cm)]
+    [InlineData(59.0, CatalogKind.Cm)]
     [InlineData(28.4, CatalogKind.Unknown)]
     [InlineData(30.6, CatalogKind.Unknown)]
+    [InlineData(61.0, CatalogKind.Unknown)]
+    [InlineData(75.0, CatalogKind.Unknown)]
+    [InlineData(89.0, CatalogKind.Unknown)]
     public void AGridPieceInOneSeriesIsAnAdvertAtHalf(double seconds, CatalogKind kind)
     {
         CatalogPattern pattern = Estimated(seconds, At(Entry, Drama.Episode(0), 600, seconds), At(Entry, Drama.Episode(1), 900, seconds));
@@ -151,13 +156,15 @@ public sealed class CatalogKindsTests
     [Fact(DisplayName = "an opening is not estimated in this phase: its sound falls to the rows below")]
     public void AnOpeningIsNotEstimated()
     {
+        PlacedOccurrence[] heardAsItWas = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 0, 89))];
+        PlacedOccurrence[] wholeSlot = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 0, 90))];
         PlacedOccurrence[] offTheGrid = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 0, 85))];
-        PlacedOccurrence[] onTheGrid = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 0, 90))];
-        PlacedOccurrence[] closing = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 1700, 85))];
+        PlacedOccurrence[] closing = [.. Enumerable.Range(0, 3).Select(week => At(Entry, Drama.Episode(week), 1700, 89))];
 
-        Assert.Equal(new CatalogEstimate(CatalogKind.Unknown, null, null), Estimated(85, offTheGrid).Estimate);
-        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.5, CatalogDecision.Pattern), Estimated(90, onTheGrid).Estimate);
-        Assert.Equal(new CatalogEstimate(CatalogKind.Unknown, null, null), Estimated(85, closing).Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, Estimated(89, heardAsItWas).Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, Estimated(90, wholeSlot).Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, Estimated(85, offTheGrid).Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, Estimated(89, closing).Estimate);
     }
 
     [Fact(DisplayName = "a stretch that covers only part of the entry does not count towards its kind")]
