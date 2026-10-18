@@ -11,9 +11,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Carina.Infrastructure.Tests.Segments;
 
 /// <summary>
-/// The records and learning data held in memory, read for detection the way the store reads them: a record
-/// waits to be detected as <see cref="RecordingDetection.IsAwaited"/> says, and only while its recording is
-/// <see cref="Kept"/>.
+/// The records and learning data held in memory, read for detection with the filters and order the store reads
+/// them with: a record waits to be detected as <see cref="RecordingDetection.IsAwaited"/> says, and only while its
+/// recording is <see cref="Kept"/>.
 /// </summary>
 internal sealed class HeldDetectionWorklist(HeldLearningExtractions records, HeldLearningData data, HeldRecordingDetections detections) : IDetectionWorklist
 {
@@ -36,6 +36,7 @@ internal sealed class HeldDetectionWorklist(HeldLearningExtractions records, Hel
                              && !passedOver.Contains(record.RecordingId)
                              && RecordingDetection.IsAwaited(record, detections.Of(record.RecordingId, modelVersion)))
             .OrderByDescending(record => record.Programme.RecordingStartedAt)
+            .ThenBy(record => record.RecordingId.Value)
             .FirstOrDefault());
     }
 
@@ -45,13 +46,21 @@ internal sealed class HeldDetectionWorklist(HeldLearningExtractions records, Hel
             .. Readable()
                 .Where(record => record.Programme.NetworkId.Equals(judged.NetworkId)
                                  && record.Programme.ServiceId.Equals(judged.ServiceId)
-                                 && record.Programme.RecordingStartedAt < judged.StartedAt)
+                                 && record.Programme.RecordingStartedAt < judged.StartedAt
+                                 && !record.RecordingId.Equals(judged.RecordingId))
                 .OrderByDescending(record => record.Programme.RecordingStartedAt)
+                .ThenBy(record => record.RecordingId.Value)
                 .Take(most),
         ]);
 
     public Task<IReadOnlyList<LearningExtraction>> RecordsAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<LearningExtraction>>([.. Readable().Where(record => recordings.Contains(record.RecordingId))]);
+        => Task.FromResult<IReadOnlyList<LearningExtraction>>(
+        [
+            .. Readable()
+                .Where(record => recordings.Contains(record.RecordingId))
+                .OrderBy(record => record.Programme.RecordingStartedAt)
+                .ThenBy(record => record.RecordingId.Value),
+        ]);
 
     public Task<IReadOnlyList<LearningDataPart>> PartsAsync(RecordingId recording, IReadOnlyCollection<LearningDataKind> kinds, CancellationToken cancellationToken)
     {
@@ -64,7 +73,14 @@ internal sealed class HeldDetectionWorklist(HeldLearningExtractions records, Hel
         WhileReading?.Invoke(recording);
 
         return Task.FromResult<IReadOnlyList<LearningDataPart>>(
-            [.. data.Of(recording).Where(block => kinds.Contains(block.Kind)).Select(Part).OfType<LearningDataPart>()]);
+        [
+            .. data.Of(recording)
+                .Where(block => kinds.Contains(block.Kind))
+                .OrderBy(block => block.Kind)
+                .ThenBy(block => block.Chunk)
+                .Select(Part)
+                .OfType<LearningDataPart>(),
+        ]);
     }
 
     private IEnumerable<LearningExtraction> Readable()

@@ -73,6 +73,23 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         Assert.Equal(Noon, stretch.MatchedAt);
     }
 
+    [Fact(DisplayName = "the entries named are read with their fingerprints, and no other")]
+    public async Task TheEntriesNamedAreRead()
+    {
+        (CatalogEntry named, CatalogOccurrence[] heard) = Started(RecordingId.New(), RecordingId.New());
+        (CatalogEntry unnamed, CatalogOccurrence[] elsewhere) = Started(RecordingId.New(), RecordingId.New());
+
+        await KeepAsync(new CatalogChange([named, unnamed], [], [.. heard, .. elsewhere], []));
+
+        await using CarinaDbContext context = Context();
+        IReadOnlyList<CatalogEntry> read = await new CatalogRepository(context).EntriesAsync([named.Id, CatalogEntryId.New()], CancellationToken.None);
+
+        CatalogEntry entry = Assert.Single(read);
+        Assert.Equal(named.Id, entry.Id);
+        Assert.Equal(Fifteen, entry.Frames());
+        Assert.Empty(await new CatalogRepository(context).EntriesAsync([], CancellationToken.None));
+    }
+
     [Fact(DisplayName = "an entry estimated again and a stretch taken for another kind are written as they now stand")]
     public async Task AChangeToKeptRowsIsWritten()
     {
