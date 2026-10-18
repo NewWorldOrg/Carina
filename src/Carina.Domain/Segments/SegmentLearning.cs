@@ -291,7 +291,7 @@ public static class SegmentLearning
                 .. pieces.Pieces
                     .Zip(labels)
                     .Where(pair => pair.Second is { Kind: SegmentKind.Programme or SegmentKind.Break })
-                    .Select(pair => new SegmentSample(pair.First.Features, pieces.Station, series, pair.Second!.Kind is SegmentKind.Break, pair.Second.Weight)),
+                    .Select(pair => new SegmentSample(pair.First.Features, pieces.Station, series, pair.Second!.Kind, pair.Second.Weight)),
             ];
 
             return new Labelled(this, pieces, samples);

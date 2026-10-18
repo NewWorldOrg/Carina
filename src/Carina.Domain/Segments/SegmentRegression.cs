@@ -7,12 +7,16 @@ namespace Carina.Domain.Segments;
 public sealed record SegmentFit(SegmentModel Model, int Iterations, bool Converged);
 
 /// <summary>
-/// Fits the logistic regression telling a break from the programme to labelled samples, by Newton's method
-/// (IRLS). The parameters are an intercept, a weight per feature of <see cref="SegmentFeature.Names"/>, an
-/// offset per station and one per series named by the samples. Each step solves
-/// <c>(XᵀWX + Λ) Δθ = Xᵀ(c ⊙ (y − p)) − Λθ</c> by a Cholesky decomposition, where <c>W</c> is
-/// <c>c p (1 − p)</c> on the diagonal and <c>Λ</c> carries twice each pull of the thresholds, since the
-/// loss pulls by <c>λ‖w‖² + λ_u Σ u² + λ_v Σ v²</c>; the intercept is not pulled. A step that would lower
+/// Fits the logistic regression telling the kinds of segment apart to labelled samples, by Newton's method
+/// (IRLS). Labels of the programme and of breaks alone are fitted as two kinds, a break against the programme;
+/// an opening or an ending among them makes it four, a multinomial logistic regression (softmax) of the break,
+/// the opening and the ending each against the programme. The parameters are an intercept and a weight per
+/// feature of <see cref="SegmentFeature.Names"/> for each kind weighed, and an offset per station and one per
+/// series named by the samples, which every kind weighed shares. Each step solves
+/// <c>(XᵀWX + Λ) Δθ = Xᵀ(c ⊙ (y − p)) − Λθ</c> by a Cholesky decomposition, where <c>W</c> holds
+/// <c>c (p_k δ_kl − p_k p_l)</c> between the kinds weighed, which is <c>c p (1 − p)</c> with two, and <c>Λ</c>
+/// carries twice each pull of the thresholds, since the loss pulls by <c>λ‖w‖² + λ_u Σ u² + λ_v Σ v²</c>; the
+/// intercepts are not pulled. With two kinds every step is the one the two-kind fit took, to the last bit. A step that would lower
 /// the penalised log-likelihood is halved until it does not. The fit stops once a step changes the
 /// penalised log-likelihood by less than <see cref="SmallestChange"/>, after <see cref="MostIterations"/>
 /// steps, or when the system cannot be solved, as with no samples. Each feature is standardised by the
@@ -96,7 +100,31 @@ public static class SegmentRegression
         return moved;
     }
 
-    private static double LogChance(double score) => score >= 0 ? -Math.Log(1 + Math.Exp(-score)) : score - Math.Log(1 + Math.Exp(score));
+    /// <summary>
+    /// The highest of <paramref name="scores"/> and of the programme's nothing, and the sum of the exponentials of
+    /// every score, the programme's first, less it: what the softmax is normalised by.
+    /// </summary>
+    private static (double Highest, double Sum) Normaliser(double[] scores)
+    {
+        double highest = 0;
+
+        foreach (double score in scores)
+        {
+            if (score > highest)
+            {
+                highest = score;
+            }
+        }
+
+        double sum = Math.Exp(0 - highest);
+
+        foreach (double score in scores)
+        {
+            sum += Math.Exp(score - highest);
+        }
+
+        return (highest, sum);
+    }
 
     /// <summary>
     /// Solves <c>h x = g</c> for a symmetric <paramref name="h"/> of <paramref name="width"/> columns by its
@@ -176,6 +204,8 @@ public static class SegmentRegression
     {
         private readonly IReadOnlyList<string> names = SegmentFeature.Names;
 
+        private SegmentKind[] classes = [];
+
         private string[] stations = [];
 
         private string[] series = [];
@@ -188,28 +218,36 @@ public static class SegmentRegression
 
         private int[] seriesOf = [];
 
-        private double[] labels = [];
+        private int[] labels = [];
 
         private double[] weights = [];
 
-        public int Width => 1 + names.Count + stations.Length + series.Length;
+        public int Width => Offsets + stations.Length + series.Length;
 
         private int Count => labels.Length;
 
         private int Features => names.Count;
 
+        private int Block => 1 + Features;
+
+        private int Offsets => classes.Length * Block;
+
         public static Design Of(IReadOnlyList<SegmentSample> samples)
         {
+            SegmentKind[] classes = samples.Any(sample => sample.Kind is SegmentKind.Opening or SegmentKind.Ending)
+                ? [SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending]
+                : [SegmentKind.Break];
             Design design = new()
             {
+                classes = classes,
                 stations = [.. samples.Select(sample => sample.Station).Distinct().Order(StringComparer.Ordinal)],
                 series = [.. samples.Select(sample => sample.Series).OfType<string>().Distinct().Order(StringComparer.Ordinal)],
-                labels = [.. samples.Select(sample => sample.IsBreak ? 1.0 : 0.0)],
+                labels = [.. samples.Select(sample => Array.IndexOf(classes, sample.Kind))],
                 weights = [.. samples.Select(sample => sample.Weight)],
             };
 
             design.scales = [.. design.names.Select(name => Scale(samples, name))];
-            design.stationOf = [.. samples.Select(sample => 1 + design.Features + Array.BinarySearch(design.stations, sample.Station, StringComparer.Ordinal))];
+            design.stationOf = [.. samples.Select(sample => design.Offsets + Array.BinarySearch(design.stations, sample.Station, StringComparer.Ordinal))];
             design.seriesOf = [.. samples.Select(sample => sample.Series is string named ? design.SeriesColumn(named) : -1)];
             design.values = new double[samples.Count * design.Features];
 
@@ -225,9 +263,13 @@ public static class SegmentRegression
         {
             double[] pull = new double[Width];
 
-            Array.Fill(pull, 2 * thresholds.Lambda, 1, Features);
-            Array.Fill(pull, 2 * thresholds.LambdaStation, 1 + Features, stations.Length);
-            Array.Fill(pull, 2 * thresholds.LambdaSeries, 1 + Features + stations.Length, series.Length);
+            for (int weighed = 0; weighed < classes.Length; weighed++)
+            {
+                Array.Fill(pull, 2 * thresholds.Lambda, (weighed * Block) + 1, Features);
+            }
+
+            Array.Fill(pull, 2 * thresholds.LambdaStation, Offsets, stations.Length);
+            Array.Fill(pull, 2 * thresholds.LambdaSeries, Offsets + stations.Length, series.Length);
 
             return pull;
         }
@@ -235,23 +277,30 @@ public static class SegmentRegression
         public double[] From(SegmentModel start)
         {
             double[] theta = new double[Width];
-            SegmentClassWeights weighed = start.Weights.Classes[SegmentKind.Break];
 
-            theta[0] = weighed.Bias;
-
-            for (int feature = 0; feature < Features; feature++)
+            for (int weighed = 0; weighed < classes.Length; weighed++)
             {
-                theta[1 + feature] = weighed.Features.GetValueOrDefault(names[feature]);
+                if (!start.Weights.Classes.TryGetValue(classes[weighed], out SegmentClassWeights? given))
+                {
+                    continue;
+                }
+
+                theta[weighed * Block] = given.Bias;
+
+                for (int feature = 0; feature < Features; feature++)
+                {
+                    theta[(weighed * Block) + 1 + feature] = given.Features.GetValueOrDefault(names[feature]);
+                }
             }
 
             for (int station = 0; station < stations.Length; station++)
             {
-                theta[1 + Features + station] = start.StationOffsets.GetValueOrDefault(stations[station]);
+                theta[Offsets + station] = start.StationOffsets.GetValueOrDefault(stations[station]);
             }
 
             for (int named = 0; named < series.Length; named++)
             {
-                theta[1 + Features + stations.Length + named] = start.SeriesOffsets.GetValueOrDefault(series[named]);
+                theta[Offsets + stations.Length + named] = start.SeriesOffsets.GetValueOrDefault(series[named]);
             }
 
             return theta;
@@ -260,12 +309,15 @@ public static class SegmentRegression
         public double Objective(double[] theta, double[] pull)
         {
             double likelihood = 0;
+            double[] scores = new double[classes.Length];
 
             for (int sample = 0; sample < Count; sample++)
             {
-                double score = Score(theta, sample);
+                Scores(theta, sample, scores);
+                (double highest, double sum) = Normaliser(scores);
+                double labelled = labels[sample] < 0 ? 0 : scores[labels[sample]];
 
-                likelihood += weights[sample] * ((labels[sample] * LogChance(score)) + ((1 - labels[sample]) * LogChance(-score)));
+                likelihood += weights[sample] * ((labelled - highest) - Math.Log(sum));
             }
 
             double penalty = 0;
@@ -283,15 +335,41 @@ public static class SegmentRegression
             int width = Width;
             double[] hessian = new double[width * width];
             double[] gradient = new double[width];
-            int[] columns = new int[Features + 3];
-            double[] entries = new double[Features + 3];
+            int[][] columns = [.. classes.Select(_ => new int[Features + 3])];
+            double[][] entries = [.. classes.Select(_ => new double[Features + 3])];
+            double[] scores = new double[classes.Length];
+            double[] chances = new double[classes.Length];
 
             for (int sample = 0; sample < Count; sample++)
             {
-                double chance = SegmentModel.Chance(Score(theta, sample));
-                int used = Row(sample, columns, entries);
+                Scores(theta, sample, scores);
+                (double highest, double sum) = Normaliser(scores);
+                int used = 0;
 
-                Accumulate(hessian, gradient, columns, entries, used, weights[sample] * chance * (1 - chance), weights[sample] * (labels[sample] - chance));
+                for (int weighed = 0; weighed < classes.Length; weighed++)
+                {
+                    chances[weighed] = Math.Exp(scores[weighed] - highest) / sum;
+                    used = Row(sample, weighed, columns[weighed], entries[weighed]);
+                }
+
+                for (int weighed = 0; weighed < classes.Length; weighed++)
+                {
+                    double residual = weights[sample] * ((labels[sample] == weighed ? 1.0 : 0.0) - chances[weighed]);
+
+                    for (int one = 0; one < used; one++)
+                    {
+                        gradient[columns[weighed][one]] += residual * entries[weighed][one];
+                    }
+
+                    for (int other = 0; other < classes.Length; other++)
+                    {
+                        double coefficient = other == weighed
+                            ? weights[sample] * chances[weighed] * (1 - chances[weighed])
+                            : -(weights[sample] * chances[weighed] * chances[other]);
+
+                        Accumulate(hessian, width, coefficient, columns[weighed], entries[weighed], columns[other], entries[other], used);
+                    }
+                }
             }
 
             for (int at = 0; at < width; at++)
@@ -307,12 +385,15 @@ public static class SegmentRegression
 
         public SegmentModel Model(double[] theta, SegmentThresholds thresholds)
             => new(
-                new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
-                {
-                    [SegmentKind.Break] = new(theta[0], names.Select((name, feature) => (name, feature)).ToDictionary(pair => pair.name, pair => theta[1 + pair.feature])),
-                }),
-                stations.Select((station, at) => (station, at)).ToDictionary(pair => pair.station, pair => theta[1 + Features + pair.at]),
-                series.Select((named, at) => (named, at)).ToDictionary(pair => pair.named, pair => theta[1 + Features + stations.Length + pair.at]),
+                new SegmentWeights(classes
+                    .Select((kind, weighed) => (kind, weighed))
+                    .ToDictionary(
+                        pair => pair.kind,
+                        pair => new SegmentClassWeights(
+                            theta[pair.weighed * Block],
+                            names.Select((name, feature) => (name, feature)).ToDictionary(named => named.name, named => theta[(pair.weighed * Block) + 1 + named.feature])))),
+                stations.Select((station, at) => (station, at)).ToDictionary(pair => pair.station, pair => theta[Offsets + pair.at]),
+                series.Select((named, at) => (named, at)).ToDictionary(pair => pair.named, pair => theta[Offsets + stations.Length + pair.at]),
                 thresholds,
                 names.Select((name, feature) => (name, feature)).ToDictionary(pair => pair.name, pair => scales[pair.feature]));
 
@@ -331,17 +412,20 @@ public static class SegmentRegression
             return new FeatureScale(mean, deviation > FlatDeviation * Math.Max(1, Math.Abs(mean)) ? deviation : 1);
         }
 
-        private static void Accumulate(double[] hessian, double[] gradient, int[] columns, double[] entries, int used, double weight, double residual)
+        /// <summary>
+        /// Adds <paramref name="coefficient"/> times the outer product of two rows to the upper triangle of
+        /// <paramref name="hessian"/>, where a row's column is no later than the other's.
+        /// </summary>
+        private static void Accumulate(double[] hessian, int width, double coefficient, int[] columns, double[] entries, int[] otherColumns, double[] otherEntries, int used)
         {
-            int width = gradient.Length;
-
             for (int one = 0; one < used; one++)
             {
-                gradient[columns[one]] += residual * entries[one];
-
-                for (int other = one; other < used; other++)
+                for (int other = 0; other < used; other++)
                 {
-                    hessian[(columns[one] * width) + columns[other]] += weight * entries[one] * entries[other];
+                    if (columns[one] <= otherColumns[other])
+                    {
+                        hessian[(columns[one] * width) + otherColumns[other]] += coefficient * entries[one] * otherEntries[other];
+                    }
                 }
             }
         }
@@ -357,7 +441,7 @@ public static class SegmentRegression
             }
         }
 
-        private int SeriesColumn(string named) => 1 + Features + stations.Length + Array.BinarySearch(series, named, StringComparer.Ordinal);
+        private int SeriesColumn(string named) => Offsets + stations.Length + Array.BinarySearch(series, named, StringComparer.Ordinal);
 
         private void Standardise(int sample, SegmentFeatureValues features)
         {
@@ -367,14 +451,14 @@ public static class SegmentRegression
             }
         }
 
-        private int Row(int sample, int[] columns, double[] entries)
+        private int Row(int sample, int weighed, int[] columns, double[] entries)
         {
-            columns[0] = 0;
+            columns[0] = weighed * Block;
             entries[0] = 1;
 
             for (int feature = 0; feature < Features; feature++)
             {
-                columns[1 + feature] = 1 + feature;
+                columns[1 + feature] = (weighed * Block) + 1 + feature;
                 entries[1 + feature] = values[(sample * Features) + feature];
             }
 
@@ -392,21 +476,24 @@ public static class SegmentRegression
             return Features + 3;
         }
 
-        private double Score(double[] theta, int sample)
+        private void Scores(double[] theta, int sample, double[] scores)
         {
-            double score = theta[0] + theta[stationOf[sample]];
-
-            if (seriesOf[sample] >= 0)
+            for (int weighed = 0; weighed < classes.Length; weighed++)
             {
-                score += theta[seriesOf[sample]];
-            }
+                double score = theta[weighed * Block] + theta[stationOf[sample]];
 
-            for (int feature = 0; feature < Features; feature++)
-            {
-                score += theta[1 + feature] * values[(sample * Features) + feature];
-            }
+                if (seriesOf[sample] >= 0)
+                {
+                    score += theta[seriesOf[sample]];
+                }
 
-            return score;
+                for (int feature = 0; feature < Features; feature++)
+                {
+                    score += theta[(weighed * Block) + 1 + feature] * values[(sample * Features) + feature];
+                }
+
+                scores[weighed] = score;
+            }
         }
     }
 }

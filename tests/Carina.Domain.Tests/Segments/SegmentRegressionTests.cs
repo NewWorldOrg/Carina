@@ -109,6 +109,121 @@ public sealed class SegmentRegressionTests
         Assert.Equal(once.Model.Weights.Classes[SegmentKind.Break].Features[SegmentFeature.Length], started.Model.Weights.Classes[SegmentKind.Break].Features[SegmentFeature.Length], 4);
     }
 
+    [Fact(DisplayName = "BR-CD-007: labels of programme and breaks alone are fitted as two kinds, and an opening or an ending among them makes the fit tell four kinds apart")]
+    public void TheKindsFittedAreTheKindsLabelled()
+    {
+        SegmentSample[] twoKinds = [Sample(true, 1.0, 15), Sample(false, 1.0, 300)];
+
+        Assert.Equal(2, SegmentRegression.Fit(twoKinds, SegmentThresholds.Initial).Model.Kinds);
+        Assert.Equal(4, SegmentRegression.Fit([.. twoKinds, Sample(SegmentKind.Opening, 1.0, 90)], SegmentThresholds.Initial).Model.Kinds);
+        Assert.Equal(4, SegmentRegression.Fit([.. twoKinds, Sample(SegmentKind.Ending, 1.0, 90)], SegmentThresholds.Initial).Model.Kinds);
+        Assert.Equal(2, SegmentRegression.Fit(twoKinds, SegmentThresholds.Initial, SegmentModel.FirstOfFourKinds).Model.Kinds);
+    }
+
+    [Fact(DisplayName = "with nothing but the labels to go on, each kind's intercept is the log of its weighted odds against the programme")]
+    public void TheInterceptsAloneAreTheWeightedLogOddsOfEachKind()
+    {
+        SegmentSample[] samples =
+        [
+            Sample(SegmentKind.Programme, 1.0),
+            Sample(SegmentKind.Programme, 1.0),
+            Sample(SegmentKind.Programme, 0.5),
+            Sample(SegmentKind.Programme, 0.5),
+            Sample(SegmentKind.Break, 1.0),
+            Sample(SegmentKind.Break, 0.5),
+            Sample(SegmentKind.Opening, 0.6),
+            Sample(SegmentKind.Ending, 0.2),
+            Sample(SegmentKind.Ending, 0.2),
+        ];
+
+        SegmentFit fit = SegmentRegression.Fit(samples, SegmentThresholds.Initial);
+        SegmentChances chances = fit.Model.Chances(samples[0].Features, Station, null);
+
+        Assert.True(fit.Converged);
+        Assert.Equal(Math.Log(1.5 / 3), fit.Model.Weights.Classes[SegmentKind.Break].Bias, 5);
+        Assert.Equal(Math.Log(0.6 / 3), fit.Model.Weights.Classes[SegmentKind.Opening].Bias, 5);
+        Assert.Equal(Math.Log(0.4 / 3), fit.Model.Weights.Classes[SegmentKind.Ending].Bias, 5);
+        Assert.All(fit.Model.Weights.Classes.Values.SelectMany(weights => weights.Features.Values), weight => Assert.Equal(0, weight));
+        Assert.Equal(3 / 5.5, chances.Of(SegmentKind.Programme), 5);
+        Assert.Equal(0.6 / 5.5, chances.Of(SegmentKind.Opening), 5);
+    }
+
+    [Fact(DisplayName = "a four-kind fit comes to a standstill of the penalised likelihood: for every kind the weighted residuals sum to nothing, and the slope along each feature is its pull")]
+    public void AFourKindFitComesToAStandstill()
+    {
+        SegmentSample[] samples =
+        [
+            .. new[] { 14.5, 15.0, 29.8, 30.0, 45.2 }.Select(seconds => Sample(SegmentKind.Break, 0.9, seconds)),
+            .. new[] { 85.0, 89.5, 90.0, 91.0 }.Select(seconds => Sample(SegmentKind.Opening, 0.8, seconds, 0.2)),
+            .. new[] { 60.0, 88.0, 90.0 }.Select(seconds => Sample(SegmentKind.Ending, 0.8, seconds, 0.9)),
+            .. new[] { 120.0, 200.0, 300.0, 90.0, 400.0, 31.0 }.Select(seconds => Sample(SegmentKind.Programme, 1.0, seconds, 0.6)),
+        ];
+        SegmentThresholds thresholds = Pulled(0.5, 10, 10);
+
+        SegmentFit fit = SegmentRegression.Fit(samples, thresholds);
+
+        Assert.True(fit.Converged);
+        Assert.InRange(fit.Iterations, 1, SegmentRegression.MostIterations - 1);
+
+        foreach (SegmentKind kind in new[] { SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending })
+        {
+            SegmentClassWeights weights = fit.Model.Weights.Classes[kind];
+            double[] residuals = [.. samples.Select(sample => sample.Weight * ((sample.Kind == kind ? 1 : 0) - fit.Model.Chances(sample.Features, sample.Station, sample.Series).Of(kind)))];
+
+            foreach (string feature in new[] { SegmentFeature.Length, SegmentFeature.LogoShare })
+            {
+                FeatureScale scale = fit.Model.Standardisation[feature];
+                double slope = samples.Select((sample, at) => residuals[at] * (sample.Features[feature] is double value ? scale.Standardised(value) : 0)).Sum();
+
+                Assert.Equal(2 * thresholds.Lambda * weights.Features[feature], slope, 4);
+            }
+
+            Assert.Equal(0, residuals.Sum(), 4);
+        }
+
+        Assert.True(Chance(fit, samples[5], SegmentKind.Opening) > Chance(fit, samples[5], SegmentKind.Break));
+        Assert.True(Chance(fit, samples[0], SegmentKind.Break) > Chance(fit, samples[0], SegmentKind.Opening));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: the offsets of a station and a series are shared by every kind weighed, so a station whose segments are more often not the programme has the larger one")]
+    public void FourKindsShareTheOffsets()
+    {
+        SegmentSample[] samples =
+        [
+            .. Enumerable.Range(0, 40).Select(at => Sample(at % 4 is 0 ? SegmentKind.Programme : (SegmentKind)(2 + (at % 3)), 1.0, station: Station)),
+            .. Enumerable.Range(0, 40).Select(at => Sample(at % 4 is 0 ? (SegmentKind)(2 + (at % 3)) : SegmentKind.Programme, 1.0, station: OtherStation)),
+        ];
+
+        SegmentModel model = SegmentRegression.Fit(samples, Pulled(1, 1, 1)).Model;
+
+        Assert.Equal(4, model.Kinds);
+        Assert.True(model.StationOffsets[Station] > model.StationOffsets[OtherStation]);
+        Assert.Equal([Station, OtherStation], model.StationOffsets.Keys);
+    }
+
+    [Fact(DisplayName = "the same four-kind samples give an identical model every time, and starting from the first version of four kinds or of two reaches the same one")]
+    public void TheSameFourKindSamplesGiveTheSameModel()
+    {
+        SegmentSample[] samples =
+        [
+            .. Enumerable.Range(0, 40).Select(at => Sample((SegmentKind)(1 + (at % 4)), 0.2 + (at % 4 * 0.2), 5 + (at * 7 % 90), at % 7 / 7.0, at % 2 is 0 ? Station : OtherStation, at % 3 is 1 ? "架空の物語" : null)),
+        ];
+
+        SegmentFit once = SegmentRegression.Fit(samples, SegmentThresholds.Initial);
+        SegmentFit again = SegmentRegression.Fit(samples, SegmentThresholds.Initial);
+        SegmentFit fromFour = SegmentRegression.Fit(samples, SegmentThresholds.Initial, SegmentModel.FirstOfFourKinds);
+        SegmentFit fromTwo = SegmentRegression.Fit(samples, SegmentThresholds.Initial, SegmentModel.First);
+
+        Assert.Equal(once.Model, again.Model);
+        Assert.Equal(once.Iterations, again.Iterations);
+
+        foreach (SegmentKind kind in new[] { SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending })
+        {
+            Assert.Equal(once.Model.Weights.Classes[kind].Bias, fromFour.Model.Weights.Classes[kind].Bias, 4);
+            Assert.Equal(once.Model.Weights.Classes[kind].Features[SegmentFeature.Length], fromTwo.Model.Weights.Classes[kind].Features[SegmentFeature.Length], 4);
+        }
+    }
+
     [Fact(DisplayName = "no samples leave every parameter at zero")]
     public void NoSamplesLeaveEverythingAtZero()
     {
@@ -124,21 +239,33 @@ public sealed class SegmentRegressionTests
     {
         SegmentFeatureValues none = SegmentFeatureValues.Of(new Dictionary<string, double?>());
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new SegmentSample(none, Station, null, true, 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new SegmentSample(none, Station, null, true, double.NaN));
-        Assert.Throws<ArgumentException>(() => new SegmentSample(none, "1", null, true, 1));
-        Assert.Throws<ArgumentException>(() => new SegmentSample(none, Station, string.Empty, true, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SegmentSample(none, Station, null, SegmentKind.Break, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SegmentSample(none, Station, null, SegmentKind.Break, double.NaN));
+        Assert.Throws<ArgumentException>(() => new SegmentSample(none, "1", null, SegmentKind.Break, 1));
+        Assert.Throws<ArgumentException>(() => new SegmentSample(none, Station, string.Empty, SegmentKind.Break, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SegmentSample(none, Station, null, (SegmentKind)9, 1));
     }
 
-    private static double Label(SegmentSample sample) => sample.IsBreak ? 1 : 0;
+    private static double Label(SegmentSample sample) => sample.Kind is SegmentKind.Break ? 1 : 0;
 
     private static double Chance(SegmentFit fit, SegmentSample sample) => SegmentModel.Chance(fit.Model.BreakScore(sample.Features, sample.Station, sample.Series));
+
+    private static double Chance(SegmentFit fit, SegmentSample sample, SegmentKind kind) => fit.Model.Chances(sample.Features, sample.Station, sample.Series).Of(kind);
 
     private static SegmentThresholds Pulled(double lambda, double station, double series)
         => new(-50, 0.10, 0.30, 1.0, -3.0, lambda, station, series);
 
     private static SegmentSample Sample(
         bool isBreak,
+        double weight,
+        double? length = null,
+        double? logo = null,
+        string station = Station,
+        string? series = null)
+        => Sample(isBreak ? SegmentKind.Break : SegmentKind.Programme, weight, length, logo, station, series);
+
+    private static SegmentSample Sample(
+        SegmentKind kind,
         double weight,
         double? length = null,
         double? logo = null,
@@ -157,6 +284,6 @@ public sealed class SegmentRegressionTests
             features[SegmentFeature.LogoShare] = share;
         }
 
-        return new SegmentSample(SegmentFeatureValues.Of(features), station, series, isBreak, weight);
+        return new SegmentSample(SegmentFeatureValues.Of(features), station, series, kind, weight);
     }
 }
