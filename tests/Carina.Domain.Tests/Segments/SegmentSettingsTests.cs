@@ -41,4 +41,11 @@ public sealed class SegmentSettingsTests
         Assert.Equal(learning, standing.Learning);
         Assert.Equal(Noon, standing.LearningChangedAt);
     }
+
+    [Fact(DisplayName = "BR-CD-009: how likely a stretch is before a button offers to skip it stands at 0.70 while no setting holds another")]
+    public void TheSkipThresholdStandsAtItsDefault()
+    {
+        Assert.Equal(0.70, SegmentSettingsStanding.Unset.SkipThreshold);
+        Assert.Equal(0.70, SegmentSettingsStanding.Over(SegmentSettings.LearningSwitched(true, Noon)).SkipThreshold);
+    }
 }
