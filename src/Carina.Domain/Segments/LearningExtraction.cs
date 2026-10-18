@@ -46,7 +46,19 @@ public sealed class LearningExtraction
 
     public DateTime UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// When what the record holds was last matched against the catalog; null when it never was.
+    /// </summary>
+    public DateTime? MatchedAt { get; private set; }
+
     public bool CanRetry => State is LearningExtractionState.Failed && Failures <= MostRetries;
+
+    /// <summary>
+    /// Whether what the record holds waits to be matched against the catalog: it was read to its end or as far
+    /// as it could be, and has not been matched since it last changed.
+    /// </summary>
+    public bool AwaitsMatching
+        => State is LearningExtractionState.Done or LearningExtractionState.Partial && (MatchedAt is null || MatchedAt < UpdatedAt);
 
     private bool MadeFromAReducedCopy => Version?.Origin is ExtractionOrigin.ReducedCopy;
 
@@ -75,7 +87,8 @@ public sealed class LearningExtraction
         int failures,
         ProgrammeCopy programme,
         DateTime createdAt,
-        DateTime updatedAt)
+        DateTime updatedAt,
+        DateTime? matchedAt = null)
     {
         ArgumentNullException.ThrowIfNull(recordingId);
         ArgumentNullException.ThrowIfNull(gaps);
@@ -103,6 +116,13 @@ public sealed class LearningExtraction
             throw new ArgumentException("An extraction is changed no earlier than it was made.", nameof(updatedAt));
         }
 
+        DateTime? matched = UtcTimes.Optional(matchedAt, nameof(matchedAt));
+
+        if (matched < created)
+        {
+            throw new ArgumentException("An extraction is matched no earlier than it was made.", nameof(matchedAt));
+        }
+
         return new LearningExtraction
         {
             RecordingId = recordingId,
@@ -116,7 +136,24 @@ public sealed class LearningExtraction
             Programme = programme,
             CreatedAt = created,
             UpdatedAt = updated,
+            MatchedAt = matched,
         };
+    }
+
+    /// <summary>
+    /// Marks what the record holds as matched against the catalog, leaving when the record last changed as it
+    /// was. A moment before that counts as that moment.
+    /// </summary>
+    public void Matched(DateTime at)
+    {
+        DateTime when = UtcTimes.Required(at, nameof(at));
+
+        if (!AwaitsMatching)
+        {
+            throw new InvalidOperationException($"An extraction that is {State}, or already matched since it last changed, does not wait to be matched.");
+        }
+
+        MatchedAt = when > UpdatedAt ? when : UpdatedAt;
     }
 
     public void Follow(ExtractionVersion version, DateTime at)

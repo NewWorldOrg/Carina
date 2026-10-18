@@ -158,7 +158,8 @@ public sealed class HeldLearningExtractions : ILearningExtractionRepository
             row.Failures,
             row.Programme,
             row.CreatedAt,
-            row.UpdatedAt);
+            row.UpdatedAt,
+            row.MatchedAt);
 }
 
 /// <summary>

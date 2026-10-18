@@ -14,10 +14,14 @@ public sealed record CatalogKnowledge(
     SeriesLinks Links);
 
 /// <summary>
-/// The entries started, the entries already kept that gained stretches and were estimated again, and
-/// the stretches found.
+/// The entries started, the entries already kept that gained stretches and were estimated again, the
+/// stretches found, and the stretches already kept that are now taken for another kind on their own.
 /// </summary>
-public sealed record CatalogChange(IReadOnlyList<CatalogEntry> Started, IReadOnlyList<CatalogEntry> Reestimated, IReadOnlyList<CatalogOccurrence> Found);
+public sealed record CatalogChange(
+    IReadOnlyList<CatalogEntry> Started,
+    IReadOnlyList<CatalogEntry> Reestimated,
+    IReadOnlyList<CatalogOccurrence> Found,
+    IReadOnlyList<CatalogOccurrence> Overridden);
 
 /// <summary>
 /// Puts the matches found in one recording into the catalog. A stretch matched in an entry is a
@@ -108,14 +112,19 @@ public static class Catalog
             }
 
             List<CatalogEntry> reestimated = [.. grown.Where(id => !started.ContainsKey(id)).Select(id => entries[id])];
+            List<CatalogOccurrence> overridden = [];
 
             foreach (CatalogEntry entry in reestimated)
             {
-                entry.Reestimate(Placed(stretches[entry.Id]), known.Links, at);
-                found.AddRange(stretches[entry.Id].Where(added.Contains));
+                List<CatalogOccurrence> own = stretches[entry.Id];
+                SegmentKind?[] before = [.. own.Select(occurrence => occurrence.KindOverride)];
+
+                entry.Reestimate(Placed(own), known.Links, at);
+                found.AddRange(own.Where(added.Contains));
+                overridden.AddRange(own.Where((occurrence, index) => !added.Contains(occurrence) && occurrence.KindOverride != before[index]));
             }
 
-            return new CatalogChange(begun, reestimated, found);
+            return new CatalogChange(begun, reestimated, found, overridden);
         }
 
         private void TakeItself(SoundMatch match, SoundTrack sound)
