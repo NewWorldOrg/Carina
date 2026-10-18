@@ -64,6 +64,12 @@ public sealed record SegmentContext
 
     public string Station => SegmentModel.StationKey(NetworkId, ServiceId);
 
+    /// <summary>
+    /// The same context hearing <paramref name="catalog"/> in place of what it heard.
+    /// </summary>
+    public SegmentContext Hearing(IReadOnlyList<CatalogHeard> catalog)
+        => new(NetworkId, ServiceId, Series, ProgrammeStarts, ProgrammeEnds, Genres, catalog, Logo, Past);
+
     public static SegmentContext Of(ProgrammeCopy programme, IReadOnlyList<CatalogHeard> catalog, CornerLogo logo, IReadOnlyList<PastEpisode> past)
     {
         ArgumentNullException.ThrowIfNull(programme);

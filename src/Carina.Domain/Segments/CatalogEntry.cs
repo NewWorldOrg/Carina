@@ -12,7 +12,7 @@ public sealed class CatalogEntry
 {
     public const int MostFrames = SegmentMatcher.MostFrames;
 
-    private const int FewestOccurrences = 2;
+    internal const int FewestOccurrences = 2;
 
     private CatalogEntry()
     {
