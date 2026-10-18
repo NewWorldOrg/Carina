@@ -1,9 +1,13 @@
+using System.ComponentModel;
+
+using Carina.Api.Responder.Encoding;
 using Carina.Domain.Captions;
 using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Streaming;
 
 using PlaybackChapter = Carina.Domain.Segments.PlaybackChapter;
+using PlaybackFileClock = Carina.Domain.Segments.PlaybackFileClock;
 using SegmentKind = Carina.Domain.Segments.SegmentKind;
 
 namespace Carina.Api.Responder.Playback;
@@ -54,8 +58,16 @@ public sealed record PlaybackPlanResponder(
     IReadOnlyList<SoundTrack> Sounds,
     IReadOnlyList<PlaybackChapterResponder> Chapters,
     CaptionStanding Captions,
-    PlaybackArtefactFileResponder? ArtefactFile)
+    PlaybackArtefactFileResponder? ArtefactFile,
+    [property: Description(PlaybackPlanResponder.HowFarTheRecordingsTimeStandsAhead)] double? RecordingOffsetSec)
 {
+    public const string HowFarTheRecordingsTimeStandsAhead =
+        "How many seconds a time in the recording, as /api/recordings/{id}/segments gives it, stands ahead of the "
+        + "same moment in the file this plan plays: the file's time is the recording's time less this. 0 for the "
+        + "recording itself, and for an artefact the head the encode that made it skipped. A time that falls before 0 "
+        + "or past the end of the file is not in the file. Null for an artefact whose timeline was not kept, on which "
+        + "no time in the recording can be placed.";
+
     public static PlaybackPlanResponder Of(
         PlaybackPlan plan,
         PlaybackFile handover,
@@ -65,7 +77,8 @@ public sealed record PlaybackPlanResponder(
         IReadOnlyList<SoundTrack> sounds,
         IReadOnlyList<PlaybackChapterResponder> chapters,
         CaptionStanding captions,
-        EncodeCodec? artefactCodec)
+        EncodeCodec? artefactCodec,
+        PlaybackFileClock? clock)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(handover);
@@ -89,6 +102,7 @@ public sealed record PlaybackPlanResponder(
             sounds,
             chapters,
             captions,
-            artefactCodec is { } codec ? new PlaybackArtefactFileResponder(codec) : null);
+            artefactCodec is { } codec ? new PlaybackArtefactFileResponder(codec) : null,
+            clock is { } placing ? Math.Round(placing.HeadSkip.TotalSeconds, EncodeTimelineResponder.Places) : null);
     }
 }

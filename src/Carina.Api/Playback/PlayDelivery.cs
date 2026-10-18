@@ -300,7 +300,7 @@ public static class PlayDelivery
         PlaybackOffer offer,
         TimeSpan? leftOffAt,
         IReadOnlyList<SoundTrack> sounds,
-        IReadOnlyList<PlaybackChapterResponder> chapters,
+        PlayedChapters played,
         CaptionStanding captions)
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
@@ -314,9 +314,10 @@ public static class PlayDelivery
                     MediaTypeOf(offer.Plan, offer.Handover),
                     leftOffAt,
                     sounds,
-                    chapters,
+                    PlaybackChapterResponder.Of(played.Chapters),
                     captions,
-                    offer.ArtefactCodec)),
+                    offer.ArtefactCodec,
+                    played.Clock)),
             context.RequestAborted);
     }
 
@@ -335,12 +336,12 @@ public static class PlayDelivery
         return kept?.Position;
     }
 
-    private static async Task<IReadOnlyList<PlaybackChapterResponder>> MarkedAsync(
+    private static async Task<PlayedChapters> MarkedAsync(
         RecordingId recording,
         PlaybackOffer offer,
         PlaybackChapterService chapters,
         CancellationToken cancellationToken)
-        => PlaybackChapterResponder.Of((await chapters.ChaptersAsync(recording, offer, cancellationToken)).Data!);
+        => (await chapters.ChaptersAsync(recording, offer, cancellationToken)).Data!;
 
     /// <summary>
     /// The sounds a plan names. A transcoded recording whose sounds cannot be read is named as
