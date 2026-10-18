@@ -302,6 +302,38 @@ public sealed class RecordingFenceRuleSelfCheckTests
     }
 
     [Fact]
+    public void LeavesTheRouteThatWithdrawsAnAnswer()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Api/Controllers/Recordings/WithdrawSegmentAnswerAction.cs",
+            OffersADeletion.Replace("{id}/files", "{id}/segments/answer", StringComparison.Ordinal));
+
+        Assert.Empty(RecordingFenceRules.DeletionsOfferedByTheRecordingFeature(tree.Root));
+        Assert.Empty(RecordingFenceRules.RoutesThatThrowARecordingAway(tree.Root));
+    }
+
+    [Theory]
+    [InlineData("DELETE FROM segment_answer WHERE recording_id = {id}", true)]
+    [InlineData("delete from segment_answer", true)]
+    [InlineData("context.Set<RecordingAnswer>().Where(answer => answer.RecordingId == id).ExecuteDeleteAsync()", true)]
+    [InlineData("context.Remove(answer)", true)]
+    [InlineData("UPDATE segment_answer SET withdrawn_at = {at} WHERE recording_id = {id} AND withdrawn_at IS NULL", false)]
+    public void DetectsAWithdrawalThatRemovesARow(string statement, bool removes)
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Api/Controllers/Recordings/WithdrawSegmentAnswerAction.cs",
+            OffersADeletion.Replace("{id}/files", "{id}/answer", StringComparison.Ordinal));
+        tree.Write("Carina.Infrastructure/Persistence/Repositories/SegmentAnswerRepository.cs", $"class SegmentAnswerRepository {{ void Withdraw() => Run(\"{statement}\"); }}");
+
+        (IReadOnlyList<string> routes, bool removesARow) = RecordingFenceRules.HowAnAnswerIsWithdrawn(tree.Root);
+
+        Assert.Equal(["api/recordings/{id}/answer"], routes);
+        Assert.Equal(removes, removesARow);
+    }
+
+    [Fact]
     public void DetectsASecondPlaceThatErasesALedgerRow()
     {
         using var tree = new SourceTree();

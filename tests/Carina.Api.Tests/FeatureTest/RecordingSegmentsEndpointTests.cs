@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 
 using Carina.Domain.Recordings;
@@ -26,6 +27,10 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
             services.AddSingleton<IRecordingDirectory>(Recordings);
             services.AddSingleton<ISegmentModelVersionRepository>(Versions);
             services.AddSingleton<IRecordingDetectionRepository>(Detections);
+            services.AddSingleton<ISegmentAnswerRepository>(Answers);
+            services.AddSingleton<ISkipEventRepository>(Skips);
+            services.AddSingleton<ISegmentSettingsRepository>(Settings);
+            services.AddSingleton<TimeProvider>(Clock);
         }));
 
         Client = Built.WithTestScheme().CreateClient();
@@ -42,7 +47,19 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
 
     public HeldRecordingDetections Detections { get; } = new();
 
+    public HeldSegmentAnswers Answers { get; } = new();
+
+    public HeldSkipEvents Skips { get; } = new();
+
+    public HeldSegmentSettings Settings { get; } = new();
+
+    public MovingClock Clock { get; } = new(RecordingFeature.Noon.AddHours(2));
+
     public static string Path(RecordingId id) => $"/api/recordings/{id.Wire}/segments";
+
+    public static string AnswerPath(RecordingId id) => $"/api/recordings/{id.Wire}/segments/answer";
+
+    public static string SkipsPath(RecordingId id) => $"/api/recordings/{id.Wire}/skips";
 
     public Recording Ended()
     {
@@ -96,7 +113,49 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
         return (response.StatusCode, document.RootElement.Clone());
     }
 
+    public Task<(HttpStatusCode Status, JsonElement Body)> PutAsync(string path, string json, HttpClient? client = null)
+        => SendAsync(HttpMethod.Put, path, json, client);
+
+    public Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, string json, HttpClient? client = null)
+        => SendAsync(HttpMethod.Post, path, json, client);
+
+    public Task<(HttpStatusCode Status, JsonElement Body)> DeleteAsync(string path, HttpClient? client = null)
+        => SendAsync(HttpMethod.Delete, path, null, client);
+
     public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
+
+    public HttpClient FromElsewhere()
+    {
+        HttpClient client = Built.WithTestScheme().CreateClient();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
+        client.DefaultRequestHeaders.Remove(Microsoft.Net.Http.Headers.HeaderNames.Origin);
+        client.DefaultRequestHeaders.Add(Microsoft.Net.Http.Headers.HeaderNames.Origin, "https://elsewhere.example");
+
+        return client;
+    }
+
+    private async Task<(HttpStatusCode Status, JsonElement Body)> SendAsync(HttpMethod method, string path, string? json, HttpClient? client)
+    {
+        using var request = new HttpRequestMessage(method, new Uri(path, UriKind.Relative));
+
+        if (json is not null)
+        {
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        }
+
+        using HttpResponseMessage response = await (client ?? Client).SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+
+        if (!body.StartsWith('{'))
+        {
+            return (response.StatusCode, default);
+        }
+
+        using var document = JsonDocument.Parse(body);
+
+        return (response.StatusCode, document.RootElement.Clone());
+    }
 
     public async ValueTask DisposeAsync()
     {

@@ -153,6 +153,68 @@ public sealed class ArtefactChapterRewritesTests : IDisposable
         Assert.Equal([EncodeScratchKind.ChapteredWork], harness.Encodes.Scratch.Files.Select(scratch => scratch.Kind));
     }
 
+    [Fact(DisplayName = "BR-CD-010: chapters that agree with the answer standing are left in the artefact and written down as standing for it: when it was given, and no version")]
+    public async Task ChaptersThatAgreeWithTheAnswerAreWrittenDownAsStandingForIt()
+    {
+        EncodeJob job = harness.Stood(Recorded, APod, TheArtefact);
+        RecordingDetection detection = harness.Awaiting(job, SegmentDetectionState.Marked, null, Moved());
+        DateTime answeredAt = harness.Now.AddHours(-1);
+        RecordingAnswer answer = harness.Answered(job, detection, answeredAt, null, Given(0, 300.2, SegmentKind.Programme), Given(300.2, 360, SegmentKind.Break), Given(360, Recorded.TotalSeconds, SegmentKind.Programme));
+
+        ChapterRewriteRound round = await harness.Rewrites.RewriteAsync(1, 4, [], Spare, Cancel);
+
+        Assert.Equal((1, 0), (round.AsCarried, round.Rewritten));
+        Assert.Equal(
+            (ChapterDetectorName.Segments, ChapterVerdict.Marked, (int?)null, (DateTime?)answeredAt),
+            (job.Chapters!.Detector, job.Chapters.Verdict, job.Chapters.ModelVersion, job.Chapters.AnsweredAt));
+        Assert.Equal(answer.BreakShare, job.Chapters.BreakShare);
+        Assert.Empty(harness.Encodes.Scratch.Files);
+    }
+
+    [Fact(DisplayName = "BR-CD-010: an answer that moved a boundary is what the artefact is written again with, whatever the detection says")]
+    public async Task AnAnswerThatMovedABoundaryIsWhatTheArtefactIsWrittenAgainWith()
+    {
+        EncodeJob job = harness.Stood(Recorded, APod, TheArtefact);
+        RecordingDetection detection = harness.Awaiting(job, SegmentDetectionState.Marked, null, Span(0, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Break), Span(360, Recorded.TotalSeconds, SegmentKind.Programme));
+        harness.Answered(job, detection, harness.Now.AddHours(-1), null, Given(0, 600, SegmentKind.Programme), Given(600, 690, SegmentKind.Break), Given(690, Recorded.TotalSeconds, SegmentKind.Programme));
+        string handed = harness.Encodes.Room.Under("handed-chapters");
+        harness.Encodes.Standing($"for chapters in \"$@\"; do if head -c 12 \"$chapters\" 2>/dev/null | grep -q FFMETADATA; then cp \"$chapters\" \"{handed}\"; fi; done; exit 1");
+
+        await harness.Rewrites.RewriteAsync(1, 4, [], Spare, Cancel);
+
+        string chapters = File.ReadAllText(handed);
+        Assert.Contains("START=599500\nEND=689500\ntitle=CM", chapters, StringComparison.Ordinal);
+        Assert.DoesNotContain("START=299500", chapters, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-CS-002: once the answer is withdrawn the artefact is compared with the detection again, and written down as standing for that version")]
+    public async Task OnceTheAnswerIsWithdrawnTheArtefactIsComparedWithTheDetection()
+    {
+        EncodeJob job = harness.Stood(Recorded, APod, TheArtefact);
+        RecordingDetection detection = harness.Awaiting(job, SegmentDetectionState.Marked, null, Span(0, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Break), Span(360, Recorded.TotalSeconds, SegmentKind.Programme));
+        harness.Answered(job, detection, harness.Now.AddHours(-2), harness.Now.AddHours(-1), Given(0, 600, SegmentKind.Programme), Given(600, 690, SegmentKind.Break), Given(690, Recorded.TotalSeconds, SegmentKind.Programme));
+
+        ChapterRewriteRound round = await harness.Rewrites.RewriteAsync(1, 4, [], Spare, Cancel);
+
+        Assert.Equal(1, round.AsCarried);
+        Assert.Equal(((int?)1, (DateTime?)null), (job.Chapters!.ModelVersion, job.Chapters.AnsweredAt));
+    }
+
+    [Fact(DisplayName = "BR-CS-002: once the answer of a recording no version detected is withdrawn, the chapters it gave are taken out of the artefact")]
+    public async Task OnceTheAnswerOfAnUndetectedRecordingIsWithdrawnItsChaptersAreTakenOut()
+    {
+        EncodeJob job = harness.Stood(Recorded, APod, TheArtefact);
+        harness.Answered(job, null, harness.Now.AddHours(-2), harness.Now.AddHours(-1), Given(0, 300, SegmentKind.Programme), Given(300, 360, SegmentKind.Break), Given(360, Recorded.TotalSeconds, SegmentKind.Programme));
+        string arguments = harness.Encodes.Room.Under("arguments");
+        harness.Encodes.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; exit 1");
+
+        await harness.Rewrites.RewriteAsync(1, 4, [], Spare, Cancel);
+
+        string[] handed = File.ReadAllLines(arguments);
+        Assert.DoesNotContain("ffmetadata", handed);
+        Assert.Equal("-1", handed[Array.IndexOf(handed, "-map_chapters") + 1]);
+    }
+
     private static Task<bool> Spare(CancellationToken cancellationToken) => Task.FromResult(true);
 
     private static Task<bool> Needed(CancellationToken cancellationToken) => Task.FromResult(false);
@@ -162,4 +224,7 @@ public sealed class ArtefactChapterRewritesTests : IDisposable
 
     private static SegmentSpan Span(double starts, double ends, SegmentKind kind)
         => new(TimeSpan.FromSeconds(starts), TimeSpan.FromSeconds(ends), kind, 0.9);
+
+    private static SegmentSpan Given(double starts, double ends, SegmentKind kind)
+        => new(TimeSpan.FromSeconds(starts), TimeSpan.FromSeconds(ends), kind, null);
 }

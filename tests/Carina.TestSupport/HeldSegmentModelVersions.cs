@@ -53,4 +53,7 @@ public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
 
         return Task.FromResult(Active);
     }
+
+    public Task<SegmentModelVersion?> FindAsync(int number, CancellationToken cancellationToken)
+        => Task.FromResult(Active.Number == number ? Active : Others.FirstOrDefault(version => version.Number == number));
 }

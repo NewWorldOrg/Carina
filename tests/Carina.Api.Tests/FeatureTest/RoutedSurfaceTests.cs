@@ -82,6 +82,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "DELETE /api/encoding/destinations/{id:guid}",
                 "DELETE /api/encoding/profiles/{id:guid}",
                 "DELETE /api/recordings/{id}",
+                "DELETE /api/recordings/{id}/segments/answer",
                 "DELETE /api/reservations/{id:guid}",
                 "DELETE /api/rules/{id:guid}",
                 "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
@@ -89,11 +90,11 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             EndpointRules.SurfacesThatDelete(Inventory()));
     }
 
-    [Fact]
-    public void TheOnlyWayToDeleteUnderTheRecordingSurfaceIsTheOneAPersonAsksForByHand()
+    [Fact(DisplayName = "the ways to take the delete method under the recording surface are the ones a person asks for by hand: throwing a recording away, and withdrawing an answer, which keeps its row")]
+    public void TheOnlyWaysToDeleteUnderTheRecordingSurfaceAreTheOnesAPersonAsksForByHand()
     {
         Assert.Equal(
-            ["DELETE /api/recordings/{id}"],
+            ["DELETE /api/recordings/{id}", "DELETE /api/recordings/{id}/segments/answer"],
             EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings"));
     }
 
@@ -214,16 +215,28 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             segments.Select(surface => surface.Effect).ToArray());
     }
 
-    [Fact(DisplayName = "BR-CA-001: the stretches of a recording are read under the recording, and nothing there writes yet")]
-    public void TheStretchesOfARecordingAreReadUnderTheRecording()
+    [Fact(DisplayName = "BR-CA-001: the stretches of a recording are read, answered and withdrawn under the recording and the skip events taken there, every write a change and none destructive")]
+    public void TheStretchesOfARecordingAreReadAndAnsweredUnderTheRecording()
     {
         RoutedSurface[] segments =
         [
-            .. Inventory().Where(surface => surface.Pattern.StartsWith("/api/recordings/{id}/segments", StringComparison.Ordinal)),
+            .. Inventory()
+                .Where(surface => surface.Pattern.StartsWith("/api/recordings/{id}/segments", StringComparison.Ordinal)
+                                  || surface.Pattern.StartsWith("/api/recordings/{id}/skips", StringComparison.Ordinal))
+                .OrderBy(surface => surface.ToString(), StringComparer.Ordinal),
         ];
 
-        Assert.Equal(["GET /api/recordings/{id}/segments"], segments.Select(surface => surface.ToString()).ToArray());
-        Assert.Equal([EndpointEffect.Reading], segments.Select(surface => surface.Effect).ToArray());
+        Assert.Equal(
+            [
+                "DELETE /api/recordings/{id}/segments/answer",
+                "GET /api/recordings/{id}/segments",
+                "POST /api/recordings/{id}/skips",
+                "PUT /api/recordings/{id}/segments",
+            ],
+            segments.Select(surface => surface.ToString()).ToArray());
+        Assert.Equal(
+            [EndpointEffect.Changing, EndpointEffect.Reading, EndpointEffect.Changing, EndpointEffect.Changing],
+            segments.Select(surface => surface.Effect).ToArray());
     }
 
     [Fact]

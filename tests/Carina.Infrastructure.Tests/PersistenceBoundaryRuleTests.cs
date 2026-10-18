@@ -243,13 +243,14 @@ public sealed class PersistenceBoundaryRuleTests
             StringComparer.Ordinal);
     }
 
-    [Fact(DisplayName = "the segment tables are the learning data, the settings, the catalog, the versions of the model and the detections, and the only keys among them are a stretch's into its entry and a detection's into its version")]
+    [Fact(DisplayName = "BR-CD-002: the segment tables are the learning data, the settings, the catalog, the versions of the model, the detections, the answers and the skip events, and the only keys among them are a stretch's into its entry and a detection's and a skip event's into their version")]
     public void TheSegmentTablesHoldNoKeyIntoAnotherDomain()
     {
         using CarinaDbContext context = Carina();
 
         Assert.Equal(
             [
+                "segment_answer",
                 "segment_catalog_entry",
                 "segment_catalog_occurrence",
                 "segment_detection",
@@ -257,11 +258,16 @@ public sealed class PersistenceBoundaryRuleTests
                 "segment_learning_data",
                 "segment_model_version",
                 "segment_settings",
+                "segment_skip_event",
             ],
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Segments));
 
         Assert.Equal(
-            ["segment_catalog_occurrence -> segment_catalog_entry", "segment_detection -> segment_model_version"],
+            [
+                "segment_catalog_occurrence -> segment_catalog_entry",
+                "segment_detection -> segment_model_version",
+                "segment_skip_event -> segment_model_version",
+            ],
             context.Model
                 .GetEntityTypes()
                 .SelectMany(entityType => entityType.GetForeignKeys())
@@ -275,6 +281,8 @@ public sealed class PersistenceBoundaryRuleTests
     [InlineData("segment_learning_data")]
     [InlineData("segment_catalog_occurrence")]
     [InlineData("segment_detection")]
+    [InlineData("segment_answer")]
+    [InlineData("segment_skip_event")]
     public void TheLearningDataReachesTheRecordingByValue(string table)
     {
         using CarinaDbContext context = Carina();

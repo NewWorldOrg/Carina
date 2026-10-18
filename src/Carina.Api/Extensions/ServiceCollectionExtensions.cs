@@ -62,6 +62,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SegmentVersionService>();
         services.AddScoped<SegmentSettingsService>();
         services.AddScoped<SegmentStatusService>();
+        services.AddScoped<SkipEventService>();
         services.AddScoped<QualityService>();
         services.AddScoped<QualityThresholdService>();
         services.AddScoped<QualityIncidentService>();
