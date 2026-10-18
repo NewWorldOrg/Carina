@@ -263,8 +263,8 @@ public sealed class SegmentModelTests
         Assert.Equal(1.0, four.BreakScore(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 0)), Station, null), 12);
     }
 
-    [Fact(DisplayName = "the offsets of the station and of the series are added to the score of every kind weighed against the programme")]
-    public void TheOffsetsAreAddedToEveryKind()
+    [Fact(DisplayName = "the offsets of the station and of the series are added to the score of a break alone, so the opening and the ending score by their own weights")]
+    public void TheOffsetsWeighTheBreakAlone()
     {
         SegmentModel offset = new(
             SegmentModel.FirstOfFourKinds.Weights,
@@ -274,8 +274,8 @@ public sealed class SegmentModelTests
             SegmentModel.FirstOfFourKinds.Standardisation);
 
         Assert.Equal(-2.5 + 0.3 - 0.2, offset.Score(SegmentKind.Break, Features(), Station, "架空の物語"), 12);
-        Assert.Equal(-6.0 + 0.3 - 0.2, offset.Score(SegmentKind.Opening, Features(), Station, "架空の物語"), 12);
-        Assert.Equal(-6.0 + 0.3, offset.Score(SegmentKind.Ending, Features(), Station, null), 12);
+        Assert.Equal(-6.0, offset.Score(SegmentKind.Opening, Features(), Station, "架空の物語"), 12);
+        Assert.Equal(-6.0, offset.Score(SegmentKind.Ending, Features(), Station, null), 12);
         Assert.Equal(0, offset.Score(SegmentKind.Programme, Features(), Station, "架空の物語"));
         Assert.Throws<ArgumentException>(() => SegmentModel.First.Score(SegmentKind.Opening, Features(), Station, null));
     }

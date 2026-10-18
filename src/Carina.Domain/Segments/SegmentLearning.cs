@@ -12,7 +12,10 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// Learns a candidate from every recording handed over and judges it on the confirmed ones. Each recording
 /// is read with the catalog as it would have heard it (<see cref="LearningCatalog"/>) and labelled by
 /// <see cref="SegmentLabels"/>; labels of the programme, of breaks, of openings and of endings are learned
-/// from, and with an opening or an ending among them the candidate tells four kinds apart. Every setting of
+/// from, and with an opening or an ending among them the candidate tells four kinds apart. With none among
+/// them, a candidate learned beside a version in use that tells four kinds apart keeps that version's opening
+/// and ending as they are, and only its break is learned, so that a round with nothing to learn the opening and
+/// the ending from never takes them away. Every setting of
 /// the search is judged by leave-one-out in time: each confirmed recording is detected again with a model
 /// fitted to every other recording's labels, none of them read with its answer, through the catalog or
 /// through the earlier episodes they remember, and compared with its answer. The setting chosen skips no more than
@@ -90,11 +93,12 @@ public static class SegmentLearning
             .ToDictionary(at => at, at => labelled[at].Learner.Labelled(reading, judged.Recording.Id).Samples);
     }
 
-    private static Trial Tried(Prepared prepared, int[] judged, SegmentThresholds setting, double skipThreshold, CancellationToken cancellationToken)
+    private static Trial Tried(Prepared prepared, int[] judged, SegmentThresholds setting, double skipThreshold, SegmentModel inUse, CancellationToken cancellationToken)
     {
         Labelled[] labelled = prepared.Labelled;
         IReadOnlyList<SegmentSample>[] each = [.. labelled.Select(learned => learned.Samples)];
-        SegmentFit full = SegmentRegression.Fit([.. each.SelectMany(samples => samples)], setting);
+        SegmentModel? kept = inUse.Kinds is 4 && !each.Any(samples => samples.Any(SegmentRegression.Themed)) ? inUse : null;
+        SegmentFit full = SegmentRegression.Fit([.. each.SelectMany(samples => samples)], setting, kept: kept);
         List<SegmentComparison> compared = [];
 
         for (int fold = 0; fold < judged.Length; fold++)
@@ -102,7 +106,8 @@ public static class SegmentLearning
             cancellationToken.ThrowIfCancellationRequested();
 
             int left = judged[fold];
-            SegmentModel apart = SegmentRegression.Fit(LeaveOneOut.Samples(each, left, prepared.ReadAgain[fold]), setting, full.Model).Model;
+            IReadOnlyList<SegmentSample> others = LeaveOneOut.Samples(each, left, prepared.ReadAgain[fold]);
+            SegmentModel apart = SegmentRegression.Fit(others, setting, full.Model, others.Any(SegmentRegression.Themed) ? null : kept).Model;
 
             compared.Add(labelled[left].Learner.Compared(SegmentDetector.Detect(labelled[left].Pieces, apart)));
         }
@@ -216,7 +221,7 @@ public static class SegmentLearning
                 return;
             }
 
-            Trial trial = Tried(ready, judged, reading.ElementAt(settingAt), skipThreshold, cancellationToken);
+            Trial trial = Tried(ready, judged, reading.ElementAt(settingAt), skipThreshold, active.Model, cancellationToken);
 
             if (best is null || Better(trial.Metrics, best.Metrics, used.Metrics))
             {

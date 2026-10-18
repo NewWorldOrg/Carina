@@ -194,6 +194,42 @@ public sealed class SegmentLearningTests
         Assert.True(learned.Evaluation.Metrics.BoundaryRecallWithin2s > learned.InUse.Metrics.BoundaryRecallWithin2s);
     }
 
+    [Fact(DisplayName = "A-051: a round with no opening or ending labelled keeps the opening and the ending of the four-kind version in use as they are, learns only the break, and finds the same opening on a recording the catalog hears one in")]
+    public void ARoundWithNoOpeningLabelledKeepsTheVersionsOpening()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> sounds) = Taught(Weeks);
+        recordings.Add(Judged(RecordingId.New(), Weeks));
+        (LearningRecording opened, CatalogSound heard) = JudgedOpened(RecordingId.New(), Weeks + 1);
+        LearningCatalog catalog = new([.. sounds, heard], SeriesLinks.None);
+        SegmentModel inUse = FourKindsInUse.Model;
+
+        SegmentLearned learned = Learn(recordings, sounds, active: FourKindsInUse);
+        SegmentModel candidate = learned.Candidate;
+
+        Assert.Equal(4, candidate.Kinds);
+        Assert.Equal(inUse.Weights.Classes[SegmentKind.Opening], candidate.Weights.Classes[SegmentKind.Opening]);
+        Assert.Equal(inUse.Weights.Classes[SegmentKind.Ending], candidate.Weights.Classes[SegmentKind.Ending]);
+        Assert.All(
+            [SegmentFeature.CatalogOpeningShare, SegmentFeature.PastOpeningShare, SegmentFeature.CatalogEndingShare, SegmentFeature.PastEndingShare],
+            name => Assert.Equal(inUse.Standardisation[name], candidate.Standardisation[name]));
+        Assert.NotEqual(inUse.Weights.Classes[SegmentKind.Break], candidate.Weights.Classes[SegmentKind.Break]);
+        Assert.Equal(Themes(Compared(opened, catalog, inUse).Shown), Themes(Compared(opened, catalog, candidate).Shown));
+        Assert.Single(Themes(Compared(opened, catalog, candidate).Shown));
+    }
+
+    [Fact(DisplayName = "A-051: a round with openings labelled learns the opening afresh, beside a four-kind version in use too")]
+    public void ARoundWithOpeningsLabelledLearnsTheOpeningAfresh()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> sounds) = Opened(Weeks);
+        (LearningRecording judged, CatalogSound heard) = JudgedOpened(RecordingId.New(), Weeks);
+
+        SegmentLearned learned = Learn([.. recordings, judged], [.. sounds, heard], active: FourKindsInUse);
+
+        Assert.Equal(4, learned.Candidate.Kinds);
+        Assert.NotEqual(FourKindsInUse.Model.Weights.Classes[SegmentKind.Opening], learned.Candidate.Weights.Classes[SegmentKind.Opening]);
+        Assert.NotEqual(FourKindsInUse.Model.Weights.Classes[SegmentKind.Ending], learned.Candidate.Weights.Classes[SegmentKind.Ending]);
+    }
+
     [Fact(DisplayName = "A-051: each confirmed recording is judged by a model learned from the others alone, its own opening included, and a model that learned from it too would score it higher")]
     public void EachRecordingIsJudgedWithoutItsOwnOpening()
     {
@@ -350,6 +386,9 @@ public sealed class SegmentLearningTests
     /// An earlier episode of <paramref name="recording"/> remembered by <see cref="ThemedAnswer"/> alone.
     /// </summary>
     private static PastEpisode Themed(RecordingId recording) => new(recording, TimeSpan.Zero, null, null, ThemedAnswer);
+
+    private static (TimeSpan Starts, TimeSpan Ends, SegmentKind Kind)[] Themes(IReadOnlyList<SegmentSpan> shown)
+        => [.. shown.Where(span => span.Kind is SegmentKind.Opening or SegmentKind.Ending).Select(span => (span.Starts, span.Ends, span.Kind))];
 
     private static SegmentComparison Compared(LearningRecording recording, LearningCatalog catalog, SegmentModel model)
         => new(

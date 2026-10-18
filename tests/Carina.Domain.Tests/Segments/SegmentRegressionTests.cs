@@ -185,20 +185,62 @@ public sealed class SegmentRegressionTests
         Assert.True(Chance(fit, samples[0], SegmentKind.Break) > Chance(fit, samples[0], SegmentKind.Opening));
     }
 
-    [Fact(DisplayName = "BR-CD-007: the offsets of a station and a series are shared by every kind weighed, so a station whose segments are more often not the programme has the larger one")]
-    public void FourKindsShareTheOffsets()
+    [Fact(DisplayName = "BR-CD-007: the offsets of a station and a series weigh the break alone, so a station with more breaks has the larger one whatever its openings and endings")]
+    public void FourKindsLearnTheOffsetsOfBreaks()
     {
+        SegmentKind[] busy = [SegmentKind.Break, SegmentKind.Break, SegmentKind.Break, SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Ending];
+        SegmentKind[] quiet = [SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending];
         SegmentSample[] samples =
         [
-            .. Enumerable.Range(0, 40).Select(at => Sample(at % 4 is 0 ? SegmentKind.Programme : (SegmentKind)(2 + (at % 3)), 1.0, station: Station)),
-            .. Enumerable.Range(0, 40).Select(at => Sample(at % 4 is 0 ? (SegmentKind)(2 + (at % 3)) : SegmentKind.Programme, 1.0, station: OtherStation)),
+            .. Enumerable.Range(0, 42).Select(at => Sample(busy[at % busy.Length], 1.0, station: Station)),
+            .. Enumerable.Range(0, 42).Select(at => Sample(quiet[at % quiet.Length], 1.0, station: OtherStation)),
         ];
 
         SegmentModel model = SegmentRegression.Fit(samples, Pulled(1, 1, 1)).Model;
+        SegmentFeatureValues none = samples[0].Features;
 
         Assert.Equal(4, model.Kinds);
         Assert.True(model.StationOffsets[Station] > model.StationOffsets[OtherStation]);
+        Assert.Equal(model.Score(SegmentKind.Opening, none, Station, null), model.Score(SegmentKind.Opening, none, OtherStation, null));
         Assert.Equal([Station, OtherStation], model.StationOffsets.Keys);
+    }
+
+    [Fact(DisplayName = "A-051: with the opening and the ending kept from a version that weighs them, the fit weighs the break as the two-kind fit does and hands the kept weights and their scales on unchanged")]
+    public void TheOpeningAndTheEndingAreKeptUnchanged()
+    {
+        SegmentSample[] samples =
+        [
+            .. Enumerable.Range(0, 30).Select(at => Sample(at % 3 is 0, 0.2 + (at % 4 * 0.2), 5 + (at * 7 % 90), at % 7 / 7.0, at % 2 is 0 ? Station : OtherStation, at % 3 is 1 ? "架空の物語" : null)),
+        ];
+        SegmentModel bare = Kept(new Dictionary<string, double>(), new Dictionary<string, FeatureScale>());
+        SegmentModel weighing = Kept(
+            new Dictionary<string, double> { [SegmentFeature.Length] = 0.5, [SegmentFeature.CatalogOpeningShare] = 8 },
+            new Dictionary<string, FeatureScale> { [SegmentFeature.Length] = new(60, 30), [SegmentFeature.CatalogOpeningShare] = new(0.2, 0.5) });
+
+        SegmentFit two = SegmentRegression.Fit(samples, SegmentThresholds.Initial);
+        SegmentFit keptBare = SegmentRegression.Fit(samples, SegmentThresholds.Initial, kept: bare);
+        SegmentFit keptWeighing = SegmentRegression.Fit(samples, SegmentThresholds.Initial, two.Model, weighing);
+
+        Assert.Equal(4, keptBare.Model.Kinds);
+        Assert.Equal(two.Model.Weights.Classes[SegmentKind.Break], keptBare.Model.Weights.Classes[SegmentKind.Break]);
+        Assert.True(SortedMapsEqual(two.Model.Standardisation, keptBare.Model.Standardisation));
+        Assert.Equal(bare.Weights.Classes[SegmentKind.Opening], keptBare.Model.Weights.Classes[SegmentKind.Opening]);
+        Assert.Equal(weighing.Weights.Classes[SegmentKind.Opening], keptWeighing.Model.Weights.Classes[SegmentKind.Opening]);
+        Assert.Equal(weighing.Weights.Classes[SegmentKind.Ending], keptWeighing.Model.Weights.Classes[SegmentKind.Ending]);
+        Assert.Equal(new FeatureScale(60, 30), keptWeighing.Model.Standardisation[SegmentFeature.Length]);
+        Assert.Equal(new FeatureScale(0.2, 0.5), keptWeighing.Model.Standardisation[SegmentFeature.CatalogOpeningShare]);
+        Assert.Equal(two.Model.Standardisation[SegmentFeature.LogoShare], keptWeighing.Model.Standardisation[SegmentFeature.LogoShare]);
+        Assert.NotEqual(weighing.Weights.Classes[SegmentKind.Break], keptWeighing.Model.Weights.Classes[SegmentKind.Break]);
+        Assert.True(keptWeighing.Converged);
+    }
+
+    [Fact(DisplayName = "the opening and the ending are kept only from a version that weighs them, and only for samples that label neither")]
+    public void TheOpeningAndTheEndingAreKeptOnlyWhereNothingLabelsThem()
+    {
+        SegmentSample[] labelled = [Sample(true, 1.0, 15), Sample(SegmentKind.Opening, 1.0, 90)];
+
+        Assert.Throws<ArgumentException>(() => SegmentRegression.Fit(labelled, SegmentThresholds.Initial, kept: SegmentModel.FirstOfFourKinds));
+        Assert.Throws<ArgumentException>(() => SegmentRegression.Fit([Sample(true, 1.0, 15)], SegmentThresholds.Initial, kept: SegmentModel.First));
     }
 
     [Fact(DisplayName = "the same four-kind samples give an identical model every time, and starting from the first version of four kinds or of two reaches the same one")]
@@ -245,6 +287,22 @@ public sealed class SegmentRegressionTests
         Assert.Throws<ArgumentException>(() => new SegmentSample(none, Station, string.Empty, SegmentKind.Break, 1));
         Assert.Throws<ArgumentOutOfRangeException>(() => new SegmentSample(none, Station, null, (SegmentKind)9, 1));
     }
+
+    private static SegmentModel Kept(IReadOnlyDictionary<string, double> opening, IReadOnlyDictionary<string, FeatureScale> scales)
+        => new(
+            new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
+            {
+                [SegmentKind.Break] = new(-1.0, new Dictionary<string, double>()),
+                [SegmentKind.Opening] = new(-6.0, opening),
+                [SegmentKind.Ending] = new(-5.0, opening),
+            }),
+            new Dictionary<string, double>(),
+            new Dictionary<string, double>(),
+            SegmentThresholds.Initial,
+            scales);
+
+    private static bool SortedMapsEqual(IReadOnlyDictionary<string, FeatureScale> one, IReadOnlyDictionary<string, FeatureScale> other)
+        => one.Count == other.Count && one.All(pair => other.TryGetValue(pair.Key, out FeatureScale? found) && found == pair.Value);
 
     private static double Label(SegmentSample sample) => sample.Kind is SegmentKind.Break ? 1 : 0;
 

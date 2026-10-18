@@ -162,8 +162,26 @@ internal static class LearningWorld
     public static PlacedOccurrence Heard(CatalogEntryId entry, CatalogSeries series, int week, double atRecording, double seconds, RecordingId? recording = null, SegmentKind? answer = null)
         => CatalogSeries.At(entry, series.Episode(week), atRecording - CatalogSeries.Lead.TotalSeconds, seconds, answer, recording);
 
-    public static SegmentLearned Learn(IReadOnlyList<LearningRecording> recordings, IReadOnlyList<CatalogSound> sounds, SegmentSearch? search = null)
-        => SegmentLearning.Learn(recordings, new LearningCatalog(sounds, SeriesLinks.None), InUse, search ?? OneSetting, SegmentSettingsStanding.DefaultSkipThreshold, Now);
+    /// <summary>
+    /// <see cref="InUse"/> as the first version of four kinds would stand in its place.
+    /// </summary>
+    public static readonly SegmentModelVersion FourKindsInUse = SegmentModelVersion.Rehydrate(
+        SegmentModelVersion.FirstNumber + 1,
+        SegmentModelVersionState.Active,
+        false,
+        SegmentModel.FirstOfFourKinds,
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        null,
+        null,
+        null);
+
+    public static SegmentLearned Learn(
+        IReadOnlyList<LearningRecording> recordings,
+        IReadOnlyList<CatalogSound> sounds,
+        SegmentSearch? search = null,
+        SegmentModelVersion? active = null)
+        => SegmentLearning.Learn(recordings, new LearningCatalog(sounds, SeriesLinks.None), active ?? InUse, search ?? OneSetting, SegmentSettingsStanding.DefaultSkipThreshold, Now);
 
     public static string Figures(SegmentMetrics? metrics)
         => metrics is null

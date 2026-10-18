@@ -9,12 +9,13 @@ namespace Carina.Domain.Segments;
 /// The parameters of one version of the model segments are classified by: the weights of the logistic
 /// regression, an offset per station (keyed <c>network id:service id</c>) and per series name, the
 /// thresholds, and the mean and standard deviation each feature is standardised with. Every feature the
-/// weights name has a scale. A kind weighed against the programme is scored by its own weights and by
-/// both offsets, which are the same for every kind. <see cref="First"/> is the version made by hand from
-/// the rule-based detection before any learning: a piece of 15-second multiples between two silent cuts,
-/// out of the logo, or heard as an advert in the catalog, is a break. <see cref="FirstOfFourKinds"/> weighs
-/// the break the same way and adds the opening and the ending made by hand: a piece the catalog hears as
-/// one of them is that, the more so where earlier episodes of the series had it at the same place.
+/// weights name has a scale. A kind weighed against the programme is scored by its own weights, and a break
+/// by both offsets besides, which tell how much more often a station or a series breaks for adverts.
+/// <see cref="First"/> is the version made by hand from the rule-based detection before any learning: a piece
+/// of 15-second multiples between two silent cuts, out of the logo, or heard as an advert in the catalog, is a
+/// break. <see cref="FirstOfFourKinds"/> weighs the break the same way and adds the opening and the ending made
+/// by hand: a piece the catalog hears as one of them is that, the more so where earlier episodes of the series
+/// had it at the same place.
 /// </summary>
 public sealed class SegmentModel : IEquatable<SegmentModel>
 {
@@ -132,8 +133,8 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
 
     /// <summary>
     /// The score of a segment being <paramref name="kind"/> rather than programme: the intercept, each weighted
-    /// feature standardised (one not known counts as its mean), and the offsets of the station and the series;
-    /// nothing for the programme itself.
+    /// feature standardised (one not known counts as its mean), and for a break the offsets of the station and
+    /// the series; nothing for the programme itself.
     /// </summary>
     public double Score(SegmentKind kind, SegmentFeatureValues features, string station, string? series)
     {
@@ -150,11 +151,16 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             throw new ArgumentException("A kind is scored by a version that weighs it.", nameof(kind));
         }
 
-        double score = weights.Bias + StationOffsets.GetValueOrDefault(station);
+        double score = weights.Bias;
 
-        if (series is not null)
+        if (kind is SegmentKind.Break)
         {
-            score += SeriesOffsets.GetValueOrDefault(series);
+            score += StationOffsets.GetValueOrDefault(station);
+
+            if (series is not null)
+            {
+                score += SeriesOffsets.GetValueOrDefault(series);
+            }
         }
 
         foreach ((string name, double weight) in weights.Features)
