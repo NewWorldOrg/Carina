@@ -59,6 +59,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeDestinationService>();
         services.AddScoped<EncodeJobService>();
         services.AddScoped<EncodeAutoRunService>();
+        services.AddScoped<SegmentVersionService>();
         services.AddScoped<SegmentSettingsService>();
         services.AddScoped<SegmentStatusService>();
         services.AddScoped<QualityService>();

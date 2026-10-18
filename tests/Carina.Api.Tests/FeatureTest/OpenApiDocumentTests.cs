@@ -203,6 +203,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "logIn",
                 "logOut",
                 "patchSegmentSettings",
+                "patchSegmentVersion",
                 "patchTuner",
                 "playVideo",
                 "previewRules",
@@ -701,6 +702,24 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             Properties(schemas, "SegmentVersionHistoryResponder"));
         Assert.Equal(["at", "returnedAfterSkipShare", "previousShare", "skips"], Properties(schemas, "SegmentRolledBackResponder"));
         Assert.Equal(["current", "recommended"], Properties(schemas, "SkipThresholdResponder"));
+    }
+
+    [Fact(DisplayName = "BR-CS-003: choosing the version in use is described by the number or the choice left to learning it takes, and answers the version in use, or why not")]
+    public async Task ChoosingTheVersionInUseIsDescribed()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonObject path = document["paths"]!["/api/segments/version"]!.AsObject();
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(["patch"], path.Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
+        Assert.Equal(
+            ["200", "400", "401", "404", "409", "500"],
+            path["patch"]!["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(["number", "byHand"], Properties(schemas, "PatchSegmentVersionRequest"));
+        Assert.EndsWith(
+            "BaseResponderOfSegmentVersionResponder",
+            path["patch"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!["$ref"]!.GetValue<string>(),
+            StringComparison.Ordinal);
     }
 
     private static string[] Properties(JsonNode schemas, string name)
