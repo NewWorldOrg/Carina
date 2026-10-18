@@ -14,7 +14,8 @@ namespace Carina.Api.Responder.Playback;
 
 /// <summary>
 /// A chapter of the file a plan hands over, on that file's clock to the hundredth of a second, what it is, and
-/// whether a button offers to skip it. A chapter of a kind the plan has no word for is left out.
+/// whether a button offers to skip it. An opening and an ending are handed over as a break, and a chapter of a
+/// kind the plan has no word for is left out.
 /// </summary>
 public sealed record PlaybackChapterResponder(double StartsAtSec, double EndsAtSec, ChapterKind Kind, bool Skippable)
 {
@@ -33,7 +34,7 @@ public sealed record PlaybackChapterResponder(double StartsAtSec, double EndsAtS
     private static ChapterKind? KindOf(SegmentKind kind) => kind switch
     {
         SegmentKind.Programme => ChapterKind.Programme,
-        SegmentKind.Break => ChapterKind.Break,
+        SegmentKind.Break or SegmentKind.Opening or SegmentKind.Ending => ChapterKind.Break,
         _ => null,
     };
 

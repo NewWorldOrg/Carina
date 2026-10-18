@@ -129,12 +129,14 @@ public sealed class EncodeChapterChoiceTests
     public void ARecordingStandsWithTheDetectionByTheVersionInUse()
         => Assert.Throws<ArgumentException>(() => EncodeChapterChoice.Of(true, 2, SegmentStanding.Of(null, Detected([Span(0, 1800, SegmentKind.Programme)]))));
 
-    [Fact(DisplayName = "an artefact's chapters are the programme or a break")]
+    [Fact(DisplayName = "an artefact's chapters are the programme or a break, an opening and an ending embedded as a break")]
     public void AnArtefactsChaptersAreTheProgrammeOrABreak()
     {
         Assert.Equal(ChapterKind.Programme, EncodeChapterChoice.KindOf(SegmentKind.Programme));
         Assert.Equal(ChapterKind.Break, EncodeChapterChoice.KindOf(SegmentKind.Break));
-        Assert.Throws<ArgumentOutOfRangeException>(() => EncodeChapterChoice.KindOf(SegmentKind.Opening));
+        Assert.Equal(ChapterKind.Break, EncodeChapterChoice.KindOf(SegmentKind.Opening));
+        Assert.Equal(ChapterKind.Break, EncodeChapterChoice.KindOf(SegmentKind.Ending));
+        Assert.Throws<ArgumentOutOfRangeException>(() => EncodeChapterChoice.KindOf((SegmentKind)9));
     }
 
     private static RecordingDetection Detected(SegmentSpan[] segments, int version = 1)
