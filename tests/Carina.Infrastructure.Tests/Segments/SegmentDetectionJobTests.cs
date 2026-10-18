@@ -156,6 +156,30 @@ public sealed class SegmentDetectionJobTests
         Assert.NotNull(harness.Detections.Of(older, SegmentModelVersion.FirstNumber));
     }
 
+    [Fact(DisplayName = "BR-CD-007: once the first version of four kinds is in use, a recording detected before is detected again in spare time, the opening the catalog hears in it marked as the opening")]
+    public async Task TheFirstVersionOfFourKindsDetectsTheOpeningAgain()
+    {
+        using SegmentDetectionHarness harness = new();
+        await harness.LearningAsync(true);
+        RecordingId recording = await harness.ReadAsync(1, "架空の物語");
+        Opened(harness, recording, 20, 110);
+        SegmentDetectionJob job = harness.Job();
+        await job.LookAsync(CancellationToken.None);
+
+        harness.Versions.Active = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, false, SegmentModel.FirstOfFourKinds, Now.AddMinutes(-1), Now.AddMinutes(-1), null, null, null);
+        SegmentDetectionLook again = await job.LookAsync(CancellationToken.None);
+
+        Assert.Equal(SegmentDetectionState.NothingFound, harness.Detections.Of(recording, SegmentModelVersion.FirstNumber)!.State);
+        RecordingDetection opened = harness.Detections.Of(recording, 2)!;
+        Assert.Same(opened, again.Detected);
+        Assert.Equal(SegmentDetectionState.Marked, opened.State);
+        Assert.Equal(
+            [(0d, 20d, SegmentKind.Programme), (20d, 110d, SegmentKind.Opening), (110d, 300d, SegmentKind.Programme)],
+            opened.Segments.Select(segment => (Math.Round(segment.Starts.TotalSeconds, 1), Math.Round(segment.Ends.TotalSeconds, 1), segment.Kind)));
+        Assert.True(opened.Segments[1].Probability >= SegmentSettingsStanding.DefaultSkipThreshold);
+        Assert.Equal(0, opened.CmShare);
+    }
+
     [Fact(DisplayName = "a recording matched again after it was detected is detected again, the detection taking the place of the one kept")]
     public async Task ARecordingMatchedAgainIsDetectedAgain()
     {
@@ -262,5 +286,37 @@ public sealed class SegmentDetectionJobTests
         await harness.Job().DetectMatchedAsync(recording, CancellationToken.None);
 
         Assert.Equal(before + 3, harness.Lowest.Ran);
+    }
+
+    /// <summary>
+    /// Has the catalog hear an opening in <paramref name="recording"/> from <paramref name="from"/> to
+    /// <paramref name="to"/> seconds, and in an earlier episode.
+    /// </summary>
+    private static void Opened(SegmentDetectionHarness harness, RecordingId recording, double from, double to)
+    {
+        CatalogEntryId id = CatalogEntryId.New();
+        CatalogOccurrence heard = CatalogOccurrence.Found(
+            id,
+            recording,
+            new SoundSpan(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to)),
+            harness.Records.Row(recording)!.Programme,
+            0.05,
+            Now);
+
+        harness.Catalog.Entries.Add(CatalogEntry.Rehydrate(
+            id,
+            CatalogKind.Opening,
+            0.8,
+            CatalogDecision.Pattern,
+            TimeSpan.FromSeconds(to - from),
+            new byte[sizeof(uint) * 4],
+            2,
+            1,
+            1,
+            Now,
+            Now,
+            Now,
+            CatalogKinds.Version));
+        harness.Catalog.Occurrences.Add(heard);
     }
 }

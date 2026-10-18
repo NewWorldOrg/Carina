@@ -22,18 +22,24 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
 
     private int nextEvent = 8_100;
 
-    [Fact(DisplayName = "BR-CS-003: the first version is in use from the start, holding the first model and no figures of an evaluation")]
-    public async Task TheFirstVersionIsInUseFromTheStart()
+    [Fact(DisplayName = "BR-CS-003: the first version holds the first model and no figures of an evaluation, and the first version of four kinds, made by hand, has taken its place in use")]
+    public async Task TheFirstVersionOfFourKindsIsInUseFromTheStart()
     {
+        await using CarinaDbContext context = Context();
+        IReadOnlyList<SegmentModelVersion> kept = await new SegmentModelVersionRepository(context).ListAsync(CancellationToken.None);
+        SegmentModelVersion first = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber);
         SegmentModelVersion active = await ActiveAsync();
 
-        Assert.Equal(SegmentModelVersion.FirstNumber, active.Number);
-        Assert.Equal(SegmentModelVersionState.Active, active.State);
+        Assert.Equal(SegmentModelVersion.FirstNumber + 1, active.Number);
         Assert.False(active.ByHand);
-        Assert.Equal(2, active.Kinds);
-        Assert.Equal(SegmentModel.First, active.Model);
+        Assert.Equal(4, active.Kinds);
+        Assert.Equal(SegmentModel.FirstOfFourKinds, active.Model);
         Assert.Equal(active.TrainedAt, active.AdoptedAt);
-        Assert.Null(active.RetiredAt);
+        Assert.Null(active.Evaluation);
+        Assert.Equal(SegmentModelVersionState.Retired, first.State);
+        Assert.Equal(2, first.Kinds);
+        Assert.Equal(SegmentModel.First, first.Model);
+        Assert.Equal(active.AdoptedAt, first.RetiredAt);
         Assert.Equal(
             "NULL NULL NULL NULL NULL",
             await ScalarAsync("SELECT concat_ws(' ', coalesce(metrics::text, 'NULL'), coalesce(stations::text, 'NULL'), coalesce(evidence::text, 'NULL'), coalesce(recommended_threshold::text, 'NULL'), coalesce(rollback::text, 'NULL')) FROM segment_model_version WHERE number = 1"));
@@ -153,12 +159,12 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
 
         await using NpgsqlConnection connection = await database.OpenAsync();
         await using NpgsqlTransaction transaction = await connection.BeginTransactionAsync();
-        await ExecuteAsync(connection, Version(2, "'Candidate'", "NULL"));
+        await ExecuteAsync(connection, Version(32, "'Candidate'", "NULL"));
         await ExecuteAsync(
             connection,
             $"""
             INSERT INTO segment_detection (recording_id, model_version, state, segments, cm_share, snaps, extraction_version, catalog_until, detected_at)
-            SELECT recording_id, 2, state, segments, cm_share, snaps, extraction_version, catalog_until, detected_at FROM segment_detection WHERE recording_id = '{recording.Value}'
+            SELECT recording_id, 32, state, segments, cm_share, snaps, extraction_version, catalog_until, detected_at FROM segment_detection WHERE recording_id = '{recording.Value}'
             """);
 
         Assert.Equal("2", await ScalarAsync(connection, $"SELECT count(*) FROM segment_detection WHERE recording_id = '{recording.Value}'"));

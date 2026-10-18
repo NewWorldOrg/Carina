@@ -18,6 +18,9 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
 {
     private const string Ours = "number BETWEEN 71 AND 79";
 
+    private const string OthersOutOfUse =
+        $"UPDATE segment_model_version SET state = 'Retired', retired_at = adopted_at, by_hand = false, chosen_by_hand_at = NULL WHERE state = 'Active' AND number <> 1 AND NOT ({Ours})";
+
     private static readonly DateTime Installed = new(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -74,7 +77,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
         Assert.Equal(new SegmentTrainingLook(null, null), again);
         Assert.Equal(
             "1:Retired 71:Candidate 72:Active",
-            await ScalarAsync("SELECT string_agg(number || ':' || state, ' ' ORDER BY number) FROM segment_model_version"));
+            await ScalarAsync($"SELECT string_agg(number || ':' || state, ' ' ORDER BY number) FROM segment_model_version WHERE number = 1 OR {Ours}"));
         Assert.Equal(
             "t t t 0.65 t",
             await ScalarAsync(
@@ -132,6 +135,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
                 """
                 SELECT string_agg(concat_ws(':', number, state, CASE WHEN rollback = '{"returnedAfterSkipShare": 0.4, "previousShare": 0.1, "skips": 25, "backTo": 1}'::jsonb THEN 'kept' END), ' ' ORDER BY number)
                 FROM segment_model_version
+                WHERE number = 1 OR number BETWEEN 71 AND 79
                 """));
     }
 
@@ -166,8 +170,8 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
-    /// Leaves the first version alone in use with the first model, as the migration puts it, no versions, skips or
-    /// rounds of these tests, and no settings row.
+    /// Leaves the first version alone in use with the first model, the version of four kinds the migrations put in
+    /// use beside it as one used before, no versions, skips or rounds of these tests, and no settings row.
     /// </summary>
     private async Task ResetAsync()
     {
@@ -175,6 +179,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
         Guid[] ours = [.. skipped];
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_skip_event WHERE model_version BETWEEN 71 AND 79 OR recording_id = ANY({ours})", Cancel);
         await context.Database.ExecuteSqlRawAsync($"DELETE FROM segment_model_version WHERE {Ours}", Cancel);
+        await context.Database.ExecuteSqlRawAsync(OthersOutOfUse, Cancel);
         await context.Database.ExecuteSqlRawAsync("DELETE FROM segment_learning_round", Cancel);
         await context.Database.ExecuteSqlRawAsync("DELETE FROM segment_settings", Cancel);
 
