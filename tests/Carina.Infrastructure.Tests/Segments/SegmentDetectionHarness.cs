@@ -115,6 +115,7 @@ internal sealed class SegmentDetectionHarness : IDisposable
             .AddSingleton<ICatalogRepository>(Catalog)
             .AddSingleton<ISegmentModelVersionRepository>(Versions)
             .AddSingleton<IRecordingDetectionRepository>(Detections)
+            .AddSingleton<ISegmentAnswerRepository>(Answers)
             .AddSingleton(Lowest)
             .AddSingleton(SegmentDetectionSettings.Default)
             .AddScoped<SegmentDetecting>()
@@ -138,6 +139,8 @@ internal sealed class SegmentDetectionHarness : IDisposable
     public HeldSegmentModelVersions Versions { get; } = new();
 
     public HeldRecordingDetections Detections { get; } = new();
+
+    public HeldSegmentAnswers Answers { get; } = new();
 
     public LearningRecords Store { get; }
 

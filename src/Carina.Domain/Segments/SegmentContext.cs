@@ -1,5 +1,6 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Segments;
 
@@ -69,6 +70,38 @@ public sealed record SegmentContext
     /// </summary>
     public SegmentContext Hearing(IReadOnlyList<CatalogHeard> catalog)
         => new(NetworkId, ServiceId, Series, ProgrammeStarts, ProgrammeEnds, Genres, catalog, Logo, Past);
+
+    /// <summary>
+    /// Whether an earlier episode is remembered by the answer given for <paramref name="recording"/>.
+    /// </summary>
+    public bool RemembersTheAnswerOf(RecordingId recording)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+
+        return Past.Any(episode => episode.StandsOnTheAnswer && episode.Recording.Equals(recording));
+    }
+
+    /// <summary>
+    /// The same context remembering the episode of <paramref name="recording"/> by its detection alone, and not
+    /// at all when it was not detected.
+    /// </summary>
+    public SegmentContext WithoutTheAnswerOf(RecordingId recording)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+
+        return RemembersTheAnswerOf(recording)
+            ? new(
+                NetworkId,
+                ServiceId,
+                Series,
+                ProgrammeStarts,
+                ProgrammeEnds,
+                Genres,
+                Catalog,
+                Logo,
+                [.. Past.Select(episode => episode.Recording.Equals(recording) ? episode.WithoutTheAnswer() : episode).OfType<PastEpisode>()])
+            : this;
+    }
 
     public static SegmentContext Of(ProgrammeCopy programme, IReadOnlyList<CatalogHeard> catalog, CornerLogo logo, IReadOnlyList<PastEpisode> past)
     {

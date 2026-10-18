@@ -17,8 +17,9 @@ public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitte
 /// <see cref="FewestLogoSeconds"/> do; the share the catalog covers, in all and by the kind each stretch
 /// counts as, and the most stretches, series and stations an entry over it is heard in; where it lies from
 /// the programme's start and end, as shares of the programme's length, and the share of it outside the
-/// guide; the share of earlier episodes with a break within <see cref="PastWithin"/> of the same place
-/// from their programme's start; the share of its seconds with captions; the channels' mean likeness,
+/// guide; the share of earlier episodes with a break, and with an opening, within <see cref="PastWithin"/>
+/// of the same place from their programme's start, and with an ending within it of the same place before
+/// their programme's end; the share of its seconds with captions; the channels' mean likeness,
 /// and how far it changes across each edge over <see cref="ChannelWindow"/> on either side, when at
 /// least half of each window was measured; the changes of scene per ten seconds; the programme's first
 /// genre; and the two interactions. A feature without the readings to compute it
@@ -104,7 +105,9 @@ public static class SegmentFeatures
                 [SegmentFeature.FromStart] = (piece.From - programmeStarts) / ProgrammeLength,
                 [SegmentFeature.FromEnd] = (programmeEnds - piece.To) / ProgrammeLength,
                 [SegmentFeature.OutsideGuide] = OutsideGuide(piece),
-                [SegmentFeature.PastCmShare] = PastShare(piece),
+                [SegmentFeature.PastCmShare] = PastShare((episode, place) => episode.HadABreakNear(place, PastWithin), piece.Middle - programmeStarts),
+                [SegmentFeature.PastOpeningShare] = PastShare((episode, place) => episode.HadAnOpeningNear(place, PastWithin), piece.Middle - programmeStarts),
+                [SegmentFeature.PastEndingShare] = PastShare((episode, place) => episode.HadAnEndingNear(place, PastWithin), programmeEnds - piece.Middle),
                 [SegmentFeature.CaptionShare] = CaptionShare(piece),
                 [SegmentFeature.ChannelCorrelation] = MeanLikeness(piece.From, piece.To),
                 [SegmentFeature.HeadChannelChange] = ChannelChangeAcross(head.At),
@@ -183,17 +186,8 @@ public static class SegmentFeatures
             return (before + after) / piece.Length;
         }
 
-        private double? PastShare(Stretch piece)
-        {
-            if (context.Past.Count is 0)
-            {
-                return null;
-            }
-
-            TimeSpan place = piece.Middle - programmeStarts;
-
-            return context.Past.Count(episode => episode.HadABreakNear(place, PastWithin)) / (double)context.Past.Count;
-        }
+        private double? PastShare(Func<PastEpisode, TimeSpan, bool> had, TimeSpan place)
+            => context.Past.Count is 0 ? null : context.Past.Count(episode => had(episode, place)) / (double)context.Past.Count;
 
         private double? CaptionShare(Stretch piece)
         {
