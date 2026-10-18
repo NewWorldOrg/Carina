@@ -719,6 +719,23 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             schemas["ViewerActionKind"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
+    [Fact(DisplayName = "BR-CV-001, BR-CV-003: the kind of a stretch answered, and the action and kind of a skip event, are read as text but listed with the values they take, any of which may be left out")]
+    public async Task TheTextAnAnswerAndASkipEventReadListsItsValues()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(["programme", "break", "absent"], Choices(schemas["AnsweredSegmentRequest"]!["properties"]!["kind"]!));
+        Assert.Equal(["skipped", "dismissed", "returned", "absent"], Choices(schemas["AddSkipEventRequest"]!["properties"]!["event"]!));
+        Assert.Equal(["break", "opening", "ending", "absent"], Choices(schemas["AddSkipEventRequest"]!["properties"]!["kind"]!));
+        Assert.All(
+            [schemas["AnsweredSegmentRequest"]!["properties"]!["kind"]!, schemas["AddSkipEventRequest"]!["properties"]!["event"]!, schemas["AddSkipEventRequest"]!["properties"]!["kind"]!],
+            property => Assert.Equal(["null", "string"], property["type"]!.AsArray().Select(value => value!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray()));
+
+        static string[] Choices(JsonNode property)
+            => [.. property["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent")];
+    }
+
     [Fact(DisplayName = "BR-BV-004: a module of a recording's data broadcast is described by the numbers that name it, and its bytes are left out of the JSON the document describes")]
     public async Task AModuleOfADataBroadcastIsDescribedByTheNumbersThatNameIt()
     {

@@ -4,8 +4,9 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// One thing a viewer did with a skip button, kept for good under the recording's id by value: what
-/// <see cref="ViewerAction"/> says, and nothing of who did it. At most <see cref="MostAnHour"/> are taken for one
-/// recording in any hour, and the moments it names lie within the recording, to <see cref="Resolution"/>.
+/// <see cref="ViewerAction"/> says, and nothing of who did it. A button offers one of <see cref="KindsOffered"/>;
+/// at most <see cref="MostAnHour"/> events are taken for one recording in any hour, and the moments one names lie
+/// within the recording, to <see cref="Resolution"/>.
 /// </summary>
 public sealed class SkipEvent
 {
@@ -18,6 +19,8 @@ public sealed class SkipEvent
     private SkipEvent()
     {
     }
+
+    public static IReadOnlyList<SegmentKind> KindsOffered { get; } = [SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending];
 
     public long Id { get; private set; }
 

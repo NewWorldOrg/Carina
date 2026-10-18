@@ -10,8 +10,6 @@ public sealed class SkipEventConfiguration : IEntityTypeConfiguration<SkipEvent>
 {
     public const string TableName = "segment_skip_event";
 
-    private static readonly SegmentKind[] KindsOffered = [SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending];
-
     public void Configure(EntityTypeBuilder<SkipEvent> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -19,7 +17,7 @@ public sealed class SkipEventConfiguration : IEntityTypeConfiguration<SkipEvent>
         builder.ToTable(TableName, table =>
         {
             table.HasCheckConstraint("ck_segment_skip_event_event", $"event IN ({SegmentVocabulary.Names<ViewerActionKind>()})");
-            table.HasCheckConstraint("ck_segment_skip_event_kind", $"kind IN ({string.Join(", ", KindsOffered.Select(kind => $"'{kind}'"))})");
+            table.HasCheckConstraint("ck_segment_skip_event_kind", $"kind IN ({string.Join(", ", SkipEvent.KindsOffered.Select(kind => $"'{kind}'"))})");
             table.HasCheckConstraint("ck_segment_skip_event_moments", "from_at >= interval '0' AND to_at >= interval '0'");
         });
 

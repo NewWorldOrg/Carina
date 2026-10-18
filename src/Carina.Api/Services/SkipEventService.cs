@@ -58,7 +58,8 @@ public sealed class SkipEventService(
     }
 
     private static ReadSkip? Read(SentSkip sent, TimeSpan written)
-        => sent is { Event: { } action, Kind: { } kind and not SegmentKind.Programme, FromSec: { } from, ToSec: { } to }
+        => sent is { Event: { } action, Kind: { } kind, FromSec: { } from, ToSec: { } to }
+           && SkipEvent.KindsOffered.Contains(kind)
            && SkipEvent.Moment(from, written) is { } starts
            && SkipEvent.Moment(to, written) is { } ends
             ? new ReadSkip(action, kind, starts, ends)
@@ -71,7 +72,7 @@ public sealed class SkipEventService(
             return "event: expected skipped, dismissed or returned.";
         }
 
-        if (sent.Kind is null or SegmentKind.Programme)
+        if (sent.Kind is not { } kind || !SkipEvent.KindsOffered.Contains(kind))
         {
             return "kind: expected break, opening or ending.";
         }
