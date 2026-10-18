@@ -18,6 +18,8 @@ public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
 
     public List<SegmentModelVersion> Written { get; } = [];
 
+    public List<SegmentModelVersion> Added { get; } = [];
+
     private SegmentModelVersion[] Kept => [Active, .. Others];
 
     public static SegmentModelVersion InUse(int number, DateTime adoptedAt)
@@ -45,6 +47,16 @@ public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
         Written.AddRange(changed.Written);
 
         return Task.FromResult<SegmentModelVersion?>(changed.Active);
+    }
+
+    public Task<SegmentModelVersion> AddCandidateAsync(SegmentModel model, SegmentEvaluation evaluation, DateTime trainedAt, CancellationToken cancellationToken)
+    {
+        SegmentModelVersion candidate = SegmentModelVersion.Learned(Kept.Max(version => version.Number) + 1, model, evaluation, trainedAt);
+
+        Others.Add(candidate);
+        Added.Add(candidate);
+
+        return Task.FromResult(candidate);
     }
 
     public Task<SegmentModelVersion> ActiveAsync(CancellationToken cancellationToken)

@@ -96,8 +96,77 @@ public sealed class SegmentAdoptionTests
         Assert.Throws<ArgumentException>(() => SegmentRollback.Judge(Before, InUse, returning, Adopted.AddDays(2)));
     }
 
+    [Fact(DisplayName = "BR-CD-008: for seven days after a version was rolled back from, a candidate that would be put in use is held out, and other verdicts stand")]
+    public void ACandidateIsHeldOutAfterARollback()
+    {
+        DateTime rolledBack = Adopted.AddDays(1);
+        SegmentModelVersion left = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, SegmentModel.First, Made, Adopted, rolledBack, null, rolledBack, rollback: new SegmentRollback(0.2, 0.1, 25, 2));
+        SegmentModelVersion[] kept = [left, InUse, Before];
+
+        Assert.Equal(AdoptionVerdict.HeldAfterRollback, SegmentAdoption.AfterRollbacks(AdoptionVerdict.Adopted, kept, rolledBack));
+        Assert.Equal(AdoptionVerdict.HeldAfterRollback, SegmentAdoption.AfterRollbacks(AdoptionVerdict.Adopted, kept, rolledBack.AddDays(7)));
+        Assert.Equal(AdoptionVerdict.Adopted, SegmentAdoption.AfterRollbacks(AdoptionVerdict.Adopted, kept, rolledBack.AddDays(7).AddTicks(1)));
+        Assert.Equal(AdoptionVerdict.Adopted, SegmentAdoption.AfterRollbacks(AdoptionVerdict.Adopted, [InUse, Before], rolledBack));
+        Assert.Equal(AdoptionVerdict.NoBetterAtBoundaries, SegmentAdoption.AfterRollbacks(AdoptionVerdict.NoBetterAtBoundaries, kept, rolledBack));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: counted skips and returns judge a rollback as the actions they were counted from do")]
+    public void CountedReturnsJudgeAsTheActionsDo()
+    {
+        ViewerAction[] actions = [.. Actions(2, Adopted.AddDays(1), 25, 5), .. Actions(1, Adopted.AddDays(-3), 40, 4), .. Actions(1, Adopted.AddDays(-9), 40, 40)];
+        DateTime now = Adopted.AddDays(6);
+        RollbackSpans spans = SegmentRollback.Spans(InUse, now)!;
+
+        SegmentRollback? counted = SegmentRollback.Judge(
+            InUse,
+            Before,
+            SkipReturns.Of(actions, InUse.Number, spans.From, spans.Until),
+            SkipReturns.Of(actions, Before.Number, spans.BeforeFrom, spans.BeforeUntil),
+            now);
+
+        Assert.Equal(SegmentRollback.Judge(InUse, Before, actions, now), counted);
+        Assert.Equal(new SegmentRollback(0.2, 0.1, 25, 1), counted);
+        Assert.Null(SegmentRollback.Judge(InUse, Before, new SkipReturns(25, 25), new SkipReturns(40, 4), Adopted.AddDays(8)));
+        Assert.Null(SegmentRollback.Judge(ChosenByHand, Before, new SkipReturns(25, 25), new SkipReturns(40, 4), now));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: the version in use is judged from when it was put in use up to now, against the version before it over the seven days before that")]
+    public void TheSpansRunFromThePutInUseAndTheSevenDaysBefore()
+    {
+        RollbackSpans? spans = SegmentRollback.Spans(InUse, Adopted.AddDays(3));
+
+        Assert.Equal(new RollbackSpans(Adopted, Adopted.AddDays(3), Adopted.AddDays(-7), Adopted.AddTicks(-1)), spans);
+        Assert.NotNull(SegmentRollback.Spans(InUse, Adopted.AddDays(7)));
+        Assert.Null(SegmentRollback.Spans(InUse, Adopted.AddDays(7).AddTicks(1)));
+        Assert.Null(SegmentRollback.Spans(InUse, Adopted.AddTicks(-1)));
+        Assert.Null(SegmentRollback.Spans(ChosenByHand, Adopted.AddDays(3)));
+        Assert.Throws<ArgumentException>(() => SegmentRollback.Spans(Before, Adopted.AddDays(3)));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: the version before the one in use is the one taken out of use as it was put in use")]
+    public void TheVersionBeforeIsTheOneItTookThePlaceOf()
+    {
+        SegmentModelVersion older = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, SegmentModel.First, Made, Made, Made.AddDays(2), null, null);
+        SegmentModelVersion candidate = SegmentModelVersion.Rehydrate(4, SegmentModelVersionState.Candidate, false, SegmentModel.First, Adopted.AddDays(1), null, null, null, null);
+
+        Assert.Equal(Before.Number, SegmentRollback.Previous([candidate, older, InUse, Before])?.Number);
+        Assert.Null(SegmentRollback.Previous([candidate, HeldFirst()]));
+        Assert.Throws<InvalidOperationException>(() => SegmentRollback.Previous([candidate, older]));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a version put back in use by a rollback is never rolled back to the version it was put back from")]
+    public void AVersionPutBackIsNotRolledBackToTheOneItLeft()
+    {
+        SegmentModelVersion rolledBackFrom = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, SegmentModel.First, Made, Made, Adopted, null, Adopted, rollback: new SegmentRollback(0.2, 0.1, 25, 2));
+
+        Assert.Null(SegmentRollback.Previous([rolledBackFrom, InUse]));
+    }
+
     private static SegmentEvaluation Evaluated(double recall, double extra, double skipped, EvaluationEvidence evidence)
         => new(new SegmentMetrics(recall, recall - 0.1, extra, skipped, [new KindMetrics(SegmentKind.Break, 0.9, 0.9)], null, 0), [], evidence, 0.7);
+
+    private static SegmentModelVersion HeldFirst()
+        => SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, SegmentModel.First, Made, Made, null, null, null);
 
     private static IEnumerable<ViewerAction> Actions(int version, DateTime from, int skips, int returned)
         => Enumerable.Range(0, skips).Select(at => Action(ViewerActionKind.Skipped, version, from.AddMinutes(at)))

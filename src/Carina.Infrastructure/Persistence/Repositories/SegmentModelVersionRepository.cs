@@ -50,6 +50,25 @@ public sealed class SegmentModelVersionRepository(CarinaDbContext context) : ISe
         return changed.Active;
     }
 
+    public async Task<SegmentModelVersion> AddCandidateAsync(SegmentModel model, SegmentEvaluation evaluation, DateTime trainedAt, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(evaluation);
+
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(TakeTurnSql, cancellationToken);
+
+        int highest = await context.Set<SegmentModelVersion>().MaxAsync(version => (int?)version.Number, cancellationToken) ?? 0;
+        SegmentModelVersion candidate = SegmentModelVersion.Learned(highest + 1, model, evaluation, trainedAt);
+
+        context.Add(candidate);
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(CancellationToken.None);
+        context.Entry(candidate).State = EntityState.Detached;
+
+        return candidate;
+    }
+
     public async Task<SegmentModelVersion> ActiveAsync(CancellationToken cancellationToken)
         => await context.Set<SegmentModelVersion>()
                .AsNoTracking()

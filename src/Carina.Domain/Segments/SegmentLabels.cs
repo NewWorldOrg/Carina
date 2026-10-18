@@ -54,6 +54,13 @@ public static class SegmentLabels
         ];
     }
 
+    /// <summary>
+    /// The kind <paramref name="answer"/> gives the stretch from <paramref name="starts"/> to
+    /// <paramref name="ends"/>, as it would label a segment lying there; none where it would label none.
+    /// </summary>
+    public static SegmentKind? AnswerOver(TimeSpan starts, TimeSpan ends, GivenAnswer? answer)
+        => ends > starts ? Over(starts, ends, Answered(answer), SegmentLabelSource.Answer)?.Kind : null;
+
     private static Stretch[] Answered(GivenAnswer? answer)
     {
         if (answer is null || answer.Withdrawn)
@@ -135,27 +142,30 @@ public static class SegmentLabels
     }
 
     private static SegmentLabel? Over(SegmentPiece piece, Stretch[] stretches, SegmentLabelSource source)
+        => Over(piece.Starts, piece.Ends, stretches, source);
+
+    private static SegmentLabel? Over(TimeSpan starts, TimeSpan ends, Stretch[] stretches, SegmentLabelSource source)
     {
-        Stretch[] over = [.. stretches.Where(stretch => stretch.Starts < piece.Ends && stretch.Ends > piece.Starts)];
+        Stretch[] over = [.. stretches.Where(stretch => stretch.Starts < ends && stretch.Ends > starts)];
 
         return over
             .GroupBy(stretch => stretch.Kind)
-            .Where(kind => Covered(piece, kind) * 2 > piece.Length)
+            .Where(kind => Covered(starts, ends, kind) * 2 > ends - starts)
             .Select(kind => new SegmentLabel(kind.Key, kind.Max(stretch => stretch.Weight), source))
             .OrderByDescending(label => label.Weight)
             .ThenBy(label => label.Kind)
             .FirstOrDefault();
     }
 
-    private static TimeSpan Covered(SegmentPiece piece, IEnumerable<Stretch> stretches)
+    private static TimeSpan Covered(TimeSpan starts, TimeSpan ends, IEnumerable<Stretch> stretches)
     {
         TimeSpan covered = TimeSpan.Zero;
-        TimeSpan reached = piece.Starts;
+        TimeSpan reached = starts;
 
         foreach (Stretch stretch in stretches.OrderBy(stretch => stretch.Starts))
         {
             TimeSpan from = stretch.Starts > reached ? stretch.Starts : reached;
-            TimeSpan to = stretch.Ends < piece.Ends ? stretch.Ends : piece.Ends;
+            TimeSpan to = stretch.Ends < ends ? stretch.Ends : ends;
 
             if (to > from)
             {

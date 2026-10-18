@@ -309,6 +309,7 @@ public sealed class ChannelSchemaTests
                 "segment_detection",
                 "segment_extraction",
                 "segment_learning_data",
+                "segment_learning_round",
                 "segment_model_version",
                 "segment_settings",
                 "segment_skip_event",

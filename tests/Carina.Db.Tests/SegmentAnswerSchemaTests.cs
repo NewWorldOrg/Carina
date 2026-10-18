@@ -237,6 +237,32 @@ public sealed class SegmentAnswerSchemaTests(MigratedScratchDatabase database)
                 """));
     }
 
+    [Fact(DisplayName = "BR-CD-006: learning reads the answers kept for the recordings it names, withdrawn or not, and their skip events, the earliest first, and nothing of other recordings")]
+    public async Task LearningReadsEveryAnswerAndEveryEvent()
+    {
+        RecordingId standing = RecordingId.New();
+        RecordingId withdrawn = RecordingId.New();
+        await AnswerAsync(Given(standing, confirmed: true, Noon, (0, 600, SegmentKind.Programme), (600, 660, SegmentKind.Break), (660, 1800, SegmentKind.Programme)));
+        await AnswerAsync(Given(withdrawn, confirmed: false, Noon, (0, 1800, SegmentKind.Programme)));
+        await WithdrawAsync(withdrawn, Noon.AddHours(1));
+        await TakeAsync(Skip(standing, Noon.AddMinutes(9), null));
+        await TakeAsync(Skip(standing, Noon.AddMinutes(3), SegmentModelVersion.FirstNumber));
+        RecordingId other = RecordingId.New();
+        await AnswerAsync(Given(other, confirmed: true, Noon, (0, 1800, SegmentKind.Programme)));
+        await TakeAsync(Skip(other, Noon.AddMinutes(4), null));
+
+        await using CarinaDbContext context = Context();
+        IReadOnlyList<RecordingAnswer> answers = await new SegmentAnswerRepository(context).ListAsync([standing, withdrawn], CancellationToken.None);
+        IReadOnlyList<SkipEvent> events = await new SkipEventRepository(context).ListAsync([standing, withdrawn], CancellationToken.None);
+
+        Assert.Equal(
+            [(standing, true), (withdrawn, false)],
+            answers.OrderBy(answer => answer.Confirmed ? 0 : 1).Select(answer => (answer.RecordingId, answer.Stands)));
+        Assert.Equal(
+            [(Noon.AddMinutes(3), (int?)SegmentModelVersion.FirstNumber), (Noon.AddMinutes(9), null)],
+            events.Select(skip => (skip.HappenedAt, skip.ModelVersion)));
+    }
+
     private static string InsertSkip(string version)
         => $"""
             INSERT INTO segment_skip_event (recording_id, happened_at, event, kind, from_at, to_at, model_version)

@@ -4045,6 +4045,26 @@ namespace Carina.Db.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Carina.Domain.Segments.SegmentLearningRound", b =>
+                {
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("date")
+                        .HasColumnName("day");
+
+                    b.Property<int?>("Candidate")
+                        .HasColumnType("integer")
+                        .HasColumnName("candidate");
+
+                    b.Property<DateTime>("TakenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("taken_at");
+
+                    b.HasKey("Day")
+                        .HasName("pk_segment_learning_round");
+
+                    b.ToTable("segment_learning_round", (string)null);
+                });
+
             modelBuilder.Entity("Carina.Domain.Segments.SegmentModelVersion", b =>
                 {
                     b.Property<int>("Number")

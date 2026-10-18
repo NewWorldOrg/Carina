@@ -1,3 +1,5 @@
+using Carina.Domain.Recordings;
+
 namespace Carina.Domain.Segments;
 
 /// <summary>
@@ -11,6 +13,11 @@ public interface ISkipEventRepository
     /// that happened within <see cref="SkipEvent.Within"/> before it, and says whether it was kept.
     /// </summary>
     Task<bool> TakeAsync(SkipEvent skip, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The events kept for the recordings named, the earliest that happened first.
+    /// </summary>
+    Task<IReadOnlyList<SkipEvent>> ListAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken);
 
     /// <summary>
     /// The skips and returns on the buttons of the version numbered <paramref name="modelVersion"/> that happened

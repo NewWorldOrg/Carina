@@ -19,6 +19,12 @@ public interface ISegmentModelVersionRepository
     Task<SegmentModelVersion?> ChangeAsync(SegmentVersionChange change, DateTime at, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Keeps a candidate learning made at <paramref name="trainedAt"/>, numbered after the highest number kept once
+    /// no other change is being made, and answers it.
+    /// </summary>
+    Task<SegmentModelVersion> AddCandidateAsync(SegmentModel model, SegmentEvaluation evaluation, DateTime trainedAt, CancellationToken cancellationToken);
+
+    /// <summary>
     /// The version in use; there is always exactly one.
     /// </summary>
     Task<SegmentModelVersion> ActiveAsync(CancellationToken cancellationToken);

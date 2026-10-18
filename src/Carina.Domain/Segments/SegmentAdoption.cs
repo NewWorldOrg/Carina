@@ -3,7 +3,7 @@ namespace Carina.Domain.Segments;
 /// <summary>
 /// What became of a candidate weighed against the version in use: put in use, or kept out because the
 /// version in use was chosen by hand, the evaluation stands on too little, it would skip more programme,
-/// or it finds boundaries no better.
+/// it finds boundaries no better, or a version was rolled back from lately.
 /// </summary>
 public enum AdoptionVerdict
 {
@@ -16,6 +16,8 @@ public enum AdoptionVerdict
     SkipsMoreProgramme = 4,
 
     NoBetterAtBoundaries = 5,
+
+    HeldAfterRollback = 6,
 }
 
 /// <summary>
@@ -52,6 +54,21 @@ public static class SegmentAdoption
         }
 
         return FindsMore(found, used) ? AdoptionVerdict.Adopted : AdoptionVerdict.NoBetterAtBoundaries;
+    }
+
+    /// <summary>
+    /// What <paramref name="verdict"/> comes to among the versions <paramref name="kept"/> at <paramref name="now"/>:
+    /// for <see cref="SegmentRollback.Within"/> after a version was rolled back from, a candidate that would be put
+    /// in use is held out instead, so that learning does not undo a rollback on much the same labels.
+    /// </summary>
+    public static AdoptionVerdict AfterRollbacks(AdoptionVerdict verdict, IReadOnlyList<SegmentModelVersion> kept, DateTime now)
+    {
+        ArgumentNullException.ThrowIfNull(kept);
+
+        return verdict is AdoptionVerdict.Adopted
+               && kept.Any(version => version.RolledBackAt is DateTime rolledBack && rolledBack <= now && now - rolledBack <= SegmentRollback.Within)
+            ? AdoptionVerdict.HeldAfterRollback
+            : verdict;
     }
 
     private static bool FindsMore(SegmentMetrics found, SegmentMetrics used)
