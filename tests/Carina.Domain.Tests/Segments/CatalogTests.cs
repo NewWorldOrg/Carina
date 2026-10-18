@@ -131,6 +131,20 @@ public sealed class CatalogTests
             change.Found.Select(occurrence => (occurrence.RecordingId, occurrence.StartsAt)).OrderBy(found => found.RecordingId.Equals(First)).ThenBy(found => found.StartsAt));
     }
 
+    [Fact(DisplayName = "a stretch of the recording that joins an entry through the other side of a match within itself is claimed for that entry")]
+    public void AStretchJoiningThroughTheOtherSideIsClaimed()
+    {
+        SoundMatch later = new(Span(70, 86), new RecordedSound(Heard), Span(130, 146), 0.02);
+        SoundMatch earlier = new(Span(10, 25), new RecordedSound(Heard), Span(70, 85), 0.02);
+        SoundMatch elsewhere = new(Span(10, 25), new RecordedSound(First), Span(300, 315), 0.05);
+
+        CatalogChange change = Catalog.Absorb(Heard, Sound, [elsewhere, earlier, later], Knowing(), Now);
+
+        CatalogEntry entry = Assert.Single(change.Started);
+        Assert.Equal(4, entry.OccurrenceCount);
+        Assert.Contains(change.Found, occurrence => occurrence.RecordingId.Equals(First));
+    }
+
     [Fact(DisplayName = "separate stretches start separate entries")]
     public void SeparateStretchesStartSeparateEntries()
     {
