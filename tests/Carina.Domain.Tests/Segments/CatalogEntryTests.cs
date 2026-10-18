@@ -100,8 +100,8 @@ public sealed class CatalogEntryTests
     public void AnOverrideThatNoLongerHoldsIsCleared()
     {
         CatalogEntryId id = CatalogEntryId.New();
-        PlacedOccurrence answered = At(id, Drama.Episode(0), 0, 90, SegmentKind.Opening);
-        PlacedOccurrence again = At(id, Drama.Episode(1), 0, 90);
+        PlacedOccurrence answered = At(id, Drama.Episode(0), Midpoint - 300, 90, SegmentKind.Opening);
+        PlacedOccurrence again = At(id, Drama.Episode(1), Midpoint, 90);
         PlacedOccurrence advertised = At(id, Quiz.Episode(0), 600, 15);
         CatalogEntry entry = CatalogEntry.Start(id, [.. Enumerable.Range(1, 5625).Select(value => (uint)value)], [answered, again, advertised], SeriesLinks.None, Now);
 
@@ -113,6 +113,26 @@ public sealed class CatalogEntryTests
         Assert.Equal(CatalogKind.Unknown, entry.Kind);
         Assert.Null(answered.Occurrence.KindOverride);
         Assert.Null(advertised.Occurrence.KindOverride);
+    }
+
+    [Fact(DisplayName = "an entry started or estimated again carries the version of the estimation it was estimated with")]
+    public void AnEntryCarriesTheVersionOfTheEstimation()
+    {
+        CatalogEntryId id = CatalogEntryId.New();
+        PlacedOccurrence[] two = [At(id, Drama.Episode(0), 600, 15), At(id, Drama.Episode(1), 600, 15)];
+        CatalogEntry kept = Rehydrated(CatalogKind.Cm, 0.5, CatalogDecision.Pattern, kindsVersion: CatalogKinds.FirstVersion, id: id);
+
+        Assert.Equal(CatalogKinds.Version, CatalogEntry.Start(id, Fifteen, two, SeriesLinks.None, Now).KindsVersion);
+        Assert.False(CatalogEntry.Start(id, Fifteen, two, SeriesLinks.None, Now).AwaitsReestimation);
+        Assert.True(kept.AwaitsReestimation);
+
+        kept.Reestimate(two, SeriesLinks.None, Now.AddHours(1));
+
+        Assert.Equal(CatalogKinds.Version, kept.KindsVersion);
+        Assert.False(kept.AwaitsReestimation);
+        Assert.False(Rehydrated(CatalogKind.Cm, 0.5, CatalogDecision.Pattern, kindsVersion: CatalogKinds.Version + 1).AwaitsReestimation);
+        Assert.True(Rehydrated(CatalogKind.Cm, 0.5, CatalogDecision.Pattern, kindsVersion: CatalogKinds.Unsettled).AwaitsReestimation);
+        Assert.Throws<ArgumentOutOfRangeException>(() => Rehydrated(CatalogKind.Cm, 0.5, CatalogDecision.Pattern, kindsVersion: CatalogKinds.Unsettled - 1));
     }
 
     [Fact(DisplayName = "an entry is made of at least two stretches, all of its own")]
@@ -162,9 +182,11 @@ public sealed class CatalogEntryTests
         CatalogDecision? decidedBy,
         int occurrences = 2,
         int seriesCount = 1,
-        DateTime? lastSeenAt = null)
+        DateTime? lastSeenAt = null,
+        int kindsVersion = CatalogKinds.Version,
+        CatalogEntryId? id = null)
         => CatalogEntry.Rehydrate(
-            CatalogEntryId.New(),
+            id ?? CatalogEntryId.New(),
             kind,
             confidence,
             decidedBy,
@@ -175,5 +197,6 @@ public sealed class CatalogEntryTests
             1,
             Evening,
             lastSeenAt ?? Evening.AddDays(7),
-            Now);
+            Now,
+            kindsVersion);
 }

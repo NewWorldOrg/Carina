@@ -36,6 +36,29 @@ public sealed record GivenAnswer
         Detected = detected is null ? null : [.. detected];
     }
 
+    /// <summary>
+    /// The answer kept for a recording, read beside the detection of the recording it is read against: one
+    /// that was discarded shows nothing, and with none the answer is read against programme throughout.
+    /// </summary>
+    public static GivenAnswer Of(RecordingAnswer answer, RecordingDetection? detection)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+
+        if (detection is not null && !detection.RecordingId.Equals(answer.RecordingId))
+        {
+            throw new ArgumentException("An answer is read beside the detection of its own recording.", nameof(detection));
+        }
+
+        IReadOnlyList<SegmentSpan>? shown = detection switch
+        {
+            null => null,
+            { State: SegmentDetectionState.Discarded } => [],
+            _ => detection.Segments,
+        };
+
+        return new GivenAnswer(answer.Segments, answer.Confirmed, answer.AnsweredAt, !answer.Stands, shown);
+    }
+
     public IReadOnlyList<SegmentSpan> Segments { get; }
 
     public bool Confirmed { get; }

@@ -8,7 +8,8 @@ namespace Carina.Domain.Tests.Segments;
 /// pod of two 15-second adverts between silent cuts at 120 seconds, a silent stretch of 37 seconds that is
 /// programme at 250, and 30 seconds between two black frames at 330. Those learned from also have an advert
 /// of 75 seconds at 450 that only the catalog hears, heard on another station the week before, and 50
-/// seconds of music at 180 that the catalog hears in an earlier episode and cannot tell the kind of. Their
+/// seconds of music at 180 that the catalog hears in the middle of an earlier episode and cannot tell the
+/// kind of. Their
 /// answers make the pod and the advert breaks, and everything else programme.
 /// </summary>
 internal static class LearningWorld
@@ -79,7 +80,7 @@ internal static class LearningWorld
                 sounds.Add(new CatalogSound(advert, TimeSpan.FromSeconds(75), [Heard(advert, Story, week, 450, 75, id), Heard(advert, Across, week - 1, 300, 75)]));
             }
 
-            sounds.Add(new CatalogSound(music, TimeSpan.FromSeconds(50), [Heard(music, Story, week, 180, 50, id), Heard(music, StoryEarlier, week, 400, 50)]));
+            sounds.Add(new CatalogSound(music, TimeSpan.FromSeconds(50), [Heard(music, Story, week, 180, 50, id), Heard(music, StoryEarlier, week, CatalogSeries.Lead.TotalSeconds + CatalogSeries.Midpoint, 50)]));
         }
 
         return (recordings, sounds);

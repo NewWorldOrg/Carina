@@ -98,8 +98,11 @@ public sealed class SegmentDetectingTests
         Assert.Equal("架空の物語", inputs.Context.Series);
     }
 
-    [Fact(DisplayName = "an earlier recording on another station sharing the sound of a programme fixture with the recording is an earlier episode of its series")]
-    public async Task ARecordingSharingAFixtureOnAnotherStationIsAnEarlierEpisode()
+    [Theory(DisplayName = "BR-CD-011: an earlier recording on another station sharing the sound of an opening, an ending or a programme fixture with the recording is an earlier episode of its series")]
+    [InlineData(CatalogKind.ProgrammeFixture)]
+    [InlineData(CatalogKind.Opening)]
+    [InlineData(CatalogKind.Ending)]
+    public async Task ARecordingSharingAFixtureOnAnotherStationIsAnEarlierEpisode(CatalogKind kind)
     {
         using SegmentDetectionHarness harness = new();
         RecordingId judged = await harness.ReadAsync(0, "架空の物語");
@@ -111,12 +114,35 @@ public sealed class SegmentDetectingTests
             CatalogOccurrence.Found(id, judged, new SoundSpan(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(40)), harness.Records.Row(judged)!.Programme, 0.05, Now),
             CatalogOccurrence.Found(id, delayed, new SoundSpan(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(40)), harness.Records.Row(delayed)!.Programme, 0.05, Now),
         ];
-        harness.Catalog.Entries.Add(Fixture(id, heard));
+        harness.Catalog.Entries.Add(Fixture(id, heard, kind));
         harness.Catalog.Occurrences.AddRange(heard);
 
         DetectionInputs inputs = await GatherAsync(harness, judged);
 
         Assert.Single(inputs.Context.Past);
+    }
+
+    [Theory(DisplayName = "BR-CD-011: a recording on another station heard in a stretch of an advert or of part of an opening is not an earlier episode of the series")]
+    [InlineData(CatalogKind.Cm, 30)]
+    [InlineData(CatalogKind.Opening, 15)]
+    public async Task ARecordingSharingAnAdvertOrPartOfAnOpeningIsNoEarlierEpisode(CatalogKind kind, double seconds)
+    {
+        using SegmentDetectionHarness harness = new();
+        RecordingId judged = await harness.ReadAsync(0, "架空の物語");
+        RecordingId elsewhere = await harness.ReadAsync(7, "まるで違う架空の名前", station: 2);
+        await Detected(harness, elsewhere, SegmentModelVersion.FirstNumber, (0, 100, SegmentKind.Programme), (100, 160, SegmentKind.Break), (160, 300, SegmentKind.Programme));
+        CatalogEntryId id = CatalogEntryId.New();
+        CatalogOccurrence[] heard =
+        [
+            CatalogOccurrence.Found(id, judged, new SoundSpan(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(40)), harness.Records.Row(judged)!.Programme, 0.05, Now),
+            CatalogOccurrence.Found(id, elsewhere, new SoundSpan(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10 + seconds)), harness.Records.Row(elsewhere)!.Programme, 0.05, Now),
+        ];
+        harness.Catalog.Entries.Add(Fixture(id, heard, kind));
+        harness.Catalog.Occurrences.AddRange(heard);
+
+        DetectionInputs inputs = await GatherAsync(harness, judged);
+
+        Assert.Empty(inputs.Context.Past);
     }
 
     private static async Task<DetectionInputs> GatherAsync(SegmentDetectionHarness harness, RecordingId recording)
@@ -131,10 +157,10 @@ public sealed class SegmentDetectingTests
             CancellationToken.None);
     }
 
-    private static CatalogEntry Fixture(CatalogEntryId id, CatalogOccurrence[] heard)
+    private static CatalogEntry Fixture(CatalogEntryId id, CatalogOccurrence[] heard, CatalogKind kind = CatalogKind.ProgrammeFixture)
         => CatalogEntry.Rehydrate(
             id,
-            CatalogKind.ProgrammeFixture,
+            kind,
             0.9,
             CatalogDecision.Pattern,
             TimeSpan.FromSeconds(30),
@@ -144,7 +170,8 @@ public sealed class SegmentDetectingTests
             2,
             Now,
             Now,
-            Now);
+            Now,
+            CatalogKinds.Version);
 
     private static CatalogOccurrence Overridden(CatalogOccurrence found, SegmentKind kind)
         => CatalogOccurrence.Rehydrate(

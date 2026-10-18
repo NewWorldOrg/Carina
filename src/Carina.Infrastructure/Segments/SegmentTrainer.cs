@@ -159,7 +159,7 @@ public sealed class SegmentTrainer(
 
         return standing.ToDictionary(
             answer => answer.RecordingId,
-            answer => new GivenAnswer(answer.Segments, answer.Confirmed, answer.AnsweredAt, false, Shown(detected.GetValueOrDefault(answer.RecordingId))));
+            answer => GivenAnswer.Of(answer, detected.GetValueOrDefault(answer.RecordingId)));
     }
 
     private async Task<LearningRecording?> ReadAsync(
@@ -202,7 +202,7 @@ public sealed class SegmentTrainer(
                 [.. stretches[entry.Id].Select(occurrence => Placed(occurrence, copies, given))])),
         ];
 
-        return new LearningCatalog(sounds, SeriesLinks.SharingSound(await catalog.FixtureSharersAsync(cancellationToken)));
+        return new LearningCatalog(sounds, SeriesLinks.SharingSound(await catalog.SoundSharersAsync(cancellationToken)));
     }
 
     private static PlacedOccurrence Placed(
@@ -213,15 +213,5 @@ public sealed class SegmentTrainer(
             occurrence,
             copies.GetValueOrDefault(occurrence.RecordingId),
             SegmentLabels.AnswerOver(occurrence.StartsAt, occurrence.EndsAt, given.GetValueOrDefault(occurrence.RecordingId)));
-
-    /// <summary>
-    /// The stretches a detection showed the person who answered; none of one thrown away.
-    /// </summary>
-    private static IReadOnlyList<SegmentSpan>? Shown(RecordingDetection? detection)
-        => detection switch
-        {
-            null => null,
-            { State: SegmentDetectionState.Discarded } => [],
-            _ => detection.Segments,
-        };
 }
+

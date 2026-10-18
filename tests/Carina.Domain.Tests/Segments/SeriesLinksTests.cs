@@ -70,6 +70,19 @@ public sealed class SeriesLinksTests
         Assert.True(links.Link(first, renamed));
     }
 
+    [Fact(DisplayName = "BR-CD-011: another episode in a weekly slot is on the station, a whole number of weeks away on the same day of the week, and no nearer than six days to an episode")]
+    public void AnotherEpisodeInTheSlotIsAWeekAway()
+    {
+        SeriesMember[] series = [Member(1, "架空の物語", Evening), Member(1, "架空の物語", Evening.AddDays(7))];
+
+        Assert.True(SeriesLinks.AnotherEpisodeInTheSlot(Member(1, "まるで違う架空の名前", Evening.AddDays(14).AddMinutes(80)), series));
+        Assert.True(SeriesLinks.AnotherEpisodeInTheSlot(Member(1, null, Evening.AddDays(21).AddMinutes(-90)), series));
+        Assert.False(SeriesLinks.AnotherEpisodeInTheSlot(Member(1, null, Evening.AddDays(15)), series));
+        Assert.False(SeriesLinks.AnotherEpisodeInTheSlot(Member(1, null, Evening.AddDays(7).AddMinutes(60)), series));
+        Assert.False(SeriesLinks.AnotherEpisodeInTheSlot(Member(1, null, Evening.AddDays(14).AddMinutes(100)), series));
+        Assert.False(SeriesLinks.AnotherEpisodeInTheSlot(Member(2, null, Evening.AddDays(14)), series));
+    }
+
     [Fact(DisplayName = "linked recordings are grouped through one another")]
     public void LinkedRecordingsAreGroupedThroughOneAnother()
     {

@@ -269,7 +269,8 @@ public sealed class SegmentFeaturesTests
             1,
             Evening,
             Evening,
-            Evening);
+            Evening,
+            CatalogKinds.Version);
 
     private static CatalogOccurrence Occurrence(CatalogEntry entry, SegmentKind? kind)
         => CatalogOccurrence.Rehydrate(

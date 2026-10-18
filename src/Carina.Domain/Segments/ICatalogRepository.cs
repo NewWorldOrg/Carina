@@ -13,7 +13,8 @@ public interface ICatalogRepository
     Task<IReadOnlyList<CatalogEntry>> ListEntriesAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// The entries named, with their fingerprints.
+    /// The entries named, with their fingerprints, read so that keeping them later refuses an entry whose row
+    /// changed since (<see cref="KeepAsync"/>).
     /// </summary>
     Task<IReadOnlyList<CatalogEntry>> EntriesAsync(IReadOnlyCollection<CatalogEntryId> entries, CancellationToken cancellationToken);
 
@@ -28,13 +29,25 @@ public interface ICatalogRepository
     Task<IReadOnlyList<CatalogOccurrence>> OccurrencesInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The recordings each fixed part of a programme is heard in, one group per entry.
+    /// The recordings each opening, ending and fixed part of a programme links into one series, one group per
+    /// entry: those its stretches that link series are heard in (<see cref="CatalogKinds.LinksSeries"/>).
     /// </summary>
-    Task<IReadOnlyList<IReadOnlyList<RecordingId>>> FixtureSharersAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<IReadOnlyList<RecordingId>>> SoundSharersAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The entry first seen earliest of those that <see cref="CatalogEntry.AwaitsReestimation"/>, with its
+    /// fingerprint, read as <see cref="EntriesAsync"/> reads; null when none does.
+    /// </summary>
+    Task<CatalogEntry?> NextToReestimateAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// Writes the change whole or not at all: the entries started and the stretches found are added, the
-    /// entries estimated again and the stretches taken for another kind are written as they now stand.
+    /// entries estimated again and the stretches taken for another kind are written as they now stand, and
+    /// every other entry heard in a recording an entry relinking is heard in is put back to
+    /// <see cref="CatalogKinds.Unsettled"/>, to be estimated again. An entry estimated again whose row changed
+    /// since it was read, such as one put back by an answer meanwhile, is left as it now stands, and so are the
+    /// stretches taken for another kind with it; it waits to be estimated again. An entry estimated again is one
+    /// read through this repository, by <see cref="EntriesAsync"/> or <see cref="NextToReestimateAsync"/>.
     /// </summary>
     Task KeepAsync(CatalogChange change, CancellationToken cancellationToken);
 }

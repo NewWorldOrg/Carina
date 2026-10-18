@@ -20,12 +20,14 @@ public interface ISegmentAnswerRepository
 
     /// <summary>
     /// Keeps <paramref name="answer"/> as the answer of its recording: the first one sent, or one written over the
-    /// answer kept, counting one answer more than it did and standing again.
+    /// answer kept, counting one answer more than it did and standing again. Every catalog entry heard in the
+    /// recording is put back to <see cref="CatalogKinds.Unsettled"/> with it, to be estimated again.
     /// </summary>
     Task AnswerAsync(RecordingAnswer answer, CancellationToken cancellationToken);
 
     /// <summary>
     /// Marks the answer of the recording withdrawn at <paramref name="at"/> when it stands, and says whether it did.
+    /// When it did, every catalog entry heard in the recording is put back to <see cref="CatalogKinds.Unsettled"/>.
     /// </summary>
     Task<bool> WithdrawAsync(RecordingId recording, DateTime at, CancellationToken cancellationToken);
 

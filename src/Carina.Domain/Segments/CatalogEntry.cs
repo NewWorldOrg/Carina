@@ -5,8 +5,9 @@ namespace Carina.Domain.Segments;
 /// <summary>
 /// A sound heard more than once, kept in the catalog by a representative fingerprint, with the kind it
 /// is taken for and the counts that kind was estimated from: its stretches, and the series and stations
-/// its whole stretches are spread over (<see cref="CatalogKinds"/>). An entry is started once two
-/// stretches of it are found, is estimated again whenever stretches are added, and is never removed.
+/// its whole stretches are spread over (<see cref="CatalogKinds"/>), and the version of the estimation it
+/// was last estimated with. An entry is started once two stretches of it are found, is estimated again
+/// whenever stretches are added and once more when the estimation changes, and is never removed.
 /// </summary>
 public sealed class CatalogEntry
 {
@@ -41,6 +42,14 @@ public sealed class CatalogEntry
     public DateTime LastSeenAt { get; private set; }
 
     public DateTime UpdatedAt { get; private set; }
+
+    public int KindsVersion { get; private set; }
+
+    /// <summary>
+    /// Whether the entry was last estimated with an earlier version of the estimation than
+    /// <see cref="CatalogKinds.Version"/>, and waits to be estimated again.
+    /// </summary>
+    public bool AwaitsReestimation => KindsVersion < CatalogKinds.Version;
 
     /// <summary>
     /// The entry of the sound whose fingerprint is <paramref name="frames"/>, estimated from its first
@@ -82,10 +91,12 @@ public sealed class CatalogEntry
         int stationCount,
         DateTime firstSeenAt,
         DateTime lastSeenAt,
-        DateTime updatedAt)
+        DateTime updatedAt,
+        int kindsVersion)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(fingerprint);
+        ArgumentOutOfRangeException.ThrowIfLessThan(kindsVersion, CatalogKinds.Unsettled);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(length, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThan(occurrenceCount, FewestOccurrences);
         ArgumentOutOfRangeException.ThrowIfLessThan(seriesCount, 1);
@@ -104,6 +115,7 @@ public sealed class CatalogEntry
         };
 
         entry.Set(new CatalogEstimate(kind, confidence, decidedBy), occurrenceCount, seriesCount, stationCount, firstSeenAt, lastSeenAt, updatedAt);
+        entry.KindsVersion = kindsVersion;
 
         return entry;
     }
@@ -111,8 +123,8 @@ public sealed class CatalogEntry
     public uint[] Frames() => CatalogFingerprint.Read(Fingerprint);
 
     /// <summary>
-    /// Estimates the entry again from every one of its stretches, and gives each stretch what it alone
-    /// is taken for.
+    /// Estimates the entry again from every one of its stretches with <see cref="CatalogKinds.Version"/> of
+    /// the estimation, and gives each stretch what it alone is taken for.
     /// </summary>
     public void Reestimate(IReadOnlyList<PlacedOccurrence> occurrences, SeriesLinks links, DateTime at)
     {
@@ -128,6 +140,7 @@ public sealed class CatalogEntry
         DateTime[] seen = [.. occurrences.Select(placed => placed.Occurrence.RecordingStartedAt)];
 
         Set(pattern.Estimate, occurrences.Count, pattern.SeriesCount, pattern.StationCount, seen.Min(), seen.Max(), at);
+        KindsVersion = CatalogKinds.Version;
 
         for (int each = 0; each < occurrences.Count; each++)
         {

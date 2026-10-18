@@ -10,16 +10,23 @@ public sealed record SeriesMember(RecordingId RecordingId, NetworkId NetworkId, 
 
 /// <summary>
 /// Which recordings are of one series. Two stretches of one recording are; so are recordings known to
-/// share the sound of a programme fixture, whatever their names; and so are two recordings on the same
-/// station whose series names link (<see cref="SeriesNames.Link"/>) and which start within
-/// <see cref="StartsWithin"/> of each other in the time of day. Series are what these links join,
-/// through one another.
+/// share the sound of an opening, an ending or a programme fixture, whatever their names and stations;
+/// and so are two recordings on the same station whose series names link (<see cref="SeriesNames.Link"/>)
+/// and which start within <see cref="StartsWithin"/> of each other in the time of day. Series are what these
+/// links join, through one another.
 /// </summary>
 public sealed class SeriesLinks
 {
     public static readonly TimeSpan StartsWithin = TimeSpan.FromMinutes(90);
 
+    /// <summary>
+    /// How far apart two episodes of a weekly series are at the least.
+    /// </summary>
+    public static readonly TimeSpan EpisodesApart = TimeSpan.FromDays(6);
+
     private static readonly TimeSpan Day = TimeSpan.FromDays(1);
+
+    private static readonly TimeSpan Week = TimeSpan.FromDays(7);
 
     private readonly Dictionary<RecordingId, int> soundGroups;
 
@@ -31,8 +38,23 @@ public sealed class SeriesLinks
     public static SeriesLinks None { get; } = new([]);
 
     /// <summary>
-    /// The links that also join each group of recordings known to share the sound of a programme
-    /// fixture. A recording named in two groups joins both.
+    /// Whether <paramref name="member"/> could be another episode of the weekly series of
+    /// <paramref name="series"/>, whatever it is called: it is on the station of one of them and starts a whole
+    /// number of weeks from it, give or take <see cref="StartsWithin"/>, on the same day of the week, and none
+    /// of them starts within <see cref="EpisodesApart"/> of it.
+    /// </summary>
+    public static bool AnotherEpisodeInTheSlot(SeriesMember member, IReadOnlyList<SeriesMember> series)
+    {
+        ArgumentNullException.ThrowIfNull(member);
+        ArgumentNullException.ThrowIfNull(series);
+
+        return series.Any(episode => OnOneStation(episode, member) && WeeksApart(episode.StartedAt, member.StartedAt))
+               && series.All(episode => (episode.StartedAt - member.StartedAt).Duration() >= EpisodesApart);
+    }
+
+    /// <summary>
+    /// The links that also join each group of recordings known to share a sound that links series
+    /// (<see cref="CatalogKinds.LinksSeries"/>). A recording named in two groups joins both.
     /// </summary>
     public static SeriesLinks SharingSound(IEnumerable<IReadOnlyCollection<RecordingId>> groups)
     {
@@ -124,10 +146,20 @@ public sealed class SeriesLinks
            && oneGroup == otherGroup;
 
     private static bool Neighbours(SeriesMember one, SeriesMember other)
-        => one.NetworkId.Equals(other.NetworkId)
-           && one.ServiceId.Equals(other.ServiceId)
+        => OnOneStation(one, other)
            && SeriesNames.Link(one.SeriesName, other.SeriesName)
            && ApartInTheDay(one.StartedAt, other.StartedAt) <= StartsWithin;
+
+    private static bool OnOneStation(SeriesMember one, SeriesMember other)
+        => one.NetworkId.Equals(other.NetworkId) && one.ServiceId.Equals(other.ServiceId);
+
+    private static bool WeeksApart(DateTime one, DateTime other)
+    {
+        TimeSpan apart = (one - other).Duration();
+        long weeks = (long)Math.Round(apart / Week, MidpointRounding.AwayFromZero);
+
+        return weeks >= 1 && (apart - (Week * weeks)).Duration() <= StartsWithin;
+    }
 
     private static TimeSpan ApartInTheDay(DateTime one, DateTime other)
     {

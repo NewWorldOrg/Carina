@@ -63,6 +63,12 @@ public static partial class SeriesNames
     }
 
     /// <summary>
+    /// Whether two series names are the very same, character for character; a name not known is the same as
+    /// none.
+    /// </summary>
+    public static bool Same(string? one, string? other) => one is not null && string.Equals(one, other, StringComparison.Ordinal);
+
+    /// <summary>
     /// Whether two series names name one series: they are the same, or the shorter, of at least
     /// <see cref="ShortestSharedHead"/> characters, is the head of the longer.
     /// </summary>

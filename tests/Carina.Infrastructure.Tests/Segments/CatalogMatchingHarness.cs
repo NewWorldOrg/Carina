@@ -26,6 +26,8 @@ internal sealed class HeldCatalog : ICatalogRepository
 
     public int Keeps { get; private set; }
 
+    public Action? WhileReading { get; set; }
+
     public Task<IReadOnlyList<CatalogEntry>> ListEntriesAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<CatalogEntry>>([.. Entries]);
 
@@ -33,18 +35,31 @@ internal sealed class HeldCatalog : ICatalogRepository
         => Task.FromResult<IReadOnlyList<CatalogEntry>>([.. Entries.Where(entry => entries.Contains(entry.Id))]);
 
     public Task<IReadOnlyList<CatalogOccurrence>> OccurrencesOfAsync(IReadOnlyCollection<CatalogEntryId> entries, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => entries.Contains(occurrence.EntryId))]);
+    {
+        WhileReading?.Invoke();
+
+        return Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => entries.Contains(occurrence.EntryId))]);
+    }
 
     public Task<IReadOnlyList<CatalogOccurrence>> OccurrencesInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => recordings.Contains(occurrence.RecordingId))]);
 
-    public Task<IReadOnlyList<IReadOnlyList<RecordingId>>> FixtureSharersAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyList<IReadOnlyList<RecordingId>>> SoundSharersAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<IReadOnlyList<RecordingId>>>(
         [
             .. Entries
-                .Where(entry => entry.Kind is CatalogKind.ProgrammeFixture)
-                .Select(entry => (IReadOnlyList<RecordingId>)[.. Occurrences.Where(occurrence => occurrence.EntryId.Equals(entry.Id)).Select(occurrence => occurrence.RecordingId).Distinct()]),
+                .Select(entry => (IReadOnlyList<RecordingId>)
+                [
+                    .. Occurrences
+                        .Where(occurrence => occurrence.EntryId.Equals(entry.Id) && CatalogKinds.LinksSeries(entry.Kind, entry.Length, occurrence))
+                        .Select(occurrence => occurrence.RecordingId)
+                        .Distinct(),
+                ])
+                .Where(group => group.Count > 0),
         ]);
+
+    public Task<CatalogEntry?> NextToReestimateAsync(CancellationToken cancellationToken)
+        => Task.FromResult(Entries.Where(entry => entry.AwaitsReestimation).OrderBy(entry => entry.FirstSeenAt).ThenBy(entry => entry.Id.Value).FirstOrDefault());
 
     public Task KeepAsync(CatalogChange change, CancellationToken cancellationToken)
     {
@@ -137,6 +152,9 @@ internal sealed class CatalogMatchingHarness : IDisposable
             .AddScoped<IOccupancyReader, OccupancyReader>()
             .AddSingleton<ICatalogWorklist>(Worklist)
             .AddSingleton<ICatalogRepository>(Catalog)
+            .AddSingleton<ISegmentAnswerRepository>(Answers)
+            .AddSingleton<IRecordingDetectionRepository>(Detections)
+            .AddSingleton<ISegmentModelVersionRepository>(Versions)
             .AddSingleton(Lowest)
             .AddScoped<CatalogMatching>()
             .BuildServiceProvider();
@@ -155,6 +173,12 @@ internal sealed class CatalogMatchingHarness : IDisposable
     public HeldCatalogWorklist Worklist { get; }
 
     public HeldCatalog Catalog { get; } = new();
+
+    public HeldSegmentAnswers Answers { get; } = new();
+
+    public HeldRecordingDetections Detections { get; } = new();
+
+    public HeldSegmentModelVersions Versions { get; } = new();
 
     public LearningRecords Store { get; }
 

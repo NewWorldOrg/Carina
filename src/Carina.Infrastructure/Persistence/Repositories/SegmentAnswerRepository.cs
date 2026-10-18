@@ -28,7 +28,8 @@ public sealed class SegmentAnswerRepository(CarinaDbContext context) : ISegmentA
 
     /// <summary>
     /// Inserts the answer as the first one sent, or writes it over the one kept, one more answer counted and
-    /// the withdrawal cleared, in a single statement.
+    /// the withdrawal cleared, and puts every catalog entry heard in the recording back to be estimated again,
+    /// in a single statement.
     /// </summary>
     public async Task AnswerAsync(RecordingAnswer answer, CancellationToken cancellationToken)
     {
@@ -43,6 +44,10 @@ public sealed class SegmentAnswerRepository(CarinaDbContext context) : ISegmentA
 
         await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
+            WITH unsettled AS (
+                UPDATE segment_catalog_entry
+                SET kinds_version = {CatalogKinds.Unsettled}
+                WHERE id IN (SELECT entry_id FROM segment_catalog_occurrence WHERE recording_id = {recording}))
             INSERT INTO segment_answer (recording_id, segments, length, confirmed, confirmed_at, answered_at, answers, withdrawn_at)
             VALUES ({recording}, {segments}::jsonb, {length}::interval, {confirmed}, {confirmedAt}::timestamptz, {answeredAt}, 1, NULL)
             ON CONFLICT (recording_id)
@@ -58,6 +63,10 @@ public sealed class SegmentAnswerRepository(CarinaDbContext context) : ISegmentA
             cancellationToken);
     }
 
+    /// <summary>
+    /// Marks the answer withdrawn when it stands, and then puts every catalog entry heard in the recording back
+    /// to be estimated again, in a single statement.
+    /// </summary>
     public async Task<bool> WithdrawAsync(RecordingId recording, DateTime at, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(recording);
@@ -65,7 +74,14 @@ public sealed class SegmentAnswerRepository(CarinaDbContext context) : ISegmentA
         Guid id = recording.Value;
 
         return await context.Database.ExecuteSqlInterpolatedAsync(
-            $"UPDATE segment_answer SET withdrawn_at = {at} WHERE recording_id = {id} AND withdrawn_at IS NULL",
+            $"""
+            WITH unsettled AS (
+                UPDATE segment_catalog_entry
+                SET kinds_version = {CatalogKinds.Unsettled}
+                WHERE id IN (SELECT entry_id FROM segment_catalog_occurrence WHERE recording_id = {id})
+                  AND EXISTS (SELECT 1 FROM segment_answer WHERE recording_id = {id} AND withdrawn_at IS NULL))
+            UPDATE segment_answer SET withdrawn_at = {at} WHERE recording_id = {id} AND withdrawn_at IS NULL
+            """,
             cancellationToken) is 1;
     }
 
