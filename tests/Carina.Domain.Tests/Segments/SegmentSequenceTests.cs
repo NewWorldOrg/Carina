@@ -186,6 +186,14 @@ public sealed class SegmentSequenceTests
         Assert.Equal([SegmentKind.Programme, SegmentKind.Ending], SegmentSequence.Decide(Laid(1710, 90), [Plain, Ending(3)], SegmentThresholds.Initial));
     }
 
+    [Fact(DisplayName = "BR-CD-007: an opening long enough to leave is kept apart from a likelier one still too short, so the long one is chosen when the short one cannot last")]
+    public void AnOpeningLongEnoughIsKeptApartFromAShorterOne()
+    {
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Opening, SegmentKind.Programme],
+            SegmentSequence.Decide(Laid(60, 20, 15, 1705), [Plain, Four(-5, -0.405, -8), Opening(4), Plain], SegmentThresholds.Initial));
+    }
+
     [Fact(DisplayName = "BR-CD-007: a break left for an opening off the grid costs the penalty as one left for the programme does")]
     public void ABreakLeftForAnOpeningOffTheGridCosts()
     {

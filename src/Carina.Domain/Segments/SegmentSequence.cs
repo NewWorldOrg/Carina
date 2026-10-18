@@ -5,7 +5,8 @@ namespace Carina.Domain.Segments;
 /// far is, and whether the opening and the ending have been used: the run's real length, the sum of its
 /// segments' fitted lengths, rounded to whole seconds and taken modulo the grid (<see cref="RunSteps"/> states).
 /// Each state keeps the real length of the best run reaching it, so no rounding builds up along a run; an
-/// opening or an ending keeps its real length the same way. The sequence chosen has the greatest sum of the
+/// opening or an ending keeps its real length the same way, in a state of its own while it is still too short
+/// to leave, so that a likelier one too short to last never takes the place of one that may. The sequence chosen has the greatest sum of the
 /// log-probabilities of its kinds and of what its moves cost: leaving a break for anything else after a run
 /// whose real length lies further off the grid than the tolerance costs the penalty. The opening and the ending
 /// are one each at most, the opening before the ending, and each lasts from
@@ -23,9 +24,13 @@ public static class SegmentSequence
 
     public static readonly TimeSpan Resolution = TimeSpan.FromMilliseconds(10);
 
-    private const int OpeningState = 2 * RunSteps;
+    private const int ShortOpening = 2 * RunSteps;
 
-    private const int EndingState = OpeningState + 1;
+    private const int OpeningState = ShortOpening + 1;
+
+    private const int ShortEnding = OpeningState + 1;
+
+    private const int EndingState = ShortEnding + 1;
 
     private const int Block = EndingState + 1;
 
@@ -67,7 +72,7 @@ public static class SegmentSequence
 
         for (int state = 0; state < States; state++)
         {
-            if (!MayEnd(state, best.Runs[state]))
+            if (!MayEnd(state))
             {
                 best.Scores[state] = double.NegativeInfinity;
             }
@@ -151,9 +156,9 @@ public static class SegmentSequence
         SegmentKind kind = KindOf(state);
         int used = state / Block;
 
-        if (kind is SegmentKind.Opening or SegmentKind.Ending && run < CatalogKinds.ThemeShortest)
+        if (IsShort(state))
         {
-            Stayed(next, state, score, run, piece, chances, kind);
+            Themed(next, (used * Block) + (kind is SegmentKind.Opening ? ShortOpening : ShortEnding), state, score + chances.LogOf(kind), run + piece.Length);
 
             return;
         }
@@ -166,35 +171,31 @@ public static class SegmentSequence
 
         if (kind is SegmentKind.Opening || used is 0)
         {
-            Themed(next, (OpeningUsed * Block) + OpeningState, state, score + leaving + chances.LogOf(SegmentKind.Opening), (kind is SegmentKind.Opening ? run : TimeSpan.Zero) + piece.Length);
+            Themed(next, (OpeningUsed * Block) + ShortOpening, state, score + leaving + chances.LogOf(SegmentKind.Opening), (kind is SegmentKind.Opening ? run : TimeSpan.Zero) + piece.Length);
         }
 
         if (kind is SegmentKind.Ending || (used & EndingUsed) is 0)
         {
-            Themed(next, ((used | EndingUsed) * Block) + EndingState, state, score + leaving + chances.LogOf(SegmentKind.Ending), (kind is SegmentKind.Ending ? run : TimeSpan.Zero) + piece.Length);
+            Themed(next, ((used | EndingUsed) * Block) + ShortEnding, state, score + leaving + chances.LogOf(SegmentKind.Ending), (kind is SegmentKind.Ending ? run : TimeSpan.Zero) + piece.Length);
         }
     }
 
     /// <summary>
-    /// The only move from an opening or an ending still too short to leave: on in it.
+    /// Offers a move into the opening or the ending whose state while still too short to leave is
+    /// <paramref name="shortState"/>, lasting <paramref name="run"/> with it: to that state while it is still that
+    /// short, to the one after it once it may be left, and nowhere when it is longer than one may last.
     /// </summary>
-    private static void Stayed(Column next, int state, double score, TimeSpan run, SegmentPiece piece, SegmentChances chances, SegmentKind kind)
-        => Themed(next, state, state, score + chances.LogOf(kind), run + piece.Length);
-
-    /// <summary>
-    /// Offers a move into an opening or an ending that lasts <paramref name="run"/> with it, when that is no
-    /// longer than one may last.
-    /// </summary>
-    private static void Themed(Column next, int to, int from, double score, TimeSpan run)
+    private static void Themed(Column next, int shortState, int from, double score, TimeSpan run)
     {
         if (run <= CatalogKinds.ThemeLongest)
         {
-            next.Offer(to, from, score, run);
+            next.Offer(run < CatalogKinds.ThemeShortest ? shortState : shortState + 1, from, score, run);
         }
     }
 
-    private static bool MayEnd(int state, TimeSpan run)
-        => KindOf(state) is not (SegmentKind.Opening or SegmentKind.Ending) || run >= CatalogKinds.ThemeShortest;
+    private static bool IsShort(int state) => state % Block is ShortOpening or ShortEnding;
+
+    private static bool MayEnd(int state) => !IsShort(state);
 
     private static SegmentKind KindOf(int state)
     {
@@ -202,8 +203,8 @@ public static class SegmentSequence
 
         return local switch
         {
-            OpeningState => SegmentKind.Opening,
-            EndingState => SegmentKind.Ending,
+            ShortOpening or OpeningState => SegmentKind.Opening,
+            ShortEnding or EndingState => SegmentKind.Ending,
             >= RunSteps => SegmentKind.Break,
             _ => SegmentKind.Programme,
         };
