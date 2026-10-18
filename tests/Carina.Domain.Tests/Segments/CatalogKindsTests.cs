@@ -176,7 +176,7 @@ public sealed class CatalogKindsTests
             At(Entry, Quiz.Episode(0), 900, 15));
 
         Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 1.0, CatalogDecision.Answer), breakAnswered.Estimate);
-        Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 1.0, CatalogDecision.Answer), programmeAnswered.Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, programmeAnswered.Estimate);
     }
 
     [Theory(DisplayName = "BR-CD-005: a piece of 30 seconds to 3 minutes starting within six minutes after the guide's start of two episodes of one series is its opening, 0.8")]
@@ -452,14 +452,59 @@ public sealed class CatalogKindsTests
         Assert.Equal([null, null, null, SegmentKind.Programme], pattern.Overrides);
     }
 
-    [Fact(DisplayName = "answers of the programme rule out the rows of adverts and of the station's fixed parts, and otherwise make the entry a fixed part of the programme")]
+    [Fact(DisplayName = "answers of the programme skip the rows of adverts and of the station's fixed parts, leaving a fixed part of the programme by its place or nothing known")]
     public void AProgrammeAnswerRulesOutTheAdvertRows()
     {
         CatalogPattern twoSeries = Estimated(89, At(Entry, Drama.Episode(0), 0, 89, SegmentKind.Programme), At(Entry, Quiz.Episode(0), 0, 89));
         CatalogPattern atTheEdges = Estimated(5, At(Entry, Drama.Episode(0), 2, 5, SegmentKind.Programme), At(Entry, Quiz.Episode(0), 2, 5));
+        CatalogPattern samePlace = Estimated(20, At(Entry, Drama.Episode(0), 60, 20, SegmentKind.Programme), At(Entry, Drama.Episode(1), 80, 20));
 
-        Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 1.0, CatalogDecision.Answer), twoSeries.Estimate);
-        Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 1.0, CatalogDecision.Answer), atTheEdges.Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, twoSeries.Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, atTheEdges.Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 0.7, CatalogDecision.Pattern), samePlace.Estimate);
+    }
+
+    [Fact(DisplayName = "BR-CD-011: an advert heard in two series with one answer of the programme is not known, and links nothing")]
+    public void AnAdvertWithAProgrammeAnswerLinksNothing()
+    {
+        PlacedOccurrence answered = At(Entry, Drama.Episode(0), 600, 15, SegmentKind.Programme);
+        PlacedOccurrence aired = At(Entry, Quiz.Episode(0), 900, 15);
+
+        CatalogPattern pattern = Estimated(15, answered, aired);
+
+        Assert.Equal(CatalogEstimate.Unknown, pattern.Estimate);
+        Assert.False(CatalogKinds.LinksSeries(pattern.Estimate.Kind, TimeSpan.FromSeconds(15), aired.Occurrence));
+        Assert.False(CatalogKinds.LinksSeries(pattern.Estimate.Kind, TimeSpan.FromSeconds(15), answered.Occurrence));
+    }
+
+    [Fact(DisplayName = "BR-CD-011: a series of a name that only begins with the series' own on another station is not joined by the sound, and a sound on the grid there is an advert")]
+    public void APrefixNameOnAnotherStationIsNotJoined()
+    {
+        CatalogSeries longer = new(2, "架空の物語二", Evening);
+
+        CatalogPattern pattern = Estimated(90, [.. Weekly(Drama, 2, 0, 90), At(Entry, longer.Episode(2), 0, 90)]);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.9, CatalogDecision.Pattern), pattern.Estimate);
+        Assert.Equal(2, pattern.SeriesCount);
+    }
+
+    [Fact(DisplayName = "in a programme of five minutes every stretch is near both its start and its end, and the half it is heard in tells the opening from the ending")]
+    public void AShortProgrammeTellsByTheHalf()
+    {
+        CatalogSeries brief = new(1, "架空の小品", Evening, TimeSpan.FromMinutes(5));
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), Estimated(31, Weekly(brief, 2, 0, 31)).Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Ending, 0.8, CatalogDecision.Pattern), Estimated(31, Weekly(brief, 2, 240, 31)).Estimate);
+    }
+
+    [Theory(DisplayName = "a piece starting more than six minutes after the guide's start or 15 seconds before it, or ending more than six minutes before the guide's end or 15 seconds after it, is neither an opening nor an ending")]
+    [InlineData(361.0)]
+    [InlineData(-16.0)]
+    [InlineData(1800.0 - 361 - 85)]
+    [InlineData(1800.0 + 16 - 85)]
+    public void APieceJustOutsideTheEdgesIsNoTheme(double fromProgrammeStart)
+    {
+        Assert.Equal(CatalogEstimate.Unknown, Estimated(85, Weekly(Drama, 2, fromProgrammeStart, 85)).Estimate);
     }
 
     [Fact(DisplayName = "an answer of a break decides the entry outright, over the opening its stretches are heard as and over answers of the programme")]

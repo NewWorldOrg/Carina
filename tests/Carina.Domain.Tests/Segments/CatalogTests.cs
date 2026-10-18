@@ -221,7 +221,7 @@ public sealed class CatalogTests
         (CatalogEntry entry, CatalogOccurrence[] occurrences) = Kept(Drama.Episode(0), Drama.Episode(1));
         RecordingId answered = occurrences[1].RecordingId;
         Dictionary<RecordingId, ProgrammeCopy> programmes = new(Programmes) { [occurrences[0].RecordingId] = Drama.Episode(0), [answered] = Drama.Episode(1) };
-        Dictionary<RecordingId, GivenAnswer> answers = new() { [answered] = Answer(occurrences[1].Span, SegmentKind.Programme, TimeSpan.FromMinutes(32)) };
+        Dictionary<RecordingId, GivenAnswer> answers = new() { [answered] = Answer(occurrences[1].Span, SegmentKind.Break, TimeSpan.FromMinutes(32)) };
         SoundMatch match = new(Span(10, 25), new EntrySound(entry.Id), Span(0, 15), 0.04);
 
         Assert.Equal((CatalogKind.Cm, 0.5), (entry.Kind, entry.Confidence));
@@ -229,8 +229,8 @@ public sealed class CatalogTests
         CatalogChange change = Catalog.Absorb(Heard, Sound, [match], Knowing(entry, occurrences, answers, programmes), Now);
 
         Assert.Same(entry, Assert.Single(change.Reestimated));
-        Assert.Equal((CatalogKind.ProgrammeFixture, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
-        Assert.Equal(SegmentKind.Programme, occurrences[1].KindOverride);
+        Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
+        Assert.Equal(SegmentKind.Break, occurrences[1].KindOverride);
         Assert.Same(occurrences[1], Assert.Single(change.Overridden));
     }
 
@@ -291,6 +291,33 @@ public sealed class CatalogTests
         Assert.Empty(grown.Relinking);
     }
 
+    [Fact(DisplayName = "BR-CD-011: a kept opening that gains a stretch, and one estimated again out of its kind, change the links")]
+    public void AnOpeningThatGrowsOrLeavesItsKindChangesTheLinks()
+    {
+        CatalogEntryId grows = CatalogEntryId.New();
+        CatalogOccurrence[] weeks = [At(grows, Drama.Episode(0), 0, 89).Occurrence, At(grows, Drama.Episode(1), 0, 89).Occurrence];
+        CatalogEntry growing = KeptOpening(grows, weeks.Length);
+        SoundMatch heardAgain = new(Span(60, 149), new EntrySound(grows), Span(0, 89), 0.04);
+        CatalogEntryId leaves = CatalogEntryId.New();
+        CatalogOccurrence[] apart = [At(leaves, Drama.Episode(0), 600, 89).Occurrence, At(leaves, Quiz.Episode(0), 600, 89).Occurrence];
+        CatalogEntry leaving = KeptOpening(leaves, apart.Length);
+        Dictionary<RecordingId, ProgrammeCopy> programmes = new(Programmes)
+        {
+            [weeks[0].RecordingId] = Drama.Episode(0),
+            [weeks[1].RecordingId] = Drama.Episode(1),
+            [apart[0].RecordingId] = Drama.Episode(0),
+            [apart[1].RecordingId] = Quiz.Episode(0),
+        };
+
+        CatalogChange grown = Catalog.Absorb(Heard, Sound, [heardAgain], Knowing(growing, weeks, programmes: programmes), Now);
+        CatalogChange left = Catalog.Reestimate(leaving, Knowing(leaving, apart, programmes: programmes), Now);
+
+        Assert.Equal(CatalogKind.Opening, growing.Kind);
+        Assert.Equal([grows], grown.Relinking);
+        Assert.Equal(CatalogKind.Cm, leaving.Kind);
+        Assert.Equal([leaves], left.Relinking);
+    }
+
     [Fact(DisplayName = "a match naming an entry that was not handed over is refused")]
     public void AMatchNamingAnUnknownEntryIsRefused()
     {
@@ -319,6 +346,22 @@ public sealed class CatalogTests
             Now,
             false,
             null);
+
+    private static CatalogEntry KeptOpening(CatalogEntryId id, int occurrences)
+        => CatalogEntry.Rehydrate(
+            id,
+            CatalogKind.Opening,
+            0.8,
+            CatalogDecision.Pattern,
+            TimeSpan.FromSeconds(89),
+            CatalogFingerprint.Write([.. Enumerable.Range(1, 5562).Select(value => (uint)value)]),
+            occurrences,
+            1,
+            1,
+            Evening,
+            Evening.AddDays(7),
+            Now,
+            CatalogKinds.Version);
 
     private static CatalogEntry KeptBeforeThemes(CatalogEntryId id, int occurrences)
         => CatalogEntry.Rehydrate(

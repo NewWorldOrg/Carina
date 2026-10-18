@@ -15,7 +15,7 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// <summary>
 /// The kind of a catalog entry, from the way its stretches are spread, the first row that holds: an
 /// answer of a break, an opening or an ending given on one of its stretches decides outright, and
-/// answers of the programme alone leave only the rows of the opening, the ending and the programme; a
+/// answers of the programme alone skip the rows of adverts and of the station's fixed parts; a
 /// length on the 15-second grid (<see cref="OnTheGrid"/>, a second and a half short of a multiple to half
 /// a second over) heard in two series or on two stations is an advert, 0.9; a piece of
 /// <see cref="ThemeShortest"/> to <see cref="ThemeLongest"/>, other than one on the grid of up to a minute,
@@ -31,8 +31,9 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// (<see cref="WholeWithin"/>) count; a shorter one is taken on its own.
 /// <para>
 /// The series are those the links join, except that a sound heard as an opening or an ending joins the
-/// series that hears it so most often with every other series of a name that links to its own
-/// (<see cref="SeriesNames.Link"/>), on whatever station, and with every series of another name whose
+/// series that hears it so most often with every other series of the very same name
+/// (<see cref="SeriesNames.Same"/>), on whatever station and at whatever time, and with every series of another
+/// name whose
 /// recordings could be other episodes of it in its weekly slot
 /// (<see cref="SeriesLinks.AnotherEpisodeInTheSlot"/>) and hear it in two episodes or only at that place:
 /// the sound links those. When every whole stretch is of that one series, the opening or ending comes
@@ -120,7 +121,8 @@ public static class CatalogKinds
         Theme? theme = ThemeOf(length, linked);
         IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series = theme?.Series ?? linked;
         int stations = counted.Select(placed => (placed.Occurrence.NetworkId, placed.Occurrence.ServiceId)).Distinct().Count();
-        CatalogEstimate estimate = Answered(counted, theme) ?? Spread(length, series, stations, theme);
+        SegmentKind[] answers = [.. counted.Select(placed => placed.Answer).OfType<SegmentKind>()];
+        CatalogEstimate estimate = Decided(answers) ?? (answers.Length > 0 ? AsProgramme(length, series, theme) : Spread(length, series, stations, theme));
         IReadOnlyList<PlacedOccurrence> own = theme?.Own ?? series.MaxBy(group => group.Count) ?? [];
 
         return new CatalogPattern(
@@ -168,31 +170,38 @@ public static class CatalogKinds
     private static bool IsWhole(TimeSpan stretch, TimeSpan length) => stretch >= length - WholeWithin;
 
     /// <summary>
-    /// What the answers on the stretches say of the entry. An answer of a break, an opening or an ending
-    /// decides outright, the one given most, a tie going to the break, then the opening. Answers of the
-    /// programme alone rule out the rows that make it an advert or a fixed part of the station's output: the
-    /// opening or ending it is heard as decides, and otherwise they make it a fixed part of the programme.
+    /// The kind an answer of a break, an opening or an ending on one of the stretches decides, the one given
+    /// most, a tie going to the break, then the opening; none when no answer is of those.
     /// </summary>
-    private static CatalogEstimate? Answered(IEnumerable<PlacedOccurrence> counted, Theme? theme)
+    private static CatalogEstimate? Decided(SegmentKind[] answers)
     {
-        SegmentKind[] answers = [.. counted.Select(placed => placed.Answer).OfType<SegmentKind>()];
         SegmentKind[] deciding = [.. answers.Where(answer => answer is not SegmentKind.Programme)];
 
-        if (deciding.Length > 0)
-        {
-            SegmentKind most = deciding.GroupBy(answer => answer).OrderByDescending(group => group.Count()).ThenBy(group => group.Key).First().Key;
-
-            return new CatalogEstimate(KindOf(most), Certain, CatalogDecision.Answer);
-        }
-
-        if (answers.Length is 0)
+        if (deciding.Length is 0)
         {
             return null;
         }
 
-        return theme is null
-            ? new CatalogEstimate(CatalogKind.ProgrammeFixture, Certain, CatalogDecision.Answer)
-            : new CatalogEstimate(theme.Kind, EveryEpisode, CatalogDecision.Pattern);
+        SegmentKind most = deciding.GroupBy(answer => answer).OrderByDescending(group => group.Count()).ThenBy(group => group.Key).First().Key;
+
+        return new CatalogEstimate(KindOf(most), Certain, CatalogDecision.Answer);
+    }
+
+    /// <summary>
+    /// The kind of an entry the answers on whose stretches are of the programme alone: the rows that would make
+    /// it an advert or a fixed part of the station's output are skipped, so it is the opening or ending it is
+    /// heard as, a fixed part of the programme by its place, or not known.
+    /// </summary>
+    private static CatalogEstimate AsProgramme(TimeSpan length, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series, Theme? theme)
+    {
+        if (theme is not null)
+        {
+            return new CatalogEstimate(theme.Kind, EveryEpisode, CatalogDecision.Pattern);
+        }
+
+        return length < ProgrammeFixtureShorterThan && series.Any(HeardTwiceInOnePlace)
+            ? new CatalogEstimate(CatalogKind.ProgrammeFixture, SamePlace, CatalogDecision.Pattern)
+            : CatalogEstimate.Unknown;
     }
 
     private static CatalogKind KindOf(SegmentKind answer) => answer switch
@@ -237,8 +246,8 @@ public static class CatalogKinds
 
     /// <summary>
     /// The opening or ending a sound of its length is heard as, when two episodes of one series hear it at
-    /// that place in their programmes; the series it is heard as that in, with every other series of the
-    /// name of the one that hears it so most often, and every series in its slot that hears it in two episodes
+    /// that place in their programmes; the series it is heard as that in, with every other series of the very
+    /// same name as the one that hears it so most often, and every series in its slot that hears it in two episodes
     /// or only at that place; the series once those are joined into one; and whether every whole stretch is of
     /// that one series.
     /// </summary>
@@ -291,7 +300,7 @@ public static class CatalogKinds
     }
 
     private static bool NamedAs(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
-        => group.Any(placed => main.Any(member => SeriesNames.Link(member.Occurrence.SeriesName, placed.Occurrence.SeriesName)));
+        => group.Any(placed => main.Any(member => SeriesNames.Same(member.Occurrence.SeriesName, placed.Occurrence.SeriesName)));
 
     /// <summary>
     /// What the place of a stretch makes a theme heard there, by the guide's start and end of its programme:
