@@ -6,17 +6,15 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace Carina.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// The versions of the model. The figures an evaluation leaves — the metrics overall and by station, the
-/// evidence they rest on, the threshold they recommend and what a rollback measured — are columns nothing
-/// writes until versions are evaluated, so they are kept beside the entity rather than on it.
+/// The versions of the model, with the figures an evaluation leaves — the metrics overall and by station, the
+/// evidence they rest on and the threshold they recommend — and what a rollback measured, in the shapes the
+/// HTTP surface answers them in.
 /// </summary>
 public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<SegmentModelVersion>
 {
     public const string TableName = "segment_model_version";
 
     public const string ActiveIndexName = "ux_segment_model_version_active";
-
-    public static readonly IReadOnlyList<string> EvaluationColumns = ["metrics", "stations", "evidence", "recommended_threshold", "rollback"];
 
     private const string Candidate = nameof(SegmentModelVersionState.Candidate);
 
@@ -106,10 +104,25 @@ public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<
             .HasColumnType("jsonb")
             .IsRequired();
 
-        builder.Property<string?>("Metrics").HasColumnName("metrics").HasColumnType("jsonb");
-        builder.Property<string?>("Stations").HasColumnName("stations").HasColumnType("jsonb");
-        builder.Property<string?>("Evidence").HasColumnName("evidence").HasColumnType("jsonb");
-        builder.Property<decimal?>("RecommendedThreshold").HasColumnName("recommended_threshold").HasColumnType("numeric(3,2)");
+        builder.Property(version => version.Metrics)
+            .HasConversion(metrics => SegmentJson.Written(metrics!), stored => SegmentJson.Metrics(stored), SegmentJson.ComparedAsWritten<SegmentMetrics>(SegmentJson.Written))
+            .HasColumnName("metrics")
+            .HasColumnType("jsonb");
+
+        builder.Property(version => version.Stations)
+            .HasConversion(stations => SegmentJson.Written(stations!), stored => SegmentJson.Stations(stored), SegmentJson.ComparedAsWritten<IReadOnlyList<StationMetrics>>(SegmentJson.Written))
+            .HasColumnName("stations")
+            .HasColumnType("jsonb");
+
+        builder.Property(version => version.Evidence)
+            .HasConversion(evidence => SegmentJson.Written(evidence!), stored => SegmentJson.Evidence(stored), SegmentJson.ComparedAsWritten<EvaluationEvidence>(SegmentJson.Written))
+            .HasColumnName("evidence")
+            .HasColumnType("jsonb");
+
+        builder.Property(version => version.RecommendedThreshold)
+            .HasConversion<decimal?>()
+            .HasColumnName("recommended_threshold")
+            .HasColumnType("numeric(3,2)");
 
         builder.Property(version => version.TrainedAt).IsRequired();
         builder.Property(version => version.AdoptedAt);
@@ -117,9 +130,13 @@ public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<
         builder.Property(version => version.ChosenByHandAt);
         builder.Property(version => version.RolledBackAt);
 
-        builder.Property<string?>("Rollback").HasColumnName("rollback").HasColumnType("jsonb");
+        builder.Property(version => version.Rollback)
+            .HasConversion(rollback => SegmentJson.Written(rollback!), stored => SegmentJson.Rollback(stored), SegmentJson.ComparedAsWritten<SegmentRollback>(SegmentJson.Written))
+            .HasColumnName("rollback")
+            .HasColumnType("jsonb");
 
         builder.Ignore(version => version.Model);
+        builder.Ignore(version => version.Evaluation);
 
         builder.HasIndex(version => version.State)
             .IsUnique()
