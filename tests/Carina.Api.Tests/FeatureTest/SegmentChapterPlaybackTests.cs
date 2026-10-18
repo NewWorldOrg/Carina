@@ -76,6 +76,29 @@ public sealed class SegmentChapterPlaybackTests
         Assert.Equal("break", plan.GetProperty("chapters")[1].GetProperty("kind").GetString());
     }
 
+    [Theory(DisplayName = "BR-CD-009: the threshold the settings hold decides which breaks are offered to be skipped")]
+    [InlineData(0.60, true, true)]
+    [InlineData(0.90, false, true)]
+    [InlineData(0.95, false, false)]
+    public async Task TheThresholdTheSettingsHoldDecidesWhichBreaksAreOffered(double threshold, bool unlikely, bool likely)
+    {
+        await using var feature = new PlayFeature();
+        await feature.SegmentSettings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, false, null, threshold, RecordingFeature.Noon), CancellationToken.None);
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        await DetectedAsync(
+            feature,
+            recording.Id,
+            (0, 300, SegmentKind.Programme, 0.98),
+            (300, 360, SegmentKind.Break, 0.69),
+            (360, 900, SegmentKind.Programme, 0.99),
+            (900, 960, SegmentKind.Break, 0.93),
+            (960, 1800, SegmentKind.Programme, 0.99));
+
+        JsonElement plan = await PlanAsync(feature, recording);
+
+        Assert.Equal([false, unlikely, false, likely, false], plan.GetProperty("chapters").EnumerateArray().Select(chapter => chapter.GetProperty("skippable").GetBoolean()));
+    }
+
     [Fact(DisplayName = "BR-CS-002: a recording whose detected sequence was thrown away plays with no chapters, even with chapters its encode marked")]
     public async Task ASequenceThrownAwayPlaysWithNoChapters()
     {

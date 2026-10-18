@@ -647,6 +647,20 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal("byte", schemas["DataBroadcastEventResponder"]!["properties"]!["privateData"]!["format"]!.GetValue<string>());
     }
 
+    [Fact(DisplayName = "BR-CV-002: the segment settings are described with learning and the skip threshold, each with when it last changed, and a change may name either")]
+    public async Task TheSegmentSettingsAreDescribedWithTheSkipThreshold()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["learning", "learningChangedAt", "skipThreshold", "skipThresholdChangedAt"],
+            schemas["SegmentSettingsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["learning", "skipThreshold"],
+            schemas["PatchSegmentSettingsRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
     [Fact(DisplayName = "the status of CM, OP and ED detection is described with the learning data kept, the catalog's count of each kind and the version of the model in use")]
     public async Task TheSegmentStatusIsDescribedWithTheCatalog()
     {

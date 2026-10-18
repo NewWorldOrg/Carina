@@ -4116,9 +4116,19 @@ namespace Carina.Db.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("learning");
 
-                    b.Property<DateTime>("LearningChangedAt")
+                    b.Property<DateTime?>("LearningChangedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("learning_changed_at");
+
+                    b.Property<decimal>("SkipThreshold")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(3,2)")
+                        .HasDefaultValue(0.7m)
+                        .HasColumnName("skip_threshold");
+
+                    b.Property<DateTime?>("SkipThresholdChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("skip_threshold_changed_at");
 
                     b.HasKey("Id")
                         .HasName("pk_segment_settings");
@@ -4126,6 +4136,8 @@ namespace Carina.Db.Migrations
                     b.ToTable("segment_settings", null, t =>
                         {
                             t.HasCheckConstraint("ck_segment_settings_single_row", "id = 1");
+
+                            t.HasCheckConstraint("ck_segment_settings_skip_threshold", "skip_threshold BETWEEN 0.50 AND 0.95");
                         });
                 });
 
