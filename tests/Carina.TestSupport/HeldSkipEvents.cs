@@ -42,9 +42,12 @@ public sealed class HeldSkipEvents : ISkipEventRepository
         }
     }
 
+    public Task<IReadOnlyList<SkipEvent>> ListAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<SkipEvent>>([.. Taken.OrderBy(skip => skip.HappenedAt).ThenBy(skip => skip.Id)]);
+
     public Task<SkipReturns> ReturnsAsync(int modelVersion, DateTime from, DateTime until, CancellationToken cancellationToken)
         => Task.FromResult(SkipReturns.Of(
-            Taken.Select(skip => new ViewerAction(skip.HappenedAt, skip.Event, skip.Kind, skip.From, skip.To, skip.ModelVersion)),
+            Taken.Select(skip => skip.Action()),
             modelVersion,
             from,
             until));

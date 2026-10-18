@@ -106,6 +106,64 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         Assert.Equal(new SegmentRollback(0.09, 0.03, 25, SegmentModelVersion.FirstNumber), left.Rollback);
     }
 
+    [Fact(DisplayName = "BR-CS-003: a candidate learning makes is kept under the number after the highest, with its figures in the shapes the status answers, and never in use")]
+    public async Task ACandidateIsKeptUnderTheNextNumber()
+    {
+        await AddAsync(Version(61, SegmentModelVersionState.Candidate));
+
+        SegmentModelVersion kept = await AddCandidateAsync(Noon.AddDays(1));
+
+        Assert.Equal((62, SegmentModelVersionState.Candidate, false, (DateTime?)null), (kept.Number, kept.State, kept.ByHand, kept.AdoptedAt));
+        SegmentModelVersion read = (await ListAsync()).Single(version => version.Number == 62);
+        Assert.Equal((SegmentModelVersionState.Candidate, Noon.AddDays(1), (DateTime?)null), (read.State, read.TrainedAt, read.AdoptedAt));
+        Assert.Equal(Evaluated.Evidence, read.Evidence);
+        Assert.Equal(0.65, read.RecommendedThreshold);
+        Assert.Equal(SegmentModel.First.Weights, read.Weights);
+        Assert.Equal(
+            "Candidate t t t 0.65",
+            await ScalarAsync(
+                """
+                SELECT concat_ws(' ', state,
+                    metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": null, "extraBoundariesPerRecording": 1.2, "programmeSkippedSecondsPerHour": 2.1, "kinds": [{"kind": "Break", "recall": 0.95, "precision": null}], "returnedAfterSkipShare": 0.03, "skips": 64}'::jsonb,
+                    stations = '[{"networkId": 40001, "serviceId": 60001, "confirmedRecordings": 5, "metrics": {"boundaryRecallWithin2s": 0.96, "boundaryRecallWithin1s": 0.9, "extraBoundariesPerRecording": 1, "programmeSkippedSecondsPerHour": 1.4, "kinds": [], "returnedAfterSkipShare": null, "skips": 0}}]'::jsonb,
+                    evidence = '{"confirmedRecordings": 12, "boundaries": 148, "labelsUntil": "2026-10-18T09:00:00Z"}'::jsonb,
+                    recommended_threshold)
+                FROM segment_model_version WHERE number = 62
+                """));
+        Assert.Equal(SegmentModelVersion.FirstNumber, (await ActiveAsync()).Number);
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a candidate kept is put in use by learning through the one change, and the version it takes the place of is taken out of use")]
+    public async Task ACandidateKeptIsPutInUseByLearning()
+    {
+        await AddAsync(Version(61, SegmentModelVersionState.Candidate));
+        SegmentModelVersion kept = await AddCandidateAsync(Noon.AddDays(1));
+
+        SegmentModelVersion? active = await ChangeAsync(SegmentVersionChange.Adopting(kept.Number), Noon.AddDays(1).AddMinutes(5));
+
+        Assert.Equal((62, false, (DateTime?)Noon.AddDays(1).AddMinutes(5)), (active?.Number, active?.ByHand, active?.AdoptedAt));
+        Assert.Equal("1:Retired:false 61:Candidate:false 62:Active:false", await StatesAsync());
+        Assert.Equal(SegmentModelVersion.FirstNumber, SegmentRollback.Previous(await ListAsync())?.Number);
+    }
+
+    [Fact(DisplayName = "BR-CS-003: candidates kept at once are each given a number of their own")]
+    public async Task CandidatesKeptAtOnceAreNumberedApart()
+    {
+        await AddAsync(Version(61, SegmentModelVersionState.Candidate));
+
+        using var gate = new Barrier(3);
+        int[] numbers = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => Task.Run(async () =>
+        {
+            await using CarinaDbContext writing = database.Open();
+            await writing.Database.OpenConnectionAsync(Cancel);
+            gate.SignalAndWait(Cancel);
+
+            return (await new SegmentModelVersionRepository(writing).AddCandidateAsync(SegmentModel.First, Evaluated, Noon.AddDays(1), Cancel)).Number;
+        })));
+
+        Assert.Equal([62, 63, 64], numbers.Order());
+    }
+
     [Fact(DisplayName = "a change naming a number no version has writes nothing")]
     public async Task AChangeNamingAnUnknownNumberWritesNothing()
     {
@@ -162,6 +220,13 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         await using CarinaDbContext reading = database.Open();
 
         return [.. (await new SegmentModelVersionRepository(reading).ListAsync(Cancel)).Where(version => version.Number is SegmentModelVersion.FirstNumber or (>= 61 and <= 69))];
+    }
+
+    private async Task<SegmentModelVersion> AddCandidateAsync(DateTime trainedAt)
+    {
+        await using CarinaDbContext writing = database.Open();
+
+        return await new SegmentModelVersionRepository(writing).AddCandidateAsync(SegmentModel.First, Evaluated, trainedAt, Cancel);
     }
 
     private async Task<SegmentModelVersion> ActiveAsync()

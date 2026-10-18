@@ -13,6 +13,11 @@ public interface ISkipEventRepository
     Task<bool> TakeAsync(SkipEvent skip, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Every event kept, the earliest that happened first.
+    /// </summary>
+    Task<IReadOnlyList<SkipEvent>> ListAsync(CancellationToken cancellationToken);
+
+    /// <summary>
     /// The skips and returns on the buttons of the version numbered <paramref name="modelVersion"/> that happened
     /// from <paramref name="from"/> up to and including <paramref name="until"/>, as <see cref="SkipReturns.Of"/>
     /// counts them.

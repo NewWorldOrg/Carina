@@ -14,6 +14,11 @@ public interface ISegmentAnswerRepository
     Task<RecordingAnswer?> FindAsync(RecordingId recording, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Every answer kept, whether it stands or was withdrawn.
+    /// </summary>
+    Task<IReadOnlyList<RecordingAnswer>> ListAsync(CancellationToken cancellationToken);
+
+    /// <summary>
     /// Keeps <paramref name="answer"/> as the answer of its recording: the first one sent, or one written over the
     /// answer kept, counting one answer more than it did and standing again.
     /// </summary>

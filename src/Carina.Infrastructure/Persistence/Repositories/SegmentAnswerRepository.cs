@@ -17,6 +17,9 @@ public sealed class SegmentAnswerRepository(CarinaDbContext context) : ISegmentA
             .FirstOrDefaultAsync(answer => answer.RecordingId == recording, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<RecordingAnswer>> ListAsync(CancellationToken cancellationToken)
+        => await context.Set<RecordingAnswer>().AsNoTracking().ToListAsync(cancellationToken);
+
     /// <summary>
     /// Inserts the answer as the first one sent, or writes it over the one kept, one more answer counted and
     /// the withdrawal cleared, in a single statement.

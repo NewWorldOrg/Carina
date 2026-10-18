@@ -26,6 +26,14 @@ public sealed class HeldSegmentAnswers : ISegmentAnswerRepository
     public Task<RecordingAnswer?> FindAsync(RecordingId recording, CancellationToken cancellationToken)
         => Task.FromResult(Of(recording));
 
+    public Task<IReadOnlyList<RecordingAnswer>> ListAsync(CancellationToken cancellationToken)
+    {
+        lock (gate)
+        {
+            return Task.FromResult<IReadOnlyList<RecordingAnswer>>([.. held.Values]);
+        }
+    }
+
     public Task AnswerAsync(RecordingAnswer answer, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(answer);
