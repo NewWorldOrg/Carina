@@ -18,6 +18,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
+using IRecordingDetectionRepository = Carina.Domain.Segments.IRecordingDetectionRepository;
+using ISegmentModelVersionRepository = Carina.Domain.Segments.ISegmentModelVersionRepository;
+using ISegmentSettingsRepository = Carina.Domain.Segments.ISegmentSettingsRepository;
+
 namespace Carina.Api.Tests.FeatureTest;
 
 internal sealed class CaptionFeature : IAsyncDisposable
@@ -64,6 +68,9 @@ internal sealed class CaptionFeature : IAsyncDisposable
                 services.RemoveAll<IEncodeChapterRepository>();
                 services.AddSingleton<IEncodeChapterRepository>(new HeldEncodeChapters());
                 services.AddSingleton<IPlaybackPositionRepository>(new HeldPlaybackPositions());
+                services.AddSingleton<ISegmentSettingsRepository>(new HeldSegmentSettings());
+                services.AddSingleton<ISegmentModelVersionRepository>(new HeldSegmentModelVersions());
+                services.AddSingleton<IRecordingDetectionRepository>(new HeldRecordingDetections());
             }));
 
         Client = configured.WithTestScheme().CreateClient();

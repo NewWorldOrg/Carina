@@ -146,7 +146,7 @@ app.MapGet(
                 string id,
                 PlaybackService playback,
                 IOnTheFlyPlayer player,
-                IEncodeChapterRepository chapters,
+                PlaybackChapterService chapters,
                 IPlaybackPositionRepository positions,
                 CaptionService captions) =>
             PlayDelivery.Invoke(context, id, playback, player, chapters, positions, captions))

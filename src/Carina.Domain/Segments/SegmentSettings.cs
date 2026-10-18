@@ -33,11 +33,17 @@ public sealed class SegmentSettings
 }
 
 /// <summary>
-/// The segment settings as they stand: the row where there is one, and learning off where there is not.
+/// The segment settings as they stand: the row where there is one, and learning off where there is not; and how
+/// likely a break, an opening or an ending is to be before a button offers to skip it, which stands at
+/// <see cref="DefaultSkipThreshold"/> while no setting holds another.
 /// </summary>
 public sealed record SegmentSettingsStanding(bool Learning, DateTime? LearningChangedAt)
 {
+    public const double DefaultSkipThreshold = 0.70;
+
     public static SegmentSettingsStanding Unset { get; } = new(false, null);
+
+    public double SkipThreshold { get; init; } = DefaultSkipThreshold;
 
     public static SegmentSettingsStanding Over(SegmentSettings? held)
         => held is null ? Unset : new SegmentSettingsStanding(held.Learning, held.LearningChangedAt);
