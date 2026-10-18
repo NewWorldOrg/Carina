@@ -104,6 +104,8 @@ public sealed class CatalogKindsTests
     [InlineData(29.0, CatalogKind.Cm)]
     [InlineData(44.0, CatalogKind.Cm)]
     [InlineData(59.0, CatalogKind.Cm)]
+    [InlineData(60.0, CatalogKind.Cm)]
+    [InlineData(60.5, CatalogKind.Cm)]
     [InlineData(28.4, CatalogKind.Unknown)]
     [InlineData(30.6, CatalogKind.Unknown)]
     [InlineData(61.0, CatalogKind.Unknown)]

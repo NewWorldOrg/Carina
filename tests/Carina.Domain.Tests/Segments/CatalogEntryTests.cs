@@ -81,6 +81,21 @@ public sealed class CatalogEntryTests
         Assert.Null(cutShortAtHome.Occurrence.KindOverride);
     }
 
+    [Theory(DisplayName = "the opening's song in another series is an advert there from a second and a half short of the grid, and not further short")]
+    [InlineData(14.0, SegmentKind.Break)]
+    [InlineData(13.4, null)]
+    public void AnOpeningFragmentIsAnAdvertWithinTheGridWindow(double seconds, SegmentKind? taken)
+    {
+        CatalogEntryId id = CatalogEntryId.New();
+        PlacedOccurrence answered = At(id, Drama.Episode(0), 0, 90, SegmentKind.Opening);
+        PlacedOccurrence again = At(id, Drama.Episode(1), 0, 90);
+        PlacedOccurrence advertised = At(id, Quiz.Episode(0), 600, seconds);
+
+        CatalogEntry.Start(id, [.. Enumerable.Range(1, 5625).Select(value => (uint)value)], [answered, again, advertised], SeriesLinks.None, Now);
+
+        Assert.Equal(taken, advertised.Occurrence.KindOverride);
+    }
+
     [Fact(DisplayName = "an override that no longer holds is cleared when the entry is estimated again")]
     public void AnOverrideThatNoLongerHoldsIsCleared()
     {
