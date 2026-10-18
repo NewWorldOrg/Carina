@@ -131,7 +131,8 @@ public sealed class CatalogEntryTests
         Assert.Equal(CatalogKinds.Version, kept.KindsVersion);
         Assert.False(kept.AwaitsReestimation);
         Assert.False(Rehydrated(CatalogKind.Cm, 0.5, CatalogDecision.Pattern, kindsVersion: CatalogKinds.Version + 1).AwaitsReestimation);
-        Assert.Throws<ArgumentOutOfRangeException>(() => Rehydrated(CatalogKind.Cm, 0.5, CatalogDecision.Pattern, kindsVersion: CatalogKinds.FirstVersion - 1));
+        Assert.True(Rehydrated(CatalogKind.Cm, 0.5, CatalogDecision.Pattern, kindsVersion: CatalogKinds.Unsettled).AwaitsReestimation);
+        Assert.Throws<ArgumentOutOfRangeException>(() => Rehydrated(CatalogKind.Cm, 0.5, CatalogDecision.Pattern, kindsVersion: CatalogKinds.Unsettled - 1));
     }
 
     [Fact(DisplayName = "an entry is made of at least two stretches, all of its own")]

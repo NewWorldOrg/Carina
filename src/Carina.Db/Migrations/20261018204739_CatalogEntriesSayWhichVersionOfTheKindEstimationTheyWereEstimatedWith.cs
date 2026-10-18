@@ -24,7 +24,7 @@ public partial class CatalogEntriesSayWhichVersionOfTheKindEstimationTheyWereEst
         migrationBuilder.AddCheckConstraint(
             name: "ck_segment_catalog_entry_kinds_version",
             table: "segment_catalog_entry",
-            sql: "kinds_version >= 1");
+            sql: "kinds_version >= 0");
     }
 
     /// <inheritdoc />

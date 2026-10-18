@@ -30,14 +30,17 @@ public sealed record CatalogKnowledge(
 }
 
 /// <summary>
-/// The entries started, the entries already kept that gained stretches and were estimated again, the
-/// stretches found, and the stretches already kept that are now taken for another kind on their own.
+/// The entries started, the entries already kept that were estimated again, the stretches found, the
+/// stretches already kept that are now taken for another kind on their own, and the entries whose links
+/// between series changed (<see cref="CatalogKinds.LinksSeries(CatalogKind)"/>): every other entry heard in
+/// one of their recordings was estimated with links that no longer hold.
 /// </summary>
 public sealed record CatalogChange(
     IReadOnlyList<CatalogEntry> Started,
     IReadOnlyList<CatalogEntry> Reestimated,
     IReadOnlyList<CatalogOccurrence> Found,
-    IReadOnlyList<CatalogOccurrence> Overridden);
+    IReadOnlyList<CatalogOccurrence> Overridden,
+    IReadOnlyList<CatalogEntryId> Relinking);
 
 /// <summary>
 /// Puts the matches found in one recording into the catalog. A stretch matched in an entry is a
@@ -48,13 +51,15 @@ public sealed record CatalogChange(
 /// other recordings, each kind the longest first. A stretch an entry already has in a recording is not added again, and a
 /// recording whose programme is not known adds none. An entry started is estimated from its first
 /// stretches, and one already kept is estimated again from all of them, each stretch beside the kind the
-/// answer given for its recording gives it.
+/// answer given for its recording gives it. The links between series change with an entry started as a kind
+/// that links them, and with an entry estimated again that links them before or after, since its stretches grew.
 /// </summary>
 public static class Catalog
 {
     /// <summary>
     /// Estimates a kept entry again from every stretch it has, as the estimation now stands, and hands it
-    /// back with the stretches whose own kind changed.
+    /// back with the stretches whose own kind changed, and as changing the links between series when it began
+    /// or stopped linking them.
     /// </summary>
     public static CatalogChange Reestimate(CatalogEntry entry, CatalogKnowledge known, DateTime at)
     {
@@ -63,10 +68,16 @@ public static class Catalog
 
         CatalogOccurrence[] own = [.. known.Occurrences.Where(occurrence => occurrence.EntryId.Equals(entry.Id))];
         SegmentKind?[] before = [.. own.Select(occurrence => occurrence.KindOverride)];
+        bool linked = CatalogKinds.LinksSeries(entry.Kind);
 
         entry.Reestimate([.. own.Select(known.Placed)], known.Links, at);
 
-        return new CatalogChange([], [entry], [], [.. own.Where((occurrence, index) => occurrence.KindOverride != before[index])]);
+        return new CatalogChange(
+            [],
+            [entry],
+            [],
+            [.. own.Where((occurrence, index) => occurrence.KindOverride != before[index])],
+            linked != CatalogKinds.LinksSeries(entry.Kind) ? [entry.Id] : []);
     }
 
     public static CatalogChange Absorb(
@@ -155,18 +166,25 @@ public static class Catalog
 
             List<CatalogEntry> reestimated = [.. grown.Where(id => !started.ContainsKey(id)).Select(id => entries[id])];
             List<CatalogOccurrence> overridden = [];
+            List<CatalogEntryId> relinking = [.. begun.Where(entry => CatalogKinds.LinksSeries(entry.Kind)).Select(entry => entry.Id)];
 
             foreach (CatalogEntry entry in reestimated)
             {
                 List<CatalogOccurrence> own = stretches[entry.Id];
                 SegmentKind?[] before = [.. own.Select(occurrence => occurrence.KindOverride)];
+                bool linked = CatalogKinds.LinksSeries(entry.Kind);
 
                 entry.Reestimate(Placed(own), known.Links, at);
                 found.AddRange(own.Where(added.Contains));
                 overridden.AddRange(own.Where((occurrence, index) => !added.Contains(occurrence) && occurrence.KindOverride != before[index]));
+
+                if (linked || CatalogKinds.LinksSeries(entry.Kind))
+                {
+                    relinking.Add(entry.Id);
+                }
             }
 
-            return new CatalogChange(begun, reestimated, found, overridden);
+            return new CatalogChange(begun, reestimated, found, overridden, relinking);
         }
 
         private void TakeItself(SoundMatch match, SoundTrack sound)

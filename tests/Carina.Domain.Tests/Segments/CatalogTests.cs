@@ -254,6 +254,7 @@ public sealed class CatalogTests
         Assert.Empty(change.Found);
         Assert.Same(entry, Assert.Single(change.Reestimated));
         Assert.Empty(change.Overridden);
+        Assert.Equal([entry.Id], change.Relinking);
     }
 
     [Fact(DisplayName = "an entry estimated again keeps the kind an answer gives it, and hands back the stretches whose own kind changed")]
@@ -270,6 +271,24 @@ public sealed class CatalogTests
         Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
         Assert.Equal(SegmentKind.Break, stretches[0].KindOverride);
         Assert.Same(stretches[0], Assert.Single(change.Overridden));
+        Assert.Empty(change.Relinking);
+    }
+
+    [Fact(DisplayName = "BR-CD-011: an entry started as a programme fixture changes the links, and an advert that gains a stretch does not")]
+    public void AnEntryThatLinksSeriesChangesTheLinks()
+    {
+        SoundMatch samePlace = new(Span(70, 85), new RecordedSound(Second), Span(70, 85), 0.05);
+        (CatalogEntry advert, CatalogOccurrence[] aired) = Kept(Drama.Episode(0), Quiz.Episode(1));
+        SoundMatch heardAgain = new(Span(10, 25), new EntrySound(advert.Id), Span(0, 15), 0.04);
+
+        CatalogChange started = Catalog.Absorb(Heard, Sound, [samePlace], Knowing(), Now);
+        CatalogChange grown = Catalog.Absorb(Heard, Sound, [heardAgain], Knowing(advert, aired), Now);
+
+        CatalogEntry fixture = Assert.Single(started.Started);
+        Assert.Equal(CatalogKind.ProgrammeFixture, fixture.Kind);
+        Assert.Equal([fixture.Id], started.Relinking);
+        Assert.Equal(CatalogKind.Cm, advert.Kind);
+        Assert.Empty(grown.Relinking);
     }
 
     [Fact(DisplayName = "a match naming an entry that was not handed over is refused")]

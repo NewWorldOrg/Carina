@@ -44,6 +44,12 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 public static class CatalogKinds
 {
     /// <summary>
+    /// The version an entry is put back to when what it was estimated from changed under it: an answer on one
+    /// of its recordings was given or withdrawn, or an entry heard in one of them began or stopped linking series.
+    /// </summary>
+    public const int Unsettled = 0;
+
+    /// <summary>
     /// The version of these rows an entry was estimated with before the rows for openings and endings were
     /// applied.
     /// </summary>
@@ -133,10 +139,14 @@ public static class CatalogKinds
     {
         ArgumentNullException.ThrowIfNull(occurrence);
 
-        return kind is CatalogKind.Opening or CatalogKind.Ending or CatalogKind.ProgrammeFixture
-               && IsWhole(occurrence.Length, entryLength)
-               && occurrence.KindOverride is not SegmentKind.Break;
+        return LinksSeries(kind) && IsWhole(occurrence.Length, entryLength) && occurrence.KindOverride is not SegmentKind.Break;
     }
+
+    /// <summary>
+    /// Whether an entry of <paramref name="kind"/> links the recordings it is heard in: an opening, an ending or
+    /// a fixed part of a programme.
+    /// </summary>
+    public static bool LinksSeries(CatalogKind kind) => kind is CatalogKind.Opening or CatalogKind.Ending or CatalogKind.ProgrammeFixture;
 
     private static bool OnTheGrid(TimeSpan length, int mostMultiple)
     {

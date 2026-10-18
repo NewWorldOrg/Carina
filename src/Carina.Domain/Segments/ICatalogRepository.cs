@@ -41,7 +41,9 @@ public interface ICatalogRepository
 
     /// <summary>
     /// Writes the change whole or not at all: the entries started and the stretches found are added, the
-    /// entries estimated again and the stretches taken for another kind are written as they now stand.
+    /// entries estimated again and the stretches taken for another kind are written as they now stand, and
+    /// every other entry heard in a recording an entry relinking is heard in is put back to
+    /// <see cref="CatalogKinds.Unsettled"/>, to be estimated again.
     /// </summary>
     Task KeepAsync(CatalogChange change, CancellationToken cancellationToken);
 }

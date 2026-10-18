@@ -2,6 +2,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
@@ -92,11 +93,33 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
     {
         ArgumentNullException.ThrowIfNull(change);
 
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
         context.AddRange(change.Started);
         context.AddRange(change.Found);
         context.UpdateRange(change.Reestimated);
         context.UpdateRange(change.Overridden);
 
         await context.SaveChangesAsync(cancellationToken);
+
+        if (change.Relinking.Count > 0)
+        {
+            Guid[] relinking = [.. change.Relinking.Select(entry => entry.Value)];
+
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                UPDATE segment_catalog_entry
+                SET kinds_version = {CatalogKinds.Unsettled}
+                WHERE NOT (id = ANY ({relinking}))
+                  AND id IN (
+                      SELECT heard.entry_id
+                      FROM segment_catalog_occurrence heard
+                      JOIN segment_catalog_occurrence linking ON linking.recording_id = heard.recording_id
+                      WHERE linking.entry_id = ANY ({relinking}))
+                """,
+                cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
     }
 }

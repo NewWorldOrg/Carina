@@ -96,7 +96,7 @@ public sealed class CatalogEntry
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(fingerprint);
-        ArgumentOutOfRangeException.ThrowIfLessThan(kindsVersion, CatalogKinds.FirstVersion);
+        ArgumentOutOfRangeException.ThrowIfLessThan(kindsVersion, CatalogKinds.Unsettled);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(length, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThan(occurrenceCount, FewestOccurrences);
         ArgumentOutOfRangeException.ThrowIfLessThan(seriesCount, 1);

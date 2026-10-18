@@ -3638,7 +3638,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_segment_catalog_entry_kind", "kind IN ('Cm', 'Opening', 'Ending', 'ProgrammeFixture', 'StationFixture', 'Unknown')");
 
-                            t.HasCheckConstraint("ck_segment_catalog_entry_kinds_version", "kinds_version >= 1");
+                            t.HasCheckConstraint("ck_segment_catalog_entry_kinds_version", "kinds_version >= 0");
 
                             t.HasCheckConstraint("ck_segment_catalog_entry_length", "length > interval '0'");
 

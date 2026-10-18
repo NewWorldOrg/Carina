@@ -385,6 +385,23 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(1, harness.Catalog.Keeps);
     }
 
+    [Fact(DisplayName = "an entry put back after an answer or a change of links is estimated again in spare time, once")]
+    public async Task AnEntryPutBackIsEstimatedAgainOnce()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        CatalogEntry entry = await OutdatedAsync(harness, CatalogKinds.Unsettled);
+        CatalogMatchingJob job = harness.Job();
+
+        CatalogMatchingLook first = await job.LookAsync(CancellationToken.None);
+        CatalogMatchingLook second = await job.LookAsync(CancellationToken.None);
+
+        Assert.Same(entry, first.Reestimated);
+        Assert.Equal((CatalogKind.Opening, CatalogKinds.Version), (entry.Kind, entry.KindsVersion));
+        Assert.Null(second.Reestimated);
+        Assert.Equal(1, harness.Catalog.Keeps);
+    }
+
     [Fact(DisplayName = "BR-CD-004: no entry is estimated again while something is being recorded or while learning is off")]
     public async Task NoEntryIsEstimatedAgainOutsideSpareTime()
     {
@@ -473,7 +490,7 @@ public sealed class CatalogMatchingJobTests
     /// An entry kept from before the rows for openings and endings, an advert of one series: a minute heard
     /// near the start of two weekly episodes, both matched already.
     /// </summary>
-    private static async Task<CatalogEntry> OutdatedAsync(CatalogMatchingHarness harness)
+    private static async Task<CatalogEntry> OutdatedAsync(CatalogMatchingHarness harness, int kindsVersion = CatalogKinds.FirstVersion)
     {
         CatalogEntryId id = CatalogEntryId.New();
         List<CatalogOccurrence> heard = [];
@@ -512,7 +529,7 @@ public sealed class CatalogMatchingJobTests
             heard[0].RecordingStartedAt,
             heard[^1].RecordingStartedAt,
             Now.AddDays(-1),
-            CatalogKinds.FirstVersion);
+            kindsVersion);
 
         harness.Catalog.Entries.Add(entry);
         harness.Catalog.Occurrences.AddRange(heard);

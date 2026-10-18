@@ -30,7 +30,7 @@ public sealed class CatalogEntryConfiguration : IEntityTypeConfiguration<Catalog
                 $"octet_length(fingerprint) BETWEEN 4 AND {CatalogEntry.MostFrames * sizeof(uint)} AND octet_length(fingerprint) % 4 = 0");
             table.HasCheckConstraint("ck_segment_catalog_entry_counts", "occurrences >= 2 AND series_count >= 1 AND station_count >= 1");
             table.HasCheckConstraint("ck_segment_catalog_entry_seen", "last_seen_at >= first_seen_at");
-            table.HasCheckConstraint("ck_segment_catalog_entry_kinds_version", $"kinds_version >= {CatalogKinds.FirstVersion}");
+            table.HasCheckConstraint("ck_segment_catalog_entry_kinds_version", $"kinds_version >= {CatalogKinds.Unsettled}");
         });
 
         builder.HasKey(entry => entry.Id);
