@@ -23,8 +23,9 @@ public sealed record CatalogMatchingLook(SpareTimeVerdict? Verdict, CatalogMatch
 /// most recently started first, one a look: after <see cref="CatalogMatchingSettings.BeforeFirstLook"/>, then
 /// every <see cref="CatalogMatchingSettings.BetweenLooks"/>, or after
 /// <see cref="CatalogMatchingSettings.AfterAMatch"/> once a look has matched one. A recording told to the
-/// first path is taken as soon as it is told, before the next look. Neither path matches while learning is
-/// off, and a match finished after learning was switched off is not written. What a match changes is written
+/// first path is taken as soon as it is told, before the next look, and once marked as matched it is told on
+/// (<see cref="MatchedAtOnce"/>) to be detected at once. Neither path matches while learning is off, and a
+/// match finished after learning was switched off is not written. What a match changes is written
 /// before the record is marked as matched; a record that changed meanwhile is left waiting and is matched
 /// again, which adds no stretch twice.
 /// </summary>
@@ -32,6 +33,7 @@ public sealed class CatalogMatchingJob(
     IServiceScopeFactory scopes,
     LearningRecords records,
     FollowedToTheEnd followed,
+    MatchedAtOnce matchedAtOnce,
     CatalogMatchingSettings settings,
     TimeProvider clock,
     ILogger<CatalogMatchingJob> logger) : BackgroundService
@@ -57,7 +59,14 @@ public sealed class CatalogMatchingJob(
             return new CatalogMatchingLook(null, null, false);
         }
 
-        return await MatchAsync(services, record, null, cancellationToken);
+        CatalogMatchingLook look = await MatchAsync(services, record, null, cancellationToken);
+
+        if (look.Marked)
+        {
+            matchedAtOnce.Tell(id);
+        }
+
+        return look;
     }
 
     /// <summary>

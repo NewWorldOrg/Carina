@@ -202,6 +202,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICatalogRepository, CatalogRepository>();
         services.AddScoped<ICatalogCountsReader, CatalogCountsReader>();
         services.AddScoped<ICatalogWorklist, CatalogWorklist>();
+        services.AddScoped<ISegmentModelVersionRepository, SegmentModelVersionRepository>();
+        services.AddScoped<IRecordingDetectionRepository, RecordingDetectionRepository>();
+        services.AddScoped<IDetectionWorklist, DetectionWorklist>();
         services.AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>();
         services.AddScoped<IMigrationRecordRepository, MigrationRecordRepository>();
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
@@ -238,6 +241,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILearningWorklist, LearningWorklist>();
         services.AddScoped<IOccupancyReader, OccupancyReader>();
         services.AddScoped<CatalogMatching>();
+        services.AddScoped<SegmentDetecting>();
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
         services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();
@@ -427,6 +431,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LearningBacklogJob>();
         services.TryAddSingleton(CatalogMatchingSettings.Default);
         services.AddSingleton<CatalogMatchingJob>();
+        services.TryAddSingleton(SegmentDetectionSettings.Default);
+        services.TryAddSingleton<MatchedAtOnce>();
+        services.AddSingleton<SegmentDetectionJob>();
         services.TryAddSingleton<IThumbnailRemaker>(provider =>
             provider.GetRequiredService<ThumbnailJob>());
         services.TryAddSingleton<CollectionSettings>(provider =>
@@ -464,6 +471,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(provider => provider.GetRequiredService<LearningFollowJob>());
         services.AddHostedService(provider => provider.GetRequiredService<LearningBacklogJob>());
         services.AddHostedService(provider => provider.GetRequiredService<CatalogMatchingJob>());
+        services.AddHostedService(provider => provider.GetRequiredService<SegmentDetectionJob>());
         services.AddHostedService(provider =>
             provider.GetRequiredService<ReservationRecalculationHostedService>());
 

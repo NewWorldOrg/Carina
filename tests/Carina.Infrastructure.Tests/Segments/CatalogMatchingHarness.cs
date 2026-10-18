@@ -162,6 +162,8 @@ internal sealed class CatalogMatchingHarness : IDisposable
 
     public FollowedToTheEnd Followed { get; } = new();
 
+    public MatchedAtOnce MatchedAtOnce { get; } = new();
+
     public bool Recording { get; set; }
 
     public CatalogMatchingJob Job(CatalogMatchingSettings? settings = null)
@@ -169,6 +171,7 @@ internal sealed class CatalogMatchingHarness : IDisposable
             provider.GetRequiredService<IServiceScopeFactory>(),
             Store,
             Followed,
+            MatchedAtOnce,
             settings ?? CatalogMatchingSettings.Default,
             new FixedClock(Now),
             NullLogger<CatalogMatchingJob>.Instance);

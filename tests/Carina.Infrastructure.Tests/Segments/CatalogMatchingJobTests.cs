@@ -184,6 +184,38 @@ public sealed class CatalogMatchingJobTests
         Assert.True(harness.Records.Row(waiting)!.AwaitsMatching);
     }
 
+    [Fact(DisplayName = "BR-CD-004: a recording followed to its end and marked as matched at once is told on to be detected at once, and one matched in spare time is not")]
+    public async Task ARecordingMatchedAtOnceIsToldOnToBeDetected()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        RecordingId waiting = await harness.ReadAsync(Sound(1), 7, "架空のクイズ");
+        RecordingId followed = await harness.ReadAsync(Sound(2), 0, "架空の物語");
+        CatalogMatchingJob job = harness.Job();
+
+        await job.MatchFollowedAsync(followed, CancellationToken.None);
+        bool toldOnce = harness.MatchedAtOnce.TryTake(out RecordingId? told);
+        CatalogMatchingLook inSpareTime = await job.LookAsync(CancellationToken.None);
+
+        Assert.True(toldOnce);
+        Assert.Equal(followed, told);
+        Assert.Equal(waiting, inSpareTime.Matched?.Recording);
+        Assert.False(harness.MatchedAtOnce.TryTake(out _));
+    }
+
+    [Fact(DisplayName = "a recording followed to its end that is not matched at once is not told on to be detected")]
+    public async Task ARecordingNotMatchedAtOnceIsNotToldOn()
+    {
+        using CatalogMatchingHarness harness = new();
+        RecordingId followed = await harness.ReadAsync(Sound(1), 0, "架空の物語");
+        CatalogMatchingJob job = harness.Job();
+
+        CatalogMatchingLook off = await job.MatchFollowedAsync(followed, CancellationToken.None);
+
+        Assert.Equal(SpareTimeVerdict.LearningOff, off.Verdict);
+        Assert.False(harness.MatchedAtOnce.TryTake(out _));
+    }
+
     [Fact(DisplayName = "BR-CD-013: while learning is off a recording followed to its end is not matched, and is matched in spare time once learning is on")]
     public async Task ARecordingFollowedWhileLearningIsOffWaitsForSpareTime()
     {
