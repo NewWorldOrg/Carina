@@ -167,14 +167,21 @@ public sealed class SegmentMatcher
     }
 
     /// <summary>
-    /// The offsets that gather enough votes with their neighbours, the most voted first; an offset taken
-    /// takes its neighbours' votes with it, so that each vote counts towards one candidate.
+    /// The offsets that gather enough votes with their neighbours, the most voted first and, of two that
+    /// gather as many, the one with more votes of its own; an offset taken takes its neighbours' votes with
+    /// it, so that each vote counts towards one candidate.
     /// </summary>
     private static IEnumerable<Candidate> Candidates(List<long> votes)
     {
         List<OffsetVotes> offsets = Offsets(votes);
         bool[] taken = new bool[offsets.Count];
-        int[] order = [.. Enumerable.Range(0, offsets.Count).OrderByDescending(at => Gathered(offsets, taken, at)).ThenBy(at => offsets[at].Offset)];
+        int[] order =
+        [
+            .. Enumerable.Range(0, offsets.Count)
+                .OrderByDescending(at => Gathered(offsets, taken, at))
+                .ThenByDescending(at => offsets[at].Count)
+                .ThenBy(at => offsets[at].Offset),
+        ];
 
         foreach (int at in order)
         {
@@ -254,10 +261,10 @@ public sealed class SegmentMatcher
     private Stretch? Widened(ReadOnlySpan<uint> there, bool[]? masked, int offset, int[] votes, bool itself)
     {
         Diagonal diagonal = new(fingerprints, Math.Max(0, -offset), Math.Min(fingerprints.Length, there.Length - offset), offset);
-        int starts = votes[0];
-        int ends = itself ? Math.Min(votes[^1] + 1, starts + offset) : votes[^1] + 1;
+        int starts = Math.Max(votes[0], diagonal.Low);
+        int ends = Math.Min(itself ? Math.Min(votes[^1] + 1, starts + offset) : votes[^1] + 1, diagonal.High);
 
-        if (ends - starts is < 1 or > MostFrames || diagonal.Errors(there, masked, starts, ends) >= MostBitErrors)
+        if (ends <= starts || ends - starts > MostFrames || diagonal.Errors(there, masked, starts, ends) >= MostBitErrors)
         {
             return null;
         }
