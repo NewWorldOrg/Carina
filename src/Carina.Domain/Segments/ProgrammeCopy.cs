@@ -95,9 +95,9 @@ public sealed record ProgrammeCopy
             recording.SnapshotName,
             recording.SnapshotGenres,
             ProgrammeMarks.In(recording.SnapshotName, recording.SnapshotSummary),
-            null,
+            SeriesNames.EpisodeOf(recording.SnapshotName),
             recording.SnapshotAudio,
-            null);
+            SeriesNames.Of(recording.SnapshotName));
     }
 
     public bool Equals(ProgrammeCopy? other)
