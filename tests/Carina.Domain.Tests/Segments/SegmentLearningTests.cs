@@ -24,6 +24,35 @@ public sealed class SegmentLearningTests
         Assert.Equal(once.Evaluation.RecommendedThreshold, again.Evaluation.RecommendedThreshold);
     }
 
+    [Fact(DisplayName = "BR-CD-004: learning taken a step at a time comes to what learning at once does, and a stop between steps throws the round away")]
+    public void LearningTakenAStepAtATimeComesToTheSame()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> sounds) = Taught(Weeks);
+        recordings.Add(Judged(RecordingId.New(), Weeks));
+        SegmentSearch search = new([SegmentThresholds.Initial], [0.1, 1], [10]);
+        LearningCatalog catalog = new(sounds, SeriesLinks.None);
+
+        SegmentLearningRun run = SegmentLearning.Begin(recordings, catalog, InUse, search, SegmentSettingsStanding.DefaultSkipThreshold, Now);
+        int steps = 1;
+
+        while (!run.Step(CancellationToken.None))
+        {
+            steps++;
+        }
+
+        SegmentLearned once = SegmentLearning.Learn(recordings, catalog, InUse, search, SegmentSettingsStanding.DefaultSkipThreshold, Now);
+        SegmentLearningRun stopped = SegmentLearning.Begin(recordings, catalog, InUse, search, SegmentSettingsStanding.DefaultSkipThreshold, Now);
+        stopped.Step(CancellationToken.None);
+
+        Assert.Equal(4, steps);
+        Assert.Equal(once.Candidate, run.Result().Candidate);
+        Assert.Equal(Figures(once.Evaluation.Metrics), Figures(run.Result().Evaluation.Metrics));
+        Assert.Throws<InvalidOperationException>(() => run.Step(CancellationToken.None));
+        Assert.Throws<InvalidOperationException>(stopped.Result);
+        Assert.Throws<OperationCanceledException>(() => stopped.Step(new CancellationToken(canceled: true)));
+        Assert.Throws<OperationCanceledException>(() => SegmentLearning.Learn(recordings, catalog, InUse, search, SegmentSettingsStanding.DefaultSkipThreshold, Now, new CancellationToken(canceled: true)));
+    }
+
     [Fact(DisplayName = "each confirmed recording is judged by a model learned from the others alone, and a model that learned from it too would score it higher")]
     public void EachRecordingIsJudgedWithoutItsOwnLabels()
     {

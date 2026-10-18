@@ -96,6 +96,20 @@ public sealed class SegmentAdoptionTests
         Assert.Throws<ArgumentException>(() => SegmentRollback.Judge(Before, InUse, returning, Adopted.AddDays(2)));
     }
 
+    [Fact(DisplayName = "BR-CD-008: for seven days after a version was rolled back from, a candidate that would be put in use is held out, and other verdicts stand")]
+    public void ACandidateIsHeldOutAfterARollback()
+    {
+        DateTime rolledBack = Adopted.AddDays(1);
+        SegmentModelVersion left = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, SegmentModel.First, Made, Adopted, rolledBack, null, rolledBack, rollback: new SegmentRollback(0.2, 0.1, 25, 2));
+        SegmentModelVersion[] kept = [left, InUse, Before];
+
+        Assert.Equal(AdoptionVerdict.HeldAfterRollback, SegmentAdoption.AfterRollbacks(AdoptionVerdict.Adopted, kept, rolledBack));
+        Assert.Equal(AdoptionVerdict.HeldAfterRollback, SegmentAdoption.AfterRollbacks(AdoptionVerdict.Adopted, kept, rolledBack.AddDays(7)));
+        Assert.Equal(AdoptionVerdict.Adopted, SegmentAdoption.AfterRollbacks(AdoptionVerdict.Adopted, kept, rolledBack.AddDays(7).AddTicks(1)));
+        Assert.Equal(AdoptionVerdict.Adopted, SegmentAdoption.AfterRollbacks(AdoptionVerdict.Adopted, [InUse, Before], rolledBack));
+        Assert.Equal(AdoptionVerdict.NoBetterAtBoundaries, SegmentAdoption.AfterRollbacks(AdoptionVerdict.NoBetterAtBoundaries, kept, rolledBack));
+    }
+
     [Fact(DisplayName = "BR-CD-008: counted skips and returns judge a rollback as the actions they were counted from do")]
     public void CountedReturnsJudgeAsTheActionsDo()
     {
