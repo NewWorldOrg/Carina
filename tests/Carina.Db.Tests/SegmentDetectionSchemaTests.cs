@@ -39,21 +39,26 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
             await ScalarAsync("SELECT concat_ws(' ', coalesce(metrics::text, 'NULL'), coalesce(stations::text, 'NULL'), coalesce(evidence::text, 'NULL'), coalesce(recommended_threshold::text, 'NULL'), coalesce(rollback::text, 'NULL')) FROM segment_model_version WHERE number = 1"));
     }
 
-    [Fact(DisplayName = "BR-CS-003: exactly one version is in use: a second one in use is refused by the unique index, and a candidate beside it is kept")]
+    [Fact(DisplayName = "BR-CS-003: exactly one version is in use: a second one in use is refused by the unique index, while any number of candidates and versions used before are kept beside it")]
     public async Task ExactlyOneVersionIsInUse()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         await using NpgsqlTransaction transaction = await connection.BeginTransactionAsync();
 
-        await ExecuteAsync(connection, Version(7, "'Candidate'", "NULL"));
+        await ExecuteAsync(connection, Version(21, "'Candidate'", "NULL"));
+        await ExecuteAsync(connection, Version(22, "'Candidate'", "NULL"));
+        await ExecuteAsync(connection, Version(23, "'Retired'", "now()", retiredAt: "now()"));
+        await ExecuteAsync(connection, Version(24, "'Retired'", "now()", retiredAt: "now()"));
         await ExecuteAsync(connection, "SAVEPOINT before_second");
-        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(connection, Version(8, "'Active'", "now()")));
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(connection, Version(25, "'Active'", "now()")));
         await ExecuteAsync(connection, "ROLLBACK TO SAVEPOINT before_second");
 
         Assert.Equal(PostgresErrorCodes.UniqueViolation, refused.SqlState);
         Assert.Equal("ux_segment_model_version_active", refused.ConstraintName);
         Assert.Equal("1", await ScalarAsync(connection, "SELECT count(*) FROM segment_model_version WHERE state = 'Active'"));
-        Assert.Equal("2", await ScalarAsync(connection, "SELECT count(*) FROM segment_model_version"));
+        Assert.Equal(
+            "Candidate Candidate Retired Retired",
+            await ScalarAsync(connection, "SELECT string_agg(state, ' ' ORDER BY number) FROM segment_model_version WHERE number BETWEEN 21 AND 25"));
 
         await transaction.RollbackAsync();
     }
@@ -247,10 +252,100 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
         Assert.Equal(detected.Id, (await NextAsync(1, [passed.Id, newer.Id, older.Id]))?.RecordingId);
     }
 
-    private static string Version(int number, string state, string adoptedAt)
+    [Fact(DisplayName = "the earlier recordings on a station are those read on the same station that started strictly before the one judged, the most recently started first, never the one judged")]
+    public async Task TheEarlierRecordingsOnAStation()
+    {
+        DateTime judgedAt = Noon.AddDays(40);
+        RecordingId judged = RecordingId.New();
+        RecordingId lastWeek = RecordingId.New();
+        RecordingId twoWeeksAgo = RecordingId.New();
+        RecordingId later = RecordingId.New();
+        RecordingId sameTime = RecordingId.New();
+        RecordingId elsewhere = RecordingId.New();
+        RecordingId unread = RecordingId.New();
+        await ReadAsync(judged, judgedAt, matched: true, station: 7);
+        await ReadAsync(lastWeek, judgedAt.AddDays(-7), matched: false, station: 7);
+        await ReadAsync(twoWeeksAgo, judgedAt.AddDays(-14), matched: true, station: 7);
+        await ReadAsync(later, judgedAt.AddDays(1), matched: true, station: 7);
+        await ReadAsync(sameTime, judgedAt, matched: true, station: 7);
+        await ReadAsync(elsewhere, judgedAt.AddDays(-1), matched: true, station: 8);
+        await AddAsync(LearningExtraction.Waiting(unread, Copy(judgedAt.AddDays(-3), 7), judgedAt.AddDays(-3)));
+        SeriesMember member = Copy(judgedAt, 7).MemberAs(judged);
+
+        Assert.Equal([lastWeek, twoWeeksAgo], (await EarlierAsync(member, 200)).Select(record => record.RecordingId));
+        Assert.Equal([lastWeek], (await EarlierAsync(member, 1)).Select(record => record.RecordingId));
+    }
+
+    [Fact(DisplayName = "the records named are read when read to their end or as far as they could be, the earliest started first")]
+    public async Task TheRecordsNamedAreReadWhenRead()
+    {
+        RecordingId later = RecordingId.New();
+        RecordingId earlier = RecordingId.New();
+        RecordingId unread = RecordingId.New();
+        RecordingId other = RecordingId.New();
+        await ReadAsync(later, Noon.AddDays(50), matched: true, station: 9);
+        await ReadAsync(earlier, Noon.AddDays(49), matched: false, station: 9);
+        await ReadAsync(other, Noon.AddDays(48), matched: true, station: 9);
+        await AddAsync(LearningExtraction.Waiting(unread, Copy(Noon.AddDays(47), 9), Noon.AddDays(47)));
+
+        await using CarinaDbContext context = Context();
+        IReadOnlyList<LearningExtraction> read = await new DetectionWorklist(context).RecordsAsync([later, earlier, unread, RecordingId.New()], CancellationToken.None);
+
+        Assert.Equal([earlier, later], read.Select(record => record.RecordingId));
+    }
+
+    [Fact(DisplayName = "the learning data of the kinds asked for is read for the recording alone, by chunk, leaving out a chunk that cannot be read")]
+    public async Task TheLearningDataOfTheKindsAskedForIsRead()
+    {
+        RecordingId recording = RecordingId.New();
+        RecordingId other = RecordingId.New();
+        await KeepAsync(Block(recording, LearningDataKind.Loudness, 1));
+        await KeepAsync(Block(recording, LearningDataKind.Loudness, 0));
+        await KeepAsync(Block(recording, LearningDataKind.SoundFingerprints, 0));
+        await KeepAsync(Block(other, LearningDataKind.Loudness, 0));
+        await using (NpgsqlConnection connection = await database.OpenAsync())
+        {
+            await ExecuteAsync(
+                connection,
+                $"INSERT INTO segment_learning_data (recording_id, kind, chunk, bytes, version_number, version_origin, written_at) VALUES ('{recording.Value}', {(short)LearningDataKind.Loudness}, 2, '\\x01'::bytea, 2, 'RecordingFile', now())");
+        }
+
+        await using CarinaDbContext context = Context();
+        IReadOnlyList<LearningDataPart> parts = await new DetectionWorklist(context).PartsAsync(recording, [LearningDataKind.Loudness], CancellationToken.None);
+
+        Assert.Equal([(LearningDataKind.Loudness, 0), (LearningDataKind.Loudness, 1)], parts.Select(part => (part.Kind, part.Index)));
+    }
+
+    [Fact(DisplayName = "the detections listed are those of the recordings named made by the version named")]
+    public async Task TheDetectionsListedAreThoseOfTheVersionNamed()
+    {
+        RecordingId first = RecordingId.New();
+        RecordingId second = RecordingId.New();
+        RecordingId unnamed = RecordingId.New();
+        await using (NpgsqlConnection connection = await database.OpenAsync())
+        {
+            await ExecuteAsync(connection, Version(31, "'Candidate'", "NULL"));
+        }
+
+        await KeepAsync(Detection(first, SegmentDetection.Judged([Span(0, 1800, SegmentKind.Programme, 0.97)], HalfAnHour, [])));
+        await KeepAsync(Detection(second, SegmentDetection.Judged([Span(0, 1800, SegmentKind.Programme, 0.97)], HalfAnHour, [])));
+        await KeepAsync(Detection(unnamed, SegmentDetection.Judged([Span(0, 1800, SegmentKind.Programme, 0.97)], HalfAnHour, [])));
+        await KeepAsync(RecordingDetection.Of(second, 31, SegmentDetection.Judged([Span(0, 1800, SegmentKind.Programme, 0.97)], HalfAnHour, []), 2, Noon, Noon));
+
+        await using CarinaDbContext context = Context();
+        RecordingDetectionRepository detections = new(context);
+        IReadOnlyList<RecordingDetection> byTheFirst = await detections.ListAsync([first, second, RecordingId.New()], 1, CancellationToken.None);
+        IReadOnlyList<RecordingDetection> byTheOther = await detections.ListAsync([first, second], 31, CancellationToken.None);
+
+        Assert.Equal([first, second], byTheFirst.Select(detection => detection.RecordingId).OrderBy(id => id.Equals(second)));
+        Assert.All(byTheFirst, detection => Assert.Equal(1, detection.ModelVersion));
+        Assert.Equal((second, 31), (Assert.Single(byTheOther).RecordingId, byTheOther[0].ModelVersion));
+    }
+
+    private static string Version(int number, string state, string adoptedAt, string retiredAt = "NULL")
         => $$"""
-            INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, adopted_at)
-            VALUES ({{number}}, {{state}}, false, 2, '{}', '{}', '{}', '{}', '{}', now(), {{adoptedAt}})
+            INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, adopted_at, retired_at)
+            VALUES ({{number}}, {{state}}, false, 2, '{}', '{}', '{}', '{}', '{}', now(), {{adoptedAt}}, {{retiredAt}})
             """;
 
     private static SegmentSpan Span(double starts, double ends, SegmentKind kind, double probability)
@@ -310,10 +405,47 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
         return await new DetectionWorklist(context).NextAsync(version, passedOver, CancellationToken.None);
     }
 
-    private async Task ReadAsync(RecordingId recording, DateTime startedAt, bool matched)
+    private static ProgrammeCopy Copy(DateTime startedAt, int station = 1)
+        => new(new NetworkId(station), new ServiceId(station), startedAt, startedAt.AddMinutes(30), startedAt, "架空の物語 #1", [], [], 1, AudioMode.Stereo, "架空の物語");
+
+    private static LearningDataBlock Block(RecordingId recording, LearningDataKind kind, int chunk)
     {
-        ProgrammeCopy programme = new(new NetworkId(1), new ServiceId(1), startedAt, startedAt.AddMinutes(30), startedAt, "架空の物語 #1", [], [], 1, AudioMode.Stereo, "架空の物語");
-        LearningExtraction record = LearningExtraction.Waiting(recording, programme, startedAt);
+        LearningDataChunk sample = LearningDataChunk.Of(
+            chunk,
+            FrameClock.Of(30000, 1001, LearningData.ChunkStarts(chunk)),
+            [.. Enumerable.Range(0, 64).Select(reading => (uint)reading * 2_654_435_761u)],
+            [.. Enumerable.Range(0, 64).Select(reading => (byte)(reading % 200))],
+            [],
+            [],
+            []);
+
+        return LearningDataBlock.Of(recording, LearningDataPart.Of(sample, kind), ExtractionVersion.Current, Noon);
+    }
+
+    private async Task KeepAsync(LearningDataBlock block)
+    {
+        await using CarinaDbContext context = Context();
+
+        await new LearningDataRepository(context).KeepAsync(block, CancellationToken.None);
+    }
+
+    private async Task AddAsync(LearningExtraction record)
+    {
+        await using CarinaDbContext context = Context();
+
+        await new LearningExtractionRepository(context).AddAsync(record, CancellationToken.None);
+    }
+
+    private async Task<IReadOnlyList<LearningExtraction>> EarlierAsync(SeriesMember judged, int most)
+    {
+        await using CarinaDbContext context = Context();
+
+        return await new DetectionWorklist(context).EarlierOnTheStationAsync(judged, most, CancellationToken.None);
+    }
+
+    private async Task ReadAsync(RecordingId recording, DateTime startedAt, bool matched, int station = 1)
+    {
+        LearningExtraction record = LearningExtraction.Waiting(recording, Copy(startedAt, station), startedAt);
 
         record.Read(ExtractionVersion.Current, startedAt);
         record.Reached(HalfAnHour, startedAt.AddMinutes(30));
@@ -324,8 +456,7 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
             record.Matched(startedAt.AddMinutes(32));
         }
 
-        await using CarinaDbContext context = Context();
-        await new LearningExtractionRepository(context).AddAsync(record, CancellationToken.None);
+        await AddAsync(record);
     }
 
     private async Task<Recording> RecordedAsync()
