@@ -141,6 +141,32 @@ public sealed class SegmentDetectorTests
         Assert.Equal(SegmentDetectionState.NothingFound, SegmentDetector.Detect(half, Context(CornerLogo.None), spread).State);
     }
 
+    [Theory(DisplayName = "the offsets of the judged recording's station and series are added to every segment, and offsets kept for another station or series are not")]
+    [InlineData(true, true, SegmentDetectionState.Marked)]
+    [InlineData(true, false, SegmentDetectionState.NothingFound)]
+    [InlineData(false, true, SegmentDetectionState.NothingFound)]
+    [InlineData(false, false, SegmentDetectionState.NothingFound)]
+    public void TheJudgedStationAndSeriesOffsetsAreAdded(bool judgedStation, bool judgedSeries, SegmentDetectionState state)
+    {
+        NetworkId network = new(32736);
+        ServiceId service = new(1024);
+        SegmentContext context = new(network, service, "架空の物語", null, null, [], [], CornerLogo.None, []);
+        SegmentModel offset = new(
+            SegmentModel.First.Weights,
+            new Dictionary<string, double> { [judgedStation ? SegmentModel.StationKey(network, service) : SegmentModel.StationKey(new NetworkId(4), new ServiceId(101))] = 0.3 },
+            new Dictionary<string, double> { [judgedSeries ? "架空の物語" : "別の架空の話"] = 0.3 },
+            SegmentThresholds.Initial,
+            SegmentModel.First.Standardisation);
+        SegmentEvidence evidence = new SyntheticReadings(Length).QuietAround(600).QuietAround(660).Evidence();
+
+        SegmentDetection first = SegmentDetector.Detect(evidence, context, SegmentModel.First);
+        SegmentDetection offsetDetection = SegmentDetector.Detect(evidence, context, offset);
+
+        Assert.Equal(SegmentDetectionState.NothingFound, first.State);
+        Assert.Equal(state, offsetDetection.State);
+        Assert.Equal(state is SegmentDetectionState.Marked ? 60d / 1800 : 0, offsetDetection.CmShare, 9);
+    }
+
     [Fact(DisplayName = "the same readings and context give the same detection every time, whatever order the catalog is handed over in")]
     public void TheSameInputGivesTheSameDetection()
     {
