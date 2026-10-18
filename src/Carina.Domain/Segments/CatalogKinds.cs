@@ -15,7 +15,7 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// <summary>
 /// The kind of a catalog entry, from the way its stretches are spread, the first row that holds:
 /// an answer given on one of its stretches decides outright; a length on the 15-second grid
-/// (<see cref="OnTheGrid"/>) heard in two series or on two stations is an advert, 0.9; a piece
+/// (<see cref="OnTheGrid"/>, a second and a half short of a multiple to half a second over) heard in two series or on two stations is an advert, 0.9; a piece
 /// shorter than 30 seconds heard at about the same place (<see cref="SamePlaceWithin"/>) from the
 /// start of two episodes of one series is a fixed part of the programme, 0.7; a piece shorter than
 /// 15 seconds heard within 15 seconds of the start or end of programmes of two series is a fixed part
@@ -30,7 +30,9 @@ public static class CatalogKinds
 {
     public static readonly TimeSpan Grid = TimeSpan.FromSeconds(15);
 
-    public static readonly TimeSpan GridTolerance = TimeSpan.FromSeconds(0.5);
+    public static readonly TimeSpan ShortOfTheGrid = TimeSpan.FromSeconds(1.5);
+
+    public static readonly TimeSpan OverTheGrid = TimeSpan.FromSeconds(0.5);
 
     public static readonly TimeSpan WholeWithin = TimeSpan.FromSeconds(1);
 
@@ -76,14 +78,17 @@ public static class CatalogKinds
     }
 
     /// <summary>
-    /// Whether a length is within <see cref="GridTolerance"/> of a multiple of <see cref="Grid"/> from one
-    /// to eight, 15 to 120 seconds.
+    /// Whether a length is no more than <see cref="ShortOfTheGrid"/> short of a multiple of <see cref="Grid"/>
+    /// from one to eight, 15 to 120 seconds, and no more than <see cref="OverTheGrid"/> over it. A match is cut
+    /// to the sound it hears, and an advert's slot keeps about half a second of silence at either end, so what
+    /// is heard of a slot falls short of the slot rather than over it.
     /// </summary>
     public static bool OnTheGrid(TimeSpan length)
     {
-        long multiple = (long)Math.Round(length / Grid, MidpointRounding.AwayFromZero);
+        long multiple = (long)Math.Round((length + ((ShortOfTheGrid - OverTheGrid) / 2)) / Grid, MidpointRounding.AwayFromZero);
+        TimeSpan slot = Grid * multiple;
 
-        return multiple is >= FewestOnTheGrid and <= MostOnTheGrid && (length - (Grid * multiple)).Duration() <= GridTolerance;
+        return multiple is >= FewestOnTheGrid and <= MostOnTheGrid && length >= slot - ShortOfTheGrid && length <= slot + OverTheGrid;
     }
 
     private static bool IsWhole(PlacedOccurrence placed, TimeSpan length) => placed.Occurrence.Length >= length - WholeWithin;
