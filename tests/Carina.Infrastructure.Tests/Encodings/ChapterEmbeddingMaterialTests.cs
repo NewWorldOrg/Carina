@@ -15,7 +15,8 @@ namespace Carina.Infrastructure.Tests.Encodings;
 /// <summary>
 /// Bakes chapters into an artefact with the ffmpeg the application runs and reads them back off it:
 /// a synthetic broadcast with a pod of advertisements is encoded with a head to skip, and the
-/// artefact carries its chapters where they were meant to be, with the picture and the sound.
+/// artefact carries its chapters where they were meant to be, with the picture and the sound. A
+/// standing artefact is written again with the chapters of a detection that moved.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
