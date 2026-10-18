@@ -170,6 +170,22 @@ public sealed class AnsweredStretchesTests
         Assert.Equal(AnswerFault.TooMany, AnsweredStretches.Read(Alternating(101, HalfAnHour), HalfAnHour).Fault);
     }
 
+    [Fact(DisplayName = "BR-CV-001: a recording too short for two hundred an hour to allow one stretch still takes an answer, and up to ten stretches")]
+    public void AShortRecordingStillTakesAnAnswer()
+    {
+        TimeSpan tenSeconds = TimeSpan.FromSeconds(10);
+        TimeSpan aMinute = TimeSpan.FromMinutes(1);
+
+        AnswerReading single = AnsweredStretches.Read([Sent(0, 10, SegmentKind.Programme)], tenSeconds);
+
+        Assert.Null(single.Fault);
+        Assert.Single(single.Stretches!.Stretches);
+        Assert.Null(AnsweredStretches.Read(Alternating(AnsweredStretches.FewestStretchesAllowed, tenSeconds), tenSeconds).Fault);
+        Assert.Equal(AnswerFault.TooMany, AnsweredStretches.Read(Alternating(AnsweredStretches.FewestStretchesAllowed + 1, tenSeconds), tenSeconds).Fault);
+        Assert.Null(AnsweredStretches.Read(Alternating(AnsweredStretches.FewestStretchesAllowed, aMinute), aMinute).Fault);
+        Assert.Equal(AnswerFault.TooMany, AnsweredStretches.Read(Alternating(AnsweredStretches.FewestStretchesAllowed + 1, aMinute), aMinute).Fault);
+    }
+
     [Fact(DisplayName = "BR-CV-001: stretches are counted once those of the same kind side by side are made one")]
     public void StretchesAreCountedOnceMerged()
     {

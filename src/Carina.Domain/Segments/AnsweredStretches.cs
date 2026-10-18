@@ -36,7 +36,8 @@ public sealed record AnswerReading(AnsweredStretches? Stretches, AnswerFault? Fa
 /// The stretches a person gives a recording, in its own time: each rounded to <see cref="Resolution"/>, of a
 /// kind in <see cref="KindsTaken"/>, ending after it starts, together covering the recording from zero to its
 /// length rounded the same way with no gap and no overlap, two of the same kind side by side made one, and no
-/// more than <see cref="MostStretchesAnHour"/> an hour. An answer is not held to an order of kinds: the
+/// more than <see cref="MostStretchesAnHour"/> an hour, a recording of any length taking at least
+/// <see cref="FewestStretchesAllowed"/>. An answer is not held to an order of kinds: the
 /// sequence a detection keeps to is not asked of it. A stretch given carries no probability.
 /// </summary>
 /// <remarks>
@@ -47,6 +48,8 @@ public sealed record AnswerReading(AnsweredStretches? Stretches, AnswerFault? Fa
 public sealed record AnsweredStretches
 {
     public const int MostStretchesAnHour = 200;
+
+    public const int FewestStretchesAllowed = 10;
 
     public static readonly TimeSpan Resolution = TimeSpan.FromMilliseconds(10);
 
@@ -100,7 +103,7 @@ public sealed record AnsweredStretches
 
         List<(double Starts, double Ends, SegmentKind Kind)> merged = Merged(ordered);
 
-        return merged.Count * 3600 * HundredthsASecond > MostStretchesAnHour * length
+        return merged.Count > Allowed(length)
             ? AnswerReading.Refused(AnswerFault.TooMany)
             : new AnswerReading(
                 new AnsweredStretches([.. merged.Select(stretch => new SegmentSpan(At(stretch.Starts), At(stretch.Ends), stretch.Kind, null))], At(length)),
@@ -169,6 +172,9 @@ public sealed record AnsweredStretches
 
         return merged;
     }
+
+    private static double Allowed(double length)
+        => Math.Max(MostStretchesAnHour * length / (TimeSpan.SecondsPerHour * HundredthsASecond), FewestStretchesAllowed);
 
     private static double Hundredths(double seconds)
         => double.IsFinite(seconds) ? Math.Round(seconds * HundredthsASecond, MidpointRounding.AwayFromZero) : double.NaN;
