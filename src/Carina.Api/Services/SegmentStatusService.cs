@@ -6,12 +6,16 @@ namespace Carina.Api.Services;
 /// <summary>
 /// Where CM, OP and ED detection stands, as the settings screen shows it.
 /// </summary>
-public sealed record SegmentStatus(LearningDataAmount LearningData, CatalogCounts Catalog);
+public sealed record SegmentStatus(LearningDataAmount LearningData, CatalogCounts Catalog, SegmentModelVersion Version);
 
-public sealed class SegmentStatusService(ILearningDataAmountReader learningData, ICatalogCountsReader catalog)
+public sealed class SegmentStatusService(
+    ILearningDataAmountReader learningData,
+    ICatalogCountsReader catalog,
+    ISegmentModelVersionRepository versions)
 {
     public async Task<ServiceResult<SegmentStatus>> ReadAsync(CancellationToken cancellationToken)
         => ServiceResult<SegmentStatus>.Success(new SegmentStatus(
             await learningData.ReadAsync(cancellationToken),
-            await catalog.ReadAsync(cancellationToken)));
+            await catalog.ReadAsync(cancellationToken),
+            await versions.ActiveAsync(cancellationToken)));
 }

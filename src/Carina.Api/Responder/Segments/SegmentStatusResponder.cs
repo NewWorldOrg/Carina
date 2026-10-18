@@ -36,14 +36,31 @@ public sealed record CatalogResponder(int Cm, int Opening, int Ending, int Progr
 }
 
 /// <summary>
+/// The version of the model in use: its number, where it stands, whether it was chosen by hand, and when it was
+/// made and put in use.
+/// </summary>
+public sealed record SegmentVersionResponder(int Number, SegmentModelVersionState State, bool ByHand, DateTime TrainedAt, DateTime? AdoptedAt)
+{
+    public static SegmentVersionResponder Of(SegmentModelVersion version)
+    {
+        ArgumentNullException.ThrowIfNull(version);
+
+        return new SegmentVersionResponder(version.Number, version.State, version.ByHand, version.TrainedAt, version.AdoptedAt);
+    }
+}
+
+/// <summary>
 /// Where CM, OP and ED detection stands.
 /// </summary>
-public sealed record SegmentStatusResponder(LearningDataResponder LearningData, CatalogResponder Catalog)
+public sealed record SegmentStatusResponder(LearningDataResponder LearningData, CatalogResponder Catalog, SegmentVersionResponder Version)
 {
     public static SegmentStatusResponder Of(SegmentStatus status)
     {
         ArgumentNullException.ThrowIfNull(status);
 
-        return new SegmentStatusResponder(LearningDataResponder.Of(status.LearningData), CatalogResponder.Of(status.Catalog));
+        return new SegmentStatusResponder(
+            LearningDataResponder.Of(status.LearningData),
+            CatalogResponder.Of(status.Catalog),
+            SegmentVersionResponder.Of(status.Version));
     }
 }

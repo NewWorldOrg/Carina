@@ -646,15 +646,18 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal("byte", schemas["DataBroadcastEventResponder"]!["properties"]!["privateData"]!["format"]!.GetValue<string>());
     }
 
-    [Fact(DisplayName = "the status of CM, OP and ED detection is described with the learning data kept beside the catalog's count of each kind")]
+    [Fact(DisplayName = "the status of CM, OP and ED detection is described with the learning data kept, the catalog's count of each kind and the version of the model in use")]
     public async Task TheSegmentStatusIsDescribedWithTheCatalog()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
         JsonNode schemas = document["components"]!["schemas"]!;
 
         Assert.Equal(
-            ["learningData", "catalog"],
+            ["learningData", "catalog", "version"],
             schemas["SegmentStatusResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["number", "state", "byHand", "trainedAt", "adoptedAt"],
+            schemas["SegmentVersionResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal(
             ["recordings", "seconds", "bytes", "waiting"],
             schemas["LearningDataResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
