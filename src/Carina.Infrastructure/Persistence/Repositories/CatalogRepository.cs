@@ -24,7 +24,6 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
         CatalogEntryId[] named = [.. entries];
 
         return await context.Set<CatalogEntry>()
-            .AsNoTracking()
             .Where(entry => named.Contains(entry.Id))
             .OrderBy(entry => entry.FirstSeenAt)
             .ThenBy(entry => entry.Id)
@@ -83,7 +82,6 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
 
     public async Task<CatalogEntry?> NextToReestimateAsync(CancellationToken cancellationToken)
         => await context.Set<CatalogEntry>()
-            .AsNoTracking()
             .Where(entry => entry.KindsVersion < CatalogKinds.Version)
             .OrderBy(entry => entry.FirstSeenAt)
             .ThenBy(entry => entry.Id)
@@ -93,14 +91,35 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
     {
         ArgumentNullException.ThrowIfNull(change);
 
-        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-
         context.AddRange(change.Started);
         context.AddRange(change.Found);
         context.UpdateRange(change.Reestimated);
         context.UpdateRange(change.Overridden);
 
-        await context.SaveChangesAsync(cancellationToken);
+        while (!await TryKeepAsync(change, cancellationToken))
+        {
+        }
+    }
+
+    /// <summary>
+    /// Writes what is still to be written in one transaction; false, with nothing written and the entries whose
+    /// rows changed since they were read set aside with their stretches taken for another kind, when one did.
+    /// </summary>
+    private async Task<bool> TryKeepAsync(CatalogChange change, CancellationToken cancellationToken)
+    {
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException conflict) when (conflict.Entries.Any(entry => entry.Entity is CatalogEntry))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            SetAside([.. conflict.Entries.Select(entry => entry.Entity).OfType<CatalogEntry>()], change);
+
+            return false;
+        }
 
         if (change.Relinking.Count > 0)
         {
@@ -121,5 +140,17 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
         }
 
         await transaction.CommitAsync(cancellationToken);
+
+        return true;
+    }
+
+    private void SetAside(CatalogEntry[] stale, CatalogChange change)
+    {
+        HashSet<CatalogEntryId> ids = [.. stale.Select(entry => entry.Id)];
+
+        foreach (object kept in stale.Concat<object>(change.Overridden.Where(occurrence => ids.Contains(occurrence.EntryId))))
+        {
+            context.Entry(kept).State = EntityState.Detached;
+        }
     }
 }

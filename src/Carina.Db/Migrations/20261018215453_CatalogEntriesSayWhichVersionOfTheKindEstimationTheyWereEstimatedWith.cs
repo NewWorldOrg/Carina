@@ -6,7 +6,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
+/// <summary>
+/// Keeps the version of the kind estimation each catalog entry was estimated with, the entries kept before
+/// it as the first, and makes PostgreSQL's own <c>xmin</c> the entry's concurrency token, which changes the
+/// model and not the schema.
+/// </summary>
 public partial class CatalogEntriesSayWhichVersionOfTheKindEstimationTheyWereEstimatedWith : Migration
 {
     /// <inheritdoc />

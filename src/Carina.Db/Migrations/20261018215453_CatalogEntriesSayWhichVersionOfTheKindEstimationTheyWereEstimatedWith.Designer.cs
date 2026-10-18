@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    [Migration("20261018204739_CatalogEntriesSayWhichVersionOfTheKindEstimationTheyWereEstimatedWith")]
+    [Migration("20261018215453_CatalogEntriesSayWhichVersionOfTheKindEstimationTheyWereEstimatedWith")]
     partial class CatalogEntriesSayWhichVersionOfTheKindEstimationTheyWereEstimatedWith
     {
         /// <inheritdoc />
@@ -3616,6 +3616,12 @@ namespace Carina.Db.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id")
                         .HasName("pk_segment_catalog_entry");

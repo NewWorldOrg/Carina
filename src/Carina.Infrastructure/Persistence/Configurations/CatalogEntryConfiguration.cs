@@ -9,6 +9,8 @@ public sealed class CatalogEntryConfiguration : IEntityTypeConfiguration<Catalog
 {
     public const string TableName = "segment_catalog_entry";
 
+    public const string ConcurrencyToken = "xmin";
+
     private const string Unknown = nameof(CatalogKind.Unknown);
 
     public void Configure(EntityTypeBuilder<CatalogEntry> builder)
@@ -32,6 +34,12 @@ public sealed class CatalogEntryConfiguration : IEntityTypeConfiguration<Catalog
             table.HasCheckConstraint("ck_segment_catalog_entry_seen", "last_seen_at >= first_seen_at");
             table.HasCheckConstraint("ck_segment_catalog_entry_kinds_version", $"kinds_version >= {CatalogKinds.Unsettled}");
         });
+
+        builder.Property<uint>(ConcurrencyToken)
+            .HasColumnName(ConcurrencyToken)
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
 
         builder.HasKey(entry => entry.Id);
 

@@ -53,7 +53,7 @@ public sealed class CatalogMatching(
                 .Append(id)
                 .Distinct(),
         ];
-        CatalogKnowledge known = await KnowingAsync([.. entries.Where(entry => named.Contains(entry.Id))], occurrences, involved, cancellationToken);
+        CatalogKnowledge known = await KnowingAsync(named.Count is 0 ? [] : await catalog.EntriesAsync(named, cancellationToken), occurrences, involved, cancellationToken);
 
         return new CatalogMatched(id, matches.Count, await lowest.Run(() => Catalog.Absorb(id, sound, matches, known, at), cancellationToken));
     }
