@@ -174,13 +174,14 @@ public sealed class LearningFollowJobTests : IDisposable
 
         End(ending);
         await job.LookAsync(Cancel);
-        await Eventually.Happens(() => harness.Records.Row(ending.Id)?.State is LearningExtractionState.Done, "the ended follow never settled");
+        RecordingId? told = null;
+        await Eventually.Happens(() => harness.Finished.TryTake(out told), "the follow that came to its end was never told");
         await harness.LearningAsync(false);
         await job.LookAsync(Cancel);
 
         await Eventually.Happens(() => harness.Follower.Stopped.Contains(stopped.Id), "the other follow was never stopped");
-        Assert.True(harness.Finished.TryTake(out RecordingId? told));
         Assert.Equal(ending.Id, told);
+        Assert.Equal(LearningExtractionState.Done, harness.Records.Row(ending.Id)?.State);
         Assert.False(harness.Finished.TryTake(out _));
     }
 

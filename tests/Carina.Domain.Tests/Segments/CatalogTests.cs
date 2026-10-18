@@ -48,11 +48,12 @@ public sealed class CatalogTests
         Assert.Contains(change.Found, occurrence => occurrence.RecordingId.Equals(First) && occurrence.StartsAt == Span(300, 315).Starts && occurrence.BitErrorRate == 0.08f);
     }
 
-    [Theory(DisplayName = "an advert with half a second of silence either side, heard in two series, starts an advert entry of its own length")]
+    [Theory(DisplayName = "an advert slot with half a second of silence at either end, heard in two series, starts an advert entry as long as what is heard of it")]
     [InlineData(15)]
     [InlineData(30)]
-    public void AnAdvertBetweenSilencesStartsAnAdvertEntry(int seconds)
+    public void AnAdvertSlotStartsAnAdvertEntry(int slot)
     {
+        int seconds = slot - 1;
         short[] advert = SoundScenes.Joined(SoundScenes.Silence(0.5), SoundScenes.Piece(103, seconds), SoundScenes.Silence(0.5));
         SoundTrack heard = SoundScenes.Track(SoundScenes.Laid(SoundScenes.Programme(1, 90), advert, 10));
         SoundTrack other = SoundScenes.Track(SoundScenes.Laid(SoundScenes.Programme(2, 90), advert, 37));

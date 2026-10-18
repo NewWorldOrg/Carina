@@ -15,12 +15,13 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// <summary>
 /// The kind of a catalog entry, from the way its stretches are spread, the first row that holds:
 /// an answer given on one of its stretches decides outright; a length on the 15-second grid
-/// (<see cref="OnTheGrid"/>) heard in two series or on two stations is an advert, 0.9; a piece
+/// (<see cref="OnTheGrid"/>, a second and a half short of a multiple to half a second over) heard in two series or on two stations is an advert, 0.9; a piece
 /// shorter than 30 seconds heard at about the same place (<see cref="SamePlaceWithin"/>) from the
 /// start of two episodes of one series is a fixed part of the programme, 0.7; a piece shorter than
 /// 15 seconds heard within 15 seconds of the start or end of programmes of two series is a fixed part
-/// of the station's output, 0.6; a length on the grid heard in one series is an advert, 0.5; anything
-/// else is not known. The rows for openings and endings are not applied: their sound falls to the rows
+/// of the station's output, 0.6; a length on the grid of up to a minute heard in one series is an advert,
+/// 0.5, since an opening or ending repeated within a series is often a whole slot of a minute and a half;
+/// anything else is not known. The rows for openings and endings are not applied: their sound falls to the rows
 /// below. Only the stretches that cover the entry whole (<see cref="WholeWithin"/>) count; a shorter
 /// one is taken on its own, and when the entry is an opening or an ending, a shorter one on the grid
 /// heard outside the entry's own series is an advert there, the song played in another series'
@@ -30,7 +31,9 @@ public static class CatalogKinds
 {
     public static readonly TimeSpan Grid = TimeSpan.FromSeconds(15);
 
-    public static readonly TimeSpan GridTolerance = TimeSpan.FromSeconds(0.5);
+    public static readonly TimeSpan ShortOfTheGrid = TimeSpan.FromSeconds(1.5);
+
+    public static readonly TimeSpan OverTheGrid = TimeSpan.FromSeconds(0.5);
 
     public static readonly TimeSpan WholeWithin = TimeSpan.FromSeconds(1);
 
@@ -45,6 +48,8 @@ public static class CatalogKinds
     private const int FewestOnTheGrid = 1;
 
     private const int MostOnTheGrid = 8;
+
+    private const int MostInOneSeries = 4;
 
     private const double Certain = 1.0;
 
@@ -76,14 +81,19 @@ public static class CatalogKinds
     }
 
     /// <summary>
-    /// Whether a length is within <see cref="GridTolerance"/> of a multiple of <see cref="Grid"/> from one
-    /// to eight, 15 to 120 seconds.
+    /// Whether a length is no more than <see cref="ShortOfTheGrid"/> short of a multiple of <see cref="Grid"/>
+    /// from one to eight, 15 to 120 seconds, and no more than <see cref="OverTheGrid"/> over it. A match is cut
+    /// to the sound it hears, and an advert's slot keeps about half a second of silence at either end, so what
+    /// is heard of a slot falls short of the slot rather than over it.
     /// </summary>
-    public static bool OnTheGrid(TimeSpan length)
-    {
-        long multiple = (long)Math.Round(length / Grid, MidpointRounding.AwayFromZero);
+    public static bool OnTheGrid(TimeSpan length) => OnTheGrid(length, MostOnTheGrid);
 
-        return multiple is >= FewestOnTheGrid and <= MostOnTheGrid && (length - (Grid * multiple)).Duration() <= GridTolerance;
+    private static bool OnTheGrid(TimeSpan length, int mostMultiple)
+    {
+        long multiple = (long)Math.Round((length + ((ShortOfTheGrid - OverTheGrid) / 2)) / Grid, MidpointRounding.AwayFromZero);
+        TimeSpan slot = Grid * multiple;
+
+        return multiple >= FewestOnTheGrid && multiple <= mostMultiple && length >= slot - ShortOfTheGrid && length <= slot + OverTheGrid;
     }
 
     private static bool IsWhole(PlacedOccurrence placed, TimeSpan length) => placed.Occurrence.Length >= length - WholeWithin;
@@ -127,7 +137,7 @@ public static class CatalogKinds
             return new CatalogEstimate(CatalogKind.StationFixture, AtTheEdges, CatalogDecision.Pattern);
         }
 
-        return OnTheGrid(length) && series.Count == 1
+        return OnTheGrid(length, MostInOneSeries) && series.Count == 1
             ? new CatalogEstimate(CatalogKind.Cm, OneSeries, CatalogDecision.Pattern)
             : CatalogEstimate.Unknown;
     }
