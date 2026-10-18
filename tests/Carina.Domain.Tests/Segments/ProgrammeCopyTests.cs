@@ -38,9 +38,9 @@ public sealed class ProgrammeCopyTests
         Assert.Equal($"架空の番組 第1話{New}", copy.Name);
         Assert.Equal([new ProgrammeGenre(7, 0), new ProgrammeGenre(7, 15)], copy.Genres);
         Assert.Equal([ProgrammeMark.Captioned, ProgrammeMark.New], copy.Marks);
-        Assert.Null(copy.Episode);
+        Assert.Equal(1, copy.Episode);
         Assert.Equal(AudioMode.DualMono, copy.Audio);
-        Assert.Null(copy.SeriesName);
+        Assert.Equal("架空の番組", copy.SeriesName);
     }
 
     [Fact(DisplayName = "a programme whose end is not known is copied without one")]
