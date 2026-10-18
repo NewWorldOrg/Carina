@@ -51,7 +51,7 @@ public partial class TheChaptersOfAnArtefactSayWhichDetectionTheyCameFrom : Migr
                 + "AND (chapters_break_share IS NULL OR chapters_break_share BETWEEN 0 AND 1)\n"
                 + "AND (chapters_decided_at IS NULL OR chapters_decided_at >= started_at)\n"
                 + "AND (chapters_model_version IS NULL OR chapters_model_version >= 1)\n"
-                + "AND ((chapters_model_version IS NULL AND chapters_answered_at IS NULL) OR chapters_detector = 'Segments')\n"
+                + "AND ((chapters_model_version IS NULL AND chapters_answered_at IS NULL) OR chapters_detector IS NOT DISTINCT FROM 'Segments')\n"
                 + "AND (chapters_detector IS DISTINCT FROM 'Segments'\n"
                 + "    OR ((chapters_model_version IS NOT NULL OR chapters_answered_at IS NOT NULL) = (chapters_verdict <> 'NotAsked')))");
     }
