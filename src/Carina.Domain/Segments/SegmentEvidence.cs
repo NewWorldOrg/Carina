@@ -52,8 +52,6 @@ public sealed class SegmentEvidence
 
     public ReadOnlySpan<byte> Captions => captions;
 
-    public int Seconds => (int)Math.Ceiling(Length.TotalSeconds);
-
     public static SegmentEvidence Of(
         TimeSpan length,
         ReadOnlySpan<byte> loudness,
