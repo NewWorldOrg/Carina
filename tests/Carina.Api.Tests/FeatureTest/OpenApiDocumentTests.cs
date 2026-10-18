@@ -157,6 +157,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getQualityTrends",
                 "getRecording",
                 "getRecordingIntegrity",
+                "getRecordingSegments",
                 "getReservation",
                 "getReservationHealth",
                 "getRule",
@@ -664,6 +665,26 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             ["cm", "opening", "ending", "programmeFixture", "stationFixture", "unknown"],
             schemas["CatalogResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
+    [Fact(DisplayName = "the stretches of a recording are read on a path of their own, described by where they come from, how they stand and the stretches in the recording's own time")]
+    public async Task TheStretchesOfARecordingAreDescribed()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonObject path = document["paths"]!["/api/recordings/{id}/segments"]!.AsObject();
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(["get"], path.Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
+        Assert.Equal(
+            ["lengthSec", "source", "state", "modelVersion", "confirmed", "answeredAt", "detectedAt", "cmShare", "segments", "snaps"],
+            schemas["RecordingSegmentsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["startsAtSec", "endsAtSec", "kind", "probability"],
+            schemas["RecordingSegmentResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(["none", "detected"], schemas["SegmentSource"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(
+            ["none", "marked", "nothingFound", "discarded"],
+            schemas["SegmentStandingState"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
     [Fact(DisplayName = "BR-BV-004: a module of a recording's data broadcast is described by the numbers that name it, and its bytes are left out of the JSON the document describes")]

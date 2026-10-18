@@ -214,6 +214,18 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             segments.Select(surface => surface.Effect).ToArray());
     }
 
+    [Fact(DisplayName = "BR-CA-001: the stretches of a recording are read under the recording, and nothing there writes yet")]
+    public void TheStretchesOfARecordingAreReadUnderTheRecording()
+    {
+        RoutedSurface[] segments =
+        [
+            .. Inventory().Where(surface => surface.Pattern.StartsWith("/api/recordings/{id}/segments", StringComparison.Ordinal)),
+        ];
+
+        Assert.Equal(["GET /api/recordings/{id}/segments"], segments.Select(surface => surface.ToString()).ToArray());
+        Assert.Equal([EndpointEffect.Reading], segments.Select(surface => surface.Effect).ToArray());
+    }
+
     [Fact]
     public void TheReservationSurfacesAreTheNineAReservationIsMadeChangedThrownAwayAndAccountedForThrough()
     {
