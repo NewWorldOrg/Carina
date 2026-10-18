@@ -100,8 +100,8 @@ public sealed class CatalogEntryTests
     public void AnOverrideThatNoLongerHoldsIsCleared()
     {
         CatalogEntryId id = CatalogEntryId.New();
-        PlacedOccurrence answered = At(id, Drama.Episode(0), 600, 90, SegmentKind.Opening);
-        PlacedOccurrence again = At(id, Drama.Episode(1), 900, 90);
+        PlacedOccurrence answered = At(id, Drama.Episode(0), Midpoint - 300, 90, SegmentKind.Opening);
+        PlacedOccurrence again = At(id, Drama.Episode(1), Midpoint, 90);
         PlacedOccurrence advertised = At(id, Quiz.Episode(0), 600, 15);
         CatalogEntry entry = CatalogEntry.Start(id, [.. Enumerable.Range(1, 5625).Select(value => (uint)value)], [answered, again, advertised], SeriesLinks.None, Now);
 

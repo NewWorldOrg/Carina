@@ -18,9 +18,11 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// answers of the programme alone leave only the rows of the opening, the ending and the programme; a
 /// length on the 15-second grid (<see cref="OnTheGrid"/>, a second and a half short of a multiple to half
 /// a second over) heard in two series or on two stations is an advert, 0.9; a piece of
-/// <see cref="ThemeShortest"/> to <see cref="ThemeLongest"/> heard in two episodes of one series in the
-/// first half of the programme is its opening, 0.8, and in the second half its ending, 0.8, whichever half
-/// more of those episodes hear it in, the opening on a tie; a piece shorter than 30 seconds heard at about
+/// <see cref="ThemeShortest"/> to <see cref="ThemeLongest"/>, other than one on the grid of up to a minute,
+/// heard in two episodes of one series starting within <see cref="ThemeEdgeWithin"/> after the guide's start
+/// of the programme is its opening, 0.8, and ending within as much before the guide's end its ending, 0.8,
+/// whichever more of those episodes hear it at, the opening on a tie, a stretch near both taken by the half
+/// of the programme it is heard in; a piece shorter than 30 seconds heard at about
 /// the same place (<see cref="SamePlaceWithin"/>) from the start of two episodes of one series is a fixed
 /// part of the programme, 0.7; a piece shorter than 15 seconds heard within 15 seconds of the start or end
 /// of programmes of two series is a fixed part of the station's output, 0.6; a length on the grid of up to
@@ -32,11 +34,11 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// series that hears it so most often with every other series of a name that links to its own
 /// (<see cref="SeriesNames.Link"/>), on whatever station, and with every series of another name whose
 /// recordings could be other episodes of it in its weekly slot
-/// (<see cref="SeriesLinks.AnotherEpisodeInTheSlot"/>) and hear it in two episodes or only in that half:
+/// (<see cref="SeriesLinks.AnotherEpisodeInTheSlot"/>) and hear it in two episodes or only at that place:
 /// the sound links those. When every whole stretch is of that one series, the opening or ending comes
 /// before the advert of two stations, so that a series whose opening fills a slot on the grid, broadcast
 /// on two stations, keeps its opening. When the entry is an opening or an ending, a whole stretch in a
-/// series that hears it so is taken for the kind of the half it is heard in, so that the opening sung at
+/// series that hears it so is taken for the kind of the place it is heard at, so that the opening sung at
 /// the end of a last episode is that episode's ending, and a shorter one on the grid heard outside those
 /// series is an advert there, the song played in another series' break.
 /// </para>
@@ -71,6 +73,12 @@ public static class CatalogKinds
     public static readonly TimeSpan ThemeShortest = TimeSpan.FromSeconds(30);
 
     public static readonly TimeSpan ThemeLongest = TimeSpan.FromMinutes(3);
+
+    /// <summary>
+    /// How far after the guide's start an opening starts, and before the guide's end an ending ends, at the
+    /// most.
+    /// </summary>
+    public static readonly TimeSpan ThemeEdgeWithin = TimeSpan.FromMinutes(6);
 
     public static readonly TimeSpan SamePlaceWithin = TimeSpan.FromSeconds(30);
 
@@ -227,15 +235,15 @@ public static class CatalogKinds
     }
 
     /// <summary>
-    /// The opening or ending a sound of its length is heard as, when two episodes of one series hear it in
-    /// the same half of their programmes; the series it is heard as that in, with every other series of the
+    /// The opening or ending a sound of its length is heard as, when two episodes of one series hear it at
+    /// that place in their programmes; the series it is heard as that in, with every other series of the
     /// name of the one that hears it so most often, and every series in its slot that hears it in two episodes
-    /// or only in that half; the series once those are joined into one; and whether every whole stretch is of
+    /// or only at that place; the series once those are joined into one; and whether every whole stretch is of
     /// that one series.
     /// </summary>
     private static Theme? ThemeOf(TimeSpan length, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> linked)
     {
-        if (length < ThemeShortest || length > ThemeLongest)
+        if (length < ThemeShortest || length > ThemeLongest || OnTheGrid(length, MostInOneSeries))
         {
             return null;
         }
@@ -285,8 +293,11 @@ public static class CatalogKinds
         => group.Any(placed => main.Any(member => SeriesNames.Link(member.Occurrence.SeriesName, placed.Occurrence.SeriesName)));
 
     /// <summary>
-    /// What the place of a stretch makes a theme heard there: an opening in the first half of its programme,
-    /// an ending in the second, by where the middle of the stretch falls; null when the programme is not known.
+    /// What the place of a stretch makes a theme heard there, by the guide's start and end of its programme:
+    /// an opening when it starts no more than <see cref="EdgeWithin"/> before the start or
+    /// <see cref="ThemeEdgeWithin"/> after it, an ending when it ends no more than as much before the end or
+    /// <see cref="EdgeWithin"/> after it, by the half its middle falls in when it is both, and neither,
+    /// <see cref="CatalogKind.Unknown"/>, anywhere else; null when the programme is not known.
     /// </summary>
     private static CatalogKind? PlaceOf(PlacedOccurrence placed)
     {
@@ -295,9 +306,17 @@ public static class CatalogKinds
             return null;
         }
 
-        TimeSpan middle = placed.Occurrence.StartsAt + (placed.Occurrence.Length / 2);
+        CatalogOccurrence occurrence = placed.Occurrence;
+        bool opens = occurrence.StartsAt >= starts - EdgeWithin && occurrence.StartsAt <= starts + ThemeEdgeWithin;
+        bool closes = occurrence.EndsAt >= ends - ThemeEdgeWithin && occurrence.EndsAt <= ends + EdgeWithin;
 
-        return middle < starts + ((ends - starts) / 2) ? CatalogKind.Opening : CatalogKind.Ending;
+        return (opens, closes) switch
+        {
+            (true, true) => occurrence.StartsAt + (occurrence.Length / 2) < starts + ((ends - starts) / 2) ? CatalogKind.Opening : CatalogKind.Ending,
+            (true, false) => CatalogKind.Opening,
+            (false, true) => CatalogKind.Ending,
+            _ => CatalogKind.Unknown,
+        };
     }
 
     private static bool HeardTwiceInOnePlace(IReadOnlyList<PlacedOccurrence> series)

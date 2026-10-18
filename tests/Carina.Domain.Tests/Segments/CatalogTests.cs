@@ -239,7 +239,7 @@ public sealed class CatalogTests
     {
         CatalogEntryId id = CatalogEntryId.New();
         CatalogEntry entry = KeptBeforeThemes(id, 3);
-        CatalogOccurrence[] stretches = [.. Enumerable.Range(0, 3).Select(week => At(id, Drama.Episode(week), 0, 59).Occurrence)];
+        CatalogOccurrence[] stretches = [.. Enumerable.Range(0, 3).Select(week => At(id, Drama.Episode(week), 0, 89).Occurrence)];
         Dictionary<RecordingId, ProgrammeCopy> programmes = stretches.Select((stretch, week) => (stretch.RecordingId, Drama.Episode(week))).ToDictionary();
 
         Assert.True(entry.AwaitsReestimation);
@@ -262,7 +262,7 @@ public sealed class CatalogTests
     {
         CatalogEntryId id = CatalogEntryId.New();
         CatalogEntry entry = KeptBeforeThemes(id, 3);
-        CatalogOccurrence[] stretches = [.. Enumerable.Range(0, 3).Select(week => At(id, Drama.Episode(week), week is 2 ? 1700 : 0, 59).Occurrence)];
+        CatalogOccurrence[] stretches = [.. Enumerable.Range(0, 3).Select(week => At(id, Drama.Episode(week), week is 2 ? 1700 : 0, 89).Occurrence)];
         Dictionary<RecordingId, ProgrammeCopy> programmes = stretches.Select((stretch, week) => (stretch.RecordingId, Drama.Episode(week))).ToDictionary();
         Dictionary<RecordingId, GivenAnswer> answers = new() { [stretches[0].RecordingId] = Answer(stretches[0].Span, SegmentKind.Break, TimeSpan.FromMinutes(32)) };
 
@@ -323,11 +323,11 @@ public sealed class CatalogTests
     private static CatalogEntry KeptBeforeThemes(CatalogEntryId id, int occurrences)
         => CatalogEntry.Rehydrate(
             id,
-            CatalogKind.Cm,
-            0.5,
-            CatalogDecision.Pattern,
-            TimeSpan.FromSeconds(59),
-            CatalogFingerprint.Write([.. Enumerable.Range(1, 3688).Select(value => (uint)value)]),
+            CatalogKind.Unknown,
+            null,
+            null,
+            TimeSpan.FromSeconds(89),
+            CatalogFingerprint.Write([.. Enumerable.Range(1, 5562).Select(value => (uint)value)]),
             occurrences,
             1,
             1,

@@ -484,10 +484,10 @@ public sealed class CatalogMatchingJobTests
 
     private static readonly TimeSpan Into = TimeSpan.FromSeconds(35);
 
-    private static readonly TimeSpan Heard = TimeSpan.FromSeconds(59);
+    private static readonly TimeSpan Heard = TimeSpan.FromSeconds(89);
 
     /// <summary>
-    /// An entry kept from before the rows for openings and endings, an advert of one series: a minute heard
+    /// An entry kept from before the rows for openings and endings, of no kind yet: a minute and a half heard
     /// near the start of two weekly episodes, both matched already.
     /// </summary>
     private static async Task<CatalogEntry> OutdatedAsync(CatalogMatchingHarness harness, int kindsVersion = CatalogKinds.FirstVersion)
@@ -518,9 +518,9 @@ public sealed class CatalogMatchingJobTests
 
         CatalogEntry entry = CatalogEntry.Rehydrate(
             id,
-            CatalogKind.Cm,
-            0.5,
-            CatalogDecision.Pattern,
+            CatalogKind.Unknown,
+            null,
+            null,
             Heard,
             CatalogFingerprint.Write(Sound(1).AsSpan(0, (int)(Heard / SegmentMatcher.Frame))),
             heard.Count,

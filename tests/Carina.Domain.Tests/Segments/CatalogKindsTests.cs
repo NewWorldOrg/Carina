@@ -71,7 +71,7 @@ public sealed class CatalogKindsTests
     public void ALongerPieceIsNotAProgrammeFixture()
     {
         CatalogPattern early = Estimated(31, At(Entry, Drama.Episode(0), 60, 31), At(Entry, Drama.Episode(1), 60, 31));
-        CatalogPattern middle = Estimated(31, At(Entry, Drama.Episode(0), 870, 31), At(Entry, Drama.Episode(1), 895, 31));
+        CatalogPattern middle = Estimated(31, At(Entry, Drama.Episode(0), Midpoint - 30, 31), At(Entry, Drama.Episode(1), Midpoint - 5, 31));
 
         Assert.Equal(CatalogKind.Opening, early.Estimate.Kind);
         Assert.Equal(CatalogKind.Unknown, middle.Estimate.Kind);
@@ -101,7 +101,7 @@ public sealed class CatalogKindsTests
             Estimated(5, At(Entry, Drama.Episode(0), 2, 5), At(Entry, Drama.Episode(1), 2, 5)).Estimate.Kind);
     }
 
-    [Theory(DisplayName = "a piece on the grid of up to a minute heard in one series only is an advert, 0.5, and one off the grid or longer is unknown")]
+    [Theory(DisplayName = "a piece on the grid of up to a minute heard in one series once in each half is an advert, 0.5, and one off the grid or longer is unknown")]
     [InlineData(30.0, CatalogKind.Cm)]
     [InlineData(29.0, CatalogKind.Cm)]
     [InlineData(44.0, CatalogKind.Cm)]
@@ -113,12 +113,34 @@ public sealed class CatalogKindsTests
     [InlineData(61.0, CatalogKind.Unknown)]
     [InlineData(75.0, CatalogKind.Unknown)]
     [InlineData(89.0, CatalogKind.Unknown)]
-    public void AGridPieceInOneSeriesIsAnAdvertAtHalf(double seconds, CatalogKind kind)
+    public void AGridPieceInOneSeriesOnceInEachHalfIsAnAdvertAtHalf(double seconds, CatalogKind kind)
     {
-        CatalogPattern pattern = Estimated(seconds, At(Entry, Drama.Episode(0), 600, seconds), At(Entry, Drama.Episode(1), 900, seconds));
+        CatalogPattern pattern = Estimated(seconds, At(Entry, Drama.Episode(0), Midpoint - 300, seconds), At(Entry, Drama.Episode(1), Midpoint, seconds));
 
         Assert.Equal(kind, pattern.Estimate.Kind);
         Assert.Equal(kind is CatalogKind.Cm ? 0.5 : null, pattern.Estimate.Confidence);
+    }
+
+    [Theory(DisplayName = "BR-CD-005: a piece on the grid of up to a minute heard in one series twice at the start or twice in the middle is an advert, 0.5, and a longer one is the opening only at the start")]
+    [InlineData(30.0, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(29.0, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(44.0, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(45.0, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(59.0, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(60.0, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(60.5, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(28.4, CatalogKind.Unknown, CatalogKind.Unknown)]
+    [InlineData(30.6, CatalogKind.Opening, CatalogKind.Unknown)]
+    [InlineData(61.0, CatalogKind.Opening, CatalogKind.Unknown)]
+    [InlineData(75.0, CatalogKind.Opening, CatalogKind.Unknown)]
+    [InlineData(89.0, CatalogKind.Opening, CatalogKind.Unknown)]
+    public void AGridPieceInOneSeriesTwiceInOneHalfIsAnAdvertAtHalf(double seconds, CatalogKind atTheStart, CatalogKind inTheMiddle)
+    {
+        CatalogPattern start = Estimated(seconds, At(Entry, Drama.Episode(0), 0, seconds), At(Entry, Drama.Episode(1), 60, seconds));
+        CatalogPattern middle = Estimated(seconds, At(Entry, Drama.Episode(0), Midpoint - 300, seconds), At(Entry, Drama.Episode(1), Midpoint - 200, seconds));
+
+        Assert.Equal((atTheStart, inTheMiddle), (start.Estimate.Kind, middle.Estimate.Kind));
+        Assert.Equal(atTheStart is CatalogKind.Cm ? 0.5 : atTheStart is CatalogKind.Opening ? 0.8 : null, start.Estimate.Confidence);
     }
 
     [Fact(DisplayName = "the audible core of a 15-second slot, a second short of it, is on the grid")]
@@ -157,9 +179,11 @@ public sealed class CatalogKindsTests
         Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 1.0, CatalogDecision.Answer), programmeAnswered.Estimate);
     }
 
-    [Theory(DisplayName = "BR-CD-005: a piece of 30 seconds to 3 minutes heard in the first half of two episodes of one series is its opening, 0.8")]
-    [InlineData(30.0, 0)]
+    [Theory(DisplayName = "BR-CD-005: a piece of 30 seconds to 3 minutes starting within six minutes after the guide's start of two episodes of one series is its opening, 0.8")]
+    [InlineData(30.6, 0)]
     [InlineData(85.0, 0)]
+    [InlineData(85.0, -15)]
+    [InlineData(85.0, 360)]
     [InlineData(89.0, 0)]
     [InlineData(90.0, 120)]
     [InlineData(180.0, 300)]
@@ -172,10 +196,11 @@ public sealed class CatalogKindsTests
         Assert.All(pattern.Overrides, Assert.Null);
     }
 
-    [Theory(DisplayName = "BR-CD-005: the same piece in the second half of two episodes is the ending, 0.8")]
+    [Theory(DisplayName = "BR-CD-005: the same piece ending within six minutes before the guide's end of two episodes is the ending, 0.8")]
     [InlineData(89.0, 1700)]
-    [InlineData(60.0, 1620)]
-    [InlineData(45.0, 960)]
+    [InlineData(100.0, 1650)]
+    [InlineData(85.0, 1355)]
+    [InlineData(85.0, 1730)]
     public void APieceInTheSecondHalfOfEachEpisodeIsTheEnding(double seconds, double fromProgrammeStart)
     {
         CatalogPattern pattern = Estimated(seconds, Weekly(Drama, 2, fromProgrammeStart, seconds));
@@ -183,18 +208,29 @@ public sealed class CatalogKindsTests
         Assert.Equal(new CatalogEstimate(CatalogKind.Ending, 0.8, CatalogDecision.Pattern), pattern.Estimate);
     }
 
-    [Theory(DisplayName = "a piece shorter than 30 seconds or longer than 3 minutes is neither an opening nor an ending")]
-    [InlineData(30.0, CatalogKind.Opening, CatalogKind.Ending)]
+    [Theory(DisplayName = "a piece shorter than 30 seconds, longer than 3 minutes, or on the grid of up to a minute is neither an opening nor an ending")]
+    [InlineData(31.0, CatalogKind.Opening, CatalogKind.Ending)]
     [InlineData(29.9, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(45.0, CatalogKind.Cm, CatalogKind.Cm)]
+    [InlineData(60.0, CatalogKind.Cm, CatalogKind.Cm)]
     [InlineData(25.0, CatalogKind.Unknown, CatalogKind.Unknown)]
     [InlineData(180.0, CatalogKind.Opening, CatalogKind.Ending)]
     [InlineData(180.1, CatalogKind.Unknown, CatalogKind.Unknown)]
     public void APieceOutsideTheLengthsIsNoTheme(double seconds, CatalogKind early, CatalogKind late)
     {
         CatalogPattern first = Estimated(seconds, At(Entry, Drama.Episode(0), 0, seconds), At(Entry, Drama.Episode(1), 200, seconds));
-        CatalogPattern second = Estimated(seconds, At(Entry, Drama.Episode(0), 1400, seconds), At(Entry, Drama.Episode(1), 1600, seconds));
+        CatalogPattern second = Estimated(seconds, At(Entry, Drama.Episode(0), 1450, seconds), At(Entry, Drama.Episode(1), 1500, seconds));
 
         Assert.Equal((early, late), (first.Estimate.Kind, second.Estimate.Kind));
+    }
+
+    [Fact(DisplayName = "BR-CD-005: a piece of 90 seconds heard twice from minute 2 is the opening, twice up to 2 minutes before the end the ending, and twice from minute 12 neither")]
+    public void AThemeIsPlacedByTheGuidesStartAndEnd()
+    {
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), Estimated(90, Weekly(Drama, 2, 120, 90)).Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Ending, 0.8, CatalogDecision.Pattern), Estimated(90, Weekly(Drama, 2, Runs.TotalSeconds - 120 - 90, 90)).Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, Estimated(85, Weekly(Drama, 2, 720, 85)).Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, Estimated(90, Weekly(Drama, 2, 720, 90)).Estimate);
     }
 
     [Fact(DisplayName = "a piece heard in one episode, or once in each half, is neither an opening nor an ending")]
