@@ -14,19 +14,13 @@ public enum BoundaryCue
 
     Black = 4,
 
-    SceneChange = 8,
+    LogoChange = 8,
 
-    ChannelChange = 16,
+    CatalogEdge = 16,
 
-    LogoChange = 32,
+    GuideEdge = 32,
 
-    CaptionChange = 64,
-
-    CatalogEdge = 128,
-
-    GuideEdge = 256,
-
-    RecordingEdge = 512,
+    RecordingEdge = 64,
 }
 
 /// <summary>

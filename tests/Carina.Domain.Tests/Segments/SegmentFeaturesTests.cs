@@ -179,6 +179,22 @@ public sealed class SegmentFeaturesTests
         Assert.Null(uncaptioned[SegmentFeature.CaptionShare]);
     }
 
+    [Fact(DisplayName = "changes of scene are counted per ten seconds of a piece, and the change in how alike the channels are is read across each edge")]
+    public void ScenesAndChannelChangesAreRead()
+    {
+        SegmentEvidence evidence = new SyntheticReadings(Length).Cut(305, 0.9).Cut(310, 0.9).Cut(320, 0.2).Channels(360, Length, 100).Evidence();
+
+        IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of([Edge(0), Cut(300), Cut(360), Edge(Length)], evidence, Context(), null, SegmentThresholds.Initial);
+
+        Assert.Equal(2d / 6, pieces[1].Features[SegmentFeature.SceneChangesPer10s]!.Value, 9);
+        Assert.Equal(0, pieces[0].Features[SegmentFeature.SceneChangesPer10s]);
+        Assert.Equal(0, pieces[1].Features[SegmentFeature.HeadChannelChange]!.Value, 9);
+        Assert.Equal(0.9, pieces[1].Features[SegmentFeature.TailChannelChange]!.Value, 9);
+        Assert.Equal(0.9, pieces[2].Features[SegmentFeature.HeadChannelChange]!.Value, 9);
+        Assert.Null(pieces[0].Features[SegmentFeature.HeadChannelChange]);
+        Assert.Null(pieces[2].Features[SegmentFeature.TailChannelChange]);
+    }
+
     [Fact(DisplayName = "the programme's first genre sets its own feature and clears the others, and no genre leaves them all unknown")]
     public void TheFirstGenreIsSet()
     {
@@ -222,12 +238,12 @@ public sealed class SegmentFeaturesTests
             TimeSpan.FromSeconds(at),
             TimeSpan.FromSeconds(at),
             TimeSpan.FromSeconds(latest ?? at),
-            BoundaryCue.Silence | BoundaryCue.SilentCut | BoundaryCue.SceneChange,
+            BoundaryCue.Silence | BoundaryCue.SilentCut,
             depth,
             TimeSpan.FromSeconds(lasting));
 
     private static BoundaryCandidate Plain(double at)
-        => new(TimeSpan.FromSeconds(at), TimeSpan.FromSeconds(at), TimeSpan.FromSeconds(at), BoundaryCue.SceneChange, 0, TimeSpan.Zero);
+        => new(TimeSpan.FromSeconds(at), TimeSpan.FromSeconds(at), TimeSpan.FromSeconds(at), BoundaryCue.LogoChange, 0, TimeSpan.Zero);
 
     private static SegmentContext Context(
         TimeSpan? starts = null,

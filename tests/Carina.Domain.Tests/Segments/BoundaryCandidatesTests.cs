@@ -37,15 +37,18 @@ public sealed class BoundaryCandidatesTests
         Assert.Equal(TimeSpan.FromSeconds(100.15), black.At);
     }
 
-    [Fact(DisplayName = "a frame that moved the threshold's share of full scale or more from the one before is a change of scene")]
-    public void AFrameThatMovedFarEnoughIsAChangeOfScene()
+    [Fact(DisplayName = "a change of scene is no candidate of its own, and corroborates a silence when the frame moved the threshold's share of full scale or more")]
+    public void AChangeOfSceneOnlyCorroboratesASilence()
     {
-        SyntheticReadings readings = new SyntheticReadings(Length).Cut(100, 0.3).Cut(200, 0.29).Cut(300, 0.2);
+        SyntheticReadings readings = new SyntheticReadings(Length)
+            .Cut(50, 0.9)
+            .QuietAround(100).Cut(100, 0.3)
+            .QuietAround(200).Cut(200, 0.29)
+            .QuietAround(300).Cut(300, 0.2);
 
-        Assert.Equal([TimeSpan.FromSeconds(100)], [.. Inner(readings).Select(candidate => candidate.At)]);
-        Assert.Equal(
-            [TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(300)],
-            [.. Inner(readings, SegmentThresholds.Initial, sceneChange: 0.2).Select(candidate => candidate.At)]);
+        Assert.Equal([true, false, false], [.. Inner(readings).Select(candidate => candidate.IsSilentCut)]);
+        Assert.Equal([true, true, true], [.. Inner(readings, SegmentThresholds.Initial, sceneChange: 0.2).Select(candidate => candidate.IsSilentCut)]);
+        Assert.Equal([TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(300)], [.. Inner(readings).Select(candidate => candidate.At)]);
     }
 
     [Fact(DisplayName = "a silence with a change of scene within half a second of its middle, or black over it, is a silent cut")]
@@ -59,20 +62,15 @@ public sealed class BoundaryCandidatesTests
         Assert.True(found[0].IsSilentCut);
         Assert.True(found[1].IsSilentCut);
         Assert.False(found[2].IsSilentCut);
-        Assert.Equal(BoundaryCue.Silence | BoundaryCue.SilentCut | BoundaryCue.SceneChange, found[0].Cues);
+        Assert.Equal(BoundaryCue.Silence | BoundaryCue.SilentCut, found[0].Cues);
         Assert.Equal(BoundaryCue.Silence | BoundaryCue.SilentCut | BoundaryCue.Black, found[1].Cues);
-        Assert.Equal(BoundaryCue.Silence | BoundaryCue.SceneChange, found[2].Cues);
+        Assert.Equal(BoundaryCue.Silence, found[2].Cues);
         Assert.Equal(TimeSpan.FromSeconds(300), found[2].At);
     }
 
-    [Fact(DisplayName = "the channels turning from alike to unlike is a candidate where the change is greatest")]
-    public void AChangeInHowAlikeTheChannelsAreIsACandidate()
-    {
-        BoundaryCandidate change = Assert.Single(Inner(new SyntheticReadings(Length).Channels(250, Length, 100)));
-
-        Assert.Equal(BoundaryCue.ChannelChange, change.Cues);
-        Assert.Equal(TimeSpan.FromSeconds(250), change.At);
-    }
+    [Fact(DisplayName = "the channels turning from alike to unlike, and captions coming and going, are no candidates")]
+    public void ChannelsAndCaptionsAreNoCandidates()
+        => Assert.Empty(Inner(new SyntheticReadings(Length).Channels(250, Length, 100).Captioned(second => second is (>= 50 and < 90) or (>= 300 and < 400))));
 
     [Fact(DisplayName = "the logo coming on or going off for more than a moment is a candidate, and a flicker is not")]
     public void TheLogoComingAndGoingIsACandidate()
@@ -82,15 +80,6 @@ public sealed class BoundaryCandidatesTests
         IReadOnlyList<BoundaryCandidate> found = BoundaryCandidates.Find(new SyntheticReadings(Length).Evidence(), Bare, seen, SegmentThresholds.Initial);
 
         Assert.Equal([TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(160)], [.. found.Where(candidate => candidate.Cues is BoundaryCue.LogoChange).Select(candidate => candidate.At)]);
-    }
-
-    [Fact(DisplayName = "captions coming on or going off for more than a moment is a candidate")]
-    public void CaptionsComingAndGoingAreACandidate()
-    {
-        IReadOnlyList<BoundaryCandidate> found = Inner(new SyntheticReadings(Length).Captioned(second => second is (>= 50 and < 90) or 300));
-
-        Assert.Equal([TimeSpan.FromSeconds(50), TimeSpan.FromSeconds(90)], [.. found.Select(candidate => candidate.At)]);
-        Assert.All(found, candidate => Assert.Equal(BoundaryCue.CaptionChange, candidate.Cues));
     }
 
     [Fact(DisplayName = "the edges of what the catalog heard and the programme's start and end by the guide are candidates")]
@@ -112,11 +101,11 @@ public sealed class BoundaryCandidatesTests
     public void CandidatesWithinTwoSecondsMergeIntoTheStronger()
     {
         IReadOnlyList<BoundaryCandidate> found = Inner(new SyntheticReadings(Length)
-            .Cut(98.5, 0.9).QuietAround(100).Cut(100, 0.9).Cut(101.9, 0.9)
-            .Cut(200, 0.9).Cut(202.5, 0.9));
+            .Black(98.4, 98.6).QuietAround(100).Cut(100, 0.9).QuietAround(101.9)
+            .QuietAround(200).QuietAround(202.5));
 
         Assert.Equal([TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(202.5)], [.. found.Select(candidate => candidate.At)]);
-        Assert.Equal(BoundaryCue.Silence | BoundaryCue.SilentCut | BoundaryCue.SceneChange, found[0].Cues);
+        Assert.Equal(BoundaryCue.Black | BoundaryCue.Silence | BoundaryCue.SilentCut, found[0].Cues);
     }
 
     [Fact(DisplayName = "a merged candidate stretches over the silent cuts and catalog edges it took in, and is its own second otherwise")]
@@ -125,7 +114,7 @@ public sealed class BoundaryCandidatesTests
         SegmentContext context = Context(catalog: [new CatalogHeard(TimeSpan.FromSeconds(301.2), TimeSpan.FromSeconds(316.2), SegmentKind.Break, 3, 2, 1)]);
 
         IReadOnlyList<BoundaryCandidate> found = BoundaryCandidates.Find(
-            new SyntheticReadings(Length).QuietAround(300).Cut(300, 0.9).Cut(301.9, 0.9).QuietAround(400).Cut(400, 0.9).Cut(401.5, 0.9).Evidence(),
+            new SyntheticReadings(Length).QuietAround(300).Cut(300, 0.9).QuietAround(301.9).QuietAround(400).Cut(400, 0.9).QuietAround(401.5).Evidence(),
             context,
             null,
             SegmentThresholds.Initial);
@@ -140,23 +129,23 @@ public sealed class BoundaryCandidatesTests
     public void TheEndsTakeInWhatIsNearThem()
     {
         IReadOnlyList<BoundaryCandidate> found = BoundaryCandidates.Find(
-            new SyntheticReadings(Length, Length + 10).QuietAround(1.5).Cut(1.5, 0.9).Cut(598.5, 0.9).Cut(605, 0.9).Evidence(),
+            new SyntheticReadings(Length, Length + 10).QuietAround(1.5).Cut(1.5, 0.9).QuietAround(598.5).QuietAround(605).Evidence(),
             Bare,
             null,
             SegmentThresholds.Initial);
 
         Assert.Equal(2, found.Count);
         Assert.Equal((TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromSeconds(1.5)), (found[0].At, found[0].Earliest, found[0].Latest));
-        Assert.Equal(BoundaryCue.RecordingEdge | BoundaryCue.Silence | BoundaryCue.SilentCut | BoundaryCue.SceneChange, found[0].Cues);
+        Assert.Equal(BoundaryCue.RecordingEdge | BoundaryCue.Silence | BoundaryCue.SilentCut, found[0].Cues);
         Assert.Equal(TimeSpan.FromSeconds(Length), found[1].At);
-        Assert.Equal(BoundaryCue.RecordingEdge | BoundaryCue.SceneChange, found[1].Cues);
+        Assert.Equal(BoundaryCue.RecordingEdge | BoundaryCue.Silence, found[1].Cues);
     }
 
     [Fact(DisplayName = "the snaps are the seconds of the merged candidates, without the recording's own ends")]
     public void TheSnapsAreTheMergedSeconds()
     {
         IReadOnlyList<BoundaryCandidate> found = BoundaryCandidates.Find(
-            new SyntheticReadings(Length).Cut(1, 0.9).Cut(100, 0.9).Cut(101, 0.9).Cut(250, 0.9).Evidence(),
+            new SyntheticReadings(Length).QuietAround(1).QuietAround(100).QuietAround(101).QuietAround(250).Evidence(),
             Bare,
             null,
             SegmentThresholds.Initial);

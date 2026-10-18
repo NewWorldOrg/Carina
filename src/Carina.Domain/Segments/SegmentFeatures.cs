@@ -18,8 +18,10 @@ public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitte
 /// counts as, and the most stretches, series and stations an entry over it is heard in; where it lies from
 /// the programme's start and end, as shares of the programme's length, and the share of it outside the
 /// guide; the share of earlier episodes with a break within <see cref="PastWithin"/> of the same place
-/// from their programme's start; the share of its seconds with captions; the channels' mean likeness;
-/// the programme's first genre; and the two interactions. A feature without the readings to compute it
+/// from their programme's start; the share of its seconds with captions; the channels' mean likeness,
+/// and how far it changes across each edge over <see cref="ChannelWindow"/> on either side, when at
+/// least half of each window was measured; the changes of scene per ten seconds; the programme's first
+/// genre; and the two interactions. A feature without the readings to compute it
 /// is not known. The programme spans the recording when the guide says nothing.
 /// </summary>
 public static class SegmentFeatures
@@ -29,6 +31,10 @@ public static class SegmentFeatures
     public static readonly TimeSpan LogoAwayFromTheEdges = TimeSpan.FromSeconds(2);
 
     public static readonly TimeSpan PastWithin = TimeSpan.FromSeconds(30);
+
+    public static readonly TimeSpan ChannelWindow = TimeSpan.FromSeconds(1);
+
+    private static readonly TimeSpan SceneSpan = TimeSpan.FromSeconds(10);
 
     public static IReadOnlyList<SegmentPiece> Of(
         IReadOnlyList<BoundaryCandidate> candidates,
@@ -61,6 +67,8 @@ public static class SegmentFeatures
         private readonly bool[]? captions = Shown(evidence);
 
         private readonly double?[] likeness = Likeness(evidence);
+
+        private readonly List<TimeSpan> scenes = BoundaryCandidates.Scenes(evidence.Frames, thresholds);
 
         private readonly int? genre = context.Genres.Count is 0 ? null : context.Genres[0].Kind;
 
@@ -98,7 +106,10 @@ public static class SegmentFeatures
                 [SegmentFeature.OutsideGuide] = OutsideGuide(piece),
                 [SegmentFeature.PastCmShare] = PastShare(piece),
                 [SegmentFeature.CaptionShare] = CaptionShare(piece),
-                [SegmentFeature.ChannelCorrelation] = MeanLikeness(piece),
+                [SegmentFeature.ChannelCorrelation] = MeanLikeness(piece.From, piece.To),
+                [SegmentFeature.HeadChannelChange] = ChannelChangeAcross(head.At),
+                [SegmentFeature.TailChannelChange] = ChannelChangeAcross(tail.At),
+                [SegmentFeature.SceneChangesPer10s] = scenes.Count(at => at >= piece.From && at < piece.To) * (SceneSpan / piece.Length),
                 [SegmentFeature.MultipleOf15sWithoutLogo] = multiple * (1 - logo),
                 [SegmentFeature.CatalogCmMultipleOf15s] = covered.Share(SegmentKind.Break) * multiple,
             };
@@ -196,15 +207,24 @@ public static class SegmentFeatures
             return inside.Length is 0 ? null : inside.Count(shown => shown) / (double)inside.Length;
         }
 
-        private double? MeanLikeness(Stretch piece)
+        private double? MeanLikeness(TimeSpan from, TimeSpan to, int fewest = 1)
         {
             double[] measured =
             [
-                .. likeness[Within(Centred(piece.From, SegmentEvidence.ChannelStep), Centred(piece.To, SegmentEvidence.ChannelStep), likeness.Length)]
+                .. likeness[Within(Centred(from, SegmentEvidence.ChannelStep), Centred(to, SegmentEvidence.ChannelStep), likeness.Length)]
                     .OfType<double>(),
             ];
 
-            return measured.Length is 0 ? null : measured.Average();
+            return measured.Length < Math.Max(fewest, 1) ? null : measured.Average();
+        }
+
+        private double? ChannelChangeAcross(TimeSpan at)
+        {
+            int fewest = (int)Math.Ceiling(ChannelWindow / SegmentEvidence.ChannelStep / 2);
+            double? before = MeanLikeness(at - ChannelWindow, at, fewest);
+            double? after = MeanLikeness(at, at + ChannelWindow, fewest);
+
+            return after - before is double change ? Math.Abs(change) : null;
         }
 
         private static double Centred(TimeSpan at, TimeSpan step) => Math.Ceiling((at / step) - 0.5);

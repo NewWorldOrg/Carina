@@ -1,22 +1,19 @@
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// Finds where a segment may start or end in one recording: a silence, sound quieter than the
-/// threshold for at least <see cref="ShortestQuiet"/>, at its middle; black, frames darker than the
-/// threshold for as long, at its middle; a change of scene, a frame that moved from the one before by the
-/// threshold or more; a change in how alike the channels are, the greatest change of their mean over
-/// <see cref="ChannelWindow"/> on either side, of at least <see cref="ChannelChange"/>; the logo and the
-/// captions coming on or going off, each state held for <see cref="HeldSeconds"/> seconds; the edges of
-/// what the catalog heard; the programme's start and end by the guide; and the recording's own ends. A
-/// silence with a change of scene within <see cref="CorroboratedWithin"/> of its middle, or black over
-/// it, is a silent cut. Nothing past the recording's length is a candidate. Going forward in time, a
-/// candidate within <see cref="MergedWithin"/> of the strongest of those merged before it joins them: a
-/// recording end is the strongest, then a silent cut, a catalog edge, a silence or black, and the rest.
+/// Finds where a segment may start or end in one recording, from the cues a break is cut at: a silence,
+/// sound quieter than the threshold for at least <see cref="ShortestQuiet"/>, at its middle; black,
+/// frames darker than the threshold for as long, at its middle; the logo coming on or going off, each
+/// state held for <see cref="HeldSeconds"/> seconds; the edges of what the catalog heard; the programme's
+/// start and end by the guide; and the recording's own ends. A change of scene, a frame that moved from
+/// the one before by the threshold or more, is no candidate of its own: a silence with one within
+/// <see cref="CorroboratedWithin"/> of its middle, or with black over it, is a silent cut. Nothing past
+/// the recording's length is a candidate. Going forward in time, a candidate within
+/// <see cref="MergedWithin"/> of the strongest of those merged before it joins them: a recording end is
+/// the strongest, then a silent cut, a catalog edge, a silence or black, and the rest.
 /// </summary>
 public static class BoundaryCandidates
 {
-    public const double ChannelChange = 0.5;
-
     public const int HeldSeconds = 2;
 
     public static readonly TimeSpan ShortestQuiet = TimeSpan.FromSeconds(0.15);
@@ -24,8 +21,6 @@ public static class BoundaryCandidates
     public static readonly TimeSpan CorroboratedWithin = TimeSpan.FromSeconds(0.5);
 
     public static readonly TimeSpan MergedWithin = TimeSpan.FromSeconds(2);
-
-    public static readonly TimeSpan ChannelWindow = TimeSpan.FromSeconds(1);
 
     private const double FullScale = byte.MaxValue;
 
@@ -43,10 +38,7 @@ public static class BoundaryCandidates
         [
             .. Silences(evidence.Loudness, thresholds, blacks, scenes),
             .. blacks.Select(black => new Raw(black.Middle, BoundaryCue.Black)),
-            .. scenes.Select(at => new Raw(at, BoundaryCue.SceneChange)),
-            .. ChannelChanges(evidence.Channels),
-            .. Flips(sightings ?? [], TimeSpan.FromSeconds(1), BoundaryCue.LogoChange),
-            .. Flips(Shown(evidence.Captions), TimeSpan.FromSeconds(1), BoundaryCue.CaptionChange),
+            .. LogoChanges(sightings ?? []),
             .. context.Catalog.SelectMany(heard => new[] { new Raw(heard.Starts, BoundaryCue.CatalogEdge), new Raw(heard.Ends, BoundaryCue.CatalogEdge) }),
             .. new[] { context.ProgrammeStarts, context.ProgrammeEnds }.OfType<TimeSpan>().Select(at => new Raw(at, BoundaryCue.GuideEdge)),
             new Raw(TimeSpan.Zero, BoundaryCue.RecordingEdge),
@@ -116,7 +108,7 @@ public static class BoundaryCandidates
         return [.. Runs(dark).Select(run => new Stretch(times[run.From], times[run.To])).Where(black => black.Length >= ShortestQuiet)];
     }
 
-    private static List<TimeSpan> Scenes(ReadOnlySpan<PlacedFrame> frames, SegmentThresholds thresholds)
+    internal static List<TimeSpan> Scenes(ReadOnlySpan<PlacedFrame> frames, SegmentThresholds thresholds)
     {
         List<TimeSpan> found = [];
 
@@ -131,66 +123,10 @@ public static class BoundaryCandidates
         return found;
     }
 
-    private static List<Raw> ChannelChanges(ReadOnlySpan<ChannelDifference> channels)
-    {
-        int window = (int)(ChannelWindow.Ticks / SegmentEvidence.ChannelStep.Ticks);
-        double[] sums = new double[channels.Length + 1];
-        int[] counts = new int[channels.Length + 1];
-
-        for (int at = 0; at < channels.Length; at++)
-        {
-            double? likeness = channels[at].Likeness;
-
-            sums[at + 1] = sums[at] + (likeness ?? 0);
-            counts[at + 1] = counts[at] + (likeness is null ? 0 : 1);
-        }
-
-        double[] changes = new double[channels.Length + 1];
-
-        for (int at = 0; at <= channels.Length; at++)
-        {
-            changes[at] = at < window || at + window > channels.Length
-                ? double.NaN
-                : Math.Abs(Mean(sums, counts, at, at + window, window) - Mean(sums, counts, at - window, at, window));
-        }
-
-        return [.. Enumerable.Range(0, changes.Length)
-            .Where(at => changes[at] >= ChannelChange && IsTheGreatestAround(changes, at, window))
-            .Select(at => new Raw(SegmentEvidence.ChannelStep * at, BoundaryCue.ChannelChange))];
-    }
-
-    private static double Mean(double[] sums, int[] counts, int from, int to, int window)
-    {
-        int measured = counts[to] - counts[from];
-
-        return measured * 2 >= window ? (sums[to] - sums[from]) / measured : double.NaN;
-    }
-
-    private static bool IsTheGreatestAround(double[] changes, int at, int window)
-    {
-        int from = Math.Max(0, at - window);
-        int to = Math.Min(changes.Length - 1, at + window);
-
-        return Enumerable.Range(from, at - from).All(before => !(changes[before] >= changes[at]))
-            && Enumerable.Range(at + 1, to - at).All(after => !(changes[after] > changes[at]));
-    }
-
-    private static bool[] Shown(ReadOnlySpan<byte> captions)
-    {
-        bool[] shown = new bool[captions.Length];
-
-        for (int second = 0; second < captions.Length; second++)
-        {
-            shown[second] = captions[second] is CaptionPresence.Shown;
-        }
-
-        return shown;
-    }
-
-    private static IEnumerable<Raw> Flips(bool[] states, TimeSpan step, BoundaryCue cue)
-        => Enumerable.Range(HeldSeconds, Math.Max(0, states.Length - (2 * HeldSeconds) + 1))
-            .Where(at => states[at] != states[at - 1] && Held(states, at - HeldSeconds, at) && Held(states, at, at + HeldSeconds))
-            .Select(at => new Raw(step * at, cue));
+    private static IEnumerable<Raw> LogoChanges(bool[] seen)
+        => Enumerable.Range(HeldSeconds, Math.Max(0, seen.Length - (2 * HeldSeconds) + 1))
+            .Where(at => seen[at] != seen[at - 1] && Held(seen, at - HeldSeconds, at) && Held(seen, at, at + HeldSeconds))
+            .Select(at => new Raw(TimeSpan.FromSeconds(at), BoundaryCue.LogoChange));
 
     private static bool Held(bool[] states, int from, int to) => states.AsSpan(from, to - from).IndexOfAnyExcept(states[from]) < 0;
 

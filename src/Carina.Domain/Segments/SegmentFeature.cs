@@ -55,6 +55,12 @@ public static class SegmentFeature
 
     public const string ChannelCorrelation = "channelCorrelation";
 
+    public const string HeadChannelChange = "headChannelChange";
+
+    public const string TailChannelChange = "tailChannelChange";
+
+    public const string SceneChangesPer10s = "sceneChangesPer10s";
+
     public const string MultipleOf15sWithoutLogo = "multipleOf15sWithoutLogo";
 
     public const string CatalogCmMultipleOf15s = "catalogCmMultipleOf15s";
@@ -86,6 +92,9 @@ public static class SegmentFeature
         PastCmShare,
         CaptionShare,
         ChannelCorrelation,
+        HeadChannelChange,
+        TailChannelChange,
+        SceneChangesPer10s,
         .. Enumerable.Range(0, GenreKinds).Select(Genre),
         MultipleOf15sWithoutLogo,
         CatalogCmMultipleOf15s,

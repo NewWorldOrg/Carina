@@ -72,19 +72,41 @@ public sealed class SegmentDetectorTests
         Assert.Equal(39, nineteen.Segments.Count);
     }
 
-    [Theory(DisplayName = "a stretch the catalog heard as a break is one even when changes of scene cut it into pieces off the grid, and one heard as programme or as nothing known is not")]
+    [Theory(DisplayName = "a stretch the catalog heard as a break is one even without silence at its edges, and one heard as programme or as nothing known is not")]
     [InlineData(SegmentKind.Break, SegmentDetectionState.Marked)]
     [InlineData(SegmentKind.Programme, SegmentDetectionState.NothingFound)]
     [InlineData(null, SegmentDetectionState.NothingFound)]
-    public void TheCatalogFindsABreakCutIntoPieces(SegmentKind? heardAs, SegmentDetectionState state)
+    public void TheCatalogFindsABreakWithoutSilence(SegmentKind? heardAs, SegmentDetectionState state)
     {
-        SegmentEvidence evidence = Cuts(new SyntheticReadings(Length), 600, 630).Cut(607, 0.9).Cut(615, 0.9).Cut(622, 0.9).Evidence();
         SegmentContext context = Context(CornerLogo.None, [new CatalogHeard(TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), heardAs, 4, 2, 2)]);
 
-        SegmentDetection detection = SegmentDetector.Detect(evidence, context, SegmentModel.First);
+        SegmentDetection detection = SegmentDetector.Detect(new SyntheticReadings(Length).Evidence(), context, SegmentModel.First);
 
         Assert.Equal(state, detection.State);
         Assert.Equal(heardAs is SegmentKind.Break ? 30d / 1800 : 0, detection.CmShare, 9);
+    }
+
+    [Fact(DisplayName = "an advert of 15 seconds with two changes of scene inside it and nothing from the catalog is one break of 15 seconds")]
+    public void ChangesOfSceneInsideAnAdvertDoNotCutIt()
+    {
+        SegmentEvidence evidence = Cuts(new SyntheticReadings(Length), 600, 615).Cut(604, 0.9).Cut(610, 0.9).Evidence();
+
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.First);
+        SegmentSpan advert = detection.Segments.Single(segment => segment.Kind is SegmentKind.Break);
+
+        Assert.Equal(SegmentDetectionState.Marked, detection.State);
+        Assert.Equal((TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(615)), (advert.Starts, advert.Ends));
+    }
+
+    [Fact(DisplayName = "programme with captions coming and going is one stretch of programme, cut nowhere by the captions")]
+    public void CaptionsComingAndGoingDoNotCutTheProgramme()
+    {
+        SegmentEvidence evidence = Cuts(new SyntheticReadings(Length), 600, 615).Captioned(second => second < 600 && second % 9 < 5).Evidence();
+
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.First);
+
+        Assert.Equal([TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(615)], detection.Snaps);
+        Assert.Equal((TimeSpan.Zero, TimeSpan.FromSeconds(600), SegmentKind.Programme), (detection.Segments[0].Starts, detection.Segments[0].Ends, detection.Segments[0].Kind));
     }
 
     [Fact(DisplayName = "the logo learned from the station's earlier recordings takes away a pod it stays on screen through")]
