@@ -91,6 +91,15 @@ public sealed class StreamingRuleTests
         Assert.Empty(StreamingRules.WhatWritesWhatIsNotItsOwnInsideTheFeature(RepositoryLayout.SourceDirectory));
     }
 
+    [Fact(DisplayName = "BR-CA-001: the chapters a plan carries are worked out inside the streaming feature, so its rules read the file that works them out")]
+    public void TheChaptersOfAPlanAreWorkedOutInsideTheFeature()
+    {
+        Assert.Contains(
+            "/Carina.Api/Services/PlaybackChapterService.cs",
+            StreamingRules.FilesInTheFeature(RepositoryLayout.SourceDirectory),
+            StringComparer.Ordinal);
+    }
+
     [Fact]
     public void TheWritersTheRuleNamesAreOnDiskForItToHaveFound()
     {

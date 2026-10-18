@@ -3,19 +3,37 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Streaming;
 
+using PlaybackChapter = Carina.Domain.Segments.PlaybackChapter;
+using SegmentKind = Carina.Domain.Segments.SegmentKind;
+
 namespace Carina.Api.Responder.Playback;
 
-public sealed record PlaybackChapterResponder(double StartsAtSec, double EndsAtSec, ChapterKind Kind)
+/// <summary>
+/// A chapter of the file a plan hands over, on that file's clock to the hundredth of a second, what it is, and
+/// whether a button offers to skip it. A chapter of a kind the plan has no word for is left out.
+/// </summary>
+public sealed record PlaybackChapterResponder(double StartsAtSec, double EndsAtSec, ChapterKind Kind, bool Skippable)
 {
-    public static PlaybackChapterResponder Of(EncodeChapter chapter)
+    public static IReadOnlyList<PlaybackChapterResponder> Of(IReadOnlyList<PlaybackChapter> chapters)
     {
-        ArgumentNullException.ThrowIfNull(chapter);
+        ArgumentNullException.ThrowIfNull(chapters);
 
-        return new PlaybackChapterResponder(
-            chapter.StartsAt.TotalSeconds,
-            chapter.EndsAt.TotalSeconds,
-            chapter.Kind);
+        return [.. chapters.Select(Of).OfType<PlaybackChapterResponder>()];
     }
+
+    private static PlaybackChapterResponder? Of(PlaybackChapter chapter)
+        => KindOf(chapter.Stretch.Kind) is { } kind
+            ? new PlaybackChapterResponder(Seconds(chapter.Stretch.Starts), Seconds(chapter.Stretch.Ends), kind, chapter.Skippable)
+            : null;
+
+    private static ChapterKind? KindOf(SegmentKind kind) => kind switch
+    {
+        SegmentKind.Programme => ChapterKind.Programme,
+        SegmentKind.Break => ChapterKind.Break,
+        _ => null,
+    };
+
+    private static double Seconds(TimeSpan at) => Math.Round(at.TotalSeconds, 2, MidpointRounding.AwayFromZero);
 }
 
 public sealed record PlaybackArtefactFileResponder(EncodeCodec Codec);

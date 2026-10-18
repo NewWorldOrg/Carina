@@ -70,7 +70,7 @@ public static class PlayDelivery
         string id,
         PlaybackService playback,
         IOnTheFlyPlayer player,
-        IEncodeChapterRepository chapters,
+        PlaybackChapterService chapters,
         IPlaybackPositionRepository positions,
         CaptionService captions)
     {
@@ -157,7 +157,7 @@ public static class PlayDelivery
                     narrowed,
                     leftOffAt,
                     TheMainSoundAlone,
-                    await MarkedAsync(narrowed, chapters, context.RequestAborted),
+                    await MarkedAsync(recordingId, narrowed, chapters, context.RequestAborted),
                     (await captions.StandingAsync(recordingId, narrowed, context.RequestAborted)).Data);
 
                 return;
@@ -191,7 +191,7 @@ public static class PlayDelivery
                 offered.Data!,
                 leftOffAt,
                 offering.Tracks,
-                await MarkedAsync(offered.Data!, chapters, context.RequestAborted),
+                await MarkedAsync(recordingId, offered.Data!, chapters, context.RequestAborted),
                 (await captions.StandingAsync(recordingId, offered.Data!, context.RequestAborted)).Data);
 
             return;
@@ -336,17 +336,11 @@ public static class PlayDelivery
     }
 
     private static async Task<IReadOnlyList<PlaybackChapterResponder>> MarkedAsync(
+        RecordingId recording,
         PlaybackOffer offer,
-        IEncodeChapterRepository chapters,
+        PlaybackChapterService chapters,
         CancellationToken cancellationToken)
-    {
-        if (offer.Plan.Route is not PlaybackRoute.Direct || offer.Artefact is not { } made)
-        {
-            return [];
-        }
-
-        return [.. (await chapters.ListForJobAsync(made, cancellationToken)).Select(PlaybackChapterResponder.Of)];
-    }
+        => PlaybackChapterResponder.Of((await chapters.ChaptersAsync(recording, offer, cancellationToken)).Data!);
 
     /// <summary>
     /// The sounds a plan names. A transcoded recording whose sounds cannot be read is named as

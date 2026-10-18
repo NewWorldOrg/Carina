@@ -20,6 +20,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
+using IRecordingDetectionRepository = Carina.Domain.Segments.IRecordingDetectionRepository;
+using ISegmentModelVersionRepository = Carina.Domain.Segments.ISegmentModelVersionRepository;
+using ISegmentSettingsRepository = Carina.Domain.Segments.ISegmentSettingsRepository;
+
 namespace Carina.Api.Tests.FeatureTest;
 
 internal sealed class HeldViewing(OnTheFlyStanding standing, byte[] picture) : IOnTheFlyViewing
@@ -153,6 +157,9 @@ internal sealed class PlayFeature : IAsyncDisposable
                 services.RemoveAll<IEncodeChapterRepository>();
                 services.AddSingleton<IEncodeChapterRepository>(Chapters);
                 services.AddSingleton<IPlaybackPositionRepository>(Positions);
+                services.AddSingleton<ISegmentSettingsRepository>(SegmentSettings);
+                services.AddSingleton<ISegmentModelVersionRepository>(Versions);
+                services.AddSingleton<IRecordingDetectionRepository>(Detections);
             }));
 
         WebApplicationFactory<Program> serving = configured.WithTestScheme();
@@ -183,6 +190,12 @@ internal sealed class PlayFeature : IAsyncDisposable
     public HeldPlaybackPositions Positions { get; } = new();
 
     public HeldOnTheFlyPlayer Player { get; } = new();
+
+    public HeldSegmentSettings SegmentSettings { get; } = new();
+
+    public HeldSegmentModelVersions Versions { get; } = new();
+
+    public HeldRecordingDetections Detections { get; } = new();
 
     public string MountedAt => mounted.FullName;
 
@@ -239,7 +252,8 @@ internal sealed class PlayFeature : IAsyncDisposable
         int bytes = 900,
         bool onDisk = true,
         EncodeCodec? fileReadAs = null,
-        string? taggedAs = null)
+        string? taggedAs = null,
+        EncodeTimeline? timeline = null)
     {
         EncodeProfile profile = EncodedArtefact.Profile(codec, RecordingFeature.Noon.AddHours(-1));
         Profiles.Profiles.Add(profile);
@@ -247,7 +261,8 @@ internal sealed class PlayFeature : IAsyncDisposable
         EncodeJob job = EncodedArtefact.Made(
             recording,
             profile,
-            RecordingFeature.Noon.AddHours(1).AddMinutes(minutesLater));
+            RecordingFeature.Noon.AddHours(1).AddMinutes(minutesLater),
+            timeline);
         Jobs.Jobs.Add(job);
 
         if (fileReadAs is { } read)

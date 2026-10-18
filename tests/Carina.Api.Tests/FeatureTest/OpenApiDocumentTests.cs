@@ -534,7 +534,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             chapters["items"]!["$ref"]!.GetValue<string>(),
             StringComparison.Ordinal);
         Assert.Equal(
-            ["startsAtSec", "endsAtSec", "kind"],
+            ["startsAtSec", "endsAtSec", "kind", "skippable"],
             schemas["PlaybackChapterResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
