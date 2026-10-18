@@ -13,17 +13,18 @@ public sealed record CatalogEstimate(CatalogKind Kind, double? Confidence, Catal
 public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, int StationCount, IReadOnlyList<SegmentKind?> Overrides);
 
 /// <summary>
-/// The kind of a catalog entry, from the way its stretches are spread, the first row that holds:
-/// an answer given on one of its stretches decides outright; a length on the 15-second grid
-/// (<see cref="OnTheGrid"/>, a second and a half short of a multiple to half a second over) heard in two
-/// series or on two stations is an advert, 0.9; a piece of <see cref="ThemeShortest"/> to
-/// <see cref="ThemeLongest"/> heard in two episodes of one series in the first half of the programme is
-/// its opening, 0.8, and in the second half its ending, 0.8, whichever half more of those episodes hear it
-/// in, the opening on a tie; a piece shorter than 30 seconds heard at about the same place
-/// (<see cref="SamePlaceWithin"/>) from the start of two episodes of one series is a fixed part of the
-/// programme, 0.7; a piece shorter than 15 seconds heard within 15 seconds of the start or end of
-/// programmes of two series is a fixed part of the station's output, 0.6; a length on the grid of up to a
-/// minute heard in one series is an advert, 0.5, since an opening or ending is often a whole slot of a
+/// The kind of a catalog entry, from the way its stretches are spread, the first row that holds: an
+/// answer of a break, an opening or an ending given on one of its stretches decides outright, and
+/// answers of the programme alone leave only the rows of the opening, the ending and the programme; a
+/// length on the 15-second grid (<see cref="OnTheGrid"/>, a second and a half short of a multiple to half
+/// a second over) heard in two series or on two stations is an advert, 0.9; a piece of
+/// <see cref="ThemeShortest"/> to <see cref="ThemeLongest"/> heard in two episodes of one series in the
+/// first half of the programme is its opening, 0.8, and in the second half its ending, 0.8, whichever half
+/// more of those episodes hear it in, the opening on a tie; a piece shorter than 30 seconds heard at about
+/// the same place (<see cref="SamePlaceWithin"/>) from the start of two episodes of one series is a fixed
+/// part of the programme, 0.7; a piece shorter than 15 seconds heard within 15 seconds of the start or end
+/// of programmes of two series is a fixed part of the station's output, 0.6; a length on the grid of up to
+/// a minute heard in one series is an advert, 0.5, since an opening or ending is often a whole slot of a
 /// minute and a half; anything else is not known. Only the stretches that cover the entry whole
 /// (<see cref="WholeWithin"/>) count; a shorter one is taken on its own.
 /// <para>
@@ -33,11 +34,11 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// recordings could be other episodes of it in its weekly slot
 /// (<see cref="SeriesLinks.AnotherEpisodeInTheSlot"/>) and hear it in two episodes or only in that half:
 /// the sound links those. When every whole stretch is of that one series, the opening or ending comes
-/// before the advert of two stations, so that a series whose opening fills a slot on the grid, broadcast on
-/// two stations, keeps its opening. When the entry is an opening or an ending, a whole stretch in a series that
-/// hears it so is taken for the kind of the half it is heard in, so that the opening sung at the end of a
-/// last episode is that episode's ending, and a shorter one on the grid heard outside those series is an
-/// advert there, the song played in another series' break.
+/// before the advert of two stations, so that a series whose opening fills a slot on the grid, broadcast
+/// on two stations, keeps its opening. When the entry is an opening or an ending, a whole stretch in a
+/// series that hears it so is taken for the kind of the half it is heard in, so that the opening sung at
+/// the end of a last episode is that episode's ending, and a shorter one on the grid heard outside those
+/// series is an advert there, the song played in another series' break.
 /// </para>
 /// </summary>
 public static class CatalogKinds
@@ -104,7 +105,7 @@ public static class CatalogKinds
         Theme? theme = ThemeOf(length, linked);
         IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series = theme?.Series ?? linked;
         int stations = counted.Select(placed => (placed.Occurrence.NetworkId, placed.Occurrence.ServiceId)).Distinct().Count();
-        CatalogEstimate estimate = Answered(counted) ?? Spread(length, series, stations, theme);
+        CatalogEstimate estimate = Answered(counted, theme) ?? Spread(length, series, stations, theme);
         IReadOnlyList<PlacedOccurrence> own = theme?.Own ?? series.MaxBy(group => group.Count) ?? [];
 
         return new CatalogPattern(
@@ -147,18 +148,32 @@ public static class CatalogKinds
 
     private static bool IsWhole(TimeSpan stretch, TimeSpan length) => stretch >= length - WholeWithin;
 
-    private static CatalogEstimate? Answered(IEnumerable<PlacedOccurrence> counted)
+    /// <summary>
+    /// What the answers on the stretches say of the entry. An answer of a break, an opening or an ending
+    /// decides outright, the one given most, a tie going to the break, then the opening. Answers of the
+    /// programme alone rule out the rows that make it an advert or a fixed part of the station's output: the
+    /// opening or ending it is heard as decides, and otherwise they make it a fixed part of the programme.
+    /// </summary>
+    private static CatalogEstimate? Answered(IEnumerable<PlacedOccurrence> counted, Theme? theme)
     {
         SegmentKind[] answers = [.. counted.Select(placed => placed.Answer).OfType<SegmentKind>()];
+        SegmentKind[] deciding = [.. answers.Where(answer => answer is not SegmentKind.Programme)];
+
+        if (deciding.Length > 0)
+        {
+            SegmentKind most = deciding.GroupBy(answer => answer).OrderByDescending(group => group.Count()).ThenBy(group => group.Key).First().Key;
+
+            return new CatalogEstimate(KindOf(most), Certain, CatalogDecision.Answer);
+        }
 
         if (answers.Length is 0)
         {
             return null;
         }
 
-        SegmentKind most = answers.GroupBy(answer => answer).OrderByDescending(group => group.Count()).ThenBy(group => group.Key).First().Key;
-
-        return new CatalogEstimate(KindOf(most), Certain, CatalogDecision.Answer);
+        return theme is null
+            ? new CatalogEstimate(CatalogKind.ProgrammeFixture, Certain, CatalogDecision.Answer)
+            : new CatalogEstimate(theme.Kind, EveryEpisode, CatalogDecision.Pattern);
     }
 
     private static CatalogKind KindOf(SegmentKind answer) => answer switch

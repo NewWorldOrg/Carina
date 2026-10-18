@@ -393,6 +393,45 @@ public sealed class CatalogKindsTests
         Assert.Equal([SegmentKind.Opening, SegmentKind.Ending], pattern.Overrides);
     }
 
+    [Fact(DisplayName = "an answer of the programme on a stretch of an opening leaves the entry the opening, and that stretch the programme")]
+    public void AProgrammeAnswerLeavesTheOpening()
+    {
+        PlacedOccurrence[] weeks = Weekly(Drama, 3, 0, 89);
+        PlacedOccurrence answered = At(Entry, Drama.Episode(3), 0, 89, SegmentKind.Programme);
+
+        CatalogPattern pattern = Estimated(89, [.. weeks, answered]);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), pattern.Estimate);
+        Assert.Equal([null, null, null, SegmentKind.Programme], pattern.Overrides);
+    }
+
+    [Fact(DisplayName = "answers of the programme rule out the rows of adverts and of the station's fixed parts, and otherwise make the entry a fixed part of the programme")]
+    public void AProgrammeAnswerRulesOutTheAdvertRows()
+    {
+        CatalogPattern twoSeries = Estimated(89, At(Entry, Drama.Episode(0), 0, 89, SegmentKind.Programme), At(Entry, Quiz.Episode(0), 0, 89));
+        CatalogPattern atTheEdges = Estimated(5, At(Entry, Drama.Episode(0), 2, 5, SegmentKind.Programme), At(Entry, Quiz.Episode(0), 2, 5));
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 1.0, CatalogDecision.Answer), twoSeries.Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 1.0, CatalogDecision.Answer), atTheEdges.Estimate);
+    }
+
+    [Fact(DisplayName = "an answer of a break decides the entry outright, over the opening its stretches are heard as and over answers of the programme")]
+    public void ABreakAnswerDecidesOutright()
+    {
+        PlacedOccurrence[] weeks = Weekly(Drama, 3, 0, 89);
+        CatalogPattern answeredOnce = Estimated(89, [.. weeks, At(Entry, Drama.Episode(3), 0, 89, SegmentKind.Break)]);
+        CatalogPattern outnumbered = Estimated(
+            89,
+            [
+                At(Entry, Drama.Episode(0), 0, 89, SegmentKind.Programme),
+                At(Entry, Drama.Episode(1), 0, 89, SegmentKind.Programme),
+                At(Entry, Drama.Episode(2), 0, 89, SegmentKind.Break),
+            ]);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 1.0, CatalogDecision.Answer), answeredOnce.Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 1.0, CatalogDecision.Answer), outnumbered.Estimate);
+    }
+
     [Fact(DisplayName = "BR-CD-011: a programme of another name in the same time of day on another day of the week, or an hour later the same night, is not joined by the sound")]
     public void AProgrammeInTheBlockOnAnotherDayOrLaterThatNightIsNotJoined()
     {
