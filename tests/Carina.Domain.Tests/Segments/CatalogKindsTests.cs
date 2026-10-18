@@ -393,6 +393,16 @@ public sealed class CatalogKindsTests
         Assert.Equal([SegmentKind.Opening, SegmentKind.Ending], pattern.Overrides);
     }
 
+    [Fact(DisplayName = "BR-CD-011: a programme of another name in the same time of day on another day of the week, or an hour later the same night, is not joined by the sound")]
+    public void AProgrammeInTheBlockOnAnotherDayOrLaterThatNightIsNotJoined()
+    {
+        CatalogSeries anotherDay = new(1, "まるで違う架空の名前", Evening.AddDays(1));
+        CatalogSeries laterThatNight = new(1, "まるで違う架空の名前", Evening.AddMinutes(60));
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.9, CatalogDecision.Pattern), Estimated(89, [.. Weekly(Drama, 2, 0, 89), At(Entry, anotherDay.Episode(1), 0, 89)]).Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.9, CatalogDecision.Pattern), Estimated(89, [.. Weekly(Drama, 2, 0, 89), At(Entry, laterThatNight.Episode(1), 0, 89)]).Estimate);
+    }
+
     [Fact(DisplayName = "a stretch that covers only part of the entry does not count towards its kind")]
     public void APartialStretchDoesNotCount()
     {

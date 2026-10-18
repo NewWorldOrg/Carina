@@ -29,9 +29,10 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// <para>
 /// The series are those the links join, except that a sound heard as an opening or an ending joins the
 /// series that hears it so most often with every other series of a name that links to its own
-/// (<see cref="SeriesNames.Link"/>), on whatever station, and with every series in its slot
-/// (<see cref="SeriesLinks.InOneSlot"/>), whatever it is called, that hears it in two episodes or only in that
-/// half: the sound links those. When every whole stretch is of that one series, the opening or ending comes
+/// (<see cref="SeriesNames.Link"/>), on whatever station, and with every series of another name whose
+/// recordings could be other episodes of it in its weekly slot
+/// (<see cref="SeriesLinks.AnotherEpisodeInTheSlot"/>) and hear it in two episodes or only in that half:
+/// the sound links those. When every whole stretch is of that one series, the opening or ending comes
 /// before the advert of two stations, so that a series whose opening fills a slot on the grid, broadcast on
 /// two stations, keeps its opening. When the entry is an opening or an ending, a whole stretch in a series that
 /// hears it so is taken for the kind of the half it is heard in, so that the opening sung at the end of a
@@ -249,7 +250,11 @@ public static class CatalogKinds
         => group.Any(placed => PlaceOf(placed) == place) && group.All(placed => PlaceOf(placed) is null || PlaceOf(placed) == place);
 
     private static bool InTheSlotOf(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
-        => group.Any(placed => main.Any(member => SeriesLinks.InOneSlot(member.Occurrence.Member, placed.Occurrence.Member)));
+    {
+        SeriesMember[] episodes = [.. main.Select(member => member.Occurrence.Member)];
+
+        return group.All(placed => SeriesLinks.AnotherEpisodeInTheSlot(placed.Occurrence.Member, episodes));
+    }
 
     private static bool NamedAs(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
         => group.Any(placed => main.Any(member => SeriesNames.Link(member.Occurrence.SeriesName, placed.Occurrence.SeriesName)));
