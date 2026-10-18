@@ -9,6 +9,40 @@ public sealed class SegmentLearningTests
 {
     private const int Weeks = 5;
 
+    private const double PinnedWithin = 1e-6;
+
+    private const double PinnedBias = -3.4620117697283472;
+
+    private const string PinnedFigures = "0.846153846 0.846153846 0.000000000 0.000000 Break:0.840909:1.000000  0";
+
+    /// <summary>
+    /// The weights learning made of the recordings of <see cref="LearningTakenAStepAtATimeComesToTheSame"/> while it
+    /// was still taken in one piece, every weight not named being nothing.
+    /// </summary>
+    private static readonly Dictionary<string, double> PinnedWeights = new(StringComparer.Ordinal)
+    {
+        ["catalogCmMultipleOf15s"] = 0.7049540571812944,
+        ["catalogCmShare"] = 0.7049540571812944,
+        ["catalogOccurrences"] = 0.4340280198238972,
+        ["catalogSeries"] = 0.597943926388741,
+        ["catalogShare"] = 0.4340280198238972,
+        ["catalogStations"] = 0.597943926388741,
+        ["channelCorrelation"] = -0.6927543110924417,
+        ["edgeSilence"] = 1.256021509984539,
+        ["fromEnd"] = 0.11143462659038852,
+        ["fromStart"] = 0.09607390788697237,
+        ["gridOffset"] = -1.2497351927194036,
+        ["headChannelChange"] = 0.4358179902680711,
+        ["headSilenceDepth"] = 0.09312847366425785,
+        ["headSilenceLength"] = 0.0931284736642579,
+        ["isMultipleOf15s"] = 1.000353133364359,
+        ["length"] = -0.7639539660381195,
+        ["sceneChangesPer10s"] = 1.486423942619604,
+        ["tailChannelChange"] = 0.3763080145991857,
+        ["tailSilenceDepth"] = 0.7279614349783017,
+        ["tailSilenceLength"] = 0.7279614349783018,
+    };
+
     [Fact(DisplayName = "the same recordings, catalog and labels give an identical candidate and the same figures, whatever order the recordings come in")]
     public void TheSameLabelsGiveTheSameCandidate()
     {
@@ -24,7 +58,7 @@ public sealed class SegmentLearningTests
         Assert.Equal(once.Evaluation.RecommendedThreshold, again.Evaluation.RecommendedThreshold);
     }
 
-    [Fact(DisplayName = "BR-CD-004: learning taken a step at a time comes to what learning at once does, and a stop between steps throws the round away")]
+    [Fact(DisplayName = "BR-CD-004: learning taken a step at a time comes to the candidate and figures learning made in one piece before it was split into steps, and a stop between steps throws the round away")]
     public void LearningTakenAStepAtATimeComesToTheSame()
     {
         (List<LearningRecording> recordings, List<CatalogSound> sounds) = Taught(Weeks);
@@ -40,13 +74,20 @@ public sealed class SegmentLearningTests
             steps++;
         }
 
-        SegmentLearned once = SegmentLearning.Learn(recordings, catalog, InUse, search, SegmentSettingsStanding.DefaultSkipThreshold, Now);
+        SegmentLearned learned = run.Result();
+        SegmentClassWeights breaks = learned.Candidate.Weights.Classes[SegmentKind.Break];
         SegmentLearningRun stopped = SegmentLearning.Begin(recordings, catalog, InUse, search, SegmentSettingsStanding.DefaultSkipThreshold, Now);
         stopped.Step(CancellationToken.None);
 
         Assert.Equal(4, steps);
-        Assert.Equal(once.Candidate, run.Result().Candidate);
-        Assert.Equal(Figures(once.Evaluation.Metrics), Figures(run.Result().Evaluation.Metrics));
+        Assert.Equal(PinnedBias, breaks.Bias, PinnedWithin);
+        Assert.All(breaks.Features, feature => Assert.Equal(PinnedWeights.GetValueOrDefault(feature.Key), feature.Value, PinnedWithin));
+        Assert.Equal(PinnedWeights.Keys.Order(StringComparer.Ordinal), breaks.Features.Keys.Where(PinnedWeights.ContainsKey).Order(StringComparer.Ordinal));
+        Assert.All(learned.Candidate.StationOffsets.Values.Concat(learned.Candidate.SeriesOffsets.Values), offset => Assert.Equal(0, offset, PinnedWithin));
+        Assert.Equal((0.1, 10.0), (learned.Candidate.Thresholds.Lambda, learned.Candidate.Thresholds.LambdaStation));
+        Assert.Equal(PinnedFigures, Figures(learned.Evaluation.Metrics));
+        Assert.Equal(PinnedFigures, Figures(learned.InUse.Metrics));
+        Assert.Equal((0.5, AdoptionVerdict.TooLittleEvidence, 6, 26), (learned.Evaluation.RecommendedThreshold, learned.Verdict, learned.Evaluation.Evidence.ConfirmedRecordings, learned.Evaluation.Evidence.Boundaries));
         Assert.Throws<InvalidOperationException>(() => run.Step(CancellationToken.None));
         Assert.Throws<InvalidOperationException>(stopped.Result);
         Assert.Throws<OperationCanceledException>(() => stopped.Step(new CancellationToken(canceled: true)));
