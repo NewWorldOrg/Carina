@@ -269,6 +269,37 @@ public sealed class SegmentFeaturesTests
         Assert.Same(context, catalog.Forgetting(context, new HashSet<CatalogEntryId>()));
     }
 
+    [Fact(DisplayName = "BR-CD-008: an earlier episode whose stretches reach a few milliseconds or a second and a half past an entry set aside keeps no sliver of them, so the past shares there fall to nothing")]
+    public void AnEarlierEpisodeKeepsNoSliverPastAnEntrySetAside()
+    {
+        CatalogSeries story = new(1, "架空の物語", new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc));
+        RecordingId earlier = RecordingId.New();
+        CatalogEntryId opening = CatalogEntryId.New();
+        CatalogEntryId advert = CatalogEntryId.New();
+        LearningCatalog catalog = new(
+        [
+            new CatalogSound(opening, TimeSpan.FromSeconds(90), [CatalogSeries.At(opening, story.Episode(0), 0, 90, earlier), CatalogSeries.At(opening, story.Episode(1), 0, 90)]),
+            new CatalogSound(advert, TimeSpan.FromSeconds(30), [CatalogSeries.At(advert, story.Episode(0), 900, 30, earlier), CatalogSeries.At(advert, story.Episode(2), 900, 30)]),
+        ],
+        SeriesLinks.None);
+        PastEpisode episode = new(
+            earlier,
+            CatalogSeries.Lead,
+            null,
+            [.. new[] { (0.0, 59.995, SegmentKind.Programme), (59.995, 151.5, SegmentKind.Opening), (151.5, 958.5, SegmentKind.Programme), (958.5, 990.005, SegmentKind.Break), (990.005, 1800, SegmentKind.Programme) }
+                .Select(stretch => new SegmentSpan(TimeSpan.FromSeconds(stretch.Item1), TimeSpan.FromSeconds(stretch.Item2), stretch.Item3, 0.9))]);
+        BoundaryCandidate[] candidates = [Edge(0), Cut(60), Cut(150), Cut(960), Cut(990), Edge(Length)];
+        SegmentContext context = Context(starts: CatalogSeries.Lead, ends: TimeSpan.FromSeconds(Length), past: [episode]);
+
+        SegmentContext forgetting = catalog.Forgetting(context, new HashSet<CatalogEntryId> { opening, advert });
+        IReadOnlyList<SegmentPiece> remembered = SegmentFeatures.Of(candidates, new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial);
+        IReadOnlyList<SegmentPiece> forgotten = SegmentFeatures.Of(candidates, new SyntheticReadings(Length).Evidence(), forgetting, null, SegmentThresholds.Initial);
+
+        Assert.Equal((1d, 1d), (remembered[1].Features[SegmentFeature.PastOpeningShare]!.Value, remembered[3].Features[SegmentFeature.PastCmShare]!.Value));
+        Assert.Equal((0d, 0d), (forgotten[1].Features[SegmentFeature.PastOpeningShare]!.Value, forgotten[3].Features[SegmentFeature.PastCmShare]!.Value));
+        Assert.All(forgetting.Past.Single().Segments, segment => Assert.Equal(SegmentKind.Programme, segment.Kind));
+    }
+
     [Fact(DisplayName = "BR-CD-008: an earlier episode forgets only the part of a stretch it was taken to hold that lies over a stretch of an entry set aside, and keeps the rest of it as it was")]
     public void AnEarlierEpisodeForgetsOnlyThePartOverAnEntrySetAside()
     {
