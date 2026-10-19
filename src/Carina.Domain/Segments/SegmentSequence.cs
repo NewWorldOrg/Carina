@@ -284,7 +284,7 @@ public static class SegmentSequence
 
         public bool IsReached => !double.IsNegativeInfinity(Score);
 
-        public Reach Then(Reach taken, double cost = 0) => new(Overruled + taken.Overruled, Score + taken.Score + cost);
+        public Reach Then(Reach taken, double cost = 0) => new(Overruled + taken.Overruled, Score + cost + taken.Score);
 
         public bool Beats(Reach other) => Overruled != other.Overruled ? Overruled < other.Overruled : Score > other.Score;
     }

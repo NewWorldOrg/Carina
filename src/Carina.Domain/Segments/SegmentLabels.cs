@@ -12,9 +12,9 @@ namespace Carina.Domain.Segments;
 /// kind covers more than half of it. In a recording the catalog is sure of an advert in
 /// (<see cref="CatalogTruth.Sure"/>), a segment inside the guide's programme, reaching out of it by no more than
 /// <see cref="GuideTolerance"/>, that no stretch of the catalog touches, whatever its kind, and no viewer's action
-/// lies over, is the programme at <see cref="UncoveredWeight"/>, or at <see cref="UncoveredWithLogoWeight"/> where the station's logo shows
-/// through at least <see cref="LogoSeenThrough"/> of it; with no logo known for the station it stays at the
-/// lower weight. The catalog wins over viewers and viewers over a segment no stretch touches; within one source
+/// lies over, is the programme at <see cref="UncoveredWeight"/>, or at <see cref="UncoveredWithLogoWeight"/>
+/// where the station's logo shows through at least <see cref="LogoSeenThrough"/> of it; with no logo known for
+/// the station it stays at the lower weight. The catalog wins over viewers and viewers over a segment no stretch touches; within one source
 /// the heavier label wins, a tie going to the programme. A segment more than half outside the guide's programme
 /// is never a label.
 /// </summary>
