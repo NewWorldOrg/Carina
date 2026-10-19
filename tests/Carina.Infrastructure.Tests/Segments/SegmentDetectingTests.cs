@@ -98,7 +98,7 @@ public sealed class SegmentDetectingTests
         Assert.Equal("架空の物語", inputs.Context.Series);
     }
 
-    [Fact(DisplayName = "BR-CD-007: an earlier episode stands on the confirmed answer given for it over what the version in use detected, one answered alone is remembered too, and each keeps where its programme ends")]
+    [Fact(DisplayName = "BR-CD-007: an earlier episode stands on the confirmed answer given for it over what the version in use detected, its opening still read from the detection while the answer could not name one, one answered alone is remembered too, and each keeps where its programme ends")]
     public async Task TheEarlierEpisodesStandOnTheirConfirmedAnswers()
     {
         using SegmentDetectionHarness harness = new();
@@ -107,7 +107,7 @@ public sealed class SegmentDetectingTests
         RecordingId unconfirmed = await harness.ReadAsync(14, "架空の物語");
         RecordingId withdrawn = await harness.ReadAsync(7, "架空の物語");
         RecordingId judged = await harness.ReadAsync(0, "架空の物語");
-        await Detected(harness, first, SegmentModelVersion.FirstNumber, (0, 300, SegmentKind.Programme));
+        await Detected(harness, first, SegmentModelVersion.FirstNumber, (0, 150, SegmentKind.Programme), (150, 240, SegmentKind.Opening), (240, 300, SegmentKind.Programme));
         await Detected(harness, unconfirmed, SegmentModelVersion.FirstNumber, (0, 300, SegmentKind.Programme));
         await Detected(harness, withdrawn, SegmentModelVersion.FirstNumber, (0, 300, SegmentKind.Programme));
         await Answered(harness, first, true, null);
@@ -117,12 +117,14 @@ public sealed class SegmentDetectingTests
 
         DetectionInputs inputs = await GatherAsync(harness, judged);
         Dictionary<RecordingId, PastEpisode> past = inputs.Context.Past.ToDictionary(episode => episode.Recording);
+        TimeSpan within = TimeSpan.Zero;
 
         Assert.Equal(new[] { first, second, unconfirmed, withdrawn }.Select(id => id.Value).Order(), past.Keys.Select(id => id.Value).Order());
-        Assert.Equal(SegmentKind.Opening, past[first].Segments[1].Kind);
-        Assert.NotNull(past[first].Detected);
-        Assert.Equal(SegmentKind.Opening, past[second].Segments[1].Kind);
-        Assert.Null(past[second].Detected);
+        Assert.True(past[first].StandsOnTheAnswer);
+        Assert.True(past[first].HadABreakNear(TimeSpan.FromSeconds(75), within));
+        Assert.True(past[first].HadAnOpeningNear(TimeSpan.FromSeconds(195), within));
+        Assert.True(past[second].HadABreakNear(TimeSpan.FromSeconds(75), within));
+        Assert.False(past[second].HadAnOpeningNear(TimeSpan.FromSeconds(195), within));
         Assert.False(past[unconfirmed].StandsOnTheAnswer);
         Assert.False(past[withdrawn].StandsOnTheAnswer);
         Assert.All(past.Values, episode => Assert.Equal(TimeSpan.FromSeconds(Seconds), episode.ProgrammeEnds));
@@ -193,7 +195,7 @@ public sealed class SegmentDetectingTests
         SegmentSpan[] segments =
         [
             new(TimeSpan.Zero, TimeSpan.FromSeconds(30), SegmentKind.Programme, null),
-            new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(120), SegmentKind.Opening, null),
+            new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(120), SegmentKind.Break, null),
             new(TimeSpan.FromSeconds(120), TimeSpan.FromSeconds(Seconds), SegmentKind.Programme, null),
         ];
 

@@ -234,13 +234,27 @@ public sealed class SegmentRegressionTests
         Assert.True(keptWeighing.Converged);
     }
 
-    [Fact(DisplayName = "the opening and the ending are kept only from a version that weighs them, and only for samples that label neither")]
-    public void TheOpeningAndTheEndingAreKeptOnlyWhereNothingLabelsThem()
+    [Theory(DisplayName = "A-051: of the opening and the ending, the one labelled is fitted and the one nothing labels is kept as it was, and nothing is kept from a version of two kinds")]
+    [InlineData(SegmentKind.Opening, SegmentKind.Ending)]
+    [InlineData(SegmentKind.Ending, SegmentKind.Opening)]
+    public void TheKindNothingLabelsIsKept(SegmentKind labelled, SegmentKind unlabelled)
     {
-        SegmentSample[] labelled = [Sample(true, 1.0, 15), Sample(SegmentKind.Opening, 1.0, 90)];
+        SegmentSample[] samples =
+        [
+            .. new[] { 14.5, 15.0, 29.8, 30.0 }.Select(seconds => Sample(SegmentKind.Break, 0.9, seconds)),
+            .. new[] { 85.0, 89.5, 90.0 }.Select(seconds => Sample(labelled, 0.8, seconds, 0.2)),
+            .. new[] { 120.0, 200.0, 300.0, 31.0 }.Select(seconds => Sample(SegmentKind.Programme, 1.0, seconds, 0.6)),
+        ];
+        SegmentModel kept = SegmentModel.FirstOfFourKinds;
 
-        Assert.Throws<ArgumentException>(() => SegmentRegression.Fit(labelled, SegmentThresholds.Initial, kept: SegmentModel.FirstOfFourKinds));
-        Assert.Throws<ArgumentException>(() => SegmentRegression.Fit([Sample(true, 1.0, 15)], SegmentThresholds.Initial, kept: SegmentModel.First));
+        SegmentModel fitted = SegmentRegression.Fit(samples, SegmentThresholds.Initial, kept: kept).Model;
+        SegmentModel alone = SegmentRegression.Fit(samples, SegmentThresholds.Initial).Model;
+
+        Assert.Equal(4, fitted.Kinds);
+        Assert.Equal(kept.Weights.Classes[unlabelled], fitted.Weights.Classes[unlabelled]);
+        Assert.NotEqual(kept.Weights.Classes[labelled], fitted.Weights.Classes[labelled]);
+        Assert.True(alone.Weights.Classes[unlabelled].Bias < -10);
+        Assert.Throws<ArgumentException>(() => SegmentRegression.Fit(samples, SegmentThresholds.Initial, kept: SegmentModel.First));
     }
 
     [Fact(DisplayName = "the same four-kind samples give an identical model every time, and starting from the first version of four kinds or of two reaches the same one")]

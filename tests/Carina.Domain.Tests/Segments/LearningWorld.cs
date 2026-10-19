@@ -88,13 +88,17 @@ internal static class LearningWorld
     ];
 
     /// <summary>
-    /// The recordings of <see cref="Taught"/> whose answers also give the opening, and the sounds the catalog hears
-    /// in them, one opening an episode heard in the same place of the episode two days before.
+    /// The recordings of <see cref="Taught"/> whose answers also give the opening, as an answer able to name one
+    /// would, or say programme there, as every answer kept today does, and the sounds the catalog hears in them,
+    /// one opening an episode heard in the same place of the episode two days before.
     /// </summary>
-    public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Opened(int count)
+    public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Opened(int count, bool answersNameOpenings = true)
     {
         (List<LearningRecording> taught, List<CatalogSound> sounds) = Taught(count);
-        List<LearningRecording> recordings = [.. taught.Select((recording, week) => Recording(recording.Id, week, Readings(null), OpenedAnswer, true))];
+        List<LearningRecording> recordings =
+        [
+            .. taught.Select((recording, week) => Recording(recording.Id, week, Readings(null), answersNameOpenings ? OpenedAnswer : TaughtAnswer, true)),
+        ];
 
         sounds.AddRange(recordings.Select((recording, week) => Opening(recording.Id, week)));
 
@@ -102,10 +106,11 @@ internal static class LearningWorld
     }
 
     /// <summary>
-    /// The recording judged after <see cref="Opened"/>, with its opening, and the sound the catalog hears it by.
+    /// The recording judged after <see cref="Opened"/>, its answer giving its opening or saying programme there, and
+    /// the sound the catalog hears the opening by.
     /// </summary>
-    public static (LearningRecording Recording, CatalogSound Sound) JudgedOpened(RecordingId id, int weeks)
-        => (Recording(id, weeks, Readings(null).Channels(330, 360, 60), JudgedOpenedAnswer, true), Opening(id, weeks));
+    public static (LearningRecording Recording, CatalogSound Sound) JudgedOpened(RecordingId id, int weeks, bool answerNamesOpenings = true)
+        => (Recording(id, weeks, Readings(null).Channels(330, 360, 60), answerNamesOpenings ? JudgedOpenedAnswer : JudgedAnswer, true), Opening(id, weeks));
 
     /// <summary>
     /// A recording of week <paramref name="week"/> that looks like those learned from and is answered with
@@ -231,7 +236,9 @@ internal static class LearningWorld
         DateTime started = Story.Episode(week).RecordingStartedAt;
         SegmentContext context = new(Story.Episode(week).NetworkId, Story.Episode(week).ServiceId, "架空の物語", null, null, [], [], CornerLogo.None, past ?? []);
 
-        GivenAnswer? given = answer is null ? null : new GivenAnswer(answer, confirmed, started.AddDays(1), false, null);
+        GivenAnswer? given = answer is null
+            ? null
+            : new GivenAnswer(answer, confirmed, started.AddDays(1), false, null, answer.Any(segment => segment.Kind is SegmentKind.Opening or SegmentKind.Ending));
 
         return new LearningRecording(id, started, readings.Evidence(), context, given, actions ?? []);
     }

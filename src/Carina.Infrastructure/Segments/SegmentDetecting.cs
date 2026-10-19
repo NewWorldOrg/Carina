@@ -16,8 +16,9 @@ public sealed record DetectionInputs(SegmentEvidence Evidence, SegmentContext Co
 /// recent earlier recordings on its station, to learn the station's logo from; and the earlier episodes of its
 /// series, found among the <see cref="SegmentDetectionSettings.EpisodesAmong"/> most recent earlier recordings on
 /// the station and the recordings sharing the sound of a programme fixture with it, each by the detection the same
-/// version made of it, leaving out one thrown away, and by the confirmed answer given for it while that stands, with
-/// where its programme starts and ends. The counting is done on the <see cref="LowestPriorityScheduler"/>. Nothing
+/// version made of it, leaving out one thrown away, and by the confirmed answer given for it while that stands, its
+/// openings and endings still read from the detection while the answer could not name them, with where its programme
+/// starts and ends. The counting is done on the <see cref="LowestPriorityScheduler"/>. Nothing
 /// is written here.
 /// </summary>
 public sealed class SegmentDetecting(
@@ -146,7 +147,8 @@ public sealed class SegmentDetecting(
                     Starts(copies[member]),
                     Ends(copies[member]),
                     detected.GetValueOrDefault(member)?.Segments,
-                    answered.GetValueOrDefault(member)?.Segments)),
+                    answered.GetValueOrDefault(member)?.Segments,
+                    answered.GetValueOrDefault(member)?.NamesOpeningsAndEndings ?? false)),
         ];
     }
 

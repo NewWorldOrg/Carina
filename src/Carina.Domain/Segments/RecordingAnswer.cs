@@ -6,8 +6,10 @@ namespace Carina.Domain.Segments;
 /// <summary>
 /// The answer a person gave for one recording, kept for good under the recording's id by value: its stretches
 /// end to end from the recording's zero to the length they were read against, with no probability; whether it
-/// is confirmed and since when; when it was last sent and how many times; and when it was withdrawn, if it is.
-/// An answer sent again takes the place of the one kept and stands again; a withdrawn one is kept as it was.
+/// is confirmed and since when; when it was last sent and how many times; when it was withdrawn, if it is; and
+/// whether it could name an opening and an ending, which no answer kept yet could, so that where it says
+/// programme it says nothing of either. An answer sent again takes the place of the one kept and stands again; a
+/// withdrawn one is kept as it was.
 /// </summary>
 public sealed class RecordingAnswer
 {
@@ -30,6 +32,8 @@ public sealed class RecordingAnswer
     public int Answers { get; private set; }
 
     public DateTime? WithdrawnAt { get; private set; }
+
+    public bool NamesOpeningsAndEndings { get; private set; }
 
     /// <summary>
     /// Whether the answer stands, which is to say it has not been withdrawn since it was last sent.
@@ -63,7 +67,8 @@ public sealed class RecordingAnswer
         DateTime? confirmedAt,
         DateTime answeredAt,
         int answers,
-        DateTime? withdrawnAt)
+        DateTime? withdrawnAt,
+        bool namesOpeningsAndEndings = false)
     {
         ArgumentNullException.ThrowIfNull(recordingId);
         ArgumentNullException.ThrowIfNull(segments);
@@ -89,6 +94,7 @@ public sealed class RecordingAnswer
             AnsweredAt = UtcTimes.Required(answeredAt, nameof(answeredAt)),
             Answers = answers,
             WithdrawnAt = UtcTimes.Optional(withdrawnAt, nameof(withdrawnAt)),
+            NamesOpeningsAndEndings = namesOpeningsAndEndings,
         };
     }
 

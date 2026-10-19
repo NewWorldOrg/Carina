@@ -166,7 +166,7 @@ public sealed class SegmentFeaturesTests
         Assert.Null(Pieces([Edge(0), Cut(300), Cut(360), Edge(Length)])[1].Features[SegmentFeature.PastCmShare]);
     }
 
-    [Fact(DisplayName = "BR-CD-007: the past opening share is how many earlier episodes had an opening within 30 seconds of the same place from their start, the past ending share how many had an ending as far from their end, and an episode stands on its answer over its detection")]
+    [Fact(DisplayName = "BR-CD-007: the past opening share is how many earlier episodes had an opening within 30 seconds of the same place from their start, the past ending share how many had an ending as far from their end, and an episode stands on its answer over its detection, its openings and endings on the detection where the answer could not name them")]
     public void ThePastOpeningAndEndingSharesComeFromEarlierEpisodes()
     {
         PastEpisode[] past =
@@ -174,8 +174,10 @@ public sealed class SegmentFeaturesTests
             Remembered(10, 1810, [(70, 160, SegmentKind.Opening), (1660, 1750, SegmentKind.Ending)]),
             Remembered(0, null, [(0, 400, SegmentKind.Programme), (400, 490, SegmentKind.Opening), (490, 1700, SegmentKind.Programme), (1700, 1790, SegmentKind.Ending), (1790, 1900, SegmentKind.Programme)]),
             Remembered(0, 1800, [(0, 1800, SegmentKind.Programme)]),
+            Remembered(0, 1800, [(0, 1800, SegmentKind.Programme)], [(0, 60, SegmentKind.Programme), (60, 150, SegmentKind.Opening), (150, 1800, SegmentKind.Programme)], true),
+            Remembered(0, 1800, null, [(0, 60, SegmentKind.Programme), (60, 150, SegmentKind.Opening), (150, 1800, SegmentKind.Programme)], true),
+            Remembered(0, 1800, [(0, 60, SegmentKind.Programme), (60, 150, SegmentKind.Opening), (150, 1800, SegmentKind.Programme)], [(0, 1800, SegmentKind.Programme)]),
             Remembered(0, 1800, [(0, 1800, SegmentKind.Programme)], [(0, 60, SegmentKind.Programme), (60, 150, SegmentKind.Opening), (150, 1800, SegmentKind.Programme)]),
-            Remembered(0, 1800, null, [(0, 60, SegmentKind.Programme), (60, 150, SegmentKind.Opening), (150, 1800, SegmentKind.Programme)]),
         ];
         BoundaryCandidate[] candidates = [Edge(0), Cut(60), Cut(150), Cut(1650), Cut(1740), Edge(Length)];
         SegmentContext context = Context(starts: TimeSpan.Zero, ends: TimeSpan.FromSeconds(Length), past: past);
@@ -184,16 +186,16 @@ public sealed class SegmentFeaturesTests
         IReadOnlyList<SegmentPiece> setAside = SegmentFeatures.Of(
             candidates,
             new SyntheticReadings(Length).Evidence(),
-            context.WithoutTheAnswerOf(past[3].Recording).WithoutTheAnswerOf(past[4].Recording),
+            context.WithoutTheAnswerOf(past[3].Recording).WithoutTheAnswerOf(past[4].Recording).WithoutTheAnswerOf(past[5].Recording),
             null,
             SegmentThresholds.Initial);
 
-        Assert.Equal(3d / 5, pieces[1].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
-        Assert.Equal(2d / 5, pieces[3].Features[SegmentFeature.PastEndingShare]!.Value, 9);
+        Assert.Equal(4d / 7, pieces[1].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
+        Assert.Equal(2d / 7, pieces[3].Features[SegmentFeature.PastEndingShare]!.Value, 9);
         Assert.Equal(0, pieces[3].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
         Assert.Equal(0, pieces[1].Features[SegmentFeature.PastEndingShare]!.Value, 9);
-        Assert.Equal(1d / 4, setAside[1].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
-        Assert.Equal(2d / 4, setAside[3].Features[SegmentFeature.PastEndingShare]!.Value, 9);
+        Assert.Equal(2d / 6, setAside[1].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
+        Assert.Equal(2d / 6, setAside[3].Features[SegmentFeature.PastEndingShare]!.Value, 9);
         Assert.True(context.RemembersTheAnswerOf(past[3].Recording));
         Assert.False(context.RemembersTheAnswerOf(past[0].Recording));
         Assert.False(context.WithoutTheAnswerOf(past[3].Recording).RemembersTheAnswerOf(past[3].Recording));
@@ -296,13 +298,15 @@ public sealed class SegmentFeaturesTests
         double programmeStarts,
         double? programmeEnds,
         (double Starts, double Ends, SegmentKind Kind)[]? detected,
-        (double Starts, double Ends, SegmentKind Kind)[]? answered = null)
+        (double Starts, double Ends, SegmentKind Kind)[]? answered = null,
+        bool answerNamesOpeningsAndEndings = false)
         => new(
             RecordingId.New(),
             TimeSpan.FromSeconds(programmeStarts),
             programmeEnds is double ends ? TimeSpan.FromSeconds(ends) : null,
             detected is null ? null : Spans(detected),
-            answered is null ? null : Spans(answered));
+            answered is null ? null : Spans(answered),
+            answerNamesOpeningsAndEndings);
 
     private static SegmentSpan[] Spans((double Starts, double Ends, SegmentKind Kind)[] stretches)
         => [.. stretches.Select(stretch => new SegmentSpan(TimeSpan.FromSeconds(stretch.Starts), TimeSpan.FromSeconds(stretch.Ends), stretch.Kind, null))];

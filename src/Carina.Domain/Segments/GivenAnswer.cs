@@ -4,13 +4,20 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// An answer a person gave for one recording, as learning reads it: the stretches it lays end to end from
-/// the recording's zero, whether it was confirmed, when it was last sent, whether it was withdrawn, and
-/// the stretches the detection gave, which an answer not confirmed is read against. With no detection
-/// beside it, an answer not confirmed is read against programme throughout.
+/// the recording's zero, whether it was confirmed, when it was last sent, whether it was withdrawn, the
+/// stretches the detection gave, which an answer not confirmed is read against, and whether it could name an
+/// opening and an ending. With no detection beside it, an answer not confirmed is read against programme
+/// throughout.
 /// </summary>
 public sealed record GivenAnswer
 {
-    public GivenAnswer(IReadOnlyList<SegmentSpan> segments, bool confirmed, DateTime answeredAt, bool withdrawn, IReadOnlyList<SegmentSpan>? detected)
+    public GivenAnswer(
+        IReadOnlyList<SegmentSpan> segments,
+        bool confirmed,
+        DateTime answeredAt,
+        bool withdrawn,
+        IReadOnlyList<SegmentSpan>? detected,
+        bool namesOpeningsAndEndings = false)
     {
         ArgumentNullException.ThrowIfNull(segments);
 
@@ -34,6 +41,7 @@ public sealed record GivenAnswer
         AnsweredAt = UtcTimes.Required(answeredAt, nameof(answeredAt));
         Withdrawn = withdrawn;
         Detected = detected is null ? null : [.. detected];
+        NamesOpeningsAndEndings = namesOpeningsAndEndings;
     }
 
     /// <summary>
@@ -56,7 +64,7 @@ public sealed record GivenAnswer
             _ => detection.Segments,
         };
 
-        return new GivenAnswer(answer.Segments, answer.Confirmed, answer.AnsweredAt, !answer.Stands, shown);
+        return new GivenAnswer(answer.Segments, answer.Confirmed, answer.AnsweredAt, !answer.Stands, shown, answer.NamesOpeningsAndEndings);
     }
 
     public IReadOnlyList<SegmentSpan> Segments { get; }
@@ -68,6 +76,8 @@ public sealed record GivenAnswer
     public bool Withdrawn { get; }
 
     public IReadOnlyList<SegmentSpan>? Detected { get; }
+
+    public bool NamesOpeningsAndEndings { get; }
 
     /// <summary>
     /// Whether the recording is judged against this answer: it was confirmed and not withdrawn.

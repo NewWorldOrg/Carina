@@ -13,7 +13,9 @@ public sealed record KindMetrics(SegmentKind Kind, double? Recall, double? Preci
 /// within <see cref="NearWithin"/>, per recording; the seconds answered as programme that a button would
 /// offer to skip, per hour of the recordings; the seconds of breaks, of openings and of endings found, the
 /// kind a recording's answer does not hold counting neither as found nor as missed there; and the share of
-/// skips on its buttons that viewers came back from, and how many skips that is of. A detection thrown away shows
+/// skips on its buttons that viewers came back from, and how many skips that is of. The boundaries and the
+/// programme skipped are counted from the stretches as the answer can judge them
+/// (<see cref="SegmentComparison.Judged"/>). A detection thrown away shows
 /// nothing, so it has no boundaries and offers no skip.
 /// </summary>
 public sealed record SegmentMetrics
@@ -95,7 +97,7 @@ public sealed record SegmentMetrics
         }
 
         Boundary[][] answered = [.. compared.Select(comparison => Boundaries(comparison.Answer))];
-        Boundary[][] detected = [.. compared.Select(comparison => Boundaries(comparison.Shown))];
+        Boundary[][] detected = [.. compared.Select(comparison => Boundaries(comparison.Judged))];
         int extra = detected.Select((found, at) => found.Count(boundary => !answered[at].Any(answer => Near(answer.At, boundary.At, NearWithin)))).Sum();
 
         return new SegmentMetrics(
@@ -118,7 +120,7 @@ public sealed record SegmentMetrics
 
         double seconds = compared.Sum(comparison => Overlap(
             Of(comparison.Answer, SegmentKind.Programme),
-            [.. PlaybackChapter.Of(comparison.Shown, PlaybackFileClock.AsItIs, skipThreshold).Where(chapter => chapter.Skippable).Select(chapter => chapter.Stretch)]));
+            [.. PlaybackChapter.Of(comparison.Judged, PlaybackFileClock.AsItIs, skipThreshold).Where(chapter => chapter.Skippable).Select(chapter => chapter.Stretch)]));
         double hours = compared.Sum(comparison => comparison.Length.TotalHours);
 
         return hours > 0 ? seconds / hours : 0;

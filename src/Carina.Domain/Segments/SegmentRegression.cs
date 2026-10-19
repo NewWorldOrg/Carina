@@ -10,9 +10,10 @@ public sealed record SegmentFit(SegmentModel Model, int Iterations, bool Converg
 /// Fits the logistic regression telling the kinds of segment apart to labelled samples, by Newton's method
 /// (IRLS). Labels of the programme and of breaks alone are fitted as two kinds, a break against the programme;
 /// an opening or an ending among them makes it four, a multinomial logistic regression (softmax) of the break,
-/// the opening and the ending each against the programme. Where none is labelled, the opening and the ending
-/// can be kept from a version that weighs them, with the scales of the features they weigh: only the break is
-/// fitted then, on those scales, and the kept weights are handed on as they were. The parameters are an
+/// the opening and the ending each against the programme. Of the opening and the ending, one no sample labels
+/// can be kept from a version that weighs both, with the scales of the features it weighs: only the kinds
+/// labelled and the break are fitted then, on those scales, and the kept weights are handed on as they were.
+/// Without a version to keep it from, a kind no sample labels is fitted from none. The parameters are an
 /// intercept and a weight per feature of <see cref="SegmentFeature.Names"/> for each kind fitted, and an offset
 /// per station and one per series named by the samples, which weigh the break alone. Each step solves
 /// <c>(XᵀWX + Λ) Δθ = Xᵀ(c ⊙ (y − p)) − Λθ</c> by a Cholesky decomposition, where <c>W</c> holds
@@ -48,9 +49,9 @@ public static class SegmentRegression
             throw new ArgumentException("Every sample is handed over.", nameof(samples));
         }
 
-        if (kept is not null && (kept.Kinds is not 4 || samples.Any(Themed)))
+        if (kept is not null && kept.Kinds is not 4)
         {
-            throw new ArgumentException("The opening and the ending are kept from a version that weighs them, for samples that label neither.", nameof(kept));
+            throw new ArgumentException("The opening and the ending are kept from a version that weighs them.", nameof(kept));
         }
 
         Design design = Design.Of(samples, kept);
@@ -79,15 +80,6 @@ public static class SegmentRegression
         return new SegmentFit(design.Model(theta, thresholds), iterations, converged);
     }
 
-    /// <summary>
-    /// Whether a sample is labelled an opening or an ending.
-    /// </summary>
-    public static bool Themed(SegmentSample sample)
-    {
-        ArgumentNullException.ThrowIfNull(sample);
-
-        return sample.Kind is SegmentKind.Opening or SegmentKind.Ending;
-    }
 
     private static (double[] Theta, double Objective) Walked(Design design, double[] theta, double[] step, double[] pull, double objective)
     {
@@ -223,7 +215,7 @@ public static class SegmentRegression
 
         private SegmentKind[] classes = [];
 
-        private SegmentModel? kept;
+        private KeyValuePair<SegmentKind, SegmentClassWeights>[] kept = [];
 
         private string[] stations = [];
 
@@ -251,14 +243,14 @@ public static class SegmentRegression
 
         private int Offsets => classes.Length * Block;
 
-        public static Design Of(IReadOnlyList<SegmentSample> samples, SegmentModel? kept)
+        public static Design Of(IReadOnlyList<SegmentSample> samples, SegmentModel? keeping)
         {
-            SegmentKind[] classes = samples.Any(Themed)
-                ? [SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending]
-                : [SegmentKind.Break];
-            HashSet<string> keptScales = kept is null
-                ? []
-                : [.. new[] { SegmentKind.Opening, SegmentKind.Ending }.SelectMany(kind => kept.Weights.Classes[kind].Features.Keys)];
+            SegmentKind[] classes = Fitted(samples, keeping);
+            KeyValuePair<SegmentKind, SegmentClassWeights>[] kept =
+            [
+                .. keeping?.Weights.Classes.Where(pair => pair.Key is not SegmentKind.Break && !classes.Contains(pair.Key)) ?? [],
+            ];
+            HashSet<string> keptScales = [.. kept.SelectMany(pair => pair.Value.Features.Keys)];
             Design design = new()
             {
                 classes = classes,
@@ -269,7 +261,7 @@ public static class SegmentRegression
                 weights = [.. samples.Select(sample => sample.Weight)],
             };
 
-            design.scales = [.. design.names.Select(name => keptScales.Contains(name) ? kept!.Standardisation[name] : Scale(samples, name))];
+            design.scales = [.. design.names.Select(name => keptScales.Contains(name) ? keeping!.Standardisation[name] : Scale(samples, name))];
             design.stationOf = [.. samples.Select(sample => design.Offsets + Array.BinarySearch(design.stations, sample.Station, StringComparer.Ordinal))];
             design.seriesOf = [.. samples.Select(sample => sample.Series is string named ? design.SeriesColumn(named) : -1)];
             design.values = new double[samples.Count * design.Features];
@@ -416,12 +408,28 @@ public static class SegmentRegression
                         pair => new SegmentClassWeights(
                             theta[pair.weighed * Block],
                             names.Select((name, feature) => (name, feature)).ToDictionary(named => named.name, named => theta[(pair.weighed * Block) + 1 + named.feature])))
-                    .Concat(kept is null ? [] : kept.Weights.Classes.Where(pair => pair.Key is not SegmentKind.Break))
+                    .Concat(kept)
                     .ToDictionary()),
                 stations.Select((station, at) => (station, at)).ToDictionary(pair => pair.station, pair => theta[Offsets + pair.at]),
                 series.Select((named, at) => (named, at)).ToDictionary(pair => pair.named, pair => theta[Offsets + stations.Length + pair.at]),
                 thresholds,
                 names.Select((name, feature) => (name, feature)).ToDictionary(pair => pair.name, pair => scales[pair.feature]));
+
+        /// <summary>
+        /// The kinds fitted: the break alone when no sample labels an opening or an ending; otherwise the break, the
+        /// opening and the ending, but for one no sample labels when it is kept from <paramref name="keeping"/>.
+        /// </summary>
+        private static SegmentKind[] Fitted(IReadOnlyList<SegmentSample> samples, SegmentModel? keeping)
+        {
+            SegmentKind[] labelled = [.. new[] { SegmentKind.Opening, SegmentKind.Ending }.Where(kind => samples.Any(sample => sample.Kind == kind))];
+
+            if (labelled.Length is 0)
+            {
+                return [SegmentKind.Break];
+            }
+
+            return keeping is null ? [SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending] : [SegmentKind.Break, .. labelled];
+        }
 
         private static FeatureScale Scale(IReadOnlyList<SegmentSample> samples, string name)
         {
