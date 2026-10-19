@@ -11,8 +11,9 @@ namespace Carina.Domain.Segments;
 /// earlier one of the same kind that landed past where they came back to; closing the button on a break
 /// and watching it labels it programme at <see cref="DismissedWeight"/>. A segment takes a label when its
 /// kind covers more than half of it. An answer wins over the catalog and the catalog over viewers; within
-/// one source the heavier label wins, a tie going to the programme. A segment more than half outside the
-/// guide's programme is never a label.
+/// one source the heavier label wins, a tie going to the programme. An answer that could not name an opening or
+/// an ending says nothing of them where it says programme, so there the catalog's opening or ending wins. A
+/// segment more than half outside the guide's programme is never a label.
 /// </summary>
 public static class SegmentLabels
 {
@@ -44,15 +45,25 @@ public static class SegmentLabels
         Stretch[] heard = [.. context.Catalog.Select(Heard).OfType<Stretch>()];
         Stretch[] viewed = Viewed(actions);
 
+        bool themesUnsaid = answer is not { NamesOpeningsAndEndings: true };
+
         return
         [
             .. pieces.Select(piece => piece.Features[SegmentFeature.OutsideGuide] > MostOutsideTheGuide
                 ? null
-                : Over(piece, answered, SegmentLabelSource.Answer)
-                  ?? Over(piece, heard, SegmentLabelSource.Catalog)
+                : Labelled(Over(piece, answered, SegmentLabelSource.Answer), Over(piece, heard, SegmentLabelSource.Catalog), themesUnsaid)
                   ?? Over(piece, viewed, SegmentLabelSource.Viewer)),
         ];
     }
+
+    /// <summary>
+    /// The label of the answer over that of the catalog, unless the answer says programme without having been
+    /// able to name an opening or an ending and the catalog hears one.
+    /// </summary>
+    private static SegmentLabel? Labelled(SegmentLabel? answered, SegmentLabel? heard, bool themesUnsaid)
+        => themesUnsaid && answered is { Kind: SegmentKind.Programme } && heard is { Kind: SegmentKind.Opening or SegmentKind.Ending }
+            ? heard
+            : answered ?? heard;
 
     /// <summary>
     /// The kind <paramref name="answer"/> gives the stretch from <paramref name="starts"/> to

@@ -32,5 +32,5 @@ public sealed class LeaveOneOutTests
     }
 
     private static SegmentSample Sample(double length)
-        => new(SegmentFeatureValues.Of(new Dictionary<string, double?> { [SegmentFeature.Length] = length }), "1:1", null, false, 1.0);
+        => new(SegmentFeatureValues.Of(new Dictionary<string, double?> { [SegmentFeature.Length] = length }), "1:1", null, SegmentKind.Programme, 1.0);
 }

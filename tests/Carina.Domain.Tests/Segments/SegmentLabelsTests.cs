@@ -41,6 +41,26 @@ public sealed class SegmentLabelsTests
         Assert.Equal([Programme(0.7, SegmentLabelSource.Catalog), Break(1.0, SegmentLabelSource.Answer), null, null], labels);
     }
 
+    [Fact(DisplayName = "A-051: an answer that could not name an opening says nothing of one where it says programme, so the catalog's opening labels the piece there, and an answer able to name one wins as any answer does")]
+    public void AnAnswerThatCannotNameAnOpeningLeavesTheCatalogs()
+    {
+        GivenAnswer plain = Answer(true, (0, 101, SegmentKind.Programme), (101, 130, SegmentKind.Break), (130, 400, SegmentKind.Programme));
+        GivenAnswer naming = new(plain.Segments, true, plain.AnsweredAt, false, null, true);
+        SegmentContext context = Context(
+        [
+            new CatalogHeard(Seconds(130), Seconds(400), SegmentKind.Opening, 3, 1, 1, 0.8),
+            new CatalogHeard(Seconds(100), Seconds(130), SegmentKind.Ending, 3, 1, 1, 0.8),
+        ]);
+
+        IReadOnlyList<SegmentLabel?> heard = SegmentLabels.Of(Pieces, context, plain, []);
+        IReadOnlyList<SegmentLabel?> answered = SegmentLabels.Of(Pieces, context, naming, []);
+
+        Assert.Equal(
+            [Programme(1.0, SegmentLabelSource.Answer), Break(1.0, SegmentLabelSource.Answer), Break(1.0, SegmentLabelSource.Answer), new SegmentLabel(SegmentKind.Opening, 0.8, SegmentLabelSource.Catalog)],
+            heard);
+        Assert.Equal(Programme(1.0, SegmentLabelSource.Answer), answered[3]);
+    }
+
     [Fact(DisplayName = "an answer not confirmed with no detection beside it is read against programme throughout")]
     public void AnUnconfirmedAnswerWithoutADetectionIsReadAgainstProgramme()
     {

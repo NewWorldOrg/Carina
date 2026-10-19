@@ -168,14 +168,116 @@ public sealed class SegmentModelTests
             new Dictionary<string, FeatureScale> { [SegmentFeature.Length] = FeatureScale.Identity, ["loudnessOfTheMoon"] = FeatureScale.Identity }));
     }
 
-    [Fact(DisplayName = "the two-kind model weighs breaks against the programme and nothing else")]
-    public void OnlyBreaksAreWeighed()
+    [Fact(DisplayName = "the two-kind model weighs breaks against the programme, the four-kind one the break, the opening and the ending each, and nothing else is weighed")]
+    public void TheKindsWeighedAreTwoOrFour()
     {
         SegmentClassWeights some = new(0, new Dictionary<string, double>());
 
         Assert.Throws<ArgumentException>(() => new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>()));
         Assert.Throws<ArgumentException>(() => new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights> { [SegmentKind.Programme] = some }));
         Assert.Throws<ArgumentException>(() => new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights> { [SegmentKind.Break] = some, [SegmentKind.Opening] = some }));
+        Assert.Throws<ArgumentException>(() => new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights> { [SegmentKind.Opening] = some, [SegmentKind.Ending] = some }));
+        Assert.Throws<ArgumentException>(() => new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights> { [SegmentKind.Programme] = some, [SegmentKind.Break] = some, [SegmentKind.Opening] = some, [SegmentKind.Ending] = some }));
+        Assert.Equal(
+            [SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending],
+            new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights> { [SegmentKind.Ending] = some, [SegmentKind.Opening] = some, [SegmentKind.Break] = some }).Classes.Keys);
+    }
+
+    [Fact(DisplayName = "BR-CD-007: the first version of four kinds weighs the break as the first version does, and the opening and the ending by the catalog and by where earlier episodes had theirs")]
+    public void TheFirstVersionOfFourKindsIsHandSet()
+    {
+        SegmentModel four = SegmentModel.FirstOfFourKinds;
+
+        Assert.Equal(4, four.Kinds);
+        Assert.Equal(SegmentModel.First.Weights.Classes[SegmentKind.Break], four.Weights.Classes[SegmentKind.Break]);
+        Assert.Equal(
+            (-6.0, 8.0, 4.0),
+            (four.Weights.Classes[SegmentKind.Opening].Bias, four.Weights.Classes[SegmentKind.Opening].Features[SegmentFeature.CatalogOpeningShare], four.Weights.Classes[SegmentKind.Opening].Features[SegmentFeature.PastOpeningShare]));
+        Assert.Equal(
+            (-6.0, 8.0, 4.0),
+            (four.Weights.Classes[SegmentKind.Ending].Bias, four.Weights.Classes[SegmentKind.Ending].Features[SegmentFeature.CatalogEndingShare], four.Weights.Classes[SegmentKind.Ending].Features[SegmentFeature.PastEndingShare]));
+        Assert.Equal(2, four.Weights.Classes[SegmentKind.Opening].Features.Count);
+        Assert.Equal(2, four.Weights.Classes[SegmentKind.Ending].Features.Count);
+        Assert.Empty(four.StationOffsets);
+        Assert.Empty(four.SeriesOffsets);
+        Assert.Equal(SegmentThresholds.Initial, four.Thresholds);
+        Assert.Equal(8, four.Standardisation.Count);
+        Assert.All(four.Standardisation.Values, scale => Assert.Equal(FeatureScale.Identity, scale));
+    }
+
+    [Fact(DisplayName = "with the break alone weighed, the chances are the logistic function of its score to the last bit, and an opening or an ending is not likely at all")]
+    public void TwoKindsGiveTheLogisticFunction()
+    {
+        foreach (double score in new[] { -800.0, -40, -2.5, -0.3, 0, 0.7, 3, 40, 800 })
+        {
+            SegmentChances chances = SegmentChances.OfABreak(score);
+
+            Assert.Equal(SegmentModel.Chance(score), chances.Of(SegmentKind.Break));
+            Assert.Equal(1 - SegmentModel.Chance(score), chances.Of(SegmentKind.Programme));
+            Assert.Equal((0, 0), (chances.Of(SegmentKind.Opening), chances.Of(SegmentKind.Ending)));
+            Assert.Equal(double.NegativeInfinity, chances.LogOf(SegmentKind.Opening));
+            Assert.Equal(double.NegativeInfinity, chances.LogOf(SegmentKind.Ending));
+            Assert.True(double.IsFinite(chances.LogOf(SegmentKind.Break)) && double.IsFinite(chances.LogOf(SegmentKind.Programme)));
+            Assert.Equal(score >= 0 ? -Math.Log(1 + Math.Exp(-score)) : score - Math.Log(1 + Math.Exp(score)), chances.LogOf(SegmentKind.Break));
+            Assert.Equal(score <= 0 ? Math.Log(1 + Math.Exp(score)) * -1 : -score - Math.Log(1 + Math.Exp(-score)), chances.LogOf(SegmentKind.Programme));
+        }
+    }
+
+    [Fact(DisplayName = "four kinds are told apart by the softmax of their scores against the programme, which scores nothing, and the chances add up to one")]
+    public void FourKindsGiveTheSoftmax()
+    {
+        SegmentChances chances = SegmentChances.Of(new Dictionary<SegmentKind, double>
+        {
+            [SegmentKind.Break] = 1.0,
+            [SegmentKind.Opening] = 2.0,
+            [SegmentKind.Ending] = -1.0,
+        });
+        double sum = 1 + Math.Exp(1) + Math.Exp(2) + Math.Exp(-1);
+
+        Assert.Equal(1 / sum, chances.Of(SegmentKind.Programme), 12);
+        Assert.Equal(Math.Exp(1) / sum, chances.Of(SegmentKind.Break), 12);
+        Assert.Equal(Math.Exp(2) / sum, chances.Of(SegmentKind.Opening), 12);
+        Assert.Equal(Math.Exp(-1) / sum, chances.Of(SegmentKind.Ending), 12);
+        Assert.Equal(Math.Log(Math.Exp(2) / sum), chances.LogOf(SegmentKind.Opening), 12);
+        Assert.Equal(1, Enum.GetValues<SegmentKind>().Sum(chances.Of), 12);
+        Assert.Throws<ArgumentException>(() => SegmentChances.Of(new Dictionary<SegmentKind, double> { [SegmentKind.Programme] = 1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SegmentChances.Of(new Dictionary<SegmentKind, double> { [SegmentKind.Break] = double.NaN }));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: the first version of four kinds takes a piece the catalog hears as the opening for the opening, a piece it hears as the ending for the ending, and a plain piece for the programme")]
+    public void TheFirstVersionOfFourKindsScoresByTheCatalog()
+    {
+        SegmentModel four = SegmentModel.FirstOfFourKinds;
+
+        SegmentChances opening = four.Chances(Features((SegmentFeature.CatalogOpeningShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
+        SegmentChances remembered = four.Chances(Features((SegmentFeature.CatalogOpeningShare, 1), (SegmentFeature.PastOpeningShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
+        SegmentChances ending = four.Chances(Features((SegmentFeature.CatalogEndingShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
+        SegmentChances plain = four.Chances(Features((SegmentFeature.LogoShare, 1)), Station, null);
+        SegmentChances pod = four.Chances(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 0)), Station, null);
+
+        Assert.True(opening.Of(SegmentKind.Opening) > SegmentSettingsStanding.DefaultSkipThreshold);
+        Assert.True(remembered.Of(SegmentKind.Opening) > opening.Of(SegmentKind.Opening));
+        Assert.True(ending.Of(SegmentKind.Ending) > SegmentSettingsStanding.DefaultSkipThreshold);
+        Assert.True(plain.Of(SegmentKind.Programme) > 0.9);
+        Assert.True(pod.Of(SegmentKind.Break) > 0.5);
+        Assert.Equal(1.0, four.BreakScore(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 0)), Station, null), 12);
+    }
+
+    [Fact(DisplayName = "the offsets of the station and of the series are added to the score of a break alone, so the opening and the ending score by their own weights")]
+    public void TheOffsetsWeighTheBreakAlone()
+    {
+        SegmentModel offset = new(
+            SegmentModel.FirstOfFourKinds.Weights,
+            new Dictionary<string, double> { [Station] = 0.3 },
+            new Dictionary<string, double> { ["架空の物語"] = -0.2 },
+            SegmentThresholds.Initial,
+            SegmentModel.FirstOfFourKinds.Standardisation);
+
+        Assert.Equal(-2.5 + 0.3 - 0.2, offset.Score(SegmentKind.Break, Features(), Station, "架空の物語"), 12);
+        Assert.Equal(-6.0, offset.Score(SegmentKind.Opening, Features(), Station, "架空の物語"), 12);
+        Assert.Equal(-6.0, offset.Score(SegmentKind.Ending, Features(), Station, null), 12);
+        Assert.Equal(0, offset.Score(SegmentKind.Programme, Features(), Station, "架空の物語"));
+        Assert.Throws<ArgumentException>(() => SegmentModel.First.Score(SegmentKind.Opening, Features(), Station, null));
     }
 
     [Fact(DisplayName = "a number that is not finite, a scale of no spread and a malformed station key are refused")]

@@ -6,9 +6,16 @@ namespace Carina.Api.Services;
 
 /// <summary>
 /// Reads and changes the segment settings changed from a screen. A change names only what it changes, and is
-/// made against the settings as they stand once no other change is being made.
+/// made against the settings as they stand once no other change is being made. A change asking for learning to be
+/// on, once it is, has the version of four kinds made by hand take the place of the first, through the one change
+/// that moves the version in use and only while the first is in use as it was installed; the migration that made
+/// the version leaves it a candidate while learning is off.
 /// </summary>
-public sealed class SegmentSettingsService(ISegmentSettingsRepository rows, IAtomicWrite writes, TimeProvider clock)
+public sealed class SegmentSettingsService(
+    ISegmentSettingsRepository rows,
+    IAtomicWrite writes,
+    ISegmentModelVersionRepository versions,
+    TimeProvider clock)
 {
     public async Task<ServiceResult<SegmentSettingsStanding>> ReadAsync(CancellationToken cancellationToken)
         => ServiceResult<SegmentSettingsStanding>.Success(await StandingAsync(cancellationToken));
@@ -51,6 +58,11 @@ public sealed class SegmentSettingsService(ISegmentSettingsRepository rows, IAto
                 return SegmentSettingsStanding.Over(set);
             },
             cancellationToken);
+
+        if (learning is true && changed.Learning)
+        {
+            await versions.ChangeAsync(SegmentVersionChange.FourKindsInPlaceOfTheFirst, clock.GetUtcNow().UtcDateTime, cancellationToken);
+        }
 
         return ServiceResult<SegmentSettingsStanding>.Success(changed);
     }

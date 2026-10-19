@@ -144,9 +144,118 @@ public sealed class SegmentSequenceTests
         Assert.Equal(SegmentSequence.Decide(pieces, [Programme, Pod, Programme], SegmentThresholds.Initial), SegmentSequence.Decide(pieces, [Programme, Pod, Programme], SegmentThresholds.Initial));
     }
 
+    [Fact(DisplayName = "BR-CD-007: a piece heard as the opening and one heard as the ending are decided as one each, the opening before the ending")]
+    public void AnOpeningAndAnEndingAreDecided()
+    {
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Programme, SegmentKind.Ending, SegmentKind.Programme],
+            SegmentSequence.Decide(Laid(60, 90, 1500, 90, 60), [Plain, Opening(3), Plain, Ending(3), Plain], SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: there is one opening at most, so of two pieces apart that look like one the likelier is the opening and the other the programme")]
+    public void ThereIsOneOpeningAtMost()
+    {
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(Laid(60, 90, 600, 90, 960), [Plain, Opening(3), Plain, Opening(2), Plain], SegmentThresholds.Initial));
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Ending, SegmentKind.Programme],
+            SegmentSequence.Decide(Laid(60, 90, 600, 90, 960), [Plain, Ending(2), Plain, Ending(3), Plain], SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: the opening comes before the ending, so a piece like an opening after a likelier ending is the programme")]
+    public void TheOpeningComesBeforeTheEnding()
+    {
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Ending, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(Laid(60, 90, 1500, 90, 60), [Plain, Ending(3), Plain, Opening(2), Plain], SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: an opening or an ending lasts from 30 seconds to 3 minutes, so a piece like one that is shorter or longer is the programme, and neighbours join up to that length")]
+    public void AnOpeningOrAnEndingLastsThirtySecondsToThreeMinutes()
+    {
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme], SegmentSequence.Decide(Laid(60, 20, 1720), [Plain, Opening(3), Plain], SegmentThresholds.Initial));
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Opening, SegmentKind.Programme],
+            SegmentSequence.Decide(Laid(60, 20, 20, 1700), [Plain, Opening(3), Opening(3), Plain], SegmentThresholds.Initial));
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme], SegmentSequence.Decide(Laid(1500, 200, 100), [Plain, Ending(3), Plain], SegmentThresholds.Initial));
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Ending, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(Laid(1500, 120, 90, 90), [Plain, Ending(4), Ending(3), Plain], SegmentThresholds.Initial));
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Programme], SegmentSequence.Decide(Laid(1780, 20), [Plain, Ending(3)], SegmentThresholds.Initial));
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Ending], SegmentSequence.Decide(Laid(1710, 90), [Plain, Ending(3)], SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: an opening long enough to leave is kept apart from a likelier one still too short, so the long one is chosen when the short one cannot last")]
+    public void AnOpeningLongEnoughIsKeptApartFromAShorterOne()
+    {
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Opening, SegmentKind.Programme],
+            SegmentSequence.Decide(Laid(60, 20, 15, 1705), [Plain, Four(-5, -0.405, -8), Opening(4), Plain], SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a break left for an opening off the grid costs the penalty as one left for the programme does")]
+    public void ABreakLeftForAnOpeningOffTheGridCosts()
+    {
+        SegmentPiece[] pieces = Laid(300, 32, 90, 1378);
+        SegmentChances[] chances = [Plain, Four(0.2, -8, -8), Opening(3), Plain];
+
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Programme],
+            SegmentSequence.Decide(pieces, chances, SegmentThresholds.Initial));
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Break, SegmentKind.Opening, SegmentKind.Programme],
+            SegmentSequence.Decide(pieces, chances, Free));
+    }
+
+    [Fact(DisplayName = "with the opening and the ending all but impossible, four kinds decide what the break's scores alone decide")]
+    public void FourKindsWithNoOpeningOrEndingDecideAsTwo()
+    {
+        SegmentPiece[] pieces = Laid(300, 14.6, 14.6, 14.6, 14.6, 14.6, 14.6, 14.6, 2.8, 1394.4);
+        double[] scores = [Programme, 2, 2, 2, 2, 2, 2, 2, -0.5, Programme];
+        SegmentChances[] four = [.. scores.Select(score => Four(score, -60, -60))];
+        SegmentKind[] kinds = SegmentSequence.Decide(pieces, scores, SegmentThresholds.Initial);
+
+        Assert.Equal(kinds, SegmentSequence.Decide(pieces, four, SegmentThresholds.Initial));
+        Assert.Equal(
+            SegmentSequence.Spans(pieces, kinds, scores, TimeSpan.FromSeconds(1800), SegmentThresholds.Initial).Select(span => (span.Starts, span.Ends, span.Kind, Math.Round(span.Probability!.Value, 9))),
+            SegmentSequence.Spans(pieces, kinds, four, TimeSpan.FromSeconds(1800), SegmentThresholds.Initial).Select(span => (span.Starts, span.Ends, span.Kind, Math.Round(span.Probability!.Value, 9))));
+    }
+
+    [Fact(DisplayName = "an opening's probability is the mean of its pieces' chances of the opening weighted by length")]
+    public void AnOpeningsProbabilityIsItsPiecesChance()
+    {
+        SegmentPiece[] pieces = Laid(60, 20, 40, 1680);
+        SegmentChances[] chances = [Plain, Opening(3), Opening(1), Plain];
+
+        IReadOnlyList<SegmentSpan> spans = SegmentSequence.Spans(
+            pieces,
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Opening, SegmentKind.Programme],
+            chances,
+            TimeSpan.FromSeconds(1800),
+            SegmentThresholds.Initial);
+
+        Assert.Equal((TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(120), SegmentKind.Opening), (spans[1].Starts, spans[1].Ends, spans[1].Kind));
+        Assert.Equal(((20 * chances[1].Of(SegmentKind.Opening)) + (40 * chances[2].Of(SegmentKind.Opening))) / 60, spans[1].Probability!.Value, 12);
+    }
+
     [Fact(DisplayName = "a score is needed for every piece")]
     public void AScoreIsNeededForEveryPiece()
         => Assert.Throws<ArgumentException>(() => SegmentSequence.Decide(Laid(300, 60), [Programme], SegmentThresholds.Initial));
+
+    private static SegmentChances Plain => Four(-5, -8, -8);
+
+    private static SegmentChances Opening(double score) => Four(-5, score, -8);
+
+    private static SegmentChances Ending(double score) => Four(-5, -8, score);
+
+    private static SegmentChances Four(double breaks, double opening, double ending)
+        => SegmentChances.Of(new Dictionary<SegmentKind, double>
+        {
+            [SegmentKind.Break] = breaks,
+            [SegmentKind.Opening] = opening,
+            [SegmentKind.Ending] = ending,
+        });
 
     private static SegmentPiece[] Laid(params double[] lengths)
     {

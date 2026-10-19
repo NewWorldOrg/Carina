@@ -47,6 +47,7 @@ public sealed class RecordingAnswerConfiguration : IEntityTypeConfiguration<Reco
 
         builder.Ignore(answer => answer.Stands);
         builder.Ignore(answer => answer.BreakShare);
+        builder.Ignore(answer => answer.NamesOpeningsAndEndings);
 
         builder.HasIndex(answer => answer.ConfirmedAt)
             .HasFilter("confirmed AND withdrawn_at IS NULL")

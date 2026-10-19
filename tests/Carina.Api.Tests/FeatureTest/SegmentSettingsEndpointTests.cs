@@ -32,6 +32,7 @@ internal sealed class SegmentSettingsFeature : IAsyncDisposable
             services.RemoveAll<IHostedService>();
             services.AddSingleton<TimeProvider>(Clock);
             services.AddSingleton<ISegmentSettingsRepository>(Settings);
+            services.AddSingleton<ISegmentModelVersionRepository>(Versions);
             services.AddSingleton<IAtomicWrite, UnguardedWrites>();
         }));
 
@@ -46,6 +47,8 @@ internal sealed class SegmentSettingsFeature : IAsyncDisposable
     public MovingClock Clock { get; } = new(Noon);
 
     public HeldSegmentSettings Settings { get; } = new();
+
+    public HeldSegmentModelVersions Versions { get; } = new();
 
     public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
 
@@ -94,6 +97,48 @@ internal sealed class SegmentSettingsFeature : IAsyncDisposable
 
 public sealed class SegmentSettingsEndpointTests
 {
+    [Fact(DisplayName = "BR-CD-013: turning learning on puts the version of four kinds made by hand in place of the first still in use as installed, and turning it off moves nothing")]
+    public async Task TurningLearningOnPutsTheVersionOfFourKindsInUse()
+    {
+        await using var feature = new SegmentSettingsFeature();
+        feature.Versions.Active = HeldSegmentModelVersions.InUse(SegmentModelVersion.FirstNumber, SegmentSettingsFeature.Noon.AddDays(-2));
+        feature.Versions.Others.Add(FourKinds());
+
+        (HttpStatusCode off, _) = await feature.PatchAsync(new { learning = false, skipThreshold = 0.8 });
+        int stillFirst = feature.Versions.Active.Number;
+        (HttpStatusCode on, _) = await feature.PatchAsync(new { learning = true });
+
+        Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (off, on));
+        Assert.Equal(SegmentModelVersion.FirstNumber, stillFirst);
+        Assert.Equal((2, 4), (feature.Versions.Active.Number, feature.Versions.Active.Kinds));
+        Assert.Equal(SegmentSettingsFeature.Noon, feature.Versions.Active.AdoptedAt);
+        Assert.Equal(SegmentModelVersionState.Retired, feature.Versions.Others.Single(version => version.Number == SegmentModelVersion.FirstNumber).State);
+    }
+
+    [Fact(DisplayName = "BR-CD-013: turning learning on beside a version learned in use leaves it in use, and the version of four kinds a candidate")]
+    public async Task TurningLearningOnLeavesALearnedVersionInUse()
+    {
+        await using var feature = new SegmentSettingsFeature();
+        feature.Versions.Active = SegmentModelVersion.Rehydrate(
+            3,
+            SegmentModelVersionState.Active,
+            false,
+            SegmentModel.First,
+            SegmentSettingsFeature.Noon.AddDays(-2),
+            SegmentSettingsFeature.Noon.AddDays(-2),
+            null,
+            null,
+            null,
+            new SegmentEvaluation(null, [], new EvaluationEvidence(12, 148, null), null));
+        feature.Versions.Others.Add(FourKinds());
+
+        (HttpStatusCode on, _) = await feature.PatchAsync(new { learning = true });
+
+        Assert.Equal(HttpStatusCode.OK, on);
+        Assert.Equal(3, feature.Versions.Active.Number);
+        Assert.Empty(feature.Versions.Written);
+    }
+
     [Fact(DisplayName = "with no row held learning reads as off, and nobody has changed it")]
     public async Task WithNoRowHeldLearningReadsAsOff()
     {
@@ -367,4 +412,7 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(0, feature.Settings.Reads);
         Assert.Equal(0, feature.Settings.Saves);
     }
+
+    private static SegmentModelVersion FourKinds()
+        => SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Candidate, false, SegmentModel.FirstOfFourKinds, SegmentSettingsFeature.Noon.AddDays(-1), null, null, null, null);
 }

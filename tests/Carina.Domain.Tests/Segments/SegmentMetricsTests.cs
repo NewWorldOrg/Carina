@@ -35,7 +35,7 @@ public sealed class SegmentMetricsTests
         Assert.Equal(0.25, metrics.BoundaryRecallWithin1s);
         Assert.Equal(2, metrics.ExtraBoundariesPerRecording);
         Assert.Equal(15.5 * 2, metrics.ProgrammeSkippedSecondsPerHour, 9);
-        Assert.Equal(new KindMetrics(SegmentKind.Break, 88.5 / 120, 88.5 / 104), Assert.Single(metrics.Kinds));
+        Assert.Equal([new KindMetrics(SegmentKind.Break, 88.5 / 120, 88.5 / 104), Unmeasured(SegmentKind.Opening), Unmeasured(SegmentKind.Ending)], metrics.Kinds);
         Assert.Null(metrics.ReturnedAfterSkipShare);
         Assert.Equal(0, metrics.Skips);
     }
@@ -70,7 +70,7 @@ public sealed class SegmentMetricsTests
         Assert.Equal(0, metrics.BoundaryRecallWithin2s);
         Assert.Equal(0, metrics.ExtraBoundariesPerRecording);
         Assert.Equal(0, metrics.ProgrammeSkippedSecondsPerHour);
-        Assert.Equal(new KindMetrics(SegmentKind.Break, 0, null), Assert.Single(metrics.Kinds));
+        Assert.Equal([new KindMetrics(SegmentKind.Break, 0, null), Unmeasured(SegmentKind.Opening), Unmeasured(SegmentKind.Ending)], metrics.Kinds);
     }
 
     [Fact(DisplayName = "over several recordings the extra boundaries are per recording and the skipped programme per hour of them all, and answers without a boundary leave the recall unknown")]
@@ -85,10 +85,90 @@ public sealed class SegmentMetricsTests
         Assert.Null(metrics.BoundaryRecallWithin2s);
         Assert.Equal(1, metrics.ExtraBoundariesPerRecording);
         Assert.Equal(30, metrics.ProgrammeSkippedSecondsPerHour, 9);
-        Assert.Equal(new KindMetrics(SegmentKind.Break, null, 0), Assert.Single(metrics.Kinds));
+        Assert.Equal([new KindMetrics(SegmentKind.Break, null, 0), Unmeasured(SegmentKind.Opening), Unmeasured(SegmentKind.Ending)], metrics.Kinds);
         Assert.Equal(0.12, metrics.ReturnedAfterSkipShare);
         Assert.Equal(25, metrics.Skips);
         Assert.Null(SegmentMetrics.Of([], 0.7, SkipReturns.None));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: the seconds of openings and endings found are measured as those of breaks, the boundaries into and out of them count, and a button over either that skips programme counts against it")]
+    public void OpeningsAndEndingsAreMeasured()
+    {
+        SegmentSpan[] answer =
+        [
+            Span(0, 60, SegmentKind.Programme),
+            Span(60, 150, SegmentKind.Opening),
+            Span(150, 900, SegmentKind.Programme),
+            Span(900, 960, SegmentKind.Break),
+            Span(960, 1650, SegmentKind.Programme),
+            Span(1650, 1740, SegmentKind.Ending),
+            Span(1740, Length, SegmentKind.Programme),
+        ];
+        SegmentDetection detection = Detected(
+            Span(0, 61, SegmentKind.Programme, 0.9),
+            Span(61, 160, SegmentKind.Opening, 0.9),
+            Span(160, 900, SegmentKind.Programme, 0.9),
+            Span(900, 960, SegmentKind.Break, 0.9),
+            Span(960, Length, SegmentKind.Programme, 0.9));
+
+        SegmentMetrics metrics = SegmentMetrics.Of([Compared(answer, detection, true)], 0.7, SkipReturns.None)!;
+
+        Assert.Equal(
+            [new KindMetrics(SegmentKind.Break, 1, 1), new KindMetrics(SegmentKind.Opening, 89 / 90.0, 89 / 99.0), new KindMetrics(SegmentKind.Ending, 0, null)],
+            metrics.Kinds);
+        Assert.Equal(3 / 6.0, metrics.BoundaryRecallWithin2s);
+        Assert.Equal(3 / 6.0, metrics.BoundaryRecallWithin1s);
+        Assert.Equal(1, metrics.ExtraBoundariesPerRecording);
+        Assert.Equal(10 * 2, metrics.ProgrammeSkippedSecondsPerHour, 9);
+    }
+
+    [Fact(DisplayName = "A-051: a first episode with no opening, answered and detected as such, counts the opening neither as found nor as missed, and one detected where none was answered lowers its precision alone")]
+    public void AFirstEpisodeWithNoOpeningIsNoMiss()
+    {
+        SegmentSpan[] withOpening = [Span(0, 60, SegmentKind.Programme), Span(60, 150, SegmentKind.Opening), Span(150, Length, SegmentKind.Programme)];
+        SegmentSpan[] withoutOpening = [Span(0, Length, SegmentKind.Programme)];
+        SegmentDetection found = Detected(Span(0, 60, SegmentKind.Programme, 0.9), Span(60, 150, SegmentKind.Opening, 0.9), Span(150, Length, SegmentKind.Programme, 0.9));
+        SegmentDetection none = Detected(Span(0, Length, SegmentKind.Programme, 0.9));
+
+        SegmentMetrics alone = SegmentMetrics.Of([Compared(withOpening, found, true)], 0.7, SkipReturns.None)!;
+        SegmentMetrics beside = SegmentMetrics.Of([Compared(withOpening, found, true), Compared(withoutOpening, none, true)], 0.7, SkipReturns.None)!;
+        SegmentMetrics wrong = SegmentMetrics.Of([Compared(withOpening, found, true), Compared(withoutOpening, found, true)], 0.7, SkipReturns.None)!;
+
+        Assert.Equal(new KindMetrics(SegmentKind.Opening, 1, 1), alone.Kinds[1]);
+        Assert.Equal(new KindMetrics(SegmentKind.Opening, 1, 1), beside.Kinds[1]);
+        Assert.Equal(alone.BoundaryRecallWithin2s, beside.BoundaryRecallWithin2s);
+        Assert.Equal(0, beside.ExtraBoundariesPerRecording);
+        Assert.Equal(new KindMetrics(SegmentKind.Opening, 1, 0.5), wrong.Kinds[1]);
+    }
+
+    [Fact(DisplayName = "A-051: against an answer that could say only programme or a break, an opening found where it says programme is neither an extra boundary nor programme skipped, an ending just before a break finds the boundary into it, and the seconds of each kind are measured as they are")]
+    public void AnAnswerThatCannotNameOpeningsJudgesThemAsProgramme()
+    {
+        SegmentSpan[] answer =
+        [
+            Span(0, 900, SegmentKind.Programme),
+            Span(900, 960, SegmentKind.Break),
+            Span(960, Length, SegmentKind.Programme),
+        ];
+        SegmentDetection detection = Detected(
+            Span(0, 60, SegmentKind.Programme, 0.9),
+            Span(60, 150, SegmentKind.Opening, 0.9),
+            Span(150, 810, SegmentKind.Programme, 0.9),
+            Span(810, 900, SegmentKind.Ending, 0.9),
+            Span(900, 960, SegmentKind.Break, 0.9),
+            Span(960, Length, SegmentKind.Programme, 0.9));
+
+        SegmentMetrics plain = SegmentMetrics.Of([Compared(answer, detection)], 0.7, SkipReturns.None)!;
+        SegmentMetrics naming = SegmentMetrics.Of([Compared(answer, detection, true)], 0.7, SkipReturns.None)!;
+
+        Assert.Equal((1.0, 0.0, 0.0), (plain.BoundaryRecallWithin2s!.Value, plain.ExtraBoundariesPerRecording, plain.ProgrammeSkippedSecondsPerHour));
+        Assert.Equal(
+            [new KindMetrics(SegmentKind.Break, 1, 1), new KindMetrics(SegmentKind.Opening, null, 0), new KindMetrics(SegmentKind.Ending, null, 0)],
+            plain.Kinds);
+        Assert.Equal(plain.Kinds, naming.Kinds);
+        Assert.Equal((0.5, 3.0), (naming.BoundaryRecallWithin2s!.Value, naming.ExtraBoundariesPerRecording));
+        Assert.Equal(180 * 2, naming.ProgrammeSkippedSecondsPerHour, 9);
+        Assert.Equal(0, SegmentMetrics.ProgrammeSkippedAnHour([Compared(answer, detection)], 0.7));
     }
 
     [Fact(DisplayName = "the recommended threshold is the lowest hundredth at which no more than five seconds of programme an hour are skippable")]
@@ -192,11 +272,13 @@ public sealed class SegmentMetricsTests
     private static ViewerAction Action(ViewerActionKind action, int days, int? version)
         => new(Evening.AddDays(days), action, SegmentKind.Break, TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(690), version);
 
-    private static SegmentComparison Compared(IReadOnlyList<SegmentSpan> answer, SegmentDetection detection)
-        => new(new NetworkId(1), new ServiceId(1), answer, detection);
+    private static SegmentComparison Compared(IReadOnlyList<SegmentSpan> answer, SegmentDetection detection, bool answerNamesOpeningsAndEndings = false)
+        => new(new NetworkId(1), new ServiceId(1), answer, detection, answerNamesOpeningsAndEndings);
 
     private static SegmentDetection Detected(params SegmentSpan[] spans) => SegmentDetection.Judged(spans, spans[^1].Ends, []);
 
     private static SegmentSpan Span(double from, double to, SegmentKind kind, double? probability = null)
         => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, probability);
+
+    private static KindMetrics Unmeasured(SegmentKind kind) => new(kind, null, null);
 }

@@ -9,9 +9,13 @@ namespace Carina.Domain.Segments;
 /// The parameters of one version of the model segments are classified by: the weights of the logistic
 /// regression, an offset per station (keyed <c>network id:service id</c>) and per series name, the
 /// thresholds, and the mean and standard deviation each feature is standardised with. Every feature the
-/// weights name has a scale. <see cref="First"/> is the version made by hand from the rule-based
-/// detection before any learning: a piece of 15-second multiples between two silent cuts, out of the
-/// logo, or heard as an advert in the catalog, is a break.
+/// weights name has a scale. A kind weighed against the programme is scored by its own weights, and a break
+/// by both offsets besides, which tell how much more often a station or a series breaks for adverts.
+/// <see cref="First"/> is the version made by hand from the rule-based detection before any learning: a piece
+/// of 15-second multiples between two silent cuts, out of the logo, or heard as an advert in the catalog, is a
+/// break. <see cref="FirstOfFourKinds"/> weighs the break the same way and adds the opening and the ending made
+/// by hand: a piece the catalog hears as one of them is that, the more so where earlier episodes of the series
+/// had it at the same place.
 /// </summary>
 public sealed class SegmentModel : IEquatable<SegmentModel>
 {
@@ -61,6 +65,36 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             [SegmentFeature.CatalogCmShare] = FeatureScale.Identity,
         });
 
+    public static SegmentModel FirstOfFourKinds { get; } = new(
+        new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
+        {
+            [SegmentKind.Break] = First.Weights.Classes[SegmentKind.Break],
+            [SegmentKind.Opening] = new(-6.0, new Dictionary<string, double>
+            {
+                [SegmentFeature.CatalogOpeningShare] = 8.0,
+                [SegmentFeature.PastOpeningShare] = 4.0,
+            }),
+            [SegmentKind.Ending] = new(-6.0, new Dictionary<string, double>
+            {
+                [SegmentFeature.CatalogEndingShare] = 8.0,
+                [SegmentFeature.PastEndingShare] = 4.0,
+            }),
+        }),
+        new Dictionary<string, double>(),
+        new Dictionary<string, double>(),
+        SegmentThresholds.Initial,
+        new Dictionary<string, FeatureScale>
+        {
+            [SegmentFeature.IsMultipleOf15s] = FeatureScale.Identity,
+            [SegmentFeature.EdgeSilence] = FeatureScale.Identity,
+            [SegmentFeature.LogoShare] = FeatureScale.Identity,
+            [SegmentFeature.CatalogCmShare] = FeatureScale.Identity,
+            [SegmentFeature.CatalogOpeningShare] = FeatureScale.Identity,
+            [SegmentFeature.PastOpeningShare] = FeatureScale.Identity,
+            [SegmentFeature.CatalogEndingShare] = FeatureScale.Identity,
+            [SegmentFeature.PastEndingShare] = FeatureScale.Identity,
+        });
+
     public SegmentWeights Weights { get; }
 
     public IReadOnlyDictionary<string, double> StationOffsets { get; }
@@ -87,20 +121,46 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
     public static double Chance(double score) => score >= 0 ? 1 / (1 + Math.Exp(-score)) : Math.Exp(score) / (1 + Math.Exp(score));
 
     /// <summary>
-    /// The score of a segment being a break rather than programme: the intercept, each weighted feature
-    /// standardised (one not known counts as its mean), and the offsets of the station and the series.
+    /// The score of a segment being a break rather than programme.
     /// </summary>
-    public double BreakScore(SegmentFeatureValues features, string station, string? series)
+    public double BreakScore(SegmentFeatureValues features, string station, string? series) => Score(SegmentKind.Break, features, station, series);
+
+    /// <summary>
+    /// How likely a segment is to be each kind the version tells apart.
+    /// </summary>
+    public SegmentChances Chances(SegmentFeatureValues features, string station, string? series)
+        => SegmentChances.Of(Weights.Classes.Keys.ToDictionary(kind => kind, kind => Score(kind, features, station, series)));
+
+    /// <summary>
+    /// The score of a segment being <paramref name="kind"/> rather than programme: the intercept, each weighted
+    /// feature standardised (one not known counts as its mean), and for a break the offsets of the station and
+    /// the series; nothing for the programme itself.
+    /// </summary>
+    public double Score(SegmentKind kind, SegmentFeatureValues features, string station, string? series)
     {
         ArgumentNullException.ThrowIfNull(features);
         ArgumentNullException.ThrowIfNull(station);
 
-        SegmentClassWeights weights = Weights.Classes[SegmentKind.Break];
-        double score = weights.Bias + StationOffsets.GetValueOrDefault(station);
-
-        if (series is not null)
+        if (kind is SegmentKind.Programme)
         {
-            score += SeriesOffsets.GetValueOrDefault(series);
+            return 0;
+        }
+
+        if (!Weights.Classes.TryGetValue(kind, out SegmentClassWeights? weights))
+        {
+            throw new ArgumentException("A kind is scored by a version that weighs it.", nameof(kind));
+        }
+
+        double score = weights.Bias;
+
+        if (kind is SegmentKind.Break)
+        {
+            score += StationOffsets.GetValueOrDefault(station);
+
+            if (series is not null)
+            {
+                score += SeriesOffsets.GetValueOrDefault(series);
+            }
         }
 
         foreach ((string name, double weight) in weights.Features)

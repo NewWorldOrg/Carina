@@ -13,16 +13,19 @@ public sealed record DetectionInputs(SegmentEvidence Evidence, SegmentContext Co
 /// Detects the segments of one recording with one version of the model. It reads the recording's readings;
 /// the catalog's stretches heard in it, each counted as the kind the stretch alone is taken for when that
 /// differs from its entry; the corner outlines of the <see cref="SegmentDetectionSettings.LogoFrom"/> most
-/// recent earlier recordings on its station, to learn the station's logo from; and the detections the same
-/// version made of the earlier episodes of its series, found among the
-/// <see cref="SegmentDetectionSettings.EpisodesAmong"/> most recent earlier recordings on the station and the
-/// recordings sharing the sound of a programme fixture with it, leaving out those thrown away. The counting is
-/// done on the <see cref="LowestPriorityScheduler"/>. Nothing is written here.
+/// recent earlier recordings on its station, to learn the station's logo from; and the earlier episodes of its
+/// series, found among the <see cref="SegmentDetectionSettings.EpisodesAmong"/> most recent earlier recordings on
+/// the station and the recordings sharing the sound of a programme fixture with it, each by the detection the same
+/// version made of it, leaving out one thrown away, and by the confirmed answer given for it while that stands, its
+/// openings and endings still read from the detection while the answer could not name them, with where its programme
+/// starts and ends. The counting is done on the <see cref="LowestPriorityScheduler"/>. Nothing
+/// is written here.
 /// </summary>
 public sealed class SegmentDetecting(
     IDetectionWorklist worklist,
     ICatalogRepository catalog,
     IRecordingDetectionRepository detections,
+    ISegmentAnswerRepository answers,
     LowestPriorityScheduler lowest,
     SegmentDetectionSettings settings)
 {
@@ -127,15 +130,29 @@ public sealed class SegmentDetecting(
             return [];
         }
 
-        IReadOnlyList<RecordingDetection> detected = await detections.ListAsync([.. series.Select(member => member.RecordingId)], modelVersion, cancellationToken);
+        RecordingId[] members = [.. series.Select(member => member.RecordingId)];
+        Dictionary<RecordingId, RecordingDetection> detected = (await detections.ListAsync(members, modelVersion, cancellationToken))
+            .Where(detection => detection.State is not SegmentDetectionState.Discarded)
+            .ToDictionary(detection => detection.RecordingId);
+        Dictionary<RecordingId, RecordingAnswer> answered = (await answers.ListAsync(members, cancellationToken))
+            .Where(answer => answer is { Stands: true, Confirmed: true })
+            .ToDictionary(answer => answer.RecordingId);
 
         return
         [
-            .. detected
-                .Where(detection => detection.State is not SegmentDetectionState.Discarded)
-                .Select(detection => new PastEpisode(Starts(copies[detection.RecordingId]), detection.Segments)),
+            .. members
+                .Where(member => detected.ContainsKey(member) || answered.ContainsKey(member))
+                .Select(member => new PastEpisode(
+                    member,
+                    Starts(copies[member]),
+                    Ends(copies[member]),
+                    detected.GetValueOrDefault(member)?.Segments,
+                    answered.GetValueOrDefault(member)?.Segments,
+                    answered.GetValueOrDefault(member)?.NamesOpeningsAndEndings ?? false)),
         ];
     }
 
     private static TimeSpan Starts(ProgrammeCopy programme) => programme.ProgrammeStartsAt - programme.RecordingStartedAt;
+
+    private static TimeSpan? Ends(ProgrammeCopy programme) => programme.ProgrammeEndsAt - programme.RecordingStartedAt;
 }

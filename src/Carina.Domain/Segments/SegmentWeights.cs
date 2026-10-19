@@ -2,17 +2,26 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// The weights of the logistic regression a version of the model scores segments with, one set per
-/// kind weighed against the programme. With two kinds, programme and break, only the break is weighed.
+/// kind weighed against the programme. With two kinds, programme and break, only the break is weighed;
+/// with four, the break, the opening and the ending each are.
 /// </summary>
 public sealed class SegmentWeights : IEquatable<SegmentWeights>
 {
+    private static readonly SegmentKind[] TwoKinds = [SegmentKind.Break];
+
+    private static readonly SegmentKind[] FourKinds = [SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending];
+
     public SegmentWeights(IReadOnlyDictionary<SegmentKind, SegmentClassWeights> classes)
     {
         ArgumentNullException.ThrowIfNull(classes);
 
-        if (classes.Count is not 1 || !classes.ContainsKey(SegmentKind.Break))
+        SegmentKind[] weighed = [.. classes.Keys.Order()];
+
+        if (!weighed.SequenceEqual(TwoKinds) && !weighed.SequenceEqual(FourKinds))
         {
-            throw new ArgumentException("Two kinds are told apart by the weights of the break against the programme.", nameof(classes));
+            throw new ArgumentException(
+                "Two kinds are told apart by the weights of the break against the programme, and four by those of the break, the opening and the ending.",
+                nameof(classes));
         }
 
         if (classes.Values.Any(weights => weights is null))

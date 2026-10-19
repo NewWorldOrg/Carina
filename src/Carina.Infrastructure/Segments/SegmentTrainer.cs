@@ -44,12 +44,13 @@ public interface ISegmentTrainer
 /// Gathers what learning reads and learns from it with <see cref="SegmentLearning"/>, a step at a time. The
 /// recordings learned from are those <see cref="LearningSelection"/> chooses among the candidates of
 /// <see cref="ITrainingWorklist"/>, read the way detection reads them (<see cref="SegmentDetecting.GatherAsync"/>),
-/// with the earlier episodes the version in use detected; only their answers and skip events are read, and an
-/// answer not confirmed is read against the detection the version in use made of it. Every catalog entry is handed
-/// over with all its stretches, each placed in its programme beside the kind the answer on its recording gives it,
-/// when that recording is one learned from. A recording whose data cannot be read is left out and said so. Each
-/// step of the learning is its own piece of work on the <see cref="LowestPriorityScheduler"/>, so that whatever
-/// else waits there goes between them. Nothing is written here.
+/// with the earlier episodes as the version in use detected them or as a confirmed answer gives them; only their
+/// answers and skip events are read, and an answer not confirmed is read against the detection the version in use
+/// made of it. Every catalog entry is handed over with all its stretches, each placed in its programme beside the
+/// kind the answer on its recording gives it, when that recording is one learned from. A recording whose data
+/// cannot be read is left out and said so. Each step of the learning is its own piece of work on the
+/// <see cref="LowestPriorityScheduler"/>, so that whatever else waits there goes between them. Nothing is written
+/// here.
 /// </summary>
 public sealed class SegmentTrainer(
     SegmentDetecting detecting,

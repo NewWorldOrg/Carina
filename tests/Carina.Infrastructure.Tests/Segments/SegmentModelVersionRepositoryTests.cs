@@ -13,6 +13,9 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
 {
     private const string Ours = "number BETWEEN 61 AND 69";
 
+    private const string OthersOutOfUse =
+        $"UPDATE segment_model_version SET state = 'Retired', retired_at = adopted_at, by_hand = false, chosen_by_hand_at = NULL WHERE state = 'Active' AND number <> 1 AND NOT ({Ours})";
+
     private static readonly DateTime Noon = new(2026, 10, 18, 12, 0, 0, DateTimeKind.Utc);
 
     private static readonly DateTime Installed = new(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc);
@@ -243,7 +246,7 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         return await new SegmentModelVersionRepository(writing).ChangeAsync(change, at, Cancel);
     }
 
-    private Task<string> StatesAsync() => ScalarAsync("SELECT string_agg(number || ':' || state || ':' || by_hand, ' ' ORDER BY number) FROM segment_model_version");
+    private Task<string> StatesAsync() => ScalarAsync($"SELECT string_agg(number || ':' || state || ':' || by_hand, ' ' ORDER BY number) FROM segment_model_version WHERE number = 1 OR {Ours}");
 
     private async Task<string> ScalarAsync(string sql)
     {
@@ -256,13 +259,14 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
     }
 
     /// <summary>
-    /// Leaves the first version alone in use with the first model, as the migration puts it, beside whatever
-    /// other tests keep, and none of the versions these tests add.
+    /// Leaves the first version alone in use with the first model, the version of four kinds the migrations put in
+    /// use beside it as one used before, whatever other tests keep, and none of the versions these tests add.
     /// </summary>
     private async Task ResetAsync()
     {
         await using CarinaDbContext context = database.Open();
         await context.Database.ExecuteSqlRawAsync($"DELETE FROM segment_model_version WHERE {Ours}", Cancel);
+        await context.Database.ExecuteSqlRawAsync(OthersOutOfUse, Cancel);
         SegmentModelVersion first = SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, SegmentModel.First, Installed, Installed, null, null, null);
 
         int restored = await context.Set<SegmentModelVersion>()
