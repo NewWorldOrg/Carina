@@ -17,10 +17,22 @@ namespace Carina.Domain.Segments;
 /// A break that does not run on to the end, within the tolerance of the grid, is pulled onto it by moving its
 /// end, as the rule-based detection did. Boundaries are kept to <see cref="Resolution"/>. A model that tells
 /// only breaks from the programme makes no opening or ending, and decides as it did before there were four.
+/// <para>
+/// A segment the catalog fixes to a kind (<see cref="SegmentPiece.Fixed"/>) is that kind whatever the regression
+/// takes it for, with the chance of <see cref="FixedBreakChance"/> for a break and <see cref="FixedThemeChance"/>
+/// for an opening or an ending, as long as the model tells that kind apart. It still sits inside the runs, the
+/// costs and the rules above, and the segments beside it are decided by the regression: the sequence chosen
+/// overrules the fewest fixed segments any sequence keeping the rules can, and among those has the greatest sum,
+/// an overruled segment counting as what the regression takes it for.
+/// </para>
 /// </summary>
 public static class SegmentSequence
 {
     public const int RunSteps = 15;
+
+    public const double FixedBreakChance = 0.9;
+
+    public const double FixedThemeChance = 0.8;
 
     public static readonly TimeSpan Resolution = TimeSpan.FromMilliseconds(10);
 
@@ -57,12 +69,13 @@ public static class SegmentSequence
         for (int at = 0; at < pieces.Count; at++)
         {
             Column next = new();
+            Piece piece = new(pieces[at], chances[at]);
 
             for (int state = 0; state < States; state++)
             {
-                if (!double.IsNegativeInfinity(best.Scores[state]))
+                if (best.Reached[state].IsReached)
                 {
-                    Moved(next, state, best.Scores[state], best.Runs[state], pieces[at], chances[at], thresholds);
+                    Moved(next, state, best.Reached[state], best.Runs[state], piece, thresholds);
                 }
             }
 
@@ -70,15 +83,7 @@ public static class SegmentSequence
             best = next;
         }
 
-        for (int state = 0; state < States; state++)
-        {
-            if (!MayEnd(state))
-            {
-                best.Scores[state] = double.NegativeInfinity;
-            }
-        }
-
-        return Traced(came, Array.IndexOf(best.Scores, best.Scores.Max()));
+        return Traced(came, Ending(best));
     }
 
     /// <summary>
@@ -112,7 +117,7 @@ public static class SegmentSequence
 
         for (int at = 0; at < pieces.Count; at++)
         {
-            double chance = chances[at].Of(kinds[at]);
+            double chance = new Piece(pieces[at], chances[at]).Chance(kinds[at]);
             Stretch piece = new(Rounded(pieces[at].Starts, length), Rounded(pieces[at].Ends, length), kinds[at], chance * pieces[at].Length.TotalSeconds, pieces[at].Length.TotalSeconds);
 
             if (stretches.Count > 0 && stretches[^1].Kind == kinds[at])
@@ -151,32 +156,33 @@ public static class SegmentSequence
     /// Offers every move from <paramref name="state"/> through <paramref name="piece"/>: to the programme, to a
     /// break, to the opening and to the ending, in that order, so that a tie keeps the earlier.
     /// </summary>
-    private static void Moved(Column next, int state, double score, TimeSpan run, SegmentPiece piece, SegmentChances chances, SegmentThresholds thresholds)
+    private static void Moved(Column next, int state, Reach reach, TimeSpan run, Piece piece, SegmentThresholds thresholds)
     {
         SegmentKind kind = KindOf(state);
         int used = state / Block;
+        TimeSpan length = piece.Segment.Length;
 
         if (IsShort(state))
         {
-            Themed(next, (used * Block) + (kind is SegmentKind.Opening ? ShortOpening : ShortEnding), state, score + chances.LogOf(kind), run + piece.Length);
+            Themed(next, (used * Block) + (kind is SegmentKind.Opening ? ShortOpening : ShortEnding), state, reach.Then(piece.Taken(kind)), run + length);
 
             return;
         }
 
         double leaving = Leaving(state, run, thresholds);
-        TimeSpan breaks = (kind is SegmentKind.Break ? run : TimeSpan.Zero) + piece.Fitted;
+        TimeSpan breaks = (kind is SegmentKind.Break ? run : TimeSpan.Zero) + piece.Segment.Fitted;
 
-        next.Offer(used * Block, state, score + leaving + chances.LogOf(SegmentKind.Programme), TimeSpan.Zero);
-        next.Offer((used * Block) + BreakState(breaks), state, score + chances.LogOf(SegmentKind.Break), breaks);
+        next.Offer(used * Block, state, reach.Then(piece.Taken(SegmentKind.Programme), leaving), TimeSpan.Zero);
+        next.Offer((used * Block) + BreakState(breaks), state, reach.Then(piece.Taken(SegmentKind.Break)), breaks);
 
         if (kind is SegmentKind.Opening || used is 0)
         {
-            Themed(next, (OpeningUsed * Block) + ShortOpening, state, score + leaving + chances.LogOf(SegmentKind.Opening), (kind is SegmentKind.Opening ? run : TimeSpan.Zero) + piece.Length);
+            Themed(next, (OpeningUsed * Block) + ShortOpening, state, reach.Then(piece.Taken(SegmentKind.Opening), leaving), (kind is SegmentKind.Opening ? run : TimeSpan.Zero) + length);
         }
 
         if (kind is SegmentKind.Ending || (used & EndingUsed) is 0)
         {
-            Themed(next, ((used | EndingUsed) * Block) + ShortEnding, state, score + leaving + chances.LogOf(SegmentKind.Ending), (kind is SegmentKind.Ending ? run : TimeSpan.Zero) + piece.Length);
+            Themed(next, ((used | EndingUsed) * Block) + ShortEnding, state, reach.Then(piece.Taken(SegmentKind.Ending), leaving), (kind is SegmentKind.Ending ? run : TimeSpan.Zero) + length);
         }
     }
 
@@ -185,12 +191,30 @@ public static class SegmentSequence
     /// <paramref name="shortState"/>, lasting <paramref name="run"/> with it: to that state while it is still that
     /// short, to the one after it once it may be left, and nowhere when it is longer than one may last.
     /// </summary>
-    private static void Themed(Column next, int shortState, int from, double score, TimeSpan run)
+    private static void Themed(Column next, int shortState, int from, Reach reach, TimeSpan run)
     {
         if (run <= CatalogKinds.ThemeLongest)
         {
-            next.Offer(run < CatalogKinds.ThemeShortest ? shortState : shortState + 1, from, score, run);
+            next.Offer(run < CatalogKinds.ThemeShortest ? shortState : shortState + 1, from, reach, run);
         }
+    }
+
+    /// <summary>
+    /// The state the sequence chosen ends in: the best one may end in, the earliest of those that tie.
+    /// </summary>
+    private static int Ending(Column last)
+    {
+        int ending = 0;
+
+        for (int state = 1; state < States; state++)
+        {
+            if (MayEnd(state) && last.Reached[state].Beats(last.Reached[ending]))
+            {
+                ending = state;
+            }
+        }
+
+        return ending;
     }
 
     private static bool IsShort(int state) => state % Block is ShortOpening or ShortEnding;
@@ -250,9 +274,48 @@ public static class SegmentSequence
         }
     }
 
+    /// <summary>
+    /// How a state is reached: by overruling how many fixed segments, and with what sum. Fewer overruled beats
+    /// more, then the greater sum; a sum of nothing at all is not reached.
+    /// </summary>
+    private readonly record struct Reach(int Overruled, double Score)
+    {
+        public static Reach None { get; } = new(int.MaxValue, double.NegativeInfinity);
+
+        public bool IsReached => !double.IsNegativeInfinity(Score);
+
+        public Reach Then(Reach taken, double cost = 0) => new(Overruled + taken.Overruled, Score + taken.Score + cost);
+
+        public bool Beats(Reach other) => Overruled != other.Overruled ? Overruled < other.Overruled : Score > other.Score;
+    }
+
+    /// <summary>
+    /// One segment with its chances, fixed to a kind when the catalog fixes it to a break, an opening or an ending
+    /// the model tells apart.
+    /// </summary>
+    private readonly record struct Piece(SegmentPiece Segment, SegmentChances Chances)
+    {
+        public SegmentKind? Fixed
+            => Segment.Fixed is SegmentKind kind and not SegmentKind.Programme && Chances.Weighs(kind) ? kind : null;
+
+        public Reach Taken(SegmentKind kind)
+        {
+            if (Fixed is not SegmentKind fixedTo)
+            {
+                return new Reach(0, Chances.LogOf(kind));
+            }
+
+            return fixedTo == kind ? new Reach(0, Math.Log(FixedChance(kind))) : new Reach(1, Chances.LogOf(kind));
+        }
+
+        public double Chance(SegmentKind kind) => Fixed == kind ? FixedChance(kind) : Chances.Of(kind);
+
+        private static double FixedChance(SegmentKind kind) => kind is SegmentKind.Break ? FixedBreakChance : FixedThemeChance;
+    }
+
     private sealed class Column
     {
-        public double[] Scores { get; } = [.. Enumerable.Repeat(double.NegativeInfinity, States)];
+        public Reach[] Reached { get; } = [.. Enumerable.Repeat(Reach.None, States)];
 
         public TimeSpan[] Runs { get; } = new TimeSpan[States];
 
@@ -262,16 +325,16 @@ public static class SegmentSequence
         {
             Column start = new();
 
-            start.Scores[0] = 0;
+            start.Reached[0] = new Reach(0, 0);
 
             return start;
         }
 
-        public void Offer(int to, int from, double score, TimeSpan run)
+        public void Offer(int to, int from, Reach reach, TimeSpan run)
         {
-            if (score > Scores[to])
+            if (reach.IsReached && reach.Beats(Reached[to]))
             {
-                Scores[to] = score;
+                Reached[to] = reach;
                 Runs[to] = run;
                 Came[to] = from;
             }

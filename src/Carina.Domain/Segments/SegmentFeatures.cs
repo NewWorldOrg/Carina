@@ -2,9 +2,10 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// A segment, the stretch between two neighbouring boundary candidates: where it starts and ends, its
-/// length fitted to the grid from any of the cuts its edges took in, and its features.
+/// length fitted to the grid from any of the cuts its edges took in, its features, and the kind the catalog
+/// fixes it to, when it does (<see cref="SegmentSequence"/>).
 /// </summary>
-public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitted, SegmentFeatureValues Features)
+public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitted, SegmentFeatureValues Features, SegmentKind? Fixed = null)
 {
     public TimeSpan Length => Ends - Starts;
 }
@@ -122,7 +123,7 @@ public static class SegmentFeatures
                 features[SegmentFeature.Genre(kind)] = genre is null ? null : (genre == kind ? 1 : 0);
             }
 
-            return new SegmentPiece(piece.From, piece.To, fitted, SegmentFeatureValues.Of(features));
+            return new SegmentPiece(piece.From, piece.To, fitted, SegmentFeatureValues.Of(features), FixedBy(context.Catalog, piece));
         }
 
         private TimeSpan ProgrammeLength => programmeEnds > programmeStarts ? programmeEnds - programmeStarts : evidence.Length;
@@ -233,6 +234,40 @@ public static class SegmentFeatures
         private static TimeSpan Clipped(TimeSpan from, TimeSpan to) => to > from ? to - from : TimeSpan.Zero;
     }
 
+    /// <summary>
+    /// The kind the catalog fixes a segment to: a break, an opening or an ending whose stretches over it cover more
+    /// than half of it, the surest of those that do, then the earlier kind; none when no such kind does.
+    /// </summary>
+    private static SegmentKind? FixedBy(IReadOnlyList<CatalogHeard> catalog, Stretch piece)
+        => catalog
+            .Where(heard => heard.Kind is SegmentKind.Break or SegmentKind.Opening or SegmentKind.Ending && heard.Starts < piece.To && heard.Ends > piece.From)
+            .GroupBy(heard => heard.Kind!.Value)
+            .Where(kind => Union([.. kind], piece) * 2 > piece.Length)
+            .OrderByDescending(kind => kind.Max(heard => heard.Confidence ?? 0))
+            .ThenBy(kind => kind.Key)
+            .Select(kind => (SegmentKind?)kind.Key)
+            .FirstOrDefault();
+
+    private static TimeSpan Union(CatalogHeard[] heard, Stretch piece)
+    {
+        TimeSpan total = TimeSpan.Zero;
+        TimeSpan reached = piece.From;
+
+        foreach (CatalogHeard stretch in heard.OrderBy(stretch => stretch.Starts))
+        {
+            TimeSpan from = stretch.Starts > reached ? stretch.Starts : reached;
+            TimeSpan to = stretch.Ends < piece.To ? stretch.Ends : piece.To;
+
+            if (to > from)
+            {
+                total += to - from;
+                reached = to;
+            }
+        }
+
+        return total;
+    }
+
     private readonly record struct Stretch(TimeSpan From, TimeSpan To)
     {
         public TimeSpan Length => To - From;
@@ -275,25 +310,5 @@ public static class SegmentFeatures
         }
 
         public double Share(SegmentKind? kind) => (kind is SegmentKind counted ? byKind[counted] : all) / length;
-
-        private static TimeSpan Union(CatalogHeard[] heard, Stretch piece)
-        {
-            TimeSpan total = TimeSpan.Zero;
-            TimeSpan reached = piece.From;
-
-            foreach (CatalogHeard stretch in heard.OrderBy(stretch => stretch.Starts))
-            {
-                TimeSpan from = stretch.Starts > reached ? stretch.Starts : reached;
-                TimeSpan to = stretch.Ends < piece.To ? stretch.Ends : piece.To;
-
-                if (to > from)
-                {
-                    total += to - from;
-                    reached = to;
-                }
-            }
-
-            return total;
-        }
     }
 }
