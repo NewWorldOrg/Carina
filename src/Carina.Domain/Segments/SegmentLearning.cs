@@ -16,8 +16,8 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// from never takes it away; the same holds in every fold of the leave-one-out. Every setting of the search is judged
 /// by leave-one-out in time: each recording judged is detected again with the entries set aside for it
 /// (<see cref="LearningCatalog.SetAsideFor"/>) heard nowhere in it, which leaves it hearing nothing of the catalog,
-/// and its earlier episodes remembered without what they were taken to hold over a stretch of one of them
-/// (<see cref="LearningCatalog.Forgetting"/>), with a model fitted to every other recording's labels, none of them
+/// and its earlier episodes remembered without the part of what they were taken to hold that lies over a stretch of
+/// one of them (<see cref="LearningCatalog.Forgetting"/>), with a model fitted to every other recording's labels, none of them
 /// standing on an entry set aside for it, and compared with what the catalog is sure of in it. The setting chosen finds the most boundaries within two seconds,
 /// then the most seconds of adverts (<see cref="SegmentAdoption.Better"/>); a tie keeps the setting tried first. With
 /// nothing judged, the first setting is the only one tried. The candidate is fitted to every label with the chosen

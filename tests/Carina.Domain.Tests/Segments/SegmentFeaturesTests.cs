@@ -265,6 +265,30 @@ public sealed class SegmentFeaturesTests
         Assert.Same(context, catalog.Forgetting(context, new HashSet<CatalogEntryId>()));
     }
 
+    [Fact(DisplayName = "BR-CD-008: an earlier episode forgets only the part of a stretch it was taken to hold that lies over a stretch of an entry set aside, and keeps the rest of it as it was")]
+    public void AnEarlierEpisodeForgetsOnlyThePartOverAnEntrySetAside()
+    {
+        PastEpisode episode = new(
+            RecordingId.New(),
+            CatalogSeries.Lead,
+            null,
+            [
+                new SegmentSpan(TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(60), SegmentKind.Programme, 0.9),
+                new SegmentSpan(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(150), SegmentKind.Break, 0.8),
+                new SegmentSpan(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(960), SegmentKind.Programme, 0.9),
+                new SegmentSpan(TimeSpan.FromSeconds(960), TimeSpan.FromSeconds(1000), SegmentKind.Break, null),
+            ]);
+        SoundSpan[] setAside = [new(TimeSpan.FromSeconds(140), TimeSpan.FromSeconds(170)), new(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(120)), new(TimeSpan.FromSeconds(950), TimeSpan.FromSeconds(1010))];
+
+        PastEpisode forgetting = episode.Without(setAside);
+
+        Assert.Equal(
+            [(0d, 60d, SegmentKind.Programme, (double?)0.9), (60, 90, SegmentKind.Break, 0.8), (120, 140, SegmentKind.Break, 0.8), (170, 950, SegmentKind.Programme, 0.9)],
+            forgetting.Segments.Select(segment => (segment.Starts.TotalSeconds, segment.Ends.TotalSeconds, segment.Kind, segment.Probability)));
+        Assert.True(forgetting.HadABreakNear(TimeSpan.FromSeconds(130) - CatalogSeries.Lead, TimeSpan.Zero));
+        Assert.False(forgetting.HadABreakNear(TimeSpan.FromSeconds(105) - CatalogSeries.Lead, TimeSpan.Zero));
+    }
+
     [Fact(DisplayName = "the caption share and the channels' mean likeness are read over the piece, and are not known without readings")]
     public void CaptionsAndChannelsAreReadOverThePiece()
     {

@@ -34,8 +34,8 @@ public sealed record PastEpisode
     public IReadOnlyList<SegmentSpan> Segments { get; }
 
     /// <summary>
-    /// The episode as it is remembered without the stretches it was taken to hold that lie over any of
-    /// <paramref name="sounds"/>.
+    /// The episode as it is remembered without the part of each stretch it was taken to hold that lies over any of
+    /// <paramref name="sounds"/>; what is left of a stretch keeps its kind and probability.
     /// </summary>
     public PastEpisode Without(IReadOnlyList<SoundSpan> sounds)
     {
@@ -43,11 +43,7 @@ public sealed record PastEpisode
 
         return sounds.Count is 0
             ? this
-            : new PastEpisode(
-                Recording,
-                ProgrammeStarts,
-                ProgrammeEnds,
-                [.. Segments.Where(segment => !sounds.Any(sound => segment.Starts < sound.Ends && segment.Ends > sound.Starts))]);
+            : new PastEpisode(Recording, ProgrammeStarts, ProgrammeEnds, [.. Segments.SelectMany(segment => Left(segment, sounds))]);
     }
 
     /// <summary>
@@ -70,6 +66,26 @@ public sealed record PastEpisode
     /// </summary>
     public bool HadAnEndingNear(TimeSpan beforeProgrammeEnd, TimeSpan within)
         => Segments.Count is not 0 && Had(SegmentKind.Ending, (ProgrammeEnds ?? Segments[^1].Ends) - beforeProgrammeEnd, within);
+
+    private static IEnumerable<SegmentSpan> Left(SegmentSpan segment, IReadOnlyList<SoundSpan> sounds)
+    {
+        TimeSpan from = segment.Starts;
+
+        foreach (SoundSpan sound in sounds.Where(sound => sound.Starts < segment.Ends && sound.Ends > segment.Starts).OrderBy(sound => sound.Starts))
+        {
+            if (sound.Starts > from)
+            {
+                yield return new SegmentSpan(from, sound.Starts, segment.Kind, segment.Probability);
+            }
+
+            from = sound.Ends > from ? sound.Ends : from;
+        }
+
+        if (segment.Ends > from)
+        {
+            yield return new SegmentSpan(from, segment.Ends, segment.Kind, segment.Probability);
+        }
+    }
 
     private bool Had(SegmentKind kind, TimeSpan at, TimeSpan within)
         => Segments.Any(segment => segment.Kind == kind && segment.Starts <= at + within && segment.Ends >= at - within);
