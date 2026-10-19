@@ -180,6 +180,28 @@ public sealed class SegmentModelVersionTests
         Assert.Throws<InvalidOperationException>(() => SegmentModelVersion.Change([inUse], SegmentVersionChange.Adopting(3), Noon.AddDays(1)));
     }
 
+    [Fact(DisplayName = "BR-CD-013: the version of four kinds made by hand takes the place of the first while the first is in use as installed, and moves nothing beside a version learned or chosen by hand, or with no such candidate")]
+    public void TheVersionOfFourKindsTakesThePlaceOfTheFirstAsInstalled()
+    {
+        SegmentModelVersion first = Version(1, SegmentModelVersionState.Active, adoptedAt: Noon);
+        SegmentModelVersion learned = Version(5, SegmentModelVersionState.Candidate, evaluation: Evaluated);
+        SegmentModelVersion made = Four(3);
+        SegmentModelVersion older = Four(2);
+        SegmentModelVersion chosen = Version(1, SegmentModelVersionState.Active, adoptedAt: Noon, byHand: true, chosenAt: Noon);
+        SegmentModelVersion learnedInUse = Version(4, SegmentModelVersionState.Active, adoptedAt: Noon, evaluation: Evaluated);
+        SegmentVersionChange change = SegmentVersionChange.FourKindsInPlaceOfTheFirst;
+
+        SegmentVersionChanged moved = SegmentModelVersion.Change([first, older, made, learned], change, Noon.AddDays(1))!;
+
+        Assert.Equal((3, SegmentModelVersionState.Active, (DateTime?)Noon.AddDays(1)), (moved.Active.Number, moved.Active.State, moved.Active.AdoptedAt));
+        Assert.Equal([1, 3], moved.Written.Select(version => version.Number));
+        Assert.Equal((SegmentModelVersionState.Retired, (DateTime?)Noon.AddDays(1)), (moved.Written[0].State, moved.Written[0].RetiredAt));
+        Assert.Empty(SegmentModelVersion.Change([chosen, made], change, Noon.AddDays(1))!.Written);
+        Assert.Empty(SegmentModelVersion.Change([first, learned], change, Noon.AddDays(1))!.Written);
+        Assert.Empty(SegmentModelVersion.Change([learnedInUse, made], change, Noon.AddDays(1))!.Written);
+        Assert.Equal(4, SegmentModelVersion.Change([learnedInUse, made], change, Noon.AddDays(1))!.Active.Number);
+    }
+
     [Fact(DisplayName = "a change naming a number no version has changes nothing, and the versions kept have exactly one in use")]
     public void AChangeNamingAnUnknownNumberChangesNothing()
     {
@@ -205,6 +227,9 @@ public sealed class SegmentModelVersionTests
         [new StationMetrics(new NetworkId(1), new ServiceId(1), 5, new SegmentMetrics(0.96, 0.9, 1, 1.4, [], null, 0))],
         new EvaluationEvidence(12, 148, Noon.AddDays(-1)),
         0.65);
+
+    private static SegmentModelVersion Four(int number)
+        => SegmentModelVersion.Rehydrate(number, SegmentModelVersionState.Candidate, false, SegmentModel.FirstOfFourKinds, Noon, null, null, null, null);
 
     private static (SegmentModelVersionState, bool, DateTime?, DateTime?, DateTime?, DateTime?) Stand(SegmentModelVersion version)
         => (version.State, version.ByHand, version.AdoptedAt, version.RetiredAt, version.ChosenByHandAt, version.RolledBackAt);

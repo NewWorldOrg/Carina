@@ -21,9 +21,11 @@ public sealed class FourKindVersionMigrationTests
 
     private const string Learned = """{"confirmedRecordings": 12, "boundaries": 148, "labelsUntil": null}""";
 
+    private const string LearningOn = "INSERT INTO segment_settings (id, learning, learning_changed_at) VALUES (1, true, now())";
+
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-CD-007: the first version of four kinds takes the place of the first version in use after the candidates kept, read back as the model made by hand, and going back puts the first version in use again")]
+    [Fact(DisplayName = "BR-CD-007: while learning is on the first version of four kinds takes the place of the first version in use after the candidates kept, read back as the model made by hand, and going back puts the first version in use again and keeps what viewers did")]
     public async Task TheFirstVersionOfFourKindsTakesThePlaceOfTheFirst()
     {
         await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
@@ -33,6 +35,7 @@ public sealed class FourKindVersionMigrationTests
 
         await using (NpgsqlConnection before = await OpenAsync())
         {
+            await ExecuteAsync(before, LearningOn);
             await ExecuteAsync(before, Version(2, "'Candidate'", "NULL", "NULL", $"'{Learned}'"));
         }
 
@@ -51,6 +54,7 @@ public sealed class FourKindVersionMigrationTests
         {
             Assert.Equal("1:Retired 2:Candidate 3:Active", await StatesAsync(after));
             await ExecuteAsync(after, "INSERT INTO segment_detection (recording_id, model_version, state, segments, cm_share, snaps, extraction_version, catalog_until, detected_at) VALUES (gen_random_uuid(), 3, 'NothingFound', '[{\"startsAtSec\": 0, \"endsAtSec\": 1800, \"kind\": \"Programme\", \"probability\": 0.9}]', 0, '[]', 2, now(), now())");
+            await ExecuteAsync(after, "INSERT INTO segment_skip_event (recording_id, happened_at, event, kind, from_at, to_at, model_version) VALUES (gen_random_uuid(), now(), 'Skipped', 'Opening', interval '30 seconds', interval '120 seconds', 3)");
         }
 
         await migrator.MigrateAsync(BeforeTheVersionWasMade, Cancel);
@@ -60,6 +64,34 @@ public sealed class FourKindVersionMigrationTests
             Assert.Equal("1:Active 2:Candidate", await StatesAsync(back));
             Assert.Equal("NULL", await ScalarAsync(back, "SELECT coalesce(retired_at::text, 'NULL') FROM segment_model_version WHERE number = 1"));
             Assert.Equal("0", await ScalarAsync(back, "SELECT count(*) FROM segment_detection"));
+            Assert.Equal("1 NULL", await ScalarAsync(back, "SELECT concat_ws(' ', count(*), coalesce(max(model_version)::text, 'NULL')) FROM segment_skip_event"));
+        }
+
+        await context.Database.EnsureDeletedAsync(Cancel);
+    }
+
+    [Theory(DisplayName = "BR-CD-013: while learning is off, the first version stays in use and the first version of four kinds waits as a candidate, whether the settings were ever written or not")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WhileLearningIsOffTheFirstVersionStays(bool written)
+    {
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
+        await context.Database.EnsureDeletedAsync(Cancel);
+        IMigrator migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(BeforeTheVersionWasMade, Cancel);
+
+        if (written)
+        {
+            await using NpgsqlConnection before = await OpenAsync();
+            await ExecuteAsync(before, "INSERT INTO segment_settings (id, learning, learning_changed_at) VALUES (1, false, now())");
+        }
+
+        await migrator.MigrateAsync(cancellationToken: Cancel);
+
+        await using (NpgsqlConnection after = await OpenAsync())
+        {
+            Assert.Equal("1:Active 2:Candidate", await StatesAsync(after));
+            Assert.Equal("4 NULL", await ScalarAsync(after, "SELECT concat_ws(' ', kinds, coalesce(adopted_at::text, 'NULL')) FROM segment_model_version WHERE number = 2"));
         }
 
         await context.Database.EnsureDeletedAsync(Cancel);
@@ -77,6 +109,7 @@ public sealed class FourKindVersionMigrationTests
 
         await using (NpgsqlConnection before = await OpenAsync())
         {
+            await ExecuteAsync(before, LearningOn);
             await ExecuteAsync(before, "UPDATE segment_model_version SET state = 'Retired', retired_at = now() WHERE number = 1");
             await ExecuteAsync(before, Version(2, "'Active'", "now()", byHand ? "now()" : "NULL", byHand ? "NULL" : $"'{Learned}'"));
         }
@@ -107,6 +140,11 @@ public sealed class FourKindVersionMigrationTests
         IMigrator migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync(BeforeTheVersionWasMade, Cancel);
         Task migrated;
+
+        await using (NpgsqlConnection settings = await OpenAsync())
+        {
+            await ExecuteAsync(settings, LearningOn);
+        }
 
         await using (NpgsqlConnection round = await OpenAsync())
         {

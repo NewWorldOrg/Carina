@@ -22,24 +22,24 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
 
     private int nextEvent = 8_100;
 
-    [Fact(DisplayName = "BR-CS-003: the first version holds the first model and no figures of an evaluation, and the first version of four kinds, made by hand, has taken its place in use")]
-    public async Task TheFirstVersionOfFourKindsIsInUseFromTheStart()
+    [Fact(DisplayName = "BR-CS-003: the first version is in use from the start, holding the first model and no figures of an evaluation, and the first version of four kinds, made by hand, waits beside it as a candidate while learning is off")]
+    public async Task TheFirstVersionIsInUseFromTheStart()
     {
         await using CarinaDbContext context = Context();
         IReadOnlyList<SegmentModelVersion> kept = await new SegmentModelVersionRepository(context).ListAsync(CancellationToken.None);
-        SegmentModelVersion first = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber);
+        SegmentModelVersion four = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber + 1);
         SegmentModelVersion active = await ActiveAsync();
 
-        Assert.Equal(SegmentModelVersion.FirstNumber + 1, active.Number);
+        Assert.Equal(SegmentModelVersion.FirstNumber, active.Number);
         Assert.False(active.ByHand);
-        Assert.Equal(4, active.Kinds);
-        Assert.Equal(SegmentModel.FirstOfFourKinds, active.Model);
+        Assert.Equal(2, active.Kinds);
+        Assert.Equal(SegmentModel.First, active.Model);
         Assert.Equal(active.TrainedAt, active.AdoptedAt);
-        Assert.Null(active.Evaluation);
-        Assert.Equal(SegmentModelVersionState.Retired, first.State);
-        Assert.Equal(2, first.Kinds);
-        Assert.Equal(SegmentModel.First, first.Model);
-        Assert.Equal(active.AdoptedAt, first.RetiredAt);
+        Assert.Null(active.RetiredAt);
+        Assert.Equal(SegmentModelVersionState.Candidate, four.State);
+        Assert.Equal(4, four.Kinds);
+        Assert.Equal(SegmentModel.FirstOfFourKinds, four.Model);
+        Assert.Null(four.Evaluation);
         Assert.Equal(
             "NULL NULL NULL NULL NULL",
             await ScalarAsync("SELECT concat_ws(' ', coalesce(metrics::text, 'NULL'), coalesce(stations::text, 'NULL'), coalesce(evidence::text, 'NULL'), coalesce(recommended_threshold::text, 'NULL'), coalesce(rollback::text, 'NULL')) FROM segment_model_version WHERE number = 1"));

@@ -154,7 +154,8 @@ public sealed class SegmentModelVersion
     /// learning keeps the version in use and no longer marks it chosen. Learning puts only a candidate in use
     /// and goes back only to a version used before, and never moves a version chosen by hand; a rollback is
     /// kept on the version it leaves. A version put in use again sheds what an earlier rollback from it
-    /// measured. A change that moves nothing writes nothing.
+    /// measured. The version of four kinds made by hand takes the place of the first only while the first is in use
+    /// as it was installed. A change that moves nothing writes nothing.
     /// </summary>
     public static SegmentVersionChanged? Change(IReadOnlyList<SegmentModelVersion> kept, SegmentVersionChange change, DateTime at)
     {
@@ -166,6 +167,11 @@ public sealed class SegmentModelVersion
         if (active is not [SegmentModelVersion inUse])
         {
             throw new InvalidOperationException("Exactly one version is in use.");
+        }
+
+        if (change.InPlaceOfTheFirst)
+        {
+            return InPlaceOfTheFirst(kept, inUse, at);
         }
 
         if (change.To is not int number)
@@ -211,6 +217,22 @@ public sealed class SegmentModelVersion
         {
             throw new InvalidOperationException("Learning puts only a candidate in use, and goes back only to a version used before.");
         }
+    }
+
+    /// <summary>
+    /// Puts the latest version made by hand with four kinds, never evaluated and still a candidate, in use in place
+    /// of the first, when the version in use is still the first as it was installed: made by hand with two kinds,
+    /// never evaluated and not chosen by hand. Otherwise nothing moves.
+    /// </summary>
+    private static SegmentVersionChanged InPlaceOfTheFirst(IReadOnlyList<SegmentModelVersion> kept, SegmentModelVersion inUse, DateTime at)
+    {
+        SegmentModelVersion? made = kept
+            .Where(version => version is { State: SegmentModelVersionState.Candidate, Kinds: 4, Evidence: null })
+            .MaxBy(version => version.Number);
+
+        return inUse is { ByHand: false, Kinds: 2, Evidence: null } && made is not null
+            ? Moved(inUse, made, SegmentVersionChange.Adopting(made.Number), at)
+            : Changed([], inUse);
     }
 
     private static SegmentVersionChanged Changed(SegmentModelVersion moved) => new([moved], moved);
@@ -272,25 +294,32 @@ public sealed class SegmentModelVersion
 
 /// <summary>
 /// A change to which version of the model is in use, or to how it came to be: learning putting a candidate in
-/// use, a rollback going back to the version before, a version chosen by hand, or the choice left to learning
-/// again. <see cref="To"/> is the version moved to, none when the version in use stays.
+/// use, a rollback going back to the version before, a version chosen by hand, the choice left to learning
+/// again, or the version of four kinds made by hand put in place of the first once learning is on.
+/// <see cref="To"/> is the version moved to, none when the version in use stays or is worked out from the
+/// versions kept.
 /// </summary>
 public sealed record SegmentVersionChange
 {
-    private SegmentVersionChange(int? to, bool byHand, SegmentRollback? rollback)
+    private SegmentVersionChange(int? to, bool byHand, SegmentRollback? rollback, bool inPlaceOfTheFirst = false)
     {
         To = to;
         ByHand = byHand;
         Rollback = rollback;
+        InPlaceOfTheFirst = inPlaceOfTheFirst;
     }
 
     public static SegmentVersionChange LeftToLearning { get; } = new(null, false, null);
+
+    public static SegmentVersionChange FourKindsInPlaceOfTheFirst { get; } = new(null, false, null, true);
 
     public int? To { get; }
 
     public bool ByHand { get; }
 
     public SegmentRollback? Rollback { get; }
+
+    public bool InPlaceOfTheFirst { get; }
 
     public static SegmentVersionChange Adopting(int candidate) => new(candidate, false, null);
 

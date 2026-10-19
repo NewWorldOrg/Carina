@@ -7,10 +7,13 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Carina.Db.Migrations;
 
 /// <summary>
-/// Keeps the first version of four kinds, made by hand, numbered after the highest number kept. It takes the place
-/// of the version in use when that one was made by hand too, has never been evaluated and was not chosen by hand,
-/// as the first version did when the feature went in; otherwise it is kept as a candidate, and the version in use
-/// stays. The version in use changing is what has the detections made again in spare time.
+/// Keeps the first version of four kinds, made by hand, numbered after the highest number kept under the lock a round
+/// of learning keeps its candidate under. While learning is on, it takes the place of the version in use when that
+/// one was made by hand too, has never been evaluated and was not chosen by hand, as the first version did when the
+/// feature went in; otherwise it is kept as a candidate, and the version in use stays. While learning is off nothing
+/// moves the version in use, so the candidate waits for learning to be turned on, which puts it in use on the same
+/// conditions. The version in use changing is what has the detections made again in spare time. Going back clears
+/// the version from what viewers did with its buttons rather than throwing that away.
 /// </summary>
 public partial class AVersionMadeByHandTellsOpeningsAndEndingsApart : Migration
 {
@@ -45,6 +48,7 @@ public partial class AVersionMadeByHandTellsOpeningsAndEndingsApart : Migration
             UPDATE segment_model_version
             SET state = 'Retired', retired_at = now()
             WHERE state = 'Active' AND NOT by_hand AND kinds = 2 AND evidence IS NULL
+              AND EXISTS (SELECT 1 FROM segment_settings WHERE learning)
             """);
         migrationBuilder.Sql(
             """
@@ -62,7 +66,7 @@ public partial class AVersionMadeByHandTellsOpeningsAndEndingsApart : Migration
 
         migrationBuilder.Sql(TakeTurn);
         migrationBuilder.Sql($"DELETE FROM segment_detection WHERE model_version IN (SELECT number FROM segment_model_version WHERE {Made})");
-        migrationBuilder.Sql($"DELETE FROM segment_skip_event WHERE model_version IN (SELECT number FROM segment_model_version WHERE {Made})");
+        migrationBuilder.Sql($"UPDATE segment_skip_event SET model_version = NULL WHERE model_version IN (SELECT number FROM segment_model_version WHERE {Made})");
         migrationBuilder.Sql(
             $"""
             UPDATE segment_model_version
