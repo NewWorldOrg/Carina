@@ -722,6 +722,8 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             ["boundaryRecallWithin2s", "boundaryRecallWithin1s", "extraBoundariesPerRecording", "programmeSkippedSecondsPerHour", "kinds", "returnedAfterSkipShare", "skips"],
             Properties(schemas, "SegmentMetricsResponder"));
         Assert.Equal(["kind", "recall", "precision"], Properties(schemas, "SegmentKindMetricsResponder"));
+        Assert.EndsWith("/SegmentKind", schemas["SegmentKindMetricsResponder"]!["properties"]!["kind"]!["$ref"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal(["programme", "break", "opening", "ending"], schemas["SegmentKind"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
         Assert.Equal(["networkId", "serviceId", "confirmedRecordings", "metrics"], Properties(schemas, "SegmentStationResponder"));
         Assert.Equal(["boundaryRecallWithin2s", "programmeSkippedSecondsPerHour"], Properties(schemas, "SegmentMetricsSummaryResponder"));
         Assert.Equal(

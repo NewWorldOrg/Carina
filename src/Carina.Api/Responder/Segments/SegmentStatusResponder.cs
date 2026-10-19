@@ -77,8 +77,9 @@ public sealed record SegmentKindMetricsResponder(SegmentKind Kind, double? Recal
 /// <summary>
 /// How the version in use detects the confirmed recordings: the share of answered boundaries found within two
 /// seconds and within one, the extra boundaries per recording, the seconds of programme a button would skip per
-/// hour, the seconds of breaks found, and the share of skips on its buttons viewers came back from over the
-/// last seven days, with how many skips that is of. The seconds of openings and endings found are kept back.
+/// hour, the seconds found of each kind it was measured on, breaks and, once evaluated on them, openings and
+/// endings, and the share of skips on its buttons viewers came back from over the last seven days, with how many
+/// skips that is of.
 /// </summary>
 public sealed record SegmentMetricsResponder(
     double? BoundaryRecallWithin2s,
@@ -98,7 +99,7 @@ public sealed record SegmentMetricsResponder(
             metrics.BoundaryRecallWithin1s,
             metrics.ExtraBoundariesPerRecording,
             metrics.ProgrammeSkippedSecondsPerHour,
-            [.. metrics.Kinds.Where(kind => kind.Kind is SegmentKind.Break).Select(kind => new SegmentKindMetricsResponder(kind.Kind, kind.Recall, kind.Precision))],
+            [.. metrics.Kinds.Select(kind => new SegmentKindMetricsResponder(kind.Kind, kind.Recall, kind.Precision))],
             metrics.ReturnedAfterSkipShare,
             metrics.Skips);
     }

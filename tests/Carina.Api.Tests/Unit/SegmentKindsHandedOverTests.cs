@@ -36,8 +36,8 @@ public sealed class SegmentKindsHandedOverTests
             handed.Select(chapter => (chapter.StartsAtSec, chapter.EndsAtSec, chapter.Kind, chapter.Skippable)));
     }
 
-    [Fact(DisplayName = "BR-CD-008: the figures of the version in use answer the seconds of breaks found, and keep those of openings and endings back until the status names them")]
-    public void TheStatusAnswersTheBreaksAlone()
+    [Fact(DisplayName = "BR-CD-008: the figures of the version in use answer the seconds of breaks, openings and endings found, each kind in a row of its own")]
+    public void TheStatusAnswersEveryKindMeasured()
     {
         SegmentMetrics metrics = new(
             0.9,
@@ -48,9 +48,21 @@ public sealed class SegmentKindsHandedOverTests
             null,
             0);
 
-        SegmentKindMetricsResponder kind = Assert.Single(SegmentMetricsResponder.Of(metrics).Kinds);
+        Assert.Equal(
+            [
+                new SegmentKindMetricsResponder(SegmentKind.Break, 0.95, 0.97),
+                new SegmentKindMetricsResponder(SegmentKind.Opening, 0.5, 0.6),
+                new SegmentKindMetricsResponder(SegmentKind.Ending, null, null),
+            ],
+            SegmentMetricsResponder.Of(metrics).Kinds);
+    }
 
-        Assert.Equal(new SegmentKindMetricsResponder(SegmentKind.Break, 0.95, 0.97), kind);
+    [Fact(DisplayName = "BR-CD-008: a version evaluated before openings and endings were measured answers the row for breaks alone")]
+    public void AVersionEvaluatedBeforeOpeningsAndEndingsWereMeasuredAnswersBreaksAlone()
+    {
+        SegmentMetrics metrics = new(0.9, 0.8, 1.0, 2.0, [new KindMetrics(SegmentKind.Break, 0.95, 0.97)], null, 0);
+
+        Assert.Equal([new SegmentKindMetricsResponder(SegmentKind.Break, 0.95, 0.97)], SegmentMetricsResponder.Of(metrics).Kinds);
     }
 
     private static SegmentSpan Span(double from, double to, SegmentKind kind) => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, 0.9);
