@@ -160,6 +160,23 @@ public sealed class SegmentLabelsTests
         Assert.Equal((0.3, 0.5, 0.8), (SegmentLabels.UncoveredWeight, SegmentLabels.UncoveredWithLogoWeight, SegmentLabels.LogoSeenThrough));
     }
 
+    [Fact(DisplayName = "BR-CD-006: a segment reaching up to two seconds outside the guide, as far as boundary candidates are merged, counts as inside it for the programme by elimination, and one reaching further does not")]
+    public void ASegmentWithinTheMergeOfTheGuideCountsAsInside()
+    {
+        SegmentPiece[] pieces =
+        [
+            Piece(28, 100, outside: 2 / 72d),
+            Piece(100, 115),
+            Piece(115, 200),
+            Piece(200, 302.5, outside: 2.5 / 102.5),
+        ];
+
+        IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces, Context([SureAdvert(100, 115)]), []);
+
+        Assert.Equal([Uncovered(0.3), Break(0.9, SegmentLabelSource.Catalog), Uncovered(0.3), null], labels);
+        Assert.Equal(BoundaryCandidates.MergedWithin, SegmentLabels.GuideTolerance);
+    }
+
     [Fact(DisplayName = "BR-CD-006: a recording the catalog is not sure of an advert in has no programme by elimination, and neither has a segment whose place in the guide is not known")]
     public void WithoutASureAdvertNothingIsTheProgrammeByElimination()
     {
