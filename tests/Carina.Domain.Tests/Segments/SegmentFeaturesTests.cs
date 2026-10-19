@@ -189,6 +189,40 @@ public sealed class SegmentFeaturesTests
         Assert.Null(Pieces([Edge(0), Cut(60), Cut(150), Edge(Length)])[1].Features[SegmentFeature.PastEndingShare]);
     }
 
+    [Fact(DisplayName = "BR-CD-008: an earlier episode forgets what it was taken to hold over a stretch of an entry set aside, so an opening held out raises the past opening share no more, and an entry not set aside is remembered as it was")]
+    public void AnEarlierEpisodeForgetsWhatLiesOverAnEntrySetAside()
+    {
+        CatalogSeries story = new(1, "架空の物語", new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc));
+        RecordingId earlier = RecordingId.New();
+        RecordingId judged = RecordingId.New();
+        CatalogEntryId opening = CatalogEntryId.New();
+        CatalogEntryId elsewhere = CatalogEntryId.New();
+        LearningCatalog catalog = new(
+        [
+            new CatalogSound(opening, TimeSpan.FromSeconds(90), [CatalogSeries.At(opening, story.Episode(0), 0, 90, earlier), CatalogSeries.At(opening, story.Episode(1), 0, 90, judged)]),
+            new CatalogSound(elsewhere, TimeSpan.FromSeconds(30), [CatalogSeries.At(elsewhere, story.Episode(0), 900, 30, earlier), CatalogSeries.At(elsewhere, story.Episode(2), 900, 30)]),
+        ],
+        SeriesLinks.None);
+        PastEpisode episode = new(
+            earlier,
+            CatalogSeries.Lead,
+            null,
+            [.. new[] { (0.0, 60.0, SegmentKind.Programme), (60, 150, SegmentKind.Opening), (150, 960, SegmentKind.Programme), (960, 990, SegmentKind.Break), (990, 1800, SegmentKind.Programme) }
+                .Select(stretch => new SegmentSpan(TimeSpan.FromSeconds(stretch.Item1), TimeSpan.FromSeconds(stretch.Item2), stretch.Item3, 0.9))]);
+        BoundaryCandidate[] candidates = [Edge(0), Cut(60), Cut(150), Edge(Length)];
+        SegmentContext context = Context(starts: CatalogSeries.Lead, ends: TimeSpan.FromSeconds(Length), past: [episode]);
+
+        SegmentContext forgetting = catalog.Forgetting(context, new HashSet<CatalogEntryId> { opening });
+        IReadOnlyList<SegmentPiece> remembered = SegmentFeatures.Of(candidates, new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial);
+        IReadOnlyList<SegmentPiece> forgotten = SegmentFeatures.Of(candidates, new SyntheticReadings(Length).Evidence(), forgetting, null, SegmentThresholds.Initial);
+
+        Assert.Equal(1, remembered[1].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
+        Assert.Equal(0, forgotten[1].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Break, SegmentKind.Programme], forgetting.Past.Single().Segments.Select(segment => segment.Kind));
+        Assert.Equal([new SoundSpan(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(150))], catalog.StretchesOf(earlier, new HashSet<CatalogEntryId> { opening }));
+        Assert.Same(context, catalog.Forgetting(context, new HashSet<CatalogEntryId>()));
+    }
+
     [Fact(DisplayName = "the caption share and the channels' mean likeness are read over the piece, and are not known without readings")]
     public void CaptionsAndChannelsAreReadOverThePiece()
     {

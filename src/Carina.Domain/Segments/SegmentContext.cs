@@ -70,6 +70,12 @@ public sealed record SegmentContext
     public SegmentContext Hearing(IReadOnlyList<CatalogHeard> catalog)
         => new(NetworkId, ServiceId, Series, ProgrammeStarts, ProgrammeEnds, Genres, catalog, Logo, Past);
 
+    /// <summary>
+    /// The same context remembering <paramref name="past"/> in place of the earlier episodes it remembered.
+    /// </summary>
+    public SegmentContext Remembering(IReadOnlyList<PastEpisode> past)
+        => new(NetworkId, ServiceId, Series, ProgrammeStarts, ProgrammeEnds, Genres, Catalog, Logo, past);
+
     public static SegmentContext Of(ProgrammeCopy programme, IReadOnlyList<CatalogHeard> catalog, CornerLogo logo, IReadOnlyList<PastEpisode> past)
     {
         ArgumentNullException.ThrowIfNull(programme);

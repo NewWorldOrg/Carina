@@ -16,8 +16,9 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// from never takes it away; the same holds in every fold of the leave-one-out. Every setting of the search is judged
 /// by leave-one-out in time: each recording judged is detected again with the entries set aside for it
 /// (<see cref="LearningCatalog.SetAsideFor"/>) heard nowhere in it, which leaves it hearing nothing of the catalog,
-/// with a model fitted to every other recording's labels, none of them standing on an entry set aside for it, and
-/// compared with what the catalog is sure of in it. The setting chosen finds the most boundaries within two seconds,
+/// and its earlier episodes remembered without what they were taken to hold over a stretch of one of them
+/// (<see cref="LearningCatalog.Forgetting"/>), with a model fitted to every other recording's labels, none of them
+/// standing on an entry set aside for it, and compared with what the catalog is sure of in it. The setting chosen finds the most boundaries within two seconds,
 /// then the most seconds of adverts (<see cref="SegmentAdoption.Better"/>); a tie keeps the setting tried first. With
 /// nothing judged, the first setting is the only one tried. The candidate is fitted to every label with the chosen
 /// setting, and its figures are those of its leave-one-out. The version in use is judged on the same recordings, each
@@ -239,18 +240,27 @@ public static class SegmentLearning
     internal sealed record Labelled(Learner Learner, RecordingPieces Pieces, IReadOnlyList<SegmentSample> Samples);
 
     /// <summary>
-    /// One recording as a round reads it: what it heard of the catalog when it was made, what the catalog is sure of
-    /// in it now, and the entries set aside when it is judged.
+    /// One recording as a round reads it: what it heard of the catalog when it was made, which its readings and the
+    /// catalog's labels stand on; everything the catalog hears in it now, which says what the catalog is sure of in it
+    /// and keeps the programme by elimination off every stretch the catalog has, a first airing included; and the
+    /// entries set aside when it is judged, which it is read again without, its earlier episodes forgetting what they
+    /// were taken to hold over a stretch of one of them.
     /// </summary>
     internal sealed class Learner
     {
+        private readonly LearningCatalog catalog;
+
         private readonly IReadOnlyList<CatalogHeard> heard;
+
+        private readonly IReadOnlyList<CatalogHeard> everything;
 
         public Learner(LearningRecording recording, LearningCatalog catalog)
         {
+            this.catalog = catalog;
             Recording = recording;
             heard = catalog.HeardBy(recording.Id, recording.StartedAt);
-            Truth = CatalogTruth.Of(catalog.HeardNow(recording.Id), recording.Evidence.Length);
+            everything = catalog.HeardNow(recording.Id);
+            Truth = CatalogTruth.Of(everything, recording.Evidence.Length);
             SetAside = Truth.Judges ? catalog.SetAsideFor(recording.Id, recording.StartedAt) : new HashSet<CatalogEntryId>();
         }
 
@@ -263,7 +273,7 @@ public static class SegmentLearning
         public bool Judged => Truth.Judges;
 
         public RecordingPieces Read(SegmentThresholds thresholds, IReadOnlySet<CatalogEntryId>? without = null)
-            => SegmentDetector.Read(Recording.Evidence, Context(without), thresholds);
+            => SegmentDetector.Read(Recording.Evidence, without is null ? Context(null) : catalog.Forgetting(Context(without), without), thresholds);
 
         /// <summary>
         /// Whether this recording hears a stretch of one of <paramref name="entries"/>.
@@ -280,11 +290,12 @@ public static class SegmentLearning
 
         /// <summary>
         /// The samples <paramref name="pieces"/> of this recording are learned from, labelled as if the catalog did
-        /// not hear <paramref name="without"/>.
+        /// not hear <paramref name="without"/>; every stretch the catalog has in the recording, those of
+        /// <paramref name="without"/> included, still keeps the segments it lies over from being taken for the programme.
         /// </summary>
         public IReadOnlyList<SegmentSample> Samples(RecordingPieces pieces, IReadOnlySet<CatalogEntryId>? without = null)
         {
-            IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces.Pieces, Context(without), Recording.Actions);
+            IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces.Pieces, Context(without), Recording.Actions, everything);
             string? series = pieces.Series is string named && SegmentModel.IsASeries(named) ? named : null;
 
             return

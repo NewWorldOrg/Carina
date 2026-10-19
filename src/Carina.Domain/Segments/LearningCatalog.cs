@@ -102,6 +102,37 @@ public sealed class LearningCatalog
         ]);
     }
 
+    /// <summary>
+    /// The stretches of <paramref name="entries"/> heard in <paramref name="recording"/>, every one the catalog has.
+    /// </summary>
+    public IReadOnlyList<SoundSpan> StretchesOf(RecordingId recording, IReadOnlySet<CatalogEntryId> entries)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(entries);
+
+        return
+        [
+            .. soundsIn[recording]
+                .Where(sound => entries.Contains(sound.Id))
+                .SelectMany(sound => sound.Occurrences)
+                .Where(placed => placed.Occurrence.RecordingId.Equals(recording))
+                .Select(placed => placed.Occurrence.Span),
+        ];
+    }
+
+    /// <summary>
+    /// <paramref name="context"/> remembering its earlier episodes without the stretches they were taken to hold
+    /// over a stretch of <paramref name="entries"/>, so that what was set aside does not come back through what
+    /// was detected in them.
+    /// </summary>
+    public SegmentContext Forgetting(SegmentContext context, IReadOnlySet<CatalogEntryId> entries)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(entries);
+
+        return entries.Count is 0 ? context : context.Remembering([.. context.Past.Select(episode => episode.Without(StretchesOf(episode.Recording, entries)))]);
+    }
+
     private IEnumerable<CatalogHeard> Heard(CatalogSound sound, RecordingId recording, DateTime startedAt)
     {
         PlacedOccurrence[] kept = [.. sound.Occurrences.Where(placed => placed.Occurrence.RecordingStartedAt <= startedAt)];

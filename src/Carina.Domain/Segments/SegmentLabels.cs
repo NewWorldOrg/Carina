@@ -9,8 +9,14 @@ namespace Carina.Domain.Segments;
 /// back as programme at <see cref="ReturnedWeight"/>, and takes the skip it came back from, the latest
 /// earlier one of the same kind that landed past where they came back to; closing the button on a break
 /// and watching it labels it programme at <see cref="DismissedWeight"/>. A segment takes a label when its
-/// kind covers more than half of it. The catalog wins over viewers; within one source the heavier label wins,
-/// a tie going to the programme. A segment more than half outside the guide's programme is never a label.
+/// kind covers more than half of it. In a recording the catalog is sure of an advert in
+/// (<see cref="CatalogTruth.Sure"/>), a segment wholly inside the guide's programme that no stretch of the
+/// catalog touches, whatever its kind, and no viewer's action lies over, is the programme at
+/// <see cref="UncoveredWeight"/>, or at <see cref="UncoveredWithLogoWeight"/> where the station's logo shows
+/// through at least <see cref="LogoSeenThrough"/> of it; with no logo known for the station it stays at the
+/// lower weight. The catalog wins over viewers and viewers over a segment no stretch touches; within one source
+/// the heavier label wins, a tie going to the programme. A segment more than half outside the guide's programme
+/// is never a label.
 /// </summary>
 public static class SegmentLabels
 {
@@ -24,12 +30,25 @@ public static class SegmentLabels
 
     public const double MostOutsideTheGuide = 0.5;
 
+    public const double UncoveredWeight = 0.3;
+
+    public const double UncoveredWithLogoWeight = 0.5;
+
+    public const double LogoSeenThrough = 0.8;
+
     public static readonly TimeSpan ReturnedSpan = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// The labels of <paramref name="pieces"/> by what <paramref name="context"/> hears of the catalog and what
+    /// viewers did. A segment is touched by the catalog when a stretch of <paramref name="touching"/> lies over any of
+    /// it, by default the stretches the context hears; a stretch set aside from what the context hears still
+    /// touches the segments it lies over, so that it never leaves programme behind.
+    /// </summary>
     public static IReadOnlyList<SegmentLabel?> Of(
         IReadOnlyList<SegmentPiece> pieces,
         SegmentContext context,
-        IReadOnlyList<ViewerAction> actions)
+        IReadOnlyList<ViewerAction> actions,
+        IReadOnlyList<CatalogHeard>? touching = null)
     {
         ArgumentNullException.ThrowIfNull(pieces);
         ArgumentNullException.ThrowIfNull(context);
@@ -37,13 +56,36 @@ public static class SegmentLabels
 
         Stretch[] heard = [.. context.Catalog.Select(Heard).OfType<Stretch>()];
         Stretch[] viewed = Viewed(actions);
+        CatalogHeard[]? touched = context.Catalog.Any(stretch => CatalogTruth.Sure(stretch) is SegmentKind.Break)
+            ? [.. touching ?? context.Catalog]
+            : null;
 
         return
         [
             .. pieces.Select(piece => piece.Features[SegmentFeature.OutsideGuide] > MostOutsideTheGuide
                 ? null
-                : Over(piece, heard, SegmentLabelSource.Catalog) ?? Over(piece, viewed, SegmentLabelSource.Viewer)),
+                : Over(piece, heard, SegmentLabelSource.Catalog) ?? Over(piece, viewed, SegmentLabelSource.Viewer) ?? Uncovered(piece, touched, viewed)),
         ];
+    }
+
+    /// <summary>
+    /// The programme a segment is taken for when the recording holds an advert the catalog is sure of and neither
+    /// a stretch of <paramref name="touched"/> nor what a viewer did lies over the segment, wholly inside the guide's
+    /// programme; none when <paramref name="touched"/> is none, which is when the recording holds no such advert.
+    /// </summary>
+    private static SegmentLabel? Uncovered(SegmentPiece piece, CatalogHeard[]? touched, Stretch[] viewed)
+    {
+        if (touched is null
+            || piece.Features[SegmentFeature.OutsideGuide] is not 0d
+            || touched.Any(stretch => stretch.Starts < piece.Ends && stretch.Ends > piece.Starts)
+            || viewed.Any(stretch => stretch.Starts < piece.Ends && stretch.Ends > piece.Starts))
+        {
+            return null;
+        }
+
+        double weight = piece.Features[SegmentFeature.LogoShare] >= LogoSeenThrough ? UncoveredWithLogoWeight : UncoveredWeight;
+
+        return new SegmentLabel(SegmentKind.Programme, weight, SegmentLabelSource.Uncovered);
     }
 
     private static Stretch? Heard(CatalogHeard heard)

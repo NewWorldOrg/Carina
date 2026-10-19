@@ -4,7 +4,8 @@ using Carina.Domain.Segments;
 namespace Carina.Domain.Tests.Segments;
 
 /// <summary>
-/// Recordings made up for learning, ten minutes each, of one weekly series on one station. Every one has a pod of
+/// Recordings made up for learning, ten minutes each, of one weekly series on one station, the guide's programme
+/// running from 30 seconds in to 30 seconds before the end. Every one has a pod of
 /// two 15-second adverts between silent cuts at 120 seconds, a silent stretch of 37 seconds that is programme at 250,
 /// and 30 seconds between two black frames at 330. In each recording learned from, the catalog hears the two adverts
 /// of its pod, heard elsewhere in an earlier episode of the series alone, so it labels them breaks without being
@@ -13,7 +14,9 @@ namespace Carina.Domain.Tests.Segments;
 /// and 50 seconds of music at 180 whose kind it cannot tell. With adverts it also hears an advert of 75 seconds at
 /// 450 that another series aired the week before, which it is sure of; with openings, an opening of 85 seconds at
 /// 365 heard at the same place of that earlier episode, which it is sure of too; with black adverts, the black
-/// stretch heard elsewhere in that episode, which it labels a break without being sure of it. In the recording judged in the end
+/// stretch heard elsewhere in that episode, which it labels a break without being sure of it; with break adverts,
+/// that many adverts of 15 seconds between silent cuts from 380 seconds, each aired by another series the week
+/// before, which it is sure of. In the recording judged in the end
 /// the catalog hears the pod and the black stretch as adverts another series aired the week before, so it is sure
 /// of both, and the channels are unlike between the black frames.
 /// </summary>
@@ -60,6 +63,12 @@ internal static class LearningWorld
 
     private static readonly double[] Stings = [70, 300, 540];
 
+    private const double BreakStarts = 380;
+
+    private static readonly TimeSpan GuideStarts = TimeSpan.FromSeconds(30);
+
+    private static readonly TimeSpan GuideEnds = TimeSpan.FromSeconds(Length - 30);
+
     /// <summary>
     /// The recordings learned from, the first <paramref name="count"/> weeks of the series, and the sounds the catalog
     /// hears in them; each sound is also heard in an episode long before the first when <paramref name="heardLongAgo"/>.
@@ -72,7 +81,9 @@ internal static class LearningWorld
         bool heardLongAgo = false,
         int fromWeek = 0,
         bool blackAdverts = false,
-        bool watched = false)
+        bool watched = false,
+        int breakAdverts = 0,
+        bool stings = true)
     {
         List<LearningRecording> recordings = [];
         List<CatalogSound> sounds = [];
@@ -81,10 +92,13 @@ internal static class LearningWorld
         {
             RecordingId id = RecordingId.New();
 
-            recordings.Add(Recording(id, week, Readings(quiet), watched ? Watched(week) : null));
+            double[] breakAt = [.. Enumerable.Range(0, breakAdverts).Select(advert => BreakStarts + (15.0 * advert))];
+
+            recordings.Add(Recording(id, week, Readings(quiet, [.. breakAt, BreakStarts + (15.0 * breakAdverts)]), watched ? Watched(week) : null));
+            sounds.AddRange(breakAt.Select(at => Sound(15, id, week, at, (Across, at + 300), heardLongAgo, otherWeek: week - 1)));
             sounds.Add(Sound(15, id, week, 120, (StoryEarlier, 420), heardLongAgo));
             sounds.Add(Sound(15, id, week, 135, (StoryEarlier, 435), heardLongAgo));
-            sounds.AddRange(Stings.Select(at => Sound(20, id, week, at, (StoryEarlier, at), heardLongAgo)));
+            sounds.AddRange(Stings.Where(_ => stings).Select(at => Sound(20, id, week, at, (StoryEarlier, at), heardLongAgo)));
             sounds.Add(Sound(50, id, week, 180, (StoryEarlier, CatalogSeries.Lead.TotalSeconds + CatalogSeries.Midpoint), heardLongAgo));
 
             if (adverts)
@@ -187,11 +201,11 @@ internal static class LearningWorld
 
     public static SegmentSpan Span(double from, double to, SegmentKind kind) => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, null);
 
-    private static SyntheticReadings Readings(byte? quiet)
+    private static SyntheticReadings Readings(byte? quiet, IReadOnlyList<double>? breakCuts = null)
     {
         SyntheticReadings readings = new(Length);
 
-        foreach (double at in new[] { 120.0, 135, 150, 250, 287 })
+        foreach (double at in new[] { 120.0, 135, 150, 250, 287 }.Concat(breakCuts ?? []))
         {
             if (quiet is byte level)
             {
@@ -231,7 +245,7 @@ internal static class LearningWorld
         IReadOnlyList<PastEpisode>? past = null)
     {
         DateTime started = Story.Episode(week).RecordingStartedAt;
-        SegmentContext context = new(Story.Episode(week).NetworkId, Story.Episode(week).ServiceId, "架空の物語", null, null, [], [], CornerLogo.None, past ?? []);
+        SegmentContext context = new(Story.Episode(week).NetworkId, Story.Episode(week).ServiceId, "架空の物語", GuideStarts, GuideEnds, [], [], CornerLogo.None, past ?? []);
 
         return new LearningRecording(id, started, readings.Evidence(), context, actions ?? []);
     }

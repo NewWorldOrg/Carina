@@ -34,6 +34,23 @@ public sealed record PastEpisode
     public IReadOnlyList<SegmentSpan> Segments { get; }
 
     /// <summary>
+    /// The episode as it is remembered without the stretches it was taken to hold that lie over any of
+    /// <paramref name="sounds"/>.
+    /// </summary>
+    public PastEpisode Without(IReadOnlyList<SoundSpan> sounds)
+    {
+        ArgumentNullException.ThrowIfNull(sounds);
+
+        return sounds.Count is 0
+            ? this
+            : new PastEpisode(
+                Recording,
+                ProgrammeStarts,
+                ProgrammeEnds,
+                [.. Segments.Where(segment => !sounds.Any(sound => segment.Starts < sound.Ends && segment.Ends > sound.Starts))]);
+    }
+
+    /// <summary>
     /// Whether a break of this episode lies within <paramref name="within"/> of the same distance from
     /// its programme's start as <paramref name="fromProgrammeStart"/>.
     /// </summary>
