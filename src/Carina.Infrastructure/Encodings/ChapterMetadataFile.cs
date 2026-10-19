@@ -9,7 +9,7 @@ namespace Carina.Infrastructure.Encodings;
 /// <summary>
 /// Writes the chapters of one artefact in the shape ffmpeg reads chapters from. Every moment goes
 /// down in whole milliseconds on the clock <see cref="ChapterClock.InTheMetadata"/> puts it on, which is
-/// the recording's own time, and every chapter is titled from two constants.
+/// the recording's own time, and every chapter is titled from the constant for its kind.
 /// </summary>
 public static class ChapterMetadataFile
 {
@@ -23,6 +23,10 @@ public static class ChapterMetadataFile
 
     public const string BreakTitle = "CM";
 
+    public const string OpeningTitle = "OP";
+
+    public const string EndingTitle = "ED";
+
     private static readonly UTF8Encoding Utf8 = new(false);
 
     public static string Written(IReadOnlyList<ChapterSegment> segments, TimeSpan headSkip)
@@ -32,7 +36,7 @@ public static class ChapterMetadataFile
         return Lines([.. segments.Select(segment => (
             ChapterClock.InTheMetadata(segment.Starts, headSkip),
             ChapterClock.InTheMetadata(segment.Ends, headSkip),
-            Titled(segment.Kind)))]);
+            TitleOf(segment.Kind)))]);
     }
 
     /// <summary>
@@ -42,7 +46,7 @@ public static class ChapterMetadataFile
     {
         ArgumentNullException.ThrowIfNull(stretches);
 
-        return Lines([.. stretches.Select(stretch => (stretch.Starts, stretch.Ends, Titled(EncodeChapterChoice.KindOf(stretch.Kind))))]);
+        return Lines([.. stretches.Select(stretch => (stretch.Starts, stretch.Ends, TitleOf(EncodeChapterChoice.KindOf(stretch.Kind))))]);
     }
 
     public static Task WriteAsync(
@@ -82,7 +86,17 @@ public static class ChapterMetadataFile
         return written.ToString();
     }
 
-    private static string Titled(ChapterKind kind) => kind is ChapterKind.Break ? BreakTitle : ProgrammeTitle;
+    /// <summary>
+    /// The title a chapter of <paramref name="kind"/> goes down with.
+    /// </summary>
+    public static string TitleOf(ChapterKind kind) => kind switch
+    {
+        ChapterKind.Programme => ProgrammeTitle,
+        ChapterKind.Break => BreakTitle,
+        ChapterKind.Opening => OpeningTitle,
+        ChapterKind.Ending => EndingTitle,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "A chapter is titled for one of the kinds named."),
+    };
 
     private static string Milliseconds(TimeSpan inTheMetadata)
         => ((long)Math.Round(inTheMetadata.TotalMilliseconds)).ToString(CultureInfo.InvariantCulture);

@@ -191,6 +191,41 @@ public sealed class ChapterEmbeddingMaterialTests
         Assert.InRange(made.Length!.Value, length - HeadOfItsOwn - TimeSpan.FromSeconds(1), length - HeadOfItsOwn + TimeSpan.FromSeconds(1));
     }
 
+    [Fact(DisplayName = "BR-CD-010: once the detection finds the break to be an opening and the end to be an ending, the artefact is written again carrying OP and ED where they were found")]
+    public async Task OnceTheDetectionFindsAnOpeningAndAnEndingTheArtefactCarriesThem()
+    {
+        using var harness = new EncodeHarness();
+        (EncodeJob job, TimeSpan length) = await EncodedFromADetectionAsync(harness, PodOpens, PodCloses);
+        string artefact = harness.ArtefactPathOf(job);
+        TimeSpan endingOpens = length - TimeSpan.FromSeconds(5);
+        RecordingDetection named = harness.Detected(
+            harness.Recordings.Rows[0],
+            SegmentDetectionState.Marked,
+            new SegmentSpan(TimeSpan.Zero, PodOpens, SegmentKind.Programme, 0.9),
+            new SegmentSpan(PodOpens, PodCloses, SegmentKind.Opening, 0.9),
+            new SegmentSpan(PodCloses, endingOpens, SegmentKind.Programme, 0.9),
+            new SegmentSpan(endingOpens, length, SegmentKind.Ending, 0.9));
+        var rewrites = new ChapterRewriteHarness(harness);
+        rewrites.Worklist.Subjects.Add(new ChapterRewriteSubject(job, named, null, null));
+
+        ChapterRewriteRound round = await rewrites.Rewrites.RewriteAsync(1, 4, [], _ => Task.FromResult(true), Cancel);
+
+        Assert.Equal(1, round.Rewritten);
+        IReadOnlyList<(TimeSpan Starts, TimeSpan Ends, string Title)> carried = await ChaptersOfAsync(artefact);
+        Assert.Equal(["本編", "OP", "本編", "ED"], carried.Select(chapter => chapter.Title));
+        AssertNear(
+            [
+                (TimeSpan.Zero, PodOpens - HeadOfItsOwn),
+                (PodOpens - HeadOfItsOwn, PodCloses - HeadOfItsOwn),
+                (PodCloses - HeadOfItsOwn, endingOpens - HeadOfItsOwn),
+                (endingOpens - HeadOfItsOwn, length - HeadOfItsOwn),
+            ],
+            carried);
+        Assert.Equal(
+            [ChapterKind.Programme, ChapterKind.Opening, ChapterKind.Programme, ChapterKind.Ending],
+            harness.Chapters.Chapters.Select(chapter => chapter.Kind));
+    }
+
     private static async Task<(EncodeJob Job, TimeSpan Length)> EncodedFromADetectionAsync(EncodeHarness harness, TimeSpan opens, TimeSpan closes)
     {
         var machine = new MachineSettings();

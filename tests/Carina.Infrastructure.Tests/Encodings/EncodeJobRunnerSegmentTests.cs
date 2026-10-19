@@ -99,6 +99,40 @@ public sealed class EncodeJobRunnerSegmentTests
         }
     }
 
+    [Fact(DisplayName = "BR-CD-010: an opening and an ending the detection found are embedded titled OP and ED, and the ledger keeps them by those kinds on the artefact's clock")]
+    public async Task AnOpeningAndAnEndingAreEmbeddedTitledOpAndEd()
+    {
+        using var harness = new EncodeHarness();
+        Run run = Watched(harness);
+        harness.Learning(true);
+        Recording recording = harness.Recorded();
+        harness.Heads.Reading = SourceHeadReading.Read(MeasuredHeads.Start, MeasuredHeads.Start + Skipped);
+        harness.Detected(
+            recording,
+            SegmentDetectionState.Marked,
+            Span(0, 2, SegmentKind.Opening),
+            Span(2, 5, SegmentKind.Programme),
+            Span(5, 6, SegmentKind.Break),
+            Span(6, 8.5, SegmentKind.Programme),
+            Span(8.5, 10, SegmentKind.Ending));
+        EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
+
+        Assert.Equal(EncodeJobStatus.Completed, await harness.Runner.RunAsync(job, Cancel));
+
+        Assert.Equal(
+            ["title=OP", "title=本編", "title=CM", "title=本編", "title=ED"],
+            File.ReadAllLines(run.Chapters).Where(line => line.StartsWith("title=", StringComparison.Ordinal)));
+        Assert.Equal(
+            [
+                (TimeSpan.Zero, TimeSpan.FromSeconds(1.5), ChapterKind.Opening),
+                (TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(4.5), ChapterKind.Programme),
+                (TimeSpan.FromSeconds(4.5), TimeSpan.FromSeconds(5.5), ChapterKind.Break),
+                (TimeSpan.FromSeconds(5.5), TimeSpan.FromSeconds(8), ChapterKind.Programme),
+                (TimeSpan.FromSeconds(8), Artefact, ChapterKind.Ending),
+            ],
+            harness.Chapters.Chapters.Select(chapter => (chapter.StartsAt, chapter.EndsAt, chapter.Kind)));
+    }
+
     [Fact(DisplayName = "BR-CD-010: a detection that found only the programme, or was thrown away, is encoded with the arguments of a run with no chapters, and the ledger keeps which version said so")]
     public async Task ADetectionWithNothingToEmbedIsEncodedWithNoChapters()
     {

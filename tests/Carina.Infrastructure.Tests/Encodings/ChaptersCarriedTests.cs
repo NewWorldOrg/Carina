@@ -46,4 +46,31 @@ public sealed class ChaptersCarriedTests
         Assert.NotNull(ChaptersCarried.Differs(carried, [Written[0], new ChapterSegment(TimeSpan.FromSeconds(2.5), TimeSpan.FromSeconds(5.77), ChapterKind.Break)]));
         Assert.NotNull(ChaptersCarried.Differs(carried, [Written[0], new ChapterSegment(TimeSpan.FromSeconds(2.5), TimeSpan.FromSeconds(5.75), ChapterKind.Programme)]));
     }
+
+    [Fact(DisplayName = "BR-CD-010: a copy carries an opening and an ending titled OP and ED, and one titled CM where an opening was written does not carry it")]
+    public void ACopyCarriesAnOpeningAndAnEndingByTheirTitles()
+    {
+        IReadOnlyList<CarriedChapter> carried = ChaptersCarried.Read(
+            """
+            {
+                "chapters": [
+                    { "start_time": "0.000000", "end_time": "60.000000", "tags": { "title": "本編" } },
+                    { "start_time": "60.000000", "end_time": "150.000000", "tags": { "title": "OP" } },
+                    { "start_time": "150.000000", "end_time": "1710.000000", "tags": { "title": "本編" } },
+                    { "start_time": "1710.000000", "end_time": "1800.000000", "tags": { "title": "ED" } }
+                ]
+            }
+            """)!;
+        ChapterSegment[] wanted =
+        [
+            new(TimeSpan.Zero, TimeSpan.FromSeconds(60), ChapterKind.Programme),
+            new(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(150), ChapterKind.Opening),
+            new(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(1710), ChapterKind.Programme),
+            new(TimeSpan.FromSeconds(1710), TimeSpan.FromSeconds(1800), ChapterKind.Ending),
+        ];
+
+        Assert.Null(ChaptersCarried.Differs(carried, wanted));
+        Assert.NotNull(ChaptersCarried.Differs([carried[0], carried[1] with { Title = ChapterMetadataFile.BreakTitle }, carried[2], carried[3]], wanted));
+        Assert.NotNull(ChaptersCarried.Differs(carried, [wanted[0], wanted[1], wanted[2], new ChapterSegment(TimeSpan.FromSeconds(1710), TimeSpan.FromSeconds(1800), ChapterKind.Opening)]));
+    }
 }

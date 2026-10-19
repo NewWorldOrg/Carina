@@ -187,6 +187,21 @@ public sealed class ArtefactChapterRewritesTests : IDisposable
         Assert.DoesNotContain("START=299500", chapters, StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "BR-CD-010: a break the detection now finds to be an opening, where it was, is what the artefact is written again with, titled OP")]
+    public async Task ABreakNowFoundToBeAnOpeningIsWrittenAgain()
+    {
+        EncodeJob job = harness.Stood(Recorded, APod, TheArtefact);
+        harness.Awaiting(job, SegmentDetectionState.Marked, null, Span(0, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Opening), Span(360, Recorded.TotalSeconds, SegmentKind.Programme));
+        string handed = harness.Encodes.Room.Under("handed-chapters");
+        harness.Encodes.Standing($"for chapters in \"$@\"; do if head -c 12 \"$chapters\" 2>/dev/null | grep -q FFMETADATA; then cp \"$chapters\" \"{handed}\"; fi; done; exit 1");
+
+        ChapterRewriteRound round = await harness.Rewrites.RewriteAsync(1, 4, [], Spare, Cancel);
+
+        Assert.Equal((0, 1), (round.AsCarried, round.Failed.Count));
+        Assert.Contains("START=299500\nEND=359500\ntitle=OP", File.ReadAllText(handed), StringComparison.Ordinal);
+        Assert.Equal(APod, harness.Encodes.Chapters.Chapters.Select(chapter => chapter.Segment));
+    }
+
     [Fact(DisplayName = "BR-CS-002: once the answer is withdrawn the artefact is compared with the detection again, and written down as standing for that version")]
     public async Task OnceTheAnswerIsWithdrawnTheArtefactIsComparedWithTheDetection()
     {

@@ -129,14 +129,34 @@ public sealed class EncodeChapterChoiceTests
     public void ARecordingStandsWithTheDetectionByTheVersionInUse()
         => Assert.Throws<ArgumentException>(() => EncodeChapterChoice.Of(true, 2, SegmentStanding.Of(null, Detected([Span(0, 1800, SegmentKind.Programme)]))));
 
-    [Fact(DisplayName = "an artefact's chapters are the programme or a break, an opening and an ending embedded as a break")]
-    public void AnArtefactsChaptersAreTheProgrammeOrABreak()
+    [Fact(DisplayName = "BR-CD-010: a stretch is embedded as a chapter of its own kind: the programme, a break, an opening or an ending")]
+    public void AStretchIsEmbeddedAsAChapterOfItsOwnKind()
     {
         Assert.Equal(ChapterKind.Programme, EncodeChapterChoice.KindOf(SegmentKind.Programme));
         Assert.Equal(ChapterKind.Break, EncodeChapterChoice.KindOf(SegmentKind.Break));
-        Assert.Equal(ChapterKind.Break, EncodeChapterChoice.KindOf(SegmentKind.Opening));
-        Assert.Equal(ChapterKind.Break, EncodeChapterChoice.KindOf(SegmentKind.Ending));
+        Assert.Equal(ChapterKind.Opening, EncodeChapterChoice.KindOf(SegmentKind.Opening));
+        Assert.Equal(ChapterKind.Ending, EncodeChapterChoice.KindOf(SegmentKind.Ending));
         Assert.Throws<ArgumentOutOfRangeException>(() => EncodeChapterChoice.KindOf((SegmentKind)9));
+    }
+
+    [Fact(DisplayName = "BR-CD-010: a detection that found an opening and an ending is kept by the ledger with chapters of those kinds, on the artefact's clock")]
+    public void ADetectionThatFoundAnOpeningAndAnEndingKeepsThoseKinds()
+    {
+        RecordingDetection marked = Detected(
+        [
+            Span(0, 60, SegmentKind.Programme),
+            Span(60, 150, SegmentKind.Opening),
+            Span(150, 900, SegmentKind.Programme),
+            Span(900, 960, SegmentKind.Break),
+            Span(960, 1710, SegmentKind.Programme),
+            Span(1710, 1800, SegmentKind.Ending),
+        ]);
+        EncodeChapterChoice choice = EncodeChapterChoice.Of(true, 1, SegmentStanding.Of(null, marked));
+
+        Assert.Equal(
+            [ChapterKind.Programme, ChapterKind.Opening, ChapterKind.Programme, ChapterKind.Break, ChapterKind.Programme, ChapterKind.Ending],
+            choice.Chapters(Artefact).Select(chapter => chapter.Kind));
+        Assert.Equal(TimeSpan.FromSeconds(59.5), choice.Chapters(Artefact)[1].Starts);
     }
 
     private static RecordingDetection Detected(SegmentSpan[] segments, int version = 1)

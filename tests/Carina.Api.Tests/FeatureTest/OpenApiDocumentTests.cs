@@ -938,7 +938,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             schemas["DataBroadcastFetchFailureResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
-    [Fact]
+    [Fact(DisplayName = "BR-CD-009: the kinds a chapter of the plan can be are spelled in the document the way the plan spells them, an opening and an ending added after the programme and a break")]
     public async Task TheKindsAChapterCanBeAreSpelledInTheDocumentTheWayThePlanSpellsThem()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
@@ -946,7 +946,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Equal("string", kind["type"]!.GetValue<string>());
         Assert.Equal(
-            ["programme", "break"],
+            ["programme", "break", "opening", "ending"],
             kind["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 

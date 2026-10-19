@@ -96,19 +96,59 @@ public sealed class ChapterMetadataFileTests
         Assert.Throws<ArgumentException>(() => ChapterMetadataFile.InRecordingTime([]));
     }
 
-    [Fact(DisplayName = "a chapter is titled from two constants, so nothing a broadcaster wrote reaches the artefact")]
-    public void AChapterIsTitledFromTwoConstants()
+    [Fact(DisplayName = "BR-CD-010: a chapter is titled from four constants, one for each kind, so nothing a broadcaster wrote reaches the artefact")]
+    public void AChapterIsTitledFromFourConstants()
     {
         string[] titles =
         [
-            .. ChapterMetadataFile.Written(ThreeChapters, TimeSpan.FromSeconds(0.5))
+            .. ChapterMetadataFile.Written(
+                    [
+                        new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(60), ChapterKind.Programme),
+                        new ChapterSegment(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(150), ChapterKind.Opening),
+                        new ChapterSegment(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(900), ChapterKind.Programme),
+                        new ChapterSegment(TimeSpan.FromSeconds(900), TimeSpan.FromSeconds(960), ChapterKind.Break),
+                        new ChapterSegment(TimeSpan.FromSeconds(960), TimeSpan.FromSeconds(1710), ChapterKind.Programme),
+                        new ChapterSegment(TimeSpan.FromSeconds(1710), TimeSpan.FromSeconds(1800), ChapterKind.Ending),
+                    ],
+                    TimeSpan.FromSeconds(0.5))
                 .Split('\n')
                 .Where(line => line.StartsWith("title=", StringComparison.Ordinal)),
         ];
 
-        Assert.Equal(["title=本編", "title=CM", "title=本編"], titles);
-        Assert.Equal(2, titles.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(["title=本編", "title=OP", "title=本編", "title=CM", "title=本編", "title=ED"], titles);
+        Assert.Equal(
+            [ChapterMetadataFile.ProgrammeTitle, ChapterMetadataFile.BreakTitle, ChapterMetadataFile.OpeningTitle, ChapterMetadataFile.EndingTitle],
+            Enum.GetValues<ChapterKind>().Select(ChapterMetadataFile.TitleOf));
     }
+
+    [Fact(DisplayName = "BR-CD-010: an opening and an ending of a recording go down in the recording's own time, titled OP and ED")]
+    public void AnOpeningAndAnEndingGoDownTitledOpAndEd()
+        => Assert.Equal(
+            """
+            ;FFMETADATA1
+            [CHAPTER]
+            TIMEBASE=1/1000
+            START=0
+            END=90000
+            title=OP
+            [CHAPTER]
+            TIMEBASE=1/1000
+            START=90000
+            END=1710000
+            title=本編
+            [CHAPTER]
+            TIMEBASE=1/1000
+            START=1710000
+            END=1800000
+            title=ED
+
+            """.ReplaceLineEndings("\n"),
+            ChapterMetadataFile.InRecordingTime(
+            [
+                new SegmentSpan(TimeSpan.Zero, TimeSpan.FromSeconds(90), SegmentKind.Opening, 0.92),
+                new SegmentSpan(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(1710), SegmentKind.Programme, 0.98),
+                new SegmentSpan(TimeSpan.FromSeconds(1710), TimeSpan.FromSeconds(1800), SegmentKind.Ending, 0.9),
+            ]));
 
     [Fact(DisplayName = "a moment between two milliseconds goes down as the nearer of them, so START and END never disagree by a tick nobody can see")]
     public void AMomentBetweenTwoMillisecondsGoesDownAsTheNearerOfThem()
