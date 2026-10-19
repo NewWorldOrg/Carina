@@ -13,9 +13,7 @@ public sealed record CatalogEstimate(CatalogKind Kind, double? Confidence, Catal
 public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, int StationCount, IReadOnlyList<SegmentKind?> Overrides);
 
 /// <summary>
-/// The kind of a catalog entry, from the way its stretches are spread, the first row that holds: an
-/// answer of a break, an opening or an ending given on one of its stretches decides outright, and
-/// answers of the programme alone skip the rows of adverts and of the station's fixed parts; a
+/// The kind of a catalog entry, from the way its stretches are spread, the first row that holds: a
 /// length on the 15-second grid (<see cref="OnTheGrid"/>, a second and a half short of a multiple to half
 /// a second over) heard in two series or on two stations is an advert, 0.9; a piece of
 /// <see cref="ThemeShortest"/> to <see cref="ThemeLongest"/>, other than one on the grid of up to a minute,
@@ -48,8 +46,8 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 public static class CatalogKinds
 {
     /// <summary>
-    /// The version an entry is put back to when what it was estimated from changed under it: an answer on one
-    /// of its recordings was given or withdrawn, or an entry heard in one of them began or stopped linking series.
+    /// The version an entry is put back to when what it was estimated from changed under it: an entry heard in one
+    /// of its recordings began or stopped linking series.
     /// </summary>
     public const int Unsettled = 0;
 
@@ -98,8 +96,6 @@ public static class CatalogKinds
 
     private const int FewestEpisodes = 2;
 
-    private const double Certain = 1.0;
-
     private const double AcrossSeries = 0.9;
 
     private const double EveryEpisode = 0.8;
@@ -121,8 +117,7 @@ public static class CatalogKinds
         Theme? theme = ThemeOf(length, linked);
         IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series = theme?.Series ?? linked;
         int stations = counted.Select(placed => (placed.Occurrence.NetworkId, placed.Occurrence.ServiceId)).Distinct().Count();
-        SegmentKind[] answers = [.. counted.Select(placed => placed.Answer).OfType<SegmentKind>()];
-        CatalogEstimate estimate = Decided(answers) ?? (answers.Length > 0 ? AsProgramme(length, series, theme) : Spread(length, series, stations, theme));
+        CatalogEstimate estimate = Spread(length, series, stations, theme);
         IReadOnlyList<PlacedOccurrence> own = theme?.Own ?? series.MaxBy(group => group.Count) ?? [];
 
         return new CatalogPattern(
@@ -168,49 +163,6 @@ public static class CatalogKinds
     }
 
     private static bool IsWhole(TimeSpan stretch, TimeSpan length) => stretch >= length - WholeWithin;
-
-    /// <summary>
-    /// The kind an answer of a break, an opening or an ending on one of the stretches decides, the one given
-    /// most, a tie going to the break, then the opening; none when no answer is of those.
-    /// </summary>
-    private static CatalogEstimate? Decided(SegmentKind[] answers)
-    {
-        SegmentKind[] deciding = [.. answers.Where(answer => answer is not SegmentKind.Programme)];
-
-        if (deciding.Length is 0)
-        {
-            return null;
-        }
-
-        SegmentKind most = deciding.GroupBy(answer => answer).OrderByDescending(group => group.Count()).ThenBy(group => group.Key).First().Key;
-
-        return new CatalogEstimate(KindOf(most), Certain, CatalogDecision.Answer);
-    }
-
-    /// <summary>
-    /// The kind of an entry the answers on whose stretches are of the programme alone: the rows that would make
-    /// it an advert or a fixed part of the station's output are skipped, so it is the opening or ending it is
-    /// heard as, a fixed part of the programme by its place, or not known.
-    /// </summary>
-    private static CatalogEstimate AsProgramme(TimeSpan length, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series, Theme? theme)
-    {
-        if (theme is not null)
-        {
-            return new CatalogEstimate(theme.Kind, EveryEpisode, CatalogDecision.Pattern);
-        }
-
-        return length < ProgrammeFixtureShorterThan && series.Any(HeardTwiceInOnePlace)
-            ? new CatalogEstimate(CatalogKind.ProgrammeFixture, SamePlace, CatalogDecision.Pattern)
-            : CatalogEstimate.Unknown;
-    }
-
-    private static CatalogKind KindOf(SegmentKind answer) => answer switch
-    {
-        SegmentKind.Break => CatalogKind.Cm,
-        SegmentKind.Opening => CatalogKind.Opening,
-        SegmentKind.Ending => CatalogKind.Ending,
-        _ => CatalogKind.ProgrammeFixture,
-    };
 
     private static CatalogEstimate Spread(TimeSpan length, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series, int stations, Theme? theme)
     {
@@ -346,11 +298,6 @@ public static class CatalogKinds
 
     private static SegmentKind? Override(PlacedOccurrence placed, TimeSpan length, CatalogKind kind, IReadOnlyList<PlacedOccurrence> own, SeriesLinks links)
     {
-        if (placed.Answer is SegmentKind answer)
-        {
-            return answer;
-        }
-
         if (kind is not (CatalogKind.Opening or CatalogKind.Ending))
         {
             return null;

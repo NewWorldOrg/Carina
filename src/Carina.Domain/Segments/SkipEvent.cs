@@ -14,7 +14,7 @@ public sealed class SkipEvent
 
     public static readonly TimeSpan Within = TimeSpan.FromHours(1);
 
-    public static readonly TimeSpan Resolution = AnsweredStretches.Resolution;
+    public static readonly TimeSpan Resolution = TimeSpan.FromMilliseconds(10);
 
     private SkipEvent()
     {

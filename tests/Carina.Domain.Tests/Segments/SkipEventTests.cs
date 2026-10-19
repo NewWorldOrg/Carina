@@ -26,7 +26,7 @@ public sealed class SkipEventTests
             property => property.Name.Contains("Viewer", StringComparison.Ordinal) || property.Name.Contains("User", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-CV-003: a skip event from a stretch an answer gave names no version")]
+    [Fact(DisplayName = "BR-CV-003: a skip event from a chapter an encode marked names no version")]
     public void ASkipEventFromAnAnswerNamesNoVersion()
         => Assert.Null(SkipEvent.Rehydrate(7, RecordingId.New(), Noon, ViewerActionKind.Returned, SegmentKind.Ending, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(5), null).ModelVersion);
 

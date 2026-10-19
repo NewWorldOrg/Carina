@@ -2,13 +2,21 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// A stretch of the recording judged where a catalog entry is heard, the kind it counts as there, how
-/// many stretches, series and stations its entry is heard in, and how sure its entry's kind is, when it
-/// is known. A programme fixture counts as the programme and a station fixture as a break; the kind the
+/// many stretches, series and stations its entry is heard in, how sure its entry's kind is, when it
+/// is known, and which entry it is, when that is said. A programme fixture counts as the programme and a station fixture as a break; the kind the
 /// stretch alone is taken for wins over its entry's; an entry whose kind is not known counts as nothing.
 /// </summary>
 public sealed record CatalogHeard
 {
-    public CatalogHeard(TimeSpan starts, TimeSpan ends, SegmentKind? kind, int occurrences, int series, int stations, double? confidence = null)
+    public CatalogHeard(
+        TimeSpan starts,
+        TimeSpan ends,
+        SegmentKind? kind,
+        int occurrences,
+        int series,
+        int stations,
+        double? confidence = null,
+        CatalogEntryId? entry = null)
     {
         if (starts < TimeSpan.Zero || ends <= starts)
         {
@@ -36,6 +44,7 @@ public sealed record CatalogHeard
         Series = series;
         Stations = stations;
         Confidence = confidence;
+        Entry = entry;
     }
 
     public TimeSpan Starts { get; }
@@ -51,6 +60,8 @@ public sealed record CatalogHeard
     public int Stations { get; }
 
     public double? Confidence { get; }
+
+    public CatalogEntryId? Entry { get; }
 
     public static CatalogHeard Of(CatalogOccurrence occurrence, CatalogEntry entry)
     {
@@ -69,7 +80,8 @@ public sealed record CatalogHeard
             entry.OccurrenceCount,
             entry.SeriesCount,
             entry.StationCount,
-            entry.Confidence);
+            entry.Confidence,
+            entry.Id);
     }
 
     public static SegmentKind? CountsAs(CatalogKind kind) => kind switch

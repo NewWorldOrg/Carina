@@ -42,7 +42,7 @@ public sealed class SegmentDetectingTests
             CatalogOccurrence.Found(id, recording, new SoundSpan(TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(215)), programme, 0.05, Now),
             CatalogOccurrence.Found(id, elsewhere, new SoundSpan(TimeSpan.FromSeconds(50), TimeSpan.FromSeconds(65)), harness.Records.Row(elsewhere)!.Programme, 0.05, Now),
         ];
-        harness.Catalog.Entries.Add(CatalogEntry.Start(id, Fifteen, [.. heard.Select(occurrence => PlacedOccurrence.Of(occurrence, null, null))], SeriesLinks.None, Now));
+        harness.Catalog.Entries.Add(CatalogEntry.Start(id, Fifteen, [.. heard.Select(occurrence => PlacedOccurrence.Of(occurrence, null))], SeriesLinks.None, Now));
         harness.Catalog.Occurrences.AddRange([heard[0], Overridden(heard[1], SegmentKind.Programme), heard[2]]);
 
         DetectionInputs inputs = await GatherAsync(harness, recording);
@@ -98,37 +98,26 @@ public sealed class SegmentDetectingTests
         Assert.Equal("架空の物語", inputs.Context.Series);
     }
 
-    [Fact(DisplayName = "BR-CD-007: an earlier episode stands on the confirmed answer given for it over what the version in use detected, its opening still read from the detection while the answer could not name one, one answered alone is remembered too, and each keeps where its programme ends")]
-    public async Task TheEarlierEpisodesStandOnTheirConfirmedAnswers()
+    [Fact(DisplayName = "BR-CD-007: an earlier episode is remembered by what the version in use detected in it alone, one it did not detect or whose sequence it threw away is not, and each keeps where its programme ends")]
+    public async Task TheEarlierEpisodesStandOnTheirDetections()
     {
         using SegmentDetectionHarness harness = new();
         RecordingId first = await harness.ReadAsync(28, "架空の物語");
-        RecordingId second = await harness.ReadAsync(21, "架空の物語");
-        RecordingId unconfirmed = await harness.ReadAsync(14, "架空の物語");
-        RecordingId withdrawn = await harness.ReadAsync(7, "架空の物語");
+        RecordingId undetected = await harness.ReadAsync(21, "架空の物語");
+        RecordingId discarded = await harness.ReadAsync(14, "架空の物語");
         RecordingId judged = await harness.ReadAsync(0, "架空の物語");
-        await Detected(harness, first, SegmentModelVersion.FirstNumber, (0, 150, SegmentKind.Programme), (150, 240, SegmentKind.Opening), (240, 300, SegmentKind.Programme));
-        await Detected(harness, unconfirmed, SegmentModelVersion.FirstNumber, (0, 300, SegmentKind.Programme));
-        await Detected(harness, withdrawn, SegmentModelVersion.FirstNumber, (0, 300, SegmentKind.Programme));
-        await Answered(harness, first, true, null);
-        await Answered(harness, second, true, null);
-        await Answered(harness, unconfirmed, false, null);
-        await Answered(harness, withdrawn, true, Now);
+        await Detected(harness, first, SegmentModelVersion.FirstNumber, (0, 30, SegmentKind.Programme), (30, 120, SegmentKind.Break), (120, 150, SegmentKind.Programme), (150, 240, SegmentKind.Opening), (240, 300, SegmentKind.Programme));
+        await Detected(harness, discarded, SegmentModelVersion.FirstNumber, (0, 30, SegmentKind.Programme), (30, 300, SegmentKind.Break));
 
         DetectionInputs inputs = await GatherAsync(harness, judged);
-        Dictionary<RecordingId, PastEpisode> past = inputs.Context.Past.ToDictionary(episode => episode.Recording);
         TimeSpan within = TimeSpan.Zero;
 
-        Assert.Equal(new[] { first, second, unconfirmed, withdrawn }.Select(id => id.Value).Order(), past.Keys.Select(id => id.Value).Order());
-        Assert.True(past[first].StandsOnTheAnswer);
-        Assert.True(past[first].HadABreakNear(TimeSpan.FromSeconds(75), within));
-        Assert.True(past[first].HadAnOpeningNear(TimeSpan.FromSeconds(195), within));
-        Assert.True(past[second].HadABreakNear(TimeSpan.FromSeconds(75), within));
-        Assert.False(past[second].HadAnOpeningNear(TimeSpan.FromSeconds(195), within));
-        Assert.False(past[unconfirmed].StandsOnTheAnswer);
-        Assert.False(past[withdrawn].StandsOnTheAnswer);
-        Assert.All(past.Values, episode => Assert.Equal(TimeSpan.FromSeconds(Seconds), episode.ProgrammeEnds));
-        Assert.True(inputs.Context.RemembersTheAnswerOf(first));
+        PastEpisode episode = Assert.Single(inputs.Context.Past);
+        Assert.Equal(first, episode.Recording);
+        Assert.True(episode.HadABreakNear(TimeSpan.FromSeconds(75), within));
+        Assert.True(episode.HadAnOpeningNear(TimeSpan.FromSeconds(195), within));
+        Assert.Equal(TimeSpan.FromSeconds(Seconds), episode.ProgrammeEnds);
+        Assert.DoesNotContain(inputs.Context.Past, remembered => remembered.Recording.Equals(undetected) || remembered.Recording.Equals(discarded));
     }
 
     [Theory(DisplayName = "BR-CD-011: an earlier recording on another station sharing the sound of an opening, an ending or a programme fixture with the recording is an earlier episode of its series")]
@@ -188,25 +177,6 @@ public sealed class SegmentDetectingTests
         await harness.Detections.KeepAsync(
             RecordingDetection.Of(recording, version, SegmentDetection.Judged(segments, TimeSpan.FromSeconds(Seconds), []), 2, Now, Now),
             CancellationToken.None);
-    }
-
-    private static async Task Answered(SegmentDetectionHarness harness, RecordingId recording, bool confirmed, DateTime? withdrawnAt)
-    {
-        SegmentSpan[] segments =
-        [
-            new(TimeSpan.Zero, TimeSpan.FromSeconds(30), SegmentKind.Programme, null),
-            new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(120), SegmentKind.Break, null),
-            new(TimeSpan.FromSeconds(120), TimeSpan.FromSeconds(Seconds), SegmentKind.Programme, null),
-        ];
-
-        await harness.Answers.AnswerAsync(
-            RecordingAnswer.Rehydrate(recording, segments, TimeSpan.FromSeconds(Seconds), confirmed, confirmed ? Now : null, Now, 1, null),
-            CancellationToken.None);
-
-        if (withdrawnAt is DateTime at)
-        {
-            await harness.Answers.WithdrawAsync(recording, at, CancellationToken.None);
-        }
     }
 
     private static CatalogEntry Fixture(CatalogEntryId id, CatalogOccurrence[] heard, CatalogKind kind = CatalogKind.ProgrammeFixture)

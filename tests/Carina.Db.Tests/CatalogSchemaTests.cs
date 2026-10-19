@@ -109,10 +109,8 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             CatalogEntry kept = Assert.Single(await catalog.EntriesAsync([entry.Id], CancellationToken.None));
             stretches = [.. await catalog.OccurrencesOfAsync([entry.Id], CancellationToken.None)];
             CatalogOccurrence third = CatalogOccurrence.Found(entry.Id, RecordingId.New(), Span(100, 115), Copy("架空の天気", Noon.AddDays(9)), 0.1, Noon.AddDays(9));
-            kept.Reestimate(
-                [.. stretches.Append(third).Select(stretch => PlacedOccurrence.Of(stretch, null, stretch == stretches[0] ? SegmentKind.Break : null))],
-                SeriesLinks.None,
-                Noon.AddDays(9));
+            kept.Reestimate([.. stretches.Append(third).Select(stretch => PlacedOccurrence.Of(stretch, null))], SeriesLinks.None, Noon.AddDays(9));
+            stretches[0].Override(SegmentKind.Break);
 
             await catalog.KeepAsync(new CatalogChange([], [kept], [third], [stretches[0]], []), CancellationToken.None);
         }
@@ -123,7 +121,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         IReadOnlyList<CatalogOccurrence> written3 = await again.OccurrencesOfAsync([entry.Id], CancellationToken.None);
 
         Assert.Equal(SegmentKind.Break, stretches[0].KindOverride);
-        Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (written.Kind, written.Confidence, written.DecidedBy));
+        Assert.Equal((CatalogKind.Cm, 0.9, CatalogDecision.Pattern), (written.Kind, written.Confidence, written.DecidedBy));
         Assert.Equal(3, written.OccurrenceCount);
         Assert.Equal(Noon.AddDays(9), written.UpdatedAt);
         Assert.Equal(3, written3.Count);
@@ -197,7 +195,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             Assert.Equal(CatalogKinds.FirstVersion, next.KindsVersion);
             Assert.Equal(4, next.Fingerprint.Length);
 
-            next.Reestimate([.. stretches.Select(stretch => PlacedOccurrence.Of(stretch, null, null))], SeriesLinks.None, Noon);
+            next.Reestimate([.. stretches.Select(stretch => PlacedOccurrence.Of(stretch, null))], SeriesLinks.None, Noon);
             await catalog.KeepAsync(new CatalogChange([], [next], [], [], []), CancellationToken.None);
         }
 
@@ -206,7 +204,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         Assert.Equal(CatalogKinds.Version, (await new CatalogRepository(context).EntriesAsync([next.Id], CancellationToken.None)).Single().KindsVersion);
     }
 
-    [Fact(DisplayName = "an entry estimated again from a read taken before an answer put it back is set aside, the mark surviving, and the rest of the change is written")]
+    [Fact(DisplayName = "an entry estimated again from a read taken before it was put back meanwhile is set aside, the mark surviving, and the rest of the change is written")]
     public async Task AnEntryPutBackMeanwhileIsSetAside()
     {
         (CatalogEntry entry, CatalogOccurrence[] occurrences) = Started(RecordingId.New(), RecordingId.New());
@@ -221,13 +219,14 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             CatalogEntry stale = read.Single(kept => kept.Id.Equals(entry.Id));
             CatalogEntry fresh = read.Single(kept => kept.Id.Equals(other.Id));
             CatalogOccurrence third = CatalogOccurrence.Found(entry.Id, RecordingId.New(), Span(100, 115), Copy("架空の天気", Noon.AddDays(9)), 0.1, Noon.AddDays(9));
-            CatalogOccurrence answered = stretches[entry.Id].First();
+            CatalogOccurrence overridden = stretches[entry.Id].First();
 
             await ExecuteAsync($"UPDATE segment_catalog_entry SET kinds_version = {CatalogKinds.Unsettled} WHERE id = '{entry.Id.Value}'");
-            stale.Reestimate([.. stretches[entry.Id].Append(third).Select(stretch => PlacedOccurrence.Of(stretch, null, stretch == answered ? SegmentKind.Break : null))], SeriesLinks.None, Noon.AddDays(9));
-            fresh.Reestimate([.. stretches[other.Id].Select(stretch => PlacedOccurrence.Of(stretch, null, SegmentKind.Break))], SeriesLinks.None, Noon.AddDays(9));
+            stale.Reestimate([.. stretches[entry.Id].Append(third).Select(stretch => PlacedOccurrence.Of(stretch, null))], SeriesLinks.None, Noon.AddDays(9));
+            overridden.Override(SegmentKind.Break);
+            fresh.Reestimate([.. stretches[other.Id].Select(stretch => PlacedOccurrence.Of(stretch, null))], SeriesLinks.None, Noon.AddDays(9));
 
-            await catalog.KeepAsync(new CatalogChange([], [stale, fresh], [third], [answered], []), CancellationToken.None);
+            await catalog.KeepAsync(new CatalogChange([], [stale, fresh], [third], [overridden], []), CancellationToken.None);
         }
 
         await using CarinaDbContext context = Context();
@@ -240,36 +239,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         Assert.Equal((CatalogKinds.Unsettled, CatalogKind.Cm, 0.9, 2), (left.KindsVersion, left.Kind, left.Confidence, left.OccurrenceCount));
         Assert.Equal(3, heard.Count);
         Assert.All(heard, stretch => Assert.Null(stretch.KindOverride));
-        Assert.Equal((CatalogKinds.Version, CatalogKind.Cm, 1.0), (estimated.KindsVersion, estimated.Kind, estimated.Confidence));
-    }
-
-    [Fact(DisplayName = "BR-CD-005: an answer saved or withdrawn for a recording puts every entry heard in it back to be estimated again, and no other")]
-    public async Task AnAnswerPutsTheEntriesHeardInItsRecordingBack()
-    {
-        Guid recording = Guid.NewGuid();
-        Guid heard = Guid.NewGuid();
-        Guid elsewhere = Guid.NewGuid();
-        await InsertAsync("segment_catalog_entry", Seen(heard, "2026-10-01", CatalogKinds.Version));
-        await InsertAsync("segment_catalog_entry", Seen(elsewhere, "2026-10-01", CatalogKinds.Version));
-        await InsertAsync("segment_catalog_occurrence", Stretch(heard, recording));
-        await InsertAsync("segment_catalog_occurrence", Stretch(heard, Guid.NewGuid()));
-        await InsertAsync("segment_catalog_occurrence", Stretch(elsewhere, Guid.NewGuid()));
-        RecordingId id = new(recording);
-        RecordingAnswer answer = RecordingAnswer.Given(id, AnsweredStretches.Read([new SentStretch(0, 1800, SegmentKind.Programme)], TimeSpan.FromMinutes(30)).Stretches!, true, Noon);
-
-        await AnswerAsync(answers => answers.AnswerAsync(answer, CancellationToken.None));
-        int[] answered = [await KindsVersionAsync(heard), await KindsVersionAsync(elsewhere)];
-        await ExecuteAsync($"UPDATE segment_catalog_entry SET kinds_version = {CatalogKinds.Version} WHERE id = '{heard}'");
-        bool withdrew = await AnswerAsync(answers => answers.WithdrawAsync(id, Noon.AddHours(1), CancellationToken.None));
-        int withdrawn = await KindsVersionAsync(heard);
-        await ExecuteAsync($"UPDATE segment_catalog_entry SET kinds_version = {CatalogKinds.Version} WHERE id = '{heard}'");
-        bool again = await AnswerAsync(answers => answers.WithdrawAsync(id, Noon.AddHours(2), CancellationToken.None));
-
-        Assert.Equal([CatalogKinds.Unsettled, CatalogKinds.Version], answered);
-        Assert.True(withdrew);
-        Assert.Equal(CatalogKinds.Unsettled, withdrawn);
-        Assert.False(again);
-        Assert.Equal(CatalogKinds.Version, await KindsVersionAsync(heard));
+        Assert.Equal((CatalogKinds.Version, CatalogKind.Cm, 0.9, Noon.AddDays(9)), (estimated.KindsVersion, estimated.Kind, estimated.Confidence, estimated.UpdatedAt));
     }
 
     [Fact(DisplayName = "BR-CD-011: a change that relinks series puts every other entry heard in the relinking entry's recordings back, and leaves the relinking entry and the rest")]
@@ -509,7 +479,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         TimeSpan starts = TimeSpan.FromMinutes(1) + TimeSpan.FromSeconds(fromProgrammeStart);
         CatalogOccurrence occurrence = CatalogOccurrence.Found(entry, recording, new SoundSpan(starts, starts + TimeSpan.FromSeconds(seconds)), programme, 0.05, Noon);
 
-        return PlacedOccurrence.Of(occurrence, programme, null);
+        return PlacedOccurrence.Of(occurrence, programme);
     }
 
     private static (CatalogEntry Entry, CatalogOccurrence[] Occurrences) Started(RecordingId first, RecordingId second)
@@ -520,7 +490,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             CatalogOccurrence.Found(id, first, Span(600, 615), Copy("架空の物語", Noon), 0.05, Noon),
             CatalogOccurrence.Found(id, second, Span(300, 315), Copy("架空のクイズ", Noon.AddHours(4)), 0.08, Noon),
         ];
-        CatalogEntry entry = CatalogEntry.Start(id, Fifteen, [.. occurrences.Select(occurrence => PlacedOccurrence.Of(occurrence, null, null))], SeriesLinks.None, Noon);
+        CatalogEntry entry = CatalogEntry.Start(id, Fifteen, [.. occurrences.Select(occurrence => PlacedOccurrence.Of(occurrence, null))], SeriesLinks.None, Noon);
 
         return (entry, occurrences);
     }
@@ -621,20 +591,6 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlCommand reading = new($"SELECT kinds_version FROM segment_catalog_entry WHERE id = '{entry}'", connection);
 
         return Convert.ToInt32(await reading.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
-    }
-
-    private async Task<T> AnswerAsync<T>(Func<SegmentAnswerRepository, Task<T>> answering)
-    {
-        await using CarinaDbContext context = Context();
-
-        return await answering(new SegmentAnswerRepository(context));
-    }
-
-    private async Task AnswerAsync(Func<SegmentAnswerRepository, Task> answering)
-    {
-        await using CarinaDbContext context = Context();
-
-        await answering(new SegmentAnswerRepository(context));
     }
 
     private async Task KeepAsync(CatalogChange change)

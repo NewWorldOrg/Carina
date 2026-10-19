@@ -22,32 +22,22 @@ public sealed class ChapterRewriteWorklist(CarinaDbContext context) : IChapterRe
 
         List<Row> rows = await (
                 from job in Standing()
-                join detection in Detections(modelVersion) on job.RecordingId equals detection.RecordingId into detected
-                from detection in detected.DefaultIfEmpty()
-                join answer in context.Set<RecordingAnswer>().AsNoTracking() on job.RecordingId equals answer.RecordingId into answered
-                from answer in answered.DefaultIfEmpty()
-                let chapters = job.Chapters
-                where job.Timeline != null
-                      && (answer != null && answer.WithdrawnAt == null
-                          ? chapters == null || chapters.AnsweredAt == null || chapters.AnsweredAt != answer.AnsweredAt
-                          : (chapters != null && chapters.AnsweredAt != null)
-                            || (detection != null
-                                && (chapters == null
-                                    || chapters.ModelVersion != modelVersion
-                                    || chapters.DecidedAt < detection.DetectedAt)))
+                join detection in context.Set<RecordingDetection>().AsNoTracking() on job.RecordingId equals detection.RecordingId
+                where detection.ModelVersion == modelVersion
+                      && job.Timeline != null
+                      && (job.Chapters == null
+                          || job.Chapters.ModelVersion != modelVersion
+                          || job.Chapters.DecidedAt < detection.DetectedAt)
                       && !skipped.Contains(job.Id)
                       && !InHand().Any(other => other.RecordingId == job.RecordingId)
                       && !Rewritten().Any(scratch => scratch.JobId == job.Id && scratch.RemovedAt >= rewrittenSince)
-                orderby (answer != null ? answer.WithdrawnAt ?? answer.AnsweredAt : detection!.DetectedAt) descending, job.Id
-                select new Row(job, detection, answer, Rewritten().Where(scratch => scratch.JobId == job.Id).Max(scratch => scratch.RemovedAt)))
+                orderby detection.DetectedAt descending, job.Id
+                select new Row(job, detection, Rewritten().Where(scratch => scratch.JobId == job.Id).Max(scratch => scratch.RemovedAt)))
             .Take(atMost)
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(row => new ChapterRewriteSubject(row.Job, row.Detection, row.Answer, row.LastRewrittenAt))];
+        return [.. rows.Select(row => new ChapterRewriteSubject(row.Job, row.Detection, row.LastRewrittenAt))];
     }
-
-    private IQueryable<RecordingDetection> Detections(int modelVersion)
-        => context.Set<RecordingDetection>().AsNoTracking().Where(detection => detection.ModelVersion == modelVersion);
 
     private IQueryable<EncodeJob> Standing()
         => context.Set<EncodeJob>()
@@ -64,5 +54,5 @@ public sealed class ChapterRewriteWorklist(CarinaDbContext context) : IChapterRe
             .AsNoTracking()
             .Where(scratch => scratch.Kind == EncodeScratchKind.ChapteredWork && scratch.Fate == EncodeScratchFate.BecameTheArtefact);
 
-    private sealed record Row(EncodeJob Job, RecordingDetection? Detection, RecordingAnswer? Answer, DateTime? LastRewrittenAt);
+    private sealed record Row(EncodeJob Job, RecordingDetection Detection, DateTime? LastRewrittenAt);
 }

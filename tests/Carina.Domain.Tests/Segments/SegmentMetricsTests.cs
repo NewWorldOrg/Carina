@@ -1,5 +1,4 @@
 using Carina.Domain.Channels;
-using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
 namespace Carina.Domain.Tests.Segments;
@@ -10,16 +9,9 @@ public sealed class SegmentMetricsTests
 
     private static readonly DateTime Evening = new(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc);
 
-    private static readonly SegmentSpan[] Answer =
-    [
-        Span(0, 600, SegmentKind.Programme),
-        Span(600, 690, SegmentKind.Break),
-        Span(690, 1200, SegmentKind.Programme),
-        Span(1200, 1230, SegmentKind.Break),
-        Span(1230, Length, SegmentKind.Programme),
-    ];
+    private static readonly CatalogTruth TwoAdverts = Truth((600, 690, SegmentKind.Break), (1200, 1230, SegmentKind.Break));
 
-    [Fact(DisplayName = "boundaries count as found when a detected one turns the same way within two seconds or one, and a detected one with no answered boundary near is extra")]
+    [Fact(DisplayName = "BR-CD-008: a boundary the catalog is sure of is found when a detected one turns into its kind where it starts, or out of it where it ends, within two seconds or one, and the seconds of adverts are those detected as breaks")]
     public void BoundariesAreFoundByDirectionAndDistance()
     {
         SegmentDetection detection = Detected(
@@ -29,81 +21,69 @@ public sealed class SegmentMetricsTests
             Span(1000, 1015, SegmentKind.Break, 0.9),
             Span(1015, Length, SegmentKind.Programme, 0.9));
 
-        SegmentMetrics metrics = SegmentMetrics.Of([Compared(Answer, detection)], 0.7, SkipReturns.None)!;
+        SegmentMetrics metrics = SegmentMetrics.Of([Compared(TwoAdverts, detection)], SkipReturns.None)!;
 
         Assert.Equal(0.5, metrics.BoundaryRecallWithin2s);
         Assert.Equal(0.25, metrics.BoundaryRecallWithin1s);
-        Assert.Equal(2, metrics.ExtraBoundariesPerRecording);
-        Assert.Equal(15.5 * 2, metrics.ProgrammeSkippedSecondsPerHour, 9);
-        Assert.Equal([new KindMetrics(SegmentKind.Break, 88.5 / 120, 88.5 / 104), Unmeasured(SegmentKind.Opening), Unmeasured(SegmentKind.Ending)], metrics.Kinds);
+        Assert.Equal([new KindMetrics(SegmentKind.Break, 88.5 / 120), Unmeasured(SegmentKind.Opening), Unmeasured(SegmentKind.Ending)], metrics.Kinds);
+        Assert.Equal(88.5 / 120, metrics.BreakRecall);
         Assert.Null(metrics.ReturnedAfterSkipShare);
         Assert.Equal(0, metrics.Skips);
     }
 
-    [Fact(DisplayName = "a detected boundary at the right moment turning the other way is not found, and programme is skippable only from the threshold")]
-    public void TheWayABoundaryTurnsAndTheThresholdCount()
+    [Fact(DisplayName = "BR-CD-008: a detected boundary at the right moment turning the wrong way is not found, and one turning into the advert from any other kind is")]
+    public void TheWayABoundaryTurnsCounts()
     {
-        SegmentDetection detection = Detected(
+        CatalogTruth advert = Truth((600, 690, SegmentKind.Break));
+        SegmentDetection wrongWay = Detected(
             Span(0, 540, SegmentKind.Programme, 0.9),
             Span(540, 600, SegmentKind.Break, 0.6),
             Span(600, 690, SegmentKind.Programme, 0.9),
             Span(690, 720, SegmentKind.Break, 0.8),
             Span(720, Length, SegmentKind.Programme, 0.9));
+        SegmentDetection afterAnEnding = Detected(
+            Span(0, 510, SegmentKind.Programme, 0.9),
+            Span(510, 600, SegmentKind.Ending, 0.9),
+            Span(600, 690, SegmentKind.Break, 0.9),
+            Span(690, Length, SegmentKind.Programme, 0.9));
 
-        SegmentMetrics low = SegmentMetrics.Of([Compared(Answer, detection)], 0.5, SkipReturns.None)!;
-        SegmentMetrics high = SegmentMetrics.Of([Compared(Answer, detection)], 0.7, SkipReturns.None)!;
-
-        Assert.Equal(0, low.BoundaryRecallWithin2s);
-        Assert.Equal(2, low.ExtraBoundariesPerRecording);
-        Assert.Equal(90 * 2, low.ProgrammeSkippedSecondsPerHour, 9);
-        Assert.Equal(30 * 2, high.ProgrammeSkippedSecondsPerHour, 9);
+        Assert.Equal(0, SegmentMetrics.Of([Compared(advert, wrongWay)], SkipReturns.None)!.BoundaryRecallWithin2s);
+        Assert.Equal(1, SegmentMetrics.Of([Compared(advert, afterAnEnding)], SkipReturns.None)!.BoundaryRecallWithin2s);
     }
 
-    [Fact(DisplayName = "a detection thrown away has no boundaries and offers no skip, and seconds of a kind never detected have no precision")]
+    [Fact(DisplayName = "BR-CD-008: a detection thrown away has no boundaries and finds no second")]
     public void ADiscardedDetectionShowsNothing()
     {
         SegmentDetection discarded = Detected(Span(0, 600, SegmentKind.Programme, 0.9), Span(600, Length, SegmentKind.Break, 0.9));
 
-        SegmentMetrics metrics = SegmentMetrics.Of([Compared(Answer, discarded)], 0.7, SkipReturns.None)!;
+        SegmentMetrics metrics = SegmentMetrics.Of([Compared(TwoAdverts, discarded)], SkipReturns.None)!;
 
         Assert.Equal(SegmentDetectionState.Discarded, discarded.State);
         Assert.Equal(0, metrics.BoundaryRecallWithin2s);
-        Assert.Equal(0, metrics.ExtraBoundariesPerRecording);
-        Assert.Equal(0, metrics.ProgrammeSkippedSecondsPerHour);
-        Assert.Equal([new KindMetrics(SegmentKind.Break, 0, null), Unmeasured(SegmentKind.Opening), Unmeasured(SegmentKind.Ending)], metrics.Kinds);
+        Assert.Equal([new KindMetrics(SegmentKind.Break, 0), Unmeasured(SegmentKind.Opening), Unmeasured(SegmentKind.Ending)], metrics.Kinds);
     }
 
-    [Fact(DisplayName = "over several recordings the extra boundaries are per recording and the skipped programme per hour of them all, and answers without a boundary leave the recall unknown")]
-    public void SeveralRecordingsAreAveragedOverTheirCountAndLength()
+    [Fact(DisplayName = "BR-CD-008: what a detection finds beyond what the catalog is sure of is not counted against it")]
+    public void WhatTheCatalogIsNotSureOfCountsForNothing()
     {
-        SegmentSpan[] programmeOnly = [Span(0, Length, SegmentKind.Programme)];
-        SegmentDetection falseBreak = Detected(Span(0, 900, SegmentKind.Programme, 0.9), Span(900, 930, SegmentKind.Break, 0.9), Span(930, Length, SegmentKind.Programme, 0.9));
-        SegmentDetection nothing = Detected(Span(0, Length, SegmentKind.Programme, 0.9));
+        SegmentDetection detection = Detected(
+            Span(0, 600, SegmentKind.Programme, 0.9),
+            Span(600, 690, SegmentKind.Break, 0.9),
+            Span(690, 1000, SegmentKind.Programme, 0.9),
+            Span(1000, 1015, SegmentKind.Break, 0.9),
+            Span(1015, 1200, SegmentKind.Programme, 0.9),
+            Span(1200, 1230, SegmentKind.Break, 0.9),
+            Span(1230, Length, SegmentKind.Programme, 0.9));
 
-        SegmentMetrics metrics = SegmentMetrics.Of([Compared(programmeOnly, falseBreak), Compared(programmeOnly, nothing)], 0.7, new SkipReturns(25, 3))!;
+        SegmentMetrics metrics = SegmentMetrics.Of([Compared(TwoAdverts, detection)], SkipReturns.None)!;
 
-        Assert.Null(metrics.BoundaryRecallWithin2s);
-        Assert.Equal(1, metrics.ExtraBoundariesPerRecording);
-        Assert.Equal(30, metrics.ProgrammeSkippedSecondsPerHour, 9);
-        Assert.Equal([new KindMetrics(SegmentKind.Break, null, 0), Unmeasured(SegmentKind.Opening), Unmeasured(SegmentKind.Ending)], metrics.Kinds);
-        Assert.Equal(0.12, metrics.ReturnedAfterSkipShare);
-        Assert.Equal(25, metrics.Skips);
-        Assert.Null(SegmentMetrics.Of([], 0.7, SkipReturns.None));
+        Assert.Equal((1.0, 1.0, 1.0), (metrics.BoundaryRecallWithin2s!.Value, metrics.BoundaryRecallWithin1s!.Value, metrics.BreakRecall!.Value));
     }
 
-    [Fact(DisplayName = "BR-CD-008: the seconds of openings and endings found are measured as those of breaks, the boundaries into and out of them count, and a button over either that skips programme counts against it")]
+    [Fact(DisplayName = "BR-CD-008: the seconds of openings and endings the catalog is sure of are measured as those of adverts, and the boundaries into and out of them count")]
     public void OpeningsAndEndingsAreMeasured()
     {
-        SegmentSpan[] answer =
-        [
-            Span(0, 60, SegmentKind.Programme),
-            Span(60, 150, SegmentKind.Opening),
-            Span(150, 900, SegmentKind.Programme),
-            Span(900, 960, SegmentKind.Break),
-            Span(960, 1650, SegmentKind.Programme),
-            Span(1650, 1740, SegmentKind.Ending),
-            Span(1740, Length, SegmentKind.Programme),
-        ];
+        CatalogTruth truth = Truth((60, 150, SegmentKind.Opening), (900, 960, SegmentKind.Break), (1650, 1740, SegmentKind.Ending));
         SegmentDetection detection = Detected(
             Span(0, 61, SegmentKind.Programme, 0.9),
             Span(61, 160, SegmentKind.Opening, 0.9),
@@ -111,125 +91,97 @@ public sealed class SegmentMetricsTests
             Span(900, 960, SegmentKind.Break, 0.9),
             Span(960, Length, SegmentKind.Programme, 0.9));
 
-        SegmentMetrics metrics = SegmentMetrics.Of([Compared(answer, detection, true)], 0.7, SkipReturns.None)!;
+        SegmentMetrics metrics = SegmentMetrics.Of([Compared(truth, detection)], SkipReturns.None)!;
 
-        Assert.Equal(
-            [new KindMetrics(SegmentKind.Break, 1, 1), new KindMetrics(SegmentKind.Opening, 89 / 90.0, 89 / 99.0), new KindMetrics(SegmentKind.Ending, 0, null)],
-            metrics.Kinds);
+        Assert.Equal([new KindMetrics(SegmentKind.Break, 1), new KindMetrics(SegmentKind.Opening, 89 / 90.0), new KindMetrics(SegmentKind.Ending, 0)], metrics.Kinds);
         Assert.Equal(3 / 6.0, metrics.BoundaryRecallWithin2s);
         Assert.Equal(3 / 6.0, metrics.BoundaryRecallWithin1s);
-        Assert.Equal(1, metrics.ExtraBoundariesPerRecording);
-        Assert.Equal(10 * 2, metrics.ProgrammeSkippedSecondsPerHour, 9);
     }
 
-    [Fact(DisplayName = "A-051: a first episode with no opening, answered and detected as such, counts the opening neither as found nor as missed, and one detected where none was answered lowers its precision alone")]
-    public void AFirstEpisodeWithNoOpeningIsNoMiss()
+    [Fact(DisplayName = "BR-CD-008: over several recordings the figures are summed, a kind the catalog is sure of nowhere is not known, and with no recording there are no figures")]
+    public void SeveralRecordingsAreSummed()
     {
-        SegmentSpan[] withOpening = [Span(0, 60, SegmentKind.Programme), Span(60, 150, SegmentKind.Opening), Span(150, Length, SegmentKind.Programme)];
-        SegmentSpan[] withoutOpening = [Span(0, Length, SegmentKind.Programme)];
-        SegmentDetection found = Detected(Span(0, 60, SegmentKind.Programme, 0.9), Span(60, 150, SegmentKind.Opening, 0.9), Span(150, Length, SegmentKind.Programme, 0.9));
-        SegmentDetection none = Detected(Span(0, Length, SegmentKind.Programme, 0.9));
+        CatalogTruth opening = Truth((60, 150, SegmentKind.Opening));
+        SegmentDetection nothing = Detected(Span(0, Length, SegmentKind.Programme, 0.9));
+        SegmentDetection exact = Detected(Span(0, 600, SegmentKind.Programme, 0.9), Span(600, 690, SegmentKind.Break, 0.9), Span(690, Length, SegmentKind.Programme, 0.9));
 
-        SegmentMetrics alone = SegmentMetrics.Of([Compared(withOpening, found, true)], 0.7, SkipReturns.None)!;
-        SegmentMetrics beside = SegmentMetrics.Of([Compared(withOpening, found, true), Compared(withoutOpening, none, true)], 0.7, SkipReturns.None)!;
-        SegmentMetrics wrong = SegmentMetrics.Of([Compared(withOpening, found, true), Compared(withoutOpening, found, true)], 0.7, SkipReturns.None)!;
+        SegmentMetrics metrics = SegmentMetrics.Of([Compared(Truth((600, 690, SegmentKind.Break)), exact), Compared(opening, nothing)], new SkipReturns(25, 3))!;
 
-        Assert.Equal(new KindMetrics(SegmentKind.Opening, 1, 1), alone.Kinds[1]);
-        Assert.Equal(new KindMetrics(SegmentKind.Opening, 1, 1), beside.Kinds[1]);
-        Assert.Equal(alone.BoundaryRecallWithin2s, beside.BoundaryRecallWithin2s);
-        Assert.Equal(0, beside.ExtraBoundariesPerRecording);
-        Assert.Equal(new KindMetrics(SegmentKind.Opening, 1, 0.5), wrong.Kinds[1]);
+        Assert.Equal(2 / 4.0, metrics.BoundaryRecallWithin2s);
+        Assert.Equal([new KindMetrics(SegmentKind.Break, 1), new KindMetrics(SegmentKind.Opening, 0), Unmeasured(SegmentKind.Ending)], metrics.Kinds);
+        Assert.Equal(0.12, metrics.ReturnedAfterSkipShare);
+        Assert.Equal(25, metrics.Skips);
+        Assert.Null(SegmentMetrics.Of([], SkipReturns.None));
     }
 
-    [Fact(DisplayName = "A-051: against an answer that could say only programme or a break, an opening found where it says programme is neither an extra boundary nor programme skipped, an ending just before a break finds the boundary into it, and the seconds of each kind are measured as they are")]
-    public void AnAnswerThatCannotNameOpeningsJudgesThemAsProgramme()
+    [Fact(DisplayName = "BR-CD-008: the catalog is sure of adverts heard in two series or on two stations and of openings and endings, adverts less than two seconds apart are one, and no boundary is drawn within two seconds of the recording's zero or end")]
+    public void WhatTheCatalogIsSureOf()
     {
-        SegmentSpan[] answer =
-        [
-            Span(0, 900, SegmentKind.Programme),
-            Span(900, 960, SegmentKind.Break),
-            Span(960, Length, SegmentKind.Programme),
-        ];
-        SegmentDetection detection = Detected(
-            Span(0, 60, SegmentKind.Programme, 0.9),
-            Span(60, 150, SegmentKind.Opening, 0.9),
-            Span(150, 810, SegmentKind.Programme, 0.9),
-            Span(810, 900, SegmentKind.Ending, 0.9),
-            Span(900, 960, SegmentKind.Break, 0.9),
-            Span(960, Length, SegmentKind.Programme, 0.9));
+        CatalogTruth truth = CatalogTruth.Of(
+            [
+                Heard(0.5, 15, SegmentKind.Break, 0.9),
+                Heard(15.8, 30, SegmentKind.Break, 0.9),
+                Heard(60, 150, SegmentKind.Opening, 0.8),
+                Heard(300, 315, SegmentKind.Break, 0.5),
+                Heard(330, 340, SegmentKind.Break, 0.6),
+                Heard(400, 415, SegmentKind.Break, 0.8),
+                Heard(500, 590, SegmentKind.Programme, 0.8),
+                Heard(600, 615, SegmentKind.Break, 0.9),
+                Heard(618, 633, SegmentKind.Break, 0.9),
+                Heard(700, 715, null, null),
+                Heard(1790, 1799.5, SegmentKind.Break, 0.9),
+            ],
+            TimeSpan.FromSeconds(Length));
 
-        SegmentMetrics plain = SegmentMetrics.Of([Compared(answer, detection)], 0.7, SkipReturns.None)!;
-        SegmentMetrics naming = SegmentMetrics.Of([Compared(answer, detection, true)], 0.7, SkipReturns.None)!;
-
-        Assert.Equal((1.0, 0.0, 0.0), (plain.BoundaryRecallWithin2s!.Value, plain.ExtraBoundariesPerRecording, plain.ProgrammeSkippedSecondsPerHour));
         Assert.Equal(
-            [new KindMetrics(SegmentKind.Break, 1, 1), new KindMetrics(SegmentKind.Opening, null, 0), new KindMetrics(SegmentKind.Ending, null, 0)],
-            plain.Kinds);
-        Assert.Equal(plain.Kinds, naming.Kinds);
-        Assert.Equal((0.5, 3.0), (naming.BoundaryRecallWithin2s!.Value, naming.ExtraBoundariesPerRecording));
-        Assert.Equal(180 * 2, naming.ProgrammeSkippedSecondsPerHour, 9);
-        Assert.Equal(0, SegmentMetrics.ProgrammeSkippedAnHour([Compared(answer, detection)], 0.7));
+            [
+                Span(0.5, 30, SegmentKind.Break),
+                Span(60, 150, SegmentKind.Opening),
+                Span(600, 615, SegmentKind.Break),
+                Span(618, 633, SegmentKind.Break),
+                Span(1790, 1799.5, SegmentKind.Break),
+            ],
+            truth.Stretches);
+        Assert.Equal(
+            [
+                Boundary(30, SegmentKind.Break, false),
+                Boundary(60, SegmentKind.Opening, true),
+                Boundary(150, SegmentKind.Opening, false),
+                Boundary(600, SegmentKind.Break, true),
+                Boundary(615, SegmentKind.Break, false),
+                Boundary(618, SegmentKind.Break, true),
+                Boundary(633, SegmentKind.Break, false),
+                Boundary(1790, SegmentKind.Break, true),
+            ],
+            truth.Boundaries);
+        Assert.Equal((true, true, 6), (truth.Judges, truth.HoldsBreaks, truth.BreakBoundaries));
+        Assert.False(CatalogTruth.Of([Heard(300, 315, SegmentKind.Break, 0.5)], TimeSpan.FromSeconds(Length)).Judges);
+        Assert.Throws<ArgumentException>(() => Compared(CatalogTruth.None, Detected(Span(0, Length, SegmentKind.Programme, 0.9))));
     }
 
-    [Fact(DisplayName = "the recommended threshold is the lowest hundredth at which no more than five seconds of programme an hour are skippable")]
-    public void TheRecommendedThresholdIsTheLowestThatHolds()
-    {
-        SegmentDetection detection = Detected(
-            Span(0, 600, SegmentKind.Programme, 0.9),
-            Span(600, 690.5, SegmentKind.Break, 0.9),
-            Span(690.5, 1000, SegmentKind.Programme, 0.9),
-            Span(1000, 1015, SegmentKind.Break, 0.82),
-            Span(1015, 1300, SegmentKind.Programme, 0.9),
-            Span(1300, 1330, SegmentKind.Break, 0.6),
-            Span(1330, Length, SegmentKind.Programme, 0.9));
-        SegmentDetection certain = Detected(Span(0, 900, SegmentKind.Programme, 0.9), Span(900, 930, SegmentKind.Break, 0.99), Span(930, Length, SegmentKind.Programme, 0.9));
-
-        Assert.Equal(0.83, SegmentMetrics.RecommendedThreshold([Compared(Answer, detection)]));
-        Assert.Equal(0.5, SegmentMetrics.RecommendedThreshold([Compared(Answer, Detected(Answer))]));
-        Assert.Null(SegmentMetrics.RecommendedThreshold([Compared(Answer, certain)]));
-        Assert.Null(SegmentMetrics.RecommendedThreshold([]));
-    }
-
-    [Theory(DisplayName = "an evaluation stands on enough with ten confirmed recordings and a hundred boundaries of breaks, and not with one fewer of either")]
-    [InlineData(10, 25, true)]
-    [InlineData(9, 30, false)]
+    [Theory(DisplayName = "BR-CD-008: an evaluation stands on enough with ten recordings the catalog is sure of an advert in and a hundred boundaries of those adverts, and not with one fewer of either")]
+    [InlineData(10, 5, true)]
+    [InlineData(9, 6, false)]
     [InlineData(12, 4, false)]
-    public void EnoughEvidenceNeedsTenRecordingsAndAHundredBoundaries(int recordings, int pods, bool enough)
+    public void EnoughEvidenceNeedsTenRecordingsAndAHundredBoundaries(int recordings, int adverts, bool enough)
     {
-        SegmentSpan[] answer =
+        CatalogTruth truth = Truth([.. Enumerable.Range(0, adverts).Select(advert => ((advert * 60) + 45.0, (advert * 60) + 60.0, SegmentKind.Break))]);
+        CatalogTruth openingOnly = Truth((60, 150, SegmentKind.Opening));
+        SegmentComparison[] compared =
         [
-            .. Enumerable.Range(0, pods).SelectMany(pod => new[] { Span(pod * 60, (pod * 60) + 45, SegmentKind.Programme), Span((pod * 60) + 45, (pod * 60) + 60, SegmentKind.Break) }),
-            Span(pods * 60, (pods * 60) + 60, SegmentKind.Programme),
+            .. Enumerable.Range(0, recordings).Select(_ => Compared(truth, Detected(Span(0, Length, SegmentKind.Programme, 0.9)))),
+            Compared(openingOnly, Detected(Span(0, Length, SegmentKind.Programme, 0.9))),
         ];
-        SegmentComparison[] compared = [.. Enumerable.Range(0, recordings).Select(_ => Compared(answer, Detected(Span(0, (pods * 60) + 60, SegmentKind.Programme, 0.9))))];
 
         EvaluationEvidence evidence = EvaluationEvidence.Of(compared, Evening);
 
-        Assert.Equal(recordings, evidence.ConfirmedRecordings);
-        Assert.Equal(recordings * pods * 2, evidence.Boundaries);
+        Assert.Equal(recordings, evidence.Recordings);
+        Assert.Equal(recordings * adverts * 2, evidence.Boundaries);
         Assert.Equal(Evening, evidence.LabelsUntil);
         Assert.Equal(enough, evidence.Enough);
+        Assert.Equal(new EvaluationEvidence(recordings, recordings * adverts * 2, null), EvaluationEvidence.Of([.. compared.Select(comparison => comparison.Truth)]));
         Assert.False(new EvaluationEvidence(10, 99, null).Enough);
         Assert.True(new EvaluationEvidence(10, 100, null).Enough);
-    }
-
-    [Fact(DisplayName = "BR-CD-008: the answers give an evaluation the confirmed ones that stand, the boundaries of breaks they draw, and the latest of them sent")]
-    public void TheAnswersGiveTheConfirmedOnesThatStand()
-    {
-        SegmentSpan[] twoBreaks = [Span(0, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Break), Span(360, 900, SegmentKind.Programme), Span(900, 960, SegmentKind.Break), Span(960, 1800, SegmentKind.Programme)];
-        SegmentSpan[] oneBreak = [Span(0, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Break), Span(360, 1800, SegmentKind.Programme)];
-        RecordingAnswer[] answers =
-        [
-            Answered(twoBreaks, confirmed: true, Evening),
-            Answered(oneBreak, confirmed: true, Evening.AddHours(2)),
-            Answered(twoBreaks, confirmed: false, Evening.AddHours(3)),
-            Answered(twoBreaks, confirmed: true, Evening.AddHours(4), withdrawnAt: Evening.AddHours(5)),
-        ];
-
-        EvaluationEvidence evidence = EvaluationEvidence.OfAnswers(answers);
-
-        Assert.Equal(new EvaluationEvidence(2, 6, Evening.AddHours(2)), evidence);
-        Assert.Equal(new EvaluationEvidence(0, 0, null), EvaluationEvidence.OfAnswers([]));
     }
 
     [Fact(DisplayName = "skips and returns are counted on one version's buttons within the days asked for")]
@@ -255,30 +207,34 @@ public sealed class SegmentMetricsTests
     [Fact(DisplayName = "BR-CD-008: the figures read with what viewers did lately keep every other figure and take the share that came back and the skips from it")]
     public void TheFiguresReadWithWhatViewersDidLatelyKeepTheRest()
     {
-        SegmentMetrics evaluated = new(0.93, 0.85, 1.2, 2.1, [new KindMetrics(SegmentKind.Break, 0.95, 0.97)], 0.5, 4);
+        SegmentMetrics evaluated = new(0.93, 0.85, [new KindMetrics(SegmentKind.Break, 0.95)], 0.5, 4);
 
         SegmentMetrics lately = evaluated.WithReturns(new SkipReturns(64, 2));
         SegmentMetrics none = evaluated.WithReturns(SkipReturns.None);
 
-        Assert.Equal((0.93, 0.85, 1.2, 2.1), (lately.BoundaryRecallWithin2s!.Value, lately.BoundaryRecallWithin1s!.Value, lately.ExtraBoundariesPerRecording, lately.ProgrammeSkippedSecondsPerHour));
+        Assert.Equal((0.93, 0.85), (lately.BoundaryRecallWithin2s!.Value, lately.BoundaryRecallWithin1s!.Value));
         Assert.Equal(evaluated.Kinds, lately.Kinds);
         Assert.Equal((2 / 64d, 64), (lately.ReturnedAfterSkipShare!.Value, lately.Skips));
         Assert.Equal(((double?)null, 0), (none.ReturnedAfterSkipShare, none.Skips));
     }
 
-    private static RecordingAnswer Answered(SegmentSpan[] segments, bool confirmed, DateTime at, DateTime? withdrawnAt = null)
-        => RecordingAnswer.Rehydrate(RecordingId.New(), segments, segments[^1].Ends, confirmed, confirmed ? at : null, at, 1, withdrawnAt);
+    private static CatalogTruth Truth(params (double From, double To, SegmentKind Kind)[] stretches)
+        => CatalogTruth.Of([.. stretches.Select(stretch => Heard(stretch.From, stretch.To, stretch.Kind, stretch.Kind is SegmentKind.Break ? 0.9 : 0.8))], TimeSpan.FromSeconds(Length));
+
+    private static CatalogHeard Heard(double from, double to, SegmentKind? kind, double? confidence)
+        => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, 2, 2, 2, confidence, CatalogEntryId.New());
+
+    private static TruthBoundary Boundary(double at, SegmentKind kind, bool enters) => new(TimeSpan.FromSeconds(at), kind, enters);
 
     private static ViewerAction Action(ViewerActionKind action, int days, int? version)
         => new(Evening.AddDays(days), action, SegmentKind.Break, TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(690), version);
 
-    private static SegmentComparison Compared(IReadOnlyList<SegmentSpan> answer, SegmentDetection detection, bool answerNamesOpeningsAndEndings = false)
-        => new(new NetworkId(1), new ServiceId(1), answer, detection, answerNamesOpeningsAndEndings);
+    private static SegmentComparison Compared(CatalogTruth truth, SegmentDetection detection) => new(new NetworkId(1), new ServiceId(1), truth, detection);
 
     private static SegmentDetection Detected(params SegmentSpan[] spans) => SegmentDetection.Judged(spans, spans[^1].Ends, []);
 
     private static SegmentSpan Span(double from, double to, SegmentKind kind, double? probability = null)
         => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, probability);
 
-    private static KindMetrics Unmeasured(SegmentKind kind) => new(kind, null, null);
+    private static KindMetrics Unmeasured(SegmentKind kind) => new(kind, null);
 }

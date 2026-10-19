@@ -444,14 +444,14 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentDetecting>());
     }
 
-    [Fact(DisplayName = "registers where the answers and the skip events are kept")]
-    public void RegistersTheAnswersAndTheSkipEvents()
+    [Fact(DisplayName = "registers where the skip events are kept and what the catalog would give an evaluation to stand on")]
+    public void RegistersTheSkipEventsAndTheCatalogEvidence()
     {
         using ServiceProvider provider = Build(ValidSettings());
         using IServiceScope scope = provider.CreateScope();
 
-        Assert.IsType<SegmentAnswerRepository>(scope.ServiceProvider.GetRequiredService<ISegmentAnswerRepository>());
         Assert.IsType<SkipEventRepository>(scope.ServiceProvider.GetRequiredService<ISkipEventRepository>());
+        Assert.IsType<CatalogEvidenceReader>(scope.ServiceProvider.GetRequiredService<ICatalogEvidenceReader>());
     }
 
     [Fact(DisplayName = "registers the detection of segments as the same job that is stopped with the app, told by the matching what it matched at once")]

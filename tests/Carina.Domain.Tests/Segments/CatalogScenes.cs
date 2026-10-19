@@ -45,13 +45,12 @@ internal sealed class CatalogSeries(int station, string name, DateTime firstAiri
         ProgrammeCopy programme,
         double fromProgrammeStart,
         double seconds,
-        SegmentKind? answer = null,
         RecordingId? recording = null)
     {
         TimeSpan starts = Lead + TimeSpan.FromSeconds(fromProgrammeStart);
         SoundSpan span = new(starts, starts + TimeSpan.FromSeconds(seconds));
         CatalogOccurrence occurrence = CatalogOccurrence.Found(entry, recording ?? RecordingId.New(), span, programme, 0.05, Now);
 
-        return PlacedOccurrence.Of(occurrence, programme, answer);
+        return PlacedOccurrence.Of(occurrence, programme);
     }
 }

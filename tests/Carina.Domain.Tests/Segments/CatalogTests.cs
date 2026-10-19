@@ -215,25 +215,6 @@ public sealed class CatalogTests
         Assert.Empty(change.Found);
     }
 
-    [Fact(DisplayName = "an answer given for a recording decides the kind of an entry heard there when the entry is estimated again")]
-    public void AnAnswerGivenForARecordingDecidesTheEntry()
-    {
-        (CatalogEntry entry, CatalogOccurrence[] occurrences) = Kept(Drama.Episode(0), Drama.Episode(1));
-        RecordingId answered = occurrences[1].RecordingId;
-        Dictionary<RecordingId, ProgrammeCopy> programmes = new(Programmes) { [occurrences[0].RecordingId] = Drama.Episode(0), [answered] = Drama.Episode(1) };
-        Dictionary<RecordingId, GivenAnswer> answers = new() { [answered] = Answer(occurrences[1].Span, SegmentKind.Break, TimeSpan.FromMinutes(32)) };
-        SoundMatch match = new(Span(10, 25), new EntrySound(entry.Id), Span(0, 15), 0.04);
-
-        Assert.Equal((CatalogKind.Cm, 0.5), (entry.Kind, entry.Confidence));
-
-        CatalogChange change = Catalog.Absorb(Heard, Sound, [match], Knowing(entry, occurrences, answers, programmes), Now);
-
-        Assert.Same(entry, Assert.Single(change.Reestimated));
-        Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
-        Assert.Equal(SegmentKind.Break, occurrences[1].KindOverride);
-        Assert.Same(occurrences[1], Assert.Single(change.Overridden));
-    }
-
     [Fact(DisplayName = "BR-CD-005: an entry estimated before the rows for openings, heard at the start of each episode, is the opening once it is estimated again")]
     public void AnEntryEstimatedBeforeTheThemesBecomesTheOpening()
     {
@@ -257,21 +238,19 @@ public sealed class CatalogTests
         Assert.Equal([entry.Id], change.Relinking);
     }
 
-    [Fact(DisplayName = "an entry estimated again keeps the kind an answer gives it, and hands back the stretches whose own kind changed")]
-    public void AnEntryEstimatedAgainKeepsItsAnswer()
+    [Fact(DisplayName = "an entry estimated again hands back the stretches whose own kind changed")]
+    public void AnEntryEstimatedAgainHandsBackTheStretchesWhoseKindChanged()
     {
         CatalogEntryId id = CatalogEntryId.New();
         CatalogEntry entry = KeptBeforeThemes(id, 3);
         CatalogOccurrence[] stretches = [.. Enumerable.Range(0, 3).Select(week => At(id, Drama.Episode(week), week is 2 ? 1700 : 0, 89).Occurrence)];
         Dictionary<RecordingId, ProgrammeCopy> programmes = stretches.Select((stretch, week) => (stretch.RecordingId, Drama.Episode(week))).ToDictionary();
-        Dictionary<RecordingId, GivenAnswer> answers = new() { [stretches[0].RecordingId] = Answer(stretches[0].Span, SegmentKind.Break, TimeSpan.FromMinutes(32)) };
 
-        CatalogChange change = Catalog.Reestimate(entry, Knowing(entry, stretches, answers, programmes), Now.AddDays(1));
+        CatalogChange change = Catalog.Reestimate(entry, Knowing(entry, stretches, programmes), Now.AddDays(1));
 
-        Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
-        Assert.Equal(SegmentKind.Break, stretches[0].KindOverride);
-        Assert.Same(stretches[0], Assert.Single(change.Overridden));
-        Assert.Empty(change.Relinking);
+        Assert.Equal((CatalogKind.Opening, 0.8, CatalogDecision.Pattern), (entry.Kind, entry.Confidence, entry.DecidedBy));
+        Assert.Equal(SegmentKind.Ending, stretches[2].KindOverride);
+        Assert.Same(stretches[2], Assert.Single(change.Overridden));
     }
 
     [Fact(DisplayName = "BR-CD-011: an entry started as a programme fixture changes the links, and an advert that gains a stretch does not")]
@@ -331,21 +310,8 @@ public sealed class CatalogTests
     private static CatalogKnowledge Knowing(
         CatalogEntry? entry = null,
         IReadOnlyList<CatalogOccurrence>? occurrences = null,
-        IReadOnlyDictionary<RecordingId, GivenAnswer>? answers = null,
         IReadOnlyDictionary<RecordingId, ProgrammeCopy>? programmes = null)
-        => new(entry is null ? [] : [entry], occurrences ?? [], programmes ?? Programmes, answers ?? new Dictionary<RecordingId, GivenAnswer>(), SeriesLinks.None);
-
-    private static GivenAnswer Answer(SoundSpan span, SegmentKind kind, TimeSpan length)
-        => new(
-            [
-                new SegmentSpan(TimeSpan.Zero, span.Starts, SegmentKind.Programme, null),
-                new SegmentSpan(span.Starts, span.Ends, kind, null),
-                new SegmentSpan(span.Ends, length, SegmentKind.Programme, null),
-            ],
-            true,
-            Now,
-            false,
-            null);
+        => new(entry is null ? [] : [entry], occurrences ?? [], programmes ?? Programmes, SeriesLinks.None);
 
     private static CatalogEntry KeptOpening(CatalogEntryId id, int occurrences)
         => CatalogEntry.Rehydrate(
@@ -382,7 +348,7 @@ public sealed class CatalogTests
     private static (CatalogEntry Entry, CatalogOccurrence[] Occurrences) Kept(ProgrammeCopy one, ProgrammeCopy other, RecordingId? otherRecording = null)
     {
         CatalogEntryId id = CatalogEntryId.New();
-        PlacedOccurrence[] placed = [At(id, one, 600, 15), PlacedOccurrence.Of(Occurrence(id, other, otherRecording), other, null)];
+        PlacedOccurrence[] placed = [At(id, one, 600, 15), PlacedOccurrence.Of(Occurrence(id, other, otherRecording), other)];
         CatalogEntry entry = CatalogEntry.Start(id, [.. Enumerable.Range(1, 938).Select(value => (uint)value)], placed, SeriesLinks.None, Now);
 
         return (entry, [.. placed.Select(place => place.Occurrence)]);

@@ -243,14 +243,13 @@ public sealed class PersistenceBoundaryRuleTests
             StringComparer.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-CD-002: the segment tables are the learning data, the settings, the catalog, the versions of the model, the detections, the answers, the skip events and the rounds of learning taken, and the only keys among them are a stretch's into its entry and a detection's and a skip event's into their version")]
+    [Fact(DisplayName = "BR-CD-002: the segment tables are the learning data, the settings, the catalog, the versions of the model, the detections, the skip events and the rounds of learning taken, and the only keys among them are a stretch's into its entry and a detection's and a skip event's into their version")]
     public void TheSegmentTablesHoldNoKeyIntoAnotherDomain()
     {
         using CarinaDbContext context = Carina();
 
         Assert.Equal(
             [
-                "segment_answer",
                 "segment_catalog_entry",
                 "segment_catalog_occurrence",
                 "segment_detection",
@@ -282,7 +281,6 @@ public sealed class PersistenceBoundaryRuleTests
     [InlineData("segment_learning_data")]
     [InlineData("segment_catalog_occurrence")]
     [InlineData("segment_detection")]
-    [InlineData("segment_answer")]
     [InlineData("segment_skip_event")]
     public void TheLearningDataReachesTheRecordingByValue(string table)
     {

@@ -11,14 +11,6 @@ public static partial class RecordingFenceRules
 
     public const string TheServiceThatGuardsIt = "/Carina.Api/Services/RecordingService.cs";
 
-    public const string TheOneRouteThatWithdrawsAnAnswer = "api/recordings/{id}/segments/answer";
-
-    public const string TheActionThatWithdrawsAnAnswer =
-        "/Carina.Api/Controllers/Recordings/WithdrawSegmentAnswerAction.cs";
-
-    public const string WhereAnAnswerIsWithdrawn =
-        "/Carina.Infrastructure/Persistence/Repositories/SegmentAnswerRepository.cs";
-
     public const string ErasureTheGuardedRouteReaches =
         "/Carina.Infrastructure/Persistence/Repositories/RecordingDirectory.cs";
 
@@ -86,8 +78,7 @@ public static partial class RecordingFenceRules
     public static IReadOnlyList<string> DeletionsOfferedByTheRecordingFeature(string directory)
         => Scanned(directory)
             .Where(BelongsToTheRecordingFeature)
-            .Where(file => !string.Equals(file.Relative, TheActionOnThatRoute, StringComparison.Ordinal)
-                           && !string.Equals(file.Relative, TheActionThatWithdrawsAnAnswer, StringComparison.Ordinal))
+            .Where(file => !string.Equals(file.Relative, TheActionOnThatRoute, StringComparison.Ordinal))
             .Where(file => OffersADeletion().IsMatch(file.Source))
             .Select(file => file.Relative)
             .Order(StringComparer.Ordinal)
@@ -98,19 +89,10 @@ public static partial class RecordingFenceRules
             .Where(file => file.Relative.StartsWith(ApiFolder, StringComparison.Ordinal))
             .Where(file => OffersADeletion().IsMatch(file.Source))
             .SelectMany(file => RouteOf().Matches(file.Source).Select(match => match.Groups[1].Value))
-            .Where(route => route.Contains("recording", StringComparison.OrdinalIgnoreCase)
-                            && !string.Equals(route, TheOneRouteThatWithdrawsAnAnswer, StringComparison.Ordinal))
+            .Where(route => route.Contains("recording", StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-
-    /// <summary>
-    /// The routes the action that withdraws an answer declares, and whether the place it withdraws through ever
-    /// removes a row rather than marking one.
-    /// </summary>
-    public static (IReadOnlyList<string> Routes, bool RemovesARow) HowAnAnswerIsWithdrawn(string directory)
-        => ([.. RouteOf().Matches(Read(directory, TheActionThatWithdrawsAnAnswer)).Select(match => match.Groups[1].Value)],
-            RemovesARow().IsMatch(Read(directory, WhereAnAnswerIsWithdrawn)));
 
     public static IReadOnlyList<string> WhatErasesARecordingLedgerRow(string directory)
         => Scanned(directory)
@@ -220,9 +202,6 @@ public static partial class RecordingFenceRules
 
     [GeneratedRegex(@"\bHttpDelete\b|\bMapDelete\b")]
     private static partial Regex OffersADeletion();
-
-    [GeneratedRegex(@"(?i)\bDELETE\s+FROM\b|\bExecuteDelete\w*\s*\(|\.\s*Remove(?:Range)?\s*\(")]
-    private static partial Regex RemovesARow();
 
     [GeneratedRegex(@"\bRoute\s*\(\s*""([^""]+)""\s*\)")]
     private static partial Regex RouteOf();

@@ -50,17 +50,17 @@ public sealed record SegmentVersionResponder(int Number, SegmentModelVersionStat
 }
 
 /// <summary>
-/// What an evaluation stands on: the confirmed recordings judged and the boundaries of breaks their answers
-/// draw, whether that is enough to put a version in use, and how many of each it takes.
+/// What an evaluation stands on: the recordings the catalog is sure of an advert in and the boundaries of those
+/// adverts, whether that is enough to put a version in use, and how many of each it takes.
 /// </summary>
-public sealed record SegmentEvidenceResponder(int ConfirmedRecordings, int Boundaries, bool Enough, int RecordingsNeeded, int BoundariesNeeded)
+public sealed record SegmentEvidenceResponder(int Recordings, int Boundaries, bool Enough, int RecordingsNeeded, int BoundariesNeeded)
 {
     public static SegmentEvidenceResponder Of(EvaluationEvidence evidence)
     {
         ArgumentNullException.ThrowIfNull(evidence);
 
         return new SegmentEvidenceResponder(
-            evidence.ConfirmedRecordings,
+            evidence.Recordings,
             evidence.Boundaries,
             evidence.Enough,
             EvaluationEvidence.RecordingsNeeded,
@@ -69,23 +69,20 @@ public sealed record SegmentEvidenceResponder(int ConfirmedRecordings, int Bound
 }
 
 /// <summary>
-/// The seconds of one kind both answered and detected, as a share of those answered as it (recall) and of
-/// those detected as it (precision); null where there were none to share.
+/// The share of the seconds of one kind the catalog is sure of that were detected as it; null where the catalog is
+/// sure of none.
 /// </summary>
-public sealed record SegmentKindMetricsResponder(SegmentKind Kind, double? Recall, double? Precision);
+public sealed record SegmentKindMetricsResponder(SegmentKind Kind, double? Recall);
 
 /// <summary>
-/// How the version in use detects the confirmed recordings: the share of answered boundaries found within two
-/// seconds and within one, the extra boundaries per recording, the seconds of programme a button would skip per
-/// hour, the seconds found of each kind it was measured on, breaks and, once evaluated on them, openings and
-/// endings, and the share of skips on its buttons viewers came back from over the last seven days, with how many
-/// skips that is of.
+/// How the version in use detects the recordings it was judged on, against what the catalog is sure of in them: the
+/// share of the boundaries found within two seconds and within one, the seconds found of each kind it was measured
+/// on, and the share of skips on its buttons viewers came back from over the last seven days, with how many skips
+/// that is of.
 /// </summary>
 public sealed record SegmentMetricsResponder(
     double? BoundaryRecallWithin2s,
     double? BoundaryRecallWithin1s,
-    double ExtraBoundariesPerRecording,
-    double ProgrammeSkippedSecondsPerHour,
     IReadOnlyList<SegmentKindMetricsResponder> Kinds,
     double? ReturnedAfterSkipShare,
     int Skips)
@@ -97,32 +94,30 @@ public sealed record SegmentMetricsResponder(
         return new SegmentMetricsResponder(
             metrics.BoundaryRecallWithin2s,
             metrics.BoundaryRecallWithin1s,
-            metrics.ExtraBoundariesPerRecording,
-            metrics.ProgrammeSkippedSecondsPerHour,
-            [.. metrics.Kinds.Select(kind => new SegmentKindMetricsResponder(kind.Kind, kind.Recall, kind.Precision))],
+            [.. metrics.Kinds.Select(kind => new SegmentKindMetricsResponder(kind.Kind, kind.Recall))],
             metrics.ReturnedAfterSkipShare,
             metrics.Skips);
     }
 }
 
 /// <summary>
-/// The two figures a station or a version is compared by: the share of answered boundaries found within two
-/// seconds, and the seconds of programme a button would skip per hour.
+/// The figure a station or a version is compared by: the share of the boundaries the catalog is sure of found within
+/// two seconds.
 /// </summary>
-public sealed record SegmentMetricsSummaryResponder(double? BoundaryRecallWithin2s, double ProgrammeSkippedSecondsPerHour)
+public sealed record SegmentMetricsSummaryResponder(double? BoundaryRecallWithin2s)
 {
     public static SegmentMetricsSummaryResponder Of(SegmentMetrics metrics)
     {
         ArgumentNullException.ThrowIfNull(metrics);
 
-        return new SegmentMetricsSummaryResponder(metrics.BoundaryRecallWithin2s, metrics.ProgrammeSkippedSecondsPerHour);
+        return new SegmentMetricsSummaryResponder(metrics.BoundaryRecallWithin2s);
     }
 }
 
 /// <summary>
-/// How the version in use detects one station's confirmed recordings.
+/// How the version in use detects one station's recordings, and how many of them it was judged on.
 /// </summary>
-public sealed record SegmentStationResponder(int NetworkId, int ServiceId, int ConfirmedRecordings, SegmentMetricsSummaryResponder Metrics)
+public sealed record SegmentStationResponder(int NetworkId, int ServiceId, int Recordings, SegmentMetricsSummaryResponder Metrics)
 {
     public static SegmentStationResponder Of(StationMetrics station)
     {
@@ -131,7 +126,7 @@ public sealed record SegmentStationResponder(int NetworkId, int ServiceId, int C
         return new SegmentStationResponder(
             station.NetworkId.Value,
             station.ServiceId.Value,
-            station.ConfirmedRecordings,
+            station.Recordings,
             SegmentMetricsSummaryResponder.Of(station.Metrics));
     }
 }
@@ -144,8 +139,7 @@ public sealed record SegmentRolledBackResponder(DateTime At, double ReturnedAfte
 
 /// <summary>
 /// One version kept: its number, where it stands, whether it was chosen by hand, when it was made, put in use
-/// and taken out of use, why when a rollback took it out, and its two figures when it was evaluated on a
-/// confirmed recording.
+/// and taken out of use, why when a rollback took it out, and its figure when it was evaluated on a recording.
 /// </summary>
 public sealed record SegmentVersionHistoryResponder(
     int Number,
@@ -176,10 +170,9 @@ public sealed record SegmentVersionHistoryResponder(
 }
 
 /// <summary>
-/// The threshold a skip button is offered from, and the one the evaluation of the version in use recommends,
-/// null without one.
+/// The threshold a skip button is offered from.
 /// </summary>
-public sealed record SkipThresholdResponder(double Current, double? Recommended);
+public sealed record SkipThresholdResponder(double Current);
 
 /// <summary>
 /// Where CM, OP and ED detection stands.
@@ -208,6 +201,6 @@ public sealed record SegmentStatusResponder(
             status.Metrics is { } metrics ? SegmentMetricsResponder.Of(metrics) : null,
             [.. (status.Version.Stations ?? []).Select(SegmentStationResponder.Of)],
             [.. status.Versions.Select(SegmentVersionHistoryResponder.Of)],
-            new SkipThresholdResponder(status.Settings.SkipThreshold, status.Version.RecommendedThreshold));
+            new SkipThresholdResponder(status.Settings.SkipThreshold));
     }
 }

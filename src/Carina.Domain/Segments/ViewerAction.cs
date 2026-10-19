@@ -18,9 +18,9 @@ public enum ViewerActionKind
 /// <summary>
 /// One thing a viewer did with a skip button on one recording: when it was taken in, what was done, the
 /// kind of the stretch the button offered, the two moments in the recording's own time the action names,
-/// and the version whose detection offered the button, or none when an answer did. A skip names where it
-/// was pressed and where it landed; closing the button names where it was closed and where the stretch
-/// ends; coming back names where the viewer was and where they came back to.
+/// and the version whose detection offered the button, or none when the chapters an encode marked did. A
+/// skip names where it was pressed and where it landed; closing the button names where it was closed and
+/// where the stretch ends; coming back names where the viewer was and where they came back to.
 /// </summary>
 public sealed record ViewerAction
 {

@@ -68,19 +68,19 @@ internal static class SegmentJson
     public static SegmentMetrics Metrics(string stored) => Deserialised<MetricsShape>(stored).Read();
 
     public static string Written(IReadOnlyList<StationMetrics> stations)
-        => Serialised(stations.Select(station => new StationShape(station.NetworkId.Value, station.ServiceId.Value, station.ConfirmedRecordings, MetricsShape.Of(station.Metrics))).ToList());
+        => Serialised(stations.Select(station => new StationShape(station.NetworkId.Value, station.ServiceId.Value, station.Recordings, MetricsShape.Of(station.Metrics))).ToList());
 
     public static IReadOnlyList<StationMetrics> Stations(string stored)
-        => [.. Deserialised<List<StationShape>>(stored).Select(shape => new StationMetrics(new NetworkId(shape.NetworkId), new ServiceId(shape.ServiceId), shape.ConfirmedRecordings, shape.Metrics.Read()))];
+        => [.. Deserialised<List<StationShape>>(stored).Select(shape => new StationMetrics(new NetworkId(shape.NetworkId), new ServiceId(shape.ServiceId), shape.Recordings, shape.Metrics.Read()))];
 
     public static string Written(EvaluationEvidence evidence)
-        => Serialised(new EvidenceShape(evidence.ConfirmedRecordings, evidence.Boundaries, evidence.LabelsUntil));
+        => Serialised(new EvidenceShape(evidence.Recordings, evidence.Boundaries, evidence.LabelsUntil));
 
     public static EvaluationEvidence Evidence(string stored)
     {
         EvidenceShape shape = Deserialised<EvidenceShape>(stored);
 
-        return new EvaluationEvidence(shape.ConfirmedRecordings, shape.Boundaries, shape.LabelsUntil);
+        return new EvaluationEvidence(shape.Recordings, shape.Boundaries, shape.LabelsUntil);
     }
 
     public static string Written(SegmentRollback rollback)
@@ -139,8 +139,6 @@ internal static class SegmentJson
     private sealed record MetricsShape(
         double? BoundaryRecallWithin2s,
         double? BoundaryRecallWithin1s,
-        double ExtraBoundariesPerRecording,
-        double ProgrammeSkippedSecondsPerHour,
         List<KindShape> Kinds,
         double? ReturnedAfterSkipShare,
         int Skips)
@@ -149,9 +147,7 @@ internal static class SegmentJson
             => new(
                 metrics.BoundaryRecallWithin2s,
                 metrics.BoundaryRecallWithin1s,
-                metrics.ExtraBoundariesPerRecording,
-                metrics.ProgrammeSkippedSecondsPerHour,
-                [.. metrics.Kinds.Select(kind => new KindShape(kind.Kind, kind.Recall, kind.Precision))],
+                [.. metrics.Kinds.Select(kind => new KindShape(kind.Kind, kind.Recall))],
                 metrics.ReturnedAfterSkipShare,
                 metrics.Skips);
 
@@ -159,18 +155,16 @@ internal static class SegmentJson
             => new(
                 BoundaryRecallWithin2s,
                 BoundaryRecallWithin1s,
-                ExtraBoundariesPerRecording,
-                ProgrammeSkippedSecondsPerHour,
-                [.. Kinds.Select(kind => new KindMetrics(kind.Kind, kind.Recall, kind.Precision))],
+                [.. Kinds.Select(kind => new KindMetrics(kind.Kind, kind.Recall))],
                 ReturnedAfterSkipShare,
                 Skips);
     }
 
-    private sealed record KindShape(SegmentKind Kind, double? Recall, double? Precision);
+    private sealed record KindShape(SegmentKind Kind, double? Recall);
 
-    private sealed record StationShape(int NetworkId, int ServiceId, int ConfirmedRecordings, MetricsShape Metrics);
+    private sealed record StationShape(int NetworkId, int ServiceId, int Recordings, MetricsShape Metrics);
 
-    private sealed record EvidenceShape(int ConfirmedRecordings, int Boundaries, DateTime? LabelsUntil);
+    private sealed record EvidenceShape(int Recordings, int Boundaries, DateTime? LabelsUntil);
 
     private sealed record RollbackShape(double ReturnedAfterSkipShare, double PreviousShare, int Skips, int BackTo);
 

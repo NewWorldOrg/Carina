@@ -1,3 +1,5 @@
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
@@ -20,14 +22,18 @@ public sealed class SegmentStatusReadsTests(MigratedScratchDatabase database)
 
     private static readonly TimeSpan HalfAnHour = TimeSpan.FromMinutes(30);
 
+    private static readonly uint[] Fifteen = [.. Enumerable.Range(1, 938).Select(frame => (uint)frame)];
+
     public async Task InitializeAsync()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         await ExecuteAsync(
             connection,
             $$"""
-            DELETE FROM segment_answer;
             DELETE FROM segment_skip_event;
+            DELETE FROM segment_catalog_occurrence;
+            DELETE FROM segment_catalog_entry;
+            DELETE FROM segment_extraction;
             INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at)
             VALUES ({{Other}}, 'Candidate', false, 2, '{}', '{}', '{}', '{}', '{}', now())
             ON CONFLICT DO NOTHING;
@@ -36,29 +42,29 @@ public sealed class SegmentStatusReadsTests(MigratedScratchDatabase database)
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    [Fact(DisplayName = "BR-CD-008: the answers give an evaluation the confirmed ones that stand and the boundaries of breaks they draw; a withdrawn answer and one not confirmed are left out, and one sent again stands again")]
-    public async Task TheAnswersGiveTheConfirmedOnesThatStand()
+    [Fact(DisplayName = "BR-CD-008: the catalog gives an evaluation the recordings read that it is sure of an advert in and the boundaries of those adverts, two adverts with no gap between them one stretch; an advert of one series, an opening and a recording not read are left out")]
+    public async Task TheCatalogGivesTheRecordingsItIsSureOfAnAdvertIn()
     {
-        RecordingId sentAgain = RecordingId.New();
-        RecordingId withdrawn = RecordingId.New();
-        await AnswerAsync(Given(RecordingId.New(), true, Now.AddHours(-5), (0, 300, SegmentKind.Programme), (300, 360, SegmentKind.Break), (360, 900, SegmentKind.Programme), (900, 960, SegmentKind.Break), (960, 1800, SegmentKind.Programme)));
-        await AnswerAsync(Given(RecordingId.New(), false, Now.AddHours(-4), (0, 300, SegmentKind.Programme), (300, 360, SegmentKind.Break), (360, 1800, SegmentKind.Programme)));
-        await AnswerAsync(Given(withdrawn, true, Now.AddHours(-3), (0, 300, SegmentKind.Programme), (300, 360, SegmentKind.Break), (360, 1800, SegmentKind.Programme)));
-        await WithdrawAsync(withdrawn, Now.AddHours(-2));
-        await AnswerAsync(Given(sentAgain, true, Now.AddHours(-6), (0, 1740, SegmentKind.Programme), (1740, 1800, SegmentKind.Break)));
-        await WithdrawAsync(sentAgain, Now.AddHours(-5));
-        await AnswerAsync(Given(sentAgain, true, Now.AddHours(-1), (0, 600, SegmentKind.Programme), (600, 660, SegmentKind.Break), (660, 1800, SegmentKind.Programme)));
+        RecordingId pods = await RecordAsync(read: true);
+        RecordingId single = await RecordAsync(read: true);
+        RecordingId unsure = await RecordAsync(read: true);
+        RecordingId unread = await RecordAsync(read: false);
+        await EntryAsync(CatalogKind.Cm, 0.9, (pods, 300), (single, 100), (unread, 100));
+        await EntryAsync(CatalogKind.Cm, 0.9, (pods, 315), (RecordingId.New(), 600));
+        await EntryAsync(CatalogKind.Cm, 0.9, (pods, 900), (RecordingId.New(), 600));
+        await EntryAsync(CatalogKind.Cm, 0.5, (unsure, 100), (unsure, 600));
+        await EntryAsync(CatalogKind.Opening, 0.8, (single, 60), (RecordingId.New(), 60));
 
-        EvaluationEvidence evidence = await EvidenceAsync();
+        EvaluationEvidence evidence = await CatalogEvidenceAsync();
 
-        Assert.Equal(new EvaluationEvidence(2, 6, Now.AddHours(-1)), evidence);
+        Assert.Equal(new EvaluationEvidence(2, 6, null), evidence);
     }
 
-    [Fact(DisplayName = "with no answer kept the answers give an evaluation nothing to stand on")]
-    public async Task WithNoAnswerKeptTheAnswersGiveNothing()
-        => Assert.Equal(new EvaluationEvidence(0, 0, null), await EvidenceAsync());
+    [Fact(DisplayName = "with nothing the catalog is sure of, it gives an evaluation nothing to stand on")]
+    public async Task WithNothingSureTheCatalogGivesNothing()
+        => Assert.Equal(new EvaluationEvidence(0, 0, null), await CatalogEvidenceAsync());
 
-    [Fact(DisplayName = "BR-CD-008: what viewers did with one version's buttons over the last seven days counts its skips and returns, and nothing older, of another version, of an answer or closing a button")]
+    [Fact(DisplayName = "BR-CD-008: what viewers did with one version's buttons over the last seven days counts its skips and returns, and nothing older, of another version, of no version or closing a button")]
     public async Task OneVersionsSkipsAndReturnsOverTheLastSevenDaysAreCounted()
     {
         await SkipAsync(ViewerActionKind.Skipped, 8, Now.AddDays(-1), SegmentModelVersion.FirstNumber);
@@ -91,13 +97,6 @@ public sealed class SegmentStatusReadsTests(MigratedScratchDatabase database)
         Assert.Equal(SkipReturns.None.Skips, (await ReturnsAsync(SegmentModelVersion.FirstNumber)).Skips);
     }
 
-    private static RecordingAnswer Given(RecordingId recording, bool confirmed, DateTime at, params (double Starts, double Ends, SegmentKind Kind)[] stretches)
-        => RecordingAnswer.Given(
-            recording,
-            AnsweredStretches.Read([.. stretches.Select(stretch => new SentStretch(stretch.Starts, stretch.Ends, stretch.Kind))], HalfAnHour).Stretches!,
-            confirmed,
-            at);
-
     private static async Task ExecuteAsync(NpgsqlConnection connection, string statement)
     {
         await using var command = new NpgsqlCommand(statement, connection);
@@ -107,25 +106,64 @@ public sealed class SegmentStatusReadsTests(MigratedScratchDatabase database)
 
     private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
 
-    private async Task AnswerAsync(RecordingAnswer answer)
+    private async Task<RecordingId> RecordAsync(bool read)
     {
-        await using CarinaDbContext context = Context();
+        RecordingId recording = RecordingId.New();
+        ProgrammeCopy programme = new(new NetworkId(1), new ServiceId(1), Now.AddMinutes(1), Now.AddMinutes(31), Now, "架空の物語 #1", [], [], 1, AudioMode.Stereo, "架空の物語");
+        LearningExtraction record = LearningExtraction.Waiting(recording, programme, Now);
 
-        await new SegmentAnswerRepository(context).AnswerAsync(answer, CancellationToken.None);
+        if (read)
+        {
+            record.Read(ExtractionVersion.Current, Now);
+            record.Reached(HalfAnHour, Now.AddMinutes(30));
+            record.Finish(Now.AddMinutes(31));
+        }
+
+        await using CarinaDbContext context = Context();
+        await new LearningExtractionRepository(context).AddAsync(record, CancellationToken.None);
+
+        return recording;
     }
 
-    private async Task WithdrawAsync(RecordingId recording, DateTime at)
+    /// <summary>
+    /// An entry of fifteen seconds of <paramref name="kind"/> and <paramref name="confidence"/>, heard at each second
+    /// named in each recording named.
+    /// </summary>
+    private async Task EntryAsync(CatalogKind kind, double confidence, params (RecordingId Recording, double At)[] heard)
     {
-        await using CarinaDbContext context = Context();
+        CatalogEntryId id = CatalogEntryId.New();
+        ProgrammeCopy programme = new(new NetworkId(1), new ServiceId(1), Now.AddMinutes(1), Now.AddMinutes(31), Now, "架空の物語 #1", [], [], 1, AudioMode.Stereo, "架空の物語");
 
-        Assert.True(await new SegmentAnswerRepository(context).WithdrawAsync(recording, at, CancellationToken.None));
+        await using CarinaDbContext context = Context();
+        context.Add(CatalogEntry.Rehydrate(
+            id,
+            kind,
+            confidence,
+            CatalogDecision.Pattern,
+            TimeSpan.FromSeconds(15),
+            CatalogFingerprint.Write(Fifteen),
+            heard.Length,
+            2,
+            2,
+            Now,
+            Now,
+            Now,
+            CatalogKinds.Version));
+        context.AddRange(heard.Select(stretch => CatalogOccurrence.Found(
+            id,
+            stretch.Recording,
+            new SoundSpan(TimeSpan.FromSeconds(stretch.At), TimeSpan.FromSeconds(stretch.At + 15)),
+            programme,
+            0.05,
+            Now)));
+        await context.SaveChangesAsync(CancellationToken.None);
     }
 
-    private async Task<EvaluationEvidence> EvidenceAsync()
+    private async Task<EvaluationEvidence> CatalogEvidenceAsync()
     {
         await using CarinaDbContext context = Context();
 
-        return await new SegmentAnswerRepository(context).EvidenceAsync(CancellationToken.None);
+        return await new CatalogEvidenceReader(context).ReadAsync(CancellationToken.None);
     }
 
     private async Task SkipAsync(ViewerActionKind action, int count, DateTime at, int? version)

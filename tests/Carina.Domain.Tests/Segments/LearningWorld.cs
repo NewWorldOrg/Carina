@@ -4,13 +4,21 @@ using Carina.Domain.Segments;
 namespace Carina.Domain.Tests.Segments;
 
 /// <summary>
-/// Recordings made up for learning, ten minutes each, of one weekly series on one station. Every one has a
-/// pod of two 15-second adverts between silent cuts at 120 seconds, a silent stretch of 37 seconds that is
-/// programme at 250, and 30 seconds between two black frames at 330. Those learned from also have an advert
-/// of 75 seconds at 450 that only the catalog hears, heard on another station the week before, and 50
-/// seconds of music at 180 that the catalog hears in the middle of an earlier episode and cannot tell the
-/// kind of. Their
-/// answers make the pod and the advert breaks, and everything else programme.
+/// Recordings made up for learning, ten minutes each, of one weekly series on one station, the guide's programme
+/// running from 30 seconds in to 30 seconds before the end. Every one has a pod of
+/// two 15-second adverts between silent cuts at 120 seconds, a silent stretch of 37 seconds that is programme at 250,
+/// and 30 seconds between two black frames at 330. In each recording learned from, the catalog hears the two adverts
+/// of its pod, heard elsewhere in an earlier episode of the series alone, so it labels them breaks without being
+/// sure of them; stings of 20 seconds at 70, 290 and 540, heard at the same places of that episode, which it labels
+/// programme;
+/// and 50 seconds of music at 180 whose kind it cannot tell. With adverts it also hears an advert of 75 seconds at
+/// 450 that another series aired the week before, which it is sure of; with openings, an opening of 85 seconds at
+/// 365 heard at the same place of that earlier episode, which it is sure of too; with black adverts, the black
+/// stretch heard elsewhere in that episode, which it labels a break without being sure of it; with break adverts,
+/// that many adverts of 15 seconds between silent cuts from 380 seconds, each aired by another series the week
+/// before, which it is sure of. In the recording judged in the end
+/// the catalog hears the pod and the black stretch as adverts another series aired the week before, so it is sure
+/// of both, and the channels are unlike between the black frames.
 /// </summary>
 internal static class LearningWorld
 {
@@ -20,9 +28,9 @@ internal static class LearningWorld
 
     public static readonly CatalogSeries StoryEarlier = new(1, "架空の物語", new DateTime(2026, 8, 30, 12, 0, 0, DateTimeKind.Utc));
 
-    public static readonly CatalogSeries Across = new(2, "別の架空の話", new DateTime(2026, 9, 4, 12, 0, 0, DateTimeKind.Utc));
+    public static readonly CatalogSeries StoryLongAgo = new(1, "架空の物語", new DateTime(2026, 6, 2, 12, 0, 0, DateTimeKind.Utc));
 
-    public static readonly CatalogSeries Further = new(3, "三つ目の架空の話", new DateTime(2026, 9, 4, 18, 0, 0, DateTimeKind.Utc));
+    public static readonly CatalogSeries Across = new(2, "別の架空の話", new DateTime(2026, 9, 4, 12, 0, 0, DateTimeKind.Utc));
 
     public static readonly SegmentModelVersion InUse = SegmentModelVersion.Rehydrate(
         SegmentModelVersion.FirstNumber,
@@ -34,138 +42,6 @@ internal static class LearningWorld
         null,
         null,
         null);
-
-    public static readonly SegmentSearch OneSetting = new([SegmentThresholds.Initial], [0.1], [10]);
-
-    public static readonly DateTime Now = Story.Episode(8).RecordingStartedAt;
-
-    public static readonly SegmentSpan[] TaughtAnswer =
-    [
-        Span(0, 120, SegmentKind.Programme),
-        Span(120, 150, SegmentKind.Break),
-        Span(150, 450, SegmentKind.Programme),
-        Span(450, 525, SegmentKind.Break),
-        Span(525, Length, SegmentKind.Programme),
-    ];
-
-    public static readonly SegmentSpan[] JudgedAnswer =
-    [
-        Span(0, 120, SegmentKind.Programme),
-        Span(120, 150, SegmentKind.Break),
-        Span(150, 330, SegmentKind.Programme),
-        Span(330, 360, SegmentKind.Break),
-        Span(360, 450, SegmentKind.Programme),
-        Span(450, 525, SegmentKind.Break),
-        Span(525, Length, SegmentKind.Programme),
-    ];
-
-    /// <summary>
-    /// <see cref="TaughtAnswer"/> with an opening of 85 seconds at 365, where the catalog hears one in each episode.
-    /// </summary>
-    public static readonly SegmentSpan[] OpenedAnswer =
-    [
-        Span(0, 120, SegmentKind.Programme),
-        Span(120, 150, SegmentKind.Break),
-        Span(150, 365, SegmentKind.Programme),
-        Span(365, 450, SegmentKind.Opening),
-        Span(450, 525, SegmentKind.Break),
-        Span(525, Length, SegmentKind.Programme),
-    ];
-
-    /// <summary>
-    /// <see cref="JudgedAnswer"/> with the same opening.
-    /// </summary>
-    public static readonly SegmentSpan[] JudgedOpenedAnswer =
-    [
-        Span(0, 120, SegmentKind.Programme),
-        Span(120, 150, SegmentKind.Break),
-        Span(150, 330, SegmentKind.Programme),
-        Span(330, 360, SegmentKind.Break),
-        Span(360, 365, SegmentKind.Programme),
-        Span(365, 450, SegmentKind.Opening),
-        Span(450, 525, SegmentKind.Break),
-        Span(525, Length, SegmentKind.Programme),
-    ];
-
-    /// <summary>
-    /// The recordings of <see cref="Taught"/> whose answers also give the opening, as an answer able to name one
-    /// would, or say programme there, as every answer kept today does, and the sounds the catalog hears in them,
-    /// one opening an episode heard in the same place of the episode two days before.
-    /// </summary>
-    public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Opened(int count, bool answersNameOpenings = true)
-    {
-        (List<LearningRecording> taught, List<CatalogSound> sounds) = Taught(count);
-        List<LearningRecording> recordings =
-        [
-            .. taught.Select((recording, week) => Recording(recording.Id, week, Readings(null), answersNameOpenings ? OpenedAnswer : TaughtAnswer, true)),
-        ];
-
-        sounds.AddRange(recordings.Select((recording, week) => Opening(recording.Id, week)));
-
-        return (recordings, sounds);
-    }
-
-    /// <summary>
-    /// The recording judged after <see cref="Opened"/>, its answer giving its opening or saying programme there, and
-    /// the sound the catalog hears the opening by.
-    /// </summary>
-    public static (LearningRecording Recording, CatalogSound Sound) JudgedOpened(RecordingId id, int weeks, bool answerNamesOpenings = true)
-        => (Recording(id, weeks, Readings(null).Channels(330, 360, 60), answerNamesOpenings ? JudgedOpenedAnswer : JudgedAnswer, true), Opening(id, weeks));
-
-    /// <summary>
-    /// A recording of week <paramref name="week"/> that looks like those learned from and is answered with
-    /// <paramref name="answer"/>, the answer not confirmed, remembering <paramref name="past"/> of its series.
-    /// </summary>
-    public static LearningRecording Remembering(RecordingId id, int week, SegmentSpan[] answer, IReadOnlyList<PastEpisode> past)
-        => Recording(id, week, Readings(null), answer, false, past: past);
-
-    /// <summary>
-    /// The recordings learned from, the first <paramref name="count"/> weeks of the series, and the sounds
-    /// the catalog hears in them.
-    /// </summary>
-    public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Taught(int count, bool confirmed = true, byte? quiet = null, bool adverts = true)
-    {
-        List<LearningRecording> recordings = [];
-        List<CatalogSound> sounds = [];
-
-        for (int week = 0; week < count; week++)
-        {
-            RecordingId id = RecordingId.New();
-            CatalogEntryId advert = CatalogEntryId.New();
-            CatalogEntryId music = CatalogEntryId.New();
-
-            recordings.Add(Recording(id, week, Readings(quiet), TaughtAnswer, confirmed));
-            if (adverts)
-            {
-                sounds.Add(new CatalogSound(advert, TimeSpan.FromSeconds(75), [Heard(advert, Story, week, 450, 75, id), Heard(advert, Across, week - 1, 300, 75)]));
-            }
-
-            sounds.Add(new CatalogSound(music, TimeSpan.FromSeconds(50), [Heard(music, Story, week, 180, 50, id), Heard(music, StoryEarlier, week, CatalogSeries.Lead.TotalSeconds + CatalogSeries.Midpoint, 50)]));
-        }
-
-        return (recordings, sounds);
-    }
-
-    /// <summary>
-    /// The recording judged in the end, the week after <paramref name="weeks"/> weeks were learned from:
-    /// its black stretch is a break, the channels unlike inside it, and so is the advert at 450.
-    /// </summary>
-    public static LearningRecording Judged(
-        RecordingId id,
-        int weeks,
-        IReadOnlyList<ViewerAction>? actions = null,
-        IReadOnlyList<PastEpisode>? past = null,
-        SegmentSpan[]? answer = null)
-        => Recording(id, weeks, Readings(null).Channels(330, 360, 60), answer ?? JudgedAnswer, true, actions, past);
-
-    /// <summary>
-    /// A recording of week <paramref name="week"/> that looks like the one judged and has no answer.
-    /// </summary>
-    public static LearningRecording Unanswered(RecordingId id, int week)
-        => Recording(id, week, Readings(null).Channels(330, 360, 60), null, false);
-
-    public static PlacedOccurrence Heard(CatalogEntryId entry, CatalogSeries series, int week, double atRecording, double seconds, RecordingId? recording = null, SegmentKind? answer = null)
-        => CatalogSeries.At(entry, series.Episode(week), atRecording - CatalogSeries.Lead.TotalSeconds, seconds, answer, recording);
 
     /// <summary>
     /// <see cref="InUse"/> as the first version of four kinds would stand in its place.
@@ -181,26 +57,155 @@ internal static class LearningWorld
         null,
         null);
 
+    public static readonly SegmentSearch OneSetting = new([SegmentThresholds.Initial], [0.1], [10]);
+
+    public static readonly DateTime Now = Story.Episode(8).RecordingStartedAt;
+
+    private static readonly double[] Stings = [70, 300, 540];
+
+    private const double BreakStarts = 380;
+
+    private static readonly TimeSpan GuideStarts = TimeSpan.FromSeconds(30);
+
+    private static readonly TimeSpan GuideEnds = TimeSpan.FromSeconds(Length - 30);
+
+    /// <summary>
+    /// The recordings learned from, the first <paramref name="count"/> weeks of the series, and the sounds the catalog
+    /// hears in them; each sound is also heard in an episode long before the first when <paramref name="heardLongAgo"/>.
+    /// </summary>
+    public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Taught(
+        int count,
+        bool adverts = false,
+        bool openings = false,
+        byte? quiet = null,
+        bool heardLongAgo = false,
+        int fromWeek = 0,
+        bool blackAdverts = false,
+        bool watched = false,
+        int breakAdverts = 0,
+        bool stings = true)
+    {
+        List<LearningRecording> recordings = [];
+        List<CatalogSound> sounds = [];
+
+        for (int week = fromWeek; week < fromWeek + count; week++)
+        {
+            RecordingId id = RecordingId.New();
+
+            double[] breakAt = [.. Enumerable.Range(0, breakAdverts).Select(advert => BreakStarts + (15.0 * advert))];
+
+            recordings.Add(Recording(id, week, Readings(quiet, [.. breakAt, BreakStarts + (15.0 * breakAdverts)]), watched ? Watched(week) : null));
+            sounds.AddRange(breakAt.Select(at => Sound(15, id, week, at, (Across, at + 300), heardLongAgo, otherWeek: week - 1)));
+            sounds.Add(Sound(15, id, week, 120, (StoryEarlier, 420), heardLongAgo));
+            sounds.Add(Sound(15, id, week, 135, (StoryEarlier, 435), heardLongAgo));
+            sounds.AddRange(Stings.Where(_ => stings).Select(at => Sound(20, id, week, at, (StoryEarlier, at), heardLongAgo)));
+            sounds.Add(Sound(50, id, week, 180, (StoryEarlier, CatalogSeries.Lead.TotalSeconds + CatalogSeries.Midpoint), heardLongAgo));
+
+            if (adverts)
+            {
+                sounds.Add(Sound(75, id, week, 450, (Across, 300), heardLongAgo, otherWeek: week - 1));
+            }
+
+            if (openings)
+            {
+                sounds.Add(Sound(85, id, week, 365, (StoryEarlier, 365), heardLongAgo));
+            }
+
+            if (blackAdverts)
+            {
+                sounds.Add(Sound(30, id, week, 330, (StoryEarlier, 700), heardLongAgo));
+            }
+        }
+
+        return (recordings, sounds);
+    }
+
+    /// <summary>
+    /// The recording judged in the end, of week <paramref name="week"/>, and the sounds the catalog is sure of in it:
+    /// its pod and its black stretch, each an advert another series aired the week before, and with an opening, the
+    /// opening of <see cref="Taught"/> heard at the same place of an earlier episode.
+    /// </summary>
+    public static (LearningRecording Recording, List<CatalogSound> Sounds) Judged(
+        RecordingId id,
+        int week,
+        IReadOnlyList<ViewerAction>? actions = null,
+        IReadOnlyList<PastEpisode>? past = null,
+        bool opening = false,
+        byte? quiet = null)
+    {
+        List<CatalogSound> sounds =
+        [
+            Sound(15, id, week, 120, (Across, 200), false, otherWeek: week - 1),
+            Sound(15, id, week, 135, (Across, 215), false, otherWeek: week - 1),
+            Sound(30, id, week, 330, (Across, 400), false, otherWeek: week - 1),
+        ];
+
+        if (opening)
+        {
+            sounds.Add(Sound(85, id, week, 365, (StoryEarlier, 365), false));
+        }
+
+        return (Recording(id, week, Readings(quiet).Channels(330, 360, 60), actions, past), sounds);
+    }
+
+    /// <summary>
+    /// A recording of week <paramref name="week"/> that looks like the one judged and that the catalog hears nothing in.
+    /// </summary>
+    public static LearningRecording Unheard(RecordingId id, int week, IReadOnlyList<PastEpisode>? past = null)
+        => Recording(id, week, Readings(null).Channels(330, 360, 60), past: past);
+
+    /// <summary>
+    /// A sound of <paramref name="seconds"/> heard in <paramref name="recording"/> of week <paramref name="week"/> at
+    /// <paramref name="atRecording"/>, and in the episode of <paramref name="elsewhere"/> of that week, or of
+    /// <paramref name="otherWeek"/>, at its place; and in an episode long before when <paramref name="heardLongAgo"/>.
+    /// </summary>
+    public static CatalogSound Sound(
+        double seconds,
+        RecordingId recording,
+        int week,
+        double atRecording,
+        (CatalogSeries Series, double AtRecording) elsewhere,
+        bool heardLongAgo,
+        int? otherWeek = null)
+    {
+        CatalogEntryId entry = CatalogEntryId.New();
+        List<PlacedOccurrence> stretches =
+        [
+            Heard(entry, Story, week, atRecording, seconds, recording),
+            Heard(entry, elsewhere.Series, otherWeek ?? week, elsewhere.AtRecording, seconds),
+        ];
+
+        if (heardLongAgo)
+        {
+            stretches.Add(Heard(entry, StoryLongAgo, 0, elsewhere.AtRecording, seconds));
+        }
+
+        return new CatalogSound(entry, TimeSpan.FromSeconds(seconds), stretches);
+    }
+
+    public static PlacedOccurrence Heard(CatalogEntryId entry, CatalogSeries series, int week, double atRecording, double seconds, RecordingId? recording = null)
+        => CatalogSeries.At(entry, series.Episode(week), atRecording - CatalogSeries.Lead.TotalSeconds, seconds, recording);
+
     public static SegmentLearned Learn(
         IReadOnlyList<LearningRecording> recordings,
         IReadOnlyList<CatalogSound> sounds,
         SegmentSearch? search = null,
         SegmentModelVersion? active = null)
-        => SegmentLearning.Learn(recordings, new LearningCatalog(sounds, SeriesLinks.None), active ?? InUse, search ?? OneSetting, SegmentSettingsStanding.DefaultSkipThreshold, Now);
+        => SegmentLearning.Learn(recordings, new LearningCatalog(sounds, SeriesLinks.None), active ?? InUse, search ?? OneSetting, Now);
 
     public static string Figures(SegmentMetrics? metrics)
         => metrics is null
             ? "none"
-            : $"{metrics.BoundaryRecallWithin2s:F9} {metrics.BoundaryRecallWithin1s:F9} {metrics.ExtraBoundariesPerRecording:F9} {metrics.ProgrammeSkippedSecondsPerHour:F6} "
-              + $"{string.Join(",", metrics.Kinds.Select(kind => $"{kind.Kind}:{kind.Recall:F6}:{kind.Precision:F6}"))} {metrics.ReturnedAfterSkipShare:F9} {metrics.Skips}";
+            : $"{metrics.BoundaryRecallWithin2s:F9} {metrics.BoundaryRecallWithin1s:F9} "
+              + $"{string.Join(",", metrics.Kinds.Select(kind => $"{kind.Kind}:{kind.Recall:F6}"))} {metrics.ReturnedAfterSkipShare:F9} {metrics.Skips}";
 
     public static SegmentSpan Span(double from, double to, SegmentKind kind) => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, null);
 
-    private static SyntheticReadings Readings(byte? quiet)
+    private static SyntheticReadings Readings(byte? quiet, IReadOnlyList<double>? breakCuts = null)
     {
         SyntheticReadings readings = new(Length);
 
-        foreach (double at in new[] { 120.0, 135, 150, 250, 287 })
+        foreach (double at in new[] { 120.0, 135, 150, 250, 287 }.Concat(breakCuts ?? []))
         {
             if (quiet is byte level)
             {
@@ -217,29 +222,31 @@ internal static class LearningWorld
         return readings.Black(329.9, 330.1).Black(359.9, 360.1);
     }
 
-    private static CatalogSound Opening(RecordingId id, int week)
+    /// <summary>
+    /// What viewers did with the recording of week <paramref name="week"/> the day after it: closed the button and
+    /// watched the programme through from 150 to 330 seconds and from 360 to the end.
+    /// </summary>
+    private static ViewerAction[] Watched(int week)
     {
-        CatalogEntryId opening = CatalogEntryId.New();
+        DateTime after = Story.Episode(week).RecordingStartedAt.AddDays(1);
 
-        return new CatalogSound(opening, TimeSpan.FromSeconds(85), [Heard(opening, Story, week, 365, 85, id), Heard(opening, StoryEarlier, week, 365, 85)]);
+        return
+        [
+            new ViewerAction(after, ViewerActionKind.Dismissed, SegmentKind.Break, TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(330), 1),
+            new ViewerAction(after, ViewerActionKind.Dismissed, SegmentKind.Break, TimeSpan.FromSeconds(360), TimeSpan.FromSeconds(Length), 1),
+        ];
     }
 
     private static LearningRecording Recording(
         RecordingId id,
         int week,
         SyntheticReadings readings,
-        SegmentSpan[]? answer,
-        bool confirmed,
         IReadOnlyList<ViewerAction>? actions = null,
         IReadOnlyList<PastEpisode>? past = null)
     {
         DateTime started = Story.Episode(week).RecordingStartedAt;
-        SegmentContext context = new(Story.Episode(week).NetworkId, Story.Episode(week).ServiceId, "架空の物語", null, null, [], [], CornerLogo.None, past ?? []);
+        SegmentContext context = new(Story.Episode(week).NetworkId, Story.Episode(week).ServiceId, "架空の物語", GuideStarts, GuideEnds, [], [], CornerLogo.None, past ?? []);
 
-        GivenAnswer? given = answer is null
-            ? null
-            : new GivenAnswer(answer, confirmed, started.AddDays(1), false, null, answer.Any(segment => segment.Kind is SegmentKind.Opening or SegmentKind.Ending));
-
-        return new LearningRecording(id, started, readings.Evidence(), context, given, actions ?? []);
+        return new LearningRecording(id, started, readings.Evidence(), context, actions ?? []);
     }
 }

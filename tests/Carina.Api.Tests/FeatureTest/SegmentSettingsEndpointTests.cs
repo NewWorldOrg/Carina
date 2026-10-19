@@ -129,7 +129,7 @@ public sealed class SegmentSettingsEndpointTests
             null,
             null,
             null,
-            new SegmentEvaluation(null, [], new EvaluationEvidence(12, 148, null), null));
+            new SegmentEvaluation(null, [], new EvaluationEvidence(12, 148, null)));
         feature.Versions.Others.Add(FourKinds());
 
         (HttpStatusCode on, _) = await feature.PatchAsync(new { learning = true });

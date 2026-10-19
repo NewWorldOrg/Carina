@@ -27,7 +27,6 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
             services.AddSingleton<IRecordingDirectory>(Recordings);
             services.AddSingleton<ISegmentModelVersionRepository>(Versions);
             services.AddSingleton<IRecordingDetectionRepository>(Detections);
-            services.AddSingleton<ISegmentAnswerRepository>(Answers);
             services.AddSingleton<ISkipEventRepository>(Skips);
             services.AddSingleton<ISegmentSettingsRepository>(Settings);
             services.AddSingleton<TimeProvider>(Clock);
@@ -47,8 +46,6 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
 
     public HeldRecordingDetections Detections { get; } = new();
 
-    public HeldSegmentAnswers Answers { get; } = new();
-
     public HeldSkipEvents Skips { get; } = new();
 
     public HeldSegmentSettings Settings { get; } = new();
@@ -56,8 +53,6 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
     public MovingClock Clock { get; } = new(RecordingFeature.Noon.AddHours(2));
 
     public static string Path(RecordingId id) => $"/api/recordings/{id.Wire}/segments";
-
-    public static string AnswerPath(RecordingId id) => $"/api/recordings/{id.Wire}/segments/answer";
 
     public static string SkipsPath(RecordingId id) => $"/api/recordings/{id.Wire}/skips";
 
@@ -166,7 +161,7 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
 
 public sealed class RecordingSegmentsEndpointTests
 {
-    [Fact(DisplayName = "BR-CS-002: the stretches the version in use detected are answered in the recording's own time, with the boundary candidates' seconds")]
+    [Fact(DisplayName = "BR-CS-002: the stretches the version in use detected are answered in the recording's own time, and nothing of an answer a person gave or of where boundaries could be drawn")]
     public async Task TheDetectedStretchesAreAnsweredInTheRecordingsOwnTime()
     {
         await using var feature = new RecordingSegmentsFeature();
@@ -183,14 +178,12 @@ public sealed class RecordingSegmentsEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
-            ["answeredAt", "cmShare", "confirmed", "detectedAt", "lengthSec", "modelVersion", "segments", "snaps", "source", "state"],
+            ["cmShare", "detectedAt", "lengthSec", "modelVersion", "segments", "source", "state"],
             data.EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(1800, data.GetProperty("lengthSec").GetDouble());
         Assert.Equal("detected", data.GetProperty("source").GetString());
         Assert.Equal("marked", data.GetProperty("state").GetString());
         Assert.Equal(1, data.GetProperty("modelVersion").GetInt32());
-        Assert.False(data.GetProperty("confirmed").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, data.GetProperty("answeredAt").ValueKind);
         Assert.Equal(RecordingFeature.Noon.AddMinutes(32), data.GetProperty("detectedAt").GetDateTime().ToUniversalTime());
         Assert.Equal(0.05, data.GetProperty("cmShare").GetDouble());
         Assert.Equal(
@@ -200,7 +193,6 @@ public sealed class RecordingSegmentsEndpointTests
                 segment.GetProperty("endsAtSec").GetDouble(),
                 segment.GetProperty("kind").GetString()!,
                 segment.GetProperty("probability").GetDouble())));
-        Assert.Equal([912.28, 912.31, 1002.3, 1347], data.GetProperty("snaps").EnumerateArray().Select(snap => snap.GetDouble()));
     }
 
     [Fact(DisplayName = "BR-CS-002: an opening and an ending the version in use detected are answered by their own kinds beside the programme and a break")]
@@ -242,7 +234,6 @@ public sealed class RecordingSegmentsEndpointTests
         Assert.Equal(JsonValueKind.Null, none.GetProperty("detectedAt").ValueKind);
         Assert.Equal(JsonValueKind.Null, none.GetProperty("cmShare").ValueKind);
         Assert.Empty(none.GetProperty("segments").EnumerateArray());
-        Assert.Empty(none.GetProperty("snaps").EnumerateArray());
         Assert.Equal(1800, none.GetProperty("lengthSec").GetDouble());
     }
 
@@ -258,7 +249,6 @@ public sealed class RecordingSegmentsEndpointTests
         Assert.Equal("discarded", data.GetProperty("state").GetString());
         Assert.Empty(data.GetProperty("segments").EnumerateArray());
         Assert.Equal(0.6667, data.GetProperty("cmShare").GetDouble());
-        Assert.Equal([600d], data.GetProperty("snaps").EnumerateArray().Select(snap => snap.GetDouble()));
     }
 
     [Fact(DisplayName = "a recording still being written is answered, with the length written so far")]
@@ -288,6 +278,26 @@ public sealed class RecordingSegmentsEndpointTests
         Assert.False(body.GetProperty("status").GetBoolean());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("data").ValueKind);
         Assert.Equal(HttpStatusCode.BadRequest, malformed);
+    }
+
+    [Fact(DisplayName = "BR-CV-001: the stretches of a recording take no answer from a person: nothing puts them, and nothing withdraws an answer")]
+    public async Task TheStretchesTakeNoAnswer()
+    {
+        await using var feature = new RecordingSegmentsFeature();
+        Recording recording = feature.Ended();
+        await feature.DetectedAsync(recording.Id, [], (0, 1800, SegmentKind.Programme, 0.97));
+        int keeps = feature.Detections.Keeps;
+
+        (HttpStatusCode put, _) = await feature.PutAsync(
+            RecordingSegmentsFeature.Path(recording.Id),
+            """{"segments": [{"startsAtSec": 0, "endsAtSec": 1800, "kind": "programme"}], "confirmed": true}""");
+        (HttpStatusCode withdraw, _) = await feature.DeleteAsync($"{RecordingSegmentsFeature.Path(recording.Id)}/answer");
+        JsonElement data = (await feature.GetAsync(RecordingSegmentsFeature.Path(recording.Id))).Body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, put);
+        Assert.Equal(HttpStatusCode.NotFound, withdraw);
+        Assert.Equal(("detected", "nothingFound"), (data.GetProperty("source").GetString(), data.GetProperty("state").GetString()));
+        Assert.Equal(keeps, feature.Detections.Keeps);
     }
 
     [Fact(DisplayName = "a caller who has not signed in cannot read the stretches of a recording")]

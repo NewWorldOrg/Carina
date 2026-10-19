@@ -1,24 +1,25 @@
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// Labels the segments of one recording to learn from. A person's answer labels at
-/// <see cref="AnswerWeight"/>: a confirmed one every segment, one not confirmed only where it changed the
-/// detection, and a withdrawn one nothing. The catalog labels at its entry's confidence, never above
+/// Labels the segments of one recording to learn from, by the catalog and by what viewers did, never by a
+/// person saying what a stretch is. The catalog labels at its entry's confidence, never above
 /// <see cref="MostCatalogWeight"/>, and an entry whose kind or confidence is not known labels nothing.
 /// Viewers label at a tenth or two: a skip nobody came back from labels what was skipped at
 /// <see cref="SkippedWeight"/>; coming back labels <see cref="ReturnedSpan"/> from where the viewer came
 /// back as programme at <see cref="ReturnedWeight"/>, and takes the skip it came back from, the latest
 /// earlier one of the same kind that landed past where they came back to; closing the button on a break
 /// and watching it labels it programme at <see cref="DismissedWeight"/>. A segment takes a label when its
-/// kind covers more than half of it. An answer wins over the catalog and the catalog over viewers; within
-/// one source the heavier label wins, a tie going to the programme. An answer that could not name an opening or
-/// an ending says nothing of them where it says programme, so there the catalog's opening or ending wins. A
-/// segment more than half outside the guide's programme is never a label.
+/// kind covers more than half of it. In a recording the catalog is sure of an advert in
+/// (<see cref="CatalogTruth.Sure"/>), a segment wholly inside the guide's programme that no stretch of the
+/// catalog touches, whatever its kind, and no viewer's action lies over, is the programme at
+/// <see cref="UncoveredWeight"/>, or at <see cref="UncoveredWithLogoWeight"/> where the station's logo shows
+/// through at least <see cref="LogoSeenThrough"/> of it; with no logo known for the station it stays at the
+/// lower weight. The catalog wins over viewers and viewers over a segment no stretch touches; within one source
+/// the heavier label wins, a tie going to the programme. A segment more than half outside the guide's programme
+/// is never a label.
 /// </summary>
 public static class SegmentLabels
 {
-    public const double AnswerWeight = 1.0;
-
     public const double MostCatalogWeight = 0.9;
 
     public const double SkippedWeight = 0.2;
@@ -29,91 +30,63 @@ public static class SegmentLabels
 
     public const double MostOutsideTheGuide = 0.5;
 
+    public const double UncoveredWeight = 0.3;
+
+    public const double UncoveredWithLogoWeight = 0.5;
+
+    public const double LogoSeenThrough = 0.8;
+
     public static readonly TimeSpan ReturnedSpan = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// The labels of <paramref name="pieces"/> by what <paramref name="context"/> hears of the catalog and what
+    /// viewers did. A segment is touched by the catalog when a stretch of <paramref name="touching"/> lies over any of
+    /// it, by default the stretches the context hears; a stretch set aside from what the context hears still
+    /// touches the segments it lies over, so that it never leaves programme behind.
+    /// </summary>
     public static IReadOnlyList<SegmentLabel?> Of(
         IReadOnlyList<SegmentPiece> pieces,
         SegmentContext context,
-        GivenAnswer? answer,
-        IReadOnlyList<ViewerAction> actions)
+        IReadOnlyList<ViewerAction> actions,
+        IReadOnlyList<CatalogHeard>? touching = null)
     {
         ArgumentNullException.ThrowIfNull(pieces);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(actions);
 
-        Stretch[] answered = Answered(answer);
         Stretch[] heard = [.. context.Catalog.Select(Heard).OfType<Stretch>()];
         Stretch[] viewed = Viewed(actions);
-
-        bool themesUnsaid = answer is not { NamesOpeningsAndEndings: true };
+        CatalogHeard[]? touched = context.Catalog.Any(stretch => CatalogTruth.Sure(stretch) is SegmentKind.Break)
+            ? [.. touching ?? context.Catalog]
+            : null;
 
         return
         [
             .. pieces.Select(piece => piece.Features[SegmentFeature.OutsideGuide] > MostOutsideTheGuide
                 ? null
-                : Labelled(Over(piece, answered, SegmentLabelSource.Answer), Over(piece, heard, SegmentLabelSource.Catalog), themesUnsaid)
-                  ?? Over(piece, viewed, SegmentLabelSource.Viewer)),
+                : Over(piece, heard, SegmentLabelSource.Catalog) ?? Over(piece, viewed, SegmentLabelSource.Viewer) ?? Uncovered(piece, touched, viewed)),
         ];
     }
 
     /// <summary>
-    /// The label of the answer over that of the catalog, unless the answer says programme without having been
-    /// able to name an opening or an ending and the catalog hears one.
+    /// The programme a segment is taken for when the recording holds an advert the catalog is sure of and neither
+    /// a stretch of <paramref name="touched"/> nor what a viewer did lies over the segment, wholly inside the guide's
+    /// programme; none when <paramref name="touched"/> is none, which is when the recording holds no such advert.
     /// </summary>
-    private static SegmentLabel? Labelled(SegmentLabel? answered, SegmentLabel? heard, bool themesUnsaid)
-        => themesUnsaid && answered is { Kind: SegmentKind.Programme } && heard is { Kind: SegmentKind.Opening or SegmentKind.Ending }
-            ? heard
-            : answered ?? heard;
-
-    /// <summary>
-    /// The kind <paramref name="answer"/> gives the stretch from <paramref name="starts"/> to
-    /// <paramref name="ends"/>, as it would label a segment lying there; none where it would label none.
-    /// </summary>
-    public static SegmentKind? AnswerOver(TimeSpan starts, TimeSpan ends, GivenAnswer? answer)
-        => ends > starts ? Over(starts, ends, Answered(answer), SegmentLabelSource.Answer)?.Kind : null;
-
-    private static Stretch[] Answered(GivenAnswer? answer)
+    private static SegmentLabel? Uncovered(SegmentPiece piece, CatalogHeard[]? touched, Stretch[] viewed)
     {
-        if (answer is null || answer.Withdrawn)
+        if (touched is null
+            || piece.Features[SegmentFeature.OutsideGuide] is not 0d
+            || touched.Any(stretch => stretch.Starts < piece.Ends && stretch.Ends > piece.Starts)
+            || viewed.Any(stretch => stretch.Starts < piece.Ends && stretch.Ends > piece.Starts))
         {
-            return [];
+            return null;
         }
 
-        Stretch[] given = [.. answer.Segments.Select(segment => new Stretch(segment.Starts, segment.Ends, segment.Kind, AnswerWeight))];
+        double weight = piece.Features[SegmentFeature.LogoShare] >= LogoSeenThrough ? UncoveredWithLogoWeight : UncoveredWeight;
 
-        return answer.Confirmed ? given : Changed(given, answer.Detected ?? []);
+        return new SegmentLabel(SegmentKind.Programme, weight, SegmentLabelSource.Uncovered);
     }
-
-    /// <summary>
-    /// The parts of the stretches an answer gives whose kind differs from the detection's there, programme
-    /// where the detection says nothing.
-    /// </summary>
-    private static Stretch[] Changed(Stretch[] given, IReadOnlyList<SegmentSpan> detected)
-    {
-        List<Stretch> changed = [];
-
-        foreach (Stretch stretch in given)
-        {
-            TimeSpan[] cuts =
-            [
-                .. detected.SelectMany(span => new[] { span.Starts, span.Ends })
-                    .Where(at => at > stretch.Starts && at < stretch.Ends)
-                    .Append(stretch.Starts)
-                    .Append(stretch.Ends)
-                    .Distinct()
-                    .Order(),
-            ];
-
-            changed.AddRange(cuts.Zip(cuts.Skip(1))
-                .Where(part => KindAt(detected, part.First + ((part.Second - part.First) / 2)) != stretch.Kind)
-                .Select(part => stretch with { Starts = part.First, Ends = part.Second }));
-        }
-
-        return [.. changed];
-    }
-
-    private static SegmentKind KindAt(IReadOnlyList<SegmentSpan> detected, TimeSpan at)
-        => detected.FirstOrDefault(span => span.Starts <= at && at < span.Ends)?.Kind ?? SegmentKind.Programme;
 
     private static Stretch? Heard(CatalogHeard heard)
         => heard is { Kind: SegmentKind kind, Confidence: double confidence }

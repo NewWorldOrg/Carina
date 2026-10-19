@@ -23,10 +23,9 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly SegmentEvaluation Evaluated = new(
-        new SegmentMetrics(0.93, null, 1.2, 2.1, [new KindMetrics(SegmentKind.Break, 0.95, null)], 0.03, 64),
-        [new StationMetrics(new NetworkId(40_001), new ServiceId(60_001), 5, new SegmentMetrics(0.96, 0.9, 1, 1.4, [], null, 0))],
-        new EvaluationEvidence(12, 148, Noon.AddHours(-3)),
-        0.65);
+        new SegmentMetrics(0.93, null, [new KindMetrics(SegmentKind.Break, 0.95), new KindMetrics(SegmentKind.Opening, null)], 0.03, 64),
+        [new StationMetrics(new NetworkId(40_001), new ServiceId(60_001), 5, new SegmentMetrics(0.96, 0.9, [], null, 0))],
+        new EvaluationEvidence(12, 148, Noon.AddHours(-3)));
 
     public Task InitializeAsync() => ResetAsync();
 
@@ -39,21 +38,20 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
 
         SegmentModelVersion read = (await ListAsync()).Single(version => version.Number == 61);
 
-        Assert.Equal((0.93, (double?)null, 1.2, 2.1, 0.03, 64), (read.Metrics!.BoundaryRecallWithin2s!.Value, read.Metrics.BoundaryRecallWithin1s, read.Metrics.ExtraBoundariesPerRecording, read.Metrics.ProgrammeSkippedSecondsPerHour, read.Metrics.ReturnedAfterSkipShare!.Value, read.Metrics.Skips));
-        Assert.Equal([new KindMetrics(SegmentKind.Break, 0.95, null)], read.Metrics.Kinds);
+        Assert.Equal((0.93, (double?)null, 0.03, 64), (read.Metrics!.BoundaryRecallWithin2s!.Value, read.Metrics.BoundaryRecallWithin1s, read.Metrics.ReturnedAfterSkipShare!.Value, read.Metrics.Skips));
+        Assert.Equal([new KindMetrics(SegmentKind.Break, 0.95), new KindMetrics(SegmentKind.Opening, null)], read.Metrics.Kinds);
         StationMetrics station = Assert.Single(read.Stations!);
-        Assert.Equal((40_001, 60_001, 5, 0.96, 1.4), (station.NetworkId.Value, station.ServiceId.Value, station.ConfirmedRecordings, station.Metrics.BoundaryRecallWithin2s!.Value, station.Metrics.ProgrammeSkippedSecondsPerHour));
+        Assert.Equal((40_001, 60_001, 5, 0.96, 0.9), (station.NetworkId.Value, station.ServiceId.Value, station.Recordings, station.Metrics.BoundaryRecallWithin2s!.Value, station.Metrics.BoundaryRecallWithin1s!.Value));
         Assert.Equal(new EvaluationEvidence(12, 148, Noon.AddHours(-3)), read.Evidence);
-        Assert.Equal(0.65, read.RecommendedThreshold);
         Assert.Equal(new SegmentRollback(0.09, 0.03, 25, 1), read.Rollback);
         Assert.Equal(
             "t t t t",
             await ScalarAsync(
                 """
                 SELECT concat_ws(' ',
-                    metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": null, "extraBoundariesPerRecording": 1.2, "programmeSkippedSecondsPerHour": 2.1, "kinds": [{"kind": "Break", "recall": 0.95, "precision": null}], "returnedAfterSkipShare": 0.03, "skips": 64}'::jsonb,
-                    stations = '[{"networkId": 40001, "serviceId": 60001, "confirmedRecordings": 5, "metrics": {"boundaryRecallWithin2s": 0.96, "boundaryRecallWithin1s": 0.9, "extraBoundariesPerRecording": 1, "programmeSkippedSecondsPerHour": 1.4, "kinds": [], "returnedAfterSkipShare": null, "skips": 0}}]'::jsonb,
-                    evidence = '{"confirmedRecordings": 12, "boundaries": 148, "labelsUntil": "2026-10-18T09:00:00Z"}'::jsonb,
+                    metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": null, "kinds": [{"kind": "Break", "recall": 0.95}, {"kind": "Opening", "recall": null}], "returnedAfterSkipShare": 0.03, "skips": 64}'::jsonb,
+                    stations = '[{"networkId": 40001, "serviceId": 60001, "recordings": 5, "metrics": {"boundaryRecallWithin2s": 0.96, "boundaryRecallWithin1s": 0.9, "kinds": [], "returnedAfterSkipShare": null, "skips": 0}}]'::jsonb,
+                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-10-18T09:00:00Z"}'::jsonb,
                     rollback = '{"returnedAfterSkipShare": 0.09, "previousShare": 0.03, "skips": 25, "backTo": 1}'::jsonb)
                 FROM segment_model_version WHERE number = 61
                 """));
@@ -120,17 +118,15 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         SegmentModelVersion read = (await ListAsync()).Single(version => version.Number == 62);
         Assert.Equal((SegmentModelVersionState.Candidate, Noon.AddDays(1), (DateTime?)null), (read.State, read.TrainedAt, read.AdoptedAt));
         Assert.Equal(Evaluated.Evidence, read.Evidence);
-        Assert.Equal(0.65, read.RecommendedThreshold);
         Assert.Equal(SegmentModel.First.Weights, read.Weights);
         Assert.Equal(
-            "Candidate t t t 0.65",
+            "Candidate t t t",
             await ScalarAsync(
                 """
                 SELECT concat_ws(' ', state,
-                    metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": null, "extraBoundariesPerRecording": 1.2, "programmeSkippedSecondsPerHour": 2.1, "kinds": [{"kind": "Break", "recall": 0.95, "precision": null}], "returnedAfterSkipShare": 0.03, "skips": 64}'::jsonb,
-                    stations = '[{"networkId": 40001, "serviceId": 60001, "confirmedRecordings": 5, "metrics": {"boundaryRecallWithin2s": 0.96, "boundaryRecallWithin1s": 0.9, "extraBoundariesPerRecording": 1, "programmeSkippedSecondsPerHour": 1.4, "kinds": [], "returnedAfterSkipShare": null, "skips": 0}}]'::jsonb,
-                    evidence = '{"confirmedRecordings": 12, "boundaries": 148, "labelsUntil": "2026-10-18T09:00:00Z"}'::jsonb,
-                    recommended_threshold)
+                    metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": null, "kinds": [{"kind": "Break", "recall": 0.95}, {"kind": "Opening", "recall": null}], "returnedAfterSkipShare": 0.03, "skips": 64}'::jsonb,
+                    stations = '[{"networkId": 40001, "serviceId": 60001, "recordings": 5, "metrics": {"boundaryRecallWithin2s": 0.96, "boundaryRecallWithin1s": 0.9, "kinds": [], "returnedAfterSkipShare": null, "skips": 0}}]'::jsonb,
+                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-10-18T09:00:00Z"}'::jsonb)
                 FROM segment_model_version WHERE number = 62
                 """));
         Assert.Equal(SegmentModelVersion.FirstNumber, (await ActiveAsync()).Number);

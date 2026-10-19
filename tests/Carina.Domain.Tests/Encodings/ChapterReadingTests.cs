@@ -41,20 +41,15 @@ public sealed class ChapterReadingTests
     public void AReadingFromTheSegmentsSaysWhichVersionItCameFrom()
     {
         ChapterReading embedded = new(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, At, 2);
-        ChapterReading answered = new(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, At, null, At.AddDays(-1));
         ChapterReading nothing = new(ChapterDetectorName.Segments, ChapterVerdict.NotAsked, 0, At);
 
-        Assert.Equal((2, (DateTime?)null), (embedded.ModelVersion, embedded.AnsweredAt));
-        Assert.Equal(((int?)null, At.AddDays(-1)), (answered.ModelVersion, answered.AnsweredAt));
-        Assert.Equal(((int?)null, (DateTime?)null), (nothing.ModelVersion, nothing.AnsweredAt));
+        Assert.Equal(2, embedded.ModelVersion);
+        Assert.Null(nothing.ModelVersion);
         Assert.Null(ChapterReading.Of(ChapterDetectorName.Ffmpeg, ChapterDetection.NothingFound(), At).ModelVersion);
 
         Assert.Throws<ArgumentException>(() => new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.Marked, 0.1, At, 2));
-        Assert.Throws<ArgumentException>(() => new ChapterReading(ChapterDetectorName.Nobody, ChapterVerdict.NotAsked, 0, At, null, At));
         Assert.Throws<ArgumentException>(() => new ChapterReading(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, At));
         Assert.Throws<ArgumentException>(() => new ChapterReading(ChapterDetectorName.Segments, ChapterVerdict.NotAsked, 0, At, 2));
         Assert.Throws<ArgumentOutOfRangeException>(() => new ChapterReading(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, At, 0));
-        Assert.Throws<ArgumentException>(() => new ChapterReading(
-            ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, At, null, new DateTime(2026, 9, 14, 3, 0, 0, DateTimeKind.Local)));
     }
 }

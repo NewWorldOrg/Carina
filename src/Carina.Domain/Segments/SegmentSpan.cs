@@ -2,7 +2,7 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// A stretch of a recording in its own time, what it is taken for and, when it was detected, how likely
-/// that is (0 to 1); a stretch an answer gives carries no probability.
+/// that is (0 to 1); a stretch the catalog is sure of carries no probability.
 /// </summary>
 public sealed record SegmentSpan
 {

@@ -17,7 +17,7 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
 
     private static readonly uint[] Fifteen = [.. Enumerable.Range(1, 938).Select(frame => (uint)frame * 2_654_435_761u)];
 
-    private readonly RecordingId answered = RecordingId.New();
+    private readonly RecordingId viewed = RecordingId.New();
 
     private readonly RecordingId heard = RecordingId.New();
 
@@ -33,25 +33,11 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
 
     public Task DisposeAsync() => ClearAsync();
 
-    [Fact(DisplayName = "BR-CD-004: what learning reads last changed when an answer was sent or withdrawn, an entry of the catalog or a stretch of one kept, a skip event taken, or a recording's data read to its end")]
+    [Fact(DisplayName = "BR-CD-004: what learning reads last changed when an entry of the catalog or a stretch of one was kept, a skip event taken, or a recording's data read to its end")]
     public async Task EachKindOfChangeMovesTheLastChange()
     {
         DateTime? before = await LastChangedAsync();
 
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new SegmentAnswerRepository(writing).AnswerAsync(
-                RecordingAnswer.Given(answered, AnsweredStretches.Read([new SentStretch(0, 600, SegmentKind.Programme)], TimeSpan.FromMinutes(10)).Stretches!, true, Later.AddHours(1)),
-                Cancel);
-        }
-
-        DateTime? sent = await LastChangedAsync();
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new SegmentAnswerRepository(writing).WithdrawAsync(answered, Later.AddHours(2), Cancel);
-        }
-
-        DateTime? withdrawn = await LastChangedAsync();
         await KeepCatalogAsync(estimated: Later.AddHours(4), matched: Later.AddHours(3));
         DateTime? estimated = await LastChangedAsync();
         await KeepStretchAsync(heard, 300, Later.AddHours(5));
@@ -59,7 +45,7 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
         await using (CarinaDbContext writing = database.Open())
         {
             await new SkipEventRepository(writing).TakeAsync(
-                SkipEvent.Of(answered, new ViewerAction(Later.AddHours(6), ViewerActionKind.Skipped, SegmentKind.Break, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(115), null)),
+                SkipEvent.Of(viewed, new ViewerAction(Later.AddHours(6), ViewerActionKind.Skipped, SegmentKind.Break, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(115), null)),
                 Cancel);
         }
 
@@ -71,8 +57,8 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
 
         Assert.True(before is null || before < Later);
         Assert.Equal(
-            [Later.AddHours(1), Later.AddHours(2), Later.AddHours(4), Later.AddHours(5), Later.AddHours(6), Later.AddHours(6), Later.AddHours(7)],
-            new[] { sent, withdrawn, estimated, matched, skipped, notToTheEnd, readToTheEnd });
+            [Later.AddHours(4), Later.AddHours(5), Later.AddHours(6), Later.AddHours(6), Later.AddHours(7)],
+            new[] { estimated, matched, skipped, notToTheEnd, readToTheEnd });
     }
 
     private async Task<DateTime?> LastChangedAsync()
@@ -87,7 +73,7 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
         CatalogOccurrence[] found = [Found(heard, 100, matched), Found(elsewhere, 50, matched)];
 
         await using CarinaDbContext writing = database.Open();
-        writing.Add(CatalogEntry.Start(entry, Fifteen, [.. found.Select(occurrence => PlacedOccurrence.Of(occurrence, null, null))], SeriesLinks.None, estimated));
+        writing.Add(CatalogEntry.Start(entry, Fifteen, [.. found.Select(occurrence => PlacedOccurrence.Of(occurrence, null))], SeriesLinks.None, estimated));
         writing.AddRange(found);
         await writing.SaveChangesAsync(Cancel);
     }
@@ -131,12 +117,11 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
 
     private async Task ClearAsync()
     {
-        Guid[] recordings = [answered.Value, heard.Value, elsewhere.Value, read.Value, partway.Value];
+        Guid[] recordings = [viewed.Value, heard.Value, elsewhere.Value, read.Value, partway.Value];
         Guid id = entry.Value;
 
         await using CarinaDbContext context = database.Open();
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_skip_event WHERE recording_id = ANY({recordings})", Cancel);
-        await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_answer WHERE recording_id = ANY({recordings})", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_catalog_occurrence WHERE entry_id = {id}", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_catalog_entry WHERE id = {id}", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_extraction WHERE recording_id = ANY({recordings})", Cancel);

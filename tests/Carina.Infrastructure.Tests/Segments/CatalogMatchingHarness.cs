@@ -152,7 +152,6 @@ internal sealed class CatalogMatchingHarness : IDisposable
             .AddScoped<IOccupancyReader, OccupancyReader>()
             .AddSingleton<ICatalogWorklist>(Worklist)
             .AddSingleton<ICatalogRepository>(Catalog)
-            .AddSingleton<ISegmentAnswerRepository>(Answers)
             .AddSingleton<IRecordingDetectionRepository>(Detections)
             .AddSingleton<ISegmentModelVersionRepository>(Versions)
             .AddSingleton(Lowest)
@@ -174,7 +173,6 @@ internal sealed class CatalogMatchingHarness : IDisposable
 
     public HeldCatalog Catalog { get; } = new();
 
-    public HeldSegmentAnswers Answers { get; } = new();
 
     public HeldRecordingDetections Detections { get; } = new();
 

@@ -41,8 +41,8 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
         Assert.Equal(SegmentModel.FirstOfFourKinds, four.Model);
         Assert.Null(four.Evaluation);
         Assert.Equal(
-            "NULL NULL NULL NULL NULL",
-            await ScalarAsync("SELECT concat_ws(' ', coalesce(metrics::text, 'NULL'), coalesce(stations::text, 'NULL'), coalesce(evidence::text, 'NULL'), coalesce(recommended_threshold::text, 'NULL'), coalesce(rollback::text, 'NULL')) FROM segment_model_version WHERE number = 1"));
+            "NULL NULL NULL NULL",
+            await ScalarAsync("SELECT concat_ws(' ', coalesce(metrics::text, 'NULL'), coalesce(stations::text, 'NULL'), coalesce(evidence::text, 'NULL'), coalesce(rollback::text, 'NULL')) FROM segment_model_version WHERE number = 1"));
     }
 
     [Fact(DisplayName = "BR-CS-003: exactly one version is in use: a second one in use is refused by the unique index, while any number of candidates and versions used before are kept beside it")]

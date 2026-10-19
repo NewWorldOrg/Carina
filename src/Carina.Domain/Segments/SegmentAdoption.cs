@@ -2,8 +2,8 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// What became of a candidate weighed against the version in use: put in use, or kept out because the
-/// version in use was chosen by hand, the evaluation stands on too little, it would skip more programme,
-/// it finds boundaries no better, or a version was rolled back from lately.
+/// version in use was chosen by hand, the evaluation stands on too little, it finds boundaries no better,
+/// or a version was rolled back from lately.
 /// </summary>
 public enum AdoptionVerdict
 {
@@ -13,25 +13,20 @@ public enum AdoptionVerdict
 
     TooLittleEvidence = 3,
 
-    SkipsMoreProgramme = 4,
-
     NoBetterAtBoundaries = 5,
 
     HeldAfterRollback = 6,
 }
 
 /// <summary>
-/// Whether a candidate takes the place of the version in use, both judged on the same confirmed
-/// recordings. A version chosen by hand is never moved. The candidate needs enough evidence
-/// (<see cref="EvaluationEvidence.Enough"/>); then it may skip no more than
-/// <see cref="MostMoreProgrammeSkippedSecondsAnHour"/> second of programme an hour more than the version in
-/// use, and must find more of the answered boundaries within two seconds, or as many with fewer extra
-/// boundaries.
+/// Whether a candidate takes the place of the version in use, both judged on the same recordings. A version
+/// chosen by hand is never moved. The candidate needs enough evidence (<see cref="EvaluationEvidence.Enough"/>);
+/// then it must find more of the boundaries the catalog is sure of within two seconds, or as many and more of
+/// the seconds of its adverts. No threshold for the skip button is drawn from the evaluation: what a button would
+/// skip of the programme cannot be told from what the catalog is sure of.
 /// </summary>
 public static class SegmentAdoption
 {
-    public const double MostMoreProgrammeSkippedSecondsAnHour = 1;
-
     public static AdoptionVerdict Judge(SegmentModelVersion active, SegmentEvaluation inUse, SegmentEvaluation candidate)
     {
         ArgumentNullException.ThrowIfNull(active);
@@ -48,12 +43,22 @@ public static class SegmentAdoption
             return AdoptionVerdict.TooLittleEvidence;
         }
 
-        if (found.ProgrammeSkippedSecondsPerHour > used.ProgrammeSkippedSecondsPerHour + MostMoreProgrammeSkippedSecondsAnHour)
-        {
-            return AdoptionVerdict.SkipsMoreProgramme;
-        }
+        return Better(found, used) ? AdoptionVerdict.Adopted : AdoptionVerdict.NoBetterAtBoundaries;
+    }
 
-        return FindsMore(found, used) ? AdoptionVerdict.Adopted : AdoptionVerdict.NoBetterAtBoundaries;
+    /// <summary>
+    /// Whether <paramref name="found"/> finds more of the boundaries within two seconds than <paramref name="than"/>,
+    /// or as many and more of the seconds of adverts; a figure not known is less than any.
+    /// </summary>
+    public static bool Better(SegmentMetrics found, SegmentMetrics than)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+        ArgumentNullException.ThrowIfNull(than);
+
+        double recall = found.BoundaryRecallWithin2s ?? -1;
+        double before = than.BoundaryRecallWithin2s ?? -1;
+
+        return recall != before ? recall > before : (found.BreakRecall ?? -1) > (than.BreakRecall ?? -1);
     }
 
     /// <summary>
@@ -69,15 +74,5 @@ public static class SegmentAdoption
                && kept.Any(version => version.RolledBackAt is DateTime rolledBack && rolledBack <= now && now - rolledBack <= SegmentRollback.Within)
             ? AdoptionVerdict.HeldAfterRollback
             : verdict;
-    }
-
-    private static bool FindsMore(SegmentMetrics found, SegmentMetrics used)
-    {
-        if (found.BoundaryRecallWithin2s is not double recall || used.BoundaryRecallWithin2s is not double before)
-        {
-            return false;
-        }
-
-        return recall > before || (recall == before && found.ExtraBoundariesPerRecording < used.ExtraBoundariesPerRecording);
     }
 }

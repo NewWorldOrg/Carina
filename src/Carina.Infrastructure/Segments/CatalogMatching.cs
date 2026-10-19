@@ -12,17 +12,13 @@ public sealed record CatalogMatched(RecordingId Recording, int Matches, CatalogC
 /// Matches the learning data of one recording against every catalog entry, against the stretches of the
 /// recordings started within the window around it that no entry explains yet, and against itself, one
 /// recording's data read at a time; then works out what the matches change in the catalog. Estimates a kept
-/// entry again from the stretches it has. Every stretch is read beside the answer standing for its recording,
-/// read against the detection the version in use made of it. The counting is done on the
+/// entry again from the stretches it has. The counting is done on the
 /// <see cref="LowestPriorityScheduler"/>, so that it gives way to everything else the machine does. Nothing
 /// is written here.
 /// </summary>
 public sealed class CatalogMatching(
     ICatalogWorklist worklist,
     ICatalogRepository catalog,
-    ISegmentAnswerRepository answers,
-    IRecordingDetectionRepository detections,
-    ISegmentModelVersionRepository versions,
     LowestPriorityScheduler lowest)
 {
     public async Task<CatalogMatched> MatchAsync(
@@ -80,24 +76,7 @@ public sealed class CatalogMatching(
             entries,
             occurrences,
             await worklist.ProgrammesAsync(involved, cancellationToken),
-            await AnswersAsync(involved, cancellationToken),
             SeriesLinks.SharingSound(await catalog.SoundSharersAsync(cancellationToken)));
-
-    private async Task<IReadOnlyDictionary<RecordingId, GivenAnswer>> AnswersAsync(RecordingId[] recordings, CancellationToken cancellationToken)
-    {
-        RecordingAnswer[] standing = [.. (await answers.ListAsync(recordings, cancellationToken)).Where(answer => answer.Stands)];
-
-        if (standing.Length is 0)
-        {
-            return new Dictionary<RecordingId, GivenAnswer>();
-        }
-
-        SegmentModelVersion active = await versions.ActiveAsync(cancellationToken);
-        Dictionary<RecordingId, RecordingDetection> detected = (await detections.ListAsync([.. standing.Select(answer => answer.RecordingId)], active.Number, cancellationToken))
-            .ToDictionary(detection => detection.RecordingId);
-
-        return standing.ToDictionary(answer => answer.RecordingId, answer => GivenAnswer.Of(answer, detected.GetValueOrDefault(answer.RecordingId)));
-    }
 
     private async Task<List<SoundMatch>> AgainstRecordingsAsync(
         SegmentMatcher matcher,

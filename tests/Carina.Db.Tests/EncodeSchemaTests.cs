@@ -717,18 +717,16 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(refusedBy, refusal.ConstraintName);
     }
 
-    [Theory(DisplayName = "BR-CD-010: a reading taken from the segments names the version or the answer it embedded exactly when it found something, and no other reader names either")]
-    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "2, NULL", null)]
-    [InlineData("'Segments', 'Discarded', 0.6, " + Ended, "2, NULL", null)]
-    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "NULL, " + Ended, null)]
-    [InlineData("'Segments', 'NotAsked', 0, " + Ended, "NULL, NULL", null)]
-    [InlineData("'Ffmpeg', 'Marked', 0.31, " + Ended, "NULL, NULL", null)]
-    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "NULL, NULL", "ck_encode_job_chapters")]
-    [InlineData("'Segments', 'NotAsked', 0, " + Ended, "2, NULL", "ck_encode_job_chapters")]
-    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "0, NULL", "ck_encode_job_chapters")]
-    [InlineData("'Ffmpeg', 'Marked', 0.31, " + Ended, "2, NULL", "ck_encode_job_chapters")]
-    [InlineData("'Nobody', 'NotAsked', 0, " + Ended, "NULL, " + Ended, "ck_encode_job_chapters")]
-    [InlineData("NULL, NULL, NULL, NULL", "2, NULL", "ck_encode_job_chapters")]
+    [Theory(DisplayName = "BR-CD-010: a reading taken from the segments names the version it embedded exactly when it found something, and no other reader names one")]
+    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "2", null)]
+    [InlineData("'Segments', 'Discarded', 0.6, " + Ended, "2", null)]
+    [InlineData("'Segments', 'NotAsked', 0, " + Ended, "NULL", null)]
+    [InlineData("'Ffmpeg', 'Marked', 0.31, " + Ended, "NULL", null)]
+    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "NULL", "ck_encode_job_chapters")]
+    [InlineData("'Segments', 'NotAsked', 0, " + Ended, "2", "ck_encode_job_chapters")]
+    [InlineData("'Segments', 'Marked', 0.31, " + Ended, "0", "ck_encode_job_chapters")]
+    [InlineData("'Ffmpeg', 'Marked', 0.31, " + Ended, "2", "ck_encode_job_chapters")]
+    [InlineData("NULL, NULL, NULL, NULL", "2", "ck_encode_job_chapters")]
     public async Task AReadingFromTheSegmentsNamesWhereItCameFrom(string chapters, string source, string? refusedBy)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -932,7 +930,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
 
     private const string Unjudged = "NULL, NULL, NULL, NULL";
 
-    private const string Unsourced = "NULL, NULL";
+    private const string Unsourced = "NULL";
 
     private static Task MarkedJobAsync(
         NpgsqlConnection connection,
@@ -959,7 +957,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 encoder_asked, encoder_ran, swerve,
                 source_start, head_skip, source_length, artefact_length,
                 chapters_detector, chapters_verdict, chapters_break_share, chapters_decided_at,
-                chapters_model_version, chapters_answered_at)
+                chapters_model_version)
             VALUES (
                 '{Guid.NewGuid()}', '{recording}', '{Profile}', '{Destination}', 'primary', {status}, 1,
                 {Queued}, {started}, {(ended ? Ended : "NULL")}, {failure}, {artefact},

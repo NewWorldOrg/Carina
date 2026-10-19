@@ -4,7 +4,7 @@ namespace Carina.Domain.Tests.Segments;
 
 public sealed class LeaveOneOutTests
 {
-    [Fact(DisplayName = "BR-CD-008: a fold masks the held-out recording's samples and hands every other recording's over as they are, in order, those read again without its answer in their place")]
+    [Fact(DisplayName = "BR-CD-008: a fold masks the held-out recording's samples and hands every other recording's over as they are, in order, those labelled again without the entries set aside for it in their place")]
     public void AFoldMasksTheHeldOutSamples()
     {
         SegmentSample[] first = [Sample(1), Sample(2)];

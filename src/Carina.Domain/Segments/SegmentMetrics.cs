@@ -1,40 +1,32 @@
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// The seconds of one kind both answered and detected, as a share of the seconds answered as it (recall)
-/// and of the seconds detected as it (precision); a share of nothing is not known.
+/// The seconds of one kind the catalog is sure of that were detected as it, as a share of those seconds; a share of
+/// nothing is not known.
 /// </summary>
-public sealed record KindMetrics(SegmentKind Kind, double? Recall, double? Precision);
+public sealed record KindMetrics(SegmentKind Kind, double? Recall);
 
 /// <summary>
-/// How a version detects the confirmed recordings it is judged on: the share of the answers' boundaries
-/// with a detected boundary turning the same way within <see cref="NearWithin"/> and within
-/// <see cref="CloseWithin"/>, not known without one; the detected boundaries with no answered boundary
-/// within <see cref="NearWithin"/>, per recording; the seconds answered as programme that a button would
-/// offer to skip, per hour of the recordings; the seconds of breaks, of openings and of endings found, the
-/// kind a recording's answer does not hold counting neither as found nor as missed there; and the share of
-/// skips on its buttons that viewers came back from, and how many skips that is of. The boundaries and the
-/// programme skipped are counted from the stretches as the answer can judge them
-/// (<see cref="SegmentComparison.Judged"/>). A detection thrown away shows
-/// nothing, so it has no boundaries and offers no skip.
+/// How a version detects the recordings it is judged on, measured against what the catalog is sure of in them
+/// (<see cref="CatalogTruth"/>): the share of its boundaries with a detected boundary within <see cref="NearWithin"/>
+/// and within <see cref="CloseWithin"/> turning the same way, that is into the kind where the kind starts and out of
+/// it where it ends, not known without one; the share of its seconds of breaks, of openings and of endings detected as
+/// the same kind, a kind the catalog is sure of nowhere not known; and the share of skips on the version's buttons that
+/// viewers came back from, and how many skips that is of. A detection thrown away shows nothing, so it has no
+/// boundaries and finds no second. What a detection finds beyond what the catalog is sure of is not counted, since it
+/// cannot be told from an advert the catalog has not heard yet.
 /// </summary>
 public sealed record SegmentMetrics
 {
-    public const double MostProgrammeSkippedSecondsAnHour = 5;
-
     public static readonly TimeSpan NearWithin = TimeSpan.FromSeconds(2);
 
     public static readonly TimeSpan CloseWithin = TimeSpan.FromSeconds(1);
-
-    private const int ThresholdSteps = 100;
 
     private static readonly SegmentKind[] Measured = [SegmentKind.Break, SegmentKind.Opening, SegmentKind.Ending];
 
     public SegmentMetrics(
         double? boundaryRecallWithin2s,
         double? boundaryRecallWithin1s,
-        double extraBoundariesPerRecording,
-        double programmeSkippedSecondsPerHour,
         IReadOnlyList<KindMetrics> kinds,
         double? returnedAfterSkipShare,
         int skips)
@@ -44,8 +36,6 @@ public sealed record SegmentMetrics
 
         BoundaryRecallWithin2s = boundaryRecallWithin2s;
         BoundaryRecallWithin1s = boundaryRecallWithin1s;
-        ExtraBoundariesPerRecording = extraBoundariesPerRecording;
-        ProgrammeSkippedSecondsPerHour = programmeSkippedSecondsPerHour;
         Kinds = [.. kinds];
         ReturnedAfterSkipShare = returnedAfterSkipShare;
         Skips = skips;
@@ -55,15 +45,16 @@ public sealed record SegmentMetrics
 
     public double? BoundaryRecallWithin1s { get; }
 
-    public double ExtraBoundariesPerRecording { get; }
-
-    public double ProgrammeSkippedSecondsPerHour { get; }
-
     public IReadOnlyList<KindMetrics> Kinds { get; }
 
     public double? ReturnedAfterSkipShare { get; }
 
     public int Skips { get; }
+
+    /// <summary>
+    /// The share of the seconds of adverts the catalog is sure of that were detected as breaks.
+    /// </summary>
+    public double? BreakRecall => Kinds.FirstOrDefault(kind => kind.Kind is SegmentKind.Break)?.Recall;
 
     /// <summary>
     /// These figures beside what viewers did with the version's buttons as <paramref name="returns"/> counts.
@@ -72,21 +63,14 @@ public sealed record SegmentMetrics
     {
         ArgumentNullException.ThrowIfNull(returns);
 
-        return new SegmentMetrics(
-            BoundaryRecallWithin2s,
-            BoundaryRecallWithin1s,
-            ExtraBoundariesPerRecording,
-            ProgrammeSkippedSecondsPerHour,
-            Kinds,
-            returns.Share,
-            returns.Skips);
+        return new SegmentMetrics(BoundaryRecallWithin2s, BoundaryRecallWithin1s, Kinds, returns.Share, returns.Skips);
     }
 
     /// <summary>
-    /// The figures of <paramref name="compared"/> with buttons offered from <paramref name="skipThreshold"/>,
-    /// beside what viewers did with the version's buttons; none for no recording.
+    /// The figures of <paramref name="compared"/>, beside what viewers did with the version's buttons; none for no
+    /// recording.
     /// </summary>
-    public static SegmentMetrics? Of(IReadOnlyList<SegmentComparison> compared, double skipThreshold, SkipReturns returns)
+    public static SegmentMetrics? Of(IReadOnlyList<SegmentComparison> compared, SkipReturns returns)
     {
         ArgumentNullException.ThrowIfNull(compared);
         ArgumentNullException.ThrowIfNull(returns);
@@ -96,89 +80,38 @@ public sealed record SegmentMetrics
             return null;
         }
 
-        Boundary[][] answered = [.. compared.Select(comparison => Boundaries(comparison.Answer))];
-        Boundary[][] detected = [.. compared.Select(comparison => Boundaries(comparison.Judged))];
-        int extra = detected.Select((found, at) => found.Count(boundary => !answered[at].Any(answer => Near(answer.At, boundary.At, NearWithin)))).Sum();
+        Boundary[][] detected = [.. compared.Select(comparison => Boundaries(comparison.Shown))];
 
         return new SegmentMetrics(
-            Recall(answered, detected, NearWithin),
-            Recall(answered, detected, CloseWithin),
-            extra / (double)compared.Count,
-            ProgrammeSkippedAnHour(compared, skipThreshold),
+            Recall(compared, detected, NearWithin),
+            Recall(compared, detected, CloseWithin),
             [.. Measured.Select(kind => Seconds(compared, kind))],
             returns.Share,
             returns.Skips);
     }
 
     /// <summary>
-    /// The seconds answered as programme in <paramref name="compared"/> that a button offered from
-    /// <paramref name="skipThreshold"/> would skip, per hour of the recordings.
-    /// </summary>
-    public static double ProgrammeSkippedAnHour(IReadOnlyList<SegmentComparison> compared, double skipThreshold)
-    {
-        ArgumentNullException.ThrowIfNull(compared);
-
-        double seconds = compared.Sum(comparison => Overlap(
-            Of(comparison.Answer, SegmentKind.Programme),
-            [.. PlaybackChapter.Of(comparison.Judged, PlaybackFileClock.AsItIs, skipThreshold).Where(chapter => chapter.Skippable).Select(chapter => chapter.Stretch)]));
-        double hours = compared.Sum(comparison => comparison.Length.TotalHours);
-
-        return hours > 0 ? seconds / hours : 0;
-    }
-
-    /// <summary>
-    /// The lowest threshold a skip may be set to, in hundredths from
-    /// <see cref="SegmentSettingsStanding.LowestSkipThreshold"/> to
-    /// <see cref="SegmentSettingsStanding.HighestSkipThreshold"/>, at which no more than
-    /// <see cref="MostProgrammeSkippedSecondsAnHour"/> seconds of programme an hour would be skippable;
-    /// none when no recording is judged or no threshold holds.
-    /// </summary>
-    public static double? RecommendedThreshold(IReadOnlyList<SegmentComparison> compared)
-    {
-        ArgumentNullException.ThrowIfNull(compared);
-
-        if (compared.Count is 0)
-        {
-            return null;
-        }
-
-        int lowest = (int)Math.Round(SegmentSettingsStanding.LowestSkipThreshold * ThresholdSteps);
-        int highest = (int)Math.Round(SegmentSettingsStanding.HighestSkipThreshold * ThresholdSteps);
-
-        for (int step = lowest; step <= highest; step++)
-        {
-            double threshold = step / (double)ThresholdSteps;
-
-            if (ProgrammeSkippedAnHour(compared, threshold) <= MostProgrammeSkippedSecondsAnHour)
-            {
-                return threshold;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// Where the kind turns in stretches laid end to end, and which way.
     /// </summary>
-    internal static Boundary[] Boundaries(IReadOnlyList<SegmentSpan> spans)
+    private static Boundary[] Boundaries(IReadOnlyList<SegmentSpan> spans)
         => [.. spans.Zip(spans.Skip(1)).Where(pair => pair.First.Kind != pair.Second.Kind).Select(pair => new Boundary(pair.Second.Starts, pair.First.Kind, pair.Second.Kind))];
 
-    private static double? Recall(Boundary[][] answered, Boundary[][] detected, TimeSpan within)
+    private static double? Recall(IReadOnlyList<SegmentComparison> compared, Boundary[][] detected, TimeSpan within)
     {
-        int total = answered.Sum(boundaries => boundaries.Length);
-        int found = answered.Select((boundaries, at) => boundaries.Count(answer => detected[at].Any(boundary => answer.Turns(boundary) && Near(answer.At, boundary.At, within)))).Sum();
+        int total = compared.Sum(comparison => comparison.Truth.Boundaries.Count);
+        int found = compared
+            .Select((comparison, at) => comparison.Truth.Boundaries.Count(truth => detected[at].Any(boundary => boundary.Turns(truth) && Near(truth.At, boundary.At, within))))
+            .Sum();
 
         return total is 0 ? null : found / (double)total;
     }
 
     private static KindMetrics Seconds(IReadOnlyList<SegmentComparison> compared, SegmentKind kind)
     {
-        double answered = compared.Sum(comparison => Of(comparison.Answer, kind).Sum(span => span.Length.TotalSeconds));
-        double detected = compared.Sum(comparison => Of(comparison.Shown, kind).Sum(span => span.Length.TotalSeconds));
-        double both = compared.Sum(comparison => Overlap(Of(comparison.Answer, kind), Of(comparison.Shown, kind)));
+        double sure = compared.Sum(comparison => Of(comparison.Truth.Stretches, kind).Sum(span => span.Length.TotalSeconds));
+        double found = compared.Sum(comparison => Overlap(Of(comparison.Truth.Stretches, kind), Of(comparison.Shown, kind)));
 
-        return new KindMetrics(kind, answered > 0 ? both / answered : null, detected > 0 ? both / detected : null);
+        return new KindMetrics(kind, sure > 0 ? found / sure : null);
     }
 
     private static SegmentSpan[] Of(IReadOnlyList<SegmentSpan> spans, SegmentKind kind) => [.. spans.Where(span => span.Kind == kind)];
@@ -188,8 +121,12 @@ public sealed record SegmentMetrics
 
     private static bool Near(TimeSpan one, TimeSpan other, TimeSpan within) => (one - other).Duration() <= within;
 
-    internal readonly record struct Boundary(TimeSpan At, SegmentKind From, SegmentKind To)
+    private readonly record struct Boundary(TimeSpan At, SegmentKind From, SegmentKind To)
     {
-        public bool Turns(Boundary other) => From == other.From && To == other.To;
+        /// <summary>
+        /// Whether this boundary turns into the kind where <paramref name="truth"/> starts it, or out of it where
+        /// <paramref name="truth"/> ends it.
+        /// </summary>
+        public bool Turns(TruthBoundary truth) => truth.Enters ? To == truth.Kind : From == truth.Kind;
     }
 }

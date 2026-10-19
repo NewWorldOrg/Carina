@@ -201,10 +201,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILearningBacklog, LearningBacklogReader>();
         services.AddScoped<ICatalogRepository, CatalogRepository>();
         services.AddScoped<ICatalogCountsReader, CatalogCountsReader>();
+        services.AddScoped<ICatalogEvidenceReader, CatalogEvidenceReader>();
         services.AddScoped<ICatalogWorklist, CatalogWorklist>();
         services.AddScoped<ISegmentModelVersionRepository, SegmentModelVersionRepository>();
         services.AddScoped<IRecordingDetectionRepository, RecordingDetectionRepository>();
-        services.AddScoped<ISegmentAnswerRepository, SegmentAnswerRepository>();
         services.AddScoped<ISkipEventRepository, SkipEventRepository>();
         services.AddScoped<IDetectionWorklist, DetectionWorklist>();
         services.AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>();

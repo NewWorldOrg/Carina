@@ -71,11 +71,9 @@ public sealed class SegmentModelVersion
 
     public EvaluationEvidence? Evidence { get; private set; }
 
-    public double? RecommendedThreshold { get; private set; }
-
     public SegmentModel Model => model ??= new SegmentModel(Weights, StationOffsets, SeriesOffsets, Thresholds, Standardisation);
 
-    public SegmentEvaluation? Evaluation => Evidence is null ? null : new SegmentEvaluation(Metrics, Stations ?? [], Evidence, RecommendedThreshold);
+    public SegmentEvaluation? Evaluation => Evidence is null ? null : new SegmentEvaluation(Metrics, Stations ?? [], Evidence);
 
     public static SegmentModelVersion Rehydrate(
         int number,
@@ -130,7 +128,6 @@ public sealed class SegmentModelVersion
             Metrics = evaluation?.Metrics,
             Stations = evaluation is null ? null : [.. evaluation.Stations],
             Evidence = evaluation?.Evidence,
-            RecommendedThreshold = evaluation?.RecommendedThreshold,
             model = model,
         };
     }
