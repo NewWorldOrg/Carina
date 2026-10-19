@@ -10,7 +10,7 @@ namespace Carina.Domain.Tests.Segments;
 public sealed class SegmentModelTests
 {
     private const string FirstWeights =
-        """{ "classes": { "Break": { "bias": -2.5, "features": { "isMultipleOf15s": 2.0, "edgeSilence": 1.5, "logoShare": -3.0, "catalogCmShare": 4.0 } } } }""";
+        """{ "classes": { "Break": { "bias": -2.5, "features": { "isMultipleOf15s": 2.0, "edgeSilence": 1.5, "logoShare": -3.0 } } } }""";
 
     private const string InitialThresholds =
         """{ "silenceDbfs": -50, "blackLevel": 0.10, "sceneChange": 0.30, "gridToleranceSec": 1.0, "gridPenalty": -3.0, "lambda": 1, "lambdaStation": 10, "lambdaSeries": 10 }""";
@@ -35,7 +35,6 @@ public sealed class SegmentModelTests
                 [SegmentFeature.IsMultipleOf15s] = 2.0,
                 [SegmentFeature.EdgeSilence] = 1.5,
                 [SegmentFeature.LogoShare] = -3.0,
-                [SegmentFeature.CatalogCmShare] = 4.0,
             }.OrderBy(pair => pair.Key, StringComparer.Ordinal),
             weights.Features.OrderBy(pair => pair.Key, StringComparer.Ordinal));
         Assert.Empty(first.StationOffsets);
@@ -106,12 +105,10 @@ public sealed class SegmentModelTests
 
         double pod = first.BreakScore(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 0)), Station, null);
         double branded = first.BreakScore(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 1)), Station, null);
-        double heard = first.BreakScore(Features((SegmentFeature.CatalogCmShare, 1)), Station, null);
         double plain = first.BreakScore(Features(), Station, null);
 
         Assert.Equal(1.0, pod, 12);
         Assert.Equal(-2.0, branded, 12);
-        Assert.Equal(1.5, heard, 12);
         Assert.Equal(-2.5, plain, 12);
         Assert.True(SegmentModel.Chance(pod) > 0.5);
         Assert.True(SegmentModel.Chance(branded) < 0.5);
@@ -183,7 +180,7 @@ public sealed class SegmentModelTests
             new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights> { [SegmentKind.Ending] = some, [SegmentKind.Opening] = some, [SegmentKind.Break] = some }).Classes.Keys);
     }
 
-    [Fact(DisplayName = "BR-CD-007: the first version of four kinds weighs the break as the first version does, and the opening and the ending by the catalog and by where earlier episodes had theirs")]
+    [Fact(DisplayName = "BR-CD-007: the first version of four kinds weighs the break as the first version does, and the opening and the ending by where earlier episodes had theirs, the catalog weighing nothing")]
     public void TheFirstVersionOfFourKindsIsHandSet()
     {
         SegmentModel four = SegmentModel.FirstOfFourKinds;
@@ -191,17 +188,17 @@ public sealed class SegmentModelTests
         Assert.Equal(4, four.Kinds);
         Assert.Equal(SegmentModel.First.Weights.Classes[SegmentKind.Break], four.Weights.Classes[SegmentKind.Break]);
         Assert.Equal(
-            (-6.0, 8.0, 4.0),
-            (four.Weights.Classes[SegmentKind.Opening].Bias, four.Weights.Classes[SegmentKind.Opening].Features[SegmentFeature.CatalogOpeningShare], four.Weights.Classes[SegmentKind.Opening].Features[SegmentFeature.PastOpeningShare]));
+            (-6.0, 4.0),
+            (four.Weights.Classes[SegmentKind.Opening].Bias, four.Weights.Classes[SegmentKind.Opening].Features[SegmentFeature.PastOpeningShare]));
         Assert.Equal(
-            (-6.0, 8.0, 4.0),
-            (four.Weights.Classes[SegmentKind.Ending].Bias, four.Weights.Classes[SegmentKind.Ending].Features[SegmentFeature.CatalogEndingShare], four.Weights.Classes[SegmentKind.Ending].Features[SegmentFeature.PastEndingShare]));
-        Assert.Equal(2, four.Weights.Classes[SegmentKind.Opening].Features.Count);
-        Assert.Equal(2, four.Weights.Classes[SegmentKind.Ending].Features.Count);
+            (-6.0, 4.0),
+            (four.Weights.Classes[SegmentKind.Ending].Bias, four.Weights.Classes[SegmentKind.Ending].Features[SegmentFeature.PastEndingShare]));
+        Assert.Single(four.Weights.Classes[SegmentKind.Opening].Features);
+        Assert.Single(four.Weights.Classes[SegmentKind.Ending].Features);
         Assert.Empty(four.StationOffsets);
         Assert.Empty(four.SeriesOffsets);
         Assert.Equal(SegmentThresholds.Initial, four.Thresholds);
-        Assert.Equal(8, four.Standardisation.Count);
+        Assert.Equal(5, four.Standardisation.Count);
         Assert.All(four.Standardisation.Values, scale => Assert.Equal(FeatureScale.Identity, scale));
     }
 
@@ -244,20 +241,19 @@ public sealed class SegmentModelTests
         Assert.Throws<ArgumentOutOfRangeException>(() => SegmentChances.Of(new Dictionary<SegmentKind, double> { [SegmentKind.Break] = double.NaN }));
     }
 
-    [Fact(DisplayName = "BR-CD-007: the first version of four kinds takes a piece the catalog hears as the opening for the opening, a piece it hears as the ending for the ending, and a plain piece for the programme")]
-    public void TheFirstVersionOfFourKindsScoresByTheCatalog()
+    [Fact(DisplayName = "BR-CD-007: the first version of four kinds takes a piece where earlier episodes had their opening or their ending likelier for one, never likely enough on that alone, and a plain piece for the programme")]
+    public void TheFirstVersionOfFourKindsLeavesOpeningsToTheCatalog()
     {
         SegmentModel four = SegmentModel.FirstOfFourKinds;
 
-        SegmentChances opening = four.Chances(Features((SegmentFeature.CatalogOpeningShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
-        SegmentChances remembered = four.Chances(Features((SegmentFeature.CatalogOpeningShare, 1), (SegmentFeature.PastOpeningShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
-        SegmentChances ending = four.Chances(Features((SegmentFeature.CatalogEndingShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
+        SegmentChances remembered = four.Chances(Features((SegmentFeature.PastOpeningShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
+        SegmentChances ending = four.Chances(Features((SegmentFeature.PastEndingShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
         SegmentChances plain = four.Chances(Features((SegmentFeature.LogoShare, 1)), Station, null);
         SegmentChances pod = four.Chances(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 0)), Station, null);
 
-        Assert.True(opening.Of(SegmentKind.Opening) > SegmentSettingsStanding.DefaultSkipThreshold);
-        Assert.True(remembered.Of(SegmentKind.Opening) > opening.Of(SegmentKind.Opening));
-        Assert.True(ending.Of(SegmentKind.Ending) > SegmentSettingsStanding.DefaultSkipThreshold);
+        Assert.True(remembered.Of(SegmentKind.Opening) > plain.Of(SegmentKind.Opening));
+        Assert.True(remembered.Of(SegmentKind.Opening) < remembered.Of(SegmentKind.Programme));
+        Assert.True(ending.Of(SegmentKind.Ending) < ending.Of(SegmentKind.Programme));
         Assert.True(plain.Of(SegmentKind.Programme) > 0.9);
         Assert.True(pod.Of(SegmentKind.Break) > 0.5);
         Assert.Equal(1.0, four.BreakScore(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 0)), Station, null), 12);

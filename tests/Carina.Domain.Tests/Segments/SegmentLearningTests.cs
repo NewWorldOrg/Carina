@@ -73,6 +73,19 @@ public sealed class SegmentLearningTests
         Assert.Equal(4, Compared(judged, catalog, apart, hearing: false).Truth.Boundaries.Count);
     }
 
+    [Fact(DisplayName = "BR-CD-007: with the catalog weighing nothing, the folds learn adverts from the silence and the grid around those the catalog is sure of and find adverts with the catalog set aside, where the catalog's shares as features left every fold finding nothing")]
+    public void TheFoldsFindAdvertsWithTheCatalogSetAside()
+    {
+        (List<LearningRecording> taught, List<CatalogSound> sounds) = Taught(Weeks, breakAdverts: 4);
+        (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks);
+
+        SegmentMetrics folds = Learn([.. taught, judged], [.. sounds, .. heard]).Evaluation.Metrics!;
+
+        Assert.True(folds.BoundaryRecallWithin2s > 0);
+        Assert.True(folds.BoundaryRecallWithin1s > 0);
+        Assert.True(folds.Kinds.Single(kind => kind.Kind is SegmentKind.Break).Recall > 0);
+    }
+
     [Fact(DisplayName = "BR-CD-008: the labels of an entry first heard after the recording judged started are not learned from in its fold, and the same entries heard long before are")]
     public void EntriesFirstHeardLaterAreSetAside()
     {
@@ -207,7 +220,7 @@ public sealed class SegmentLearningTests
         Assert.Equal(inUse.Weights.Classes[SegmentKind.Opening], candidate.Weights.Classes[SegmentKind.Opening]);
         Assert.Equal(inUse.Weights.Classes[SegmentKind.Ending], candidate.Weights.Classes[SegmentKind.Ending]);
         Assert.All(
-            [SegmentFeature.CatalogOpeningShare, SegmentFeature.PastOpeningShare, SegmentFeature.CatalogEndingShare, SegmentFeature.PastEndingShare],
+            [SegmentFeature.PastOpeningShare, SegmentFeature.PastEndingShare],
             name => Assert.Equal(inUse.Standardisation[name], candidate.Standardisation[name]));
         Assert.NotEqual(inUse.Weights.Classes[SegmentKind.Break], candidate.Weights.Classes[SegmentKind.Break]);
         Assert.Equal(Themes(Compared(opened, catalog, inUse, hearing: true).Shown), Themes(Compared(opened, catalog, candidate, hearing: true).Shown));
@@ -225,7 +238,7 @@ public sealed class SegmentLearningTests
         Assert.Equal(4, learned.Candidate.Kinds);
         Assert.NotEqual(FourKindsInUse.Model.Weights.Classes[SegmentKind.Opening], learned.Candidate.Weights.Classes[SegmentKind.Opening]);
         Assert.Equal(FourKindsInUse.Model.Weights.Classes[SegmentKind.Ending], learned.Candidate.Weights.Classes[SegmentKind.Ending]);
-        Assert.Equal(FourKindsInUse.Model.Standardisation[SegmentFeature.CatalogEndingShare], learned.Candidate.Standardisation[SegmentFeature.CatalogEndingShare]);
+        Assert.Equal(FourKindsInUse.Model.Standardisation[SegmentFeature.PastEndingShare], learned.Candidate.Standardisation[SegmentFeature.PastEndingShare]);
     }
 
     [Fact(DisplayName = "the version in use is judged on the same recordings beside the skips viewers made with its buttons in the last seven days, a candidate has offered none, and the evidence counts the recordings the catalog is sure of an advert in")]

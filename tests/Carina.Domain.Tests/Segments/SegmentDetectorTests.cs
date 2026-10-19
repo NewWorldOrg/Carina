@@ -86,6 +86,21 @@ public sealed class SegmentDetectorTests
         Assert.Equal(heardAs is SegmentKind.Break ? 30d / 1800 : 0, detection.CmShare, 9);
     }
 
+    [Fact(DisplayName = "BR-CD-007: a stretch the catalog hears as an advert is a break at 0.9 even under the logo with nothing silent, where the version made by hand alone takes it for the programme")]
+    public void TheCatalogFixesABreakUnderTheLogo()
+    {
+        SegmentEvidence evidence = new SyntheticReadings(Length).Corners(Drawn((int)Length, TopRight, _ => true, 3)).Evidence();
+        CatalogHeard advert = new(TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), SegmentKind.Break, 4, 2, 2, 0.9);
+
+        SegmentDetection heard = SegmentDetector.Detect(evidence, Context(Logo, [advert]), SegmentModel.First);
+        RecordingPieces read = SegmentDetector.Read(evidence, Context(Logo, [advert]), SegmentThresholds.Initial);
+        SegmentPiece covered = read.Pieces.Single(piece => piece.Fixed is SegmentKind.Break);
+        SegmentSpan found = heard.Segments.Single(segment => segment.Kind is SegmentKind.Break);
+
+        Assert.True(SegmentModel.First.Chances(covered.Features, read.Station, read.Series).Of(SegmentKind.Break) < 0.5);
+        Assert.Equal((TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), SegmentSequence.FixedBreakChance), (found.Starts, found.Ends, found.Probability!.Value));
+    }
+
     [Fact(DisplayName = "an advert of 15 seconds with two changes of scene inside it and nothing from the catalog is one break of 15 seconds")]
     public void ChangesOfSceneInsideAnAdvertDoNotCutIt()
     {
@@ -127,7 +142,6 @@ public sealed class SegmentDetectorTests
             [SegmentFeature.IsMultipleOf15s] = new(0.5, 0.25),
             [SegmentFeature.EdgeSilence] = new(0.2, 0.4),
             [SegmentFeature.LogoShare] = new(0, 0.3),
-            [SegmentFeature.CatalogCmShare] = new(0.1, 0.2),
         };
         SegmentClassWeights first = SegmentModel.First.Weights.Classes[SegmentKind.Break];
         SegmentModel rescaled = Model(

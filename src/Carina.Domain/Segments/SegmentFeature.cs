@@ -5,7 +5,9 @@ namespace Carina.Domain.Segments;
 /// <summary>
 /// The names of the features computed for each segment, as the weights and the standardisation of a
 /// version of the model name them. A genre is one feature per kind of genre, set for the programme's
-/// first genre.
+/// first genre. None of them reads the catalog: what the catalog hears fixes the segments it covers when
+/// the sequence is decided (<see cref="SegmentSequence"/>), so that a recording judged without its entries
+/// is judged on what the regression learned from everything else.
 /// </summary>
 public static class SegmentFeature
 {
@@ -26,22 +28,6 @@ public static class SegmentFeature
     public const string EdgeSilence = "edgeSilence";
 
     public const string LogoShare = "logoShare";
-
-    public const string CatalogShare = "catalogShare";
-
-    public const string CatalogCmShare = "catalogCmShare";
-
-    public const string CatalogProgrammeShare = "catalogProgrammeShare";
-
-    public const string CatalogOpeningShare = "catalogOpeningShare";
-
-    public const string CatalogEndingShare = "catalogEndingShare";
-
-    public const string CatalogOccurrences = "catalogOccurrences";
-
-    public const string CatalogSeries = "catalogSeries";
-
-    public const string CatalogStations = "catalogStations";
 
     public const string FromStart = "fromStart";
 
@@ -67,8 +53,6 @@ public static class SegmentFeature
 
     public const string MultipleOf15sWithoutLogo = "multipleOf15sWithoutLogo";
 
-    public const string CatalogCmMultipleOf15s = "catalogCmMultipleOf15s";
-
     public const int GenreKinds = 16;
 
     private static readonly string[] Listed =
@@ -82,14 +66,6 @@ public static class SegmentFeature
         TailSilenceLength,
         EdgeSilence,
         LogoShare,
-        CatalogShare,
-        CatalogCmShare,
-        CatalogProgrammeShare,
-        CatalogOpeningShare,
-        CatalogEndingShare,
-        CatalogOccurrences,
-        CatalogSeries,
-        CatalogStations,
         FromStart,
         FromEnd,
         OutsideGuide,
@@ -101,7 +77,6 @@ public static class SegmentFeature
         SceneChangesPer10s,
         .. Enumerable.Range(0, GenreKinds).Select(Genre),
         MultipleOf15sWithoutLogo,
-        CatalogCmMultipleOf15s,
         PastOpeningShare,
         PastEndingShare,
     ];

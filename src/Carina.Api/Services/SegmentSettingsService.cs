@@ -61,7 +61,7 @@ public sealed class SegmentSettingsService(
 
         if (learning is true && changed.Learning)
         {
-            await versions.ChangeAsync(SegmentVersionChange.FourKindsInPlaceOfTheFirst, clock.GetUtcNow().UtcDateTime, cancellationToken);
+            await versions.ChangeAsync(SegmentVersionChange.LatestMadeByHand, clock.GetUtcNow().UtcDateTime, cancellationToken);
         }
 
         return ServiceResult<SegmentSettingsStanding>.Success(changed);

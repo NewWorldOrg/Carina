@@ -12,10 +12,10 @@ namespace Carina.Domain.Segments;
 /// weights name has a scale. A kind weighed against the programme is scored by its own weights, and a break
 /// by both offsets besides, which tell how much more often a station or a series breaks for adverts.
 /// <see cref="First"/> is the version made by hand from the rule-based detection before any learning: a piece
-/// of 15-second multiples between two silent cuts, out of the logo, or heard as an advert in the catalog, is a
-/// break. <see cref="FirstOfFourKinds"/> weighs the break the same way and adds the opening and the ending made
-/// by hand: a piece the catalog hears as one of them is that, the more so where earlier episodes of the series
-/// had it at the same place.
+/// of 15-second multiples between two silent cuts, out of the logo, is a break. <see cref="FirstOfFourKinds"/>
+/// weighs the break the same way and adds the opening and the ending made by hand, which earlier episodes of the
+/// series having one at the same place make likelier but never enough on their own. What the catalog hears is
+/// fixed when the sequence is decided (<see cref="SegmentSequence"/>), not weighed.
 /// </summary>
 public sealed class SegmentModel : IEquatable<SegmentModel>
 {
@@ -51,7 +51,6 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
                 [SegmentFeature.IsMultipleOf15s] = 2.0,
                 [SegmentFeature.EdgeSilence] = 1.5,
                 [SegmentFeature.LogoShare] = -3.0,
-                [SegmentFeature.CatalogCmShare] = 4.0,
             }),
         }),
         new Dictionary<string, double>(),
@@ -62,7 +61,6 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             [SegmentFeature.IsMultipleOf15s] = FeatureScale.Identity,
             [SegmentFeature.EdgeSilence] = FeatureScale.Identity,
             [SegmentFeature.LogoShare] = FeatureScale.Identity,
-            [SegmentFeature.CatalogCmShare] = FeatureScale.Identity,
         });
 
     public static SegmentModel FirstOfFourKinds { get; } = new(
@@ -71,12 +69,10 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             [SegmentKind.Break] = First.Weights.Classes[SegmentKind.Break],
             [SegmentKind.Opening] = new(-6.0, new Dictionary<string, double>
             {
-                [SegmentFeature.CatalogOpeningShare] = 8.0,
                 [SegmentFeature.PastOpeningShare] = 4.0,
             }),
             [SegmentKind.Ending] = new(-6.0, new Dictionary<string, double>
             {
-                [SegmentFeature.CatalogEndingShare] = 8.0,
                 [SegmentFeature.PastEndingShare] = 4.0,
             }),
         }),
@@ -88,10 +84,7 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             [SegmentFeature.IsMultipleOf15s] = FeatureScale.Identity,
             [SegmentFeature.EdgeSilence] = FeatureScale.Identity,
             [SegmentFeature.LogoShare] = FeatureScale.Identity,
-            [SegmentFeature.CatalogCmShare] = FeatureScale.Identity,
-            [SegmentFeature.CatalogOpeningShare] = FeatureScale.Identity,
             [SegmentFeature.PastOpeningShare] = FeatureScale.Identity,
-            [SegmentFeature.CatalogEndingShare] = FeatureScale.Identity,
             [SegmentFeature.PastEndingShare] = FeatureScale.Identity,
         });
 

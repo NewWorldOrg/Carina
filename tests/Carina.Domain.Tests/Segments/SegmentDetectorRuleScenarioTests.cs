@@ -6,7 +6,8 @@ namespace Carina.Domain.Tests.Segments;
 
 /// <summary>
 /// The scenarios of the rule-based detection's tests, each written as readings and run through the
-/// first version of the model beside the rule-based detection itself. The scenarios that turn a setting
+/// versions of the model made by hand, of two kinds and of four, beside the rule-based detection itself, the
+/// catalog weighing in neither. The scenarios that turn a setting
 /// the model has no counterpart for (the grid's step, the share of breaks allowed and the number of marks
 /// allowed) are left out, and so is the one that counts marks per recording rather than per hour.
 /// </summary>
@@ -60,12 +61,18 @@ public sealed class SegmentDetectorRuleScenarioTests
 
     [Theory(DisplayName = "the first version detects what the rule-based detection marks")]
     [MemberData(nameof(Scenarios))]
-    public void TheFirstVersionDetectsWhatTheRuleBasedDetectionMarks(string scenario)
+    public void TheFirstVersionDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.First);
+
+    [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand, without the catalog's weights, detects what the rule-based detection marks")]
+    [MemberData(nameof(Scenarios))]
+    public void TheVersionOfFourKindsDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.FirstOfFourKinds);
+
+    private static void DetectsWhatTheRuleBasedDetectionMarks(string scenario, SegmentModel made)
     {
         (ChapterEvidence evidence, TimeSpan length, ChapterSettings settings) = Listed[scenario];
 
         ChapterDetection marked = ChapterGrid.Mark(evidence, length, settings);
-        SegmentDetection detected = SegmentDetector.Detect(Translated(evidence, length), Bare, Model(settings));
+        SegmentDetection detected = SegmentDetector.Detect(Translated(evidence, length), Bare, Model(settings, made));
 
         Assert.Equal(StateOf(marked.Verdict), detected.State);
         Assert.Equal(marked.BreakShare, detected.CmShare, 9);
@@ -97,7 +104,7 @@ public sealed class SegmentDetectorRuleScenarioTests
     {
         (ChapterEvidence evidence, TimeSpan length, ChapterSettings settings) = Listed[scenario];
 
-        return SegmentDetector.Detect(Translated(evidence, length), Bare, Model(settings));
+        return SegmentDetector.Detect(Translated(evidence, length), Bare, Model(settings, SegmentModel.First));
     }
 
     private static (TimeSpan Starts, TimeSpan Ends) Break(SegmentDetection detection)
@@ -135,14 +142,14 @@ public sealed class SegmentDetectorRuleScenarioTests
         return readings.Evidence();
     }
 
-    private static SegmentModel Model(ChapterSettings settings)
+    private static SegmentModel Model(ChapterSettings settings, SegmentModel made)
     {
         SegmentThresholds initial = SegmentThresholds.Initial;
 
         return new SegmentModel(
-            SegmentModel.First.Weights,
-            SegmentModel.First.StationOffsets,
-            SegmentModel.First.SeriesOffsets,
+            made.Weights,
+            made.StationOffsets,
+            made.SeriesOffsets,
             new SegmentThresholds(
                 initial.SilenceDbfs,
                 initial.BlackLevel,
@@ -152,7 +159,7 @@ public sealed class SegmentDetectorRuleScenarioTests
                 initial.Lambda,
                 initial.LambdaStation,
                 initial.LambdaSeries),
-            SegmentModel.First.Standardisation);
+            made.Standardisation);
     }
 
     private static SegmentDetectionState StateOf(ChapterVerdict verdict) => verdict switch
