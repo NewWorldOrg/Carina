@@ -22,7 +22,7 @@ public sealed class ChapterSegmentTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(3)]
+    [InlineData(5)]
     [InlineData(-1)]
     public void AChapterIsOneOfTheKindsNamedHereAndNothingElse(int kind)
     {

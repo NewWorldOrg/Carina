@@ -281,6 +281,38 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal((0.6, 0.65), (data.GetProperty("skipThreshold").GetProperty("current").GetDouble(), data.GetProperty("skipThreshold").GetProperty("recommended").GetDouble()));
     }
 
+    [Fact(DisplayName = "BR-CD-008: a version in use that tells openings and endings apart answers a row of figures for breaks, openings and endings, null where there was nothing to share, and leaves the summaries by station and by version as they were")]
+    public async Task AVersionThatTellsOpeningsAndEndingsApartAnswersARowForEachKind()
+    {
+        await using var feature = new SegmentStatusFeature();
+        DateTime trained = new(2026, 11, 1, 18, 0, 0, DateTimeKind.Utc);
+        SegmentMetrics metrics = new(
+            0.93,
+            0.85,
+            1.2,
+            2.1,
+            [new KindMetrics(SegmentKind.Break, 0.95, 0.97), new KindMetrics(SegmentKind.Opening, 0.88, 0.9), new KindMetrics(SegmentKind.Ending, null, 0.5)],
+            0.5,
+            4);
+        feature.Versions.Active = Version(
+            2,
+            SegmentModelVersionState.Active,
+            trained,
+            trained,
+            null,
+            new SegmentEvaluation(metrics, [new StationMetrics(new NetworkId(1), new ServiceId(2), 5, metrics)], new EvaluationEvidence(12, 150, null), 0.65));
+        feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained, null, null));
+
+        (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [("break", (double?)0.95, (double?)0.97), ("opening", 0.88, 0.9), ("ending", null, 0.5)],
+            data.GetProperty("metrics").GetProperty("kinds").EnumerateArray().Select(kind => (kind.GetProperty("kind").GetString(), Figure(kind.GetProperty("recall")), Figure(kind.GetProperty("precision")))));
+        Assert.Equal(["boundaryRecallWithin2s", "programmeSkippedSecondsPerHour"], Names(data.GetProperty("stations")[0].GetProperty("metrics")));
+        Assert.Equal(["boundaryRecallWithin2s", "programmeSkippedSecondsPerHour"], Names(data.GetProperty("versions")[0].GetProperty("metrics")));
+    }
+
     [Fact(DisplayName = "BR-CD-008: a version in use evaluated on no confirmed recording has no figures, and its evidence still stands")]
     public async Task AVersionInUseEvaluatedOnNoConfirmedRecordingHasNoFigures()
     {
@@ -354,6 +386,8 @@ public sealed class SegmentStatusEndpointTests
                 CancellationToken.None);
         }
     }
+
+    private static double? Figure(JsonElement figure) => figure.ValueKind is JsonValueKind.Null ? null : figure.GetDouble();
 
     private static SegmentEvaluation Evaluation(double recall, int confirmed, double recommended)
         => new(

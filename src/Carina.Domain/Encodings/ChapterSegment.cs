@@ -1,10 +1,17 @@
 namespace Carina.Domain.Encodings;
 
+/// <summary>
+/// What a chapter of an artefact is: the programme itself, a break for adverts, its opening or its ending.
+/// </summary>
 public enum ChapterKind
 {
     Programme = 1,
 
     Break = 2,
+
+    Opening = 3,
+
+    Ending = 4,
 }
 
 /// <summary>

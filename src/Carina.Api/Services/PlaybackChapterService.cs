@@ -72,5 +72,11 @@ public sealed class PlaybackChapterService(
         return [.. (await marked.ListForJobAsync(made.Id, cancellationToken)).Select(chapter => new SegmentSpan(chapter.StartsAt, chapter.EndsAt, KindOf(chapter.Kind), 1))];
     }
 
-    private static SegmentKind KindOf(ChapterKind kind) => kind is ChapterKind.Break ? SegmentKind.Break : SegmentKind.Programme;
+    private static SegmentKind KindOf(ChapterKind kind) => kind switch
+    {
+        ChapterKind.Break => SegmentKind.Break,
+        ChapterKind.Opening => SegmentKind.Opening,
+        ChapterKind.Ending => SegmentKind.Ending,
+        _ => SegmentKind.Programme,
+    };
 }

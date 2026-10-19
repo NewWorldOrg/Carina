@@ -682,7 +682,7 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("encode_chapter", null, t =>
                         {
-                            t.HasCheckConstraint("ck_encode_chapter_kind", "kind IN ('Programme', 'Break')");
+                            t.HasCheckConstraint("ck_encode_chapter_kind", "kind IN ('Programme', 'Break', 'Opening', 'Ending')");
 
                             t.HasCheckConstraint("ck_encode_chapter_ordinal", "ordinal >= 0");
 

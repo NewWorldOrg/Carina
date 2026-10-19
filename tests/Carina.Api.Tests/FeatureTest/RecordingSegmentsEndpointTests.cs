@@ -203,6 +203,27 @@ public sealed class RecordingSegmentsEndpointTests
         Assert.Equal([912.28, 912.31, 1002.3, 1347], data.GetProperty("snaps").EnumerateArray().Select(snap => snap.GetDouble()));
     }
 
+    [Fact(DisplayName = "BR-CS-002: an opening and an ending the version in use detected are answered by their own kinds beside the programme and a break")]
+    public async Task AnOpeningAndAnEndingAreAnsweredByTheirOwnKinds()
+    {
+        await using var feature = new RecordingSegmentsFeature();
+        Recording recording = feature.Ended();
+        await feature.DetectedAsync(
+            recording.Id,
+            [],
+            (0, 90, SegmentKind.Opening, 0.92),
+            (90, 900, SegmentKind.Programme, 0.99),
+            (900, 960, SegmentKind.Break, 0.93),
+            (960, 1710, SegmentKind.Programme, 0.99),
+            (1710, 1800, SegmentKind.Ending, 0.9));
+
+        JsonElement data = (await feature.GetAsync(RecordingSegmentsFeature.Path(recording.Id))).Body.GetProperty("data");
+
+        Assert.Equal(
+            ["opening", "programme", "break", "programme", "ending"],
+            data.GetProperty("segments").EnumerateArray().Select(segment => segment.GetProperty("kind").GetString()));
+    }
+
     [Fact(DisplayName = "BR-CS-002: a recording where only the programme was found is answered as nothing found, apart from one not detected")]
     public async Task NothingFoundIsApartFromNotDetected()
     {

@@ -722,6 +722,8 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             ["boundaryRecallWithin2s", "boundaryRecallWithin1s", "extraBoundariesPerRecording", "programmeSkippedSecondsPerHour", "kinds", "returnedAfterSkipShare", "skips"],
             Properties(schemas, "SegmentMetricsResponder"));
         Assert.Equal(["kind", "recall", "precision"], Properties(schemas, "SegmentKindMetricsResponder"));
+        Assert.EndsWith("/SegmentKind", schemas["SegmentKindMetricsResponder"]!["properties"]!["kind"]!["$ref"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal(["programme", "break", "opening", "ending"], schemas["SegmentKind"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
         Assert.Equal(["networkId", "serviceId", "confirmedRecordings", "metrics"], Properties(schemas, "SegmentStationResponder"));
         Assert.Equal(["boundaryRecallWithin2s", "programmeSkippedSecondsPerHour"], Properties(schemas, "SegmentMetricsSummaryResponder"));
         Assert.Equal(
@@ -938,7 +940,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             schemas["DataBroadcastFetchFailureResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
-    [Fact]
+    [Fact(DisplayName = "BR-CD-009: the kinds a chapter of the plan can be are spelled in the document the way the plan spells them, an opening and an ending added after the programme and a break")]
     public async Task TheKindsAChapterCanBeAreSpelledInTheDocumentTheWayThePlanSpellsThem()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
@@ -946,7 +948,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Equal("string", kind["type"]!.GetValue<string>());
         Assert.Equal(
-            ["programme", "break"],
+            ["programme", "break", "opening", "ending"],
             kind["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 

@@ -55,6 +55,20 @@ public sealed class ChapterRewriteTests
         Assert.Equal(ChapterRewriteVerdict.Due, ChapterRewrite.Judge(Carried, turned, null, Noon));
     }
 
+    [Theory(DisplayName = "BR-CD-010: a break that is now an opening or an ending, or the other way about, is written again where the boundaries stay")]
+    [InlineData(ChapterKind.Break, ChapterKind.Opening)]
+    [InlineData(ChapterKind.Break, ChapterKind.Ending)]
+    [InlineData(ChapterKind.Opening, ChapterKind.Break)]
+    [InlineData(ChapterKind.Opening, ChapterKind.Ending)]
+    public void ABreakThatIsNowAnOpeningOrAnEndingIsWrittenAgain(ChapterKind carried, ChapterKind wanted)
+    {
+        IReadOnlyList<ChapterSegment> was = Chapters((0, 299.5, ChapterKind.Programme), (299.5, 359.5, carried), (359.5, 1799.5, ChapterKind.Programme));
+        IReadOnlyList<ChapterSegment> now = Chapters((0, 299.5, ChapterKind.Programme), (299.5, 359.5, wanted), (359.5, 1799.5, ChapterKind.Programme));
+
+        Assert.Equal(ChapterRewriteVerdict.Due, ChapterRewrite.Judge(was, now, null, Noon));
+        Assert.Equal(ChapterRewriteVerdict.AsCarried, ChapterRewrite.Judge(now, now, null, Noon));
+    }
+
     [Fact(DisplayName = "BR-CD-010: an artefact is written again at most once a day")]
     public void AnArtefactIsWrittenAgainAtMostOnceADay()
     {

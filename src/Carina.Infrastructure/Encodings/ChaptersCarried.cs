@@ -62,7 +62,7 @@ public static class ChaptersCarried
     private static bool Agree(CarriedChapter carried, ChapterSegment wanted)
         => (carried.Starts - wanted.Starts).Duration() <= Tolerance
            && (carried.Ends - wanted.Ends).Duration() <= Tolerance
-           && carried.Title == (wanted.Kind is ChapterKind.Break ? ChapterMetadataFile.BreakTitle : ChapterMetadataFile.ProgrammeTitle);
+           && carried.Title == ChapterMetadataFile.TitleOf(wanted.Kind);
 
     private static IReadOnlyList<CarriedChapter>? Of(JsonElement root)
     {

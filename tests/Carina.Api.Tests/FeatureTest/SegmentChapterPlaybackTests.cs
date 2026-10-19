@@ -99,6 +99,90 @@ public sealed class SegmentChapterPlaybackTests
         Assert.Equal([false, unlikely, false, likely, false], plan.GetProperty("chapters").EnumerateArray().Select(chapter => chapter.GetProperty("skippable").GetBoolean()));
     }
 
+    [Fact(DisplayName = "BR-CD-009: an opening and an ending are played by their own kinds on the artefact and on the recording itself, each offered to be skipped when it is likely enough and something follows it")]
+    public async Task AnOpeningAndAnEndingArePlayedByTheirOwnKinds()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, timeline: HalfASecondSkipped);
+        await DetectedAsync(
+            feature,
+            recording.Id,
+            (0, 60, SegmentKind.Programme, 0.98),
+            (60, 150, SegmentKind.Opening, 0.92),
+            (150, 900, SegmentKind.Programme, 0.99),
+            (900, 960, SegmentKind.Break, 0.93),
+            (960, 1710, SegmentKind.Programme, 0.99),
+            (1710, 1800, SegmentKind.Ending, 0.95));
+
+        JsonElement artefact = await PlanAsync(feature, recording);
+        JsonElement original = await PlanAsync(feature, recording, "?source=recording");
+
+        Assert.Equal(
+            [
+                (0d, 59.5d, "programme", false), (59.5d, 149.5d, "opening", true), (149.5d, 899.5d, "programme", false),
+                (899.5d, 959.5d, "break", true), (959.5d, 1709.5d, "programme", false), (1709.5d, 1799.5d, "ending", false),
+            ],
+            artefact.GetProperty("chapters").EnumerateArray().Select(Read));
+        Assert.Equal(
+            [
+                (0d, 60d, "programme", false), (60d, 150d, "opening", true), (150d, 900d, "programme", false),
+                (900d, 960d, "break", true), (960d, 1710d, "programme", false), (1710d, 1800d, "ending", false),
+            ],
+            original.GetProperty("chapters").EnumerateArray().Select(Read));
+    }
+
+    [Theory(DisplayName = "BR-CD-009: the threshold the settings hold decides for an opening and an ending as it does for a break, and an ending with something after it is offered to be skipped")]
+    [InlineData(0.70, false, true, true)]
+    [InlineData(0.60, true, true, true)]
+    [InlineData(0.90, false, false, true)]
+    [InlineData(0.95, false, false, false)]
+    public async Task TheThresholdDecidesForAnOpeningAndAnEnding(double threshold, bool opening, bool breaks, bool ending)
+    {
+        await using var feature = new PlayFeature();
+        await feature.SegmentSettings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, false, null, threshold, RecordingFeature.Noon), CancellationToken.None);
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        await DetectedAsync(
+            feature,
+            recording.Id,
+            (0, 90, SegmentKind.Opening, 0.65),
+            (90, 900, SegmentKind.Programme, 0.99),
+            (900, 960, SegmentKind.Break, 0.8),
+            (960, 1680, SegmentKind.Programme, 0.99),
+            (1680, 1770, SegmentKind.Ending, 0.93),
+            (1770, 1800, SegmentKind.Programme, 0.9));
+
+        JsonElement plan = await PlanAsync(feature, recording);
+
+        Assert.Equal(
+            ["opening", "programme", "break", "programme", "ending", "programme"],
+            plan.GetProperty("chapters").EnumerateArray().Select(chapter => chapter.GetProperty("kind").GetString()));
+        Assert.Equal(
+            [opening, false, breaks, false, ending, false],
+            plan.GetProperty("chapters").EnumerateArray().Select(chapter => chapter.GetProperty("skippable").GetBoolean()));
+    }
+
+    [Fact(DisplayName = "BR-CD-013: while learning is off, an artefact of a recording not detected plays each chapter its encode marked as the kind it was marked")]
+    public async Task WhileLearningIsOffEachMarkedChapterIsPlayedAsItsKind()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+        await feature.MarkedAsync(
+            feature.Jobs.Jobs[0],
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(90), ChapterKind.Opening),
+            new ChapterSegment(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(900), ChapterKind.Programme),
+            new ChapterSegment(TimeSpan.FromSeconds(900), TimeSpan.FromSeconds(960), ChapterKind.Break),
+            new ChapterSegment(TimeSpan.FromSeconds(960), TimeSpan.FromSeconds(1710), ChapterKind.Programme),
+            new ChapterSegment(TimeSpan.FromSeconds(1710), TimeSpan.FromSeconds(1799), ChapterKind.Ending));
+
+        JsonElement plan = await PlanAsync(feature, recording);
+
+        Assert.Equal(
+            [(0d, 90d, "opening", true), (90d, 900d, "programme", false), (900d, 960d, "break", true), (960d, 1710d, "programme", false), (1710d, 1799d, "ending", false)],
+            plan.GetProperty("chapters").EnumerateArray().Select(Read));
+    }
+
     [Fact(DisplayName = "BR-CS-002: a recording whose detected sequence was thrown away plays with no chapters, even with chapters its encode marked")]
     public async Task ASequenceThrownAwayPlaysWithNoChapters()
     {

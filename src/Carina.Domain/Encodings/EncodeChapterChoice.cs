@@ -79,14 +79,15 @@ public sealed record EncodeChapterChoice
     }
 
     /// <summary>
-    /// The kind of chapter a stretch is embedded as: the programme as the programme, and a break, an opening or an
-    /// ending as a break.
+    /// The kind of chapter a stretch is embedded as, which is its own kind.
     /// </summary>
     public static ChapterKind KindOf(SegmentKind kind) => kind switch
     {
         SegmentKind.Programme => ChapterKind.Programme,
-        SegmentKind.Break or SegmentKind.Opening or SegmentKind.Ending => ChapterKind.Break,
-        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "An artefact's chapters are the programme or a break."),
+        SegmentKind.Break => ChapterKind.Break,
+        SegmentKind.Opening => ChapterKind.Opening,
+        SegmentKind.Ending => ChapterKind.Ending,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "An artefact's chapters are the programme, a break, an opening or an ending."),
     };
 
     private ChapterVerdict Verdict => Standing.State switch
