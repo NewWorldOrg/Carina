@@ -239,6 +239,100 @@ public sealed class SegmentSequenceTests
         Assert.Equal(((20 * chances[1].Of(SegmentKind.Opening)) + (40 * chances[2].Of(SegmentKind.Opening))) / 60, spans[1].Probability!.Value, 12);
     }
 
+    [Theory(DisplayName = "BR-CD-007: a piece the catalog fixes to a break is a break however the regression takes it, at its entry's confidence: 0.9 for an advert of two series, 0.5 for one of a single series, 0.6 for a fixed part of a station's output")]
+    [InlineData(0.9)]
+    [InlineData(0.5)]
+    [InlineData(0.6)]
+    public void APieceFixedToABreakIsABreak(double confidence)
+    {
+        SegmentPiece[] pieces = Fixed(Laid(300, 30, 1470), (1, SegmentKind.Break, confidence));
+        double[] scores = [Programme, -8, Programme];
+        SegmentKind[] kinds = SegmentSequence.Decide(pieces, scores, SegmentThresholds.Initial);
+
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Break, SegmentKind.Programme], kinds);
+        Assert.Equal(confidence, SegmentSequence.Spans(pieces, kinds, scores, TimeSpan.FromSeconds(1800), SegmentThresholds.Initial)[1].Probability!.Value, 12);
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme], SegmentSequence.Decide(Laid(300, 30, 1470), scores, SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a piece the catalog fixes to the programme, a fixed part of it, is the programme at 0.7 however likely a break the regression takes it for")]
+    public void APieceFixedToTheProgrammeIsTheProgramme()
+    {
+        SegmentPiece[] pieces = Fixed(Laid(300, 30, 1470), (1, SegmentKind.Programme, 0.7));
+        double[] scores = [Programme, 8, Programme];
+        SegmentKind[] kinds = SegmentSequence.Decide(pieces, scores, SegmentThresholds.Initial);
+
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme], kinds);
+        Assert.Equal(
+            ((300 * (1 - SegmentModel.Chance(Programme))) + (30 * 0.7) + (1470 * (1 - SegmentModel.Chance(Programme)))) / 1800,
+            SegmentSequence.Spans(pieces, kinds, scores, TimeSpan.FromSeconds(1800), SegmentThresholds.Initial)[0].Probability!.Value,
+            12);
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Break, SegmentKind.Programme], SegmentSequence.Decide(Laid(300, 30, 1470), scores, SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: pieces the catalog fixes to the opening and the ending are those at their entries' confidence, and the pieces beside them are what the regression takes them for")]
+    public void PiecesFixedToTheOpeningAndTheEndingAreThose()
+    {
+        SegmentPiece[] pieces = Fixed(Laid(60, 90, 30, 1500, 90, 30), (1, SegmentKind.Opening, 0.8), (4, SegmentKind.Ending, 0.8));
+        SegmentChances[] chances = [Plain, Plain, Four(3, -8, -8), Plain, Plain, Plain];
+
+        SegmentKind[] kinds = SegmentSequence.Decide(pieces, chances, SegmentThresholds.Initial);
+        IReadOnlyList<SegmentSpan> spans = SegmentSequence.Spans(pieces, kinds, chances, TimeSpan.FromSeconds(1800), SegmentThresholds.Initial);
+
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Break, SegmentKind.Programme, SegmentKind.Ending, SegmentKind.Programme], kinds);
+        Assert.Equal(
+            [(SegmentKind.Opening, 0.8), (SegmentKind.Ending, 0.8)],
+            spans.Where(span => span.Kind is SegmentKind.Opening or SegmentKind.Ending).Select(span => (span.Kind, span.Probability!.Value)));
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Break, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme], SegmentSequence.Decide(Laid(60, 90, 30, 1500, 90, 30), chances, SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a version that tells only breaks from the programme is never fixed to an opening or an ending, and decides as the break's scores alone do")]
+    public void TwoKindsAreNeverFixedToAnOpening()
+    {
+        SegmentPiece[] pieces = Fixed(Laid(60, 90, 1500, 90, 60), (1, SegmentKind.Opening, 0.8), (3, SegmentKind.Ending, 0.8));
+        double[] scores = [Programme, Programme, Programme, Pod, Programme];
+
+        Assert.Equal(SegmentSequence.Decide(Laid(60, 90, 1500, 90, 60), scores, SegmentThresholds.Initial), SegmentSequence.Decide(pieces, scores, SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a piece fixed to a break still sits in its run, so leaving the run off the grid costs the penalty and a doubtful neighbour that brings it onto the grid joins it")]
+    public void AFixedBreakSitsInItsRun()
+    {
+        SegmentPiece[] pieces = Fixed(Laid(300, 13, 2, 1485), (1, SegmentKind.Break, 0.9));
+        double[] scores = [Programme, Programme, -0.5, Programme];
+
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Break, SegmentKind.Break, SegmentKind.Programme], SegmentSequence.Decide(pieces, scores, SegmentThresholds.Initial));
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Break, SegmentKind.Programme, SegmentKind.Programme], SegmentSequence.Decide(pieces, scores, Free));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a piece fixed to the opening still lasts from 30 seconds to 3 minutes, so of its neighbours the one short enough joins it up to that length")]
+    public void AFixedOpeningStillLastsThirtySeconds()
+    {
+        SegmentPiece[] pieces = Fixed(Laid(200, 20, 15, 1565), (1, SegmentKind.Opening, 0.8));
+
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Opening, SegmentKind.Programme],
+            SegmentSequence.Decide(pieces, [Plain, Plain, Plain, Plain], SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: the fixes still leave one opening before one ending, so of two pieces fixed to the opening the one the regression likes better keeps it, and of an ending fixed before an opening the likelier; the other is what the regression takes it for")]
+    public void TheFixesLeaveOneOpeningBeforeOneEnding()
+    {
+        SegmentPiece[] two = Fixed(Laid(60, 90, 600, 90, 960), (1, SegmentKind.Opening, 0.8), (3, SegmentKind.Opening, 0.8));
+        SegmentPiece[] reversed = Fixed(Laid(60, 90, 1500, 90, 60), (1, SegmentKind.Ending, 0.8), (3, SegmentKind.Opening, 0.8));
+        SegmentChances[] laterLiked = [Plain, Plain, Plain, Opening(-3), Plain];
+
+        SegmentKind[] kinds = SegmentSequence.Decide(two, laterLiked, SegmentThresholds.Initial);
+
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(two, [Plain, Opening(-3), Plain, Plain, Plain], SegmentThresholds.Initial));
+        Assert.Equal([SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Programme], kinds);
+        Assert.Equal(Plain.Of(SegmentKind.Programme), SegmentSequence.Spans(two, kinds, laterLiked, TimeSpan.FromSeconds(1800), SegmentThresholds.Initial)[0].Probability!.Value, 12);
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Ending, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(reversed, [Plain, Ending(-3), Plain, Plain, Plain], SegmentThresholds.Initial));
+    }
+
     [Fact(DisplayName = "a score is needed for every piece")]
     public void AScoreIsNeededForEveryPiece()
         => Assert.Throws<ArgumentException>(() => SegmentSequence.Decide(Laid(300, 60), [Programme], SegmentThresholds.Initial));
@@ -256,6 +350,9 @@ public sealed class SegmentSequenceTests
             [SegmentKind.Opening] = opening,
             [SegmentKind.Ending] = ending,
         });
+
+    private static SegmentPiece[] Fixed(SegmentPiece[] pieces, params (int At, SegmentKind Kind, double Chance)[] fixes)
+        => [.. pieces.Select((piece, at) => fixes.Where(fix => fix.At == at).Select(fix => piece with { Fixed = new CatalogFix(fix.Kind, fix.Chance) }).SingleOrDefault() ?? piece)];
 
     private static SegmentPiece[] Laid(params double[] lengths)
     {

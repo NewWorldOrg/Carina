@@ -214,8 +214,8 @@ public sealed class SegmentRegressionTests
         ];
         SegmentModel bare = Kept(new Dictionary<string, double>(), new Dictionary<string, FeatureScale>());
         SegmentModel weighing = Kept(
-            new Dictionary<string, double> { [SegmentFeature.Length] = 0.5, [SegmentFeature.CatalogOpeningShare] = 8 },
-            new Dictionary<string, FeatureScale> { [SegmentFeature.Length] = new(60, 30), [SegmentFeature.CatalogOpeningShare] = new(0.2, 0.5) });
+            new Dictionary<string, double> { [SegmentFeature.Length] = 0.5, [SegmentFeature.PastOpeningShare] = 8 },
+            new Dictionary<string, FeatureScale> { [SegmentFeature.Length] = new(60, 30), [SegmentFeature.PastOpeningShare] = new(0.2, 0.5) });
 
         SegmentFit two = SegmentRegression.Fit(samples, SegmentThresholds.Initial);
         SegmentFit keptBare = SegmentRegression.Fit(samples, SegmentThresholds.Initial, kept: bare);
@@ -228,7 +228,7 @@ public sealed class SegmentRegressionTests
         Assert.Equal(weighing.Weights.Classes[SegmentKind.Opening], keptWeighing.Model.Weights.Classes[SegmentKind.Opening]);
         Assert.Equal(weighing.Weights.Classes[SegmentKind.Ending], keptWeighing.Model.Weights.Classes[SegmentKind.Ending]);
         Assert.Equal(new FeatureScale(60, 30), keptWeighing.Model.Standardisation[SegmentFeature.Length]);
-        Assert.Equal(new FeatureScale(0.2, 0.5), keptWeighing.Model.Standardisation[SegmentFeature.CatalogOpeningShare]);
+        Assert.Equal(new FeatureScale(0.2, 0.5), keptWeighing.Model.Standardisation[SegmentFeature.PastOpeningShare]);
         Assert.Equal(two.Model.Standardisation[SegmentFeature.LogoShare], keptWeighing.Model.Standardisation[SegmentFeature.LogoShare]);
         Assert.NotEqual(weighing.Weights.Classes[SegmentKind.Break], keptWeighing.Model.Weights.Classes[SegmentKind.Break]);
         Assert.True(keptWeighing.Converged);

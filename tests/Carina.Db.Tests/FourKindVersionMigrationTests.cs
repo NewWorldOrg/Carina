@@ -1,6 +1,5 @@
 using System.Globalization;
 
-using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
@@ -19,13 +18,15 @@ public sealed class FourKindVersionMigrationTests
 
     private const string BeforeTheVersionWasMade = "20261018215453_CatalogEntriesSayWhichVersionOfTheKindEstimationTheyWereEstimatedWith";
 
+    private const string TheVersionWasMade = "20261018224946_AVersionMadeByHandTellsOpeningsAndEndingsApart";
+
     private const string Learned = """{"confirmedRecordings": 12, "boundaries": 148, "labelsUntil": null}""";
 
     private const string LearningOn = "INSERT INTO segment_settings (id, learning, learning_changed_at) VALUES (1, true, now())";
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-CD-007: while learning is on the first version of four kinds takes the place of the first version in use after the candidates kept, read back as the model made by hand, and going back puts the first version in use again and keeps what viewers did")]
+    [Fact(DisplayName = "BR-CD-007: while learning is on the first version of four kinds takes the place of the first version in use after the candidates kept, and going back puts the first version in use again and keeps what viewers did")]
     public async Task TheFirstVersionOfFourKindsTakesThePlaceOfTheFirst()
     {
         await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
@@ -39,20 +40,12 @@ public sealed class FourKindVersionMigrationTests
             await ExecuteAsync(before, Version(2, "'Candidate'", "NULL", "NULL", $"'{Learned}'"));
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
-
-        await using (CarinaDbContext reading = CarinaDbContextFactory.Create(Scratch()))
-        {
-            SegmentModelVersion active = await new SegmentModelVersionRepository(reading).ActiveAsync(Cancel);
-
-            Assert.Equal((3, 4, false), (active.Number, active.Kinds, active.ByHand));
-            Assert.Equal(SegmentModel.FirstOfFourKinds, active.Model);
-            Assert.Null(active.Evaluation);
-        }
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {
             Assert.Equal("1:Retired 2:Candidate 3:Active", await StatesAsync(after));
+            Assert.Equal("4 false NULL", await ScalarAsync(after, "SELECT concat_ws(' ', kinds, by_hand::text, coalesce(evidence::text, 'NULL')) FROM segment_model_version WHERE number = 3"));
             await ExecuteAsync(after, "INSERT INTO segment_detection (recording_id, model_version, state, segments, cm_share, snaps, extraction_version, catalog_until, detected_at) VALUES (gen_random_uuid(), 3, 'NothingFound', '[{\"startsAtSec\": 0, \"endsAtSec\": 1800, \"kind\": \"Programme\", \"probability\": 0.9}]', 0, '[]', 2, now(), now())");
             await ExecuteAsync(after, "INSERT INTO segment_skip_event (recording_id, happened_at, event, kind, from_at, to_at, model_version) VALUES (gen_random_uuid(), now(), 'Skipped', 'Opening', interval '30 seconds', interval '120 seconds', 3)");
         }
@@ -86,7 +79,7 @@ public sealed class FourKindVersionMigrationTests
             await ExecuteAsync(before, "INSERT INTO segment_settings (id, learning, learning_changed_at) VALUES (1, false, now())");
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {
@@ -114,7 +107,7 @@ public sealed class FourKindVersionMigrationTests
             await ExecuteAsync(before, Version(2, "'Active'", "now()", byHand ? "now()" : "NULL", byHand ? "NULL" : $"'{Learned}'"));
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {
@@ -152,7 +145,7 @@ public sealed class FourKindVersionMigrationTests
             await ExecuteAsync(round, $"SELECT pg_advisory_xact_lock({SegmentModelVersionRepository.WriterLock})");
             await ExecuteAsync(round, Version(2, "'Candidate'", "NULL", "NULL", $"'{Learned}'"));
 
-            migrated = migrator.MigrateAsync(cancellationToken: Cancel);
+            migrated = migrator.MigrateAsync(TheVersionWasMade, Cancel);
             await WaitingAsync();
 
             Assert.False(migrated.IsCompleted);

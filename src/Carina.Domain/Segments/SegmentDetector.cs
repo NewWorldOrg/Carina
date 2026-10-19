@@ -11,7 +11,7 @@ public sealed record RecordingPieces(IReadOnlyList<SegmentPiece> Pieces, IReadOn
 /// Detects the breaks, the opening and the ending in one recording with one version of the model: finds the
 /// boundary candidates, computes the features of the segments between them, scores how likely each segment is
 /// to be each kind the version tells apart by logistic regression, decides the sequence by dynamic programming
-/// and judges it. The logo is read only where it
+/// with the segments the catalog hears fixed to their kind, and judges it. The logo is read only where it
 /// tells programme from break. Reading the segments and scoring them are apart, so that one reading
 /// serves every model learned with the same thresholds.
 /// </summary>

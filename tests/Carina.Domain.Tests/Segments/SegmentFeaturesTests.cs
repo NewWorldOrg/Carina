@@ -72,31 +72,23 @@ public sealed class SegmentFeaturesTests
         Assert.Null(blind[1].Features[SegmentFeature.LogoShare]);
     }
 
-    [Fact(DisplayName = "the catalog shares count each stretch as the kind it counts as, a programme fixture as programme and a station fixture as a break")]
-    public void TheCatalogSharesCountEachStretchByItsKind()
+    [Fact(DisplayName = "BR-CD-007: no feature reads the catalog, so a piece the catalog hears has the features it has with nothing heard")]
+    public void NoFeatureReadsTheCatalog()
     {
-        SegmentContext context = Context(catalog:
-        [
-            new CatalogHeard(TimeSpan.FromSeconds(300), TimeSpan.FromSeconds(330), SegmentKind.Break, 5, 3, 2),
-            new CatalogHeard(TimeSpan.FromSeconds(320), TimeSpan.FromSeconds(345), SegmentKind.Break, 2, 1, 1),
-            new CatalogHeard(TimeSpan.FromSeconds(345), TimeSpan.FromSeconds(351), SegmentKind.Programme, 4, 1, 1),
-            new CatalogHeard(TimeSpan.FromSeconds(351), TimeSpan.FromSeconds(354), null, 2, 1, 1),
-        ]);
+        BoundaryCandidate[] candidates = [Edge(0), Cut(300), Cut(360), Cut(500), Cut(590), Edge(Length)];
+        SegmentEvidence evidence = new SyntheticReadings(Length).Captioned(second => second % 7 < 3).Evidence();
+        SegmentContext heard = Context(starts: TimeSpan.FromSeconds(30), ends: TimeSpan.FromSeconds(1770), catalog: [Heard(300, 345, SegmentKind.Break, 0.9), Heard(500, 590, SegmentKind.Opening, 0.8), Heard(700, 720, SegmentKind.Programme, 0.7)]);
+        SegmentContext deaf = Context(starts: TimeSpan.FromSeconds(30), ends: TimeSpan.FromSeconds(1770));
 
-        SegmentFeatureValues features = SegmentFeatures.Of(
-            [Edge(0), Cut(300), Cut(360), Edge(Length)],
-            new SyntheticReadings(Length).Evidence(),
-            context,
-            null,
-            SegmentThresholds.Initial)[1].Features;
+        IReadOnlyList<SegmentPiece> hearing = SegmentFeatures.Of(candidates, evidence, heard, null, SegmentThresholds.Initial);
+        IReadOnlyList<SegmentPiece> hearingNothing = SegmentFeatures.Of(candidates, evidence, deaf, null, SegmentThresholds.Initial);
 
-        Assert.Equal(45d / 60d, features[SegmentFeature.CatalogCmShare]!.Value, 9);
-        Assert.Equal(6d / 60d, features[SegmentFeature.CatalogProgrammeShare]!.Value, 9);
-        Assert.Equal(54d / 60d, features[SegmentFeature.CatalogShare]!.Value, 9);
-        Assert.Equal(0, features[SegmentFeature.CatalogOpeningShare]);
-        Assert.Equal(5, features[SegmentFeature.CatalogOccurrences]);
-        Assert.Equal(3, features[SegmentFeature.CatalogSeries]);
-        Assert.Equal(2, features[SegmentFeature.CatalogStations]);
+        Assert.DoesNotContain(SegmentFeature.Names, name => name.StartsWith("catalog", StringComparison.Ordinal));
+        Assert.All(
+            hearing.Zip(hearingNothing),
+            pair => Assert.Equal(SegmentFeature.Names.Select(name => pair.First.Features[name]), SegmentFeature.Names.Select(name => pair.Second.Features[name])));
+        Assert.Equal([null, SegmentKind.Break, null, SegmentKind.Opening, null], hearing.Select(piece => piece.Fixed?.Kind));
+        Assert.All(hearingNothing, piece => Assert.Null(piece.Fixed));
     }
 
     [Theory(DisplayName = "a catalog entry counts as the kind of segment it stands for")]
@@ -120,6 +112,60 @@ public sealed class SegmentFeaturesTests
 
         Assert.Equal(SegmentKind.Break, CatalogHeard.Of(Occurrence(opening, SegmentKind.Break), opening).Kind);
         Assert.Throws<ArgumentException>(() => CatalogHeard.Of(Occurrence(opening, null), Entry(CatalogKind.Opening)));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a piece is fixed to the kind the catalog's stretches of that kind cover more than half of, a fixed part of a programme to the programme, at the confidence of the surest entry over it; a kind or a confidence not known and half or less fix nothing")]
+    public void ThePiecesTheCatalogCoversAreFixed()
+    {
+        SegmentContext context = Context(catalog:
+        [
+            Heard(300, 320, SegmentKind.Break, 0.5),
+            Heard(320, 345, SegmentKind.Break, 0.9),
+            Heard(400, 430, SegmentKind.Break, 0.9),
+            Heard(500, 590, SegmentKind.Opening, 0.8),
+            Heard(700, 760, SegmentKind.Programme, 0.7),
+            Heard(800, 860, null),
+            Heard(900, 960, SegmentKind.Break),
+            Heard(1000, 1090, SegmentKind.Ending, 0.8),
+        ]);
+
+        IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of(
+            [Edge(0), .. new double[] { 300, 360, 400, 460, 500, 590, 700, 760, 800, 860, 900, 960, 1000, 1090 }.Select(at => Cut(at)), Edge(Length)],
+            new SyntheticReadings(Length).Evidence(),
+            context,
+            null,
+            SegmentThresholds.Initial);
+
+        Assert.Equal(
+            [
+                null, new CatalogFix(SegmentKind.Break, 0.9), null, null, null, new CatalogFix(SegmentKind.Opening, 0.8), null, new CatalogFix(SegmentKind.Programme, 0.7),
+                null, null, null, null, null, new CatalogFix(SegmentKind.Ending, 0.8), null,
+            ],
+            pieces.Select(piece => piece.Fixed));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: what one stretch alone is taken for fixes its piece, so a stretch of an opening heard in another series' break fixes it to a break")]
+    public void AStretchTakenForABreakFixesItsPieceToABreak()
+    {
+        CatalogEntry opening = Entry(CatalogKind.Opening);
+        SegmentContext context = Context(catalog: [CatalogHeard.Of(Occurrence(opening, SegmentKind.Break), opening)]);
+
+        IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of([Edge(0), Cut(100), Cut(115), Edge(Length)], new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial);
+
+        Assert.Equal([null, new CatalogFix(SegmentKind.Break, 0.9), null], pieces.Select(piece => piece.Fixed));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: of two kinds that each cover more than half of a piece, the one heard surer fixes it, and the earlier kind on a tie")]
+    public void TheSurerKindFixesAPiece()
+    {
+        BoundaryCandidate[] candidates = [Edge(0), Cut(300), Cut(390), Edge(Length)];
+        SyntheticReadings readings = new(Length);
+
+        SegmentPiece surerOpening = SegmentFeatures.Of(candidates, readings.Evidence(), Context(catalog: [Heard(300, 390, SegmentKind.Opening, 0.8), Heard(300, 360, SegmentKind.Break, 0.5)]), null, SegmentThresholds.Initial)[1];
+        SegmentPiece tie = SegmentFeatures.Of(candidates, readings.Evidence(), Context(catalog: [Heard(300, 390, SegmentKind.Opening, 0.9), Heard(300, 360, SegmentKind.Break, 0.9)]), null, SegmentThresholds.Initial)[1];
+
+        Assert.Equal(new CatalogFix(SegmentKind.Opening, 0.8), surerOpening.Fixed);
+        Assert.Equal(new CatalogFix(SegmentKind.Break, 0.9), tie.Fixed);
     }
 
     [Fact(DisplayName = "a piece is placed from the programme's start and end by the guide, and the share of it outside the guide is read")]
@@ -223,6 +269,61 @@ public sealed class SegmentFeaturesTests
         Assert.Same(context, catalog.Forgetting(context, new HashSet<CatalogEntryId>()));
     }
 
+    [Fact(DisplayName = "BR-CD-008: an earlier episode whose stretches reach a few milliseconds or a second and a half past an entry set aside keeps no sliver of them, so the past shares there fall to nothing")]
+    public void AnEarlierEpisodeKeepsNoSliverPastAnEntrySetAside()
+    {
+        CatalogSeries story = new(1, "架空の物語", new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc));
+        RecordingId earlier = RecordingId.New();
+        CatalogEntryId opening = CatalogEntryId.New();
+        CatalogEntryId advert = CatalogEntryId.New();
+        LearningCatalog catalog = new(
+        [
+            new CatalogSound(opening, TimeSpan.FromSeconds(90), [CatalogSeries.At(opening, story.Episode(0), 0, 90, earlier), CatalogSeries.At(opening, story.Episode(1), 0, 90)]),
+            new CatalogSound(advert, TimeSpan.FromSeconds(30), [CatalogSeries.At(advert, story.Episode(0), 900, 30, earlier), CatalogSeries.At(advert, story.Episode(2), 900, 30)]),
+        ],
+        SeriesLinks.None);
+        PastEpisode episode = new(
+            earlier,
+            CatalogSeries.Lead,
+            null,
+            [.. new[] { (0.0, 59.995, SegmentKind.Programme), (59.995, 151.5, SegmentKind.Opening), (151.5, 958.5, SegmentKind.Programme), (958.5, 990.005, SegmentKind.Break), (990.005, 1800, SegmentKind.Programme) }
+                .Select(stretch => new SegmentSpan(TimeSpan.FromSeconds(stretch.Item1), TimeSpan.FromSeconds(stretch.Item2), stretch.Item3, 0.9))]);
+        BoundaryCandidate[] candidates = [Edge(0), Cut(60), Cut(150), Cut(960), Cut(990), Edge(Length)];
+        SegmentContext context = Context(starts: CatalogSeries.Lead, ends: TimeSpan.FromSeconds(Length), past: [episode]);
+
+        SegmentContext forgetting = catalog.Forgetting(context, new HashSet<CatalogEntryId> { opening, advert });
+        IReadOnlyList<SegmentPiece> remembered = SegmentFeatures.Of(candidates, new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial);
+        IReadOnlyList<SegmentPiece> forgotten = SegmentFeatures.Of(candidates, new SyntheticReadings(Length).Evidence(), forgetting, null, SegmentThresholds.Initial);
+
+        Assert.Equal((1d, 1d), (remembered[1].Features[SegmentFeature.PastOpeningShare]!.Value, remembered[3].Features[SegmentFeature.PastCmShare]!.Value));
+        Assert.Equal((0d, 0d), (forgotten[1].Features[SegmentFeature.PastOpeningShare]!.Value, forgotten[3].Features[SegmentFeature.PastCmShare]!.Value));
+        Assert.All(forgetting.Past.Single().Segments, segment => Assert.Equal(SegmentKind.Programme, segment.Kind));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: an earlier episode forgets only the part of a stretch it was taken to hold that lies over a stretch of an entry set aside, and keeps the rest of it as it was")]
+    public void AnEarlierEpisodeForgetsOnlyThePartOverAnEntrySetAside()
+    {
+        PastEpisode episode = new(
+            RecordingId.New(),
+            CatalogSeries.Lead,
+            null,
+            [
+                new SegmentSpan(TimeSpan.FromSeconds(0), TimeSpan.FromSeconds(60), SegmentKind.Programme, 0.9),
+                new SegmentSpan(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(150), SegmentKind.Break, 0.8),
+                new SegmentSpan(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(960), SegmentKind.Programme, 0.9),
+                new SegmentSpan(TimeSpan.FromSeconds(960), TimeSpan.FromSeconds(1000), SegmentKind.Break, null),
+            ]);
+        SoundSpan[] setAside = [new(TimeSpan.FromSeconds(140), TimeSpan.FromSeconds(170)), new(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(120)), new(TimeSpan.FromSeconds(950), TimeSpan.FromSeconds(1010))];
+
+        PastEpisode forgetting = episode.Without(setAside);
+
+        Assert.Equal(
+            [(0d, 60d, SegmentKind.Programme, (double?)0.9), (60, 90, SegmentKind.Break, 0.8), (120, 140, SegmentKind.Break, 0.8), (170, 950, SegmentKind.Programme, 0.9)],
+            forgetting.Segments.Select(segment => (segment.Starts.TotalSeconds, segment.Ends.TotalSeconds, segment.Kind, segment.Probability)));
+        Assert.True(forgetting.HadABreakNear(TimeSpan.FromSeconds(130) - CatalogSeries.Lead, TimeSpan.Zero));
+        Assert.False(forgetting.HadABreakNear(TimeSpan.FromSeconds(105) - CatalogSeries.Lead, TimeSpan.Zero));
+    }
+
     [Fact(DisplayName = "the caption share and the channels' mean likeness are read over the piece, and are not known without readings")]
     public void CaptionsAndChannelsAreReadOverThePiece()
     {
@@ -269,20 +370,22 @@ public sealed class SegmentFeaturesTests
         Assert.Null(none[SegmentFeature.Genre(7)]);
     }
 
-    [Fact(DisplayName = "the two interactions are a multiple of 15 seconds without the logo, and a catalog advert on a multiple of 15 seconds")]
-    public void TheInteractionsAreProducts()
+    [Fact(DisplayName = "the interaction is a multiple of 15 seconds without the logo")]
+    public void TheInteractionIsAProduct()
     {
         bool[] seen = [.. Enumerable.Range(0, (int)Length).Select(second => second is >= 300 and < 312)];
-        SegmentContext context = Context(catalog: [new CatalogHeard(TimeSpan.FromSeconds(300), TimeSpan.FromSeconds(330), SegmentKind.Break, 2, 2, 1)]);
 
-        SegmentFeatureValues features = SegmentFeatures.Of([Edge(0), Cut(300), Cut(360), Edge(Length)], new SyntheticReadings(Length).Evidence(), context, seen, SegmentThresholds.Initial)[1].Features;
-        SegmentFeatureValues blind = SegmentFeatures.Of([Edge(0), Cut(300), Cut(362), Edge(Length)], new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial)[1].Features;
+        SegmentFeatureValues features = SegmentFeatures.Of([Edge(0), Cut(300), Cut(360), Edge(Length)], new SyntheticReadings(Length).Evidence(), Context(), seen, SegmentThresholds.Initial)[1].Features;
+        SegmentFeatureValues off = SegmentFeatures.Of([Edge(0), Cut(300), Cut(362), Edge(Length)], new SyntheticReadings(Length).Evidence(), Context(), seen, SegmentThresholds.Initial)[1].Features;
+        SegmentFeatureValues blind = SegmentFeatures.Of([Edge(0), Cut(300), Cut(360), Edge(Length)], new SyntheticReadings(Length).Evidence(), Context(), null, SegmentThresholds.Initial)[1].Features;
 
         Assert.Equal(1 - (9d / 55), features[SegmentFeature.MultipleOf15sWithoutLogo]!.Value, 9);
-        Assert.Equal(0.5, features[SegmentFeature.CatalogCmMultipleOf15s]!.Value, 9);
+        Assert.Equal(0, off[SegmentFeature.MultipleOf15sWithoutLogo]);
         Assert.Null(blind[SegmentFeature.MultipleOf15sWithoutLogo]);
-        Assert.Equal(0, blind[SegmentFeature.CatalogCmMultipleOf15s]);
     }
+
+    private static CatalogHeard Heard(double starts, double ends, SegmentKind? kind, double? confidence = null)
+        => new(TimeSpan.FromSeconds(starts), TimeSpan.FromSeconds(ends), kind, 2, 2, 1, confidence);
 
     private static IReadOnlyList<SegmentPiece> Pieces(BoundaryCandidate[] candidates)
         => SegmentFeatures.Of(candidates, new SyntheticReadings(Length).Evidence(), Context(), null, SegmentThresholds.Initial);

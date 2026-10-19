@@ -145,6 +145,21 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         Assert.Equal(SegmentModelVersion.FirstNumber, SegmentRollback.Previous(await ListAsync())?.Number);
     }
 
+    [Fact(DisplayName = "BR-CD-007: turning learning on puts the latest version of four kinds made by hand, read back without the catalog's weights, in place of an earlier one made by hand in use, and leaves an earlier candidate made by hand where it is")]
+    public async Task TheLatestVersionMadeByHandTakesThePlaceOfAnEarlierOne()
+    {
+        await AddAsync(MadeByHand(61));
+        await AddAsync(MadeByHand(62));
+        await AddAsync(MadeByHand(63));
+        await ChangeAsync(SegmentVersionChange.Adopting(62), Noon);
+
+        SegmentModelVersion? active = await ChangeAsync(SegmentVersionChange.LatestMadeByHand, Noon.AddDays(1));
+
+        Assert.Equal(63, active?.Number);
+        Assert.Equal(SegmentModel.FirstOfFourKinds, (await ActiveAsync()).Model);
+        Assert.Equal("1:Retired:false 61:Candidate:false 62:Retired:false 63:Active:false", await StatesAsync());
+    }
+
     [Fact(DisplayName = "BR-CS-003: candidates kept at once are each given a number of their own")]
     public async Task CandidatesKeptAtOnceAreNumberedApart()
     {
@@ -206,6 +221,9 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         DateTime? rolledBackAt = null,
         SegmentRollback? rollback = null)
         => SegmentModelVersion.Rehydrate(number, state, false, SegmentModel.First, Noon.AddHours(-1), adoptedAt, retiredAt, null, rolledBackAt, evaluation, rollback);
+
+    private static SegmentModelVersion MadeByHand(int number)
+        => SegmentModelVersion.Rehydrate(number, SegmentModelVersionState.Candidate, false, SegmentModel.FirstOfFourKinds, Noon.AddHours(-1), null, null, null, null);
 
     private async Task AddAsync(SegmentModelVersion version)
     {

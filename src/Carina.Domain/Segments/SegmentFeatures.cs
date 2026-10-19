@@ -2,9 +2,10 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// A segment, the stretch between two neighbouring boundary candidates: where it starts and ends, its
-/// length fitted to the grid from any of the cuts its edges took in, and its features.
+/// length fitted to the grid from any of the cuts its edges took in, its features, and the kind the catalog
+/// fixes it to with how likely that is, when it does (<see cref="SegmentSequence"/>).
 /// </summary>
-public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitted, SegmentFeatureValues Features)
+public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitted, SegmentFeatureValues Features, CatalogFix? Fixed = null)
 {
     public TimeSpan Length => Ends - Starts;
 }
@@ -14,16 +15,18 @@ public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitte
 /// it lies off the grid and whether it is a multiple of it; the depth and length of the silence at each
 /// edge, and whether both edges are silent cuts; the share of the seconds inside it, away from its edges
 /// by <see cref="LogoAwayFromTheEdges"/>, that show the logo, when at least
-/// <see cref="FewestLogoSeconds"/> do; the share the catalog covers, in all and by the kind each stretch
-/// counts as, and the most stretches, series and stations an entry over it is heard in; where it lies from
+/// <see cref="FewestLogoSeconds"/> do; where it lies from
 /// the programme's start and end, as shares of the programme's length, and the share of it outside the
 /// guide; the share of earlier episodes with a break, and with an opening, within <see cref="PastWithin"/>
 /// of the same place from their programme's start, and with an ending within it of the same place before
 /// their programme's end; the share of its seconds with captions; the channels' mean likeness,
 /// and how far it changes across each edge over <see cref="ChannelWindow"/> on either side, when at
 /// least half of each window was measured; the changes of scene per ten seconds; the programme's first
-/// genre; and the two interactions. A feature without the readings to compute it
-/// is not known. The programme spans the recording when the guide says nothing.
+/// genre; and a multiple of the grid without the logo. A feature without the readings to compute it
+/// is not known. The programme spans the recording when the guide says nothing. The catalog is no feature:
+/// it fixes a segment that its stretches of one kind cover more than half of to that kind, a fixed part of a
+/// programme to the programme, at the confidence of the surest entry of that kind over it; of two kinds that
+/// do, the surer, then the earlier kind. A stretch whose kind or confidence is not known fixes nothing.
 /// </summary>
 public static class SegmentFeatures
 {
@@ -82,7 +85,6 @@ public static class SegmentFeatures
             double multiple = SegmentGrid.IsAMultiple(from, longest, TimeSpan.FromSeconds(thresholds.GridToleranceSec)) ? 1 : 0;
             Stretch piece = new(head.At, tail.At);
             double? logo = LogoShare(piece);
-            Covered covered = Covered.By(context.Catalog, piece);
             Dictionary<string, double?> features = new(StringComparer.Ordinal)
             {
                 [SegmentFeature.Length] = piece.Length.TotalSeconds,
@@ -94,14 +96,6 @@ public static class SegmentFeatures
                 [SegmentFeature.TailSilenceLength] = tail.SilenceLength.TotalSeconds,
                 [SegmentFeature.EdgeSilence] = head.IsSilentCut && tail.IsSilentCut ? 1 : 0,
                 [SegmentFeature.LogoShare] = logo,
-                [SegmentFeature.CatalogShare] = covered.Share(null),
-                [SegmentFeature.CatalogCmShare] = covered.Share(SegmentKind.Break),
-                [SegmentFeature.CatalogProgrammeShare] = covered.Share(SegmentKind.Programme),
-                [SegmentFeature.CatalogOpeningShare] = covered.Share(SegmentKind.Opening),
-                [SegmentFeature.CatalogEndingShare] = covered.Share(SegmentKind.Ending),
-                [SegmentFeature.CatalogOccurrences] = covered.Occurrences,
-                [SegmentFeature.CatalogSeries] = covered.Series,
-                [SegmentFeature.CatalogStations] = covered.Stations,
                 [SegmentFeature.FromStart] = (piece.From - programmeStarts) / ProgrammeLength,
                 [SegmentFeature.FromEnd] = (programmeEnds - piece.To) / ProgrammeLength,
                 [SegmentFeature.OutsideGuide] = OutsideGuide(piece),
@@ -114,7 +108,6 @@ public static class SegmentFeatures
                 [SegmentFeature.TailChannelChange] = ChannelChangeAcross(tail.At),
                 [SegmentFeature.SceneChangesPer10s] = scenes.Count(at => at >= piece.From && at < piece.To) * (SceneSpan / piece.Length),
                 [SegmentFeature.MultipleOf15sWithoutLogo] = multiple * (1 - logo),
-                [SegmentFeature.CatalogCmMultipleOf15s] = covered.Share(SegmentKind.Break) * multiple,
             };
 
             for (int kind = 0; kind < SegmentFeature.GenreKinds; kind++)
@@ -122,7 +115,7 @@ public static class SegmentFeatures
                 features[SegmentFeature.Genre(kind)] = genre is null ? null : (genre == kind ? 1 : 0);
             }
 
-            return new SegmentPiece(piece.From, piece.To, fitted, SegmentFeatureValues.Of(features));
+            return new SegmentPiece(piece.From, piece.To, fitted, SegmentFeatureValues.Of(features), FixedBy(context.Catalog, piece));
         }
 
         private TimeSpan ProgrammeLength => programmeEnds > programmeStarts ? programmeEnds - programmeStarts : evidence.Length;
@@ -233,67 +226,45 @@ public static class SegmentFeatures
         private static TimeSpan Clipped(TimeSpan from, TimeSpan to) => to > from ? to - from : TimeSpan.Zero;
     }
 
+    /// <summary>
+    /// The kind the catalog fixes a segment to: one whose stretches over it, of a known confidence, cover more than
+    /// half of it, at the confidence of the surest of them; of two kinds that do, the surer, then the earlier kind;
+    /// none when no kind does.
+    /// </summary>
+    private static CatalogFix? FixedBy(IReadOnlyList<CatalogHeard> catalog, Stretch piece)
+        => catalog
+            .Where(heard => heard is { Kind: SegmentKind, Confidence: > 0 } && heard.Starts < piece.To && heard.Ends > piece.From)
+            .GroupBy(heard => heard.Kind!.Value)
+            .Where(kind => Union([.. kind], piece) * 2 > piece.Length)
+            .Select(kind => new CatalogFix(kind.Key, kind.Max(heard => heard.Confidence!.Value)))
+            .OrderByDescending(fix => fix.Chance)
+            .ThenBy(fix => fix.Kind)
+            .FirstOrDefault();
+
+    private static TimeSpan Union(CatalogHeard[] heard, Stretch piece)
+    {
+        TimeSpan total = TimeSpan.Zero;
+        TimeSpan reached = piece.From;
+
+        foreach (CatalogHeard stretch in heard.OrderBy(stretch => stretch.Starts))
+        {
+            TimeSpan from = stretch.Starts > reached ? stretch.Starts : reached;
+            TimeSpan to = stretch.Ends < piece.To ? stretch.Ends : piece.To;
+
+            if (to > from)
+            {
+                total += to - from;
+                reached = to;
+            }
+        }
+
+        return total;
+    }
+
     private readonly record struct Stretch(TimeSpan From, TimeSpan To)
     {
         public TimeSpan Length => To - From;
 
         public TimeSpan Middle => From + ((To - From) / 2);
-    }
-
-    private sealed class Covered
-    {
-        private readonly Dictionary<SegmentKind, TimeSpan> byKind = [];
-
-        private TimeSpan all;
-
-        private TimeSpan length;
-
-        public double Occurrences { get; private set; }
-
-        public double Series { get; private set; }
-
-        public double Stations { get; private set; }
-
-        public static Covered By(IReadOnlyList<CatalogHeard> catalog, Stretch piece)
-        {
-            CatalogHeard[] over = [.. catalog.Where(heard => heard.Starts < piece.To && heard.Ends > piece.From)];
-            Covered covered = new()
-            {
-                length = piece.Length,
-                all = Union(over, piece),
-                Occurrences = over.Select(heard => heard.Occurrences).DefaultIfEmpty(0).Max(),
-                Series = over.Select(heard => heard.Series).DefaultIfEmpty(0).Max(),
-                Stations = over.Select(heard => heard.Stations).DefaultIfEmpty(0).Max(),
-            };
-
-            foreach (SegmentKind kind in Enum.GetValues<SegmentKind>())
-            {
-                covered.byKind[kind] = Union([.. over.Where(heard => heard.Kind == kind)], piece);
-            }
-
-            return covered;
-        }
-
-        public double Share(SegmentKind? kind) => (kind is SegmentKind counted ? byKind[counted] : all) / length;
-
-        private static TimeSpan Union(CatalogHeard[] heard, Stretch piece)
-        {
-            TimeSpan total = TimeSpan.Zero;
-            TimeSpan reached = piece.From;
-
-            foreach (CatalogHeard stretch in heard.OrderBy(stretch => stretch.Starts))
-            {
-                TimeSpan from = stretch.Starts > reached ? stretch.Starts : reached;
-                TimeSpan to = stretch.Ends < piece.To ? stretch.Ends : piece.To;
-
-                if (to > from)
-                {
-                    total += to - from;
-                    reached = to;
-                }
-            }
-
-            return total;
-        }
     }
 }

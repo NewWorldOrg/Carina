@@ -121,9 +121,9 @@ public sealed class LearningCatalog
     }
 
     /// <summary>
-    /// <paramref name="context"/> remembering its earlier episodes without the stretches they were taken to hold
-    /// over a stretch of <paramref name="entries"/>, so that what was set aside does not come back through what
-    /// was detected in them.
+    /// <paramref name="context"/> remembering its earlier episodes without the part of what they were taken to hold
+    /// that lies over a stretch of <paramref name="entries"/>, so that what was set aside does not come back through
+    /// what was detected in them, and the rest of what was detected in them stays.
     /// </summary>
     public SegmentContext Forgetting(SegmentContext context, IReadOnlySet<CatalogEntryId> entries)
     {

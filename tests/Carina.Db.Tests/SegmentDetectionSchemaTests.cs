@@ -22,12 +22,13 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
 
     private int nextEvent = 8_100;
 
-    [Fact(DisplayName = "BR-CS-003: the first version is in use from the start, holding the first model and no figures of an evaluation, and the first version of four kinds, made by hand, waits beside it as a candidate while learning is off")]
+    [Fact(DisplayName = "BR-CS-003: the first version is in use from the start, holding the first model and no figures of an evaluation, and the versions of four kinds made by hand, the later without the catalog's weights as the earlier now is, wait beside it as candidates while learning is off")]
     public async Task TheFirstVersionIsInUseFromTheStart()
     {
         await using CarinaDbContext context = Context();
         IReadOnlyList<SegmentModelVersion> kept = await new SegmentModelVersionRepository(context).ListAsync(CancellationToken.None);
         SegmentModelVersion four = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber + 1);
+        SegmentModelVersion later = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber + 2);
         SegmentModelVersion active = await ActiveAsync();
 
         Assert.Equal(SegmentModelVersion.FirstNumber, active.Number);
@@ -40,6 +41,7 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
         Assert.Equal(4, four.Kinds);
         Assert.Equal(SegmentModel.FirstOfFourKinds, four.Model);
         Assert.Null(four.Evaluation);
+        Assert.Equal((SegmentModelVersionState.Candidate, SegmentModel.FirstOfFourKinds, (SegmentEvaluation?)null), (later.State, later.Model, later.Evaluation));
         Assert.Equal(
             "NULL NULL NULL NULL",
             await ScalarAsync("SELECT concat_ws(' ', coalesce(metrics::text, 'NULL'), coalesce(stations::text, 'NULL'), coalesce(evidence::text, 'NULL'), coalesce(rollback::text, 'NULL')) FROM segment_model_version WHERE number = 1"));

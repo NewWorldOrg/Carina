@@ -78,5 +78,10 @@ public sealed class SegmentChances
 
     public double LogOf(SegmentKind kind) => (scores[At(kind)] - highest) - Math.Log(sum);
 
+    /// <summary>
+    /// Whether the model these chances come from tells <paramref name="kind"/> apart; it always tells the programme.
+    /// </summary>
+    public bool Weighs(SegmentKind kind) => !double.IsNegativeInfinity(scores[At(kind)]);
+
     private static int At(SegmentKind kind) => (int)kind - (int)SegmentKind.Programme;
 }
