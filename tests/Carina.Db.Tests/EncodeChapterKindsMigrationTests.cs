@@ -37,6 +37,7 @@ public sealed class EncodeChapterKindsMigrationTests
         await migrator.MigrateAsync(BeforeOpeningsAndEndings, Cancel);
 
         Guid job = Guid.NewGuid();
+        Guid recording = Guid.NewGuid();
 
         await using (NpgsqlConnection before = await OpenAsync())
         {
@@ -52,8 +53,8 @@ public sealed class EncodeChapterKindsMigrationTests
                     queued_at, started_at, ended_at, artefact_name,
                     chapters_detector, chapters_verdict, chapters_break_share, chapters_decided_at, chapters_model_version)
                 VALUES
-                    ('{job}', '{Guid.NewGuid()}', '{Profile}', '{Destination}', 'encodes', 'Completed', 1,
-                     {Queued}, {Started}, {Made}, '{job:N}.mp4', 'Segments', 'Marked', 0.2, {Made}, 1);
+                    ('{job}', '{recording}', '{Profile}', '{Destination}', 'encodes', 'Completed', 1,
+                     {Queued}, {Started}, {Made}, '{recording:N}.{Profile:N}.mp4', 'Segments', 'Marked', 0.2, {Made}, 1);
                 INSERT INTO encode_chapter (id, job_id, ordinal, starts_at, ends_at, kind)
                 VALUES
                     ('{Guid.NewGuid()}', '{job}', 0, interval '0', interval '00:05:00', 'Programme'),
