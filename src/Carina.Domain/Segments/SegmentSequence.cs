@@ -19,8 +19,8 @@ namespace Carina.Domain.Segments;
 /// only breaks from the programme makes no opening or ending, and decides as it did before there were four.
 /// <para>
 /// A segment the catalog fixes to a kind (<see cref="SegmentPiece.Fixed"/>) is that kind whatever the regression
-/// takes it for, with the chance of <see cref="FixedBreakChance"/> for a break and <see cref="FixedThemeChance"/>
-/// for an opening or an ending, as long as the model tells that kind apart. It still sits inside the runs, the
+/// takes it for, at the chance the catalog fixes it at, its entry's confidence, as long as the model tells that kind
+/// apart; every model tells the programme. It still sits inside the runs, the
 /// costs and the rules above, and the segments beside it are decided by the regression: the sequence chosen
 /// overrules the fewest fixed segments any sequence keeping the rules can, and among those has the greatest sum,
 /// an overruled segment counting as what the regression takes it for.
@@ -29,10 +29,6 @@ namespace Carina.Domain.Segments;
 public static class SegmentSequence
 {
     public const int RunSteps = 15;
-
-    public const double FixedBreakChance = 0.9;
-
-    public const double FixedThemeChance = 0.8;
 
     public static readonly TimeSpan Resolution = TimeSpan.FromMilliseconds(10);
 
@@ -290,27 +286,23 @@ public static class SegmentSequence
     }
 
     /// <summary>
-    /// One segment with its chances, fixed to a kind when the catalog fixes it to a break, an opening or an ending
-    /// the model tells apart.
+    /// One segment with its chances, fixed when the catalog fixes it to a kind the model tells apart.
     /// </summary>
     private readonly record struct Piece(SegmentPiece Segment, SegmentChances Chances)
     {
-        public SegmentKind? Fixed
-            => Segment.Fixed is SegmentKind kind and not SegmentKind.Programme && Chances.Weighs(kind) ? kind : null;
+        public CatalogFix? Fixed => Segment.Fixed is { } fix && Chances.Weighs(fix.Kind) ? fix : null;
 
         public Reach Taken(SegmentKind kind)
         {
-            if (Fixed is not SegmentKind fixedTo)
+            if (Fixed is not { } fix)
             {
                 return new Reach(0, Chances.LogOf(kind));
             }
 
-            return fixedTo == kind ? new Reach(0, Math.Log(FixedChance(kind))) : new Reach(1, Chances.LogOf(kind));
+            return fix.Kind == kind ? new Reach(0, Math.Log(fix.Chance)) : new Reach(1, Chances.LogOf(kind));
         }
 
-        public double Chance(SegmentKind kind) => Fixed == kind ? FixedChance(kind) : Chances.Of(kind);
-
-        private static double FixedChance(SegmentKind kind) => kind is SegmentKind.Break ? FixedBreakChance : FixedThemeChance;
+        public double Chance(SegmentKind kind) => Fixed is { } fix && fix.Kind == kind ? fix.Chance : Chances.Of(kind);
     }
 
     private sealed class Column

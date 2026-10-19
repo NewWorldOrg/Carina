@@ -3,9 +3,9 @@ namespace Carina.Domain.Segments;
 /// <summary>
 /// A segment, the stretch between two neighbouring boundary candidates: where it starts and ends, its
 /// length fitted to the grid from any of the cuts its edges took in, its features, and the kind the catalog
-/// fixes it to, when it does (<see cref="SegmentSequence"/>).
+/// fixes it to with how likely that is, when it does (<see cref="SegmentSequence"/>).
 /// </summary>
-public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitted, SegmentFeatureValues Features, SegmentKind? Fixed = null)
+public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitted, SegmentFeatureValues Features, CatalogFix? Fixed = null)
 {
     public TimeSpan Length => Ends - Starts;
 }
@@ -24,8 +24,9 @@ public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitte
 /// least half of each window was measured; the changes of scene per ten seconds; the programme's first
 /// genre; and a multiple of the grid without the logo. A feature without the readings to compute it
 /// is not known. The programme spans the recording when the guide says nothing. The catalog is no feature:
-/// it fixes a segment that its stretches of a break, an opening or an ending cover more than half of to that
-/// kind, the surest of them, then the earlier kind.
+/// it fixes a segment that its stretches of one kind cover more than half of to that kind, a fixed part of a
+/// programme to the programme, at the confidence of the surest entry of that kind over it; of two kinds that
+/// do, the surer, then the earlier kind. A stretch whose kind or confidence is not known fixes nothing.
 /// </summary>
 public static class SegmentFeatures
 {
@@ -226,17 +227,18 @@ public static class SegmentFeatures
     }
 
     /// <summary>
-    /// The kind the catalog fixes a segment to: a break, an opening or an ending whose stretches over it cover more
-    /// than half of it, the surest of those that do, then the earlier kind; none when no such kind does.
+    /// The kind the catalog fixes a segment to: one whose stretches over it, of a known confidence, cover more than
+    /// half of it, at the confidence of the surest of them; of two kinds that do, the surer, then the earlier kind;
+    /// none when no kind does.
     /// </summary>
-    private static SegmentKind? FixedBy(IReadOnlyList<CatalogHeard> catalog, Stretch piece)
+    private static CatalogFix? FixedBy(IReadOnlyList<CatalogHeard> catalog, Stretch piece)
         => catalog
-            .Where(heard => heard.Kind is SegmentKind.Break or SegmentKind.Opening or SegmentKind.Ending && heard.Starts < piece.To && heard.Ends > piece.From)
+            .Where(heard => heard is { Kind: SegmentKind, Confidence: > 0 } && heard.Starts < piece.To && heard.Ends > piece.From)
             .GroupBy(heard => heard.Kind!.Value)
             .Where(kind => Union([.. kind], piece) * 2 > piece.Length)
-            .OrderByDescending(kind => kind.Max(heard => heard.Confidence ?? 0))
-            .ThenBy(kind => kind.Key)
-            .Select(kind => (SegmentKind?)kind.Key)
+            .Select(kind => new CatalogFix(kind.Key, kind.Max(heard => heard.Confidence!.Value)))
+            .OrderByDescending(fix => fix.Chance)
+            .ThenBy(fix => fix.Kind)
             .FirstOrDefault();
 
     private static TimeSpan Union(CatalogHeard[] heard, Stretch piece)

@@ -87,7 +87,7 @@ public sealed class SegmentFeaturesTests
         Assert.All(
             hearing.Zip(hearingNothing),
             pair => Assert.Equal(SegmentFeature.Names.Select(name => pair.First.Features[name]), SegmentFeature.Names.Select(name => pair.Second.Features[name])));
-        Assert.Equal([null, SegmentKind.Break, null, SegmentKind.Opening, null], hearing.Select(piece => piece.Fixed));
+        Assert.Equal([null, SegmentKind.Break, null, SegmentKind.Opening, null], hearing.Select(piece => piece.Fixed?.Kind));
         Assert.All(hearingNothing, piece => Assert.Null(piece.Fixed));
     }
 
@@ -114,29 +114,33 @@ public sealed class SegmentFeaturesTests
         Assert.Throws<ArgumentException>(() => CatalogHeard.Of(Occurrence(opening, null), Entry(CatalogKind.Opening)));
     }
 
-    [Fact(DisplayName = "BR-CD-007: a piece is fixed to a break, an opening or an ending the catalog's stretches of that kind cover more than half of; a programme fixture, a kind not known and half or less fix nothing")]
+    [Fact(DisplayName = "BR-CD-007: a piece is fixed to the kind the catalog's stretches of that kind cover more than half of, a fixed part of a programme to the programme, at the confidence of the surest entry over it; a kind or a confidence not known and half or less fix nothing")]
     public void ThePiecesTheCatalogCoversAreFixed()
     {
         SegmentContext context = Context(catalog:
         [
-            Heard(300, 320, SegmentKind.Break),
-            Heard(320, 345, SegmentKind.Break),
-            Heard(400, 430, SegmentKind.Break),
-            Heard(500, 590, SegmentKind.Opening),
-            Heard(700, 760, SegmentKind.Programme),
+            Heard(300, 320, SegmentKind.Break, 0.5),
+            Heard(320, 345, SegmentKind.Break, 0.9),
+            Heard(400, 430, SegmentKind.Break, 0.9),
+            Heard(500, 590, SegmentKind.Opening, 0.8),
+            Heard(700, 760, SegmentKind.Programme, 0.7),
             Heard(800, 860, null),
-            Heard(1000, 1090, SegmentKind.Ending),
+            Heard(900, 960, SegmentKind.Break),
+            Heard(1000, 1090, SegmentKind.Ending, 0.8),
         ]);
 
         IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of(
-            [Edge(0), .. new double[] { 300, 360, 400, 460, 500, 590, 700, 760, 800, 860, 1000, 1090 }.Select(at => Cut(at)), Edge(Length)],
+            [Edge(0), .. new double[] { 300, 360, 400, 460, 500, 590, 700, 760, 800, 860, 900, 960, 1000, 1090 }.Select(at => Cut(at)), Edge(Length)],
             new SyntheticReadings(Length).Evidence(),
             context,
             null,
             SegmentThresholds.Initial);
 
         Assert.Equal(
-            [null, SegmentKind.Break, null, null, null, SegmentKind.Opening, null, null, null, null, null, SegmentKind.Ending, null],
+            [
+                null, new CatalogFix(SegmentKind.Break, 0.9), null, null, null, new CatalogFix(SegmentKind.Opening, 0.8), null, new CatalogFix(SegmentKind.Programme, 0.7),
+                null, null, null, null, null, new CatalogFix(SegmentKind.Ending, 0.8), null,
+            ],
             pieces.Select(piece => piece.Fixed));
     }
 
@@ -148,7 +152,7 @@ public sealed class SegmentFeaturesTests
 
         IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of([Edge(0), Cut(100), Cut(115), Edge(Length)], new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial);
 
-        Assert.Equal([null, SegmentKind.Break, null], pieces.Select(piece => piece.Fixed));
+        Assert.Equal([null, new CatalogFix(SegmentKind.Break, 0.9), null], pieces.Select(piece => piece.Fixed));
     }
 
     [Fact(DisplayName = "BR-CD-007: of two kinds that each cover more than half of a piece, the one heard surer fixes it, and the earlier kind on a tie")]
@@ -160,8 +164,8 @@ public sealed class SegmentFeaturesTests
         SegmentPiece surerOpening = SegmentFeatures.Of(candidates, readings.Evidence(), Context(catalog: [Heard(300, 390, SegmentKind.Opening, 0.8), Heard(300, 360, SegmentKind.Break, 0.5)]), null, SegmentThresholds.Initial)[1];
         SegmentPiece tie = SegmentFeatures.Of(candidates, readings.Evidence(), Context(catalog: [Heard(300, 390, SegmentKind.Opening, 0.9), Heard(300, 360, SegmentKind.Break, 0.9)]), null, SegmentThresholds.Initial)[1];
 
-        Assert.Equal(SegmentKind.Opening, surerOpening.Fixed);
-        Assert.Equal(SegmentKind.Break, tie.Fixed);
+        Assert.Equal(new CatalogFix(SegmentKind.Opening, 0.8), surerOpening.Fixed);
+        Assert.Equal(new CatalogFix(SegmentKind.Break, 0.9), tie.Fixed);
     }
 
     [Fact(DisplayName = "a piece is placed from the programme's start and end by the guide, and the share of it outside the guide is read")]

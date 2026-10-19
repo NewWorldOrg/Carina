@@ -78,7 +78,7 @@ public sealed class SegmentDetectorTests
     [InlineData(null, SegmentDetectionState.NothingFound)]
     public void TheCatalogFindsABreakWithoutSilence(SegmentKind? heardAs, SegmentDetectionState state)
     {
-        SegmentContext context = Context(CornerLogo.None, [new CatalogHeard(TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), heardAs, 4, 2, 2)]);
+        SegmentContext context = Context(CornerLogo.None, [new CatalogHeard(TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), heardAs, 4, 2, 2, heardAs is null ? null : 0.9)]);
 
         SegmentDetection detection = SegmentDetector.Detect(new SyntheticReadings(Length).Evidence(), context, SegmentModel.First);
 
@@ -86,19 +86,25 @@ public sealed class SegmentDetectorTests
         Assert.Equal(heardAs is SegmentKind.Break ? 30d / 1800 : 0, detection.CmShare, 9);
     }
 
-    [Fact(DisplayName = "BR-CD-007: a stretch the catalog hears as an advert is a break at 0.9 even under the logo with nothing silent, where the version made by hand alone takes it for the programme")]
-    public void TheCatalogFixesABreakUnderTheLogo()
+    [Theory(DisplayName = "BR-CD-007, BR-CD-009: a stretch the catalog hears as an advert is a break at its entry's confidence even under the logo with nothing silent, where the version made by hand alone takes it for the programme; an advert of one series at 0.5 is marked but offered no skip at the threshold of 0.70")]
+    [InlineData(0.9, true)]
+    [InlineData(0.5, false)]
+    public void TheCatalogFixesABreakUnderTheLogo(double confidence, bool skippable)
     {
         SegmentEvidence evidence = new SyntheticReadings(Length).Corners(Drawn((int)Length, TopRight, _ => true, 3)).Evidence();
-        CatalogHeard advert = new(TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), SegmentKind.Break, 4, 2, 2, 0.9);
+        CatalogHeard advert = new(TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), SegmentKind.Break, 4, 2, 2, confidence);
 
         SegmentDetection heard = SegmentDetector.Detect(evidence, Context(Logo, [advert]), SegmentModel.First);
         RecordingPieces read = SegmentDetector.Read(evidence, Context(Logo, [advert]), SegmentThresholds.Initial);
-        SegmentPiece covered = read.Pieces.Single(piece => piece.Fixed is SegmentKind.Break);
+        SegmentPiece covered = read.Pieces.Single(piece => piece.Fixed?.Kind is SegmentKind.Break);
         SegmentSpan found = heard.Segments.Single(segment => segment.Kind is SegmentKind.Break);
 
         Assert.True(SegmentModel.First.Chances(covered.Features, read.Station, read.Series).Of(SegmentKind.Break) < 0.5);
-        Assert.Equal((TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), SegmentSequence.FixedBreakChance), (found.Starts, found.Ends, found.Probability!.Value));
+        Assert.Equal((TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), confidence), (found.Starts, found.Ends, found.Probability!.Value));
+        Assert.Equal(
+            skippable,
+            PlaybackChapter.Of(heard.Segments, PlaybackFileClock.AsItIs, SegmentSettingsStanding.DefaultSkipThreshold).Single(chapter => chapter.Stretch.Kind is SegmentKind.Break).Skippable);
+        Assert.Equal(0.70, SegmentSettingsStanding.DefaultSkipThreshold);
     }
 
     [Fact(DisplayName = "an advert of 15 seconds with two changes of scene inside it and nothing from the catalog is one break of 15 seconds")]
