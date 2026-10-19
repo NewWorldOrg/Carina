@@ -26,10 +26,10 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal([SegmentLearningRound.DayOf(SegmentTrainingHarness.Start)], harness.Rounds.Taken.Select(round => round.Day));
     }
 
-    [Fact(DisplayName = "BR-CD-008: a candidate on enough evidence that finds more boundaries without skipping more programme is kept and put in use in place of the version in use")]
+    [Fact(DisplayName = "BR-CD-008: a candidate on enough evidence that finds more boundaries is kept and put in use in place of the version in use")]
     public async Task ABetterCandidateOnEnoughEvidenceIsPutInUse()
     {
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
 
         SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
 
@@ -39,17 +39,17 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal(harness.Trainer.Candidate.Metrics, kept.Metrics);
         Assert.Equal((2, SegmentModelVersionState.Active, false), (harness.Versions.Active.Number, harness.Versions.Active.State, harness.Versions.Active.ByHand));
         Assert.Equal([(1, SegmentModelVersionState.Retired), (2, SegmentModelVersionState.Active)], harness.Versions.Written.Select(version => (version.Number, version.State)));
-        Assert.Equal([(SegmentModelVersion.FirstNumber, SegmentSettingsStanding.DefaultSkipThreshold, SegmentTrainingHarness.Start)], harness.Trainer.Asked);
+        Assert.Equal([(SegmentModelVersion.FirstNumber, SegmentTrainingHarness.Start)], harness.Trainer.Asked);
     }
 
-    [Theory(DisplayName = "BR-CD-008: a candidate that finds no more boundaries, skips more programme or stands on too little is kept as a candidate only, beside the candidates before it")]
-    [InlineData(0.80, 1.5, 12, AdoptionVerdict.NoBetterAtBoundaries)]
-    [InlineData(0.93, 3.5, 12, AdoptionVerdict.SkipsMoreProgramme)]
-    [InlineData(0.93, 1.5, 9, AdoptionVerdict.TooLittleEvidence)]
-    public async Task AWorseCandidateIsKeptOnly(double recall, double skipped, int recordings, AdoptionVerdict verdict)
+    [Theory(DisplayName = "BR-CD-008: a candidate that finds no more boundaries, as many with fewer seconds of adverts, or stands on too little is kept as a candidate only, beside the candidates before it")]
+    [InlineData(0.80, 0.9, 12, AdoptionVerdict.NoBetterAtBoundaries)]
+    [InlineData(0.85, 0.8, 12, AdoptionVerdict.NoBetterAtBoundaries)]
+    [InlineData(0.93, 0.9, 9, AdoptionVerdict.TooLittleEvidence)]
+    public async Task AWorseCandidateIsKeptOnly(double recall, double seconds, int recordings, AdoptionVerdict verdict)
     {
-        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 3, 4), SegmentTrainingHarness.Start.AddDays(-1)));
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(recall, 1.0, skipped, new EvaluationEvidence(recordings, 148, SegmentTrainingHarness.Start));
+        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), SegmentTrainingHarness.Start.AddDays(-1)));
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(recall, seconds, new EvaluationEvidence(recordings, 148, SegmentTrainingHarness.Start));
 
         SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
 
@@ -64,10 +64,10 @@ public sealed class SegmentTrainingJobTests : IDisposable
     [Fact(DisplayName = "BR-CD-008: while the version in use is chosen by hand, learning still keeps and evaluates a candidate but never puts it in use")]
     public async Task AVersionChosenByHandIsNeverReplaced()
     {
-        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 3, 4), SegmentTrainingHarness.Start.AddDays(-2)));
+        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), SegmentTrainingHarness.Start.AddDays(-2)));
         await harness.Versions.ChangeAsync(SegmentVersionChange.ChosenByHand(2), SegmentTrainingHarness.Start.AddDays(-1), Cancel);
         harness.Versions.Written.Clear();
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.99, 0.1, 0.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.99, 0.9);
 
         SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
 
@@ -80,7 +80,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     [Fact(DisplayName = "BR-CD-008: a better candidate is not put in use when the version in use is chosen by hand while it is learned")]
     public async Task AChoiceByHandWhileLearningKeepsTheCandidateOut()
     {
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
         harness.Trainer.WhileLearning = () => harness.Versions.ChangeAsync(SegmentVersionChange.ChosenByHand(SegmentModelVersion.FirstNumber), harness.Now, Cancel);
 
         SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
@@ -146,7 +146,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     public async Task NothingHappensWhileLearningIsOff()
     {
         await harness.LearningAsync(false);
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
 
         SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
 
@@ -160,7 +160,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     public async Task NothingHappensWhileTheMachineIsBusy()
     {
         harness.Recording = true;
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
         SegmentTrainingJob job = harness.Job();
 
         SegmentTrainingLook busy = await job.LookAsync(Cancel);
@@ -175,7 +175,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     [Fact(DisplayName = "BR-CD-013: learning switched off while a round learns stops it at the next boundary, keeps nothing and moves nothing, and the round is taken again once learning is on")]
     public async Task LearningSwitchedOffStopsTheRound()
     {
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
         harness.Trainer.WhileLearning = () => harness.LearningAsync(false);
 
         SegmentTrainingLook stopped = await harness.Job().LookAsync(Cancel);
@@ -192,7 +192,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     [Fact(DisplayName = "BR-CD-004: a recording starting while a round learns stops it at the next boundary, nothing kept and no day taken, and the round is taken again in spare time the same day")]
     public async Task ARoundStoppedByARecordingIsTakenAgainTheSameDay()
     {
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
         harness.Trainer.WhileLearning = () =>
         {
             harness.Recording = true;
@@ -221,7 +221,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
         DateTime adopted = harness.Versions.Active.AdoptedAt!.Value;
         await harness.SkippedAsync(2, adopted.AddHours(1), skips: 25, returned: 10);
         await harness.SkippedAsync(1, adopted.AddDays(-3), skips: 40, returned: 4);
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.99, 0.5, 0.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.99, 0.9);
 
         SegmentTrainingLook rolledBack = await harness.Job().LookAsync(Cancel);
         harness.Clock.Turn(TimeSpan.FromDays(6));
@@ -243,7 +243,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     public async Task NothingIsLearnedWhileAnotherProcessTakesARound()
     {
         harness.Rounds.HeldElsewhere = true;
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
 
         SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
 
@@ -255,7 +255,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     [Fact(DisplayName = "BR-CD-004: the day's round is taken once, not again after the process starts again, and again once the next day begins at three in the morning in Japan")]
     public async Task TheRoundIsTakenOnceADay()
     {
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
 
         SegmentTrainingLook first = await harness.Job().LookAsync(Cancel);
         harness.Clock.Turn(TimeSpan.FromHours(23));
@@ -275,7 +275,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     [Fact(DisplayName = "BR-CD-004: with nothing changed since the last round that kept a candidate was taken, the next day's round still rolls back and is taken, says so, and learns nothing")]
     public async Task NothingChangedLearnsNothing()
     {
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
         harness.Changes.LastChanged = SegmentTrainingHarness.Start.AddDays(-1);
         await harness.Job().LookAsync(Cancel);
         harness.Clock.Turn(TimeSpan.FromDays(1));
@@ -299,7 +299,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     [Fact(DisplayName = "BR-CD-004: something changed after the last round that kept a candidate was taken, even while it was learning, is learned from the next day")]
     public async Task SomethingChangedSinceIsLearnedFrom()
     {
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
         harness.Trainer.WhileLearning = () =>
         {
             harness.Changes.LastChanged = harness.Now.AddSeconds(1);
@@ -320,7 +320,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     {
         await harness.Job().LookAsync(Cancel);
         harness.Clock.Turn(TimeSpan.FromDays(1));
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
 
         SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
 
@@ -339,7 +339,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
         harness.Clock.Turn(TimeSpan.FromMinutes(1));
         await Eventually.Happens(() => harness.Log.Lines.Any(line => line.Level is LogLevel.Error), "the failed round was never said");
         harness.Trainer.Failure = null;
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
         await Eventually.Happens(() => harness.Clock.Pending > 0, "the job never waited for its next look");
         harness.Clock.Turn(TimeSpan.FromHours(12));
         await Eventually.Happens(() => harness.Clock.Pending > 0, "the job never waited after its second look");

@@ -25,7 +25,7 @@ public sealed class SegmentModelVersionTests
     [Fact(DisplayName = "BR-CS-003: a version learning makes is a candidate, not chosen by hand, carrying how it was judged")]
     public void AVersionLearningMakesIsACandidate()
     {
-        SegmentEvaluation judged = new(null, [], new EvaluationEvidence(3, 20, Noon.AddHours(-2)), null);
+        SegmentEvaluation judged = new(null, [], new EvaluationEvidence(3, 20, Noon.AddHours(-2)));
 
         SegmentModelVersion learned = SegmentModelVersion.Learned(5, SegmentModel.First, judged, Noon);
 
@@ -70,7 +70,7 @@ public sealed class SegmentModelVersionTests
         Assert.Throws<ArgumentException>(() => Version(4, SegmentModelVersionState.Retired, adoptedAt: Noon, retiredAt: Noon.AddDays(7), rollback: Measured));
     }
 
-    [Fact(DisplayName = "BR-CD-008: a version evaluated keeps its figures overall and by station, what they stand on and the threshold they recommend; one never evaluated keeps none")]
+    [Fact(DisplayName = "BR-CD-008: a version evaluated keeps its figures overall and by station, and what they stand on; one never evaluated keeps none")]
     public void AVersionEvaluatedKeepsItsFigures()
     {
         SegmentModelVersion evaluated = Version(5, SegmentModelVersionState.Candidate, evaluation: Evaluated);
@@ -79,14 +79,12 @@ public sealed class SegmentModelVersionTests
         Assert.Equal(Evaluated.Metrics, evaluated.Metrics);
         Assert.Equal(Evaluated.Stations, evaluated.Stations);
         Assert.Equal(Evaluated.Evidence, evaluated.Evidence);
-        Assert.Equal(0.65, evaluated.RecommendedThreshold);
-        Assert.Equal((Evaluated.Metrics, Evaluated.Evidence, Evaluated.RecommendedThreshold), (evaluated.Evaluation!.Metrics, evaluated.Evaluation.Evidence, evaluated.Evaluation.RecommendedThreshold));
+        Assert.Equal((Evaluated.Metrics, Evaluated.Evidence), (evaluated.Evaluation!.Metrics, evaluated.Evaluation.Evidence));
         Assert.Equal(Evaluated.Stations, evaluated.Evaluation.Stations);
         Assert.Null(never.Evaluation);
         Assert.Null(never.Metrics);
         Assert.Null(never.Stations);
         Assert.Null(never.Evidence);
-        Assert.Null(never.RecommendedThreshold);
         Assert.Null(never.Rollback);
     }
 
@@ -106,7 +104,7 @@ public sealed class SegmentModelVersionTests
             (SegmentModelVersionState.Active, true, (DateTime?)at, (DateTime?)null, (DateTime?)at, (DateTime?)null),
             Stand(changed.Written[1]));
         Assert.Same(changed.Written[1], changed.Active);
-        Assert.Equal((Evaluated.Metrics, Evaluated.Evidence, Evaluated.RecommendedThreshold), (changed.Active.Metrics, changed.Active.Evidence, changed.Active.RecommendedThreshold));
+        Assert.Equal((Evaluated.Metrics, Evaluated.Evidence), (changed.Active.Metrics, changed.Active.Evidence));
         Assert.Equal(Evaluated.Stations, changed.Active.Stations);
         Assert.Equal(kept[2].Model, changed.Active.Model);
     }
@@ -223,10 +221,9 @@ public sealed class SegmentModelVersionTests
     private static readonly SegmentRollback Measured = new(0.09, 0.03, 25, 2);
 
     private static readonly SegmentEvaluation Evaluated = new(
-        new SegmentMetrics(0.93, 0.85, 1.2, 2.1, [new KindMetrics(SegmentKind.Break, 0.95, 0.97)], null, 0),
-        [new StationMetrics(new NetworkId(1), new ServiceId(1), 5, new SegmentMetrics(0.96, 0.9, 1, 1.4, [], null, 0))],
-        new EvaluationEvidence(12, 148, Noon.AddDays(-1)),
-        0.65);
+        new SegmentMetrics(0.93, 0.85, [new KindMetrics(SegmentKind.Break, 0.95)], null, 0),
+        [new StationMetrics(new NetworkId(1), new ServiceId(1), 5, new SegmentMetrics(0.96, 0.9, [], null, 0))],
+        new EvaluationEvidence(12, 148, Noon.AddDays(-1)));
 
     private static SegmentModelVersion Four(int number)
         => SegmentModelVersion.Rehydrate(number, SegmentModelVersionState.Candidate, false, SegmentModel.FirstOfFourKinds, Noon, null, null, null, null);

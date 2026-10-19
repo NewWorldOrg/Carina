@@ -16,41 +16,50 @@ public sealed class SegmentAdoptionTests
 
     private static readonly EvaluationEvidence Enough = new(12, 148, Made);
 
-    [Theory(DisplayName = "a candidate is put in use when it finds more boundaries within two seconds and skips no more than a second of programme an hour more")]
-    [InlineData(0.93, 3.0, AdoptionVerdict.Adopted)]
-    [InlineData(0.93, 1.0, AdoptionVerdict.Adopted)]
-    [InlineData(0.93, 3.5, AdoptionVerdict.SkipsMoreProgramme)]
+    [Theory(DisplayName = "BR-CD-008: a candidate is put in use when it finds more of the boundaries the catalog is sure of within two seconds, whatever it finds of the adverts' seconds")]
+    [InlineData(0.93, 0.5, AdoptionVerdict.Adopted)]
+    [InlineData(0.86, 0.9, AdoptionVerdict.Adopted)]
     [InlineData(0.80, 1.0, AdoptionVerdict.NoBetterAtBoundaries)]
-    [InlineData(0.85, 2.0, AdoptionVerdict.NoBetterAtBoundaries)]
-    public void ACandidateMustFindMoreWithoutSkippingMoreProgramme(double recall, double skipped, AdoptionVerdict verdict)
+    public void ACandidateMustFindMoreBoundaries(double recall, double seconds, AdoptionVerdict verdict)
     {
-        Assert.Equal(verdict, SegmentAdoption.Judge(InUse, Evaluated(0.85, 1.2, 2.0, Enough), Evaluated(recall, 1.2, skipped, Enough)));
+        Assert.Equal(verdict, SegmentAdoption.Judge(InUse, Evaluated(0.85, 0.9, Enough), Evaluated(recall, seconds, Enough)));
     }
 
-    [Theory(DisplayName = "finding as many boundaries, the candidate is put in use only with fewer extra ones")]
-    [InlineData(0.8, AdoptionVerdict.Adopted)]
-    [InlineData(1.2, AdoptionVerdict.NoBetterAtBoundaries)]
-    [InlineData(1.6, AdoptionVerdict.NoBetterAtBoundaries)]
-    public void ATieOnBoundariesGoesToFewerExtras(double extra, AdoptionVerdict verdict)
+    [Theory(DisplayName = "BR-CD-008: finding as many boundaries, the candidate is put in use only finding more of the adverts' seconds")]
+    [InlineData(0.95, AdoptionVerdict.Adopted)]
+    [InlineData(0.90, AdoptionVerdict.NoBetterAtBoundaries)]
+    [InlineData(0.80, AdoptionVerdict.NoBetterAtBoundaries)]
+    public void ATieOnBoundariesGoesToMoreSecondsOfAdverts(double seconds, AdoptionVerdict verdict)
     {
-        Assert.Equal(verdict, SegmentAdoption.Judge(InUse, Evaluated(0.85, 1.2, 2.0, Enough), Evaluated(0.85, extra, 2.0, Enough)));
+        Assert.Equal(verdict, SegmentAdoption.Judge(InUse, Evaluated(0.85, 0.9, Enough), Evaluated(0.85, seconds, Enough)));
     }
 
-    [Theory(DisplayName = "a better candidate is not put in use on fewer than ten confirmed recordings or a hundred boundaries")]
+    [Fact(DisplayName = "BR-CD-008: a figure not known is less than any")]
+    public void AFigureNotKnownIsLessThanAny()
+    {
+        SegmentMetrics unknown = new(null, null, [new KindMetrics(SegmentKind.Break, null)], null, 0);
+        SegmentMetrics some = new(0, 0, [new KindMetrics(SegmentKind.Break, 0)], null, 0);
+
+        Assert.True(SegmentAdoption.Better(some, unknown));
+        Assert.False(SegmentAdoption.Better(unknown, some));
+        Assert.False(SegmentAdoption.Better(unknown, unknown));
+    }
+
+    [Theory(DisplayName = "BR-CD-008: a better candidate is not put in use on fewer than ten recordings or a hundred boundaries")]
     [InlineData(9, 148)]
     [InlineData(12, 99)]
     public void TooLittleEvidenceKeepsTheVersionInUse(int recordings, int boundaries)
     {
         EvaluationEvidence little = new(recordings, boundaries, Made);
 
-        Assert.Equal(AdoptionVerdict.TooLittleEvidence, SegmentAdoption.Judge(InUse, Evaluated(0.5, 3.0, 9.0, little), Evaluated(0.99, 0.1, 0.5, little)));
-        Assert.Equal(AdoptionVerdict.TooLittleEvidence, SegmentAdoption.Judge(InUse, new SegmentEvaluation(null, [], Enough, null), new SegmentEvaluation(null, [], Enough, null)));
+        Assert.Equal(AdoptionVerdict.TooLittleEvidence, SegmentAdoption.Judge(InUse, Evaluated(0.5, 0.5, little), Evaluated(0.99, 0.99, little)));
+        Assert.Equal(AdoptionVerdict.TooLittleEvidence, SegmentAdoption.Judge(InUse, new SegmentEvaluation(null, [], Enough), new SegmentEvaluation(null, [], Enough)));
     }
 
     [Fact(DisplayName = "a version chosen by hand is never replaced, however much better the candidate is")]
     public void AVersionChosenByHandStays()
     {
-        Assert.Equal(AdoptionVerdict.ChosenByHand, SegmentAdoption.Judge(ChosenByHand, Evaluated(0.5, 3.0, 9.0, Enough), Evaluated(0.99, 0.1, 0.5, Enough)));
+        Assert.Equal(AdoptionVerdict.ChosenByHand, SegmentAdoption.Judge(ChosenByHand, Evaluated(0.5, 0.5, Enough), Evaluated(0.99, 0.99, Enough)));
     }
 
     [Fact(DisplayName = "the version in use goes back when, within seven days, viewers came back from more than one and a half times the share of skips and skipped twenty times")]
@@ -162,8 +171,8 @@ public sealed class SegmentAdoptionTests
         Assert.Null(SegmentRollback.Previous([rolledBackFrom, InUse]));
     }
 
-    private static SegmentEvaluation Evaluated(double recall, double extra, double skipped, EvaluationEvidence evidence)
-        => new(new SegmentMetrics(recall, recall - 0.1, extra, skipped, [new KindMetrics(SegmentKind.Break, 0.9, 0.9)], null, 0), [], evidence, 0.7);
+    private static SegmentEvaluation Evaluated(double recall, double seconds, EvaluationEvidence evidence)
+        => new(new SegmentMetrics(recall, recall - 0.1, [new KindMetrics(SegmentKind.Break, seconds), new KindMetrics(SegmentKind.Opening, null)], null, 0), [], evidence);
 
     private static SegmentModelVersion HeldFirst()
         => SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, SegmentModel.First, Made, Made, null, null, null);

@@ -163,22 +163,6 @@ public sealed class CatalogKindsTests
             Estimated(15, At(Entry, Drama.Episode(0), 60, 15), At(Entry, Drama.Episode(1), 70, 15)).Estimate);
     }
 
-    [Fact(DisplayName = "an answer given on one of the stretches decides the kind outright, 1.0")]
-    public void AnAnswerDecidesTheKind()
-    {
-        CatalogPattern breakAnswered = Estimated(
-            22,
-            At(Entry, Drama.Episode(0), 600, 22, SegmentKind.Break),
-            At(Entry, Drama.Episode(1), 900, 22));
-        CatalogPattern programmeAnswered = Estimated(
-            15,
-            At(Entry, Drama.Episode(0), 600, 15, SegmentKind.Programme),
-            At(Entry, Quiz.Episode(0), 900, 15));
-
-        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 1.0, CatalogDecision.Answer), breakAnswered.Estimate);
-        Assert.Equal(CatalogEstimate.Unknown, programmeAnswered.Estimate);
-    }
-
     [Theory(DisplayName = "BR-CD-005: a piece of 30 seconds to 3 minutes starting within six minutes after the guide's start of two episodes of one series is its opening, 0.8")]
     [InlineData(30.6, 0)]
     [InlineData(85.0, 0)]
@@ -428,55 +412,6 @@ public sealed class CatalogKindsTests
         Assert.False(CatalogKinds.LinksSeries(CatalogKind.Unknown, length, whole));
     }
 
-    [Fact(DisplayName = "an answer of opening decides outright, and its stretches still take the kind of the half they are heard in")]
-    public void AnAnsweredOpeningKeepsThePlaceOfEachStretch()
-    {
-        PlacedOccurrence answered = At(Entry, Drama.Episode(0), 0, 89, SegmentKind.Opening);
-        PlacedOccurrence last = At(Entry, Drama.Episode(1), 1700, 89);
-
-        CatalogPattern pattern = Estimated(89, answered, last);
-
-        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 1.0, CatalogDecision.Answer), pattern.Estimate);
-        Assert.Equal([SegmentKind.Opening, SegmentKind.Ending], pattern.Overrides);
-    }
-
-    [Fact(DisplayName = "an answer of the programme on a stretch of an opening leaves the entry the opening, and that stretch the programme")]
-    public void AProgrammeAnswerLeavesTheOpening()
-    {
-        PlacedOccurrence[] weeks = Weekly(Drama, 3, 0, 89);
-        PlacedOccurrence answered = At(Entry, Drama.Episode(3), 0, 89, SegmentKind.Programme);
-
-        CatalogPattern pattern = Estimated(89, [.. weeks, answered]);
-
-        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), pattern.Estimate);
-        Assert.Equal([null, null, null, SegmentKind.Programme], pattern.Overrides);
-    }
-
-    [Fact(DisplayName = "answers of the programme skip the rows of adverts and of the station's fixed parts, leaving a fixed part of the programme by its place or nothing known")]
-    public void AProgrammeAnswerRulesOutTheAdvertRows()
-    {
-        CatalogPattern twoSeries = Estimated(89, At(Entry, Drama.Episode(0), 0, 89, SegmentKind.Programme), At(Entry, Quiz.Episode(0), 0, 89));
-        CatalogPattern atTheEdges = Estimated(5, At(Entry, Drama.Episode(0), 2, 5, SegmentKind.Programme), At(Entry, Quiz.Episode(0), 2, 5));
-        CatalogPattern samePlace = Estimated(20, At(Entry, Drama.Episode(0), 60, 20, SegmentKind.Programme), At(Entry, Drama.Episode(1), 80, 20));
-
-        Assert.Equal(CatalogEstimate.Unknown, twoSeries.Estimate);
-        Assert.Equal(CatalogEstimate.Unknown, atTheEdges.Estimate);
-        Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 0.7, CatalogDecision.Pattern), samePlace.Estimate);
-    }
-
-    [Fact(DisplayName = "BR-CD-011: an advert heard in two series with one answer of the programme is not known, and links nothing")]
-    public void AnAdvertWithAProgrammeAnswerLinksNothing()
-    {
-        PlacedOccurrence answered = At(Entry, Drama.Episode(0), 600, 15, SegmentKind.Programme);
-        PlacedOccurrence aired = At(Entry, Quiz.Episode(0), 900, 15);
-
-        CatalogPattern pattern = Estimated(15, answered, aired);
-
-        Assert.Equal(CatalogEstimate.Unknown, pattern.Estimate);
-        Assert.False(CatalogKinds.LinksSeries(pattern.Estimate.Kind, TimeSpan.FromSeconds(15), aired.Occurrence));
-        Assert.False(CatalogKinds.LinksSeries(pattern.Estimate.Kind, TimeSpan.FromSeconds(15), answered.Occurrence));
-    }
-
     [Fact(DisplayName = "BR-CD-011: a series of a name that only begins with the series' own on another station is not joined by the sound, and a sound on the grid there is an advert")]
     public void APrefixNameOnAnotherStationIsNotJoined()
     {
@@ -505,23 +440,6 @@ public sealed class CatalogKindsTests
     public void APieceJustOutsideTheEdgesIsNoTheme(double fromProgrammeStart)
     {
         Assert.Equal(CatalogEstimate.Unknown, Estimated(85, Weekly(Drama, 2, fromProgrammeStart, 85)).Estimate);
-    }
-
-    [Fact(DisplayName = "an answer of a break decides the entry outright, over the opening its stretches are heard as and over answers of the programme")]
-    public void ABreakAnswerDecidesOutright()
-    {
-        PlacedOccurrence[] weeks = Weekly(Drama, 3, 0, 89);
-        CatalogPattern answeredOnce = Estimated(89, [.. weeks, At(Entry, Drama.Episode(3), 0, 89, SegmentKind.Break)]);
-        CatalogPattern outnumbered = Estimated(
-            89,
-            [
-                At(Entry, Drama.Episode(0), 0, 89, SegmentKind.Programme),
-                At(Entry, Drama.Episode(1), 0, 89, SegmentKind.Programme),
-                At(Entry, Drama.Episode(2), 0, 89, SegmentKind.Break),
-            ]);
-
-        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 1.0, CatalogDecision.Answer), answeredOnce.Estimate);
-        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 1.0, CatalogDecision.Answer), outnumbered.Estimate);
     }
 
     [Fact(DisplayName = "BR-CD-011: a programme of another name in the same time of day on another day of the week, or an hour later the same night, is not joined by the sound")]

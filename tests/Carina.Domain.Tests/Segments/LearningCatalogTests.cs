@@ -29,8 +29,8 @@ public sealed class LearningCatalogTests
         CatalogHeard heard = Assert.Single(catalog.HeardBy(judged, Story.Episode(1).RecordingStartedAt));
         CatalogHeard grown = Assert.Single(catalog.HeardBy(later, Elsewhere.Episode(2).RecordingStartedAt));
 
-        Assert.Equal(new CatalogHeard(CatalogSeries.Lead + TimeSpan.FromSeconds(900), CatalogSeries.Lead + TimeSpan.FromSeconds(929), SegmentKind.Break, 2, 1, 1, 0.5), heard);
-        Assert.Equal(new CatalogHeard(CatalogSeries.Lead + TimeSpan.FromSeconds(300), CatalogSeries.Lead + TimeSpan.FromSeconds(329), SegmentKind.Break, 3, 2, 2, 0.9), grown);
+        Assert.Equal(new CatalogHeard(CatalogSeries.Lead + TimeSpan.FromSeconds(900), CatalogSeries.Lead + TimeSpan.FromSeconds(929), SegmentKind.Break, 2, 1, 1, 0.5, advert), heard);
+        Assert.Equal(new CatalogHeard(CatalogSeries.Lead + TimeSpan.FromSeconds(300), CatalogSeries.Lead + TimeSpan.FromSeconds(329), SegmentKind.Break, 3, 2, 2, 0.9, advert), grown);
     }
 
     [Fact(DisplayName = "an entry heard only once by the time a recording started is not heard by it at all")]
@@ -51,48 +51,48 @@ public sealed class LearningCatalogTests
         Assert.Empty(catalog.HeardBy(RecordingId.New(), Story.Episode(1).RecordingStartedAt));
     }
 
-    [Fact(DisplayName = "the answer given on the recording itself is set aside, and an answer on an earlier recording still decides the entry")]
-    public void TheRecordingsOwnAnswerIsSetAside()
-    {
-        CatalogEntryId sound = CatalogEntryId.New();
-        RecordingId first = RecordingId.New();
-        RecordingId judged = RecordingId.New();
-        PlacedOccurrence[] twiceInTheJudged =
-        [
-            CatalogSeries.At(sound, Story.Episode(1), 900, 29, SegmentKind.Programme, judged),
-            CatalogSeries.At(sound, Story.Episode(1), 1500, 29, SegmentKind.Programme, judged),
-        ];
-
-        LearningCatalog unanswered = new([new CatalogSound(sound, TimeSpan.FromSeconds(29), [CatalogSeries.At(sound, Story.Episode(0), 300, 29, recording: first), .. twiceInTheJudged])], SeriesLinks.None);
-        LearningCatalog answeredEarlier = new([new CatalogSound(sound, TimeSpan.FromSeconds(29), [CatalogSeries.At(sound, Story.Episode(0), 300, 29, SegmentKind.Break, first), .. twiceInTheJudged])], SeriesLinks.None);
-
-        Assert.All(unanswered.HeardBy(judged, Story.Episode(1).RecordingStartedAt), heard => Assert.Equal((SegmentKind.Break, 0.5), (heard.Kind!.Value, heard.Confidence!.Value)));
-        Assert.All(answeredEarlier.HeardBy(judged, Story.Episode(1).RecordingStartedAt), heard => Assert.Equal((SegmentKind.Break, 1.0), (heard.Kind!.Value, heard.Confidence!.Value)));
-        Assert.Equal(2, answeredEarlier.HeardBy(judged, Story.Episode(1).RecordingStartedAt).Count);
-    }
-
-    [Fact(DisplayName = "the answer of a recording held out is set aside too, so an entry it decided falls back to what its stretches say")]
-    public void TheAnswerOfARecordingHeldOutIsSetAside()
+    [Fact(DisplayName = "the catalog as it stands now hears a recording with every stretch it has counted, later ones included")]
+    public void TheCatalogNowCountsEveryStretch()
     {
         CatalogEntryId advert = CatalogEntryId.New();
-        RecordingId first = RecordingId.New();
         RecordingId judged = RecordingId.New();
         LearningCatalog catalog = new(
         [
             new CatalogSound(advert, TimeSpan.FromSeconds(29), [
-                CatalogSeries.At(advert, Story.Episode(0), 300, 29, SegmentKind.Break, first),
                 CatalogSeries.At(advert, Story.Episode(1), 900, 29, recording: judged),
+                CatalogSeries.At(advert, Story.Episode(2), 600, 29),
+                CatalogSeries.At(advert, Elsewhere.Episode(2), 300, 29),
             ]),
         ],
         SeriesLinks.None);
-        DateTime startedAt = Story.Episode(1).RecordingStartedAt;
 
-        Assert.Equal(1.0, Assert.Single(catalog.HeardBy(judged, startedAt)).Confidence);
-        Assert.Equal(0.5, Assert.Single(catalog.HeardBy(judged, startedAt, first)).Confidence);
-        Assert.True(catalog.HearsTheAnswerOf(judged, startedAt, first));
-        Assert.False(catalog.HearsTheAnswerOf(first, Story.Episode(0).RecordingStartedAt, judged));
-        Assert.False(catalog.HearsTheAnswerOf(judged, startedAt, judged));
-        Assert.False(catalog.HearsTheAnswerOf(judged, Story.Episode(0).RecordingStartedAt.AddTicks(-1), first));
+        Assert.Empty(catalog.HeardBy(judged, Story.Episode(1).RecordingStartedAt));
+        Assert.Equal(
+            new CatalogHeard(CatalogSeries.Lead + TimeSpan.FromSeconds(900), CatalogSeries.Lead + TimeSpan.FromSeconds(929), SegmentKind.Break, 3, 2, 2, 0.9, advert),
+            Assert.Single(catalog.HeardNow(judged)));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: the entries set aside when a recording is judged are every entry heard in it, however often, and every entry first heard after it started")]
+    public void TheEntriesSetAsideAreItsOwnAndThoseStartedLater()
+    {
+        RecordingId judged = RecordingId.New();
+        CatalogEntryId heardInIt = CatalogEntryId.New();
+        CatalogEntryId onceInIt = CatalogEntryId.New();
+        CatalogEntryId startedLater = CatalogEntryId.New();
+        CatalogEntryId startedEarlier = CatalogEntryId.New();
+        LearningCatalog catalog = new(
+        [
+            new CatalogSound(heardInIt, TimeSpan.FromSeconds(29), [CatalogSeries.At(heardInIt, Story.Episode(0), 600, 29), CatalogSeries.At(heardInIt, Story.Episode(1), 600, 29, recording: judged)]),
+            new CatalogSound(onceInIt, TimeSpan.FromSeconds(29), [CatalogSeries.At(onceInIt, Story.Episode(1), 900, 29, recording: judged), CatalogSeries.At(onceInIt, Elsewhere.Episode(3), 900, 29)]),
+            new CatalogSound(startedLater, TimeSpan.FromSeconds(29), [CatalogSeries.At(startedLater, Story.Episode(2), 600, 29), CatalogSeries.At(startedLater, Elsewhere.Episode(2), 600, 29)]),
+            new CatalogSound(startedEarlier, TimeSpan.FromSeconds(29), [CatalogSeries.At(startedEarlier, Story.Episode(0), 300, 29), CatalogSeries.At(startedEarlier, Elsewhere.Episode(3), 300, 29)]),
+        ],
+        SeriesLinks.None);
+
+        IReadOnlySet<CatalogEntryId> setAside = catalog.SetAsideFor(judged, Story.Episode(1).RecordingStartedAt);
+
+        Assert.True(setAside.SetEquals([heardInIt, onceInIt, startedLater]));
+        Assert.Equal([heardInIt], catalog.HeardBy(judged, Story.Episode(1).RecordingStartedAt).Select(heard => heard.Entry));
     }
 
     [Fact(DisplayName = "an empty catalog hears nothing, and a context told what it hears keeps everything else")]

@@ -33,12 +33,12 @@ public sealed record ChapterRewriteRound(
     bool Yielded);
 
 /// <summary>
-/// Compares the chapters standing artefacts carry with the ones the stretches their recording stands with would
-/// embed now, the answer standing for it or else its detection by the version in use, one artefact at a time, and
-/// writes an artefact again with the new chapters when <see cref="ChapterRewrite"/> says it is due.
+/// Compares the chapters standing artefacts carry with the ones their recording's detection by the version in
+/// use would embed now, one artefact at a time, and writes an artefact again with the new chapters when
+/// <see cref="ChapterRewrite"/> says it is due.
 /// </summary>
 /// <remarks>
-/// An artefact whose chapters still agree is written down as standing for those stretches and left as it is.
+/// An artefact whose chapters still agree is written down as standing for the detection and left as it is.
 /// One opened in the last <see cref="ArtefactCaptionTracks.LeftAloneAfterAnOpening"/>, one not where the ledger
 /// says, one written again within a day, and one whose room holds less than the artefact's size are passed
 /// over. The copy is made beside the artefact and checked, and only once the machine is still spare and the
@@ -89,7 +89,7 @@ public sealed class ArtefactChapterRewrites(
                 return Round(awaiting.Count, settled, failed, yielded: true);
             }
 
-            ChapterRewriteOutcome outcome = await ComparedAsync(subject, modelVersion, spare, cancellationToken);
+            ChapterRewriteOutcome outcome = await ComparedAsync(subject, spare, cancellationToken);
             settled[outcome] = settled.GetValueOrDefault(outcome) + 1;
 
             if (outcome is ChapterRewriteOutcome.Failed)
@@ -113,7 +113,6 @@ public sealed class ArtefactChapterRewrites(
 
     private async Task<ChapterRewriteOutcome> ComparedAsync(
         ChapterRewriteSubject subject,
-        int modelVersion,
         Func<CancellationToken, Task<bool>> spare,
         CancellationToken cancellationToken)
     {
@@ -121,7 +120,7 @@ public sealed class ArtefactChapterRewrites(
 
         try
         {
-            return await CompareAsync(subject, modelVersion, spare, cancellationToken);
+            return await CompareAsync(subject, spare, cancellationToken);
         }
         catch (EncodeJobMovedMeanwhileException)
         {
@@ -148,7 +147,6 @@ public sealed class ArtefactChapterRewrites(
 
     private async Task<ChapterRewriteOutcome> CompareAsync(
         ChapterRewriteSubject subject,
-        int modelVersion,
         Func<CancellationToken, Task<bool>> spare,
         CancellationToken cancellationToken)
     {
@@ -159,7 +157,7 @@ public sealed class ArtefactChapterRewrites(
             return ChapterRewriteOutcome.PassedOver;
         }
 
-        EncodeChapterChoice choice = EncodeChapterChoice.Of(true, modelVersion, subject.Standing);
+        EncodeChapterChoice choice = EncodeChapterChoice.Of(true, subject.Detection.ModelVersion, SegmentStanding.Of(subject.Detection));
         IReadOnlyList<ChapterSegment> wanted = choice.Chapters(PlaybackFileClock.Of(timeline));
         IReadOnlyList<ChapterSegment> carried = [.. (await chapters.ListForJobAsync(job.Id, cancellationToken)).Select(chapter => chapter.Segment)];
 
@@ -233,10 +231,10 @@ public sealed class ArtefactChapterRewrites(
         await StandsForAsync(job, choice, cancellationToken);
 
         logger.LogInformation(
-            "The artefact of job {Job} was written again with {Chapters} chapter(s), taken from what its recording stands with: {Source}.",
+            "The artefact of job {Job} was written again with the {Chapters} chapter(s) of the detection by version {Version}.",
             job.Id.Wire,
             wanted.Count,
-            choice.Standing.Source);
+            choice.ModelVersion);
 
         return ChapterRewriteOutcome.Rewritten;
     }

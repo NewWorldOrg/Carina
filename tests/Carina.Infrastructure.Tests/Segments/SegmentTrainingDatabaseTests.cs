@@ -57,7 +57,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
         await ResetAsync();
         await using CarinaDbContext writing = database.Open();
         await new SegmentSettingsRepository(writing).SaveAsync(SegmentSettings.LearningSwitched(true, Installed), Cancel);
-        writing.Add(SegmentModelVersion.Learned(71, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 3, 4), Installed.AddHours(1)));
+        writing.Add(SegmentModelVersion.Learned(71, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), Installed.AddHours(1)));
         await writing.SaveChangesAsync(Cancel);
     }
 
@@ -68,7 +68,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
     [Fact(DisplayName = "BR-CD-008: the day's round keeps its candidate in the store with its figures, puts it in use through the one change, and keeps the day so that a job started again does not take it again")]
     public async Task TheDaysRoundKeepsItsCandidateAndPutsItInUse()
     {
-        trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 1.0, 1.5);
+        trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
 
         SegmentTrainingLook look = await Job().LookAsync(Cancel);
         SegmentTrainingLook again = await Job().LookAsync(Cancel);
@@ -79,14 +79,13 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
             "1:Retired 71:Candidate 72:Active",
             await ScalarAsync($"SELECT string_agg(number || ':' || state, ' ' ORDER BY number) FROM segment_model_version WHERE number = 1 OR {Ours}"));
         Assert.Equal(
-            "t t t 0.65 t",
+            "t t t t",
             await ScalarAsync(
                 """
                 SELECT concat_ws(' ',
-                    metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": 0.83, "extraBoundariesPerRecording": 1, "programmeSkippedSecondsPerHour": 1.5, "kinds": [{"kind": "Break", "recall": 0.9, "precision": 0.9}], "returnedAfterSkipShare": null, "skips": 0}'::jsonb,
+                    metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": 0.83, "kinds": [{"kind": "Break", "recall": 0.9}], "returnedAfterSkipShare": null, "skips": 0}'::jsonb,
                     stations = '[]'::jsonb,
-                    evidence = '{"confirmedRecordings": 12, "boundaries": 148, "labelsUntil": "2026-11-01T12:30:00Z"}'::jsonb,
-                    recommended_threshold,
+                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-11-01T12:30:00Z"}'::jsonb,
                     adopted_at >= trained_at)
                 FROM segment_model_version WHERE number = 72
                 """));
@@ -99,7 +98,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
     public async Task TwoRoundsOnUnchangedTablesKeepOneCandidate()
     {
         HandTurnedClock later = new(new DateTimeOffset(2036, 1, 1, 18, 30, 0, TimeSpan.Zero));
-        trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 1.0, 1.5);
+        trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
 
         SegmentTrainingLook first = await Job(later).LookAsync(Cancel);
         later.Turn(TimeSpan.FromDays(1));

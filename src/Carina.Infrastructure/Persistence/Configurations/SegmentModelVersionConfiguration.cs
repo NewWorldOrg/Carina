@@ -6,9 +6,8 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace Carina.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// The versions of the model, with the figures an evaluation leaves — the metrics overall and by station, the
-/// evidence they rest on and the threshold they recommend — and what a rollback measured, in the shapes the
-/// HTTP surface answers them in.
+/// The versions of the model, with the figures an evaluation leaves — the metrics overall and by station and the
+/// evidence they rest on — and what a rollback measured, in the shapes the HTTP surface answers them in.
 /// </summary>
 public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<SegmentModelVersion>
 {
@@ -61,7 +60,6 @@ public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<
                 AND (stations IS NULL OR jsonb_typeof(stations) = 'array')
                 AND (evidence IS NULL OR jsonb_typeof(evidence) = 'object')
                 AND (rollback IS NULL OR jsonb_typeof(rollback) = 'object')
-                AND (recommended_threshold IS NULL OR recommended_threshold BETWEEN 0 AND 1)
                 """);
         });
 
@@ -118,11 +116,6 @@ public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<
             .HasConversion(evidence => SegmentJson.Written(evidence!), stored => SegmentJson.Evidence(stored), SegmentJson.ComparedAsWritten<EvaluationEvidence>(SegmentJson.Written))
             .HasColumnName("evidence")
             .HasColumnType("jsonb");
-
-        builder.Property(version => version.RecommendedThreshold)
-            .HasConversion<decimal?>()
-            .HasColumnName("recommended_threshold")
-            .HasColumnType("numeric(3,2)");
 
         builder.Property(version => version.TrainedAt).IsRequired();
         builder.Property(version => version.AdoptedAt);

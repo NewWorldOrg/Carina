@@ -186,7 +186,6 @@ public sealed class SegmentTrainingJob(
             return new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.NothingNew, null, null, active);
         }
 
-        double threshold = SegmentSettingsStanding.Over(await services.GetRequiredService<ISegmentSettingsRepository>().ReadAsync(cancellationToken)).SkipThreshold;
         SpareTimeVerdict stoppedBy = SpareTimeVerdict.Spare;
 
         async Task<bool> MayGoOnAsync(CancellationToken token)
@@ -196,7 +195,7 @@ public sealed class SegmentTrainingJob(
             return stoppedBy is SpareTimeVerdict.Spare;
         }
 
-        Trained trained = await services.GetRequiredService<ISegmentTrainer>().TrainAsync(active, threshold, started, MayGoOnAsync, cancellationToken);
+        Trained trained = await services.GetRequiredService<ISegmentTrainer>().TrainAsync(active, started, MayGoOnAsync, cancellationToken);
 
         if (trained.Stopped)
         {

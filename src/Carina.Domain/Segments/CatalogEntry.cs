@@ -164,7 +164,7 @@ public sealed class CatalogEntry
 
         if (estimate.DecidedBy is CatalogDecision decision && !Enum.IsDefined(decision))
         {
-            throw new ArgumentOutOfRangeException(nameof(estimate), decision, "An entry's kind is decided by an answer or by its pattern.");
+            throw new ArgumentOutOfRangeException(nameof(estimate), decision, "An entry's kind is decided by its pattern.");
         }
 
         if (estimate.Confidence is < 0 or > 1)

@@ -45,7 +45,7 @@ public interface ICatalogRepository
     /// entries estimated again and the stretches taken for another kind are written as they now stand, and
     /// every other entry heard in a recording an entry relinking is heard in is put back to
     /// <see cref="CatalogKinds.Unsettled"/>, to be estimated again. An entry estimated again whose row changed
-    /// since it was read, such as one put back by an answer meanwhile, is left as it now stands, and so are the
+    /// since it was read, such as one put back meanwhile to be estimated again, is left as it now stands, and so are the
     /// stretches taken for another kind with it; it waits to be estimated again. An entry estimated again is one
     /// read through this repository, by <see cref="EntriesAsync"/> or <see cref="NextToReestimateAsync"/>.
     /// </summary>

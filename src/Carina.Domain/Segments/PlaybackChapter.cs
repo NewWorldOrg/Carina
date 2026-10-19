@@ -8,8 +8,8 @@ public sealed record PlaybackChapter(SegmentSpan Stretch, bool Skippable)
     /// <summary>
     /// The chapters of <paramref name="stretches"/> on the file <paramref name="clock"/> reads, leaving out a
     /// stretch the file does not play. A chapter can be skipped when it is a break, an opening or an ending, it
-    /// is at least <paramref name="threshold"/> likely or was given by an answer, which carries no probability,
-    /// and another chapter follows it.
+    /// is at least <paramref name="threshold"/> likely or carries no probability to weigh, and another chapter
+    /// follows it.
     /// </summary>
     public static IReadOnlyList<PlaybackChapter> Of(IReadOnlyList<SegmentSpan> stretches, PlaybackFileClock clock, double threshold)
     {

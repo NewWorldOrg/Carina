@@ -303,7 +303,6 @@ public sealed class ChannelSchemaTests
                 "satellite_transport_stream",
                 "scan_run",
                 "scan_run_attempt",
-                "segment_answer",
                 "segment_catalog_entry",
                 "segment_catalog_occurrence",
                 "segment_detection",

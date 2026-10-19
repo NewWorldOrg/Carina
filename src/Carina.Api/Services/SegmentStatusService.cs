@@ -6,8 +6,8 @@ namespace Carina.Api.Services;
 /// <summary>
 /// Where CM, OP and ED detection stands, as the settings screen shows it: the settings, the learning data and
 /// the catalog; the version in use, and its figures beside what viewers did with its buttons lately; what the
-/// latest evaluation stands on, or what the answers kept would give one while no version has been evaluated;
-/// and every version kept, the highest number first.
+/// latest evaluation stands on, or what the catalog as it stands would give one while no version has been
+/// evaluated; and every version kept, the highest number first.
 /// </summary>
 public sealed record SegmentStatus(
     SegmentSettingsStanding Settings,
@@ -24,7 +24,7 @@ public sealed class SegmentStatusService(
     ISegmentModelVersionRepository versions,
     ISegmentSettingsRepository settings,
     ISkipEventRepository skips,
-    ISegmentAnswerRepository answers,
+    ICatalogEvidenceReader evidence,
     TimeProvider clock)
 {
     public async Task<ServiceResult<SegmentStatus>> ReadAsync(CancellationToken cancellationToken)
@@ -38,7 +38,7 @@ public sealed class SegmentStatusService(
             await catalog.ReadAsync(cancellationToken),
             active,
             await MetricsAsync(active, cancellationToken),
-            kept.FirstOrDefault(version => version.Evidence is not null)?.Evidence ?? await answers.EvidenceAsync(cancellationToken),
+            kept.FirstOrDefault(version => version.Evidence is not null)?.Evidence ?? await evidence.ReadAsync(cancellationToken),
             kept));
     }
 

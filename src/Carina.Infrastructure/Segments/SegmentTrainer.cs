@@ -34,7 +34,6 @@ public interface ISegmentTrainer
     /// </summary>
     Task<Trained> TrainAsync(
         SegmentModelVersion active,
-        double skipThreshold,
         DateTime now,
         Func<CancellationToken, Task<bool>> mayGoOn,
         CancellationToken cancellationToken);
@@ -44,11 +43,9 @@ public interface ISegmentTrainer
 /// Gathers what learning reads and learns from it with <see cref="SegmentLearning"/>, a step at a time. The
 /// recordings learned from are those <see cref="LearningSelection"/> chooses among the candidates of
 /// <see cref="ITrainingWorklist"/>, read the way detection reads them (<see cref="SegmentDetecting.GatherAsync"/>),
-/// with the earlier episodes as the version in use detected them or as a confirmed answer gives them; only their
-/// answers and skip events are read, and an answer not confirmed is read against the detection the version in use
-/// made of it. Every catalog entry is handed over with all its stretches, each placed in its programme beside the
-/// kind the answer on its recording gives it, when that recording is one learned from. A recording whose data
-/// cannot be read is left out and said so. Each step of the learning is its own piece of work on the
+/// with the earlier episodes as the version in use detected them; only their skip events are read. Every catalog
+/// entry is handed over with all its stretches, each placed in its programme. A recording whose data cannot be
+/// read is left out and said so. Each step of the learning is its own piece of work on the
 /// <see cref="LowestPriorityScheduler"/>, so that whatever else waits there goes between them. Nothing is written
 /// here.
 /// </summary>
@@ -58,16 +55,13 @@ public sealed class SegmentTrainer(
     IDetectionWorklist worklist,
     ICatalogRepository catalog,
     ICatalogWorklist programmes,
-    ISegmentAnswerRepository answers,
     ISkipEventRepository skips,
-    IRecordingDetectionRepository detections,
     LowestPriorityScheduler lowest,
     SegmentTrainingSettings settings,
     ILogger<SegmentTrainer> logger) : ISegmentTrainer
 {
     public async Task<Trained> TrainAsync(
         SegmentModelVersion active,
-        double skipThreshold,
         DateTime now,
         Func<CancellationToken, Task<bool>> mayGoOn,
         CancellationToken cancellationToken)
@@ -86,7 +80,7 @@ public sealed class SegmentTrainer(
 
         SegmentSearch search = settings.Search;
         SegmentLearningRun run = await lowest
-            .Run(() => SegmentLearning.Begin(material.Recordings, material.Catalog, active, search, skipThreshold, now), cancellationToken)
+            .Run(() => SegmentLearning.Begin(material.Recordings, material.Catalog, active, search, now), cancellationToken)
             .WaitAsync(cancellationToken);
         bool done = false;
 
@@ -122,14 +116,12 @@ public sealed class SegmentTrainer(
             return new TrainingMaterial([], LearningCatalog.Empty);
         }
 
-        RecordingAnswer[] standing = [.. (await answers.ListAsync(chosen, cancellationToken)).Where(answer => answer.Stands)];
         ILookup<RecordingId, ViewerAction> actions = (await skips.ListAsync(chosen, cancellationToken)).ToLookup(skip => skip.RecordingId, skip => skip.Action());
-        IReadOnlyDictionary<RecordingId, GivenAnswer> given = await GivenAsync(standing, active, cancellationToken);
         List<LearningRecording> recordings = [];
 
         foreach (LearningExtraction record in (await worklist.RecordsAsync(chosen, cancellationToken)).Where(record => record.ReadThrough > TimeSpan.Zero && record.Version is not null))
         {
-            if (await ReadAsync(record, active, now, given.GetValueOrDefault(record.RecordingId), [.. actions[record.RecordingId]], cancellationToken) is { } read)
+            if (await ReadAsync(record, active, now, [.. actions[record.RecordingId]], cancellationToken) is { } read)
             {
                 recordings.Add(read);
             }
@@ -145,29 +137,13 @@ public sealed class SegmentTrainer(
             ? []
             : await catalog.OccurrencesOfAsync([.. entries.Select(entry => entry.Id)], cancellationToken);
 
-        return new TrainingMaterial(recordings, await CatalogAsync(entries, occurrences, given, cancellationToken));
-    }
-
-    private async Task<IReadOnlyDictionary<RecordingId, GivenAnswer>> GivenAsync(RecordingAnswer[] standing, SegmentModelVersion active, CancellationToken cancellationToken)
-    {
-        if (standing.Length is 0)
-        {
-            return new Dictionary<RecordingId, GivenAnswer>();
-        }
-
-        Dictionary<RecordingId, RecordingDetection> detected = (await detections.ListAsync([.. standing.Select(answer => answer.RecordingId)], active.Number, cancellationToken))
-            .ToDictionary(detection => detection.RecordingId);
-
-        return standing.ToDictionary(
-            answer => answer.RecordingId,
-            answer => GivenAnswer.Of(answer, detected.GetValueOrDefault(answer.RecordingId)));
+        return new TrainingMaterial(recordings, await CatalogAsync(entries, occurrences, cancellationToken));
     }
 
     private async Task<LearningRecording?> ReadAsync(
         LearningExtraction record,
         SegmentModelVersion active,
         DateTime now,
-        GivenAnswer? answer,
         IReadOnlyList<ViewerAction> actions,
         CancellationToken cancellationToken)
     {
@@ -175,7 +151,7 @@ public sealed class SegmentTrainer(
         {
             DetectionInputs inputs = await detecting.GatherAsync(record, active.Number, now, cancellationToken);
 
-            return new LearningRecording(record.RecordingId, record.Programme.RecordingStartedAt, inputs.Evidence, inputs.Context, answer, actions);
+            return new LearningRecording(record.RecordingId, record.Programme.RecordingStartedAt, inputs.Evidence, inputs.Context, actions);
         }
         catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
         {
@@ -188,7 +164,6 @@ public sealed class SegmentTrainer(
     private async Task<LearningCatalog> CatalogAsync(
         IReadOnlyList<CatalogEntry> entries,
         IReadOnlyList<CatalogOccurrence> occurrences,
-        IReadOnlyDictionary<RecordingId, GivenAnswer> given,
         CancellationToken cancellationToken)
     {
         IReadOnlyDictionary<RecordingId, ProgrammeCopy> copies = occurrences.Count is 0
@@ -200,19 +175,10 @@ public sealed class SegmentTrainer(
             .. entries.Select(entry => new CatalogSound(
                 entry.Id,
                 entry.Length,
-                [.. stretches[entry.Id].Select(occurrence => Placed(occurrence, copies, given))])),
+                [.. stretches[entry.Id].Select(occurrence => PlacedOccurrence.Of(occurrence, copies.GetValueOrDefault(occurrence.RecordingId)))])),
         ];
 
         return new LearningCatalog(sounds, SeriesLinks.SharingSound(await catalog.SoundSharersAsync(cancellationToken)));
     }
-
-    private static PlacedOccurrence Placed(
-        CatalogOccurrence occurrence,
-        IReadOnlyDictionary<RecordingId, ProgrammeCopy> copies,
-        IReadOnlyDictionary<RecordingId, GivenAnswer> given)
-        => PlacedOccurrence.Of(
-            occurrence,
-            copies.GetValueOrDefault(occurrence.RecordingId),
-            SegmentLabels.AnswerOver(occurrence.StartsAt, occurrence.EndsAt, given.GetValueOrDefault(occurrence.RecordingId)));
 }
 

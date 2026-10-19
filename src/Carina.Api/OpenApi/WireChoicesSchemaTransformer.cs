@@ -18,7 +18,6 @@ public sealed class WireChoicesSchemaTransformer : IOpenApiSchemaTransformer
 {
     private static readonly Dictionary<(Type Declaring, string Property), IReadOnlyList<string>> Choices = new()
     {
-        [(typeof(AnsweredSegmentRequest), "kind")] = [.. AnsweredStretches.KindsTaken.Select(WireNameText.Spelled)],
         [(typeof(AddSkipEventRequest), "event")] = [.. Enum.GetValues<ViewerActionKind>().Select(WireNameText.Spelled)],
         [(typeof(AddSkipEventRequest), "kind")] = [.. SkipEvent.KindsOffered.Select(WireNameText.Spelled)],
     };

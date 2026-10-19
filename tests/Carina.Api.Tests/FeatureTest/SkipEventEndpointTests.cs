@@ -37,7 +37,7 @@ public sealed class SkipEventEndpointTests
         Assert.Equal(0, feature.Settings.Saves);
     }
 
-    [Theory(DisplayName = "BR-CV-003: closing the button and coming back are taken, an opening and an ending too, and a stretch an answer gave names no version")]
+    [Theory(DisplayName = "BR-CV-003: closing the button and coming back are taken, an opening and an ending too, and a chapter an encode marked names no version")]
     [InlineData("""{"event":"dismissed","kind":"opening","fromSec":30,"toSec":120,"modelVersion":1}""", "dismissed", "opening")]
     [InlineData("""{"event":"returned","kind":"ending","fromSec":1790,"toSec":1700,"modelVersion":null}""", "returned", "ending")]
     [InlineData("""{"event":"skipped","kind":"break","fromSec":0,"toSec":1800}""", "skipped", "break")]

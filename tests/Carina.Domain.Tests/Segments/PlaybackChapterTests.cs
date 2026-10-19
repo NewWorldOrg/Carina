@@ -41,8 +41,8 @@ public sealed class PlaybackChapterTests
         Assert.False(chapters[^1].Skippable);
     }
 
-    [Fact(DisplayName = "BR-CD-009: a stretch given by an answer is offered to be skipped whatever its probability, when something follows it")]
-    public void AnAnsweredBreakIsOfferedToBeSkipped()
+    [Fact(DisplayName = "BR-CD-009: a stretch with no probability to weigh is offered to be skipped whatever the threshold, when something follows it")]
+    public void AStretchWithNoProbabilityIsOfferedToBeSkipped()
     {
         IReadOnlyList<PlaybackChapter> chapters = PlaybackChapter.Of(
             [Span(0, 300, SegmentKind.Programme, null), Span(300, 360, SegmentKind.Break, null), Span(360, 1800, SegmentKind.Programme, null)],

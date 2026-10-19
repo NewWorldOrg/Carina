@@ -47,7 +47,7 @@ public sealed class SkipEventService(
 
         if (sent.ModelVersion is { } number && await versions.FindAsync(number, cancellationToken) is null)
         {
-            return Failure("modelVersion: expected the number of a version of the model, or null for a stretch an answer gave.", SkipEventFailure.Unreadable);
+            return Failure("modelVersion: expected the number of a version of the model, or null for a chapter an encode marked.", SkipEventFailure.Unreadable);
         }
 
         SkipEvent skip = SkipEvent.Of(id, new ViewerAction(clock.GetUtcNow().UtcDateTime, read.Action, read.Kind, read.From, read.To, sent.ModelVersion));

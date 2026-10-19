@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Tests.Segments;
 
 /// <summary>
-/// Learning as a test sets it: what a candidate and the version in use came to on the confirmed recordings, or
+/// Learning as a test sets it: what a candidate and the version in use came to on the recordings judged, or
 /// nothing to learn from, judged against the version in use as learning judges it; what to do while learning,
 /// failing included; and one boundary after it, where learning asks whether it may go on.
 /// </summary>
@@ -17,22 +17,21 @@ internal sealed class HeldTrainer : ISegmentTrainer
 {
     public SegmentEvaluation? Candidate { get; set; }
 
-    public SegmentEvaluation InUse { get; set; } = SegmentTrainingHarness.Evaluated(0.85, 1.2, 2.0);
+    public SegmentEvaluation InUse { get; set; } = SegmentTrainingHarness.Evaluated(0.85, 0.9);
 
     public Exception? Failure { get; set; }
 
     public Func<Task>? WhileLearning { get; set; }
 
-    public List<(int Active, double Threshold, DateTime Now)> Asked { get; } = [];
+    public List<(int Active, DateTime Now)> Asked { get; } = [];
 
     public async Task<Trained> TrainAsync(
         SegmentModelVersion active,
-        double skipThreshold,
         DateTime now,
         Func<CancellationToken, Task<bool>> mayGoOn,
         CancellationToken cancellationToken)
     {
-        Asked.Add((active.Number, skipThreshold, now));
+        Asked.Add((active.Number, now));
 
         if (WhileLearning is { } meanwhile)
         {
@@ -139,12 +138,11 @@ internal sealed class SegmentTrainingHarness : IDisposable
 
     public DateTime Now => Clock.GetUtcNow().UtcDateTime;
 
-    public static SegmentEvaluation Evaluated(double recall, double extra, double skipped, EvaluationEvidence? evidence = null)
+    public static SegmentEvaluation Evaluated(double recall, double seconds, EvaluationEvidence? evidence = null)
         => new(
-            new SegmentMetrics(recall, Math.Round(recall - 0.1, 2), extra, skipped, [new KindMetrics(SegmentKind.Break, 0.9, 0.9)], null, 0),
+            new SegmentMetrics(recall, Math.Round(recall - 0.1, 2), [new KindMetrics(SegmentKind.Break, seconds)], null, 0),
             [],
-            evidence ?? Enough,
-            0.65);
+            evidence ?? Enough);
 
     public SegmentTrainingJob Job(SegmentTrainingSettings? settings = null)
         => new(provider.GetRequiredService<IServiceScopeFactory>(), settings ?? SegmentTrainingSettings.Default, Clock, Log);

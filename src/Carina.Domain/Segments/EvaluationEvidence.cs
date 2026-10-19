@@ -1,10 +1,10 @@
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// What an evaluation stands on: how many confirmed recordings were judged, how many boundaries their
-/// answers draw between a break and something else, and the latest moment a label it learned from was
-/// given, when there was one. A version is put in use only on <see cref="Enough"/>: at least
-/// <see cref="RecordingsNeeded"/> recordings and <see cref="BoundariesNeeded"/> boundaries.
+/// What an evaluation stands on: how many recordings the catalog is sure of an advert in were judged, how many
+/// boundaries of those adverts they hold, and the latest moment a viewer did something it learned from, when one
+/// did. A version is put in use only on <see cref="Enough"/>: at least <see cref="RecordingsNeeded"/> recordings
+/// and <see cref="BoundariesNeeded"/> boundaries.
 /// </summary>
 public sealed record EvaluationEvidence
 {
@@ -12,47 +12,41 @@ public sealed record EvaluationEvidence
 
     public const int BoundariesNeeded = 100;
 
-    public EvaluationEvidence(int confirmedRecordings, int boundaries, DateTime? labelsUntil)
+    public EvaluationEvidence(int recordings, int boundaries, DateTime? labelsUntil)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(confirmedRecordings);
+        ArgumentOutOfRangeException.ThrowIfNegative(recordings);
         ArgumentOutOfRangeException.ThrowIfNegative(boundaries);
 
-        ConfirmedRecordings = confirmedRecordings;
+        Recordings = recordings;
         Boundaries = boundaries;
         LabelsUntil = labelsUntil;
     }
 
-    public int ConfirmedRecordings { get; }
+    public int Recordings { get; }
 
     public int Boundaries { get; }
 
     public DateTime? LabelsUntil { get; }
 
-    public bool Enough => ConfirmedRecordings >= RecordingsNeeded && Boundaries >= BoundariesNeeded;
+    public bool Enough => Recordings >= RecordingsNeeded && Boundaries >= BoundariesNeeded;
 
     public static EvaluationEvidence Of(IReadOnlyList<SegmentComparison> compared, DateTime? labelsUntil)
     {
         ArgumentNullException.ThrowIfNull(compared);
 
-        return new EvaluationEvidence(compared.Count, compared.Sum(comparison => BreakBoundaries(comparison.Answer)), labelsUntil);
+        return Of([.. compared.Select(comparison => comparison.Truth)], labelsUntil);
     }
 
     /// <summary>
-    /// What the answers kept give an evaluation to stand on: those confirmed and not withdrawn, the boundaries of
-    /// breaks they draw, and the latest moment one of them was sent.
+    /// What the catalog is sure of in some recordings gives an evaluation to stand on: those it is sure of an advert
+    /// in, and the boundaries of those adverts.
     /// </summary>
-    public static EvaluationEvidence OfAnswers(IReadOnlyList<RecordingAnswer> answers)
+    public static EvaluationEvidence Of(IReadOnlyList<CatalogTruth> truths, DateTime? labelsUntil = null)
     {
-        ArgumentNullException.ThrowIfNull(answers);
+        ArgumentNullException.ThrowIfNull(truths);
 
-        RecordingAnswer[] judged = [.. answers.Where(answer => answer.Confirmed && answer.Stands)];
+        CatalogTruth[] breaks = [.. truths.Where(truth => truth.HoldsBreaks)];
 
-        return new EvaluationEvidence(
-            judged.Length,
-            judged.Sum(answer => BreakBoundaries(answer.Segments)),
-            judged.Length is 0 ? null : judged.Max(answer => answer.AnsweredAt));
+        return new EvaluationEvidence(breaks.Length, breaks.Sum(truth => truth.BreakBoundaries), labelsUntil);
     }
-
-    private static int BreakBoundaries(IReadOnlyList<SegmentSpan> answer)
-        => SegmentMetrics.Boundaries(answer).Count(boundary => boundary.From is SegmentKind.Break || boundary.To is SegmentKind.Break);
 }

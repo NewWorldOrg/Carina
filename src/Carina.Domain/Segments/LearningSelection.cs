@@ -3,16 +3,14 @@ using Carina.Domain.Recordings;
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// What a recording a round of learning could read is learned by: a confirmed answer standing, an answer standing
-/// that was not confirmed, or only what the catalog heard in it and what viewers did with its buttons.
+/// What a recording a round of learning could read is learned by: stretches the catalog hears an advert in, or
+/// only other stretches of the catalog and what viewers did with its buttons.
 /// </summary>
 public enum LearningGround
 {
-    Confirmed = 1,
+    CatalogAdverts = 1,
 
-    Answered = 2,
-
-    Other = 3,
+    Other = 2,
 }
 
 /// <summary>
@@ -23,9 +21,8 @@ public sealed record LearningCandidate(RecordingId Recording, DateTime StartedAt
 
 /// <summary>
 /// Which recordings one round of learning reads: no more than <see cref="MostAtOnce"/> of learning data, the
-/// recordings with a confirmed answer first, then those with an answer not confirmed, then the rest, the most
-/// recently started first within each; a recording that would go over what is left is passed over for the next
-/// that fits.
+/// recordings the catalog hears an advert in first, then the rest, the most recently started first within each; a
+/// recording that would go over what is left is passed over for the next that fits.
 /// </summary>
 public static class LearningSelection
 {

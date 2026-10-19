@@ -42,17 +42,15 @@ public sealed class SegmentKindsHandedOverTests
         SegmentMetrics metrics = new(
             0.9,
             0.8,
-            1.0,
-            2.0,
-            [new KindMetrics(SegmentKind.Break, 0.95, 0.97), new KindMetrics(SegmentKind.Opening, 0.5, 0.6), new KindMetrics(SegmentKind.Ending, null, null)],
+            [new KindMetrics(SegmentKind.Break, 0.95), new KindMetrics(SegmentKind.Opening, 0.5), new KindMetrics(SegmentKind.Ending, null)],
             null,
             0);
 
         Assert.Equal(
             [
-                new SegmentKindMetricsResponder(SegmentKind.Break, 0.95, 0.97),
-                new SegmentKindMetricsResponder(SegmentKind.Opening, 0.5, 0.6),
-                new SegmentKindMetricsResponder(SegmentKind.Ending, null, null),
+                new SegmentKindMetricsResponder(SegmentKind.Break, 0.95),
+                new SegmentKindMetricsResponder(SegmentKind.Opening, 0.5),
+                new SegmentKindMetricsResponder(SegmentKind.Ending, null),
             ],
             SegmentMetricsResponder.Of(metrics).Kinds);
     }
@@ -60,9 +58,9 @@ public sealed class SegmentKindsHandedOverTests
     [Fact(DisplayName = "BR-CD-008: a version evaluated before openings and endings were measured answers the row for breaks alone")]
     public void AVersionEvaluatedBeforeOpeningsAndEndingsWereMeasuredAnswersBreaksAlone()
     {
-        SegmentMetrics metrics = new(0.9, 0.8, 1.0, 2.0, [new KindMetrics(SegmentKind.Break, 0.95, 0.97)], null, 0);
+        SegmentMetrics metrics = new(0.9, 0.8, [new KindMetrics(SegmentKind.Break, 0.95)], null, 0);
 
-        Assert.Equal([new SegmentKindMetricsResponder(SegmentKind.Break, 0.95, 0.97)], SegmentMetricsResponder.Of(metrics).Kinds);
+        Assert.Equal([new SegmentKindMetricsResponder(SegmentKind.Break, 0.95)], SegmentMetricsResponder.Of(metrics).Kinds);
     }
 
     private static SegmentSpan Span(double from, double to, SegmentKind kind) => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, 0.9);

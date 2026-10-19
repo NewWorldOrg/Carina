@@ -820,10 +820,6 @@ namespace Carina.Db.Migrations
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Chapters", "Carina.Domain.Encodings.EncodeJob.Chapters#ChapterReading", b1 =>
                         {
-                            b1.Property<DateTime?>("AnsweredAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("chapters_answered_at");
-
                             b1.Property<double>("BreakShare")
                                 .HasColumnType("double precision")
                                 .HasColumnName("chapters_break_share");
@@ -969,7 +965,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_encode_job_caption_track", "(caption_track IS NULL) = (caption_track_from IS NULL)\nAND (caption_track IS NULL OR caption_track IN ('Added', 'Withheld', 'Failed'))\nAND caption_track_attempts >= 0\nAND (caption_track_attempts = 0 OR caption_track = 'Failed')");
 
-                            t.HasCheckConstraint("ck_encode_job_chapters", "((chapters_verdict IS NULL) = (chapters_decided_at IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_detector IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_break_share IS NULL))\nAND (chapters_verdict IS NULL OR status <> 'Queued')\nAND (chapters_verdict IS NULL OR chapters_verdict IN ('NotAsked', 'Marked', 'NothingFound', 'Discarded', 'Unreadable'))\nAND (chapters_detector IS NULL OR chapters_detector IN ('Nobody', 'Ffmpeg', 'Segments'))\nAND (chapters_break_share IS NULL OR chapters_break_share BETWEEN 0 AND 1)\nAND (chapters_decided_at IS NULL OR chapters_decided_at >= started_at)\nAND (chapters_model_version IS NULL OR chapters_model_version >= 1)\nAND ((chapters_model_version IS NULL AND chapters_answered_at IS NULL) OR chapters_detector IS NOT DISTINCT FROM 'Segments')\nAND (chapters_detector IS DISTINCT FROM 'Segments'\n    OR ((chapters_model_version IS NOT NULL OR chapters_answered_at IS NOT NULL) = (chapters_verdict <> 'NotAsked')))");
+                            t.HasCheckConstraint("ck_encode_job_chapters", "((chapters_verdict IS NULL) = (chapters_decided_at IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_detector IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_break_share IS NULL))\nAND (chapters_verdict IS NULL OR status <> 'Queued')\nAND (chapters_verdict IS NULL OR chapters_verdict IN ('NotAsked', 'Marked', 'NothingFound', 'Discarded', 'Unreadable'))\nAND (chapters_detector IS NULL OR chapters_detector IN ('Nobody', 'Ffmpeg', 'Segments'))\nAND (chapters_break_share IS NULL OR chapters_break_share BETWEEN 0 AND 1)\nAND (chapters_decided_at IS NULL OR chapters_decided_at >= started_at)\nAND (chapters_model_version IS NULL OR chapters_model_version >= 1)\nAND (chapters_model_version IS NULL OR chapters_detector IS NOT DISTINCT FROM 'Segments')\nAND (chapters_detector IS DISTINCT FROM 'Segments'\n    OR ((chapters_model_version IS NOT NULL) = (chapters_verdict <> 'NotAsked')))");
 
                             t.HasCheckConstraint("ck_encode_job_failure", "((status = 'Failed') = (failure IS NOT NULL))\nAND ((failure IS NULL) = (failure_note IS NULL))\nAND ((failure IS NULL) = (failure_noticed_at IS NULL))\nAND (failure IS NULL OR failure IN ('FfmpegExitedNonZero', 'NotEnoughRoom', 'SourceMissing', 'CapabilityUnavailable', 'TimedOut', 'DestinationCollision', 'HeadTooFar', 'EndingNotKept'))");
 
@@ -3635,7 +3631,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_segment_catalog_entry_counts", "occurrences >= 2 AND series_count >= 1 AND station_count >= 1");
 
-                            t.HasCheckConstraint("ck_segment_catalog_entry_decided_by", "(decided_by IS NULL) = (kind = 'Unknown') AND (decided_by IS NULL OR decided_by IN ('Answer', 'Pattern'))");
+                            t.HasCheckConstraint("ck_segment_catalog_entry_decided_by", "(decided_by IS NULL) = (kind = 'Unknown') AND (decided_by IS NULL OR decided_by IN ('Pattern'))");
 
                             t.HasCheckConstraint("ck_segment_catalog_entry_fingerprint", "octet_length(fingerprint) BETWEEN 4 AND 45000 AND octet_length(fingerprint) % 4 = 0");
 
@@ -3944,58 +3940,6 @@ namespace Carina.Db.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Carina.Domain.Segments.RecordingAnswer", b =>
-                {
-                    b.Property<Guid>("RecordingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("recording_id");
-
-                    b.Property<DateTime>("AnsweredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("answered_at");
-
-                    b.Property<int>("Answers")
-                        .HasColumnType("integer")
-                        .HasColumnName("answers");
-
-                    b.Property<bool>("Confirmed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("confirmed");
-
-                    b.Property<DateTime?>("ConfirmedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("confirmed_at");
-
-                    b.Property<TimeSpan>("Length")
-                        .HasColumnType("interval")
-                        .HasColumnName("length");
-
-                    b.Property<string>("Segments")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("segments");
-
-                    b.Property<DateTime?>("WithdrawnAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("withdrawn_at");
-
-                    b.HasKey("RecordingId")
-                        .HasName("pk_segment_answer");
-
-                    b.HasIndex("ConfirmedAt")
-                        .HasDatabaseName("ix_segment_answer_confirmed")
-                        .HasFilter("confirmed AND withdrawn_at IS NULL");
-
-                    b.ToTable("segment_answer", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_segment_answer_answers", "answers >= 1");
-
-                            t.HasCheckConstraint("ck_segment_answer_confirmed", "confirmed = (confirmed_at IS NOT NULL)");
-
-                            t.HasCheckConstraint("ck_segment_answer_segments", "jsonb_typeof(segments) = 'array' AND jsonb_array_length(segments) >= 1");
-                        });
-                });
-
             modelBuilder.Entity("Carina.Domain.Segments.RecordingDetection", b =>
                 {
                     b.Property<Guid>("RecordingId")
@@ -4109,10 +4053,6 @@ namespace Carina.Db.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("metrics");
 
-                    b.Property<decimal?>("RecommendedThreshold")
-                        .HasColumnType("numeric(3,2)")
-                        .HasColumnName("recommended_threshold");
-
                     b.Property<DateTime?>("RetiredAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("retired_at");
@@ -4176,7 +4116,7 @@ namespace Carina.Db.Migrations
                         {
                             t.HasCheckConstraint("ck_segment_model_version_by_hand", "NOT by_hand OR (state = 'Active' AND chosen_by_hand_at IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_segment_model_version_evaluation", "(metrics IS NULL OR jsonb_typeof(metrics) = 'object')\nAND (stations IS NULL OR jsonb_typeof(stations) = 'array')\nAND (evidence IS NULL OR jsonb_typeof(evidence) = 'object')\nAND (rollback IS NULL OR jsonb_typeof(rollback) = 'object')\nAND (recommended_threshold IS NULL OR recommended_threshold BETWEEN 0 AND 1)");
+                            t.HasCheckConstraint("ck_segment_model_version_evaluation", "(metrics IS NULL OR jsonb_typeof(metrics) = 'object')\nAND (stations IS NULL OR jsonb_typeof(stations) = 'array')\nAND (evidence IS NULL OR jsonb_typeof(evidence) = 'object')\nAND (rollback IS NULL OR jsonb_typeof(rollback) = 'object')");
 
                             t.HasCheckConstraint("ck_segment_model_version_kinds", "kinds IN (2, 4)");
 

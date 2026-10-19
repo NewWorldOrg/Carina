@@ -333,38 +333,6 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(OperatingSystem.IsLinux() ? "19" : null, seen.Nice);
     }
 
-    [Fact(DisplayName = "an entry a later recording is matched against takes the kind the answer standing for one of its recordings gives its stretch there")]
-    public async Task AnEntryMatchedAgainReadsTheAnswers()
-    {
-        using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
-        uint[] source = Sound(1);
-        RecordingId answered = await harness.ReadAsync(Sharing(Sound(3), source, 1_000, 9_000, Advert), 14, "架空のクイズ");
-        await harness.ReadAsync(Sharing(Sound(2), source, 5_000, 9_000, Advert), 7, "架空の物語");
-        CatalogMatchingJob job = harness.Job();
-        await job.LookAsync(CancellationToken.None);
-        await job.LookAsync(CancellationToken.None);
-        CatalogEntry entry = Assert.Single(harness.Catalog.Entries);
-        CatalogOccurrence stretch = harness.Catalog.Occurrences.Single(occurrence => occurrence.RecordingId.Equals(answered));
-        SentStretch[] sent =
-        [
-            new(0, stretch.StartsAt.TotalSeconds, SegmentKind.Programme),
-            new(stretch.StartsAt.TotalSeconds, stretch.EndsAt.TotalSeconds, SegmentKind.Break),
-            new(stretch.EndsAt.TotalSeconds, Minutes * 60, SegmentKind.Programme),
-        ];
-        await harness.Answers.AnswerAsync(
-            RecordingAnswer.Given(answered, AnsweredStretches.Read(sent, TimeSpan.FromMinutes(Minutes)).Stretches!, true, Now),
-            CancellationToken.None);
-        await harness.ReadAsync(Sharing(Sound(4), source, 12_000, 9_000, Advert), 0, "架空の天気", updatedMinutesAgo: 1);
-
-        Assert.Equal((CatalogKind.Cm, 0.9, CatalogDecision.Pattern), (entry.Kind, entry.Confidence, entry.DecidedBy));
-
-        await job.LookAsync(CancellationToken.None);
-
-        Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
-        Assert.Equal(SegmentKind.Break, stretch.KindOverride);
-    }
-
     [Fact(DisplayName = "BR-CD-005: in spare time with no recording waiting, an entry estimated before the rows for openings and endings is estimated again, once")]
     public async Task AnEntryEstimatedBeforeTheThemesIsEstimatedAgainOnce()
     {
@@ -385,7 +353,7 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(1, harness.Catalog.Keeps);
     }
 
-    [Fact(DisplayName = "an entry put back after an answer or a change of links is estimated again in spare time, once")]
+    [Fact(DisplayName = "an entry put back after a change of links is estimated again in spare time, once")]
     public async Task AnEntryPutBackIsEstimatedAgainOnce()
     {
         using CatalogMatchingHarness harness = new();
@@ -435,25 +403,6 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(waiting, first.Matched?.Recording);
         Assert.Null(first.Reestimated);
         Assert.Same(entry, second.Reestimated);
-    }
-
-    [Fact(DisplayName = "an entry estimated again takes the kind the answer standing for one of its recordings gives its stretch there")]
-    public async Task AnEntryEstimatedAgainReadsTheAnswers()
-    {
-        using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
-        CatalogEntry entry = await OutdatedAsync(harness);
-        CatalogOccurrence answered = harness.Catalog.Occurrences[0];
-        SentStretch[] sent = [new(0, Into.TotalSeconds, SegmentKind.Programme), new(Into.TotalSeconds, (Into + Heard).TotalSeconds, SegmentKind.Break), new((Into + Heard).TotalSeconds, Minutes * 60, SegmentKind.Programme)];
-        await harness.Answers.AnswerAsync(
-            RecordingAnswer.Given(answered.RecordingId, AnsweredStretches.Read(sent, TimeSpan.FromMinutes(Minutes)).Stretches!, true, Now),
-            CancellationToken.None);
-
-        CatalogMatchingLook look = await harness.Job().LookAsync(CancellationToken.None);
-
-        Assert.Same(entry, look.Reestimated);
-        Assert.Equal((CatalogKind.Cm, 1.0, CatalogDecision.Answer), (entry.Kind, entry.Confidence, entry.DecidedBy));
-        Assert.Equal(SegmentKind.Break, answered.KindOverride);
     }
 
     [Fact(DisplayName = "BR-CD-013: an entry estimated again after learning was switched off is not kept")]

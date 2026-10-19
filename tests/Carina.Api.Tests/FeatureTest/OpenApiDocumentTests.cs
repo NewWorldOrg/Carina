@@ -212,7 +212,6 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "putEncodeSettings",
                 "putOidcConfig",
                 "putPlaybackPosition",
-                "putRecordingSegments",
                 "putSelectedChannel",
                 "putTunerHealthSettings",
                 "putTunerLnbPower",
@@ -235,7 +234,6 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "stopRecording",
                 "switchRule",
                 "transmitLiveDataBroadcast",
-                "withdrawSegmentAnswer",
             ],
             named.Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(named.Length, named.Distinct(StringComparer.Ordinal).Count());
@@ -709,28 +707,28 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             schemas["CatalogResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
-    [Fact(DisplayName = "BR-CD-008: the status of CM, OP and ED detection describes the evidence, the figures overall and by station, every version and the threshold recommended")]
+    [Fact(DisplayName = "BR-CD-008: the status of CM, OP and ED detection describes the evidence, the figures overall and by station, every version and the threshold the settings hold, and recommends none")]
     public async Task TheSegmentStatusDescribesTheEvaluation()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
         JsonNode schemas = document["components"]!["schemas"]!;
 
         Assert.Equal(
-            ["confirmedRecordings", "boundaries", "enough", "recordingsNeeded", "boundariesNeeded"],
+            ["recordings", "boundaries", "enough", "recordingsNeeded", "boundariesNeeded"],
             Properties(schemas, "SegmentEvidenceResponder"));
         Assert.Equal(
-            ["boundaryRecallWithin2s", "boundaryRecallWithin1s", "extraBoundariesPerRecording", "programmeSkippedSecondsPerHour", "kinds", "returnedAfterSkipShare", "skips"],
+            ["boundaryRecallWithin2s", "boundaryRecallWithin1s", "kinds", "returnedAfterSkipShare", "skips"],
             Properties(schemas, "SegmentMetricsResponder"));
-        Assert.Equal(["kind", "recall", "precision"], Properties(schemas, "SegmentKindMetricsResponder"));
+        Assert.Equal(["kind", "recall"], Properties(schemas, "SegmentKindMetricsResponder"));
         Assert.EndsWith("/SegmentKind", schemas["SegmentKindMetricsResponder"]!["properties"]!["kind"]!["$ref"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.Equal(["programme", "break", "opening", "ending"], schemas["SegmentKind"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
-        Assert.Equal(["networkId", "serviceId", "confirmedRecordings", "metrics"], Properties(schemas, "SegmentStationResponder"));
-        Assert.Equal(["boundaryRecallWithin2s", "programmeSkippedSecondsPerHour"], Properties(schemas, "SegmentMetricsSummaryResponder"));
+        Assert.Equal(["networkId", "serviceId", "recordings", "metrics"], Properties(schemas, "SegmentStationResponder"));
+        Assert.Equal(["boundaryRecallWithin2s"], Properties(schemas, "SegmentMetricsSummaryResponder"));
         Assert.Equal(
             ["number", "state", "byHand", "trainedAt", "adoptedAt", "retiredAt", "rolledBack", "metrics"],
             Properties(schemas, "SegmentVersionHistoryResponder"));
         Assert.Equal(["at", "returnedAfterSkipShare", "previousShare", "skips"], Properties(schemas, "SegmentRolledBackResponder"));
-        Assert.Equal(["current", "recommended"], Properties(schemas, "SkipThresholdResponder"));
+        Assert.Equal(["current"], Properties(schemas, "SkipThresholdResponder"));
     }
 
     [Fact(DisplayName = "BR-CS-003: choosing the version in use is described by the number or the choice left to learning it takes, and answers the version in use, or why not")]
@@ -754,44 +752,36 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     private static string[] Properties(JsonNode schemas, string name)
         => [.. schemas[name]!["properties"]!.AsObject().Select(entry => entry.Key)];
 
-    [Fact(DisplayName = "the stretches of a recording are read on a path of their own, described by where they come from, how they stand and the stretches in the recording's own time")]
+    [Fact(DisplayName = "BR-CV-001: the stretches of a recording are read on a path of their own that takes nothing, described by where they come from, how they stand and the stretches in the recording's own time")]
     public async Task TheStretchesOfARecordingAreDescribed()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
         JsonObject path = document["paths"]!["/api/recordings/{id}/segments"]!.AsObject();
         JsonNode schemas = document["components"]!["schemas"]!;
 
-        Assert.Equal(["get", "put"], path.Select(entry => entry.Key).Where(key => key is not "parameters").Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(["get"], path.Select(entry => entry.Key).Where(key => key is not "parameters").Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
-            ["lengthSec", "source", "state", "modelVersion", "confirmed", "answeredAt", "detectedAt", "cmShare", "segments", "snaps"],
+            ["lengthSec", "source", "state", "modelVersion", "detectedAt", "cmShare", "segments"],
             schemas["RecordingSegmentsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal(
             ["startsAtSec", "endsAtSec", "kind", "probability"],
             schemas["RecordingSegmentResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
-        Assert.Equal(["none", "detected", "answered"], schemas["SegmentSource"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(["none", "detected"], schemas["SegmentSource"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
         Assert.Equal(
-            ["none", "marked", "nothingFound", "discarded", "answered"],
+            ["none", "marked", "nothingFound", "discarded"],
             schemas["SegmentStandingState"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
-    [Fact(DisplayName = "BR-CA-001: an answer is sent and withdrawn, and a skip event taken, under the recording, each described by what it is sent and answers")]
-    public async Task TheAnswerAndTheSkipEventsAreDescribed()
+    [Fact(DisplayName = "BR-CA-001, BR-CV-001: a skip event is taken under the recording, described by what it is sent and answers, and nothing there takes an answer from a person")]
+    public async Task TheSkipEventsAreDescribedAndNoAnswerIsTaken()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
-        JsonNode paths = document["paths"]!;
-        JsonNode schemas = document["components"]!["schemas"]!;
+        JsonObject paths = document["paths"]!.AsObject();
+        JsonObject schemas = document["components"]!["schemas"]!.AsObject();
 
-        Assert.Equal(["delete"], paths["/api/recordings/{id}/segments/answer"]!.AsObject().Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
         Assert.Equal(["post"], paths["/api/recordings/{id}/skips"]!.AsObject().Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
-        Assert.Equal(
-            ["segments", "confirmed"],
-            schemas["PutRecordingSegmentsRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
-        Assert.Equal(
-            ["startsAtSec", "endsAtSec", "kind"],
-            schemas["AnsweredSegmentRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
-        Assert.Equal(
-            ["startsAtSec", "endsAtSec"],
-            schemas["AnsweredSegmentRequest"]!["required"]!.AsArray().Select(value => value!.GetValue<string>()).Order(StringComparer.Ordinal).Reverse().ToArray());
+        Assert.DoesNotContain(paths, entry => entry.Key.Contains("answer", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(schemas, entry => entry.Key.Contains("Answer", StringComparison.Ordinal) || entry.Key.Contains("PutRecordingSegments", StringComparison.Ordinal));
         Assert.Equal(
             ["event", "kind", "fromSec", "toSec", "modelVersion"],
             schemas["AddSkipEventRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
@@ -803,17 +793,16 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             schemas["ViewerActionKind"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
-    [Fact(DisplayName = "BR-CV-001, BR-CV-003: the kind of a stretch answered, and the action and kind of a skip event, are read as text but listed with the values they take, any of which may be left out")]
-    public async Task TheTextAnAnswerAndASkipEventReadListsItsValues()
+    [Fact(DisplayName = "BR-CV-003: the action and kind of a skip event are read as text but listed with the values they take, either of which may be left out")]
+    public async Task TheTextASkipEventReadListsItsValues()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
         JsonNode schemas = document["components"]!["schemas"]!;
 
-        Assert.Equal(["programme", "break", "absent"], Choices(schemas["AnsweredSegmentRequest"]!["properties"]!["kind"]!));
         Assert.Equal(["skipped", "dismissed", "returned", "absent"], Choices(schemas["AddSkipEventRequest"]!["properties"]!["event"]!));
         Assert.Equal(["break", "opening", "ending", "absent"], Choices(schemas["AddSkipEventRequest"]!["properties"]!["kind"]!));
         Assert.All(
-            [schemas["AnsweredSegmentRequest"]!["properties"]!["kind"]!, schemas["AddSkipEventRequest"]!["properties"]!["event"]!, schemas["AddSkipEventRequest"]!["properties"]!["kind"]!],
+            [schemas["AddSkipEventRequest"]!["properties"]!["event"]!, schemas["AddSkipEventRequest"]!["properties"]!["kind"]!],
             property => Assert.Equal(["null", "string"], property["type"]!.AsArray().Select(value => value!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray()));
 
         static string[] Choices(JsonNode property)

@@ -2,19 +2,18 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// A stretch of a catalog entry beside where its programme starts and ends in the recording's own time,
-/// when the copy of the programme is known, and the kind an answer gives it, when one does.
+/// when the copy of the programme is known.
 /// </summary>
-public sealed record PlacedOccurrence(CatalogOccurrence Occurrence, TimeSpan? ProgrammeStarts, TimeSpan? ProgrammeEnds, SegmentKind? Answer)
+public sealed record PlacedOccurrence(CatalogOccurrence Occurrence, TimeSpan? ProgrammeStarts, TimeSpan? ProgrammeEnds)
 {
-    public static PlacedOccurrence Of(CatalogOccurrence occurrence, ProgrammeCopy? programme, SegmentKind? answer)
+    public static PlacedOccurrence Of(CatalogOccurrence occurrence, ProgrammeCopy? programme)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
 
         return new PlacedOccurrence(
             occurrence,
             programme?.ProgrammeStartsAt - programme?.RecordingStartedAt,
-            programme?.ProgrammeEndsAt - programme?.RecordingStartedAt,
-            answer);
+            programme?.ProgrammeEndsAt - programme?.RecordingStartedAt);
     }
 
     /// <summary>

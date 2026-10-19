@@ -21,8 +21,8 @@ public enum ChapterDetectorName
 /// the answer; <see cref="BreakShare"/> is kept even when the reading was thrown away.
 /// </summary>
 /// <remarks>
-/// A reading taken from the segments says which version of the model detected what it embedded, or when the
-/// answer it embedded was given; one that found nothing to embed says neither. No other reader says either.
+/// A reading taken from the segments says which version of the model detected what it embedded; one that found
+/// nothing to embed does not. No other reader says it.
 /// </remarks>
 public sealed record ChapterReading
 {
@@ -31,8 +31,7 @@ public sealed record ChapterReading
         ChapterVerdict verdict,
         double breakShare,
         DateTime decidedAt,
-        int? modelVersion = null,
-        DateTime? answeredAt = null)
+        int? modelVersion = null)
     {
         if (!Enum.IsDefined(detector))
         {
@@ -57,7 +56,7 @@ public sealed record ChapterReading
             throw new ArgumentOutOfRangeException(nameof(modelVersion), modelVersion, $"The versions of the model are numbered from {SegmentModelVersion.FirstNumber}.");
         }
 
-        if (Unsourced(detector, verdict, modelVersion, answeredAt) is { } fault)
+        if (Unsourced(detector, verdict, modelVersion) is { } fault)
         {
             throw new ArgumentException(fault, nameof(modelVersion));
         }
@@ -67,7 +66,6 @@ public sealed record ChapterReading
         BreakShare = breakShare;
         DecidedAt = UtcTimes.Required(decidedAt, nameof(decidedAt));
         ModelVersion = modelVersion;
-        AnsweredAt = UtcTimes.Optional(answeredAt, nameof(answeredAt));
     }
 
     public ChapterDetectorName Detector { get; }
@@ -80,8 +78,6 @@ public sealed record ChapterReading
 
     public int? ModelVersion { get; }
 
-    public DateTime? AnsweredAt { get; }
-
     public bool Marks => Verdict is ChapterVerdict.Marked;
 
     public static ChapterReading Of(ChapterDetectorName detector, ChapterDetection detection, DateTime at)
@@ -91,17 +87,17 @@ public sealed record ChapterReading
         return new ChapterReading(detector, detection.Verdict, detection.BreakShare, at);
     }
 
-    private static string? Unsourced(ChapterDetectorName detector, ChapterVerdict verdict, int? modelVersion, DateTime? answeredAt)
+    private static string? Unsourced(ChapterDetectorName detector, ChapterVerdict verdict, int? modelVersion)
     {
-        bool sourced = modelVersion is not null || answeredAt is not null;
+        bool sourced = modelVersion is not null;
 
         if (detector is not ChapterDetectorName.Segments)
         {
-            return sourced ? "Only a reading taken from the segments says which version or answer it came from." : null;
+            return sourced ? "Only a reading taken from the segments says which version it came from." : null;
         }
 
         return sourced == (verdict is not ChapterVerdict.NotAsked)
             ? null
-            : "A reading taken from the segments came from a version's detection or an answer exactly when it found something to embed or leave out.";
+            : "A reading taken from the segments came from a version's detection exactly when it found something to embed or leave out.";
     }
 }

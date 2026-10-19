@@ -4,14 +4,14 @@ namespace Carina.Domain.Encodings;
 
 /// <summary>
 /// Where an encode takes the chapters it embeds from, decided as playback decides which stretches a recording
-/// is played with (<see cref="SegmentStanding"/>): the answer a person gave while it stands, otherwise the
-/// detection by the version of the model in use when there is one, and nothing when learning is on and there
-/// is neither. While learning is off and the recording stands with neither, the reader of the source the machine
-/// is set up with is asked instead (<see cref="AsksTheReader"/>).
+/// is played with (<see cref="SegmentStanding"/>): the detection by the version of the model in use when there
+/// is one, and nothing when learning is on and there is none. While learning is off and the version in use has
+/// not detected the recording, the reader of the source the machine is set up with is asked instead
+/// (<see cref="AsksTheReader"/>).
 /// </summary>
 /// <remarks>
-/// Only stretches that mark something besides the programme are embedded. An answer or a detection that gives
-/// only the programme, or a detection thrown away, embeds nothing, as a reading of the source that marked
+/// Only stretches that mark something besides the programme are embedded. A detection that gives only the
+/// programme, or one thrown away, embeds nothing, as a reading of the source that marked
 /// nothing does, so the encode is handed no chapters. A stretch the artefact does not play is not embedded.
 /// </remarks>
 public sealed record EncodeChapterChoice
@@ -74,8 +74,7 @@ public sealed record EncodeChapterChoice
             Verdict,
             Standing.BreakShare,
             at,
-            Standing.ModelVersion,
-            Standing.Answer?.AnsweredAt);
+            Standing.ModelVersion);
     }
 
     /// <summary>
@@ -95,8 +94,6 @@ public sealed record EncodeChapterChoice
         SegmentStandingState.Marked => ChapterVerdict.Marked,
         SegmentStandingState.NothingFound => ChapterVerdict.NothingFound,
         SegmentStandingState.Discarded => ChapterVerdict.Discarded,
-        SegmentStandingState.Answered when Standing.Marks => ChapterVerdict.Marked,
-        SegmentStandingState.Answered => ChapterVerdict.NothingFound,
         _ => ChapterVerdict.NotAsked,
     };
 }

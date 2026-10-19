@@ -66,16 +66,16 @@ public sealed class CatalogEntryTests
     public void AnOpeningFragmentInAnotherSeriesIsAnAdvertThere()
     {
         CatalogEntryId id = CatalogEntryId.New();
-        PlacedOccurrence answered = At(id, Drama.Episode(0), 0, 90, SegmentKind.Opening);
+        PlacedOccurrence first = At(id, Drama.Episode(0), 0, 90);
         PlacedOccurrence again = At(id, Drama.Episode(1), 0, 90);
         PlacedOccurrence advertised = At(id, Quiz.Episode(0), 600, 15);
         PlacedOccurrence cutShortAtHome = At(id, Drama.Episode(2), 0, 45);
 
-        CatalogEntry entry = CatalogEntry.Start(id, [.. Enumerable.Range(1, 5625).Select(value => (uint)value)], [answered, again, advertised, cutShortAtHome], SeriesLinks.None, Now);
+        CatalogEntry entry = CatalogEntry.Start(id, [.. Enumerable.Range(1, 5625).Select(value => (uint)value)], [first, again, advertised, cutShortAtHome], SeriesLinks.None, Now);
 
         Assert.Equal(CatalogKind.Opening, entry.Kind);
-        Assert.Equal(CatalogDecision.Answer, entry.DecidedBy);
-        Assert.Equal(SegmentKind.Opening, answered.Occurrence.KindOverride);
+        Assert.Equal(CatalogDecision.Pattern, entry.DecidedBy);
+        Assert.Null(first.Occurrence.KindOverride);
         Assert.Null(again.Occurrence.KindOverride);
         Assert.Equal(SegmentKind.Break, advertised.Occurrence.KindOverride);
         Assert.Null(cutShortAtHome.Occurrence.KindOverride);
@@ -87,11 +87,11 @@ public sealed class CatalogEntryTests
     public void AnOpeningFragmentIsAnAdvertWithinTheGridWindow(double seconds, SegmentKind? taken)
     {
         CatalogEntryId id = CatalogEntryId.New();
-        PlacedOccurrence answered = At(id, Drama.Episode(0), 0, 90, SegmentKind.Opening);
+        PlacedOccurrence first = At(id, Drama.Episode(0), 0, 90);
         PlacedOccurrence again = At(id, Drama.Episode(1), 0, 90);
         PlacedOccurrence advertised = At(id, Quiz.Episode(0), 600, seconds);
 
-        CatalogEntry.Start(id, [.. Enumerable.Range(1, 5625).Select(value => (uint)value)], [answered, again, advertised], SeriesLinks.None, Now);
+        CatalogEntry.Start(id, [.. Enumerable.Range(1, 5625).Select(value => (uint)value)], [first, again, advertised], SeriesLinks.None, Now);
 
         Assert.Equal(taken, advertised.Occurrence.KindOverride);
     }
@@ -100,18 +100,20 @@ public sealed class CatalogEntryTests
     public void AnOverrideThatNoLongerHoldsIsCleared()
     {
         CatalogEntryId id = CatalogEntryId.New();
-        PlacedOccurrence answered = At(id, Drama.Episode(0), Midpoint - 300, 90, SegmentKind.Opening);
-        PlacedOccurrence again = At(id, Drama.Episode(1), Midpoint, 90);
+        PlacedOccurrence first = At(id, Drama.Episode(0), 0, 90);
+        PlacedOccurrence again = At(id, Drama.Episode(1), 0, 90);
         PlacedOccurrence advertised = At(id, Quiz.Episode(0), 600, 15);
-        CatalogEntry entry = CatalogEntry.Start(id, [.. Enumerable.Range(1, 5625).Select(value => (uint)value)], [answered, again, advertised], SeriesLinks.None, Now);
+        CatalogEntry entry = CatalogEntry.Start(id, [.. Enumerable.Range(1, 5625).Select(value => (uint)value)], [first, again, advertised], SeriesLinks.None, Now);
+        SegmentKind? before = advertised.Occurrence.KindOverride;
 
         entry.Reestimate(
-            [PlacedOccurrence.Of(answered.Occurrence, Drama.Episode(0), null), again, advertised],
+            [PlacedOccurrence.Of(first.Occurrence, null), again, advertised],
             SeriesLinks.None,
             Now.AddHours(1));
 
+        Assert.Equal(SegmentKind.Break, before);
         Assert.Equal(CatalogKind.Unknown, entry.Kind);
-        Assert.Null(answered.Occurrence.KindOverride);
+        Assert.Null(first.Occurrence.KindOverride);
         Assert.Null(advertised.Occurrence.KindOverride);
     }
 

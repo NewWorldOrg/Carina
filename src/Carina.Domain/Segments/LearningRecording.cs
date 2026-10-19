@@ -4,8 +4,8 @@ using Carina.Domain.Recordings;
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// One recording learned from: its id and when it started, its readings, what is known of it besides, the
-/// answer given for it, if any, and what viewers did with its skip buttons. What its context heard of the
+/// One recording learned from: its id and when it started, its readings, what is known of it besides, and what
+/// viewers did with its skip buttons. What its context heard of the
 /// catalog is read afresh from the catalog learning is handed, as the recording would have heard it.
 /// </summary>
 public sealed record LearningRecording
@@ -15,7 +15,6 @@ public sealed record LearningRecording
         DateTime startedAt,
         SegmentEvidence evidence,
         SegmentContext context,
-        GivenAnswer? answer,
         IReadOnlyList<ViewerAction> actions)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -32,7 +31,6 @@ public sealed record LearningRecording
         StartedAt = UtcTimes.Required(startedAt, nameof(startedAt));
         Evidence = evidence;
         Context = context;
-        Answer = answer;
         Actions = [.. actions];
     }
 
@@ -43,8 +41,6 @@ public sealed record LearningRecording
     public SegmentEvidence Evidence { get; }
 
     public SegmentContext Context { get; }
-
-    public GivenAnswer? Answer { get; }
 
     public IReadOnlyList<ViewerAction> Actions { get; }
 }

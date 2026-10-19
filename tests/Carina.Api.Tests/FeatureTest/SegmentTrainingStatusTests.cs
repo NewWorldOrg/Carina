@@ -37,7 +37,7 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
             services.AddSingleton<ISegmentModelVersionRepository>(Versions);
             services.AddSingleton<ISegmentSettingsRepository>(Settings);
             services.AddSingleton<ISkipEventRepository>(new HeldSkipEvents());
-            services.AddSingleton<ISegmentAnswerRepository>(new HeldSegmentAnswers());
+            services.AddSingleton<ICatalogEvidenceReader>(new HeldCatalogEvidence());
             services.AddSingleton<ISegmentLearningRoundRepository>(new HeldSegmentLearningRounds());
             services.AddSingleton<ILearningMaterialChanges>(new HeldLearningMaterialChanges());
             services.AddSingleton<IOccupancyReader>(new SegmentVersionFeature.Unoccupied());
@@ -82,20 +82,18 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
     /// </summary>
     internal sealed class CannedTrainer : ISegmentTrainer
     {
-        public SegmentEvaluation Candidate { get; set; } = Evaluation(0.85, 2.0, 12);
+        public SegmentEvaluation Candidate { get; set; } = Evaluation(0.85, 0.9, 12);
 
-        public SegmentEvaluation InUse { get; set; } = Evaluation(0.85, 2.0, 12);
+        public SegmentEvaluation InUse { get; set; } = Evaluation(0.85, 0.9, 12);
 
-        public static SegmentEvaluation Evaluation(double recall, double skipped, int confirmed)
+        public static SegmentEvaluation Evaluation(double recall, double seconds, int recordings)
             => new(
-                new SegmentMetrics(recall, 0.8, 1.0, skipped, [new KindMetrics(SegmentKind.Break, 0.9, 0.95)], null, 0),
-                [new StationMetrics(new Carina.Domain.Channels.NetworkId(1), new Carina.Domain.Channels.ServiceId(1), confirmed, new SegmentMetrics(recall, 0.8, 1.0, skipped, [], null, 0))],
-                new EvaluationEvidence(confirmed, 148, Now.AddDays(-1)),
-                0.65);
+                new SegmentMetrics(recall, 0.8, [new KindMetrics(SegmentKind.Break, seconds)], null, 0),
+                [new StationMetrics(new Carina.Domain.Channels.NetworkId(1), new Carina.Domain.Channels.ServiceId(1), recordings, new SegmentMetrics(recall, 0.8, [], null, 0))],
+                new EvaluationEvidence(recordings, 148, Now.AddDays(-1)));
 
         public Task<Trained> TrainAsync(
             SegmentModelVersion active,
-            double skipThreshold,
             DateTime now,
             Func<CancellationToken, Task<bool>> mayGoOn,
             CancellationToken cancellationToken)
@@ -105,11 +103,11 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
 
 public sealed class SegmentTrainingStatusTests
 {
-    [Fact(DisplayName = "BR-CD-008: a candidate the day's round puts in use is answered as the version in use, first among the versions, with its figures, the evidence it stands on and the threshold it recommends")]
+    [Fact(DisplayName = "BR-CD-008: a candidate the day's round puts in use is answered as the version in use, first among the versions, with its figures and the evidence it stands on")]
     public async Task ACandidatePutInUseIsAnsweredWithItsFigures()
     {
         await using var feature = new SegmentTrainingFeature();
-        feature.Trainer.Candidate = SegmentTrainingFeature.CannedTrainer.Evaluation(0.93, 1.5, 12);
+        feature.Trainer.Candidate = SegmentTrainingFeature.CannedTrainer.Evaluation(0.93, 0.9, 12);
 
         SegmentTrainingLook look = await feature.RoundAsync();
         (HttpStatusCode status, JsonElement data) = await feature.StatusAsync();
@@ -119,20 +117,19 @@ public sealed class SegmentTrainingStatusTests
         Assert.Equal((2, "active"), (data.GetProperty("version").GetProperty("number").GetInt32(), data.GetProperty("version").GetProperty("state").GetString()));
         JsonElement[] versions = [.. data.GetProperty("versions").EnumerateArray()];
         Assert.Equal([(2, "active"), (1, "retired")], versions.Select(version => (version.GetProperty("number").GetInt32(), version.GetProperty("state").GetString())));
-        Assert.Equal((0.93, 1.5), (versions[0].GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble(), versions[0].GetProperty("metrics").GetProperty("programmeSkippedSecondsPerHour").GetDouble()));
+        Assert.Equal(0.93, versions[0].GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
         Assert.Equal(JsonValueKind.Null, versions[1].GetProperty("metrics").ValueKind);
         JsonElement metrics = data.GetProperty("metrics");
-        Assert.Equal((0.93, 0.8, 1.5), (metrics.GetProperty("boundaryRecallWithin2s").GetDouble(), metrics.GetProperty("boundaryRecallWithin1s").GetDouble(), metrics.GetProperty("programmeSkippedSecondsPerHour").GetDouble()));
+        Assert.Equal((0.93, 0.8, 0.9), (metrics.GetProperty("boundaryRecallWithin2s").GetDouble(), metrics.GetProperty("boundaryRecallWithin1s").GetDouble(), metrics.GetProperty("kinds")[0].GetProperty("recall").GetDouble()));
         Assert.Equal(0.93, Assert.Single(data.GetProperty("stations").EnumerateArray()).GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
-        Assert.Equal((12, true), (data.GetProperty("evidence").GetProperty("confirmedRecordings").GetInt32(), data.GetProperty("evidence").GetProperty("enough").GetBoolean()));
-        Assert.Equal(0.65, data.GetProperty("skipThreshold").GetProperty("recommended").GetDouble());
+        Assert.Equal((12, true), (data.GetProperty("evidence").GetProperty("recordings").GetInt32(), data.GetProperty("evidence").GetProperty("enough").GetBoolean()));
     }
 
     [Fact(DisplayName = "BR-CD-008: a candidate the day's round keeps only is answered among the versions with its figures, while the version in use and its figures stay")]
     public async Task ACandidateKeptOnlyIsAnsweredAmongTheVersions()
     {
         await using var feature = new SegmentTrainingFeature();
-        feature.Trainer.Candidate = SegmentTrainingFeature.CannedTrainer.Evaluation(0.80, 1.5, 12);
+        feature.Trainer.Candidate = SegmentTrainingFeature.CannedTrainer.Evaluation(0.80, 0.9, 12);
 
         SegmentTrainingLook look = await feature.RoundAsync();
         (_, JsonElement data) = await feature.StatusAsync();
@@ -144,6 +141,6 @@ public sealed class SegmentTrainingStatusTests
         Assert.Equal(0.80, versions[0].GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
         Assert.Equal(JsonValueKind.Null, versions[0].GetProperty("adoptedAt").ValueKind);
         Assert.Equal(JsonValueKind.Null, data.GetProperty("metrics").ValueKind);
-        Assert.Equal(12, data.GetProperty("evidence").GetProperty("confirmedRecordings").GetInt32());
+        Assert.Equal(12, data.GetProperty("evidence").GetProperty("recordings").GetInt32());
     }
 }
