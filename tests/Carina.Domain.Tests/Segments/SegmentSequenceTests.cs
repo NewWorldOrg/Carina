@@ -350,11 +350,73 @@ public sealed class SegmentSequenceTests
             SegmentSequence.Decide(reversed, [Plain, Ending(-3), Plain, Plain, Plain], SegmentThresholds.Initial));
     }
 
+    [Fact(DisplayName = "BR-CD-007: a joined advert is taken in place of the segments it joins and counts as one segment, so an advert cut in three, each part likelier the programme alone, is a break in its pod, and without the joined advert the pod has a hole")]
+    public void AJoinedAdvertFillsItsPod()
+    {
+        SegmentPiece[] pieces = Laid(300, 15, 4, 7, 4, 15, 1455);
+        SegmentChances[] chances = [Plain, Four(2.5, -8, -8), Four(-2.5, -8, -8), Four(-2.5, -8, -8), Four(-1, -8, -8), Four(2.5, -8, -8), Plain];
+        JoinedPiece advert = new(2, 4, new SegmentPiece(TimeSpan.FromSeconds(315), TimeSpan.FromSeconds(330), TimeSpan.FromSeconds(15), SegmentFeatureValues.Of(new Dictionary<string, double?>())), [SegmentKind.Break]);
+
+        IReadOnlyList<SegmentSpan> joined = SegmentSequence.Decided(pieces, chances, [advert], [Four(2.5, -8, -8)], TimeSpan.FromSeconds(1800), SegmentThresholds.Initial);
+        IReadOnlyList<SegmentSpan> apart = SegmentSequence.Decided(pieces, chances, [], [], TimeSpan.FromSeconds(1800), SegmentThresholds.Initial);
+
+        Assert.Equal([(300d, 345d)], Breaks(joined));
+        Assert.Equal([(300d, 315d), (330d, 345d)], Breaks(apart));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a joined opening counts as the segments it joins, each at the chance of the whole, so a song cut in three by the logo is one opening from its start where the whole is likelier than its parts, and the parts decide where it is not")]
+    public void AJoinedOpeningIsTakenWhole()
+    {
+        SegmentPiece[] pieces = Laid(60, 15, 45, 30, 1650);
+        SegmentChances[] chances = [Plain, Opening(-5), Opening(-1), Opening(1), Plain];
+        SegmentPiece whole = new(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(90), SegmentFeatureValues.Of(new Dictionary<string, double?>()));
+        JoinedPiece song = new(1, 3, whole, [SegmentKind.Opening]);
+
+        IReadOnlyList<SegmentSpan> likelier = SegmentSequence.Decided(pieces, chances, [song], [Opening(4)], TimeSpan.FromSeconds(1800), SegmentThresholds.Initial);
+        IReadOnlyList<SegmentSpan> doubtful = SegmentSequence.Decided(pieces, chances, [song], [Opening(-3)], TimeSpan.FromSeconds(1800), SegmentThresholds.Initial);
+
+        Assert.Equal([(60d, 150d)], Themes(likelier, SegmentKind.Opening));
+        Assert.Equal([(120d, 150d)], Themes(doubtful, SegmentKind.Opening));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: an opening or an ending does not run on across a seam, so a piece like one right after a seam starts nothing of the one before it, and a catalog fix across a seam is overruled for the fewer pieces")]
+    public void AThemeDoesNotRunAcrossASeam()
+    {
+        SegmentPiece[] laid = Laid(60, 60, 30, 1650);
+        SegmentPiece[] pieces = [laid[0], laid[1], laid[2] with { AfterASeam = true }, laid[3]];
+        SegmentPiece[] fixedPieces = Fixed(pieces, (1, SegmentKind.Opening, 0.8), (2, SegmentKind.Opening, 0.8));
+
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(pieces, [Plain, Opening(3), Opening(3), Plain], SegmentThresholds.Initial));
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(fixedPieces, [Plain, Plain, Plain, Plain], SegmentThresholds.Initial));
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Opening, SegmentKind.Programme],
+            SegmentSequence.Decide(laid, [Plain, Opening(3), Opening(3), Plain], SegmentThresholds.Initial));
+    }
+
+    [Fact(DisplayName = "every joined piece is given its chances and joins segments there are")]
+    public void AJoinedPieceIsGivenChancesOverSegmentsThereAre()
+    {
+        SegmentPiece[] pieces = Laid(300, 15, 15, 1470);
+        JoinedPiece beyond = new(2, 4, pieces[2], [SegmentKind.Break]);
+
+        Assert.Throws<ArgumentException>(() => SegmentSequence.Decided(pieces, [Plain, Plain, Plain, Plain], [beyond], [], TimeSpan.FromSeconds(1800), SegmentThresholds.Initial));
+        Assert.Throws<ArgumentException>(() => SegmentSequence.Decided(pieces, [Plain, Plain, Plain, Plain], [beyond], [Plain], TimeSpan.FromSeconds(1800), SegmentThresholds.Initial));
+    }
+
     [Fact(DisplayName = "a score is needed for every piece")]
     public void AScoreIsNeededForEveryPiece()
         => Assert.Throws<ArgumentException>(() => SegmentSequence.Decide(Laid(300, 60), [Programme], SegmentThresholds.Initial));
 
     private static SegmentChances Plain => Four(-5, -8, -8);
+
+    private static (double Starts, double Ends)[] Breaks(IReadOnlyList<SegmentSpan> spans) => Themes(spans, SegmentKind.Break);
+
+    private static (double Starts, double Ends)[] Themes(IReadOnlyList<SegmentSpan> spans, SegmentKind kind)
+        => [.. spans.Where(span => span.Kind == kind).Select(span => (span.Starts.TotalSeconds, span.Ends.TotalSeconds))];
 
     private static SegmentChances Opening(double score) => Four(-5, score, -8);
 

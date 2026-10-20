@@ -46,7 +46,7 @@ public sealed class CatalogEvidenceReader(CarinaDbContext context) : ICatalogEvi
                         .. recording.Select(stretch => new CatalogHeard(
                             stretch.StartsAt,
                             stretch.EndsAt,
-                            stretch.KindOverride ?? CatalogHeard.CountsAs(stretch.Kind),
+                            CatalogHeard.KindOf(stretch.KindOverride, stretch.Kind),
                             stretch.OccurrenceCount,
                             stretch.SeriesCount,
                             stretch.StationCount,

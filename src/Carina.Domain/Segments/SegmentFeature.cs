@@ -63,6 +63,8 @@ public static class SegmentFeature
 
     public const string IsShortMultipleOf15s = "isShortMultipleOf15s";
 
+    public const string AdvertBeside = "advertBeside";
+
     public const int GenreKinds = 16;
 
     private static readonly string[] Listed =
@@ -94,6 +96,7 @@ public static class SegmentFeature
         IsThemeLength,
         LoudnessRange,
         IsShortMultipleOf15s,
+        AdvertBeside,
     ];
 
     private static readonly HashSet<string> Known = new(Listed, StringComparer.Ordinal);

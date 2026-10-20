@@ -93,6 +93,10 @@ public sealed class SegmentDetectorRuleScenarioTests
     [MemberData(nameof(ScenariosCutAtEveryAdvert))]
     public void TheVersionWithDynamicSongsDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.FourKindsWithDynamicSongs, spoken: true);
 
+    [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand for pods of adverts detects on speech what the rule-based detection marks where every pod is cut at every advert")]
+    [MemberData(nameof(ScenariosCutAtEveryAdvert))]
+    public void TheVersionForPodsDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.FourKindsInPods, spoken: true);
+
     private static void DetectsWhatTheRuleBasedDetectionMarks(string scenario, SegmentModel made, bool spoken = false)
     {
         (ChapterEvidence evidence, TimeSpan length, ChapterSettings settings) = Listed[scenario];

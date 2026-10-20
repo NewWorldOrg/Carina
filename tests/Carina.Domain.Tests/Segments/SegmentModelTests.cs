@@ -335,6 +335,25 @@ public sealed class SegmentModelTests
         Assert.Equal(any.Chances(advert, Station, null).Of(SegmentKind.Break), dynamic.Chances(advert, Station, null).Of(SegmentKind.Break), 12);
     }
 
+    [Fact(DisplayName = "BR-CD-007: the version for pods weighs as the version with songs whose loudness moves but adds 1.5 to an advert with another beside it and no longer weighs a multiple of the grid against the opening and the ending, so an advert of a pod is a break at more than 0.9, a lone one as before, and a whole opening of 90 seconds on the grid as likely as one off it")]
+    public void TheVersionForPodsIsHandSet()
+    {
+        SegmentModel dynamic = SegmentModel.FourKindsWithDynamicSongs;
+        SegmentModel pods = SegmentModel.FourKindsInPods;
+        SegmentFeatureValues lone = Features((SegmentFeature.IsShortMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1));
+        SegmentFeatureValues beside = Features((SegmentFeature.IsShortMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.AdvertBeside, 1));
+        SegmentFeatureValues onTheGrid = Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.LoudnessRange, 4));
+        SegmentFeatureValues offTheGrid = Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 4));
+
+        Assert.Equal(dynamic.Thresholds, pods.Thresholds);
+        Assert.Equal(1.5, pods.Weights.Classes[SegmentKind.Break].Features[SegmentFeature.AdvertBeside]);
+        Assert.All([SegmentKind.Opening, SegmentKind.Ending], kind => Assert.False(pods.Weights.Classes[kind].Features.ContainsKey(SegmentFeature.IsMultipleOf15s)));
+        Assert.Equal(dynamic.Chances(lone, Station, null).Of(SegmentKind.Break), pods.Chances(lone, Station, null).Of(SegmentKind.Break), 12);
+        Assert.True(pods.Chances(beside, Station, null).Of(SegmentKind.Break) > 0.9);
+        Assert.Equal(pods.Chances(offTheGrid, Station, null).Of(SegmentKind.Opening), pods.Chances(onTheGrid, Station, null).Of(SegmentKind.Opening), 12);
+        Assert.True(dynamic.Chances(onTheGrid, Station, null).Of(SegmentKind.Opening) < pods.Chances(onTheGrid, Station, null).Of(SegmentKind.Opening));
+    }
+
     [Fact(DisplayName = "the offsets of the station and of the series are added to the score of a break alone, so the opening and the ending score by their own weights")]
     public void TheOffsetsWeighTheBreakAlone()
     {

@@ -42,7 +42,7 @@ public sealed class SegmentStatusReadsTests(MigratedScratchDatabase database)
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    [Fact(DisplayName = "BR-CD-008: the catalog gives an evaluation the recordings read that it is sure of an advert in and the boundaries of those adverts, two adverts with no gap between them one stretch; an advert of one series, an opening and a recording not read are left out")]
+    [Fact(DisplayName = "BR-CD-008: the catalog gives an evaluation the recordings read that it is sure of an advert in and the outer edges of the pods of those adverts, two adverts with no gap between them one pod; an advert of one series alone, an opening and a recording not read are left out")]
     public async Task TheCatalogGivesTheRecordingsItIsSureOfAnAdvertIn()
     {
         RecordingId pods = await RecordAsync(read: true);

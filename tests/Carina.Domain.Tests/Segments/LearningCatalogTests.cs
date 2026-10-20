@@ -33,7 +33,7 @@ public sealed class LearningCatalogTests
         Assert.Equal(new CatalogHeard(CatalogSeries.Lead + TimeSpan.FromSeconds(300), CatalogSeries.Lead + TimeSpan.FromSeconds(329), SegmentKind.Break, 3, 2, 2, 0.9, advert), grown);
     }
 
-    [Fact(DisplayName = "BR-CD-005: a phrase heard right after the opening of two episodes is heard as that opening, once two episodes are recorded, and as the programme where it is played elsewhere")]
+    [Fact(DisplayName = "BR-CD-005: a phrase heard right after the opening of two episodes is heard as that opening, once two episodes are recorded, and as nothing where it is played elsewhere, since the song may be sung in the programme there or advertised between adverts")]
     public void APhraseRightAfterTheOpeningIsHeardAsIt()
     {
         CatalogEntryId head = CatalogEntryId.New();
@@ -60,8 +60,8 @@ public sealed class LearningCatalogTests
 
         Assert.All(then, heard => Assert.Null(heard.Kind));
         Assert.Equal(
-            [(head, SegmentKind.Opening), (phrase, SegmentKind.Opening), (phrase, SegmentKind.Programme)],
-            now.OrderBy(heard => heard.Starts).Select(heard => (heard.Entry!, heard.Kind!.Value)));
+            [(head, SegmentKind.Opening), (phrase, SegmentKind.Opening), (phrase, (SegmentKind?)null)],
+            now.OrderBy(heard => heard.Starts).Select(heard => (heard.Entry!, heard.Kind)));
         Assert.All(now.Where(heard => heard.Entry == phrase), heard => Assert.Equal(0.8, heard.Confidence));
     }
 

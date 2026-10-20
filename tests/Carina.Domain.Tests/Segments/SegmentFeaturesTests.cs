@@ -132,6 +132,23 @@ public sealed class SegmentFeaturesTests
         Assert.Throws<ArgumentException>(() => CatalogHeard.Of(Occurrence(opening, null), Entry(CatalogKind.Opening)));
     }
 
+    [Theory(DisplayName = "BR-CD-007: a stretch of an opening's or an ending's sound taken for the programme where it lies counts as nothing and fixes no piece, since the song may be sung in the programme there or advertised between adverts; one taken for an ending, or of a fixed part of a programme, counts as before")]
+    [InlineData(CatalogKind.Opening, SegmentKind.Programme, null)]
+    [InlineData(CatalogKind.Ending, SegmentKind.Programme, null)]
+    [InlineData(CatalogKind.Opening, SegmentKind.Ending, SegmentKind.Ending)]
+    [InlineData(CatalogKind.ProgrammeFixture, null, SegmentKind.Programme)]
+    public void AThemeTakenForTheProgrammeCountsAsNothing(CatalogKind kind, SegmentKind? alone, SegmentKind? counts)
+    {
+        CatalogEntry entry = Entry(kind);
+        CatalogHeard heard = CatalogHeard.Of(Occurrence(entry, alone), entry);
+        SegmentContext context = Context(catalog: [heard]);
+
+        IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of([Edge(0), Cut(100), Cut(115), Edge(Length)], new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial);
+
+        Assert.Equal(counts, heard.Kind);
+        Assert.Equal(counts, pieces[1].Fixed?.Kind);
+    }
+
     [Fact(DisplayName = "BR-CD-007: a piece is fixed to the kind the catalog's stretches of that kind cover more than half of, a fixed part of a programme to the programme, at the confidence of the surest entry over it; a kind or a confidence not known and half or less fix nothing")]
     public void ThePiecesTheCatalogCoversAreFixed()
     {
@@ -230,7 +247,7 @@ public sealed class SegmentFeaturesTests
         Assert.Null(Pieces([Edge(0), Cut(300), Cut(360), Edge(Length)])[1].Features[SegmentFeature.PastCmShare]);
     }
 
-    [Fact(DisplayName = "BR-CD-007: the past opening share is how many earlier episodes had an opening within 30 seconds of the same place from their start, the past ending share how many had an ending as far from their end, each episode as the version detected it")]
+    [Fact(DisplayName = "BR-CD-007: the past opening share is how many earlier episodes had an opening within 5 seconds of the same place from their start, the past ending share how many had an ending as far from their end, each episode as the version detected it, so an opening that ended 25 seconds before the place says nothing of it")]
     public void ThePastOpeningAndEndingSharesComeFromEarlierEpisodes()
     {
         PastEpisode[] past =
@@ -239,14 +256,15 @@ public sealed class SegmentFeaturesTests
             Remembered(0, null, [(0, 400, SegmentKind.Programme), (400, 490, SegmentKind.Opening), (490, 1700, SegmentKind.Programme), (1700, 1790, SegmentKind.Ending), (1790, 1900, SegmentKind.Programme)]),
             Remembered(0, 1800, [(0, 1800, SegmentKind.Programme)]),
             Remembered(0, 1800, [(0, 60, SegmentKind.Programme), (60, 150, SegmentKind.Opening), (150, 1800, SegmentKind.Programme)]),
+            Remembered(0, 1800, [(0, 80, SegmentKind.Opening), (80, 1800, SegmentKind.Programme)]),
         ];
         BoundaryCandidate[] candidates = [Edge(0), Cut(60), Cut(150), Cut(1650), Cut(1740), Edge(Length)];
         SegmentContext context = Context(starts: TimeSpan.Zero, ends: TimeSpan.FromSeconds(Length), past: past);
 
         IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of(candidates, new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial);
 
-        Assert.Equal(2d / 4, pieces[1].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
-        Assert.Equal(2d / 4, pieces[3].Features[SegmentFeature.PastEndingShare]!.Value, 9);
+        Assert.Equal(2d / 5, pieces[1].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
+        Assert.Equal(2d / 5, pieces[3].Features[SegmentFeature.PastEndingShare]!.Value, 9);
         Assert.Equal(0, pieces[3].Features[SegmentFeature.PastOpeningShare]!.Value, 9);
         Assert.Equal(0, pieces[1].Features[SegmentFeature.PastEndingShare]!.Value, 9);
         Assert.Null(Pieces([Edge(0), Cut(60), Cut(150), Edge(Length)])[1].Features[SegmentFeature.PastOpeningShare]);
@@ -452,6 +470,71 @@ public sealed class SegmentFeaturesTests
 
         Assert.Equal(0, pieces[1].Features[SegmentFeature.LoudnessRange]!.Value, 6);
         Assert.Equal(20, pieces[3].Features[SegmentFeature.LoudnessRange]!.Value, 6);
+    }
+
+    [Fact(DisplayName = "BR-CD-007: the loudness range keeps away from each edge by half the silence there, so a song after a silence of six seconds is read without it and keeps its loudness")]
+    public void TheLoudnessRangeKeepsAwayFromALongSilenceAtAnEdge()
+    {
+        SegmentEvidence evidence = new SyntheticReadings(Length).QuietAround(300, 6).QuietAround(320).Evidence();
+
+        IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of([Edge(0), Cut(300, lasting: 6), Cut(320), Edge(Length)], evidence, Context(), null, SegmentThresholds.Initial);
+
+        Assert.Equal(0, pieces[1].Features[SegmentFeature.LoudnessRange]!.Value, 6);
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a piece is an advert beside another when it runs from one cut between adverts to the next, a silence of half a second or more as quiet as -90 dBFS, as long as an advert, and so does the stretch to the cut before it or after it; a lone advert, or one between cuts at a silence that is shallow, is not")]
+    public void AnAdvertBesideAnotherIsOneOfAPod()
+    {
+        IReadOnlyList<SegmentPiece> pieces = Pieces(
+        [
+            Edge(0),
+            Cut(600, depth: 70, lasting: 1),
+            Cut(615, depth: 70, lasting: 1),
+            Cut(630, depth: 70, lasting: 1),
+            Cut(900, depth: 70, lasting: 1),
+            Cut(915, depth: 70, lasting: 1),
+            Cut(1200, depth: 10, lasting: 1),
+            Cut(1215, depth: 10, lasting: 1),
+            Cut(1230, depth: 10, lasting: 1),
+            Edge(Length),
+        ]);
+
+        Assert.Equal([0d, 1, 1, 0, 0, 0, 0, 0, 0], pieces.Select(piece => piece.Features[SegmentFeature.AdvertBeside]!.Value));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: neighbouring segments are read as one advert where the cuts of a pod hold them, across the logo coming and going and a shallow silence at a change of scene, and as one opening between two silences where an opening lies, across the logo coming and going; neither inside a lone advert, across a seam, from where only the logo comes or goes, nor over a segment the catalog fixes")]
+    public void NeighbouringSegmentsAreReadAsOne()
+    {
+        BoundaryCandidate[] candidates =
+        [
+            Edge(0),
+            Cut(60, depth: 70, lasting: 1),
+            Plain(75),
+            Plain(120),
+            Cut(150, depth: 70, lasting: 1),
+            Cut(600, depth: 70, lasting: 1),
+            Cut(615, depth: 70, lasting: 1),
+            Plain(620),
+            Cut(624, depth: 10, lasting: 0.4),
+            Cut(630, depth: 70, lasting: 1),
+            Cut(645, depth: 70, lasting: 1),
+            Cut(900, depth: 70, lasting: 1),
+            Plain(905),
+            Cut(915, depth: 70, lasting: 1),
+            Edge(Length),
+        ];
+        SegmentEvidence evidence = new SyntheticReadings(Length).Evidence();
+
+        (IReadOnlyList<SegmentPiece> pieces, IReadOnlyList<JoinedPiece> joined) = SegmentFeatures.Read(candidates, evidence, Context(), null, SegmentThresholds.Initial);
+        IReadOnlyList<JoinedPiece> fixedOver = SegmentFeatures.Read(candidates, evidence, Context(catalog: [Heard(620, 624, SegmentKind.Break, 0.9)]), null, SegmentThresholds.Initial).Joined;
+
+        Assert.Equal(
+            [(60d, 150d, SegmentKind.Opening), (615d, 630d, SegmentKind.Break)],
+            joined.Select(piece => (piece.Piece.Starts.TotalSeconds, piece.Piece.Ends.TotalSeconds, piece.Kinds.Single())));
+        Assert.Equal([(1, 3), (6, 8)], joined.Select(piece => (piece.First, piece.Last)));
+        Assert.Equal(1, joined[1].Piece.Features[SegmentFeature.AdvertBeside]);
+        Assert.Equal([false, true, false, false, true, true, true, false, false, true, true, true, false, true], pieces.Select(piece => piece.AfterASeam));
+        Assert.Equal([(60d, 150d, SegmentKind.Opening)], fixedOver.Select(piece => (piece.Piece.Starts.TotalSeconds, piece.Piece.Ends.TotalSeconds, piece.Kinds.Single())));
     }
 
     [Fact(DisplayName = "BR-CD-007: a piece shorter than 12 seconds has its loudness range read over the 10 seconds around its middle, a few seconds saying little, and it is not known where no window fits in the recording")]

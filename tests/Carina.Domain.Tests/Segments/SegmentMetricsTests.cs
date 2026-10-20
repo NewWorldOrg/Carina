@@ -114,7 +114,7 @@ public sealed class SegmentMetricsTests
         Assert.Null(SegmentMetrics.Of([], SkipReturns.None));
     }
 
-    [Fact(DisplayName = "BR-CD-008: the catalog is sure of adverts heard in two series or on two stations and of openings and endings, adverts less than two seconds apart are one, and no boundary is drawn within two seconds of the recording's zero or end")]
+    [Fact(DisplayName = "BR-CD-008: the catalog is sure of adverts heard in two series or on two stations and of openings and endings, adverts less than two seconds apart are one pod, and no boundary is drawn within two seconds of the recording's zero or end")]
     public void WhatTheCatalogIsSureOf()
     {
         CatalogTruth truth = CatalogTruth.Of(
@@ -159,7 +159,51 @@ public sealed class SegmentMetricsTests
         Assert.Throws<ArgumentException>(() => Compared(CatalogTruth.None, Detected(Span(0, Length, SegmentKind.Programme, 0.9))));
     }
 
-    [Theory(DisplayName = "BR-CD-008: an evaluation stands on enough with ten recordings the catalog is sure of an advert in and a hundred boundaries of those adverts, and not with one fewer of either")]
+    [Fact(DisplayName = "BR-CD-008: adverts heard less than two seconds apart are one pod when the catalog is sure of one of them, whatever it heard the others as, and its boundaries are the pod's outer edges, not the joins inside it; a run it is sure of none of is left out")]
+    public void APodIsOneRunWithItsOuterEdges()
+    {
+        CatalogTruth truth = CatalogTruth.Of(
+            [
+                Heard(600, 615, SegmentKind.Break, 0.9),
+                Heard(615.8, 630, SegmentKind.Break, 0.5),
+                Heard(630.8, 645, SegmentKind.Break, 0.9),
+                Heard(900, 915, SegmentKind.Break, 0.5),
+                Heard(915.8, 930, SegmentKind.Break, 0.6),
+                Heard(1200, 1265, SegmentKind.Ending, 0.8),
+                Heard(1266, 1290, SegmentKind.Ending, 0.8),
+            ],
+            TimeSpan.FromSeconds(Length));
+
+        Assert.Equal([Span(600, 645, SegmentKind.Break), Span(1200, 1290, SegmentKind.Ending)], truth.Stretches);
+        Assert.Equal(
+            [Boundary(600, SegmentKind.Break, true), Boundary(645, SegmentKind.Break, false), Boundary(1200, SegmentKind.Ending, true), Boundary(1290, SegmentKind.Ending, false)],
+            truth.Boundaries);
+        Assert.Equal(2, truth.BreakBoundaries);
+        Assert.Equal(new EvaluationEvidence(1, 2, null), EvaluationEvidence.Of([truth]));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a detection that takes a pod whole finds both of its boundaries, one that cuts it at the joins between its adverts finds no more for them, and one that finds only the joins finds none")]
+    public void CuttingAPodFindsNoMoreThanTakingItWhole()
+    {
+        CatalogTruth pod = CatalogTruth.Of(
+            [Heard(600, 615, SegmentKind.Break, 0.9), Heard(615.8, 630, SegmentKind.Break, 0.5), Heard(630.8, 645, SegmentKind.Break, 0.9)],
+            TimeSpan.FromSeconds(Length));
+        SegmentDetection whole = Detected(Span(0, 600, SegmentKind.Programme), Span(600, 645, SegmentKind.Break), Span(645, Length, SegmentKind.Programme));
+        SegmentDetection cut = Detected(
+            Span(0, 600, SegmentKind.Programme),
+            Span(600, 615, SegmentKind.Break),
+            Span(615, 630.8, SegmentKind.Programme),
+            Span(630.8, 645, SegmentKind.Break),
+            Span(645, Length, SegmentKind.Programme));
+        SegmentDetection joins = Detected(Span(0, 615.8, SegmentKind.Programme), Span(615.8, 630, SegmentKind.Break), Span(630, Length, SegmentKind.Programme));
+
+        Assert.Equal(1.0, SegmentMetrics.Of([Compared(pod, whole)], SkipReturns.None)!.BoundaryRecallWithin2s);
+        Assert.Equal(1.0, SegmentMetrics.Of([Compared(pod, cut)], SkipReturns.None)!.BoundaryRecallWithin2s);
+        Assert.Equal(0.0, SegmentMetrics.Of([Compared(pod, joins)], SkipReturns.None)!.BoundaryRecallWithin2s);
+        Assert.Equal(1.0, SegmentMetrics.Of([Compared(pod, whole)], SkipReturns.None)!.BreakRecall);
+    }
+
+    [Theory(DisplayName = "BR-CD-008: an evaluation stands on enough with ten recordings the catalog is sure of an advert in and a hundred boundaries of the pods of those adverts, and not with one fewer of either")]
     [InlineData(10, 5, true)]
     [InlineData(9, 6, false)]
     [InlineData(12, 4, false)]

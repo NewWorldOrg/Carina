@@ -4,7 +4,9 @@ namespace Carina.Domain.Segments;
 /// A stretch of the recording judged where a catalog entry is heard, the kind it counts as there, how
 /// many stretches, series and stations its entry is heard in, how sure its entry's kind is, when it
 /// is known, and which entry it is, when that is said. A programme fixture counts as the programme and a station fixture as a break; the kind the
-/// stretch alone is taken for wins over its entry's; an entry whose kind is not known counts as nothing.
+/// stretch alone is taken for wins over its entry's; an entry whose kind is not known counts as nothing, and so does a stretch of an
+/// opening's or an ending's sound taken for the programme by where it lies, since the song heard there may be sung in the programme or
+/// be advertised between adverts, which the stretch alone does not tell.
 /// </summary>
 public sealed record CatalogHeard
 {
@@ -76,13 +78,21 @@ public sealed record CatalogHeard
         return new CatalogHeard(
             occurrence.StartsAt,
             occurrence.EndsAt,
-            occurrence.KindOverride ?? CountsAs(entry.Kind),
+            KindOf(occurrence.KindOverride, entry.Kind),
             entry.OccurrenceCount,
             entry.SeriesCount,
             entry.StationCount,
             entry.Confidence,
             entry.Id);
     }
+
+    /// <summary>
+    /// The kind a stretch counts as when it alone is taken for <paramref name="alone"/>, if anything, and its entry is of
+    /// <paramref name="kind"/>: what it alone is taken for, but nothing when that is the programme and its entry an
+    /// opening or an ending, or else what its entry counts as.
+    /// </summary>
+    public static SegmentKind? KindOf(SegmentKind? alone, CatalogKind kind)
+        => alone is SegmentKind.Programme && CountsAs(kind) is SegmentKind.Opening or SegmentKind.Ending ? null : alone ?? CountsAs(kind);
 
     public static SegmentKind? CountsAs(CatalogKind kind) => kind switch
     {
