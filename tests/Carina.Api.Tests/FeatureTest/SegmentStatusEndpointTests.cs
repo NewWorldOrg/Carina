@@ -334,7 +334,7 @@ public sealed class SegmentStatusEndpointTests
     [Fact(DisplayName = "BR-CD-004: before any round of learning there is no last round, and the next may begin at three in the morning in Japan of the day it is")]
     public async Task BeforeAnyRoundThereIsNoLastRound()
     {
-        await using var feature = new SegmentStatusFeature();
+        await using SegmentStatusFeature feature = new();
 
         (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
 
@@ -346,7 +346,7 @@ public sealed class SegmentStatusEndpointTests
     [Fact(DisplayName = "BR-CD-008: a round that kept a candidate on too little evidence is answered with what became of it, the verdict, the figures of the version in use beside it, and the candidate's own evidence and figures")]
     public async Task ARoundThatKeptACandidateIsAnsweredWithHowItWasJudged()
     {
-        await using var feature = new SegmentStatusFeature();
+        await using SegmentStatusFeature feature = new();
         DateTime taken = new(2026, 11, 7, 18, 6, 0, DateTimeKind.Utc);
         feature.Versions.Others.Add(Version(
             5,
@@ -381,7 +381,7 @@ public sealed class SegmentStatusEndpointTests
     [InlineData(SegmentTrainingOutcome.Failed, "failed")]
     public async Task ARoundThatLearnedNothingIsAnsweredWithoutACandidate(SegmentTrainingOutcome outcome, string said)
     {
-        await using var feature = new SegmentStatusFeature();
+        await using SegmentStatusFeature feature = new();
         await feature.Rounds.TakeAsync(SegmentLearningRound.Ended(new DateOnly(2026, 11, 7), new DateTime(2026, 11, 6, 18, 2, 0, DateTimeKind.Utc), outcome), CancellationToken.None);
 
         (_, JsonElement data) = await feature.DataAsync();
@@ -397,7 +397,7 @@ public sealed class SegmentStatusEndpointTests
     [Fact(DisplayName = "BR-CD-004: a round kept before what became of rounds was kept is not answered, and still counts as the day's round for when the next may begin")]
     public async Task ARoundKeptBeforeOutcomesWereKeptIsNotAnswered()
     {
-        await using var feature = new SegmentStatusFeature();
+        await using SegmentStatusFeature feature = new();
         await feature.Rounds.TakeAsync(SegmentLearningRound.Ended(new DateOnly(2026, 11, 7), new DateTime(2026, 11, 6, 18, 2, 0, DateTimeKind.Utc), SegmentTrainingOutcome.NothingNew), CancellationToken.None);
         await feature.Rounds.TakeAsync(SegmentLearningRound.Taken(new DateTime(2026, 11, 7, 18, 4, 0, DateTimeKind.Utc), 2), CancellationToken.None);
 
