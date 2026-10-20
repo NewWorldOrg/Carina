@@ -12,7 +12,9 @@ public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitte
 
 /// <summary>
 /// Computes the features of each segment between neighbouring boundary candidates: its length, how far
-/// it lies off the grid and whether it is a multiple of it; the depth and length of the silence at each
+/// it lies off the grid and whether it is a multiple of it, and one of at most <see cref="LongestAdvertSteps"/>
+/// steps, as long as an advert lasts, since a pod of adverts is cut at every advert and a longer stretch without a cut
+/// inside is seldom one; the depth and length of the silence at each
 /// edge, and whether both edges are silent cuts; the share of the seconds inside it, away from its edges
 /// by <see cref="LogoAwayFromTheEdges"/>, that show the logo, when at least
 /// <see cref="FewestLogoSeconds"/> do; where it lies from
@@ -22,8 +24,17 @@ public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitte
 /// their programme's end; the share of its seconds with captions; the channels' mean likeness,
 /// and how far it changes across each edge over <see cref="ChannelWindow"/> on either side, when at
 /// least half of each window was measured; the changes of scene per ten seconds; the programme's first
-/// genre; and a multiple of the grid without the logo. A feature without the readings to compute it
-/// is not known. The programme spans the recording when the guide says nothing. The catalog is no feature:
+/// genre; a multiple of the grid without the logo; whether it starts where an opening does, from
+/// <see cref="CatalogKinds.EdgeWithin"/> before the programme's start to <see cref="CatalogKinds.ThemeEdgeWithin"/>
+/// after it, and ends where an ending does, as far from the programme's end the other way; whether it lasts as
+/// long as a whole opening or ending commonly does, from <see cref="WholeThemeShortest"/> to
+/// <see cref="WholeThemeLongest"/>; and its loudness range, the decibels between the 10th and the 90th percentile
+/// of its momentary loudness, the mean power over <see cref="MomentaryWindow"/> every <see cref="MomentaryHop"/>,
+/// at least <see cref="LoudnessAwayFromTheEdges"/> away from its edges, or over <see cref="ShortestLoudnessRange"/>
+/// around its middle when less than that lies there, since a few seconds say little: a song keeps its loudness,
+/// speech keeps stopping. These say
+/// what an opening or an ending is like in any series, its first episode included. A feature without the readings
+/// to compute it is not known. The programme spans the recording when the guide says nothing. The catalog is no feature:
 /// it fixes a segment that its stretches of one kind cover more than half of to that kind, a fixed part of a
 /// programme to the programme, at the confidence of the surest entry of that kind over it; of two kinds that
 /// do, the surer, then the earlier kind. A stretch whose kind or confidence is not known fixes nothing.
@@ -37,6 +48,20 @@ public static class SegmentFeatures
     public static readonly TimeSpan PastWithin = TimeSpan.FromSeconds(30);
 
     public static readonly TimeSpan ChannelWindow = TimeSpan.FromSeconds(1);
+
+    public const int LongestAdvertSteps = 4;
+
+    public static readonly TimeSpan WholeThemeShortest = TimeSpan.FromSeconds(55);
+
+    public static readonly TimeSpan WholeThemeLongest = TimeSpan.FromSeconds(125);
+
+    public static readonly TimeSpan MomentaryWindow = TimeSpan.FromMilliseconds(400);
+
+    public static readonly TimeSpan MomentaryHop = TimeSpan.FromMilliseconds(100);
+
+    public static readonly TimeSpan LoudnessAwayFromTheEdges = TimeSpan.FromSeconds(1);
+
+    public static readonly TimeSpan ShortestLoudnessRange = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan SceneSpan = TimeSpan.FromSeconds(10);
 
@@ -76,6 +101,8 @@ public static class SegmentFeatures
 
         private readonly int? genre = context.Genres.Count is 0 ? null : context.Genres[0].Kind;
 
+        private readonly double[] power = Powers(evidence);
+
         public SegmentPiece Piece(BoundaryCandidate head, BoundaryCandidate tail)
         {
             TimeSpan shortest = tail.Earliest - head.Latest;
@@ -108,6 +135,11 @@ public static class SegmentFeatures
                 [SegmentFeature.TailChannelChange] = ChannelChangeAcross(tail.At),
                 [SegmentFeature.SceneChangesPer10s] = scenes.Count(at => at >= piece.From && at < piece.To) * (SceneSpan / piece.Length),
                 [SegmentFeature.MultipleOf15sWithoutLogo] = multiple * (1 - logo),
+                [SegmentFeature.OpeningWindow] = Between(piece.From, programmeStarts - CatalogKinds.EdgeWithin, programmeStarts + CatalogKinds.ThemeEdgeWithin),
+                [SegmentFeature.EndingWindow] = Between(piece.To, programmeEnds - CatalogKinds.ThemeEdgeWithin, programmeEnds + CatalogKinds.EdgeWithin),
+                [SegmentFeature.IsThemeLength] = Between(piece.Length, WholeThemeShortest, WholeThemeLongest),
+                [SegmentFeature.LoudnessRange] = LoudnessRange(piece),
+                [SegmentFeature.IsShortMultipleOf15s] = multiple * (Math.Round(fitted / SegmentGrid.Step, MidpointRounding.AwayFromZero) <= LongestAdvertSteps ? 1 : 0),
             };
 
             for (int kind = 0; kind < SegmentFeature.GenreKinds; kind++)
@@ -138,6 +170,19 @@ public static class SegmentFeatures
             return shown;
         }
 
+        private static double[] Powers(SegmentEvidence evidence)
+        {
+            ReadOnlySpan<byte> loudness = evidence.Loudness;
+            double[] powers = new double[loudness.Length];
+
+            for (int at = 0; at < loudness.Length; at++)
+            {
+                powers[at] = Math.Pow(10, -SoundLoudness.DecibelsBelowFullScale(loudness[at]) / 10);
+            }
+
+            return powers;
+        }
+
         private static double?[] Likeness(SegmentEvidence evidence)
         {
             ReadOnlySpan<ChannelDifference> channels = evidence.Channels;
@@ -165,6 +210,51 @@ public static class SegmentFeatures
 
             return inside.Length < FewestLogoSeconds ? null : inside.Count(seen => seen) / (double)inside.Length;
         }
+
+        /// <summary>
+        /// The decibels between the 10th and the 90th percentile of the momentary loudness inside
+        /// <paramref name="piece"/>, away from its edges, or over <see cref="ShortestLoudnessRange"/> around its middle
+        /// when less than that lies there; not known when no window fits in the recording there.
+        /// </summary>
+        private double? LoudnessRange(Stretch piece)
+        {
+            TimeSpan first = piece.From + LoudnessAwayFromTheEdges;
+            TimeSpan last = piece.To - LoudnessAwayFromTheEdges;
+
+            if (last - first < ShortestLoudnessRange)
+            {
+                first = piece.Middle - (ShortestLoudnessRange / 2);
+                last = piece.Middle + (ShortestLoudnessRange / 2);
+            }
+
+            int window = (int)Math.Round(MomentaryWindow / SegmentEvidence.LoudnessStep);
+            int hop = (int)Math.Round(MomentaryHop / SegmentEvidence.LoudnessStep);
+            Range inside = Within(Math.Ceiling(first / SegmentEvidence.LoudnessStep), Math.Floor(last / SegmentEvidence.LoudnessStep), power.Length);
+            List<double> levels = [];
+
+            for (int from = inside.Start.Value; from + window <= inside.End.Value; from += hop)
+            {
+                double sum = 0;
+
+                foreach (double each in power.AsSpan(from, window))
+                {
+                    sum += each;
+                }
+
+                levels.Add(10 * Math.Log10(sum / window));
+            }
+
+            if (levels.Count is 0)
+            {
+                return null;
+            }
+
+            levels.Sort();
+
+            return Percentile(levels, 0.9) - Percentile(levels, 0.1);
+        }
+
+        private static double Percentile(List<double> sorted, double share) => sorted[Math.Min(sorted.Count - 1, (int)(share * sorted.Count))];
 
         private double? OutsideGuide(Stretch piece)
         {
@@ -224,6 +314,8 @@ public static class SegmentFeatures
         }
 
         private static TimeSpan Clipped(TimeSpan from, TimeSpan to) => to > from ? to - from : TimeSpan.Zero;
+
+        private static double Between(TimeSpan at, TimeSpan earliest, TimeSpan latest) => at >= earliest && at <= latest ? 1 : 0;
     }
 
     /// <summary>

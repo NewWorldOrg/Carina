@@ -7,7 +7,8 @@ namespace Carina.Domain.Tests.Segments;
 /// <summary>
 /// The scenarios of the rule-based detection's tests, each written as readings and run through the
 /// versions of the model made by hand, of two kinds and of four, beside the rule-based detection itself, the
-/// catalog weighing in neither. The scenarios that turn a setting
+/// catalog weighing in neither. The version that tells the opening and the ending in any series hears speech
+/// between the cues, since sound that keeps its loudness everywhere is a song. The scenarios that turn a setting
 /// the model has no counterpart for (the grid's step, the share of breaks allowed and the number of marks
 /// allowed) are left out, and so is the one that counts marks per recording rather than per hour.
 /// </summary>
@@ -28,6 +29,10 @@ public sealed class SegmentDetectorRuleScenarioTests
             new ChapterSettings()),
         ["a pod of adverts"] = new(Observed(At(300), At(360)), HalfAnHour, new ChapterSettings()),
         ["two pods"] = new(Observed(At(300), At(360), At(900), At(1020)), HalfAnHour, new ChapterSettings()),
+        ["two pods, the longer cut at every advert"] = new(
+            Observed([At(300), At(360), .. Enumerable.Range(0, 9).Select(advert => At(900 + (15 * advert)))]),
+            HalfAnHour,
+            new ChapterSettings()),
         ["a pair off the grid beyond the tolerance"] = new(Observed(At(300), At(362.5)), HalfAnHour, new ChapterSettings()),
         ["a pair just inside the tolerance"] = new(Observed(At(300), At(360.9)), HalfAnHour, new ChapterSettings()),
         ["a pair just outside the tolerance"] = new(Observed(At(300), At(361.1)), HalfAnHour, new ChapterSettings()),
@@ -57,7 +62,16 @@ public sealed class SegmentDetectorRuleScenarioTests
         ["what was observed past the end"] = new(Observed(At(1740), At(1800), At(1860)), HalfAnHour, new ChapterSettings()),
     };
 
+    /// <summary>
+    /// The scenarios with a pod longer than a minute with no cut inside it, which no broadcast airs, since a pod is cut at
+    /// every advert; the version that tells the opening and the ending in any series takes such a stretch for an opening
+    /// or the programme rather than a break.
+    /// </summary>
+    private static readonly string[] UncutPods = ["two pods", "breaks taking more than half the length"];
+
     public static TheoryData<string> Scenarios => [.. Listed.Keys];
+
+    public static TheoryData<string> ScenariosCutAtEveryAdvert => [.. Listed.Keys.Except(UncutPods)];
 
     [Theory(DisplayName = "the first version detects what the rule-based detection marks")]
     [MemberData(nameof(Scenarios))]
@@ -71,12 +85,16 @@ public sealed class SegmentDetectorRuleScenarioTests
     [MemberData(nameof(Scenarios))]
     public void TheVersionBelowPausesDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.FourKindsBelowPauses);
 
-    private static void DetectsWhatTheRuleBasedDetectionMarks(string scenario, SegmentModel made)
+    [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand that tells the opening and the ending in any series detects on speech what the rule-based detection marks where every pod is cut at every advert")]
+    [MemberData(nameof(ScenariosCutAtEveryAdvert))]
+    public void TheVersionForAnySeriesDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.FourKindsInAnySeries, spoken: true);
+
+    private static void DetectsWhatTheRuleBasedDetectionMarks(string scenario, SegmentModel made, bool spoken = false)
     {
         (ChapterEvidence evidence, TimeSpan length, ChapterSettings settings) = Listed[scenario];
 
         ChapterDetection marked = ChapterGrid.Mark(evidence, length, settings);
-        SegmentDetection detected = SegmentDetector.Detect(Translated(evidence, length), Bare, Model(settings, made));
+        SegmentDetection detected = SegmentDetector.Detect(Translated(evidence, length, spoken), Bare, Model(settings, made));
 
         Assert.Equal(StateOf(marked.Verdict), detected.State);
         Assert.Equal(marked.BreakShare, detected.CmShare, 9);
@@ -118,7 +136,7 @@ public sealed class SegmentDetectorRuleScenarioTests
         return (found.Starts, found.Ends);
     }
 
-    private static SegmentEvidence Translated(ChapterEvidence evidence, TimeSpan length)
+    private static SegmentEvidence Translated(ChapterEvidence evidence, TimeSpan length, bool spoken = false)
     {
         double reach = new[] { length }
             .Concat(evidence.Silences.Select(quiet => quiet.Ends))
@@ -127,6 +145,11 @@ public sealed class SegmentDetectorRuleScenarioTests
             .Max()
             .TotalSeconds + 1;
         SyntheticReadings readings = new(length.TotalSeconds, reach);
+
+        if (spoken)
+        {
+            readings.Spoken(0, reach);
+        }
 
         foreach (ChapterSpan quiet in evidence.Silences)
         {

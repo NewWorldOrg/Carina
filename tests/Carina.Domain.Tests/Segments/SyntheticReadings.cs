@@ -18,6 +18,11 @@ internal sealed class SyntheticReadings
 
     public const byte AlikeChannels = 190;
 
+    /// <summary>
+    /// The level speech drops to between its words, at -40 dBFS: far quieter than it speaks, louder than any silence.
+    /// </summary>
+    public const byte BetweenWords = 80;
+
     public const int FramesASecond = 10;
 
     public static readonly TimeSpan LoudnessStep = TimeSpan.FromTicks(TimeSpan.TicksPerSecond * SoundLoudness.Hop / SoundReader.SampleRate);
@@ -68,6 +73,20 @@ internal sealed class SyntheticReadings
         for (long reading = Math.Max(0, middle - half); reading < middle + half && reading < loudness.Length; reading++)
         {
             loudness[reading] = level;
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Speech from <paramref name="from"/> to <paramref name="to"/>: every three seconds, the last of them drops to
+    /// <see cref="BetweenWords"/>, so its loudness range is 20 decibels where a song's is none.
+    /// </summary>
+    public SyntheticReadings Spoken(double from, double to)
+    {
+        for (double word = from; word + 2 < to; word += 3)
+        {
+            Quiet(word + 2, Math.Min(word + 3, to), BetweenWords);
         }
 
         return this;

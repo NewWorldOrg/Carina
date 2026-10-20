@@ -10,7 +10,9 @@ namespace Carina.Domain.Segments;
 /// log-probabilities of its kinds and of what its moves cost: leaving a break for anything else after a run
 /// whose real length lies further off the grid than the tolerance costs the penalty. The opening and the ending
 /// are one each at most, the opening before the ending, and each lasts from
-/// <see cref="CatalogKinds.ThemeShortest"/> to <see cref="CatalogKinds.ThemeLongest"/>; a sequence that breaks
+/// <see cref="CatalogKinds.ThemeShortest"/> to <see cref="CatalogKinds.ThemeLongest"/>; a segment of the opening
+/// starts in the first half of the programme and one of the ending ends in its second half, by where it lies from
+/// the programme's start and end when that is known, unless the catalog fixes it to that kind; a sequence that breaks
 /// one of these is not chosen. Entering a break costs nothing, so a break may start at the recording's zero,
 /// and one running on to the end is never left. A tie keeps the programme. Neighbouring segments of one kind
 /// are then one stretch, whose probability is the length-weighted mean of its segments' chances of that kind.
@@ -47,6 +49,8 @@ public static class SegmentSequence
     private const int EndingUsed = 2;
 
     private const int States = (Block * (OpeningUsed | EndingUsed)) + Block;
+
+    private const double HalfTheProgramme = 0.5;
 
     /// <summary>
     /// Decides the kinds from the scores of a break against the programme alone.
@@ -160,7 +164,10 @@ public static class SegmentSequence
 
         if (IsShort(state))
         {
-            Themed(next, (used * Block) + (kind is SegmentKind.Opening ? ShortOpening : ShortEnding), state, reach.Then(piece.Taken(kind)), run + length);
+            if (piece.Lies(kind))
+            {
+                Themed(next, (used * Block) + (kind is SegmentKind.Opening ? ShortOpening : ShortEnding), state, reach.Then(piece.Taken(kind)), run + length);
+            }
 
             return;
         }
@@ -171,12 +178,12 @@ public static class SegmentSequence
         next.Offer(used * Block, state, reach.Then(piece.Taken(SegmentKind.Programme), leaving), TimeSpan.Zero);
         next.Offer((used * Block) + BreakState(breaks), state, reach.Then(piece.Taken(SegmentKind.Break)), breaks);
 
-        if (kind is SegmentKind.Opening || used is 0)
+        if ((kind is SegmentKind.Opening || used is 0) && piece.Lies(SegmentKind.Opening))
         {
             Themed(next, (OpeningUsed * Block) + ShortOpening, state, reach.Then(piece.Taken(SegmentKind.Opening), leaving), (kind is SegmentKind.Opening ? run : TimeSpan.Zero) + length);
         }
 
-        if (kind is SegmentKind.Ending || (used & EndingUsed) is 0)
+        if ((kind is SegmentKind.Ending || (used & EndingUsed) is 0) && piece.Lies(SegmentKind.Ending))
         {
             Themed(next, ((used | EndingUsed) * Block) + ShortEnding, state, reach.Then(piece.Taken(SegmentKind.Ending), leaving), (kind is SegmentKind.Ending ? run : TimeSpan.Zero) + length);
         }
@@ -291,6 +298,19 @@ public static class SegmentSequence
     private readonly record struct Piece(SegmentPiece Segment, SegmentChances Chances)
     {
         public CatalogFix? Fixed => Segment.Fixed is { } fix && Chances.Weighs(fix.Kind) ? fix : null;
+
+        /// <summary>
+        /// Whether this segment lies where <paramref name="kind"/> may: an opening starts in the first half of the
+        /// programme and an ending ends in its second half; anywhere when where it lies is not known, or when the
+        /// catalog fixes it to that kind.
+        /// </summary>
+        public bool Lies(SegmentKind kind)
+            => Fixed?.Kind == kind || kind switch
+            {
+                SegmentKind.Opening => !(Segment.Features[SegmentFeature.FromStart] >= HalfTheProgramme),
+                SegmentKind.Ending => !(Segment.Features[SegmentFeature.FromEnd] >= HalfTheProgramme),
+                _ => true,
+            };
 
         public Reach Taken(SegmentKind kind)
         {
