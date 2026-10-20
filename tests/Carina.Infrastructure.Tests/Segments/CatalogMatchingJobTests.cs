@@ -377,6 +377,51 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal((CatalogKind.Opening, CatalogDecision.Pattern), (head.Kind, head.DecidedBy));
     }
 
+    [Theory(DisplayName = "BR-CD-004: an entry estimated again as another kind has every recording that hears it taken as matched again, so that it is detected again, and one estimated again as the kind and confidence it had has none")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnEntryRecastHasItsRecordingsDetectedAgain(bool asItWas)
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        CatalogEntry entry = await OutdatedAsync(harness, asTheOpening: asItWas, matched: Now.AddHours(-1));
+        RecordingId[] hearing = [.. harness.Catalog.Occurrences.Select(occurrence => occurrence.RecordingId)];
+        Dictionary<RecordingId, RecordingDetection> detected = hearing.ToDictionary(recording => recording, Detected);
+
+        CatalogMatchingLook look = await harness.Job().LookAsync(CancellationToken.None);
+
+        Assert.Same(entry, look.Reestimated);
+        Assert.Equal((CatalogKind.Opening, 0.8), (entry.Kind, entry.Confidence));
+        Assert.All(hearing, recording => Assert.Equal(
+            (asItWas ? Now.AddMinutes(-10) : Now, !asItWas),
+            (harness.Records.Row(recording)!.MatchedAt, RecordingDetection.IsAwaited(harness.Records.Row(recording)!, detected[recording]))));
+    }
+
+    [Fact(DisplayName = "BR-CD-004: a match that starts an advert heard in a recording matched before has that recording taken as matched again, and a later recording joining the advert as it was has none taken again")]
+    public async Task AMatchStartingAnAdvertHasTheOtherRecordingDetectedAgain()
+    {
+        using CatalogMatchingHarness harness = new();
+        await harness.LearningAsync(true);
+        uint[] source = Sound(1);
+        RecordingId before = await harness.ReadAsync(Sharing(Sound(3), source, 1_000, 9_000, Advert), 14, "架空のクイズ");
+        LearningExtraction earlier = harness.Records.Row(before)!;
+        earlier.Matched(Now.AddHours(-1));
+        harness.Records.Hold(earlier);
+        RecordingId heard = await harness.ReadAsync(Sharing(Sound(2), source, 5_000, 9_000, Advert), 7, "架空の物語");
+
+        await harness.Job().LookAsync(CancellationToken.None);
+        DateTime? beforeMatched = harness.Records.Row(before)!.MatchedAt;
+        DateTime? heardMatched = harness.Records.Row(heard)!.MatchedAt;
+        RecordingId later = await harness.ReadAsync(Sharing(Sound(4), source, 12_000, 9_000, Advert), 0, "架空の天気", updatedMinutesAgo: 1);
+        CatalogMatchingLook joined = await harness.Job(at: Now.AddMinutes(5)).LookAsync(CancellationToken.None);
+
+        CatalogEntry advert = Assert.Single(harness.Catalog.Entries);
+        Assert.Equal(later, joined.Matched?.Recording);
+        Assert.Equal((CatalogKind.Cm, 0.9), (advert.Kind, advert.Confidence));
+        Assert.Equal((Now, Now), (beforeMatched, heardMatched));
+        Assert.Equal((Now, Now), (harness.Records.Row(before)!.MatchedAt, harness.Records.Row(heard)!.MatchedAt));
+    }
+
     [Fact(DisplayName = "an entry put back after a change of links is estimated again in spare time, once")]
     public async Task AnEntryPutBackIsEstimatedAgainOnce()
     {
@@ -510,7 +555,11 @@ public sealed class CatalogMatchingJobTests
     /// An entry kept from before the rows for openings and endings, of no kind yet: a minute and a half heard
     /// near the start of two weekly episodes, both matched already.
     /// </summary>
-    private static async Task<CatalogEntry> OutdatedAsync(CatalogMatchingHarness harness, int kindsVersion = CatalogKinds.FirstVersion)
+    private static async Task<CatalogEntry> OutdatedAsync(
+        CatalogMatchingHarness harness,
+        int kindsVersion = CatalogKinds.FirstVersion,
+        bool asTheOpening = false,
+        DateTime? matched = null)
     {
         CatalogEntryId id = CatalogEntryId.New();
         List<CatalogOccurrence> heard = [];
@@ -519,7 +568,7 @@ public sealed class CatalogMatchingJobTests
         {
             RecordingId recording = await harness.ReadAsync(Sound(10 + week), 7 * week, "架空の物語");
             LearningExtraction record = harness.Records.Row(recording)!;
-            record.Matched(Now);
+            record.Matched(matched ?? Now);
             harness.Records.Hold(record);
             heard.Add(CatalogOccurrence.Rehydrate(
                 heard.Count + 1,
@@ -538,9 +587,9 @@ public sealed class CatalogMatchingJobTests
 
         CatalogEntry entry = CatalogEntry.Rehydrate(
             id,
-            CatalogKind.Unknown,
-            null,
-            null,
+            asTheOpening ? CatalogKind.Opening : CatalogKind.Unknown,
+            asTheOpening ? 0.8 : null,
+            asTheOpening ? CatalogDecision.Pattern : null,
             Heard,
             CatalogFingerprint.Write(Sound(1).AsSpan(0, (int)(Heard / SegmentMatcher.Frame))),
             heard.Count,
@@ -556,6 +605,18 @@ public sealed class CatalogMatchingJobTests
 
         return entry;
     }
+
+    private static RecordingDetection Detected(RecordingId recording)
+        => RecordingDetection.Rehydrate(
+            recording,
+            SegmentModelVersion.FirstNumber,
+            SegmentDetectionState.NothingFound,
+            [new SegmentSpan(TimeSpan.Zero, TimeSpan.FromMinutes(CatalogMatchingHarness.Minutes), SegmentKind.Programme, 0.9)],
+            0,
+            [],
+            LearningData.ExtractionVersion,
+            Now.AddMinutes(-5),
+            Now.AddMinutes(-5));
 
     private static void Reread(CatalogMatchingHarness harness, RecordingId recording, RecordingId heard)
     {

@@ -30,7 +30,10 @@ public sealed record CatalogMatchingLook(SpareTimeVerdict? Verdict, CatalogMatch
 /// again, which adds no stretch twice. A look in spare time that finds no recording waiting estimates again
 /// the entry first seen earliest of those last estimated with an earlier version of the estimation
 /// (<see cref="CatalogEntry.AwaitsReestimation"/>), one a look until none is left, and is followed as soon as a
-/// match is; an estimate finished after learning was switched off is not written either.
+/// match is; an estimate finished after learning was switched off is not written either. Once a match or an estimate is
+/// written, every recording that hears an entry whose kind or confidence it changed, or a stretch it took for another
+/// kind, is taken as matched again (<see cref="LearningExtraction.CatalogChanged"/>), so that it waits to be detected
+/// again; an estimate that leaves an entry as it was has none detected again.
 /// </summary>
 public sealed class CatalogMatchingJob(
     IServiceScopeFactory scopes,
@@ -130,9 +133,13 @@ public sealed class CatalogMatchingJob(
             return new CatalogMatchingLook(SpareTimeVerdict.LearningOff, null, false);
         }
 
-        await services.GetRequiredService<ICatalogRepository>().KeepAsync(matched.Change, cancellationToken);
+        ICatalogRepository catalog = services.GetRequiredService<ICatalogRepository>();
+
+        await catalog.KeepAsync(matched.Change, cancellationToken);
 
         ExtractionChange marked = await records.ChangeAsync(record.RecordingId, found => Mark(found, record.UpdatedAt), cancellationToken);
+
+        await HeardAnewAsync(catalog, matched.Change, cancellationToken);
 
         return new CatalogMatchingLook(verdict, matched, marked is ExtractionChange.Written);
     }
@@ -150,9 +157,27 @@ public sealed class CatalogMatchingJob(
             return new CatalogMatchingLook(SpareTimeVerdict.LearningOff, null, false);
         }
 
-        await services.GetRequiredService<ICatalogRepository>().KeepAsync(change, cancellationToken);
+        ICatalogRepository catalog = services.GetRequiredService<ICatalogRepository>();
+
+        await catalog.KeepAsync(change, cancellationToken);
+        await HeardAnewAsync(catalog, change, cancellationToken);
 
         return new CatalogMatchingLook(verdict, null, false, entry);
+    }
+
+    /// <summary>
+    /// Takes every recording that hears an entry <paramref name="change"/> recast, or a stretch it took for another
+    /// kind, as matched again now, so that it waits to be detected again.
+    /// </summary>
+    private async Task HeardAnewAsync(ICatalogRepository catalog, CatalogChange change, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<CatalogOccurrence> heard = change.Recast.Count is 0 ? [] : await catalog.OccurrencesOfAsync(change.Recast, cancellationToken);
+        DateTime now = Now();
+
+        foreach (RecordingId recording in heard.Concat(change.Overridden).Select(occurrence => occurrence.RecordingId).Distinct())
+        {
+            await records.ChangeAsync(recording, record => record.CatalogChanged(now), cancellationToken);
+        }
     }
 
     private async Task<CatalogMatchingLook?> OnceAsync(Func<CancellationToken, Task<CatalogMatchingLook>> matching, CancellationToken stoppingToken)

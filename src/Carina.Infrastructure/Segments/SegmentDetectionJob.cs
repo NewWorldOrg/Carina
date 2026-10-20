@@ -18,7 +18,8 @@ public sealed record SegmentDetectionLook(SpareTimeVerdict? Verdict, RecordingDe
 /// matching against the catalog takes, and after it. A recording followed to its end and matched at once
 /// (<see cref="MatchedAtOnce"/>) is detected at once, whatever is being recorded or watched. Every other
 /// recording that <see cref="RecordingDetection.IsAwaited"/> and is still kept — one that had data before,
-/// one matched again, and every one when the version in use changes — waits for <see cref="SpareTime"/> and is
+/// one matched again, one whose catalog changed under it (<see cref="LearningExtraction.CatalogChanged"/>), and every
+/// one when the version in use changes — waits for <see cref="SpareTime"/> and is
 /// detected the most recently started first, one a look: after
 /// <see cref="SegmentDetectionSettings.BeforeFirstLook"/>, then every
 /// <see cref="SegmentDetectionSettings.BetweenLooks"/>, or after

@@ -156,6 +156,25 @@ public sealed class LearningExtraction
         MatchedAt = when > UpdatedAt ? when : UpdatedAt;
     }
 
+    /// <summary>
+    /// Takes what the record holds as matched again at <paramref name="at"/>, the catalog having changed under it, so
+    /// that its detection is made again (<see cref="RecordingDetection.IsAwaited"/>); false, changing nothing, when it
+    /// waits to be matched, which has it detected again anyway, or was matched no earlier than that.
+    /// </summary>
+    public bool CatalogChanged(DateTime at)
+    {
+        DateTime when = UtcTimes.Required(at, nameof(at));
+
+        if (AwaitsMatching || MatchedAt is not DateTime matched || matched >= when)
+        {
+            return false;
+        }
+
+        MatchedAt = when;
+
+        return true;
+    }
+
     public void Follow(ExtractionVersion version, DateTime at)
     {
         DateTime when = Moving(at, "is followed", LearningExtractionState.Waiting);
