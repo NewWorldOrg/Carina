@@ -388,6 +388,77 @@ public sealed class SegmentFeaturesTests
         Assert.Null(blind[SegmentFeature.MultipleOf15sWithoutLogo]);
     }
 
+    [Theory(DisplayName = "BR-CD-007: a piece starts where an opening does from 15 seconds before the guide's start to 6 minutes after it, and ends where an ending does from 6 minutes before the guide's end to 15 seconds after it")]
+    [InlineData(44.9, 0, 0)]
+    [InlineData(45, 1, 0)]
+    [InlineData(420, 1, 0)]
+    [InlineData(420.1, 0, 0)]
+    [InlineData(1289.9, 0, 0)]
+    [InlineData(1290, 0, 1)]
+    [InlineData(1665, 0, 1)]
+    [InlineData(1665.1, 0, 0)]
+    public void APieceLiesWhereAThemeDoes(double starts, double opening, double ending)
+    {
+        SegmentContext context = Context(starts: TimeSpan.FromSeconds(60), ends: TimeSpan.FromSeconds(1740));
+
+        SegmentFeatureValues features = SegmentFeatures.Of([Edge(0), Cut(starts), Cut(starts + 90), Edge(Length)], new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial)[1].Features;
+
+        Assert.Equal((opening, ending), (features[SegmentFeature.OpeningWindow], features[SegmentFeature.EndingWindow]));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: with nothing from the guide the programme spans the recording, so a piece starting in its first 6 minutes lies where an opening does and one ending in its last 6 where an ending does")]
+    public void WithoutTheGuideThemesLieByTheRecording()
+    {
+        IReadOnlyList<SegmentPiece> pieces = Pieces([Edge(0), Cut(300), Cut(390), Cut(1500), Cut(1590), Edge(Length)]);
+
+        Assert.Equal([1d, 1, 0, 0, 0], pieces.Select(piece => piece.Features[SegmentFeature.OpeningWindow]));
+        Assert.Equal([0d, 0, 1, 1, 1], pieces.Select(piece => piece.Features[SegmentFeature.EndingWindow]));
+    }
+
+    [Theory(DisplayName = "BR-CD-007: a piece lasts as long as a whole opening or ending from 55 seconds to 125")]
+    [InlineData(54.9, 0)]
+    [InlineData(55, 1)]
+    [InlineData(90, 1)]
+    [InlineData(125, 1)]
+    [InlineData(125.1, 0)]
+    public void APieceLastsAsLongAsATheme(double seconds, double theme)
+        => Assert.Equal(theme, Pieces([Edge(0), Cut(300), Cut(300 + seconds), Edge(Length)])[1].Features[SegmentFeature.IsThemeLength]);
+
+    [Fact(DisplayName = "BR-CD-007: the loudness range is the decibels between the 10th and the 90th percentile of the momentary loudness inside a piece away from its edges, nothing for a song that keeps its loudness and 20 for speech that keeps stopping, the silence of the cuts at its edges left out")]
+    public void TheLoudnessRangeTellsASongFromSpeech()
+    {
+        SyntheticReadings readings = new SyntheticReadings(Length).Spoken(600, 1200);
+
+        foreach (double cut in new[] { 300.0, 390, 600, 690 })
+        {
+            readings.QuietAround(cut);
+        }
+
+        IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of([Edge(0), Cut(300), Cut(390), Cut(600), Cut(690), Edge(Length)], readings.Evidence(), Context(), null, SegmentThresholds.Initial);
+
+        Assert.Equal(0, pieces[1].Features[SegmentFeature.LoudnessRange]!.Value, 6);
+        Assert.Equal(20, pieces[3].Features[SegmentFeature.LoudnessRange]!.Value, 6);
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a piece shorter than 12 seconds has its loudness range read over the 10 seconds around its middle, a few seconds saying little, and it is not known where no window fits in the recording")]
+    public void AShortPieceIsReadAroundItsMiddle()
+    {
+        SegmentEvidence evidence = new SyntheticReadings(Length).Spoken(600, 1200).Evidence();
+
+        IReadOnlyList<SegmentPiece> pieces = SegmentFeatures.Of(
+            [Edge(0), Cut(300), Cut(305), Cut(900), Cut(904), Edge(Length)],
+            evidence,
+            Context(),
+            null,
+            SegmentThresholds.Initial);
+        SegmentFeatureValues around = SegmentFeatures.Of([Edge(0), Cut(895), Cut(909), Edge(Length)], evidence, Context(), null, SegmentThresholds.Initial)[1].Features;
+
+        Assert.Equal(0, pieces[1].Features[SegmentFeature.LoudnessRange]!.Value, 6);
+        Assert.Equal(20, pieces[3].Features[SegmentFeature.LoudnessRange]!.Value, 6);
+        Assert.Equal(20, around[SegmentFeature.LoudnessRange]!.Value, 6);
+        Assert.Null(SegmentFeatures.Of([Edge(0), Edge(0.3)], new SyntheticReadings(0.3).Evidence(), Context(), null, SegmentThresholds.Initial)[0].Features[SegmentFeature.LoudnessRange]);
+    }
+
     private static CatalogHeard Heard(double starts, double ends, SegmentKind? kind, double? confidence = null)
         => new(TimeSpan.FromSeconds(starts), TimeSpan.FromSeconds(ends), kind, 2, 2, 1, confidence);
 

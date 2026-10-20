@@ -53,6 +53,14 @@ public static class SegmentFeature
 
     public const string MultipleOf15sWithoutLogo = "multipleOf15sWithoutLogo";
 
+    public const string OpeningWindow = "openingWindow";
+
+    public const string EndingWindow = "endingWindow";
+
+    public const string IsThemeLength = "isThemeLength";
+
+    public const string LoudnessRange = "loudnessRange";
+
     public const int GenreKinds = 16;
 
     private static readonly string[] Listed =
@@ -79,6 +87,10 @@ public static class SegmentFeature
         MultipleOf15sWithoutLogo,
         PastOpeningShare,
         PastEndingShare,
+        OpeningWindow,
+        EndingWindow,
+        IsThemeLength,
+        LoudnessRange,
     ];
 
     private static readonly HashSet<string> Known = new(Listed, StringComparer.Ordinal);
