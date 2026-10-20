@@ -102,13 +102,14 @@ public sealed record ProgrammeCopy
 
     /// <summary>
     /// What says which series the recording of this programme is of: its station, its series name, made from
-    /// its programme's name when the copy was kept before series names were made, and when it started.
+    /// its programme's name when the copy was kept before series names were made, when it started, and when
+    /// its programme starts by the guide.
     /// </summary>
     public SeriesMember MemberAs(RecordingId recordingId)
     {
         ArgumentNullException.ThrowIfNull(recordingId);
 
-        return new SeriesMember(recordingId, NetworkId, ServiceId, SeriesName ?? SeriesNames.Of(Name), RecordingStartedAt);
+        return new SeriesMember(recordingId, NetworkId, ServiceId, SeriesName ?? SeriesNames.Of(Name), RecordingStartedAt, ProgrammeStartsAt);
     }
 
     public bool Equals(ProgrammeCopy? other)

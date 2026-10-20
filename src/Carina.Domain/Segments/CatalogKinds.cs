@@ -26,7 +26,9 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// of programmes of two series is a fixed part of the station's output, 0.6; a length on the grid of up to
 /// a minute heard in one series is an advert, 0.5, since an opening or ending is often a whole slot of a
 /// minute and a half; anything else is not known. Only the stretches that cover the entry whole
-/// (<see cref="WholeWithin"/>) count; a shorter one is taken on its own.
+/// (<see cref="WholeWithin"/>) count; a shorter one is taken on its own. Two recordings on one station of a
+/// programme the guide starts at the same time are one episode (<see cref="SeriesMember.Episode"/>), so that a
+/// broadcast recorded twice does not make a sound heard once in it a sound heard in two episodes.
 /// <para>
 /// The series are those the links join, except that a sound heard as an opening or an ending joins the
 /// series that hears it so most often with every other series of the very same name
@@ -113,7 +115,7 @@ public static class CatalogKinds
 
         PlacedOccurrence[] whole = [.. occurrences.Where(placed => IsWhole(placed.Occurrence.Length, length))];
         PlacedOccurrence[] counted = whole.Length > 0 ? whole : [.. occurrences];
-        IReadOnlyList<IReadOnlyList<PlacedOccurrence>> linked = links.Group(counted, placed => placed.Occurrence.Member);
+        IReadOnlyList<IReadOnlyList<PlacedOccurrence>> linked = links.Group(counted, placed => placed.Member);
         Theme? theme = ThemeOf(length, linked);
         IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series = theme?.Series ?? linked;
         int stations = counted.Select(placed => (placed.Occurrence.NetworkId, placed.Occurrence.ServiceId)).Distinct().Count();
@@ -239,16 +241,16 @@ public static class CatalogKinds
     private static bool Recurs(IReadOnlyList<PlacedOccurrence> group, CatalogKind place) => Episodes(group, place) >= FewestEpisodes;
 
     private static int Episodes(IReadOnlyList<PlacedOccurrence> group, CatalogKind place)
-        => group.Where(placed => PlaceOf(placed) == place).Select(placed => placed.Occurrence.RecordingId).Distinct().Count();
+        => group.Where(placed => PlaceOf(placed) == place).Select(placed => placed.Episode).Distinct().Count();
 
     private static bool HeardOnlyAs(IReadOnlyList<PlacedOccurrence> group, CatalogKind place)
         => group.Any(placed => PlaceOf(placed) == place) && group.All(placed => PlaceOf(placed) is null || PlaceOf(placed) == place);
 
     private static bool InTheSlotOf(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
     {
-        SeriesMember[] episodes = [.. main.Select(member => member.Occurrence.Member)];
+        SeriesMember[] episodes = [.. main.Select(member => member.Member)];
 
-        return group.All(placed => SeriesLinks.AnotherEpisodeInTheSlot(placed.Occurrence.Member, episodes));
+        return group.All(placed => SeriesLinks.AnotherEpisodeInTheSlot(placed.Member, episodes));
     }
 
     private static bool NamedAs(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
@@ -285,7 +287,7 @@ public static class CatalogKinds
         => series.Any(one => series.Any(other => SamePlaceInAnotherEpisode(one, other)));
 
     private static bool SamePlaceInAnotherEpisode(PlacedOccurrence one, PlacedOccurrence other)
-        => !one.Occurrence.RecordingId.Equals(other.Occurrence.RecordingId)
+        => !one.Episode.Equals(other.Episode)
            && one.IntoProgramme is TimeSpan here
            && other.IntoProgramme is TimeSpan there
            && (here - there).Duration() <= SamePlaceWithin;
@@ -303,7 +305,7 @@ public static class CatalogKinds
             return null;
         }
 
-        bool atHome = own.Any(member => links.Link(member.Occurrence.Member, placed.Occurrence.Member));
+        bool atHome = own.Any(member => links.Link(member.Member, placed.Member));
 
         return (IsWhole(placed.Occurrence.Length, length), atHome) switch
         {

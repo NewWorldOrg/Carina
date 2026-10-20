@@ -4,12 +4,35 @@ using Carina.Domain.Recordings;
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// What linking a recording into a series reads of it.
+/// What linking a recording into a series reads of it, with the guide's start of its programme when that is
+/// known.
 /// </summary>
-public sealed record SeriesMember(RecordingId RecordingId, NetworkId NetworkId, ServiceId ServiceId, string? SeriesName, DateTime StartedAt);
+public sealed record SeriesMember(
+    RecordingId RecordingId,
+    NetworkId NetworkId,
+    ServiceId ServiceId,
+    string? SeriesName,
+    DateTime StartedAt,
+    DateTime? ProgrammeStartsAt = null)
+{
+    /// <summary>
+    /// The broadcast the recording is of: two recordings on one station of a programme the guide starts at the
+    /// same time are one episode, and a recording whose programme's start is not known is an episode of its own.
+    /// </summary>
+    public SeriesEpisode Episode => ProgrammeStartsAt is DateTime starts
+        ? new SeriesEpisode(NetworkId, ServiceId, starts, null)
+        : new SeriesEpisode(NetworkId, ServiceId, null, RecordingId);
+}
 
 /// <summary>
-/// Which recordings are of one series. Two stretches of one recording are; so are recordings known to
+/// One broadcast of a series: its station and the guide's start of its programme, or, when that is not known,
+/// the one recording of it.
+/// </summary>
+public sealed record SeriesEpisode(NetworkId NetworkId, ServiceId ServiceId, DateTime? ProgrammeStartsAt, RecordingId? Recording);
+
+/// <summary>
+/// Which recordings are of one series. Two stretches of one recording are, and so are two recordings of one
+/// broadcast (<see cref="SeriesMember.Episode"/>); so are recordings known to
 /// share the sound of an opening, an ending or a programme fixture, whatever their names and stations;
 /// and so are two recordings on the same station whose series names link (<see cref="SeriesNames.Link"/>)
 /// and which start within <see cref="StartsWithin"/> of each other in the time of day. Series are what these
@@ -85,7 +108,7 @@ public sealed class SeriesLinks
         ArgumentNullException.ThrowIfNull(one);
         ArgumentNullException.ThrowIfNull(other);
 
-        return one.RecordingId.Equals(other.RecordingId) || ShareSound(one, other) || Neighbours(one, other);
+        return one.RecordingId.Equals(other.RecordingId) || one.Episode.Equals(other.Episode) || ShareSound(one, other) || Neighbours(one, other);
     }
 
     /// <summary>

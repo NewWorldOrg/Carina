@@ -92,7 +92,7 @@ public sealed class ProgrammeCopyTests
                 null));
     }
 
-    [Fact(DisplayName = "the recording of a programme belongs to a series by its station, its series name and when it started, the name made from the programme's when none was kept")]
+    [Fact(DisplayName = "the recording of a programme belongs to a series by its station, its series name, when it started and when its programme starts, the name made from the programme's when none was kept")]
     public void TheRecordingOfAProgrammeBelongsToASeries()
     {
         RecordingId recording = RecordingId.New();
@@ -100,7 +100,7 @@ public sealed class ProgrammeCopyTests
         SeriesMember named = Copy(null, "架空の連続物").MemberAs(recording);
         SeriesMember unnamed = Copy(null, null).MemberAs(recording);
 
-        Assert.Equal(new SeriesMember(recording, new NetworkId(40_001), new ServiceId(60_001), "架空の連続物", Noon), named);
+        Assert.Equal(new SeriesMember(recording, new NetworkId(40_001), new ServiceId(60_001), "架空の連続物", Noon, Noon), named);
         Assert.Equal(SeriesNames.Of("架空の番組"), unnamed.SeriesName);
     }
 

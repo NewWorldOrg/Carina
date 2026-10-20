@@ -40,6 +40,22 @@ public sealed class SeriesLinksTests
         Assert.False(SeriesLinks.None.Link(first, Member(1, "別の架空の話", Evening.AddDays(7))));
     }
 
+    [Fact(DisplayName = "BR-CD-011: two recordings on one station of a programme the guide starts at the same time are one episode, and link whatever their names")]
+    public void TwoRecordingsOfOneBroadcastAreOneEpisode()
+    {
+        SeriesMember first = Member(1, "架空の物語", Evening) with { ProgrammeStartsAt = Evening.AddSeconds(10) };
+        SeriesMember again = Member(1, null, Evening.AddSeconds(4)) with { ProgrammeStartsAt = Evening.AddSeconds(10) };
+        SeriesMember elsewhere = Member(2, "架空の物語", Evening) with { ProgrammeStartsAt = Evening.AddSeconds(10) };
+        SeriesMember unplaced = Member(1, "架空の物語", Evening);
+
+        Assert.Equal(first.Episode, again.Episode);
+        Assert.True(SeriesLinks.None.Link(first, again));
+        Assert.NotEqual(first.Episode, elsewhere.Episode);
+        Assert.NotEqual(first.Episode, (first with { ProgrammeStartsAt = Evening.AddDays(7).AddSeconds(10) }).Episode);
+        Assert.NotEqual(unplaced.Episode, Member(1, "架空の物語", Evening).Episode);
+        Assert.False(SeriesLinks.None.Link(again, elsewhere));
+    }
+
     [Fact(DisplayName = "the time of day is compared around midnight")]
     public void TheTimeOfDayIsComparedAroundMidnight()
     {
