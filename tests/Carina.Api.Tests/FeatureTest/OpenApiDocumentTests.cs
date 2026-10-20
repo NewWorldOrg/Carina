@@ -694,7 +694,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         JsonNode schemas = document["components"]!["schemas"]!;
 
         Assert.Equal(
-            ["learning", "learningData", "catalog", "version", "evidence", "metrics", "stations", "versions", "skipThreshold"],
+            ["learning", "learningData", "catalog", "version", "evidence", "metrics", "stations", "versions", "skipThreshold", "lastRound", "nextRoundNotBefore"],
             schemas["SegmentStatusResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal(
             ["number", "state", "byHand", "trainedAt", "adoptedAt"],
@@ -729,6 +729,26 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             Properties(schemas, "SegmentVersionHistoryResponder"));
         Assert.Equal(["at", "returnedAfterSkipShare", "previousShare", "skips"], Properties(schemas, "SegmentRolledBackResponder"));
         Assert.Equal(["current"], Properties(schemas, "SkipThresholdResponder"));
+    }
+
+    [Fact(DisplayName = "BR-CD-004, BR-CD-008: the status of CM, OP and ED detection describes the latest round of learning by what became of it and how its candidate was judged, and when the next may begin")]
+    public async Task TheSegmentStatusDescribesTheLatestRound()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+        JsonNode status = schemas["SegmentStatusResponder"]!["properties"]!;
+
+        Assert.Equal(
+            ["day", "takenAt", "outcome", "candidate", "verdict", "inUse", "evidence", "metrics"],
+            Properties(schemas, "SegmentLearningRoundResponder"));
+        Assert.Equal(["boundaryRecallWithin2s", "breakRecall"], Properties(schemas, "SegmentRoundMetricsResponder"));
+        Assert.Equal(
+            ["nothingToLearnFrom", "kept", "adopted", "stopped", "inUseChangedMeanwhile", "nothingNew", "heldAfterRollback", "failed"],
+            schemas["SegmentTrainingOutcome"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Contains("tooLittleEvidence", schemas["AdoptionVerdict"]!["enum"]!.AsArray().Select(value => value?.GetValue<string>()));
+        Assert.Equal("date", schemas["SegmentLearningRoundResponder"]!["properties"]!["day"]!["format"]!.GetValue<string>());
+        Assert.Equal("date-time", status["nextRoundNotBefore"]!["format"]!.GetValue<string>());
+        Assert.Contains("SegmentLearningRoundResponder", status["lastRound"]!.ToJsonString(), StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "BR-CS-003: choosing the version in use is described by the number or the choice left to learning it takes, and answers the version in use, or why not")]

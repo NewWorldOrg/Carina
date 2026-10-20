@@ -34,6 +34,7 @@ internal sealed class SegmentStatusFeature : IAsyncDisposable
             services.AddSingleton<ISegmentSettingsRepository>(Settings);
             services.AddSingleton<ISkipEventRepository>(Skips);
             services.AddSingleton<ICatalogEvidenceReader>(Evidence);
+            services.AddSingleton<ISegmentLearningRoundRepository>(Rounds);
             services.AddSingleton<TimeProvider>(new MovingClock(Now));
         }));
 
@@ -56,6 +57,8 @@ internal sealed class SegmentStatusFeature : IAsyncDisposable
     public HeldSkipEvents Skips { get; } = new();
 
     public HeldCatalogEvidence Evidence { get; } = new();
+
+    public HeldSegmentLearningRounds Rounds { get; } = new();
 
     public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
 
@@ -141,7 +144,7 @@ public sealed class SegmentStatusEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
-            ["catalog", "evidence", "learning", "learningData", "metrics", "skipThreshold", "stations", "version", "versions"],
+            ["catalog", "evidence", "lastRound", "learning", "learningData", "metrics", "nextRoundNotBefore", "skipThreshold", "stations", "version", "versions"],
             data.EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
             ["cm", "ending", "opening", "programmeFixture", "stationFixture", "unknown"],
@@ -326,6 +329,82 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(JsonValueKind.Null, data.GetProperty("metrics").ValueKind);
         Assert.Equal(0, data.GetProperty("evidence").GetProperty("recordings").GetInt32());
         Assert.Equal(JsonValueKind.Null, data.GetProperty("versions")[0].GetProperty("metrics").ValueKind);
+    }
+
+    [Fact(DisplayName = "BR-CD-004: before any round of learning there is no last round, and the next may begin at three in the morning in Japan of the day it is")]
+    public async Task BeforeAnyRoundThereIsNoLastRound()
+    {
+        await using var feature = new SegmentStatusFeature();
+
+        (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(JsonValueKind.Null, data.GetProperty("lastRound").ValueKind);
+        Assert.Equal("2026-11-07T18:00:00Z", data.GetProperty("nextRoundNotBefore").GetString());
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a round that kept a candidate on too little evidence is answered with what became of it, the verdict, the figures of the version in use beside it, and the candidate's own evidence and figures")]
+    public async Task ARoundThatKeptACandidateIsAnsweredWithHowItWasJudged()
+    {
+        await using var feature = new SegmentStatusFeature();
+        DateTime taken = new(2026, 11, 7, 18, 6, 0, DateTimeKind.Utc);
+        feature.Versions.Others.Add(Version(
+            5,
+            SegmentModelVersionState.Candidate,
+            taken.AddMinutes(20),
+            null,
+            null,
+            new SegmentEvaluation(new SegmentMetrics(0.11, 0.07, [new KindMetrics(SegmentKind.Break, 0.42)], null, 0), [], new EvaluationEvidence(12, 56, null))));
+        await feature.Rounds.TakeAsync(
+            SegmentLearningRound.Ended(new DateOnly(2026, 11, 8), taken, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, new SegmentMetrics(0.08, 0.05, [new KindMetrics(SegmentKind.Break, 0.38)], null, 0)),
+            CancellationToken.None);
+
+        (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
+        JsonElement round = data.GetProperty("lastRound");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["day", "takenAt", "outcome", "candidate", "verdict", "inUse", "evidence", "metrics"], Names(round));
+        Assert.Equal(
+            ("2026-11-08", "2026-11-07T18:06:00Z", "kept", 5, "tooLittleEvidence"),
+            (round.GetProperty("day").GetString(), round.GetProperty("takenAt").GetString(), round.GetProperty("outcome").GetString(), round.GetProperty("candidate").GetInt32(), round.GetProperty("verdict").GetString()));
+        Assert.Equal(["boundaryRecallWithin2s", "breakRecall"], Names(round.GetProperty("inUse")));
+        Assert.Equal((0.08, 0.38), (round.GetProperty("inUse").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("inUse").GetProperty("breakRecall").GetDouble()));
+        Assert.Equal(["recordings", "boundaries", "enough", "recordingsNeeded", "boundariesNeeded"], Names(round.GetProperty("evidence")));
+        Assert.Equal((12, 56, false), (round.GetProperty("evidence").GetProperty("recordings").GetInt32(), round.GetProperty("evidence").GetProperty("boundaries").GetInt32(), round.GetProperty("evidence").GetProperty("enough").GetBoolean()));
+        Assert.Equal((0.11, 0.42), (round.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("metrics").GetProperty("breakRecall").GetDouble()));
+        Assert.Equal("2026-11-08T18:00:00Z", data.GetProperty("nextRoundNotBefore").GetString());
+    }
+
+    [Theory(DisplayName = "BR-CD-004: a round that learned nothing, or failed, is answered with what became of it and nothing of a candidate")]
+    [InlineData(SegmentTrainingOutcome.NothingNew, "nothingNew")]
+    [InlineData(SegmentTrainingOutcome.NothingToLearnFrom, "nothingToLearnFrom")]
+    [InlineData(SegmentTrainingOutcome.Failed, "failed")]
+    public async Task ARoundThatLearnedNothingIsAnsweredWithoutACandidate(SegmentTrainingOutcome outcome, string said)
+    {
+        await using var feature = new SegmentStatusFeature();
+        await feature.Rounds.TakeAsync(SegmentLearningRound.Ended(new DateOnly(2026, 11, 7), new DateTime(2026, 11, 6, 18, 2, 0, DateTimeKind.Utc), outcome), CancellationToken.None);
+
+        (_, JsonElement data) = await feature.DataAsync();
+        JsonElement round = data.GetProperty("lastRound");
+
+        Assert.Equal(("2026-11-07", said), (round.GetProperty("day").GetString(), round.GetProperty("outcome").GetString()));
+        Assert.All(
+            ["candidate", "verdict", "inUse", "evidence", "metrics"],
+            field => Assert.Equal(JsonValueKind.Null, round.GetProperty(field).ValueKind));
+        Assert.Equal("2026-11-07T18:00:00Z", data.GetProperty("nextRoundNotBefore").GetString());
+    }
+
+    [Fact(DisplayName = "BR-CD-004: a round kept before what became of rounds was kept is not answered, and still counts as the day's round for when the next may begin")]
+    public async Task ARoundKeptBeforeOutcomesWereKeptIsNotAnswered()
+    {
+        await using var feature = new SegmentStatusFeature();
+        await feature.Rounds.TakeAsync(SegmentLearningRound.Ended(new DateOnly(2026, 11, 7), new DateTime(2026, 11, 6, 18, 2, 0, DateTimeKind.Utc), SegmentTrainingOutcome.NothingNew), CancellationToken.None);
+        await feature.Rounds.TakeAsync(SegmentLearningRound.Taken(new DateTime(2026, 11, 7, 18, 4, 0, DateTimeKind.Utc), 2), CancellationToken.None);
+
+        (_, JsonElement data) = await feature.DataAsync();
+
+        Assert.Equal("2026-11-07", data.GetProperty("lastRound").GetProperty("day").GetString());
+        Assert.Equal("2026-11-08T18:00:00Z", data.GetProperty("nextRoundNotBefore").GetString());
     }
 
     [Fact(DisplayName = "a caller who has not signed in cannot read the status, and nothing is counted for them")]
