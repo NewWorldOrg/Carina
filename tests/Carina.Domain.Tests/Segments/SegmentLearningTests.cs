@@ -359,7 +359,7 @@ public sealed class SegmentLearningTests
         => new(
             recording.Context.NetworkId,
             recording.Context.ServiceId,
-            CatalogTruth.Of(catalog.HeardNow(recording.Id), recording.Evidence.Length),
+            CatalogTruth.Of(catalog.HeardNow(recording.Id), recording.Evidence),
             SegmentDetector.Detect(recording.Evidence, recording.Context.Hearing(hearing ? catalog.HeardBy(recording.Id, recording.StartedAt) : []), model));
 
     private static SegmentMetrics? Metrics(SegmentComparison compared) => SegmentMetrics.Of([compared], SkipReturns.None);
@@ -386,7 +386,7 @@ public sealed class SegmentLearningTests
         => new(
             recording.Context.NetworkId,
             recording.Context.ServiceId,
-            CatalogTruth.Of(catalog.HeardNow(recording.Id), recording.Evidence.Length),
+            CatalogTruth.Of(catalog.HeardNow(recording.Id), recording.Evidence),
             SegmentDetector.Detect(recording.Evidence, context, model));
 
     /// <summary>
@@ -409,7 +409,7 @@ public sealed class SegmentLearningTests
         return Metrics(new SegmentComparison(
             judged.Context.NetworkId,
             judged.Context.ServiceId,
-            CatalogTruth.Of(catalog.HeardNow(judged.Id), judged.Evidence.Length),
+            CatalogTruth.Of(catalog.HeardNow(judged.Id), judged.Evidence),
             detection));
     }
 

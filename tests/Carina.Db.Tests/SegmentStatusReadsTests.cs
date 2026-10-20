@@ -34,6 +34,7 @@ public sealed class SegmentStatusReadsTests(MigratedScratchDatabase database)
             DELETE FROM segment_catalog_occurrence;
             DELETE FROM segment_catalog_entry;
             DELETE FROM segment_extraction;
+            DELETE FROM segment_learning_data;
             INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at)
             VALUES ({{Other}}, 'Candidate', false, 2, '{}', '{}', '{}', '{}', '{}', now())
             ON CONFLICT DO NOTHING;
@@ -58,6 +59,18 @@ public sealed class SegmentStatusReadsTests(MigratedScratchDatabase database)
         EvaluationEvidence evidence = await CatalogEvidenceAsync();
 
         Assert.Equal(new EvaluationEvidence(2, 6, null), evidence);
+    }
+
+    [Fact(DisplayName = "BR-CD-008: the catalog gives an evaluation no edge of a pod with an advert's length outside it to the next silent cut the recording's loudness holds, and the edges of a pod with the programme outside it")]
+    public async Task TheCatalogLeavesOutAnEdgeBesideAnAdvert()
+    {
+        RecordingId recording = await RecordAsync(read: true);
+        await LoudnessAsync(recording, 285, 300, 315, 330, 345);
+        await EntryAsync(CatalogKind.Cm, 0.9, (recording, 300), (RecordingId.New(), 600));
+        await EntryAsync(CatalogKind.Cm, 0.9, (recording, 315), (RecordingId.New(), 600));
+        await EntryAsync(CatalogKind.Cm, 0.9, (recording, 450), (RecordingId.New(), 600));
+
+        Assert.Equal(new EvaluationEvidence(1, 2, null), await CatalogEvidenceAsync());
     }
 
     [Fact(DisplayName = "with nothing the catalog is sure of, it gives an evaluation nothing to stand on")]
@@ -123,6 +136,28 @@ public sealed class SegmentStatusReadsTests(MigratedScratchDatabase database)
         await new LearningExtractionRepository(context).AddAsync(record, CancellationToken.None);
 
         return recording;
+    }
+
+    /// <summary>
+    /// The loudness of the recording's first chunk, loud but for half a second of silence around each second named.
+    /// </summary>
+    private async Task LoudnessAsync(RecordingId recording, params double[] silences)
+    {
+        byte[] loudness = [.. Enumerable.Repeat((byte)40, SoundLoudness.PerChunk)];
+
+        foreach (double at in silences)
+        {
+            int middle = (int)(at / SegmentEvidence.LoudnessStep.TotalSeconds);
+
+            Array.Fill(loudness, SoundLoudness.Silent, middle - 12, 25);
+        }
+
+        LearningDataChunk chunk = LearningDataChunk.Of(0, FrameClock.Of(30000, 1001, TimeSpan.Zero), [], loudness, [], [], []);
+
+        await using CarinaDbContext context = Context();
+        await new LearningDataRepository(context).KeepAsync(
+            LearningDataBlock.Of(recording, LearningDataPart.Of(chunk, LearningDataKind.Loudness), ExtractionVersion.Current, Now),
+            CancellationToken.None);
     }
 
     /// <summary>

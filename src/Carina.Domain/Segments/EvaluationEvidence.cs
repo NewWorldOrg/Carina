@@ -2,7 +2,7 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// What an evaluation stands on: how many recordings the catalog is sure of an advert in were judged, how many
-/// boundaries of the pods of those adverts they hold, the outer edges of each pod and not the joins inside it, and the latest moment a viewer did something it learned from, when one
+/// boundaries of the pods of those adverts they hold, the outer edges of each pod that <see cref="CatalogTruth"/> counts and not the joins inside it, and the latest moment a viewer did something it learned from, when one
 /// did. A version is put in use only on <see cref="Enough"/>: at least <see cref="RecordingsNeeded"/> recordings
 /// and <see cref="BoundariesNeeded"/> boundaries.
 /// </summary>
@@ -10,7 +10,7 @@ public sealed record EvaluationEvidence
 {
     public const int RecordingsNeeded = 10;
 
-    public const int BoundariesNeeded = 100;
+    public const int BoundariesNeeded = 30;
 
     public EvaluationEvidence(int recordings, int boundaries, DateTime? labelsUntil)
     {

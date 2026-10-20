@@ -51,7 +51,8 @@ public sealed record SegmentVersionResponder(int Number, SegmentModelVersionStat
 
 /// <summary>
 /// What an evaluation stands on: the recordings the catalog is sure of an advert in and the outer edges of the pods of
-/// those adverts, not the joins between the adverts in a pod, whether that is enough to put a version in use, and how many of each it takes.
+/// those adverts, not the joins between the adverts in a pod nor an edge with an advert's length outside it, whether that
+/// is enough to put a version in use, and how many of each it takes.
 /// </summary>
 public sealed record SegmentEvidenceResponder(int Recordings, int Boundaries, bool Enough, int RecordingsNeeded, int BoundariesNeeded)
 {

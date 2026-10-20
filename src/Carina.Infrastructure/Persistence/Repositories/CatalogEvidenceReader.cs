@@ -1,3 +1,4 @@
+using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
 using Microsoft.EntityFrameworkCore;
@@ -6,11 +7,13 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 /// <summary>
 /// Reads the stretches of the adverts the catalog is sure of, each beside what its entry is and the length of
-/// learning data read from its recording, without the fingerprints, and counts what the catalog is sure of in each
-/// recording in the domain.
+/// learning data read from its recording, without the fingerprints, and the loudness and the light of the frames of
+/// each such recording, one recording at a time, and counts what the catalog is sure of in each recording in the domain.
 /// </summary>
 public sealed class CatalogEvidenceReader(CarinaDbContext context) : ICatalogEvidenceReader
 {
+    private static readonly LearningDataKind[] Seams = [LearningDataKind.Loudness, LearningDataKind.FrameLights];
+
     public async Task<EvaluationEvidence> ReadAsync(CancellationToken cancellationToken)
     {
         var read = await (
@@ -37,11 +40,14 @@ public sealed class CatalogEvidenceReader(CarinaDbContext context) : ICatalogEvi
                 })
             .ToListAsync(cancellationToken);
 
-        return EvaluationEvidence.Of(
+        (RecordingId Recording, TimeSpan ReadThrough, CatalogHeard[] Heard)[] recordings =
         [
             .. read
                 .GroupBy(stretch => stretch.RecordingId)
-                .Select(recording => CatalogTruth.Of(
+                .Select(recording => (
+                    recording.Key,
+                    recording.First().ReadThrough,
+                    (CatalogHeard[])
                     [
                         .. recording.Select(stretch => new CatalogHeard(
                             stretch.StartsAt,
@@ -52,8 +58,25 @@ public sealed class CatalogEvidenceReader(CarinaDbContext context) : ICatalogEvi
                             stretch.StationCount,
                             stretch.Confidence,
                             stretch.Id)),
-                    ],
-                    recording.First().ReadThrough)),
-        ]);
+                    ])),
+        ];
+        List<CatalogTruth> truths = [];
+
+        foreach ((RecordingId recording, TimeSpan readThrough, CatalogHeard[] heard) in recordings)
+        {
+            truths.Add(CatalogTruth.Of(heard, SegmentEvidence.Of(await PartsAsync(recording, cancellationToken), readThrough)));
+        }
+
+        return EvaluationEvidence.Of(truths);
+    }
+
+    private async Task<IReadOnlyList<LearningDataPart>> PartsAsync(RecordingId recording, CancellationToken cancellationToken)
+    {
+        List<LearningDataBlock> blocks = await context.Set<LearningDataBlock>()
+            .AsNoTracking()
+            .Where(block => block.RecordingId == recording && Seams.Contains(block.Kind))
+            .ToListAsync(cancellationToken);
+
+        return [.. blocks.Select(block => block.TryRead(out LearningDataPart? part) ? part : null).OfType<LearningDataPart>()];
     }
 }
