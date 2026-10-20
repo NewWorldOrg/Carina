@@ -1,4 +1,5 @@
 using Carina.Domain.Segments;
+using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -25,9 +26,16 @@ public sealed class SegmentLearningRoundRepository(CarinaDbContext context) : IS
         DateOnly day = round.Day;
         DateTime takenAt = round.TakenAt;
         int? candidate = round.Candidate;
+        string? outcome = round.Outcome?.ToString();
+        string? verdict = round.Verdict?.ToString();
+        string? inUseMetrics = round.InUseMetrics is { } metrics ? SegmentJson.Written(metrics) : null;
 
         return await context.Database.ExecuteSqlInterpolatedAsync(
-            $"INSERT INTO segment_learning_round (day, taken_at, candidate) VALUES ({day}::date, {takenAt}::timestamptz, {candidate}::integer) ON CONFLICT (day) DO NOTHING",
+            $"""
+            INSERT INTO segment_learning_round (day, taken_at, candidate, outcome, verdict, in_use_metrics)
+            VALUES ({day}::date, {takenAt}::timestamptz, {candidate}::integer, {outcome}::varchar, {verdict}::varchar, {inUseMetrics}::jsonb)
+            ON CONFLICT (day) DO NOTHING
+            """,
             cancellationToken) is 1;
     }
 
@@ -36,6 +44,13 @@ public sealed class SegmentLearningRoundRepository(CarinaDbContext context) : IS
             .AsNoTracking()
             .Where(round => round.Candidate != null)
             .MaxAsync(round => (DateTime?)round.TakenAt, cancellationToken);
+
+    public async Task<SegmentLearningRound?> LatestAsync(CancellationToken cancellationToken)
+        => await context.Set<SegmentLearningRound>()
+            .AsNoTracking()
+            .Where(round => round.Outcome != null)
+            .OrderByDescending(round => round.Day)
+            .FirstOrDefaultAsync(cancellationToken);
 
     /// <summary>
     /// Opens a transaction on this context's connection and takes a lock that lasts as long as it does, without

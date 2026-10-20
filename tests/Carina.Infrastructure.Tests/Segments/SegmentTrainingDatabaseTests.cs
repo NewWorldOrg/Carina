@@ -107,8 +107,12 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
         Assert.Equal((SegmentTrainingOutcome.Kept, SegmentTrainingOutcome.NothingNew), (first.Round?.Outcome, second.Round?.Outcome));
         Assert.Equal("72", await ScalarAsync($"SELECT string_agg(number::text, ' ') FROM segment_model_version WHERE {Ours} AND number <> 71"));
         Assert.Equal(
-            "2036-01-02:72 2036-01-03:",
-            await ScalarAsync("SELECT string_agg(day::text || ':' || coalesce(candidate::text, ''), ' ' ORDER BY day) FROM segment_learning_round"));
+            "2036-01-02:72:Kept:NoBetterAtBoundaries:0.85 2036-01-03::NothingNew::",
+            await ScalarAsync(
+                """
+                SELECT string_agg(concat_ws(':', day::text, coalesce(candidate::text, ''), outcome, coalesce(verdict, ''), coalesce(in_use_metrics->>'boundaryRecallWithin2s', '')), ' ' ORDER BY day)
+                FROM segment_learning_round
+                """));
         Assert.Single(trainer.Asked);
     }
 

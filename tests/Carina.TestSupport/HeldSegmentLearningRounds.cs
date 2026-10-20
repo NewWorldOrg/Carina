@@ -55,6 +55,14 @@ public sealed class HeldSegmentLearningRounds : ISegmentLearningRoundRepository
         }
     }
 
+    public Task<SegmentLearningRound?> LatestAsync(CancellationToken cancellationToken)
+    {
+        lock (gate)
+        {
+            return Task.FromResult(taken.Values.Where(round => round.Outcome is not null).MaxBy(round => round.Day));
+        }
+    }
+
     public Task<IAsyncDisposable?> HoldAsync(CancellationToken cancellationToken)
     {
         lock (gate)
