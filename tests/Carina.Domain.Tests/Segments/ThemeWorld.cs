@@ -8,7 +8,7 @@ namespace Carina.Domain.Tests.Segments;
 /// recording starting a minute before a programme of twenty minutes and ending half a minute after it. Every one
 /// has a song of 88 seconds, or as long as asked, for its opening at the programme's start, a pod of two 15-second
 /// adverts right after it and another at 700 seconds, an insert song of 80 seconds at 480 in the middle, and a song as
-/// long as its opening for its ending at 1110; speech fills the rest. Every edge is a silent cut. The catalog
+/// long as its opening for its ending at 1110, whose loudness moves when asked; speech fills the rest. Every edge is a silent cut. The catalog
 /// hears each advert there and in another series the week before, so it is sure of it; it hears the opening and the
 /// ending of a series as such once two of its episodes hold them, and hears nothing of a series with one episode.
 /// </summary>
@@ -36,13 +36,19 @@ internal static class ThemeWorld
 
     private const double InsertStarts = 480;
 
+    /// <summary>
+    /// The level an ending whose loudness moves drops to for a second and a fifth every four seconds, at -27 dBFS, which
+    /// gives it a loudness range of 7 decibels.
+    /// </summary>
+    private const byte Softer = 54;
+
     private static TimeSpan Runs => TimeSpan.FromMinutes(20);
 
     /// <summary>
     /// The first <paramref name="weeks"/> episodes of <paramref name="series"/>, and the sounds the catalog hears in
     /// them: their adverts, and their opening and ending once there are two episodes.
     /// </summary>
-    public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Episodes(CatalogSeries series, int weeks, double lasts = ThemeLasts)
+    public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Episodes(CatalogSeries series, int weeks, double lasts = ThemeLasts, bool movingEnding = false)
     {
         List<LearningRecording> recordings = [];
         List<CatalogSound> sounds = [];
@@ -52,7 +58,7 @@ internal static class ThemeWorld
         {
             RecordingId id = RecordingId.New();
 
-            recordings.Add(Recording(id, series, week, lasts));
+            recordings.Add(Recording(id, series, week, lasts, movingEnding));
             sounds.AddRange(new[] { OpeningStarts + lasts, OpeningStarts + lasts + 15, 700, 715 }.Select(at => Advert(series, week, id, at)));
             aired.Add((id, week));
         }
@@ -84,7 +90,7 @@ internal static class ThemeWorld
     public static (double Starts, double Ends, SegmentKind Kind)[] Themes(SegmentDetection detection)
         => [.. detection.Segments.Where(span => span.Kind is SegmentKind.Opening or SegmentKind.Ending).Select(span => (span.Starts.TotalSeconds, span.Ends.TotalSeconds, span.Kind))];
 
-    private static LearningRecording Recording(RecordingId id, CatalogSeries series, int week, double lasts)
+    private static LearningRecording Recording(RecordingId id, CatalogSeries series, int week, double lasts, bool movingEnding)
     {
         ProgrammeCopy episode = series.Episode(week);
         SegmentContext context = new(
@@ -98,10 +104,10 @@ internal static class ThemeWorld
             CornerLogo.None,
             []);
 
-        return new LearningRecording(id, episode.RecordingStartedAt, Readings(lasts).Evidence(), context, []);
+        return new LearningRecording(id, episode.RecordingStartedAt, Readings(lasts, movingEnding).Evidence(), context, []);
     }
 
-    private static SyntheticReadings Readings(double lasts)
+    private static SyntheticReadings Readings(double lasts, bool movingEnding)
     {
         SyntheticReadings readings = new SyntheticReadings(Length)
             .Spoken(0, OpeningStarts)
@@ -127,6 +133,14 @@ internal static class ThemeWorld
         foreach (double cut in cuts)
         {
             readings.QuietAround(cut).Cut(cut, 0.9);
+        }
+
+        if (movingEnding)
+        {
+            for (double beat = EndingStarts + 2; beat + 1.2 < EndingStarts + lasts - 1; beat += 4)
+            {
+                readings.Quiet(beat, beat + 1.2, Softer);
+            }
         }
 
         return readings;

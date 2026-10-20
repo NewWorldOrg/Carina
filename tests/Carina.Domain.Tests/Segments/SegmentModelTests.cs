@@ -311,6 +311,30 @@ public sealed class SegmentModelTests
         Assert.True(middle.Of(SegmentKind.Programme) > 0.85);
     }
 
+    [Fact(DisplayName = "BR-CD-007: the version with songs whose loudness moves weighs as the version for any series but centres the loudness range on 10 dB and weighs an advert's length 0.8 more against the opening and the ending, so a song of 7 dB where an ending lies is the ending and an advert there is taken as before")]
+    public void TheVersionWithDynamicSongsIsHandSet()
+    {
+        SegmentModel any = SegmentModel.FourKindsInAnySeries;
+        SegmentModel dynamic = SegmentModel.FourKindsWithDynamicSongs;
+        SegmentFeatureValues song = Features((SegmentFeature.EndingWindow, 1), (SegmentFeature.LoudnessRange, 7));
+        SegmentFeatureValues advert = Features(
+            (SegmentFeature.EndingWindow, 1),
+            (SegmentFeature.IsMultipleOf15s, 1),
+            (SegmentFeature.IsShortMultipleOf15s, 1),
+            (SegmentFeature.EdgeSilence, 1),
+            (SegmentFeature.LoudnessRange, 3));
+
+        Assert.Equal(any.Weights.Classes[SegmentKind.Break], dynamic.Weights.Classes[SegmentKind.Break]);
+        Assert.Equal(any.Thresholds, dynamic.Thresholds);
+        Assert.Equal(new FeatureScale(10, 1), dynamic.Standardisation[SegmentFeature.LoudnessRange]);
+        Assert.All(
+            [SegmentKind.Opening, SegmentKind.Ending],
+            kind => Assert.Equal((-2.8, -0.4), (dynamic.Weights.Classes[kind].Features[SegmentFeature.IsShortMultipleOf15s], dynamic.Weights.Classes[kind].Features[SegmentFeature.LoudnessRange])));
+        Assert.True(any.Chances(song, Station, null).Of(SegmentKind.Programme) > any.Chances(song, Station, null).Of(SegmentKind.Ending));
+        Assert.True(dynamic.Chances(song, Station, null).Of(SegmentKind.Ending) > dynamic.Chances(song, Station, null).Of(SegmentKind.Programme));
+        Assert.Equal(any.Chances(advert, Station, null).Of(SegmentKind.Break), dynamic.Chances(advert, Station, null).Of(SegmentKind.Break), 12);
+    }
+
     [Fact(DisplayName = "the offsets of the station and of the series are added to the score of a break alone, so the opening and the ending score by their own weights")]
     public void TheOffsetsWeighTheBreakAlone()
     {

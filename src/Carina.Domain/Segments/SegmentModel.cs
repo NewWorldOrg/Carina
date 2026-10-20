@@ -21,8 +21,12 @@ namespace Carina.Domain.Segments;
 /// two silent cuts is no break; it tells the opening and the ending by what they are like in any series, its first
 /// episode included: a segment that starts where an opening does, or ends where an ending does, keeps its loudness as a
 /// song does and is no multiple of the grid, least of all one as long as an advert, the more so when it lasts as long
-/// as a whole one, is likelier one than the programme; earlier episodes having one at the same place add to that. What the catalog hears is fixed when the sequence is decided (<see cref="SegmentSequence"/>),
-/// not weighed.
+/// as a whole one, is likelier one than the programme; earlier episodes having one at the same place add to that.
+/// <see cref="FourKindsWithDynamicSongs"/> weighs as that one does but centres the loudness range on 10 dB rather than
+/// 8, so that a song whose loudness moves more, such as an ending that starts quietly, is still taken for one rather
+/// than for speech, and weighs an advert's length that much more against the opening and the ending, so that an
+/// advert where they lie is taken as that one takes it. What the catalog hears is fixed when the sequence is decided
+/// (<see cref="SegmentSequence"/>), not weighed.
 /// </summary>
 public sealed class SegmentModel : IEquatable<SegmentModel>
 {
@@ -132,6 +136,21 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             [SegmentFeature.IsThemeLength] = FeatureScale.Identity,
             [SegmentFeature.LoudnessRange] = new(8, 1),
             [SegmentFeature.IsShortMultipleOf15s] = FeatureScale.Identity,
+        });
+
+    public static SegmentModel FourKindsWithDynamicSongs { get; } = new(
+        new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
+        {
+            [SegmentKind.Break] = FourKindsInAnySeries.Weights.Classes[SegmentKind.Break],
+            [SegmentKind.Opening] = ThemeWeights(SegmentFeature.OpeningWindow, SegmentFeature.PastOpeningShare, -2.8),
+            [SegmentKind.Ending] = ThemeWeights(SegmentFeature.EndingWindow, SegmentFeature.PastEndingShare, -2.8),
+        }),
+        FourKindsInAnySeries.StationOffsets,
+        FourKindsInAnySeries.SeriesOffsets,
+        FourKindsInAnySeries.Thresholds,
+        new Dictionary<string, FeatureScale>(FourKindsInAnySeries.Standardisation)
+        {
+            [SegmentFeature.LoudnessRange] = new(10, 1),
         });
 
     public SegmentWeights Weights { get; }
@@ -261,17 +280,17 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
     }
 
     /// <summary>
-    /// The weights made by hand of the opening, or of the ending, whose place is <paramref name="place"/> and whose
-    /// earlier episodes are <paramref name="past"/>.
+    /// The weights made by hand of the opening, or of the ending, whose place is <paramref name="place"/>, whose
+    /// earlier episodes are <paramref name="past"/> and against which an advert's length weighs <paramref name="advert"/>.
     /// </summary>
-    private static SegmentClassWeights ThemeWeights(string place, string past)
+    private static SegmentClassWeights ThemeWeights(string place, string past, double advert = -2.0)
         => new(-6.0, new Dictionary<string, double>
         {
             [place] = 4.8,
             [SegmentFeature.IsThemeLength] = 0.5,
             [SegmentFeature.LoudnessRange] = -0.4,
             [SegmentFeature.IsMultipleOf15s] = -1.0,
-            [SegmentFeature.IsShortMultipleOf15s] = -2.0,
+            [SegmentFeature.IsShortMultipleOf15s] = advert,
             [past] = 4.0,
         });
 

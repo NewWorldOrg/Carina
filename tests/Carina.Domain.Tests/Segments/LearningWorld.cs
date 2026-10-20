@@ -87,6 +87,20 @@ internal static class LearningWorld
         null,
         null);
 
+    /// <summary>
+    /// <see cref="InUse"/> as the version of four kinds with songs whose loudness moves would stand in its place.
+    /// </summary>
+    public static readonly SegmentModelVersion DynamicSongsInUse = SegmentModelVersion.Rehydrate(
+        SegmentModelVersion.FirstNumber + 4,
+        SegmentModelVersionState.Active,
+        false,
+        SegmentModel.FourKindsWithDynamicSongs,
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        null,
+        null,
+        null);
+
     public static readonly SegmentSearch OneSetting = new([SegmentThresholds.Initial], [0.1], [10]);
 
     public static readonly DateTime Now = Story.Episode(8).RecordingStartedAt;
