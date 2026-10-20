@@ -72,6 +72,21 @@ internal static class LearningWorld
         null,
         null);
 
+    /// <summary>
+    /// <see cref="InUse"/> as the version of four kinds that tells the opening and the ending in any series would stand
+    /// in its place.
+    /// </summary>
+    public static readonly SegmentModelVersion AnySeriesInUse = SegmentModelVersion.Rehydrate(
+        SegmentModelVersion.FirstNumber + 3,
+        SegmentModelVersionState.Active,
+        false,
+        SegmentModel.FourKindsInAnySeries,
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        null,
+        null,
+        null);
+
     public static readonly SegmentSearch OneSetting = new([SegmentThresholds.Initial], [0.1], [10]);
 
     public static readonly DateTime Now = Story.Episode(8).RecordingStartedAt;

@@ -259,6 +259,64 @@ public sealed class SegmentModelTests
         Assert.Equal(1.0, four.BreakScore(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 0)), Station, null), 12);
     }
 
+    [Fact(DisplayName = "BR-CD-007: the version of four kinds for any series weighs the break and hears silence as the version hearing silence from -55 dBFS does, and weighs the opening and the ending by where they lie, how long they last, how steady their loudness is and the grid, earlier episodes adding to it")]
+    public void TheVersionForAnySeriesIsHandSet()
+    {
+        SegmentModel any = SegmentModel.FourKindsInAnySeries;
+
+        Assert.Equal(4, any.Kinds);
+        Assert.Equal(SegmentModel.FourKindsBelowPauses.Weights.Classes[SegmentKind.Break], any.Weights.Classes[SegmentKind.Break]);
+        Assert.Equal(SegmentModel.FourKindsBelowPauses.Thresholds, any.Thresholds);
+        Assert.Equal(
+            new SegmentClassWeights(-6.0, new Dictionary<string, double>
+            {
+                [SegmentFeature.OpeningWindow] = 4.8,
+                [SegmentFeature.IsThemeLength] = 0.5,
+                [SegmentFeature.LoudnessRange] = -0.4,
+                [SegmentFeature.IsMultipleOf15s] = -3.0,
+                [SegmentFeature.PastOpeningShare] = 4.0,
+            }),
+            any.Weights.Classes[SegmentKind.Opening]);
+        Assert.Equal(
+            new SegmentClassWeights(-6.0, new Dictionary<string, double>
+            {
+                [SegmentFeature.EndingWindow] = 4.8,
+                [SegmentFeature.IsThemeLength] = 0.5,
+                [SegmentFeature.LoudnessRange] = -0.4,
+                [SegmentFeature.IsMultipleOf15s] = -3.0,
+                [SegmentFeature.PastEndingShare] = 4.0,
+            }),
+            any.Weights.Classes[SegmentKind.Ending]);
+        Assert.Equal(new FeatureScale(8, 1), any.Standardisation[SegmentFeature.LoudnessRange]);
+        Assert.All(
+            any.Standardisation.Where(pair => pair.Key is not SegmentFeature.LoudnessRange),
+            pair => Assert.Equal(FeatureScale.Identity, pair.Value));
+        Assert.Empty(any.StationOffsets);
+        Assert.Empty(any.SeriesOffsets);
+    }
+
+    [Fact(DisplayName = "BR-CD-007: with neither the catalog nor earlier episodes, the version for any series takes a song as long as a whole one where an opening or an ending lies for one at 0.6 to 0.8, and speech there, a pod of adverts there and a song in the middle of the programme for what they are")]
+    public void TheVersionForAnySeriesFindsAThemeInAFirstEpisode()
+    {
+        SegmentModel any = SegmentModel.FourKindsInAnySeries;
+
+        SegmentChances opening = any.Chances(Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 3)), Station, null);
+        SegmentChances ending = any.Chances(Features((SegmentFeature.EndingWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 3)), Station, null);
+        SegmentChances speech = any.Chances(Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 15)), Station, null);
+        SegmentChances pod = any.Chances(
+            Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LoudnessRange, 2)),
+            Station,
+            null);
+        SegmentChances middle = any.Chances(Features((SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 3)), Station, null);
+
+        Assert.InRange(opening.Of(SegmentKind.Opening), 0.6, 0.8);
+        Assert.InRange(ending.Of(SegmentKind.Ending), 0.6, 0.8);
+        Assert.True(speech.Of(SegmentKind.Programme) > 0.85);
+        Assert.True(pod.Of(SegmentKind.Break) > 0.5);
+        Assert.True(pod.Of(SegmentKind.Opening) < 0.1);
+        Assert.True(middle.Of(SegmentKind.Programme) > 0.85);
+    }
+
     [Fact(DisplayName = "the offsets of the station and of the series are added to the score of a break alone, so the opening and the ending score by their own weights")]
     public void TheOffsetsWeighTheBreakAlone()
     {

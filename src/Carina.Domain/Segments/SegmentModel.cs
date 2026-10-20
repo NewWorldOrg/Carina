@@ -16,7 +16,12 @@ namespace Carina.Domain.Segments;
 /// weighs the break the same way and adds the opening and the ending made by hand, which earlier episodes of the
 /// series having one at the same place make likelier but never enough on their own. <see cref="FourKindsBelowPauses"/>
 /// weighs as that one does and hears silence only from -55 dBFS, below the pauses inside an advert that would cut it
-/// in two. What the catalog hears is fixed when the sequence is decided (<see cref="SegmentSequence"/>), not weighed.
+/// in two. <see cref="FourKindsInAnySeries"/> weighs the break and hears silence as that one does, and tells the opening
+/// and the ending by what they are like in any series, its first episode included: a segment that starts where an
+/// opening does, or ends where an ending does, keeps its loudness as a song does and is no multiple of the grid, the
+/// more so when it lasts as long as a whole one, is likelier one than the programme; earlier episodes having one at the
+/// same place add to that. What the catalog hears is fixed when the sequence is decided (<see cref="SegmentSequence"/>),
+/// not weighed.
 /// </summary>
 public sealed class SegmentModel : IEquatable<SegmentModel>
 {
@@ -103,6 +108,24 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             SegmentThresholds.Initial.LambdaStation,
             SegmentThresholds.Initial.LambdaSeries),
         FirstOfFourKinds.Standardisation);
+
+    public static SegmentModel FourKindsInAnySeries { get; } = new(
+        new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
+        {
+            [SegmentKind.Break] = FourKindsBelowPauses.Weights.Classes[SegmentKind.Break],
+            [SegmentKind.Opening] = ThemeWeights(SegmentFeature.OpeningWindow, SegmentFeature.PastOpeningShare),
+            [SegmentKind.Ending] = ThemeWeights(SegmentFeature.EndingWindow, SegmentFeature.PastEndingShare),
+        }),
+        FourKindsBelowPauses.StationOffsets,
+        FourKindsBelowPauses.SeriesOffsets,
+        FourKindsBelowPauses.Thresholds,
+        new Dictionary<string, FeatureScale>(FourKindsBelowPauses.Standardisation)
+        {
+            [SegmentFeature.OpeningWindow] = FeatureScale.Identity,
+            [SegmentFeature.EndingWindow] = FeatureScale.Identity,
+            [SegmentFeature.IsThemeLength] = FeatureScale.Identity,
+            [SegmentFeature.LoudnessRange] = new(8, 1),
+        });
 
     public SegmentWeights Weights { get; }
 
@@ -229,6 +252,20 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             throw new ArgumentException("Every feature the weights name has a scale to standardise it with.", nameof(standardisation));
         }
     }
+
+    /// <summary>
+    /// The weights made by hand of the opening, or of the ending, whose place is <paramref name="place"/> and whose
+    /// earlier episodes are <paramref name="past"/>.
+    /// </summary>
+    private static SegmentClassWeights ThemeWeights(string place, string past)
+        => new(-6.0, new Dictionary<string, double>
+        {
+            [place] = 4.8,
+            [SegmentFeature.IsThemeLength] = 0.5,
+            [SegmentFeature.LoudnessRange] = -0.4,
+            [SegmentFeature.IsMultipleOf15s] = -3.0,
+            [past] = 4.0,
+        });
 
     internal static bool IsAStation(string key)
     {
