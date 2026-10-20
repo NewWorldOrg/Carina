@@ -33,6 +33,38 @@ public sealed class LearningCatalogTests
         Assert.Equal(new CatalogHeard(CatalogSeries.Lead + TimeSpan.FromSeconds(300), CatalogSeries.Lead + TimeSpan.FromSeconds(329), SegmentKind.Break, 3, 2, 2, 0.9, advert), grown);
     }
 
+    [Fact(DisplayName = "BR-CD-005: a phrase heard right after the opening of two episodes is heard as that opening, once two episodes are recorded, and as the programme where it is played elsewhere")]
+    public void APhraseRightAfterTheOpeningIsHeardAsIt()
+    {
+        CatalogEntryId head = CatalogEntryId.New();
+        CatalogEntryId phrase = CatalogEntryId.New();
+        RecordingId first = RecordingId.New();
+        RecordingId judged = RecordingId.New();
+        LearningCatalog catalog = new(
+        [
+            new CatalogSound(head, TimeSpan.FromSeconds(70), [
+                CatalogSeries.At(head, Story.Episode(0), 0, 70, recording: first),
+                CatalogSeries.At(head, Story.Episode(1), 0, 70, recording: judged),
+            ]),
+            new CatalogSound(phrase, TimeSpan.FromSeconds(13), [
+                CatalogSeries.At(phrase, Story.Episode(0), 70, 13, recording: first),
+                CatalogSeries.At(phrase, Story.Episode(0), 700, 13, recording: first),
+                CatalogSeries.At(phrase, Story.Episode(1), 71, 13, recording: judged),
+                CatalogSeries.At(phrase, Story.Episode(1), 700, 13, recording: judged),
+            ]),
+        ],
+        SeriesLinks.None);
+
+        IReadOnlyList<CatalogHeard> then = catalog.HeardBy(first, Story.Episode(0).RecordingStartedAt);
+        IReadOnlyList<CatalogHeard> now = catalog.HeardNow(judged);
+
+        Assert.All(then, heard => Assert.Null(heard.Kind));
+        Assert.Equal(
+            [(head, SegmentKind.Opening), (phrase, SegmentKind.Opening), (phrase, SegmentKind.Programme)],
+            now.OrderBy(heard => heard.Starts).Select(heard => (heard.Entry!, heard.Kind!.Value)));
+        Assert.All(now.Where(heard => heard.Entry == phrase), heard => Assert.Equal(0.8, heard.Confidence));
+    }
+
     [Fact(DisplayName = "an entry heard only once by the time a recording started is not heard by it at all")]
     public void AnEntryNotYetStartedIsNotHeard()
     {

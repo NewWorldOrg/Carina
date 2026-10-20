@@ -297,6 +297,53 @@ public sealed class CatalogTests
         Assert.Equal([leaves], left.Relinking);
     }
 
+    [Fact(DisplayName = "BR-CD-005: a programme fixture estimated again beside the opening it follows in two episodes is that opening, and its stretches elsewhere are handed back as the programme")]
+    public void AFixtureEstimatedAgainBesideTheOpeningCarriesItOn()
+    {
+        RecordingId[] weeks = [RecordingId.New(), RecordingId.New()];
+        (CatalogEntry head, CatalogOccurrence[] heads) = KeptAt(CatalogKind.Opening, 0.8, 89, weeks, (0, 0), (1, 0));
+        (CatalogEntry phrase, CatalogOccurrence[] phrases) = KeptAt(CatalogKind.ProgrammeFixture, 0.7, 13, weeks, (0, 89), (1, 89), (0, 700), (1, 700));
+        Dictionary<RecordingId, ProgrammeCopy> programmes = new()
+        {
+            [weeks[0]] = Drama.Episode(0),
+            [weeks[1]] = Drama.Episode(1),
+        };
+
+        CatalogChange change = Catalog.Reestimate(phrase, Knowing(phrase, phrases, programmes, Around((head, heads), (phrase, phrases))), Now.AddDays(1));
+
+        Assert.Equal((CatalogKind.Opening, 0.8, CatalogDecision.Continuation), (phrase.Kind, phrase.Confidence, phrase.DecidedBy));
+        Assert.Equal([null, null, SegmentKind.Programme, SegmentKind.Programme], phrases.Select(stretch => stretch.KindOverride));
+        Assert.Equal([phrases[2], phrases[3]], change.Overridden);
+        Assert.Empty(change.Relinking);
+    }
+
+    [Fact(DisplayName = "BR-CD-005: a new episode heard to have the opening and the phrase after it carries the phrase on there too")]
+    public void ANewEpisodeCarriesThePhraseOnThere()
+    {
+        RecordingId[] weeks = [RecordingId.New(), RecordingId.New()];
+        (CatalogEntry head, CatalogOccurrence[] heads) = KeptAt(CatalogKind.Opening, 0.8, 89, weeks, (0, 0), (1, 0));
+        (CatalogEntry phrase, CatalogOccurrence[] phrases) = KeptAt(CatalogKind.ProgrammeFixture, 0.7, 13, weeks, (0, 89), (1, 89));
+        Dictionary<RecordingId, ProgrammeCopy> programmes = new(Programmes)
+        {
+            [weeks[0]] = Drama.Episode(0),
+            [weeks[1]] = Drama.Episode(1),
+        };
+        SoundMatch openingHeard = new(Span(60, 149), new EntrySound(head.Id), Span(0, 89), 0.04);
+        SoundMatch phraseHeard = new(Span(149, 162), new EntrySound(phrase.Id), Span(0, 13), 0.04);
+
+        CatalogChange change = Catalog.Absorb(
+            Heard,
+            Sound,
+            [openingHeard, phraseHeard],
+            Knowing([head, phrase], [.. heads, .. phrases], programmes, Around((head, heads), (phrase, phrases))),
+            Now.AddDays(1));
+
+        CatalogOccurrence there = Assert.Single(change.Found, stretch => stretch.EntryId.Equals(phrase.Id));
+        Assert.Equal((CatalogKind.Opening, CatalogDecision.Continuation), (phrase.Kind, phrase.DecidedBy));
+        Assert.Equal((CatalogKind.Opening, CatalogDecision.Pattern), (head.Kind, head.DecidedBy));
+        Assert.Null(there.KindOverride);
+    }
+
     [Fact(DisplayName = "a match naming an entry that was not handed over is refused")]
     public void AMatchNamingAnUnknownEntryIsRefused()
     {
@@ -310,8 +357,60 @@ public sealed class CatalogTests
     private static CatalogKnowledge Knowing(
         CatalogEntry? entry = null,
         IReadOnlyList<CatalogOccurrence>? occurrences = null,
-        IReadOnlyDictionary<RecordingId, ProgrammeCopy>? programmes = null)
-        => new(entry is null ? [] : [entry], occurrences ?? [], programmes ?? Programmes, SeriesLinks.None);
+        IReadOnlyDictionary<RecordingId, ProgrammeCopy>? programmes = null,
+        CatalogSurroundings? around = null)
+        => new(entry is null ? [] : [entry], occurrences ?? [], programmes ?? Programmes, SeriesLinks.None, around);
+
+    private static CatalogKnowledge Knowing(
+        IReadOnlyList<CatalogEntry> entries,
+        IReadOnlyList<CatalogOccurrence> occurrences,
+        IReadOnlyDictionary<RecordingId, ProgrammeCopy> programmes,
+        CatalogSurroundings around)
+        => new(entries, occurrences, programmes, SeriesLinks.None, around);
+
+    private static CatalogSurroundings Around(params (CatalogEntry Entry, CatalogOccurrence[] Stretches)[] kept)
+        => new(
+        [
+            .. kept.SelectMany(each => each.Stretches.Select(stretch => new ThemeStretch(
+                each.Entry.Id,
+                stretch.RecordingId,
+                stretch.Span,
+                CatalogKinds.PartOf(new CatalogEstimate(each.Entry.Kind, each.Entry.Confidence, each.Entry.DecidedBy), each.Entry.SeriesCount, stretch.KindOverride)))),
+        ]);
+
+    /// <summary>
+    /// An entry kept as <paramref name="kind"/> with a stretch at each place, a week of the drama and where in its
+    /// programme, in the recording <paramref name="weeks"/> names for that week.
+    /// </summary>
+    private static (CatalogEntry Entry, CatalogOccurrence[] Stretches) KeptAt(
+        CatalogKind kind,
+        double confidence,
+        double seconds,
+        RecordingId[] weeks,
+        params (int Week, double FromProgrammeStart)[] places)
+    {
+        CatalogEntryId id = CatalogEntryId.New();
+        CatalogOccurrence[] stretches =
+        [
+            .. places.Select(place => CatalogSeries.At(id, Drama.Episode(place.Week), place.FromProgrammeStart, seconds, weeks[place.Week]).Occurrence),
+        ];
+        CatalogEntry entry = CatalogEntry.Rehydrate(
+            id,
+            kind,
+            confidence,
+            CatalogDecision.Pattern,
+            TimeSpan.FromSeconds(seconds),
+            CatalogFingerprint.Write([.. Enumerable.Range(1, 1000).Select(value => (uint)value)]),
+            stretches.Length,
+            1,
+            1,
+            Evening,
+            Evening.AddDays(7),
+            Now,
+            CatalogKinds.Version - 1);
+
+        return (entry, stretches);
+    }
 
     private static CatalogEntry KeptOpening(CatalogEntryId id, int occurrences)
         => CatalogEntry.Rehydrate(

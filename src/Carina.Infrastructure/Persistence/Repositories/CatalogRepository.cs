@@ -60,6 +60,40 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<CatalogSurroundings> SurroundingsAsync(
+        IReadOnlyCollection<RecordingId> recordings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recordings);
+
+        RecordingId[] named = [.. recordings];
+        List<HeardBeside> heard = await (
+                from occurrence in context.Set<CatalogOccurrence>().AsNoTracking()
+                join entry in context.Set<CatalogEntry>().AsNoTracking() on occurrence.EntryId equals entry.Id
+                where named.Contains(occurrence.RecordingId)
+                orderby occurrence.Id
+                select new HeardBeside(
+                    occurrence.EntryId,
+                    occurrence.RecordingId,
+                    occurrence.StartsAt,
+                    occurrence.EndsAt,
+                    occurrence.KindOverride,
+                    entry.Kind,
+                    entry.Confidence,
+                    entry.DecidedBy,
+                    entry.SeriesCount))
+            .ToListAsync(cancellationToken);
+
+        return new CatalogSurroundings(
+        [
+            .. heard.Select(stretch => new ThemeStretch(
+                stretch.Entry,
+                stretch.Recording,
+                new SoundSpan(stretch.StartsAt, stretch.EndsAt),
+                CatalogKinds.PartOf(new CatalogEstimate(stretch.Kind, stretch.Confidence, stretch.DecidedBy), stretch.SeriesCount, stretch.KindOverride))),
+        ]);
+    }
+
     public async Task<IReadOnlyList<IReadOnlyList<RecordingId>>> SoundSharersAsync(CancellationToken cancellationToken)
     {
         CatalogKind[] linking = [CatalogKind.Opening, CatalogKind.Ending, CatalogKind.ProgrammeFixture];
@@ -143,6 +177,17 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
 
         return true;
     }
+
+    private sealed record HeardBeside(
+        CatalogEntryId Entry,
+        RecordingId Recording,
+        TimeSpan StartsAt,
+        TimeSpan EndsAt,
+        SegmentKind? KindOverride,
+        CatalogKind Kind,
+        double? Confidence,
+        CatalogDecision? DecidedBy,
+        int SeriesCount);
 
     private void SetAside(CatalogEntry[] stale, CatalogChange change)
     {

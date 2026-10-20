@@ -20,4 +20,15 @@ public sealed record PlacedOccurrence(CatalogOccurrence Occurrence, TimeSpan? Pr
     /// How far into its programme the stretch starts; null when the programme's start is not known.
     /// </summary>
     public TimeSpan? IntoProgramme => Occurrence.StartsAt - ProgrammeStarts;
+
+    /// <summary>
+    /// What says which series the stretch's recording is of, with the guide's start of its programme when
+    /// that is known.
+    /// </summary>
+    public SeriesMember Member => Occurrence.Member with { ProgrammeStartsAt = Occurrence.RecordingStartedAt + ProgrammeStarts };
+
+    /// <summary>
+    /// The broadcast the stretch is heard in (<see cref="SeriesMember.Episode"/>).
+    /// </summary>
+    public SeriesEpisode Episode => Member.Episode;
 }

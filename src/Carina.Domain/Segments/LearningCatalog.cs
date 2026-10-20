@@ -34,7 +34,8 @@ public sealed record CatalogSound
 /// <summary>
 /// The catalog a recording is read with when learning: what it would have heard when it was made. Only
 /// the stretches of recordings started no later than it count, so each entry it hears is estimated again
-/// from those (<see cref="CatalogKinds"/>), and one with fewer than two of them by then is not heard at
+/// from those (<see cref="CatalogKinds"/>), beside the other entries heard in its recordings as they would
+/// have been estimated then, and one with fewer than two of them by then is not heard at
 /// all. Every stretch heard says which entry it is a stretch of, so that the entries set aside when a recording is
 /// judged (<see cref="SetAsideFor"/>) can be taken out of what another recording hears.
 /// </summary>
@@ -78,7 +79,9 @@ public sealed class LearningCatalog
     {
         ArgumentNullException.ThrowIfNull(recording);
 
-        return [.. soundsIn[recording].SelectMany(sound => Heard(sound, recording, startedAt))];
+        Estimates then = new(soundsIn, links, startedAt);
+
+        return [.. soundsIn[recording].SelectMany(sound => Heard(sound, recording, then))];
     }
 
     /// <summary>
@@ -133,16 +136,13 @@ public sealed class LearningCatalog
         return entries.Count is 0 ? context : context.Remembering([.. context.Past.Select(episode => episode.Without(StretchesOf(episode.Recording, entries)))]);
     }
 
-    private IEnumerable<CatalogHeard> Heard(CatalogSound sound, RecordingId recording, DateTime startedAt)
+    private static IEnumerable<CatalogHeard> Heard(CatalogSound sound, RecordingId recording, Estimates then)
     {
-        PlacedOccurrence[] kept = [.. sound.Occurrences.Where(placed => placed.Occurrence.RecordingStartedAt <= startedAt)];
-
-        if (kept.Length < CatalogEntry.FewestOccurrences)
+        if (then.Carried(sound) is not (PlacedOccurrence[] kept, CatalogPattern pattern))
         {
             return [];
         }
 
-        CatalogPattern pattern = CatalogKinds.Estimate(sound.Length, kept, links);
         SegmentKind? kind = CatalogHeard.CountsAs(pattern.Estimate.Kind);
 
         return kept
@@ -157,5 +157,60 @@ public sealed class LearningCatalog
                 pattern.StationCount,
                 pattern.Estimate.Confidence,
                 sound.Id));
+    }
+
+    /// <summary>
+    /// The sounds as they would have been estimated at one time, each worked out once: from their stretches of
+    /// recordings started no later than then, and, for one that may carry on an opening or an ending, beside the
+    /// sounds heard in its recordings.
+    /// </summary>
+    private sealed class Estimates(ILookup<RecordingId, CatalogSound> soundsIn, SeriesLinks links, DateTime startedAt)
+    {
+        private readonly Dictionary<CatalogEntryId, (PlacedOccurrence[] Kept, CatalogPattern Pattern)?> own = [];
+
+        public (PlacedOccurrence[] Kept, CatalogPattern Pattern)? Carried(CatalogSound sound)
+        {
+            if (Own(sound) is not (PlacedOccurrence[] kept, CatalogPattern pattern))
+            {
+                return null;
+            }
+
+            if (!CatalogKinds.MayCarryOn(pattern))
+            {
+                return (kept, pattern);
+            }
+
+            CatalogSurroundings around = new(
+            [
+                .. kept
+                    .Select(placed => placed.Occurrence.RecordingId)
+                    .Distinct()
+                    .SelectMany(recording => soundsIn[recording].SelectMany(heard => StretchesIn(heard, recording))),
+            ]);
+
+            return (kept, CatalogKinds.CarryOn(sound.Length, kept, pattern, around));
+        }
+
+        private IEnumerable<ThemeStretch> StretchesIn(CatalogSound sound, RecordingId recording)
+            => Own(sound) is (PlacedOccurrence[] kept, CatalogPattern pattern)
+                ? CatalogKinds.Stretches(kept, pattern).Where(stretch => stretch.Recording.Equals(recording))
+                : [];
+
+        private (PlacedOccurrence[] Kept, CatalogPattern Pattern)? Own(CatalogSound sound)
+        {
+            if (own.TryGetValue(sound.Id, out (PlacedOccurrence[] Kept, CatalogPattern Pattern)? known))
+            {
+                return known;
+            }
+
+            PlacedOccurrence[] kept = [.. sound.Occurrences.Where(placed => placed.Occurrence.RecordingStartedAt <= startedAt)];
+            (PlacedOccurrence[] Kept, CatalogPattern Pattern)? estimated = kept.Length < CatalogEntry.FewestOccurrences
+                ? null
+                : (kept, CatalogKinds.Estimate(sound.Length, kept, links));
+
+            own[sound.Id] = estimated;
+
+            return estimated;
+        }
     }
 }

@@ -19,7 +19,8 @@ public interface ILearningWorklist
 
     /// <summary>
     /// When the recording's programme ends by the guide, or else by its reservation once that end has
-    /// been announced; null when neither says, or what they say is no later than the programme starts.
+    /// been announced, or else where the recording was promised to end, when the guide no longer holds the
+    /// programme; null when what they say is no later than the programme starts.
     /// </summary>
     Task<DateTime?> ProgrammeEndsAtAsync(Recording recording, CancellationToken cancellationToken);
 }

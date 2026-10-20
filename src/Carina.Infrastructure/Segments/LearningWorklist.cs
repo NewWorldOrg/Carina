@@ -52,14 +52,14 @@ public sealed class LearningWorklist(
             return guided;
         }
 
-        if (recording.ReservationId is not { } reserved)
+        Reservation? reservation = recording.ReservationId is { } reserved ? await reservations.FindAsync(reserved, cancellationToken) : null;
+
+        if (reservation is { EndAtConfirmed: true } && After(reservation.EndAt, recording) is { } confirmed)
         {
-            return null;
+            return confirmed;
         }
 
-        Reservation? reservation = await reservations.FindAsync(reserved, cancellationToken);
-
-        return reservation is { EndAtConfirmed: true } ? After(reservation.EndAt, recording) : null;
+        return After(recording.PromisedWindowEnd, recording);
     }
 
     private static DateTime? After(DateTime? endsAt, Recording recording)

@@ -3631,7 +3631,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_segment_catalog_entry_counts", "occurrences >= 2 AND series_count >= 1 AND station_count >= 1");
 
-                            t.HasCheckConstraint("ck_segment_catalog_entry_decided_by", "(decided_by IS NULL) = (kind = 'Unknown') AND (decided_by IS NULL OR decided_by IN ('Pattern'))");
+                            t.HasCheckConstraint("ck_segment_catalog_entry_decided_by", "(decided_by IS NULL) = (kind = 'Unknown') AND (decided_by IS NULL OR decided_by IN ('Pattern', 'Continuation'))");
 
                             t.HasCheckConstraint("ck_segment_catalog_entry_fingerprint", "octet_length(fingerprint) BETWEEN 4 AND 45000 AND octet_length(fingerprint) % 4 = 0");
 

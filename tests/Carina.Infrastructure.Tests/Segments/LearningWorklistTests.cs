@@ -1,7 +1,9 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Tests.Reservations;
 using Carina.TestSupport;
@@ -56,26 +58,76 @@ public sealed class LearningWorklistTests
         Assert.Equal(Now.AddMinutes(25), await Worklist.ProgrammeEndsAtAsync(recording, Cancel));
     }
 
-    [Fact(DisplayName = "without the guide a programme ends when its reservation says, once that end has been announced")]
+    [Fact(DisplayName = "without the guide a programme ends when its reservation says, once that end has been announced, and otherwise where its recording was promised to end")]
     public async Task WithoutTheGuideAProgrammeEndsWhenItsReservationSays()
     {
         Reservation confirmed = ReservationFixtures.Planned(endAt: Now.AddMinutes(30), endAtConfirmed: true);
         Reservation provisional = ReservationFixtures.Planned(endAt: Now.AddMinutes(30), endAtConfirmed: false);
         await reservations.AddAsync(confirmed, Cancel);
         await reservations.AddAsync(provisional, Cancel);
+        Recording unreserved = Made(Mounted, 7409, Now);
 
         Assert.Equal(Now.AddMinutes(30), await Worklist.ProgrammeEndsAtAsync(Made(Mounted, 7407, Now, confirmed.Id), Cancel));
-        Assert.Null(await Worklist.ProgrammeEndsAtAsync(Made(Mounted, 7408, Now, provisional.Id), Cancel));
-        Assert.Null(await Worklist.ProgrammeEndsAtAsync(Made(Mounted, 7409, Now), Cancel));
+        Assert.Equal(Now.AddMinutes(54), await Worklist.ProgrammeEndsAtAsync(Made(Mounted, 7408, Now, provisional.Id), Cancel));
+        Assert.Equal(unreserved.PromisedWindowEnd, await Worklist.ProgrammeEndsAtAsync(unreserved, Cancel));
+        Assert.Equal(Now.AddMinutes(54), unreserved.PromisedWindowEnd);
     }
 
-    [Fact(DisplayName = "an end no later than the programme's start is no end")]
-    public async Task AnEndNoLaterThanTheStartIsNoEnd()
+    [Fact(DisplayName = "an end from the guide no later than the programme's start is passed over for where the recording was promised to end")]
+    public async Task AnEndNoLaterThanTheStartIsPassedOver()
     {
         Recording recording = Made(Mounted, 7410, Now);
         await programmes.AddAsync(Announced(recording, recording.ProgrammeStartsAt), Cancel);
 
-        Assert.Null(await Worklist.ProgrammeEndsAtAsync(recording, Cancel));
+        Assert.Equal(recording.PromisedWindowEnd, await Worklist.ProgrammeEndsAtAsync(recording, Cancel));
+    }
+
+    [Fact(DisplayName = "BR-CD-005: a sound heard at the end of two weekly recordings whose programmes the guide no longer holds is their ending, the programmes ending where the recordings were promised to")]
+    public async Task AnEndingIsFoundWhereTheGuideNoLongerHoldsTheProgrammes()
+    {
+        Recording[] weeks = [Weekly(0), Weekly(1)];
+        ProgrammeCopy[] copies = [.. await Task.WhenAll(weeks.Select(async week => ProgrammeCopy.Of(week, await Worklist.ProgrammeEndsAtAsync(week, Cancel))))];
+        ProgrammeCopy[] unended = [.. weeks.Select(week => ProgrammeCopy.Of(week, null))];
+        CatalogEntryId entry = CatalogEntryId.New();
+
+        CatalogPattern ended = CatalogKinds.Estimate(TimeSpan.FromSeconds(89), [.. weeks.Select((week, at) => EndingOf(entry, week, copies[at]))], SeriesLinks.None);
+        CatalogPattern unknown = CatalogKinds.Estimate(TimeSpan.FromSeconds(89), [.. weeks.Select((week, at) => EndingOf(entry, week, unended[at]))], SeriesLinks.None);
+
+        Assert.Equal([.. weeks.Select(week => (DateTime?)week.PromisedWindowEnd)], copies.Select(copy => copy.ProgrammeEndsAt));
+        Assert.Equal(new CatalogEstimate(CatalogKind.Ending, 0.8, CatalogDecision.Pattern), ended.Estimate);
+        Assert.Equal(CatalogEstimate.Unknown, unknown.Estimate);
+    }
+
+    /// <summary>
+    /// A weekly recording of a half-hour programme the guide holds no row for, started ten seconds before it and
+    /// promised to end with it.
+    /// </summary>
+    private static Recording Weekly(int week)
+    {
+        RecordingId id = RecordingId.New();
+        DateTime starts = Now.AddDays(7 * week);
+
+        return Recording.Begin(
+            id,
+            null,
+            new ProgrammeRef(new NetworkId(32736), new ServiceId(1040), new EventId(7420 + week), starts),
+            Mounted,
+            RecordingFileName.For(id, ".m2ts"),
+            starts.AddSeconds(-10),
+            starts.AddMinutes(30),
+            new ProgrammeSnapshot("架空の物語", string.Empty, string.Empty, [], starts.AddDays(-1), AudioMode.Stereo, ProgrammeSnapshot.SoundsUnannounced),
+            null,
+            BroadcastGroupRole.Standalone,
+            starts.AddSeconds(-10),
+            new TunerDeviceId("synthetic-0"));
+    }
+
+    private static PlacedOccurrence EndingOf(CatalogEntryId entry, Recording recording, ProgrammeCopy copy)
+    {
+        TimeSpan starts = recording.ProgrammeStartsAt.AddMinutes(30) - TimeSpan.FromSeconds(120) - recording.StartedAtActual;
+        SoundSpan span = new(starts, starts + TimeSpan.FromSeconds(89));
+
+        return PlacedOccurrence.Of(CatalogOccurrence.Found(entry, recording.Id, span, copy, 0.05, Now), copy);
     }
 
     private async Task<Recording> HeldAsync(Recording recording)
