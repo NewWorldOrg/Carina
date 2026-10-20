@@ -186,6 +186,23 @@ public sealed class SegmentSequenceTests
         Assert.Equal([SegmentKind.Programme, SegmentKind.Ending], SegmentSequence.Decide(Laid(1710, 90), [Plain, Ending(3)], SegmentThresholds.Initial));
     }
 
+    [Fact(DisplayName = "BR-CD-007: a piece of the opening starts in the first half of the programme and one of the ending ends in its second half, so a piece like one on the wrong side is the programme unless the catalog fixes it to that kind, and an opening or an ending reaching over the middle stops there")]
+    public void AnOpeningLiesInTheFirstHalfAndAnEndingInTheSecond()
+    {
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(Placed(60, 90, 1500, 90, 60), [Plain, Ending(3), Plain, Opening(2), Plain], SegmentThresholds.Initial));
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Programme, SegmentKind.Programme],
+            SegmentSequence.Decide(Placed(850, 60, 60, 830), [Plain, Opening(3), Opening(3), Plain], SegmentThresholds.Initial));
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Ending, SegmentKind.Programme],
+            SegmentSequence.Decide(Placed(830, 60, 60, 850), [Plain, Ending(3), Ending(3), Plain], SegmentThresholds.Initial));
+        Assert.Equal(
+            [SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Opening, SegmentKind.Programme],
+            SegmentSequence.Decide(Fixed(Placed(60, 90, 1500, 90, 60), (3, SegmentKind.Opening, 0.8)), [Plain, Plain, Plain, Plain, Plain], SegmentThresholds.Initial));
+    }
+
     [Fact(DisplayName = "BR-CD-007: an opening long enough to leave is kept apart from a likelier one still too short, so the long one is chosen when the short one cannot last")]
     public void AnOpeningLongEnoughIsKeptApartFromAShorterOne()
     {
@@ -353,6 +370,26 @@ public sealed class SegmentSequenceTests
 
     private static SegmentPiece[] Fixed(SegmentPiece[] pieces, params (int At, SegmentKind Kind, double Chance)[] fixes)
         => [.. pieces.Select((piece, at) => fixes.Where(fix => fix.At == at).Select(fix => piece with { Fixed = new CatalogFix(fix.Kind, fix.Chance) }).SingleOrDefault() ?? piece)];
+
+    /// <summary>
+    /// <see cref="Laid"/> pieces placed in a programme that spans them all.
+    /// </summary>
+    private static SegmentPiece[] Placed(params double[] lengths)
+    {
+        double programme = lengths.Sum();
+
+        return
+        [
+            .. Laid(lengths).Select(piece => piece with
+            {
+                Features = SegmentFeatureValues.Of(new Dictionary<string, double?>
+                {
+                    [SegmentFeature.FromStart] = piece.Starts.TotalSeconds / programme,
+                    [SegmentFeature.FromEnd] = (programme - piece.Ends.TotalSeconds) / programme,
+                }),
+            }),
+        ];
+    }
 
     private static SegmentPiece[] Laid(params double[] lengths)
     {
