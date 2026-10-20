@@ -42,9 +42,9 @@ public sealed class BoundaryCandidatesTests
     {
         SyntheticReadings readings = new SyntheticReadings(Length)
             .Cut(50, 0.9)
-            .QuietAround(100).Cut(100, 0.3)
-            .QuietAround(200).Cut(200, 0.29)
-            .QuietAround(300).Cut(300, 0.2);
+            .QuietAround(100, level: SyntheticReadings.Pause).Cut(100, 0.3)
+            .QuietAround(200, level: SyntheticReadings.Pause).Cut(200, 0.29)
+            .QuietAround(300, level: SyntheticReadings.Pause).Cut(300, 0.2);
 
         Assert.Equal([true, false, false], [.. Inner(readings).Select(candidate => candidate.IsSilentCut)]);
         Assert.Equal([true, true, true], [.. Inner(readings, SegmentThresholds.Initial, sceneChange: 0.2).Select(candidate => candidate.IsSilentCut)]);
@@ -55,9 +55,9 @@ public sealed class BoundaryCandidatesTests
     public void ACorroboratedSilenceIsASilentCut()
     {
         IReadOnlyList<BoundaryCandidate> found = Inner(new SyntheticReadings(Length)
-            .QuietAround(100).Cut(100.4, 0.9)
-            .QuietAround(200).Black(199.8, 200.2)
-            .QuietAround(300).Cut(300.8, 0.9));
+            .QuietAround(100, level: SyntheticReadings.Pause).Cut(100.4, 0.9)
+            .QuietAround(200, level: SyntheticReadings.Pause).Black(199.8, 200.2)
+            .QuietAround(300, level: SyntheticReadings.Pause).Cut(300.8, 0.9));
 
         Assert.True(found[0].IsSilentCut);
         Assert.True(found[1].IsSilentCut);
@@ -66,6 +66,19 @@ public sealed class BoundaryCandidatesTests
         Assert.Equal(BoundaryCue.Silence | BoundaryCue.SilentCut | BoundaryCue.Black, found[1].Cues);
         Assert.Equal(BoundaryCue.Silence, found[2].Cues);
         Assert.Equal(TimeSpan.FromSeconds(300), found[2].At);
+    }
+
+    [Fact(DisplayName = "a silence as quiet on average as -90 dBFS, the silence an edit leaves, is a silent cut whatever the picture does, and a pause louder than that is not")]
+    public void ASilenceAsQuietAsAnEditIsASilentCut()
+    {
+        IReadOnlyList<BoundaryCandidate> found = Inner(new SyntheticReadings(Length)
+            .QuietAround(100)
+            .QuietAround(200, level: 180)
+            .QuietAround(300, level: 179)
+            .QuietAround(400, level: SyntheticReadings.Pause));
+
+        Assert.Equal([100d, 200, 300, 400], [.. found.Select(candidate => candidate.At.TotalSeconds)]);
+        Assert.Equal([true, true, false, false], [.. found.Select(candidate => candidate.IsSilentCut)]);
     }
 
     [Fact(DisplayName = "the channels turning from alike to unlike, and captions coming and going, are no candidates")]
@@ -82,13 +95,17 @@ public sealed class BoundaryCandidatesTests
         Assert.Equal([TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(160)], [.. found.Where(candidate => candidate.Cues is BoundaryCue.LogoChange).Select(candidate => candidate.At)]);
     }
 
-    [Fact(DisplayName = "the edges of what the catalog heard and the programme's start and end by the guide are candidates")]
+    [Fact(DisplayName = "the edges of what the catalog heard as a kind it counts as and the programme's start and end by the guide are candidates, and the edges of a stretch of a kind it cannot tell are not")]
     public void CatalogAndGuideEdgesAreCandidates()
     {
         SegmentContext context = Context(
             starts: TimeSpan.FromSeconds(30),
             ends: TimeSpan.FromSeconds(570),
-            catalog: [new CatalogHeard(TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(215), SegmentKind.Break, 3, 2, 1)]);
+            catalog:
+            [
+                new CatalogHeard(TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(215), SegmentKind.Break, 3, 2, 1),
+                new CatalogHeard(TimeSpan.FromSeconds(300), TimeSpan.FromSeconds(327), null, 2, 2, 2),
+            ]);
 
         IReadOnlyList<BoundaryCandidate> found = BoundaryCandidates.Find(new SyntheticReadings(Length).Evidence(), context, null, SegmentThresholds.Initial);
 
@@ -114,7 +131,10 @@ public sealed class BoundaryCandidatesTests
         SegmentContext context = Context(catalog: [new CatalogHeard(TimeSpan.FromSeconds(301.2), TimeSpan.FromSeconds(316.2), SegmentKind.Break, 3, 2, 1)]);
 
         IReadOnlyList<BoundaryCandidate> found = BoundaryCandidates.Find(
-            new SyntheticReadings(Length).QuietAround(300).Cut(300, 0.9).QuietAround(301.9).QuietAround(400).Cut(400, 0.9).QuietAround(401.5).Evidence(),
+            new SyntheticReadings(Length)
+                .QuietAround(300).Cut(300, 0.9).QuietAround(301.9, level: SyntheticReadings.Pause)
+                .QuietAround(400).Cut(400, 0.9).QuietAround(401.5, level: SyntheticReadings.Pause)
+                .Evidence(),
             context,
             null,
             SegmentThresholds.Initial);
@@ -129,7 +149,7 @@ public sealed class BoundaryCandidatesTests
     public void TheEndsTakeInWhatIsNearThem()
     {
         IReadOnlyList<BoundaryCandidate> found = BoundaryCandidates.Find(
-            new SyntheticReadings(Length, Length + 10).QuietAround(1.5).Cut(1.5, 0.9).QuietAround(598.5).QuietAround(605).Evidence(),
+            new SyntheticReadings(Length, Length + 10).QuietAround(1.5).Cut(1.5, 0.9).QuietAround(598.5, level: SyntheticReadings.Pause).QuietAround(605).Evidence(),
             Bare,
             null,
             SegmentThresholds.Initial);

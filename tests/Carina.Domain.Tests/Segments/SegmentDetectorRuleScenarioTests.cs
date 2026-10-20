@@ -67,6 +67,10 @@ public sealed class SegmentDetectorRuleScenarioTests
     [MemberData(nameof(Scenarios))]
     public void TheVersionOfFourKindsDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.FirstOfFourKinds);
 
+    [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand that hears silence from -55 dBFS detects what the rule-based detection marks")]
+    [MemberData(nameof(Scenarios))]
+    public void TheVersionBelowPausesDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.FourKindsBelowPauses);
+
     private static void DetectsWhatTheRuleBasedDetectionMarks(string scenario, SegmentModel made)
     {
         (ChapterEvidence evidence, TimeSpan length, ChapterSettings settings) = Listed[scenario];
@@ -126,7 +130,7 @@ public sealed class SegmentDetectorRuleScenarioTests
 
         foreach (ChapterSpan quiet in evidence.Silences)
         {
-            readings.QuietAround((quiet.Starts + ((quiet.Ends - quiet.Starts) / 2)).TotalSeconds, (quiet.Ends - quiet.Starts).TotalSeconds);
+            readings.QuietAround((quiet.Starts + ((quiet.Ends - quiet.Starts) / 2)).TotalSeconds, (quiet.Ends - quiet.Starts).TotalSeconds, SyntheticReadings.Pause);
         }
 
         foreach (ChapterScene scene in evidence.Scenes)
@@ -144,7 +148,7 @@ public sealed class SegmentDetectorRuleScenarioTests
 
     private static SegmentModel Model(ChapterSettings settings, SegmentModel made)
     {
-        SegmentThresholds initial = SegmentThresholds.Initial;
+        SegmentThresholds initial = made.Thresholds;
 
         return new SegmentModel(
             made.Weights,

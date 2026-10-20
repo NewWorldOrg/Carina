@@ -14,8 +14,9 @@ namespace Carina.Domain.Segments;
 /// <see cref="First"/> is the version made by hand from the rule-based detection before any learning: a piece
 /// of 15-second multiples between two silent cuts, out of the logo, is a break. <see cref="FirstOfFourKinds"/>
 /// weighs the break the same way and adds the opening and the ending made by hand, which earlier episodes of the
-/// series having one at the same place make likelier but never enough on their own. What the catalog hears is
-/// fixed when the sequence is decided (<see cref="SegmentSequence"/>), not weighed.
+/// series having one at the same place make likelier but never enough on their own. <see cref="FourKindsBelowPauses"/>
+/// weighs as that one does and hears silence only from -55 dBFS, below the pauses inside an advert that would cut it
+/// in two. What the catalog hears is fixed when the sequence is decided (<see cref="SegmentSequence"/>), not weighed.
 /// </summary>
 public sealed class SegmentModel : IEquatable<SegmentModel>
 {
@@ -87,6 +88,21 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             [SegmentFeature.PastOpeningShare] = FeatureScale.Identity,
             [SegmentFeature.PastEndingShare] = FeatureScale.Identity,
         });
+
+    public static SegmentModel FourKindsBelowPauses { get; } = new(
+        FirstOfFourKinds.Weights,
+        FirstOfFourKinds.StationOffsets,
+        FirstOfFourKinds.SeriesOffsets,
+        new SegmentThresholds(
+            -55,
+            SegmentThresholds.Initial.BlackLevel,
+            SegmentThresholds.Initial.SceneChange,
+            SegmentThresholds.Initial.GridToleranceSec,
+            SegmentThresholds.Initial.GridPenalty,
+            SegmentThresholds.Initial.Lambda,
+            SegmentThresholds.Initial.LambdaStation,
+            SegmentThresholds.Initial.LambdaSeries),
+        FirstOfFourKinds.Standardisation);
 
     public SegmentWeights Weights { get; }
 
