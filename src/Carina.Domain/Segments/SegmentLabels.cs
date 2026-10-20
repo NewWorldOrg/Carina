@@ -12,7 +12,8 @@ namespace Carina.Domain.Segments;
 /// kind covers more than half of it. In a recording the catalog is sure of an advert in
 /// (<see cref="CatalogTruth.Sure"/>), a segment inside the guide's programme, reaching out of it by no more than
 /// <see cref="GuideTolerance"/>, that no stretch of the catalog touches, whatever its kind, and no viewer's action
-/// lies over, is the programme at <see cref="UncoveredWeight"/>, or at <see cref="UncoveredWithLogoWeight"/>
+/// lies over, and that is not a multiple of the grid between two silent cuts, which is likelier an advert the catalog
+/// has not heard yet, is the programme at <see cref="UncoveredWeight"/>, or at <see cref="UncoveredWithLogoWeight"/>
 /// where the station's logo shows through at least <see cref="LogoSeenThrough"/> of it; with no logo known for
 /// the station it stays at the lower weight. The catalog wins over viewers and viewers over a segment no stretch touches; within one source
 /// the heavier label wins, a tie going to the programme. A segment more than half outside the guide's programme
@@ -78,12 +79,14 @@ public static class SegmentLabels
     /// <summary>
     /// The programme a segment is taken for when the recording holds an advert the catalog is sure of and neither
     /// a stretch of <paramref name="touched"/> nor what a viewer did lies over the segment, inside the guide's
-    /// programme but for <see cref="GuideTolerance"/>; none when <paramref name="touched"/> is none, which is when the recording holds no such advert.
+    /// programme but for <see cref="GuideTolerance"/>, off the grid or with an edge that is no silent cut; none when
+    /// <paramref name="touched"/> is none, which is when the recording holds no such advert.
     /// </summary>
     private static SegmentLabel? Uncovered(SegmentPiece piece, CatalogHeard[]? touched, Stretch[] viewed)
     {
         if (touched is null
             || !InsideTheGuide(piece)
+            || IsShapedLikeAnAdvert(piece)
             || touched.Any(stretch => stretch.Starts < piece.Ends && stretch.Ends > piece.Starts)
             || viewed.Any(stretch => stretch.Starts < piece.Ends && stretch.Ends > piece.Starts))
         {
@@ -94,6 +97,9 @@ public static class SegmentLabels
 
         return new SegmentLabel(SegmentKind.Programme, weight, SegmentLabelSource.Uncovered);
     }
+
+    private static bool IsShapedLikeAnAdvert(SegmentPiece piece)
+        => piece.Features[SegmentFeature.EdgeSilence] is 1.0 && piece.Features[SegmentFeature.IsMultipleOf15s] is 1.0;
 
     private static bool InsideTheGuide(SegmentPiece piece)
         => piece.Features[SegmentFeature.OutsideGuide] is double share && piece.Length * share <= GuideTolerance;

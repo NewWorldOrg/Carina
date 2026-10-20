@@ -160,6 +160,25 @@ public sealed class SegmentLabelsTests
         Assert.Equal((0.3, 0.5, 0.8), (SegmentLabels.UncoveredWeight, SegmentLabels.UncoveredWithLogoWeight, SegmentLabels.LogoSeenThrough));
     }
 
+    [Fact(DisplayName = "BR-CD-006: a segment on the 15-second grid between two silent cuts is no programme by elimination, logo or not, while one on the grid with an edge that is no silent cut, or between silent cuts off the grid, still is")]
+    public void ASegmentShapedLikeAnAdvertIsNoProgrammeByElimination()
+    {
+        SegmentPiece[] pieces =
+        [
+            Piece(0, 100),
+            Piece(100, 115),
+            Piece(115, 130, edge: 1, multiple: 1),
+            Piece(130, 160, edge: 1, multiple: 1, logo: 0.9),
+            Piece(160, 175, edge: 0, multiple: 1),
+            Piece(175, 195, edge: 1, multiple: 0),
+            Piece(195, 400),
+        ];
+
+        IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces, Context([SureAdvert(100, 115)]), []);
+
+        Assert.Equal([Uncovered(0.3), Break(0.9, SegmentLabelSource.Catalog), null, null, Uncovered(0.3), Uncovered(0.3), Uncovered(0.3)], labels);
+    }
+
     [Fact(DisplayName = "BR-CD-006: a segment reaching up to two seconds outside the guide, as far as boundary candidates are merged, counts as inside it for the programme by elimination, and one reaching further does not")]
     public void ASegmentWithinTheMergeOfTheGuideCountsAsInside()
     {
@@ -219,12 +238,18 @@ public sealed class SegmentLabelsTests
     private static ViewerAction Action(ViewerActionKind action, double from, double to, int minutes = 0)
         => new(Evening.AddMinutes(minutes), action, SegmentKind.Break, Seconds(from), Seconds(to), 1);
 
-    private static SegmentPiece Piece(double from, double to, double? outside = 0, double? logo = null)
+    private static SegmentPiece Piece(double from, double to, double? outside = 0, double? logo = null, double? edge = null, double? multiple = null)
         => new(
             Seconds(from),
             Seconds(to),
             Seconds(to - from),
-            SegmentFeatureValues.Of(new Dictionary<string, double?> { [SegmentFeature.OutsideGuide] = outside, [SegmentFeature.LogoShare] = logo }));
+            SegmentFeatureValues.Of(new Dictionary<string, double?>
+            {
+                [SegmentFeature.OutsideGuide] = outside,
+                [SegmentFeature.LogoShare] = logo,
+                [SegmentFeature.EdgeSilence] = edge,
+                [SegmentFeature.IsMultipleOf15s] = multiple,
+            }));
 
     private static CatalogHeard SureAdvert(double from, double to) => new(Seconds(from), Seconds(to), SegmentKind.Break, 3, 2, 2, 0.9);
 
