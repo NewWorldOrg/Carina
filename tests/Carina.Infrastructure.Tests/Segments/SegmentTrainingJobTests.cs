@@ -24,6 +24,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Empty(harness.Versions.Written);
         Assert.Equal(SegmentModelVersion.FirstNumber, harness.Versions.Active.Number);
         Assert.Equal([SegmentLearningRound.DayOf(SegmentTrainingHarness.Start)], harness.Rounds.Taken.Select(round => round.Day));
+        Assert.Equal([Kept(SegmentTrainingOutcome.NothingToLearnFrom, null, null, null)], harness.Rounds.Taken.Select(KeptAs));
     }
 
     [Fact(DisplayName = "BR-CD-008: a candidate on enough evidence that finds more boundaries is kept and put in use in place of the version in use")]
@@ -40,6 +41,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal((2, SegmentModelVersionState.Active, false), (harness.Versions.Active.Number, harness.Versions.Active.State, harness.Versions.Active.ByHand));
         Assert.Equal([(1, SegmentModelVersionState.Retired), (2, SegmentModelVersionState.Active)], harness.Versions.Written.Select(version => (version.Number, version.State)));
         Assert.Equal([(SegmentModelVersion.FirstNumber, SegmentTrainingHarness.Start)], harness.Trainer.Asked);
+        Assert.Equal([Kept(SegmentTrainingOutcome.Adopted, 2, AdoptionVerdict.Adopted, harness.Trainer.InUse.Metrics)], harness.Rounds.Taken.Select(KeptAs));
     }
 
     [Theory(DisplayName = "BR-CD-008: a candidate that finds no more boundaries, as many with fewer seconds of adverts, or stands on too little is kept as a candidate only, beside the candidates before it")]
@@ -59,6 +61,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
             [(1, SegmentModelVersionState.Active), (2, SegmentModelVersionState.Candidate), (3, SegmentModelVersionState.Candidate)],
             (await harness.Versions.ListAsync(Cancel)).OrderBy(version => version.Number).Select(version => (version.Number, version.State)));
         Assert.Empty(harness.Versions.Written);
+        Assert.Equal([Kept(SegmentTrainingOutcome.Kept, 3, verdict, harness.Trainer.InUse.Metrics)], harness.Rounds.Taken.Select(KeptAs));
     }
 
     [Fact(DisplayName = "BR-CD-008: while the version in use is chosen by hand, learning still keeps and evaluates a candidate but never puts it in use")]
@@ -88,6 +91,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal(SegmentTrainingOutcome.InUseChangedMeanwhile, look.Round?.Outcome);
         Assert.Equal((SegmentModelVersion.FirstNumber, true), (harness.Versions.Active.Number, harness.Versions.Active.ByHand));
         Assert.Equal(SegmentModelVersionState.Candidate, Assert.Single(harness.Versions.Added).State);
+        Assert.Equal([Kept(SegmentTrainingOutcome.InUseChangedMeanwhile, 2, AdoptionVerdict.Adopted, harness.Trainer.InUse.Metrics)], harness.Rounds.Taken.Select(KeptAs));
     }
 
     [Fact(DisplayName = "BR-CD-008: viewers coming back from more than one and a half times the share of skips within seven days roll the version in use back, kept on the version left, before the day's candidate is judged")]
@@ -237,6 +241,9 @@ public sealed class SegmentTrainingJobTests : IDisposable
             new[] { rolledBack, sixDaysOn, eightDaysOn }.Select(look => (look.Round!.Outcome, look.Round.Verdict)));
         Assert.Equal([3, 4, 5], harness.Versions.Added.Select(version => version.Number));
         Assert.Equal(5, harness.Versions.Active.Number);
+        Assert.Equal(
+            [(SegmentTrainingOutcome.HeldAfterRollback, AdoptionVerdict.HeldAfterRollback), (SegmentTrainingOutcome.HeldAfterRollback, AdoptionVerdict.HeldAfterRollback), ((SegmentTrainingOutcome?)SegmentTrainingOutcome.Adopted, (AdoptionVerdict?)AdoptionVerdict.Adopted)],
+            harness.Rounds.Taken.Select(round => (round.Outcome, round.Verdict)));
     }
 
     [Fact(DisplayName = "BR-CD-004: while another process takes a round, nothing is learned and no day is taken")]
@@ -293,6 +300,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal([2], harness.Versions.Added.Select(version => version.Number));
         Assert.Single(harness.Trainer.Asked);
         Assert.Equal([(int?)2, null], harness.Rounds.Taken.Select(round => round.Candidate));
+        Assert.Equal(Kept(SegmentTrainingOutcome.NothingNew, null, null, null), KeptAs(harness.Rounds.Taken[1]));
         Assert.Contains(harness.Log.Lines, line => line.Level is LogLevel.Information && line.Line.Contains("learned nothing", StringComparison.Ordinal));
     }
 
@@ -350,6 +358,18 @@ public sealed class SegmentTrainingJobTests : IDisposable
 
         Assert.Equal(1, askedOnTheDay);
         Assert.IsType<InvalidDataException>(harness.Log.Lines.Single(line => line.Level is LogLevel.Error).Failure);
-        Assert.Equal(2, harness.Rounds.Taken.Count);
+        Assert.Equal(
+            [Kept(SegmentTrainingOutcome.Failed, null, null, null), Kept(SegmentTrainingOutcome.Kept, 2, AdoptionVerdict.NoBetterAtBoundaries, harness.Trainer.InUse.Metrics)],
+            harness.Rounds.Taken.Select(KeptAs));
     }
+
+    private static (SegmentTrainingOutcome? Outcome, int? Candidate, AdoptionVerdict? Verdict, SegmentMetrics? InUse) Kept(
+        SegmentTrainingOutcome outcome,
+        int? candidate,
+        AdoptionVerdict? verdict,
+        SegmentMetrics? inUse)
+        => (outcome, candidate, verdict, inUse);
+
+    private static (SegmentTrainingOutcome? Outcome, int? Candidate, AdoptionVerdict? Verdict, SegmentMetrics? InUse) KeptAs(SegmentLearningRound round)
+        => (round.Outcome, round.Candidate, round.Verdict, round.InUseMetrics);
 }

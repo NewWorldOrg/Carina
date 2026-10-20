@@ -4013,14 +4013,35 @@ namespace Carina.Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("candidate");
 
+                    b.Property<string>("InUseMetrics")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("in_use_metrics");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("outcome");
+
                     b.Property<DateTime>("TakenAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("taken_at");
 
+                    b.Property<string>("Verdict")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("verdict");
+
                     b.HasKey("Day")
                         .HasName("pk_segment_learning_round");
 
-                    b.ToTable("segment_learning_round", (string)null);
+                    b.ToTable("segment_learning_round", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_segment_learning_round_judged", "(candidate IS NOT NULL OR (verdict IS NULL AND in_use_metrics IS NULL)) AND (in_use_metrics IS NULL OR jsonb_typeof(in_use_metrics) = 'object')");
+
+                            t.HasCheckConstraint("ck_segment_learning_round_outcome", "outcome IN ('NothingToLearnFrom', 'Kept', 'Adopted', 'Stopped', 'InUseChangedMeanwhile', 'NothingNew', 'HeldAfterRollback', 'Failed') AND outcome <> 'Stopped'");
+
+                            t.HasCheckConstraint("ck_segment_learning_round_verdict", "verdict IN ('Adopted', 'ChosenByHand', 'TooLittleEvidence', 'NoBetterAtBoundaries', 'HeldAfterRollback')");
+                        });
                 });
 
             modelBuilder.Entity("Carina.Domain.Segments.SegmentModelVersion", b =>

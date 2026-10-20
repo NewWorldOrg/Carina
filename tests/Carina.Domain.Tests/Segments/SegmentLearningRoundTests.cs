@@ -41,6 +41,62 @@ public sealed class SegmentLearningRoundTests
         Assert.Throws<ArgumentException>(() => SegmentLearningRound.Taken(DateTime.SpecifyKind(at, DateTimeKind.Local)));
     }
 
+    [Theory(DisplayName = "BR-CD-004: the next round may begin at three in the morning in Japan of the day it is while that day's round is not finished, and of the next day once it is")]
+    [InlineData("2026-10-20T00:00:00Z", false, "2026-10-19T18:00:00Z")]
+    [InlineData("2026-10-20T00:00:00Z", true, "2026-10-20T18:00:00Z")]
+    [InlineData("2026-10-19T17:59:59Z", false, "2026-10-18T18:00:00Z")]
+    [InlineData("2026-10-19T17:59:59Z", true, "2026-10-19T18:00:00Z")]
+    [InlineData("2026-10-19T18:00:00Z", true, "2026-10-20T18:00:00Z")]
+    public void TheNextRoundMayBeginAtThreeInTheMorningInJapan(string now, bool finishedToday, string notBefore)
+    {
+        DateTime next = SegmentLearningRound.NextNotBefore(Moment(now)!.Value, finishedToday);
+
+        Assert.Equal(Moment(notBefore), next);
+        Assert.Equal(DateTimeKind.Utc, next.Kind);
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a round that learned a candidate is kept with what became of it, the verdict on the candidate and the figures of the version in use beside it")]
+    public void ARoundThatLearnedIsKeptWithHowItWasJudged()
+    {
+        DateTime at = new(2026, 10, 19, 18, 30, 0, DateTimeKind.Utc);
+        SegmentMetrics inUse = new(0.08, 0.05, [new KindMetrics(SegmentKind.Break, 0.4)], null, 0);
+
+        SegmentLearningRound round = SegmentLearningRound.Ended(SegmentLearningRound.DayOf(at), at, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, inUse);
+
+        Assert.Equal(
+            (new DateOnly(2026, 10, 20), at, (int?)5, (SegmentTrainingOutcome?)SegmentTrainingOutcome.Kept, (AdoptionVerdict?)AdoptionVerdict.TooLittleEvidence, inUse),
+            (round.Day, round.TakenAt, round.Candidate, round.Outcome, round.Verdict, round.InUseMetrics));
+    }
+
+    [Theory(DisplayName = "BR-CD-004: a round that learned nothing, or failed, is kept with what became of it and nothing of a candidate")]
+    [InlineData(SegmentTrainingOutcome.NothingNew)]
+    [InlineData(SegmentTrainingOutcome.NothingToLearnFrom)]
+    [InlineData(SegmentTrainingOutcome.Failed)]
+    public void ARoundThatLearnedNothingKeepsNoCandidate(SegmentTrainingOutcome outcome)
+    {
+        DateTime at = new(2026, 10, 19, 18, 30, 0, DateTimeKind.Utc);
+
+        SegmentLearningRound round = SegmentLearningRound.Ended(SegmentLearningRound.DayOf(at), at, outcome);
+
+        Assert.Equal(((SegmentTrainingOutcome?)outcome, (int?)null, (AdoptionVerdict?)null, (SegmentMetrics?)null), (round.Outcome, round.Candidate, round.Verdict, round.InUseMetrics));
+        Assert.Throws<ArgumentException>(() => SegmentLearningRound.Ended(round.Day, at, outcome, 5, AdoptionVerdict.TooLittleEvidence));
+    }
+
+    [Fact(DisplayName = "BR-CD-004: a round that stopped partway is never kept as finished, and one that learned a candidate keeps it with the verdict on it")]
+    public void ARoundIsKeptOnlyAsItEnded()
+    {
+        DateTime at = new(2026, 10, 19, 18, 30, 0, DateTimeKind.Utc);
+        DateOnly day = SegmentLearningRound.DayOf(at);
+        SegmentMetrics inUse = new(0.08, 0.05, [], null, 0);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.Stopped));
+        Assert.Throws<ArgumentException>(() => SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.Kept));
+        Assert.Throws<ArgumentException>(() => SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.Adopted, 5));
+        Assert.Throws<ArgumentException>(() => SegmentLearningRound.Rehydrate(day, at, null, null, AdoptionVerdict.Adopted));
+        Assert.Throws<ArgumentException>(() => SegmentLearningRound.Rehydrate(day, at, null, null, null, inUse));
+        Assert.Null(SegmentLearningRound.Rehydrate(day, at, 5).Outcome);
+    }
+
     private static DateTime? Moment(string? at)
         => at is null ? null : DateTime.Parse(at, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal);
 }

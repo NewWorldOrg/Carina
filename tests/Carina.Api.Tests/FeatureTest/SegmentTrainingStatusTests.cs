@@ -38,7 +38,7 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
             services.AddSingleton<ISegmentSettingsRepository>(Settings);
             services.AddSingleton<ISkipEventRepository>(new HeldSkipEvents());
             services.AddSingleton<ICatalogEvidenceReader>(new HeldCatalogEvidence());
-            services.AddSingleton<ISegmentLearningRoundRepository>(new HeldSegmentLearningRounds());
+            services.AddSingleton<ISegmentLearningRoundRepository>(Rounds);
             services.AddSingleton<ILearningMaterialChanges>(new HeldLearningMaterialChanges());
             services.AddSingleton<IOccupancyReader>(new SegmentVersionFeature.Unoccupied());
             services.AddSingleton<ISegmentTrainer>(Trainer);
@@ -55,6 +55,8 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
     public HeldSegmentModelVersions Versions { get; } = new();
 
     public HeldSegmentSettings Settings { get; } = new();
+
+    public HeldSegmentLearningRounds Rounds { get; } = new();
 
     public CannedTrainer Trainer { get; } = new();
 
@@ -123,6 +125,11 @@ public sealed class SegmentTrainingStatusTests
         Assert.Equal((0.93, 0.8, 0.9), (metrics.GetProperty("boundaryRecallWithin2s").GetDouble(), metrics.GetProperty("boundaryRecallWithin1s").GetDouble(), metrics.GetProperty("kinds")[0].GetProperty("recall").GetDouble()));
         Assert.Equal(0.93, Assert.Single(data.GetProperty("stations").EnumerateArray()).GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
         Assert.Equal((12, true), (data.GetProperty("evidence").GetProperty("recordings").GetInt32(), data.GetProperty("evidence").GetProperty("enough").GetBoolean()));
+        JsonElement round = data.GetProperty("lastRound");
+        Assert.Equal(("adopted", 2, "adopted"), (round.GetProperty("outcome").GetString(), round.GetProperty("candidate").GetInt32(), round.GetProperty("verdict").GetString()));
+        Assert.Equal((0.85, 0.93, 0.9), (round.GetProperty("inUse").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("metrics").GetProperty("breakRecall").GetDouble()));
+        Assert.Equal((12, true), (round.GetProperty("evidence").GetProperty("recordings").GetInt32(), round.GetProperty("evidence").GetProperty("enough").GetBoolean()));
+        Assert.Equal("2026-11-08T18:00:00Z", data.GetProperty("nextRoundNotBefore").GetString());
     }
 
     [Fact(DisplayName = "BR-CD-008: a candidate the day's round keeps only is answered among the versions with its figures, while the version in use and its figures stay")]
@@ -142,5 +149,9 @@ public sealed class SegmentTrainingStatusTests
         Assert.Equal(JsonValueKind.Null, versions[0].GetProperty("adoptedAt").ValueKind);
         Assert.Equal(JsonValueKind.Null, data.GetProperty("metrics").ValueKind);
         Assert.Equal(12, data.GetProperty("evidence").GetProperty("recordings").GetInt32());
+        JsonElement round = data.GetProperty("lastRound");
+        Assert.Equal(("kept", 2, "noBetterAtBoundaries"), (round.GetProperty("outcome").GetString(), round.GetProperty("candidate").GetInt32(), round.GetProperty("verdict").GetString()));
+        Assert.Equal((0.85, 0.80), (round.GetProperty("inUse").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble()));
+        Assert.Single(feature.Rounds.Taken);
     }
 }

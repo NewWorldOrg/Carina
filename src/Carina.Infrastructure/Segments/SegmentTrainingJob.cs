@@ -7,29 +7,10 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Segments;
 
 /// <summary>
-/// What became of the day's round of learning.
-/// </summary>
-public enum SegmentTrainingOutcome
-{
-    NothingToLearnFrom = 1,
-
-    Kept = 2,
-
-    Adopted = 3,
-
-    Stopped = 4,
-
-    InUseChangedMeanwhile = 5,
-
-    NothingNew = 6,
-
-    HeldAfterRollback = 7,
-}
-
-/// <summary>
 /// What the day's round did: the rollback made before learning, if one was; what became of the candidate; the
-/// candidate kept, and what judging it against the version in use said, when one was learned; the version in use
-/// after the round; and, when the round stopped partway, what stood in the way.
+/// candidate kept, what judging it against the version in use said, and the figures of the version in use on the
+/// same recordings, when one was learned; the version in use after the round; and, when the round stopped partway,
+/// what stood in the way.
 /// </summary>
 public sealed record SegmentTrainingRound(
     DateOnly Day,
@@ -40,6 +21,8 @@ public sealed record SegmentTrainingRound(
     SegmentModelVersion Active)
 {
     public SpareTimeVerdict? StoppedBy { get; init; }
+
+    public SegmentMetrics? InUseMetrics { get; init; }
 }
 
 /// <summary>
@@ -127,8 +110,9 @@ public sealed class SegmentTrainingJob(
     }
 
     /// <summary>
-    /// Makes the round and keeps it as finished, with the candidate it kept, unless it stopped partway; a round that
-    /// fails is kept as finished too, so that the next try is the next day's.
+    /// Makes the round and keeps it as finished, with what became of it, the candidate it kept, the verdict on it and
+    /// the figures of the version in use it was judged against, unless it stopped partway; a round that fails is kept
+    /// as finished too, as failed, so that the next try is the next day's.
     /// </summary>
     private async Task<SegmentTrainingRound> FinishedAsync(
         IServiceProvider services,
@@ -152,7 +136,9 @@ public sealed class SegmentTrainingJob(
 
         if (made.Outcome is not SegmentTrainingOutcome.Stopped)
         {
-            await rounds.TakeAsync(SegmentLearningRound.Rehydrate(day, started, made.Candidate?.Number), cancellationToken);
+            await rounds.TakeAsync(
+                SegmentLearningRound.Ended(day, started, made.Outcome, made.Candidate?.Number, made.Verdict, made.InUseMetrics),
+                cancellationToken);
         }
 
         return made;
@@ -162,7 +148,7 @@ public sealed class SegmentTrainingJob(
     {
         try
         {
-            await rounds.TakeAsync(SegmentLearningRound.Rehydrate(day, started, null), CancellationToken.None);
+            await rounds.TakeAsync(SegmentLearningRound.Ended(day, started, SegmentTrainingOutcome.Failed), CancellationToken.None);
         }
         catch (Exception failure)
         {
@@ -210,12 +196,14 @@ public sealed class SegmentTrainingJob(
         SegmentModelVersion candidate = await versions.AddCandidateAsync(learned.Candidate, learned.Evaluation, Now(), cancellationToken);
         AdoptionVerdict verdict = SegmentAdoption.AfterRollbacks(learned.Verdict, await versions.ListAsync(cancellationToken), Now());
 
-        return verdict switch
+        SegmentTrainingRound decided = verdict switch
         {
             AdoptionVerdict.Adopted => await AdoptAsync(versions, day, rollback, candidate, active, cancellationToken),
             AdoptionVerdict.HeldAfterRollback => new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.HeldAfterRollback, candidate, verdict, active),
             _ => new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.Kept, candidate, verdict, active),
         };
+
+        return decided with { InUseMetrics = learned.InUse.Metrics };
     }
 
     /// <summary>

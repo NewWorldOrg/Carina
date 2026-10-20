@@ -170,12 +170,64 @@ public sealed record SegmentVersionHistoryResponder(
 }
 
 /// <summary>
+/// The figures a round of learning compares a candidate and the version in use by: the share of the boundaries the
+/// catalog is sure of found within two seconds, and the share of the seconds of adverts it is sure of detected as
+/// breaks.
+/// </summary>
+public sealed record SegmentRoundMetricsResponder(double? BoundaryRecallWithin2s, double? BreakRecall)
+{
+    public static SegmentRoundMetricsResponder Of(SegmentMetrics metrics)
+    {
+        ArgumentNullException.ThrowIfNull(metrics);
+
+        return new SegmentRoundMetricsResponder(metrics.BoundaryRecallWithin2s, metrics.BreakRecall);
+    }
+}
+
+/// <summary>
+/// The latest round of learning: the day it was for, when it was taken and what became of it; when it learned a
+/// candidate, the candidate's number, the verdict on it and the figures of the version in use on the same
+/// recordings; and, while that candidate is still kept, what its evaluation stands on and its figures.
+/// </summary>
+public sealed record SegmentLearningRoundResponder(
+    DateOnly Day,
+    DateTime TakenAt,
+    SegmentTrainingOutcome Outcome,
+    int? Candidate,
+    AdoptionVerdict? Verdict,
+    SegmentRoundMetricsResponder? InUse,
+    SegmentEvidenceResponder? Evidence,
+    SegmentRoundMetricsResponder? Metrics)
+{
+    public static SegmentLearningRoundResponder Of(SegmentLearningRound round, SegmentModelVersion? candidate)
+    {
+        ArgumentNullException.ThrowIfNull(round);
+
+        if (round.Outcome is not SegmentTrainingOutcome outcome)
+        {
+            throw new ArgumentException("Only a round that says what became of it is answered.", nameof(round));
+        }
+
+        return new SegmentLearningRoundResponder(
+            round.Day,
+            round.TakenAt,
+            outcome,
+            round.Candidate,
+            round.Verdict,
+            round.InUseMetrics is { } inUse ? SegmentRoundMetricsResponder.Of(inUse) : null,
+            candidate?.Evidence is { } evidence ? SegmentEvidenceResponder.Of(evidence) : null,
+            candidate?.Metrics is { } metrics ? SegmentRoundMetricsResponder.Of(metrics) : null);
+    }
+}
+
+/// <summary>
 /// The threshold a skip button is offered from.
 /// </summary>
 public sealed record SkipThresholdResponder(double Current);
 
 /// <summary>
-/// Where CM, OP and ED detection stands.
+/// Where CM, OP and ED detection stands, with the latest round of learning, none before the first, and the first
+/// moment the next round may begin, whether learning is on or off.
 /// </summary>
 public sealed record SegmentStatusResponder(
     bool Learning,
@@ -186,7 +238,9 @@ public sealed record SegmentStatusResponder(
     SegmentMetricsResponder? Metrics,
     IReadOnlyList<SegmentStationResponder> Stations,
     IReadOnlyList<SegmentVersionHistoryResponder> Versions,
-    SkipThresholdResponder SkipThreshold)
+    SkipThresholdResponder SkipThreshold,
+    SegmentLearningRoundResponder? LastRound,
+    DateTime NextRoundNotBefore)
 {
     public static SegmentStatusResponder Of(SegmentStatus status)
     {
@@ -201,6 +255,8 @@ public sealed record SegmentStatusResponder(
             status.Metrics is { } metrics ? SegmentMetricsResponder.Of(metrics) : null,
             [.. (status.Version.Stations ?? []).Select(SegmentStationResponder.Of)],
             [.. status.Versions.Select(SegmentVersionHistoryResponder.Of)],
-            new SkipThresholdResponder(status.Settings.SkipThreshold));
+            new SkipThresholdResponder(status.Settings.SkipThreshold),
+            status.LastRound is { } round ? SegmentLearningRoundResponder.Of(round, status.LastCandidate) : null,
+            status.NextRoundNotBefore);
     }
 }
