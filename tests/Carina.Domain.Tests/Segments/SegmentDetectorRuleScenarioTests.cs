@@ -29,6 +29,10 @@ public sealed class SegmentDetectorRuleScenarioTests
             new ChapterSettings()),
         ["a pod of adverts"] = new(Observed(At(300), At(360)), HalfAnHour, new ChapterSettings()),
         ["two pods"] = new(Observed(At(300), At(360), At(900), At(1020)), HalfAnHour, new ChapterSettings()),
+        ["two pods, the longer cut at every advert"] = new(
+            Observed([At(300), At(360), .. Enumerable.Range(0, 9).Select(advert => At(900 + (15 * advert)))]),
+            HalfAnHour,
+            new ChapterSettings()),
         ["a pair off the grid beyond the tolerance"] = new(Observed(At(300), At(362.5)), HalfAnHour, new ChapterSettings()),
         ["a pair just inside the tolerance"] = new(Observed(At(300), At(360.9)), HalfAnHour, new ChapterSettings()),
         ["a pair just outside the tolerance"] = new(Observed(At(300), At(361.1)), HalfAnHour, new ChapterSettings()),
@@ -58,7 +62,16 @@ public sealed class SegmentDetectorRuleScenarioTests
         ["what was observed past the end"] = new(Observed(At(1740), At(1800), At(1860)), HalfAnHour, new ChapterSettings()),
     };
 
+    /// <summary>
+    /// The scenarios with a pod longer than a minute with no cut inside it, which no broadcast airs, since a pod is cut at
+    /// every advert; the version that tells the opening and the ending in any series takes such a stretch for an opening
+    /// or the programme rather than a break.
+    /// </summary>
+    private static readonly string[] UncutPods = ["two pods", "breaks taking more than half the length"];
+
     public static TheoryData<string> Scenarios => [.. Listed.Keys];
+
+    public static TheoryData<string> ScenariosCutAtEveryAdvert => [.. Listed.Keys.Except(UncutPods)];
 
     [Theory(DisplayName = "the first version detects what the rule-based detection marks")]
     [MemberData(nameof(Scenarios))]
@@ -72,8 +85,8 @@ public sealed class SegmentDetectorRuleScenarioTests
     [MemberData(nameof(Scenarios))]
     public void TheVersionBelowPausesDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.FourKindsBelowPauses);
 
-    [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand that tells the opening and the ending in any series detects on speech what the rule-based detection marks")]
-    [MemberData(nameof(Scenarios))]
+    [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand that tells the opening and the ending in any series detects on speech what the rule-based detection marks where every pod is cut at every advert")]
+    [MemberData(nameof(ScenariosCutAtEveryAdvert))]
     public void TheVersionForAnySeriesDetectsWhatTheRuleBasedDetectionMarks(string scenario) => DetectsWhatTheRuleBasedDetectionMarks(scenario, SegmentModel.FourKindsInAnySeries, spoken: true);
 
     private static void DetectsWhatTheRuleBasedDetectionMarks(string scenario, SegmentModel made, bool spoken = false)

@@ -259,34 +259,23 @@ public sealed class SegmentModelTests
         Assert.Equal(1.0, four.BreakScore(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 0)), Station, null), 12);
     }
 
-    [Fact(DisplayName = "BR-CD-007: the version of four kinds for any series weighs the break and hears silence as the version hearing silence from -55 dBFS does, and weighs the opening and the ending by where they lie, how long they last, how steady their loudness is and the grid, earlier episodes adding to it")]
+    [Fact(DisplayName = "BR-CD-007: the version of four kinds for any series hears silence as the version hearing silence from -55 dBFS does and weighs the break as it does but for the grid, which counts only up to a minute, and weighs the opening and the ending by where they lie, how long they last, how steady their loudness is and the grid, an advert's length most, earlier episodes adding to it")]
     public void TheVersionForAnySeriesIsHandSet()
     {
         SegmentModel any = SegmentModel.FourKindsInAnySeries;
 
         Assert.Equal(4, any.Kinds);
-        Assert.Equal(SegmentModel.FourKindsBelowPauses.Weights.Classes[SegmentKind.Break], any.Weights.Classes[SegmentKind.Break]);
         Assert.Equal(SegmentModel.FourKindsBelowPauses.Thresholds, any.Thresholds);
         Assert.Equal(
-            new SegmentClassWeights(-6.0, new Dictionary<string, double>
+            new SegmentClassWeights(-2.5, new Dictionary<string, double>
             {
-                [SegmentFeature.OpeningWindow] = 4.8,
-                [SegmentFeature.IsThemeLength] = 0.5,
-                [SegmentFeature.LoudnessRange] = -0.4,
-                [SegmentFeature.IsMultipleOf15s] = -3.0,
-                [SegmentFeature.PastOpeningShare] = 4.0,
+                [SegmentFeature.IsShortMultipleOf15s] = 2.0,
+                [SegmentFeature.EdgeSilence] = 1.5,
+                [SegmentFeature.LogoShare] = -3.0,
             }),
-            any.Weights.Classes[SegmentKind.Opening]);
-        Assert.Equal(
-            new SegmentClassWeights(-6.0, new Dictionary<string, double>
-            {
-                [SegmentFeature.EndingWindow] = 4.8,
-                [SegmentFeature.IsThemeLength] = 0.5,
-                [SegmentFeature.LoudnessRange] = -0.4,
-                [SegmentFeature.IsMultipleOf15s] = -3.0,
-                [SegmentFeature.PastEndingShare] = 4.0,
-            }),
-            any.Weights.Classes[SegmentKind.Ending]);
+            any.Weights.Classes[SegmentKind.Break]);
+        Assert.Equal(Theme(SegmentFeature.OpeningWindow, SegmentFeature.PastOpeningShare), any.Weights.Classes[SegmentKind.Opening]);
+        Assert.Equal(Theme(SegmentFeature.EndingWindow, SegmentFeature.PastEndingShare), any.Weights.Classes[SegmentKind.Ending]);
         Assert.Equal(new FeatureScale(8, 1), any.Standardisation[SegmentFeature.LoudnessRange]);
         Assert.All(
             any.Standardisation.Where(pair => pair.Key is not SegmentFeature.LoudnessRange),
@@ -295,22 +284,27 @@ public sealed class SegmentModelTests
         Assert.Empty(any.SeriesOffsets);
     }
 
-    [Fact(DisplayName = "BR-CD-007: with neither the catalog nor earlier episodes, the version for any series takes a song as long as a whole one where an opening or an ending lies for one at 0.6 to 0.8, and speech there, a pod of adverts there and a song in the middle of the programme for what they are")]
+    [Fact(DisplayName = "BR-CD-007: with neither the catalog nor earlier episodes, the version for any series takes a song as long as a whole one where an opening or an ending lies for one at 0.6 to 0.8, one of a minute and a half between two silent cuts likelier for one than anything else, and speech there, a pod of adverts there and a song in the middle of the programme for what they are")]
     public void TheVersionForAnySeriesFindsAThemeInAFirstEpisode()
     {
         SegmentModel any = SegmentModel.FourKindsInAnySeries;
 
         SegmentChances opening = any.Chances(Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 3)), Station, null);
         SegmentChances ending = any.Chances(Features((SegmentFeature.EndingWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 3)), Station, null);
+        SegmentChances onTheGrid = any.Chances(
+            Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 3), (SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1)),
+            Station,
+            null);
         SegmentChances speech = any.Chances(Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 15)), Station, null);
         SegmentChances pod = any.Chances(
-            Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LoudnessRange, 2)),
+            Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.IsShortMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LoudnessRange, 2)),
             Station,
             null);
         SegmentChances middle = any.Chances(Features((SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 3)), Station, null);
 
         Assert.InRange(opening.Of(SegmentKind.Opening), 0.6, 0.8);
         Assert.InRange(ending.Of(SegmentKind.Ending), 0.6, 0.8);
+        Assert.True(onTheGrid.Of(SegmentKind.Opening) > Math.Max(onTheGrid.Of(SegmentKind.Programme), onTheGrid.Of(SegmentKind.Break)));
         Assert.True(speech.Of(SegmentKind.Programme) > 0.85);
         Assert.True(pod.Of(SegmentKind.Break) > 0.5);
         Assert.True(pod.Of(SegmentKind.Opening) < 0.1);
@@ -393,6 +387,17 @@ public sealed class SegmentModelTests
 
     private static SegmentModel Offsets(IReadOnlyDictionary<string, double> stations)
         => new(SegmentModel.First.Weights, stations, new Dictionary<string, double>(), SegmentThresholds.Initial, SegmentModel.First.Standardisation);
+
+    private static SegmentClassWeights Theme(string place, string past)
+        => new(-6.0, new Dictionary<string, double>
+        {
+            [place] = 4.8,
+            [SegmentFeature.IsThemeLength] = 0.5,
+            [SegmentFeature.LoudnessRange] = -0.4,
+            [SegmentFeature.IsMultipleOf15s] = -1.0,
+            [SegmentFeature.IsShortMultipleOf15s] = -2.0,
+            [past] = 4.0,
+        });
 
     private static SegmentFeatureValues Features(params (string Name, double? Value)[] values)
         => SegmentFeatureValues.Of(values.ToDictionary(value => value.Name, value => value.Value));

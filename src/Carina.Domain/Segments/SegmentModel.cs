@@ -16,11 +16,12 @@ namespace Carina.Domain.Segments;
 /// weighs the break the same way and adds the opening and the ending made by hand, which earlier episodes of the
 /// series having one at the same place make likelier but never enough on their own. <see cref="FourKindsBelowPauses"/>
 /// weighs as that one does and hears silence only from -55 dBFS, below the pauses inside an advert that would cut it
-/// in two. <see cref="FourKindsInAnySeries"/> weighs the break and hears silence as that one does, and tells the opening
-/// and the ending by what they are like in any series, its first episode included: a segment that starts where an
-/// opening does, or ends where an ending does, keeps its loudness as a song does and is no multiple of the grid, the
-/// more so when it lasts as long as a whole one, is likelier one than the programme; earlier episodes having one at the
-/// same place add to that. What the catalog hears is fixed when the sequence is decided (<see cref="SegmentSequence"/>),
+/// in two. <see cref="FourKindsInAnySeries"/> hears silence as that one does and weighs the break as it does but for the
+/// grid, which counts only up to a minute, as long as an advert lasts, so that an opening of a minute and a half between
+/// two silent cuts is no break; it tells the opening and the ending by what they are like in any series, its first
+/// episode included: a segment that starts where an opening does, or ends where an ending does, keeps its loudness as a
+/// song does and is no multiple of the grid, least of all one as long as an advert, the more so when it lasts as long
+/// as a whole one, is likelier one than the programme; earlier episodes having one at the same place add to that. What the catalog hears is fixed when the sequence is decided (<see cref="SegmentSequence"/>),
 /// not weighed.
 /// </summary>
 public sealed class SegmentModel : IEquatable<SegmentModel>
@@ -112,7 +113,12 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
     public static SegmentModel FourKindsInAnySeries { get; } = new(
         new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
         {
-            [SegmentKind.Break] = FourKindsBelowPauses.Weights.Classes[SegmentKind.Break],
+            [SegmentKind.Break] = new(-2.5, new Dictionary<string, double>
+            {
+                [SegmentFeature.IsShortMultipleOf15s] = 2.0,
+                [SegmentFeature.EdgeSilence] = 1.5,
+                [SegmentFeature.LogoShare] = -3.0,
+            }),
             [SegmentKind.Opening] = ThemeWeights(SegmentFeature.OpeningWindow, SegmentFeature.PastOpeningShare),
             [SegmentKind.Ending] = ThemeWeights(SegmentFeature.EndingWindow, SegmentFeature.PastEndingShare),
         }),
@@ -125,6 +131,7 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             [SegmentFeature.EndingWindow] = FeatureScale.Identity,
             [SegmentFeature.IsThemeLength] = FeatureScale.Identity,
             [SegmentFeature.LoudnessRange] = new(8, 1),
+            [SegmentFeature.IsShortMultipleOf15s] = FeatureScale.Identity,
         });
 
     public SegmentWeights Weights { get; }
@@ -263,7 +270,8 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
             [place] = 4.8,
             [SegmentFeature.IsThemeLength] = 0.5,
             [SegmentFeature.LoudnessRange] = -0.4,
-            [SegmentFeature.IsMultipleOf15s] = -3.0,
+            [SegmentFeature.IsMultipleOf15s] = -1.0,
+            [SegmentFeature.IsShortMultipleOf15s] = -2.0,
             [past] = 4.0,
         });
 

@@ -12,7 +12,9 @@ public sealed record SegmentPiece(TimeSpan Starts, TimeSpan Ends, TimeSpan Fitte
 
 /// <summary>
 /// Computes the features of each segment between neighbouring boundary candidates: its length, how far
-/// it lies off the grid and whether it is a multiple of it; the depth and length of the silence at each
+/// it lies off the grid and whether it is a multiple of it, and one of at most <see cref="LongestAdvertSteps"/>
+/// steps, as long as an advert lasts, since a pod of adverts is cut at every advert and a longer stretch without a cut
+/// inside is seldom one; the depth and length of the silence at each
 /// edge, and whether both edges are silent cuts; the share of the seconds inside it, away from its edges
 /// by <see cref="LogoAwayFromTheEdges"/>, that show the logo, when at least
 /// <see cref="FewestLogoSeconds"/> do; where it lies from
@@ -46,6 +48,8 @@ public static class SegmentFeatures
     public static readonly TimeSpan PastWithin = TimeSpan.FromSeconds(30);
 
     public static readonly TimeSpan ChannelWindow = TimeSpan.FromSeconds(1);
+
+    public const int LongestAdvertSteps = 4;
 
     public static readonly TimeSpan WholeThemeShortest = TimeSpan.FromSeconds(55);
 
@@ -135,6 +139,7 @@ public static class SegmentFeatures
                 [SegmentFeature.EndingWindow] = Between(piece.To, programmeEnds - CatalogKinds.ThemeEdgeWithin, programmeEnds + CatalogKinds.EdgeWithin),
                 [SegmentFeature.IsThemeLength] = Between(piece.Length, WholeThemeShortest, WholeThemeLongest),
                 [SegmentFeature.LoudnessRange] = LoudnessRange(piece),
+                [SegmentFeature.IsShortMultipleOf15s] = multiple * (Math.Round(fitted / SegmentGrid.Step, MidpointRounding.AwayFromZero) <= LongestAdvertSteps ? 1 : 0),
             };
 
             for (int kind = 0; kind < SegmentFeature.GenreKinds; kind++)

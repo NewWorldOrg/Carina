@@ -6,9 +6,9 @@ namespace Carina.Domain.Tests.Segments;
 /// <summary>
 /// Recordings made up for learning the opening and the ending, of three weekly series on three stations, each
 /// recording starting a minute before a programme of twenty minutes and ending half a minute after it. Every one
-/// has a song of 88 seconds for its opening at the programme's start, a pod of two 15-second adverts right after it
-/// and another at 700 seconds, an insert song of 80 seconds at 480 in the middle, and a song of 88 seconds for its
-/// ending at 1110, a minute before the programme ends; speech fills the rest. Every edge is a silent cut. The catalog
+/// has a song of 88 seconds, or as long as asked, for its opening at the programme's start, a pod of two 15-second
+/// adverts right after it and another at 700 seconds, an insert song of 80 seconds at 480 in the middle, and a song as
+/// long as its opening for its ending at 1110; speech fills the rest. Every edge is a silent cut. The catalog
 /// hears each advert there and in another series the week before, so it is sure of it; it hears the opening and the
 /// ending of a series as such once two of its episodes hold them, and hears nothing of a series with one episode.
 /// </summary>
@@ -34,23 +34,6 @@ internal static class ThemeWorld
 
     private static readonly CatalogSeries Elsewhere = new(6, "架空の番組", new DateTime(2026, 8, 31, 18, 0, 0, DateTimeKind.Utc));
 
-    private static readonly double[] Adverts = [OpeningStarts + ThemeLasts, OpeningStarts + ThemeLasts + 15, 700, 715];
-
-    private static readonly double[] Cuts =
-    [
-        OpeningStarts,
-        OpeningStarts + ThemeLasts,
-        OpeningStarts + ThemeLasts + 15,
-        OpeningStarts + ThemeLasts + 30,
-        InsertStarts,
-        InsertStarts + 80,
-        700,
-        715,
-        730,
-        EndingStarts,
-        EndingStarts + ThemeLasts,
-    ];
-
     private const double InsertStarts = 480;
 
     private static TimeSpan Runs => TimeSpan.FromMinutes(20);
@@ -59,7 +42,7 @@ internal static class ThemeWorld
     /// The first <paramref name="weeks"/> episodes of <paramref name="series"/>, and the sounds the catalog hears in
     /// them: their adverts, and their opening and ending once there are two episodes.
     /// </summary>
-    public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Episodes(CatalogSeries series, int weeks)
+    public static (List<LearningRecording> Recordings, List<CatalogSound> Sounds) Episodes(CatalogSeries series, int weeks, double lasts = ThemeLasts)
     {
         List<LearningRecording> recordings = [];
         List<CatalogSound> sounds = [];
@@ -69,15 +52,15 @@ internal static class ThemeWorld
         {
             RecordingId id = RecordingId.New();
 
-            recordings.Add(Recording(id, series, week));
-            sounds.AddRange(Adverts.Select(at => Advert(series, week, id, at)));
+            recordings.Add(Recording(id, series, week, lasts));
+            sounds.AddRange(new[] { OpeningStarts + lasts, OpeningStarts + lasts + 15, 700, 715 }.Select(at => Advert(series, week, id, at)));
             aired.Add((id, week));
         }
 
         if (weeks >= 2)
         {
-            sounds.Add(Theme(series, aired, OpeningStarts));
-            sounds.Add(Theme(series, aired, EndingStarts));
+            sounds.Add(Theme(series, aired, OpeningStarts, lasts));
+            sounds.Add(Theme(series, aired, EndingStarts, lasts));
         }
 
         return (recordings, sounds);
@@ -101,7 +84,7 @@ internal static class ThemeWorld
     public static (double Starts, double Ends, SegmentKind Kind)[] Themes(SegmentDetection detection)
         => [.. detection.Segments.Where(span => span.Kind is SegmentKind.Opening or SegmentKind.Ending).Select(span => (span.Starts.TotalSeconds, span.Ends.TotalSeconds, span.Kind))];
 
-    private static LearningRecording Recording(RecordingId id, CatalogSeries series, int week)
+    private static LearningRecording Recording(RecordingId id, CatalogSeries series, int week, double lasts)
     {
         ProgrammeCopy episode = series.Episode(week);
         SegmentContext context = new(
@@ -115,19 +98,33 @@ internal static class ThemeWorld
             CornerLogo.None,
             []);
 
-        return new LearningRecording(id, episode.RecordingStartedAt, Readings().Evidence(), context, []);
+        return new LearningRecording(id, episode.RecordingStartedAt, Readings(lasts).Evidence(), context, []);
     }
 
-    private static SyntheticReadings Readings()
+    private static SyntheticReadings Readings(double lasts)
     {
         SyntheticReadings readings = new SyntheticReadings(Length)
             .Spoken(0, OpeningStarts)
-            .Spoken(OpeningStarts + ThemeLasts + 30, InsertStarts)
+            .Spoken(OpeningStarts + lasts + 30, InsertStarts)
             .Spoken(InsertStarts + 80, 700)
             .Spoken(730, EndingStarts)
-            .Spoken(EndingStarts + ThemeLasts, Length);
+            .Spoken(EndingStarts + lasts, Length);
+        double[] cuts =
+        [
+            OpeningStarts,
+            OpeningStarts + lasts,
+            OpeningStarts + lasts + 15,
+            OpeningStarts + lasts + 30,
+            InsertStarts,
+            InsertStarts + 80,
+            700,
+            715,
+            730,
+            EndingStarts,
+            EndingStarts + lasts,
+        ];
 
-        foreach (double cut in Cuts)
+        foreach (double cut in cuts)
         {
             readings.QuietAround(cut).Cut(cut, 0.9);
         }
@@ -148,13 +145,13 @@ internal static class ThemeWorld
             ]);
     }
 
-    private static CatalogSound Theme(CatalogSeries series, IReadOnlyList<(RecordingId Id, int Week)> aired, double atRecording)
+    private static CatalogSound Theme(CatalogSeries series, IReadOnlyList<(RecordingId Id, int Week)> aired, double atRecording, double lasts)
     {
         CatalogEntryId entry = CatalogEntryId.New();
 
         return new CatalogSound(
             entry,
-            TimeSpan.FromSeconds(ThemeLasts),
-            [.. aired.Select(episode => LearningWorld.Heard(entry, series, episode.Week, atRecording, ThemeLasts, episode.Id))]);
+            TimeSpan.FromSeconds(lasts),
+            [.. aired.Select(episode => LearningWorld.Heard(entry, series, episode.Week, atRecording, lasts, episode.Id))]);
     }
 }

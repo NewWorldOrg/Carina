@@ -33,6 +33,20 @@ public sealed class SegmentFeaturesTests
         Assert.Equal(multiple, features[SegmentFeature.IsMultipleOf15s]);
     }
 
+    [Theory(DisplayName = "BR-CD-007: a piece is a multiple of 15 seconds as long as an advert when it is one of at most a minute, within the tolerance, since a pod is cut at every advert")]
+    [InlineData(15, 1, 1)]
+    [InlineData(60, 1, 1)]
+    [InlineData(60.9, 1, 1)]
+    [InlineData(74.1, 1, 0)]
+    [InlineData(90, 1, 0)]
+    [InlineData(62.5, 0, 0)]
+    public void APieceIsAMultipleAsLongAsAnAdvert(double seconds, double multiple, double advert)
+    {
+        SegmentFeatureValues features = Pieces([Edge(0), Cut(300), Cut(300 + seconds), Edge(Length)])[1].Features;
+
+        Assert.Equal((multiple, advert), (features[SegmentFeature.IsMultipleOf15s], features[SegmentFeature.IsShortMultipleOf15s]));
+    }
+
     [Fact(DisplayName = "a piece is fitted to the grid from any of the cuts its edges took in")]
     public void APieceIsFittedFromAnyCutItsEdgesTookIn()
     {

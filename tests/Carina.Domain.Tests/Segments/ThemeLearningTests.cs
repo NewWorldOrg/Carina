@@ -49,5 +49,19 @@ public sealed class ThemeLearningTests
         Assert.True(forAnySeries.InUse.Metrics.BoundaryRecallWithin1s > belowPauses.InUse.Metrics.BoundaryRecallWithin1s);
     }
 
+    [Fact(DisplayName = "BR-CD-007: an opening and an ending of a minute and a half exactly between two silent cuts, with no logo to tell by, are found in a first episode by the version for any series, which counts the grid for a break only up to a minute, where the version hearing silence from -55 dBFS takes them for breaks")]
+    public void ThemesOfAMinuteAndAHalfAreNoBreaks()
+    {
+        (List<LearningRecording> garden, _) = Episodes(Garden, 1, lasts: 90);
+
+        SegmentDetection belowPauses = Unheard(garden[0], SegmentModel.FourKindsBelowPauses);
+
+        Assert.Equal(
+            [(OpeningStarts, OpeningStarts + 90, SegmentKind.Opening), (EndingStarts, EndingStarts + 90, SegmentKind.Ending)],
+            Themes(Unheard(garden[0], SegmentModel.FourKindsInAnySeries)));
+        Assert.Contains(belowPauses.Segments, span => span.Kind is SegmentKind.Break && span.Starts.TotalSeconds is OpeningStarts && span.Ends.TotalSeconds >= OpeningStarts + 90);
+        Assert.Contains(belowPauses.Segments, span => span.Kind is SegmentKind.Break && span.Starts.TotalSeconds is EndingStarts && span.Ends.TotalSeconds is EndingStarts + 90);
+    }
+
     private static double? Recall(SegmentMetrics metrics, SegmentKind kind) => metrics.Kinds.Single(measured => measured.Kind == kind).Recall;
 }

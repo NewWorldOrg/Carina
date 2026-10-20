@@ -7,8 +7,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Carina.Db.Migrations;
 
 /// <summary>
-/// Keeps the version of four kinds made by hand that weighs the break and hears silence as the one before it and tells
-/// the opening and the ending by what they are like in any series, its first episode included, numbered after the
+/// Keeps the version of four kinds made by hand that hears silence as the one before it, weighs the break as it does but
+/// for the grid, which counts only up to a minute, and tells the opening and the ending by what they are like in any
+/// series, its first episode included, numbered after the
 /// highest number kept under the lock a round of learning keeps its candidate under. While learning is on, it takes the
 /// place of the version in use when that one was made by hand too, has never been evaluated and was not chosen by hand;
 /// otherwise it is kept as a candidate, which turning learning on puts in use on the same conditions. The version in use
@@ -23,10 +24,10 @@ public partial class AVersionMadeByHandFindsOpeningsAndEndingsInAnySeries : Migr
         "kinds = 4 AND evidence IS NULL AND number = (SELECT max(number) FROM segment_model_version WHERE kinds = 4 AND evidence IS NULL)";
 
     private const string InAnySeries =
-        """{"classes": {"Break": {"bias": -2.5, "features": {"isMultipleOf15s": 2.0, "edgeSilence": 1.5, "logoShare": -3.0}}, "Opening": {"bias": -6.0, "features": {"openingWindow": 4.8, "isThemeLength": 0.5, "loudnessRange": -0.4, "isMultipleOf15s": -3.0, "pastOpeningShare": 4.0}}, "Ending": {"bias": -6.0, "features": {"endingWindow": 4.8, "isThemeLength": 0.5, "loudnessRange": -0.4, "isMultipleOf15s": -3.0, "pastEndingShare": 4.0}}}}""";
+        """{"classes": {"Break": {"bias": -2.5, "features": {"isShortMultipleOf15s": 2.0, "edgeSilence": 1.5, "logoShare": -3.0}}, "Opening": {"bias": -6.0, "features": {"openingWindow": 4.8, "isThemeLength": 0.5, "loudnessRange": -0.4, "isMultipleOf15s": -1.0, "isShortMultipleOf15s": -2.0, "pastOpeningShare": 4.0}}, "Ending": {"bias": -6.0, "features": {"endingWindow": 4.8, "isThemeLength": 0.5, "loudnessRange": -0.4, "isMultipleOf15s": -1.0, "isShortMultipleOf15s": -2.0, "pastEndingShare": 4.0}}}}""";
 
     private const string InAnySeriesScales =
-        """{"isMultipleOf15s": {"mean": 0, "sd": 1}, "edgeSilence": {"mean": 0, "sd": 1}, "logoShare": {"mean": 0, "sd": 1}, "pastOpeningShare": {"mean": 0, "sd": 1}, "pastEndingShare": {"mean": 0, "sd": 1}, "openingWindow": {"mean": 0, "sd": 1}, "endingWindow": {"mean": 0, "sd": 1}, "isThemeLength": {"mean": 0, "sd": 1}, "loudnessRange": {"mean": 8, "sd": 1}}""";
+        """{"isMultipleOf15s": {"mean": 0, "sd": 1}, "edgeSilence": {"mean": 0, "sd": 1}, "logoShare": {"mean": 0, "sd": 1}, "pastOpeningShare": {"mean": 0, "sd": 1}, "pastEndingShare": {"mean": 0, "sd": 1}, "openingWindow": {"mean": 0, "sd": 1}, "endingWindow": {"mean": 0, "sd": 1}, "isThemeLength": {"mean": 0, "sd": 1}, "loudnessRange": {"mean": 8, "sd": 1}, "isShortMultipleOf15s": {"mean": 0, "sd": 1}}""";
 
     private const string BelowPauses =
         """{"silenceDbfs": -55, "blackLevel": 0.10, "sceneChange": 0.30, "gridToleranceSec": 1.0, "gridPenalty": -3.0, "lambda": 1, "lambdaStation": 10, "lambdaSeries": 10}""";
