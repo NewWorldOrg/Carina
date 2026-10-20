@@ -45,9 +45,9 @@ public sealed class SegmentAdoptionTests
         Assert.False(SegmentAdoption.Better(unknown, unknown));
     }
 
-    [Theory(DisplayName = "BR-CD-008: a better candidate is not put in use on fewer than ten recordings or a hundred boundaries")]
+    [Theory(DisplayName = "BR-CD-008: a better candidate is not put in use on fewer than ten recordings or thirty boundaries")]
     [InlineData(9, 148)]
-    [InlineData(12, 99)]
+    [InlineData(12, 29)]
     public void TooLittleEvidenceKeepsTheVersionInUse(int recordings, int boundaries)
     {
         EvaluationEvidence little = new(recordings, boundaries, Made);

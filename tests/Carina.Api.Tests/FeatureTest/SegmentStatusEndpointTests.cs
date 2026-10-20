@@ -220,7 +220,7 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.False(data.GetProperty("learning").GetBoolean());
         Assert.Equal(["recordings", "boundaries", "enough", "recordingsNeeded", "boundariesNeeded"], Names(evidence));
-        Assert.Equal((4, 40, false, 10, 100), (evidence.GetProperty("recordings").GetInt32(), evidence.GetProperty("boundaries").GetInt32(), evidence.GetProperty("enough").GetBoolean(), evidence.GetProperty("recordingsNeeded").GetInt32(), evidence.GetProperty("boundariesNeeded").GetInt32()));
+        Assert.Equal((4, 40, false, 10, 30), (evidence.GetProperty("recordings").GetInt32(), evidence.GetProperty("boundaries").GetInt32(), evidence.GetProperty("enough").GetBoolean(), evidence.GetProperty("recordingsNeeded").GetInt32(), evidence.GetProperty("boundariesNeeded").GetInt32()));
         Assert.Equal(1, feature.Evidence.Reads);
         Assert.Equal(JsonValueKind.Null, data.GetProperty("metrics").ValueKind);
         Assert.Empty(data.GetProperty("stations").EnumerateArray());
@@ -354,7 +354,7 @@ public sealed class SegmentStatusEndpointTests
             taken.AddMinutes(20),
             null,
             null,
-            new SegmentEvaluation(new SegmentMetrics(0.11, 0.07, [new KindMetrics(SegmentKind.Break, 0.42)], null, 0), [], new EvaluationEvidence(12, 56, null))));
+            new SegmentEvaluation(new SegmentMetrics(0.11, 0.07, [new KindMetrics(SegmentKind.Break, 0.42)], null, 0), [], new EvaluationEvidence(12, 26, null))));
         await feature.Rounds.TakeAsync(
             SegmentLearningRound.Ended(new DateOnly(2026, 11, 8), taken, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, new SegmentMetrics(0.08, 0.05, [new KindMetrics(SegmentKind.Break, 0.38)], null, 0)),
             CancellationToken.None);
@@ -370,7 +370,7 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(["boundaryRecallWithin2s", "breakRecall"], Names(round.GetProperty("inUse")));
         Assert.Equal((0.08, 0.38), (round.GetProperty("inUse").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("inUse").GetProperty("breakRecall").GetDouble()));
         Assert.Equal(["recordings", "boundaries", "enough", "recordingsNeeded", "boundariesNeeded"], Names(round.GetProperty("evidence")));
-        Assert.Equal((12, 56, false), (round.GetProperty("evidence").GetProperty("recordings").GetInt32(), round.GetProperty("evidence").GetProperty("boundaries").GetInt32(), round.GetProperty("evidence").GetProperty("enough").GetBoolean()));
+        Assert.Equal((12, 26, false), (round.GetProperty("evidence").GetProperty("recordings").GetInt32(), round.GetProperty("evidence").GetProperty("boundaries").GetInt32(), round.GetProperty("evidence").GetProperty("enough").GetBoolean()));
         Assert.Equal((0.11, 0.42), (round.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("metrics").GetProperty("breakRecall").GetDouble()));
         Assert.Equal("2026-11-08T18:00:00Z", data.GetProperty("nextRoundNotBefore").GetString());
     }

@@ -10,7 +10,7 @@ public sealed record EvaluationEvidence
 {
     public const int RecordingsNeeded = 10;
 
-    public const int BoundariesNeeded = 100;
+    public const int BoundariesNeeded = 30;
 
     public EvaluationEvidence(int recordings, int boundaries, DateTime? labelsUntil)
     {

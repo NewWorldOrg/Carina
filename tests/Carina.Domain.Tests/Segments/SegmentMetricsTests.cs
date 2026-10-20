@@ -279,11 +279,11 @@ public sealed class SegmentMetricsTests
         Assert.Equal(1.0, SegmentMetrics.Of([Compared(truth, whole)], SkipReturns.None)!.BreakRecall);
     }
 
-    [Theory(DisplayName = "BR-CD-008: an evaluation stands on enough with ten recordings the catalog is sure of an advert in and a hundred boundaries of the pods of those adverts, and not with one fewer of either")]
-    [InlineData(10, 5, true)]
-    [InlineData(9, 6, false)]
-    [InlineData(12, 4, false)]
-    public void EnoughEvidenceNeedsTenRecordingsAndAHundredBoundaries(int recordings, int adverts, bool enough)
+    [Theory(DisplayName = "BR-CD-008: an evaluation stands on enough with ten recordings the catalog is sure of an advert in and thirty boundaries of the pods of those adverts, and not with one fewer of either")]
+    [InlineData(10, 2, true)]
+    [InlineData(9, 4, false)]
+    [InlineData(14, 1, false)]
+    public void EnoughEvidenceNeedsTenRecordingsAndThirtyBoundaries(int recordings, int adverts, bool enough)
     {
         CatalogTruth truth = Truth([.. Enumerable.Range(0, adverts).Select(advert => ((advert * 60) + 45.0, (advert * 60) + 60.0, SegmentKind.Break))]);
         CatalogTruth openingOnly = Truth((60, 150, SegmentKind.Opening));
@@ -300,8 +300,9 @@ public sealed class SegmentMetricsTests
         Assert.Equal(Evening, evidence.LabelsUntil);
         Assert.Equal(enough, evidence.Enough);
         Assert.Equal(new EvaluationEvidence(recordings, recordings * adverts * 2, null), EvaluationEvidence.Of([.. compared.Select(comparison => comparison.Truth)]));
-        Assert.False(new EvaluationEvidence(10, 99, null).Enough);
-        Assert.True(new EvaluationEvidence(10, 100, null).Enough);
+        Assert.False(new EvaluationEvidence(9, 30, null).Enough);
+        Assert.False(new EvaluationEvidence(10, 29, null).Enough);
+        Assert.True(new EvaluationEvidence(10, 30, null).Enough);
     }
 
     [Fact(DisplayName = "skips and returns are counted on one version's buttons within the days asked for")]
