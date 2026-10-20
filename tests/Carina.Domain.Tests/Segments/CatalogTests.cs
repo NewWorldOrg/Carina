@@ -236,6 +236,22 @@ public sealed class CatalogTests
         Assert.Same(entry, Assert.Single(change.Reestimated));
         Assert.Empty(change.Overridden);
         Assert.Equal([entry.Id], change.Relinking);
+        Assert.Equal([entry.Id], change.Recast);
+    }
+
+    [Fact(DisplayName = "BR-CD-004: an opening estimated again as the opening it was, at the confidence it had, is not handed back as recast, so the recordings that hear it are not detected again")]
+    public void AnEntryEstimatedAgainAsItWasIsNotRecast()
+    {
+        CatalogEntryId id = CatalogEntryId.New();
+        CatalogOccurrence[] stretches = [.. Enumerable.Range(0, 3).Select(week => At(id, Drama.Episode(week), 0, 89).Occurrence)];
+        CatalogEntry entry = KeptOpening(id, stretches.Length);
+        Dictionary<RecordingId, ProgrammeCopy> programmes = stretches.Select((stretch, week) => (stretch.RecordingId, Drama.Episode(week))).ToDictionary();
+
+        CatalogChange change = Catalog.Reestimate(entry, Knowing(entry, stretches, programmes: programmes), Now.AddDays(1));
+
+        Assert.Equal((CatalogKind.Opening, 0.8), (entry.Kind, entry.Confidence));
+        Assert.Same(entry, Assert.Single(change.Reestimated));
+        Assert.Empty(change.Recast);
     }
 
     [Fact(DisplayName = "an entry estimated again hands back the stretches whose own kind changed")]
@@ -253,7 +269,7 @@ public sealed class CatalogTests
         Assert.Same(stretches[2], Assert.Single(change.Overridden));
     }
 
-    [Fact(DisplayName = "BR-CD-011: an entry started as a programme fixture changes the links, and an advert that gains a stretch does not")]
+    [Fact(DisplayName = "BR-CD-011: an entry started as a programme fixture changes the links and is recast, and an advert that gains a stretch does neither")]
     public void AnEntryThatLinksSeriesChangesTheLinks()
     {
         SoundMatch samePlace = new(Span(70, 85), new RecordedSound(Second), Span(70, 85), 0.05);
@@ -266,11 +282,13 @@ public sealed class CatalogTests
         CatalogEntry fixture = Assert.Single(started.Started);
         Assert.Equal(CatalogKind.ProgrammeFixture, fixture.Kind);
         Assert.Equal([fixture.Id], started.Relinking);
+        Assert.Equal([fixture.Id], started.Recast);
         Assert.Equal(CatalogKind.Cm, advert.Kind);
         Assert.Empty(grown.Relinking);
+        Assert.Empty(grown.Recast);
     }
 
-    [Fact(DisplayName = "BR-CD-011: a kept opening that gains a stretch, and one estimated again out of its kind, change the links")]
+    [Fact(DisplayName = "BR-CD-011: a kept opening that gains a stretch, and one estimated again out of its kind, change the links, and only the one out of its kind is recast")]
     public void AnOpeningThatGrowsOrLeavesItsKindChangesTheLinks()
     {
         CatalogEntryId grows = CatalogEntryId.New();
@@ -293,8 +311,10 @@ public sealed class CatalogTests
 
         Assert.Equal(CatalogKind.Opening, growing.Kind);
         Assert.Equal([grows], grown.Relinking);
+        Assert.Empty(grown.Recast);
         Assert.Equal(CatalogKind.Cm, leaving.Kind);
         Assert.Equal([leaves], left.Relinking);
+        Assert.Equal([leaves], left.Recast);
     }
 
     [Fact(DisplayName = "BR-CD-005: a programme fixture estimated again beside the opening it follows in two episodes is that opening, and its stretches elsewhere are handed back as the programme")]

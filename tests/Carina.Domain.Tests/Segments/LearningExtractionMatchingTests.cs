@@ -69,6 +69,46 @@ public sealed class LearningExtractionMatchingTests
         Assert.False(Rehydrated(Noon, Noon).AwaitsMatching);
     }
 
+    [Fact(DisplayName = "BR-CD-004: a record matched is taken as matched again when the catalog changes under it later, which has its detection made again, and still waits for nothing to be matched")]
+    public void ACatalogChangedUnderARecordTakesItAsMatchedAgain()
+    {
+        LearningExtraction record = LearningExtraction.Waiting(RecordingId.New(), Programme(), Noon);
+        record.Read(ExtractionVersion.Current, Noon);
+        record.Reached(TimeSpan.FromMinutes(30), Noon);
+        record.Finish(Noon);
+        record.Matched(Noon.AddMinutes(5));
+        RecordingDetection detected = RecordingDetection.Rehydrate(record.RecordingId, 1, SegmentDetectionState.NothingFound, [new SegmentSpan(TimeSpan.Zero, TimeSpan.FromMinutes(30), SegmentKind.Programme, 0.9)], 0, [], 1, Noon.AddMinutes(5), Noon.AddMinutes(6));
+
+        Assert.False(RecordingDetection.IsAwaited(record, detected));
+        Assert.False(record.CatalogChanged(Noon.AddMinutes(5)));
+        Assert.True(record.CatalogChanged(Noon.AddMinutes(30)));
+        Assert.Equal(Noon.AddMinutes(30), record.MatchedAt);
+        Assert.False(record.AwaitsMatching);
+        Assert.True(RecordingDetection.IsAwaited(record, detected));
+    }
+
+    [Theory(DisplayName = "BR-CD-004: a record never matched, or waiting to be matched, is left as it is when the catalog changes under it, being matched and detected anyway once it is matched")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ARecordWaitingToBeMatchedIsLeftAsItIs(bool matchedBefore)
+    {
+        LearningExtraction record = In(LearningExtractionState.Done);
+
+        if (matchedBefore)
+        {
+            record.Matched(Noon.AddMinutes(5));
+            record.Outdate(Newer, Noon.AddMinutes(10));
+            record.Read(Newer, Noon.AddMinutes(10));
+            record.Finish(Noon.AddMinutes(20));
+        }
+
+        DateTime? matched = record.MatchedAt;
+
+        Assert.False(record.CatalogChanged(Noon.AddMinutes(30)));
+        Assert.Equal(matched, record.MatchedAt);
+        Assert.True(record.AwaitsMatching);
+    }
+
     [Fact(DisplayName = "the time a record was matched is in UTC and no earlier than the record was made")]
     public void TheTimeMatchedIsInUtcAndAfterTheRecordWasMade()
     {

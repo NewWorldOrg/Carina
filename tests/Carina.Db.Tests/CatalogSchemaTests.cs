@@ -28,7 +28,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         Recording recording = await RecordedAsync(7_101);
         (CatalogEntry entry, CatalogOccurrence[] occurrences) = Started(recording.Id, RecordingId.New());
 
-        await KeepAsync(new CatalogChange([entry], [], occurrences, [], []));
+        await KeepAsync(new CatalogChange([entry], [], occurrences, [], [], []));
 
         await using (NpgsqlConnection connection = await database.OpenAsync())
         {
@@ -51,7 +51,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         RecordingId first = RecordingId.New();
         (CatalogEntry entry, CatalogOccurrence[] occurrences) = Started(first, RecordingId.New());
 
-        await KeepAsync(new CatalogChange([entry], [], occurrences, [], []));
+        await KeepAsync(new CatalogChange([entry], [], occurrences, [], [], []));
 
         await using CarinaDbContext context = Context();
         CatalogRepository catalog = new(context);
@@ -82,7 +82,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         (CatalogEntry named, CatalogOccurrence[] heard) = Started(RecordingId.New(), RecordingId.New());
         (CatalogEntry unnamed, CatalogOccurrence[] elsewhere) = Started(RecordingId.New(), RecordingId.New());
 
-        await KeepAsync(new CatalogChange([named, unnamed], [], [.. heard, .. elsewhere], [], []));
+        await KeepAsync(new CatalogChange([named, unnamed], [], [.. heard, .. elsewhere], [], [], []));
 
         await using CarinaDbContext context = Context();
         IReadOnlyList<CatalogEntry> read = await new CatalogRepository(context).EntriesAsync([named.Id, CatalogEntryId.New()], CancellationToken.None);
@@ -103,7 +103,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         PlacedOccurrence[] heads = [Placed(opening, first, Copy("架空の物語", Noon), 0, 89), Placed(opening, second, Copy("架空の物語", Noon.AddDays(7)), 0, 89)];
         CatalogEntry head = CatalogEntry.Start(opening, [.. Enumerable.Range(1, 5562).Select(frame => (uint)frame)], heads, SeriesLinks.None, Noon);
 
-        await KeepAsync(new CatalogChange([advert, head], [], [.. adverts, .. heads.Select(placed => placed.Occurrence)], [], []));
+        await KeepAsync(new CatalogChange([advert, head], [], [.. adverts, .. heads.Select(placed => placed.Occurrence)], [], [], []));
 
         await using CarinaDbContext context = Context();
         CatalogSurroundings around = await new CatalogRepository(context).SurroundingsAsync([first], CancellationToken.None);
@@ -121,7 +121,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         RecordingId first = RecordingId.New();
         (CatalogEntry entry, CatalogOccurrence[] occurrences) = Started(first, RecordingId.New());
 
-        await KeepAsync(new CatalogChange([entry], [], occurrences, [], []));
+        await KeepAsync(new CatalogChange([entry], [], occurrences, [], [], []));
 
         CatalogOccurrence[] stretches;
 
@@ -134,7 +134,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             kept.Reestimate([.. stretches.Append(third).Select(stretch => PlacedOccurrence.Of(stretch, null))], SeriesLinks.None, Noon.AddDays(9));
             stretches[0].Override(SegmentKind.Break);
 
-            await catalog.KeepAsync(new CatalogChange([], [kept], [third], [stretches[0]], []), CancellationToken.None);
+            await catalog.KeepAsync(new CatalogChange([], [kept], [third], [stretches[0]], [], []), CancellationToken.None);
         }
 
         await using CarinaDbContext context = Context();
@@ -156,7 +156,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         CatalogCounts before = await CountsAsync();
         (CatalogEntry advert, CatalogOccurrence[] heard) = Started(RecordingId.New(), RecordingId.New());
 
-        await KeepAsync(new CatalogChange([advert], [], heard, [], []));
+        await KeepAsync(new CatalogChange([advert], [], heard, [], [], []));
 
         CatalogCounts after = await CountsAsync();
 
@@ -182,7 +182,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         RecordingId[] advertised = [RecordingId.New(), RecordingId.New()];
         (CatalogEntry advert, CatalogOccurrence[] aired) = Kept(CatalogKind.Cm, 89, advertised, [89, 89]);
 
-        await KeepAsync(new CatalogChange([fixture, opening, advert], [], [.. placed.Select(place => place.Occurrence), .. heard, .. aired], [], []));
+        await KeepAsync(new CatalogChange([fixture, opening, advert], [], [.. placed.Select(place => place.Occurrence), .. heard, .. aired], [], [], []));
 
         await using CarinaDbContext context = Context();
         IReadOnlyList<IReadOnlyList<RecordingId>> sharers = await new CatalogRepository(context).SoundSharersAsync(CancellationToken.None);
@@ -218,7 +218,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             Assert.Equal(4, next.Fingerprint.Length);
 
             next.Reestimate([.. stretches.Select(stretch => PlacedOccurrence.Of(stretch, null))], SeriesLinks.None, Noon);
-            await catalog.KeepAsync(new CatalogChange([], [next], [], [], []), CancellationToken.None);
+            await catalog.KeepAsync(new CatalogChange([], [next], [], [], [], []), CancellationToken.None);
         }
 
         await using CarinaDbContext context = Context();
@@ -231,7 +231,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
     {
         (CatalogEntry entry, CatalogOccurrence[] occurrences) = Started(RecordingId.New(), RecordingId.New());
         (CatalogEntry other, CatalogOccurrence[] elsewhere) = Started(RecordingId.New(), RecordingId.New());
-        await KeepAsync(new CatalogChange([entry, other], [], [.. occurrences, .. elsewhere], [], []));
+        await KeepAsync(new CatalogChange([entry, other], [], [.. occurrences, .. elsewhere], [], [], []));
 
         await using (CarinaDbContext reading = Context())
         {
@@ -248,7 +248,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
             overridden.Override(SegmentKind.Break);
             fresh.Reestimate([.. stretches[other.Id].Select(stretch => PlacedOccurrence.Of(stretch, null))], SeriesLinks.None, Noon.AddDays(9));
 
-            await catalog.KeepAsync(new CatalogChange([], [stale, fresh], [third], [overridden], []), CancellationToken.None);
+            await catalog.KeepAsync(new CatalogChange([], [stale, fresh], [third], [overridden], [], []), CancellationToken.None);
         }
 
         await using CarinaDbContext context = Context();
@@ -285,7 +285,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         await InsertAsync("segment_catalog_occurrence", Stretch(apart, Guid.NewGuid()));
         await InsertAsync("segment_catalog_occurrence", Stretch(apart, Guid.NewGuid()));
 
-        await KeepAsync(new CatalogChange([], [], [], [], [new CatalogEntryId(linking)]));
+        await KeepAsync(new CatalogChange([], [], [], [], [new CatalogEntryId(linking)], []));
         int[] versions = [await KindsVersionAsync(linking), await KindsVersionAsync(alongside), await KindsVersionAsync(apart)];
 
         Assert.Equal([CatalogKinds.Version, CatalogKinds.Unsettled, CatalogKinds.Version], versions);

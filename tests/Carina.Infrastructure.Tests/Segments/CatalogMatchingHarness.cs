@@ -200,14 +200,14 @@ internal sealed class CatalogMatchingHarness : IDisposable
 
     public bool Recording { get; set; }
 
-    public CatalogMatchingJob Job(CatalogMatchingSettings? settings = null)
+    public CatalogMatchingJob Job(CatalogMatchingSettings? settings = null, DateTime? at = null)
         => new(
             provider.GetRequiredService<IServiceScopeFactory>(),
             Store,
             Followed,
             MatchedAtOnce,
             settings ?? CatalogMatchingSettings.Default,
-            new FixedClock(Now),
+            new FixedClock(at ?? Now),
             NullLogger<CatalogMatchingJob>.Instance);
 
     public async Task LearningAsync(bool on) => await Settings.SaveAsync(SegmentSettings.LearningSwitched(on, Now), CancellationToken.None);

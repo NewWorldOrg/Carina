@@ -198,6 +198,26 @@ public sealed class SegmentDetectionJobTests
         Assert.Equal(LearningData.ExtractionVersion + 1, harness.Detections.Of(recording, SegmentModelVersion.FirstNumber)!.ExtractionVersionNumber);
     }
 
+    [Fact(DisplayName = "BR-CD-004: a recording detected before the catalog changed under it is detected again in spare time ahead of a later one whose catalog did not change")]
+    public async Task ARecordingWhoseCatalogChangedIsDetectedAgain()
+    {
+        using SegmentDetectionHarness harness = new();
+        await harness.LearningAsync(true);
+        RecordingId changed = await harness.ReadAsync(2, "架空の物語");
+        RecordingId unchanged = await harness.ReadAsync(1, "架空のクイズ");
+        SegmentDetectionJob job = harness.Job();
+        await job.LookAsync(CancellationToken.None);
+        await job.LookAsync(CancellationToken.None);
+
+        LearningExtraction record = harness.Records.Row(changed)!;
+        Assert.True(record.CatalogChanged(Now.AddMinutes(1)));
+        harness.Records.Hold(record);
+        SegmentDetectionLook again = await job.LookAsync(CancellationToken.None);
+
+        Assert.Equal(changed, again.Detected?.RecordingId);
+        Assert.Equal(3, harness.Detections.Keeps);
+    }
+
     [Fact(DisplayName = "BR-CD-013: a detection finished after learning was switched off is not kept, and the recording still waits")]
     public async Task ADetectionFinishedAfterLearningWasSwitchedOffIsNotKept()
     {

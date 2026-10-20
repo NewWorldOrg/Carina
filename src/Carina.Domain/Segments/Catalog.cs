@@ -30,16 +30,19 @@ public sealed record CatalogKnowledge(
 
 /// <summary>
 /// The entries started, the entries already kept that were estimated again, the stretches found, the
-/// stretches already kept that are now taken for another kind on their own, and the entries whose links
+/// stretches already kept that are now taken for another kind on their own, the entries whose links
 /// between series changed (<see cref="CatalogKinds.LinksSeries(CatalogKind)"/>): every other entry heard in
-/// one of their recordings was estimated with links that no longer hold.
+/// one of their recordings was estimated with links that no longer hold; and the entries whose kind or confidence is
+/// not what it was, started as a kind or estimated again as another kind or as surer or less sure, which changes what
+/// the catalog hears in every recording they are heard in.
 /// </summary>
 public sealed record CatalogChange(
     IReadOnlyList<CatalogEntry> Started,
     IReadOnlyList<CatalogEntry> Reestimated,
     IReadOnlyList<CatalogOccurrence> Found,
     IReadOnlyList<CatalogOccurrence> Overridden,
-    IReadOnlyList<CatalogEntryId> Relinking);
+    IReadOnlyList<CatalogEntryId> Relinking,
+    IReadOnlyList<CatalogEntryId> Recast);
 
 /// <summary>
 /// Puts the matches found in one recording into the catalog. A stretch matched in an entry is a
@@ -69,6 +72,7 @@ public static class Catalog
         PlacedOccurrence[] placed = [.. own.Select(known.Placed)];
         SegmentKind?[] before = [.. own.Select(occurrence => occurrence.KindOverride)];
         bool linked = CatalogKinds.LinksSeries(entry.Kind);
+        (CatalogKind, double?) was = (entry.Kind, entry.Confidence);
 
         entry.Take(placed, CatalogKinds.Estimate(entry.Length, placed, known.Links, known.Around), at);
 
@@ -77,7 +81,8 @@ public static class Catalog
             [entry],
             [],
             [.. own.Where((occurrence, index) => occurrence.KindOverride != before[index])],
-            linked != CatalogKinds.LinksSeries(entry.Kind) ? [entry.Id] : []);
+            linked != CatalogKinds.LinksSeries(entry.Kind) ? [entry.Id] : [],
+            was != (entry.Kind, entry.Confidence) ? [entry.Id] : []);
     }
 
     public static CatalogChange Absorb(
@@ -171,14 +176,21 @@ public static class Catalog
 
             List<CatalogOccurrence> overridden = [];
             List<CatalogEntryId> relinking = [.. begun.Where(entry => CatalogKinds.LinksSeries(entry.Kind)).Select(entry => entry.Id)];
+            List<CatalogEntryId> recast = [.. begun.Where(entry => entry.Kind is not CatalogKind.Unknown).Select(entry => entry.Id)];
 
             foreach (CatalogEntry entry in reestimated)
             {
                 List<CatalogOccurrence> kept = stretches[entry.Id];
                 SegmentKind?[] before = [.. kept.Select(occurrence => occurrence.KindOverride)];
                 bool linked = CatalogKinds.LinksSeries(entry.Kind);
+                (CatalogKind, double?) was = (entry.Kind, entry.Confidence);
 
                 entry.Take(placed[entry.Id], Carried(entry.Id), at);
+
+                if (was != (entry.Kind, entry.Confidence))
+                {
+                    recast.Add(entry.Id);
+                }
                 found.AddRange(kept.Where(added.Contains));
                 overridden.AddRange(kept.Where((occurrence, index) => !added.Contains(occurrence) && occurrence.KindOverride != before[index]));
 
@@ -188,7 +200,7 @@ public static class Catalog
                 }
             }
 
-            return new CatalogChange(begun, reestimated, found, overridden, relinking);
+            return new CatalogChange(begun, reestimated, found, overridden, relinking, recast);
 
             CatalogPattern Carried(CatalogEntryId id) => CatalogKinds.CarryOn(lengths[id], placed[id], own[id], around);
         }
