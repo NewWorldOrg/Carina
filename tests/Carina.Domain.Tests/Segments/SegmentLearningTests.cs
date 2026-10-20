@@ -86,7 +86,7 @@ public sealed class SegmentLearningTests
         Assert.True(folds.Kinds.Single(kind => kind.Kind is SegmentKind.Break).Recall > 0);
     }
 
-    [Fact(DisplayName = "BR-CD-007: with adverts as broadcast, a little under 15 seconds between the silences edits leave, the picture changing less than the threshold at them and a pause inside one, the versions of four kinds made by hand find the adverts the catalog is sure of, the one hearing silence from -55 dBFS the advert the pause cuts as well, as many boundaries as with adverts cut cleanly, the one for any series as many adverts and boundaries as that one, and the folds find as many as with adverts cut cleanly")]
+    [Fact(DisplayName = "BR-CD-007: with adverts as broadcast, a little under 15 seconds between the silences edits leave, the picture changing less than the threshold at them and a pause inside one, the versions of four kinds made by hand find the adverts the catalog is sure of, the one hearing silence from -55 dBFS the advert the pause cuts as well, as many boundaries as with adverts cut cleanly, the ones for any series and for songs whose loudness moves as many adverts and boundaries as that one, and the folds find as many as with adverts cut cleanly")]
     public void TheVersionsMadeByHandFindAdvertsAsBroadcast()
     {
         (List<LearningRecording> clean, List<CatalogSound> cleanSounds) = Taught(Weeks, breakAdverts: 4, heardLongAgo: true);
@@ -96,6 +96,7 @@ public sealed class SegmentLearningTests
         SegmentLearned first = Learn([.. broadcast, judged], [.. broadcastSounds, .. heard], active: FourKindsInUse);
         SegmentLearned belowPauses = Learn([.. broadcast, judged], [.. broadcastSounds, .. heard], active: BelowPausesInUse);
         SegmentLearned anySeries = Learn([.. broadcast, judged], [.. broadcastSounds, .. heard], active: AnySeriesInUse);
+        SegmentLearned dynamicSongs = Learn([.. broadcast, judged], [.. broadcastSounds, .. heard], active: DynamicSongsInUse);
         SegmentLearned cleanly = Learn([.. clean, judged], [.. cleanSounds, .. heard], active: FourKindsInUse);
 
         Assert.True(first.InUse.Metrics!.BreakRecall > 0.5);
@@ -106,6 +107,9 @@ public sealed class SegmentLearningTests
         Assert.Equal(
             (belowPauses.InUse.Metrics.BreakRecall, belowPauses.InUse.Metrics.BoundaryRecallWithin2s, belowPauses.InUse.Metrics.BoundaryRecallWithin1s),
             (anySeries.InUse.Metrics!.BreakRecall, anySeries.InUse.Metrics.BoundaryRecallWithin2s, anySeries.InUse.Metrics.BoundaryRecallWithin1s));
+        Assert.Equal(
+            (belowPauses.InUse.Metrics.BreakRecall, belowPauses.InUse.Metrics.BoundaryRecallWithin2s, belowPauses.InUse.Metrics.BoundaryRecallWithin1s),
+            (dynamicSongs.InUse.Metrics!.BreakRecall, dynamicSongs.InUse.Metrics.BoundaryRecallWithin2s, dynamicSongs.InUse.Metrics.BoundaryRecallWithin1s));
     }
 
     [Fact(DisplayName = "BR-CD-008: the labels of an entry first heard after the recording judged started are not learned from in its fold, and the same entries heard long before are")]

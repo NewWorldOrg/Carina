@@ -63,5 +63,16 @@ public sealed class ThemeLearningTests
         Assert.Contains(belowPauses.Segments, span => span.Kind is SegmentKind.Break && span.Starts.TotalSeconds is EndingStarts && span.Ends.TotalSeconds is EndingStarts + 90);
     }
 
+    [Fact(DisplayName = "BR-CD-007: an ending whose loudness ranges over 7 decibels is found in a first episode by the version that centres the loudness range on 10 dB, where the version for any series takes it for the programme, and both find the steady opening")]
+    public void AnEndingWhoseLoudnessMovesIsFound()
+    {
+        (List<LearningRecording> garden, _) = Episodes(Garden, 1, movingEnding: true);
+
+        Assert.Equal(
+            [(OpeningStarts, OpeningStarts + ThemeLasts, SegmentKind.Opening), (EndingStarts, EndingStarts + ThemeLasts, SegmentKind.Ending)],
+            Themes(Unheard(garden[0], SegmentModel.FourKindsWithDynamicSongs)));
+        Assert.Equal([(OpeningStarts, OpeningStarts + ThemeLasts, SegmentKind.Opening)], Themes(Unheard(garden[0], SegmentModel.FourKindsInAnySeries)));
+    }
+
     private static double? Recall(SegmentMetrics metrics, SegmentKind kind) => metrics.Kinds.Single(measured => measured.Kind == kind).Recall;
 }
