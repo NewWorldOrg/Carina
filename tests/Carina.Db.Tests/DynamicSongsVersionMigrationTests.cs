@@ -19,6 +19,8 @@ public sealed class DynamicSongsVersionMigrationTests
 
     private const string BeforeTheVersionWasMade = "20261020150000_AVersionMadeByHandFindsOpeningsAndEndingsInAnySeries";
 
+    private const string TheVersionWasMade = "20261020230000_AVersionMadeByHandTakesDynamicSongsForThemes";
+
     private const string Learned = """{"recordings": 12, "boundaries": 148, "labelsUntil": null}""";
 
     private const string LearningOn = "INSERT INTO segment_settings (id, learning, learning_changed_at) VALUES (1, true, now())";
@@ -40,7 +42,7 @@ public sealed class DynamicSongsVersionMigrationTests
             await ExecuteAsync(before, "UPDATE segment_model_version SET state = 'Active', adopted_at = now() WHERE number = 5");
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (CarinaDbContext reading = CarinaDbContextFactory.Create(Scratch()))
         {
@@ -79,7 +81,7 @@ public sealed class DynamicSongsVersionMigrationTests
         IMigrator migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync(BeforeTheVersionWasMade, Cancel);
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {
@@ -115,7 +117,7 @@ public sealed class DynamicSongsVersionMigrationTests
                 : LearnedFrom(5, 6));
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {
