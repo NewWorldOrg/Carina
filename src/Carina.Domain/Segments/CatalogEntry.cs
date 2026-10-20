@@ -62,19 +62,29 @@ public sealed class CatalogEntry
         SeriesLinks links,
         DateTime at)
     {
-        if (frames.Length is < 1 or > MostFrames)
-        {
-            throw new ArgumentException($"A fingerprint holds 1 to {MostFrames} frames.", nameof(frames));
-        }
+        ArgumentNullException.ThrowIfNull(links);
 
-        CatalogEntry entry = new()
-        {
-            Id = id ?? throw new ArgumentNullException(nameof(id)),
-            Length = SegmentMatcher.Frame * frames.Length,
-            Fingerprint = CatalogFingerprint.Write(frames),
-        };
+        CatalogEntry entry = Begun(id, frames);
 
         entry.Reestimate(occurrences, links, at);
+
+        return entry;
+    }
+
+    /// <summary>
+    /// The entry of the sound whose fingerprint is <paramref name="frames"/>, taken as
+    /// <paramref name="pattern"/> estimated from its first stretches.
+    /// </summary>
+    internal static CatalogEntry Start(
+        CatalogEntryId id,
+        ReadOnlySpan<uint> frames,
+        IReadOnlyList<PlacedOccurrence> occurrences,
+        CatalogPattern pattern,
+        DateTime at)
+    {
+        CatalogEntry entry = Begun(id, frames);
+
+        entry.Take(occurrences, pattern, at);
 
         return entry;
     }
@@ -131,12 +141,26 @@ public sealed class CatalogEntry
         ArgumentNullException.ThrowIfNull(occurrences);
         ArgumentNullException.ThrowIfNull(links);
 
-        if (occurrences.Count < FewestOccurrences || occurrences.Any(placed => !placed.Occurrence.EntryId.Equals(Id)))
+        Refuse(occurrences);
+        Take(occurrences, CatalogKinds.Estimate(Length, occurrences, links), at);
+    }
+
+    /// <summary>
+    /// Takes the entry for <paramref name="pattern"/>, estimated from every one of its stretches with
+    /// <see cref="CatalogKinds.Version"/> of the estimation, and gives each stretch what it alone is taken for.
+    /// </summary>
+    internal void Take(IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern pattern, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(occurrences);
+        ArgumentNullException.ThrowIfNull(pattern);
+
+        Refuse(occurrences);
+
+        if (pattern.Overrides.Count != occurrences.Count)
         {
-            throw new ArgumentException($"An entry is estimated from at least {FewestOccurrences} stretches, all of its own.", nameof(occurrences));
+            throw new ArgumentException("A pattern says what each stretch alone is taken for.", nameof(pattern));
         }
 
-        CatalogPattern pattern = CatalogKinds.Estimate(Length, occurrences, links);
         DateTime[] seen = [.. occurrences.Select(placed => placed.Occurrence.RecordingStartedAt)];
 
         Set(pattern.Estimate, occurrences.Count, pattern.SeriesCount, pattern.StationCount, seen.Min(), seen.Max(), at);
@@ -145,6 +169,29 @@ public sealed class CatalogEntry
         for (int each = 0; each < occurrences.Count; each++)
         {
             occurrences[each].Occurrence.Override(pattern.Overrides[each]);
+        }
+    }
+
+    private static CatalogEntry Begun(CatalogEntryId id, ReadOnlySpan<uint> frames)
+    {
+        if (frames.Length is < 1 or > MostFrames)
+        {
+            throw new ArgumentException($"A fingerprint holds 1 to {MostFrames} frames.", nameof(frames));
+        }
+
+        return new CatalogEntry
+        {
+            Id = id ?? throw new ArgumentNullException(nameof(id)),
+            Length = SegmentMatcher.Frame * frames.Length,
+            Fingerprint = CatalogFingerprint.Write(frames),
+        };
+    }
+
+    private void Refuse(IReadOnlyList<PlacedOccurrence> occurrences)
+    {
+        if (occurrences.Count < FewestOccurrences || occurrences.Any(placed => !placed.Occurrence.EntryId.Equals(Id)))
+        {
+            throw new ArgumentException($"An entry is estimated from at least {FewestOccurrences} stretches, all of its own.", nameof(occurrences));
         }
     }
 

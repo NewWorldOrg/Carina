@@ -6,8 +6,9 @@ using Carina.Domain.Segments;
 namespace Carina.Domain.Tests.Segments;
 
 /// <summary>
-/// A synthetic weekly series of half an hour whose first episode is recorded twice, the second recording starting a
-/// few seconds after the first.
+/// A synthetic weekly series of half an hour whose opening is matched in pieces: a long head, a short phrase that
+/// the programme plays again in its middle, and a slot of 30 seconds on the grid. The first episode is recorded
+/// twice, the second recording starting a few seconds after the first.
 /// </summary>
 public sealed class CatalogPiecesTests
 {
@@ -25,6 +26,8 @@ public sealed class CatalogPiecesTests
 
     private readonly Episode second = new(Programme(1, "架空の物語", Evening.AddDays(7), Lead), RecordingId.New());
 
+    private Episode[] Weeks => [first, again, second];
+
     [Fact(DisplayName = "BR-CD-005: a sound heard only in a broadcast recorded twice is heard in one episode, so it is neither an ending nor a programme fixture")]
     public void ASoundOfABroadcastRecordedTwiceIsHeardInOneEpisode()
     {
@@ -36,6 +39,71 @@ public sealed class CatalogPiecesTests
         Assert.Equal(CatalogEstimate.Unknown, Own(fixture).Estimate);
         Assert.Equal(new CatalogEstimate(CatalogKind.Ending, 0.8, CatalogDecision.Pattern), Own(ending).Estimate);
         Assert.Equal(1, Own(ending).SeriesCount);
+    }
+
+    [Fact(DisplayName = "BR-CD-005: the pieces an opening is matched in, heard right after its head at the same place in two episodes, are that opening, 0.8")]
+    public void ThePiecesOfAnOpeningAreThatOpening()
+    {
+        Sound head = Heard(50, Every(0));
+        Sound phrase = Heard(13, [.. Every(50), .. Every(600)]);
+        Sound slot = Heard(30, Every(63));
+        Sound once = Heard(20, (first, 93), (again, 93), (second, 400));
+        CatalogSurroundings around = Around(head, phrase, slot, once);
+
+        CatalogPattern phrased = Carried(phrase, around);
+        CatalogPattern slotted = Carried(slot, around);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), Own(head).Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.ProgrammeFixture, 0.7, CatalogDecision.Pattern), Own(phrase).Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.5, CatalogDecision.Pattern), Own(slot).Estimate);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Continuation), phrased.Estimate);
+        Assert.Equal([null, null, null, SegmentKind.Programme, SegmentKind.Programme, SegmentKind.Programme], phrased.Overrides);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Continuation), slotted.Estimate);
+        Assert.All(slotted.Overrides, Assert.Null);
+        Assert.Equal(Own(once).Estimate, Carried(once, around).Estimate);
+    }
+
+    [Fact(DisplayName = "BR-CD-005: a piece is carried on only up to three minutes from the far end of the run, and an advert of two series ends the run")]
+    public void ARunEndsAtThreeMinutesAndAtAnAdvertOfTwoSeries()
+    {
+        Episode quiz = new(Programme(1, "架空のクイズ", Evening.AddHours(3), Lead), RecordingId.New());
+        Sound head = Heard(89, Every(0));
+        Sound[] pieces = [.. Enumerable.Range(0, 4).Select(at => Heard(25, Every(89 + (25 * at))))];
+        Sound advert = Heard(15, [.. Every(1500), (quiz, 600)]);
+        Sound afterTheAdvert = Heard(20, Every(1515));
+        Sound ending = Heard(89, Every(1640));
+        Sound leadingUp = Heard(20, Every(1619));
+        CatalogSurroundings around = Around([head, .. pieces, advert, afterTheAdvert, ending, leadingUp]);
+
+        Assert.Equal(
+            [CatalogKind.Opening, CatalogKind.Opening, CatalogKind.Opening, CatalogKind.ProgrammeFixture],
+            pieces.Select(piece => Carried(piece, around).Estimate.Kind));
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.9, CatalogDecision.Pattern), Carried(advert, around).Estimate);
+        Assert.Equal(CatalogKind.ProgrammeFixture, Carried(afterTheAdvert, around).Estimate.Kind);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Ending, 0.8, CatalogDecision.Continuation), Carried(leadingUp, around).Estimate);
+    }
+
+    [Fact(DisplayName = "BR-CD-005: a piece heard next to the opening in a broadcast recorded twice, and elsewhere in the other episode, is not carried on")]
+    public void APieceNextToTheOpeningInOneEpisodeIsNotCarriedOn()
+    {
+        Sound head = Heard(50, Every(0));
+        Sound slot = Heard(30, (first, 50), (again, 50), (second, 900));
+        CatalogSurroundings around = Around(head, slot);
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.5, CatalogDecision.Pattern), Carried(slot, around).Estimate);
+        Assert.All(Carried(slot, around).Overrides, Assert.Null);
+    }
+
+    [Fact(DisplayName = "BR-CD-005: a piece carried on is a piece of the run for the next one, and an entry carried on is never the head of a run")]
+    public void AnEntryCarriedOnIsAPieceAndNeverAHead()
+    {
+        Sound slot = Heard(30, Every(63));
+        Sound next = Heard(13, Every(93));
+        CatalogPattern carried = new(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Continuation), 1, 1, [null, null, null]);
+        CatalogSurroundings around = new([.. CatalogKinds.Stretches(slot.Placed, carried), .. CatalogKinds.Stretches(next.Placed, Own(next))]);
+
+        Assert.All(CatalogKinds.Stretches(slot.Placed, carried), stretch => Assert.Equal(ThemePart.Piece, stretch.Part));
+        Assert.Equal(CatalogKind.ProgrammeFixture, Carried(next, around).Estimate.Kind);
     }
 
     private static ProgrammeCopy Programme(int station, string? series, DateTime starts, TimeSpan lead)
@@ -61,6 +129,15 @@ public sealed class CatalogPiecesTests
     }
 
     private static CatalogPattern Own(Sound sound) => CatalogKinds.Estimate(sound.Length, sound.Placed, SeriesLinks.None);
+
+    private static CatalogPattern Carried(Sound sound, CatalogSurroundings around)
+        => CatalogKinds.Estimate(sound.Length, sound.Placed, SeriesLinks.None, around);
+
+    private static CatalogSurroundings Around(params Sound[] sounds)
+        => new([.. sounds.SelectMany(sound => CatalogKinds.Stretches(sound.Placed, Own(sound)))]);
+
+    private (Episode Episode, double FromProgrammeStart)[] Every(double fromProgrammeStart)
+        => [.. Weeks.Select(episode => (episode, fromProgrammeStart))];
 
     private static Sound Heard(double seconds, params (Episode Episode, double FromProgrammeStart)[] places)
     {

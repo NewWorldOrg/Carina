@@ -44,6 +44,18 @@ internal sealed class HeldCatalog : ICatalogRepository
     public Task<IReadOnlyList<CatalogOccurrence>> OccurrencesInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => recordings.Contains(occurrence.RecordingId))]);
 
+    public Task<CatalogSurroundings> SurroundingsAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
+        => Task.FromResult(new CatalogSurroundings(
+        [
+            .. Occurrences
+                .Where(occurrence => recordings.Contains(occurrence.RecordingId))
+                .Join(Entries, occurrence => occurrence.EntryId, entry => entry.Id, (occurrence, entry) => new ThemeStretch(
+                    entry.Id,
+                    occurrence.RecordingId,
+                    occurrence.Span,
+                    CatalogKinds.PartOf(new CatalogEstimate(entry.Kind, entry.Confidence, entry.DecidedBy), entry.SeriesCount, occurrence.KindOverride))),
+        ]));
+
     public Task<IReadOnlyList<IReadOnlyList<RecordingId>>> SoundSharersAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<IReadOnlyList<RecordingId>>>(
         [

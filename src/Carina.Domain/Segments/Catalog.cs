@@ -4,14 +4,19 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// What putting a recording's matches into the catalog reads: the entries the matches name and every
-/// stretch they have, the copies of the programmes of the recordings involved, and how series are linked.
+/// stretch they have, the copies of the programmes of the recordings involved, how series are linked, and
+/// the stretches heard in the recordings where an entry may carry on an opening or an ending
+/// (<see cref="CatalogKinds.CarryOn"/>), none when it is not said.
 /// </summary>
 public sealed record CatalogKnowledge(
     IReadOnlyList<CatalogEntry> Entries,
     IReadOnlyList<CatalogOccurrence> Occurrences,
     IReadOnlyDictionary<RecordingId, ProgrammeCopy> Programmes,
-    SeriesLinks Links)
+    SeriesLinks Links,
+    CatalogSurroundings? Surroundings = null)
 {
+    public CatalogSurroundings Around => Surroundings ?? CatalogSurroundings.None;
+
     /// <summary>
     /// A stretch beside where its programme starts and ends.
     /// </summary>
@@ -44,7 +49,8 @@ public sealed record CatalogChange(
 /// first, then those within the recording itself, which join both of their stretches, then those with
 /// other recordings, each kind the longest first. A stretch an entry already has in a recording is not added again, and a
 /// recording whose programme is not known adds none. An entry started is estimated from its first
-/// stretches, and one already kept is estimated again from all of them. The links between series change with an entry started as a kind
+/// stretches, and one already kept is estimated again from all of them, each beside the stretches heard around
+/// it as the others started or estimated again now take theirs. The links between series change with an entry started as a kind
 /// that links them, and with an entry estimated again that links them before or after, since its stretches grew.
 /// </summary>
 public static class Catalog
@@ -60,10 +66,11 @@ public static class Catalog
         ArgumentNullException.ThrowIfNull(known);
 
         CatalogOccurrence[] own = [.. known.Occurrences.Where(occurrence => occurrence.EntryId.Equals(entry.Id))];
+        PlacedOccurrence[] placed = [.. own.Select(known.Placed)];
         SegmentKind?[] before = [.. own.Select(occurrence => occurrence.KindOverride)];
         bool linked = CatalogKinds.LinksSeries(entry.Kind);
 
-        entry.Reestimate([.. own.Select(known.Placed)], known.Links, at);
+        entry.Take(placed, CatalogKinds.Estimate(entry.Length, placed, known.Links, known.Around), at);
 
         return new CatalogChange(
             [],
@@ -143,33 +150,37 @@ public static class Catalog
 
         public CatalogChange Settled(Dictionary<CatalogEntryId, CatalogEntry> entries)
         {
+            CatalogEntryId[] starting = [.. started.Keys.Where(id => stretches[id].Count >= CatalogEntry.FewestOccurrences)];
+            List<CatalogEntry> reestimated = [.. grown.Where(id => !started.ContainsKey(id)).Select(id => entries[id])];
+            Dictionary<CatalogEntryId, TimeSpan> lengths = new(
+            [
+                .. starting.Select(id => KeyValuePair.Create(id, SegmentMatcher.Frame * started[id].Length)),
+                .. reestimated.Select(entry => KeyValuePair.Create(entry.Id, entry.Length)),
+            ]);
+            Dictionary<CatalogEntryId, List<PlacedOccurrence>> placed = lengths.Keys.ToDictionary(id => id, id => Placed(stretches[id]));
+            Dictionary<CatalogEntryId, CatalogPattern> own = lengths.Keys.ToDictionary(id => id, id => CatalogKinds.Estimate(lengths[id], placed[id], known.Links));
+            CatalogSurroundings around = known.Around.Replacing(lengths.Keys, own.SelectMany(pair => CatalogKinds.Stretches(placed[pair.Key], pair.Value)));
             List<CatalogEntry> begun = [];
             List<CatalogOccurrence> found = [];
 
-            foreach ((CatalogEntryId id, uint[] frames) in started)
+            foreach (CatalogEntryId id in starting)
             {
-                List<CatalogOccurrence> own = stretches[id];
-
-                if (own.Count >= 2)
-                {
-                    begun.Add(CatalogEntry.Start(id, frames, Placed(own), known.Links, at));
-                    found.AddRange(own);
-                }
+                begun.Add(CatalogEntry.Start(id, started[id], placed[id], Carried(id), at));
+                found.AddRange(stretches[id]);
             }
 
-            List<CatalogEntry> reestimated = [.. grown.Where(id => !started.ContainsKey(id)).Select(id => entries[id])];
             List<CatalogOccurrence> overridden = [];
             List<CatalogEntryId> relinking = [.. begun.Where(entry => CatalogKinds.LinksSeries(entry.Kind)).Select(entry => entry.Id)];
 
             foreach (CatalogEntry entry in reestimated)
             {
-                List<CatalogOccurrence> own = stretches[entry.Id];
-                SegmentKind?[] before = [.. own.Select(occurrence => occurrence.KindOverride)];
+                List<CatalogOccurrence> kept = stretches[entry.Id];
+                SegmentKind?[] before = [.. kept.Select(occurrence => occurrence.KindOverride)];
                 bool linked = CatalogKinds.LinksSeries(entry.Kind);
 
-                entry.Reestimate(Placed(own), known.Links, at);
-                found.AddRange(own.Where(added.Contains));
-                overridden.AddRange(own.Where((occurrence, index) => !added.Contains(occurrence) && occurrence.KindOverride != before[index]));
+                entry.Take(placed[entry.Id], Carried(entry.Id), at);
+                found.AddRange(kept.Where(added.Contains));
+                overridden.AddRange(kept.Where((occurrence, index) => !added.Contains(occurrence) && occurrence.KindOverride != before[index]));
 
                 if (linked || CatalogKinds.LinksSeries(entry.Kind))
                 {
@@ -178,6 +189,8 @@ public static class Catalog
             }
 
             return new CatalogChange(begun, reestimated, found, overridden, relinking);
+
+            CatalogPattern Carried(CatalogEntryId id) => CatalogKinds.CarryOn(lengths[id], placed[id], own[id], around);
         }
 
         private void TakeItself(SoundMatch match, SoundTrack sound)

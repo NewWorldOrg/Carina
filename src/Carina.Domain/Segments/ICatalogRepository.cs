@@ -29,6 +29,12 @@ public interface ICatalogRepository
     Task<IReadOnlyList<CatalogOccurrence>> OccurrencesInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Every stretch heard in the recordings named, whichever entry it is of, with what it is to an opening or an
+    /// ending as its entry is now taken (<see cref="CatalogKinds.PartOf"/>).
+    /// </summary>
+    Task<CatalogSurroundings> SurroundingsAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken);
+
+    /// <summary>
     /// The recordings each opening, ending and fixed part of a programme links into one series, one group per
     /// entry: those its stretches that link series are heard in (<see cref="CatalogKinds.LinksSeries"/>).
     /// </summary>

@@ -93,6 +93,28 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         Assert.Empty(await new CatalogRepository(context).EntriesAsync([], CancellationToken.None));
     }
 
+    [Fact(DisplayName = "BR-CD-005: the stretches heard in the recordings named are read with what each is to an opening or an ending as its entry is now taken")]
+    public async Task TheStretchesAroundAreReadWithTheirParts()
+    {
+        RecordingId first = RecordingId.New();
+        RecordingId second = RecordingId.New();
+        (CatalogEntry advert, CatalogOccurrence[] adverts) = Started(first, RecordingId.New());
+        CatalogEntryId opening = CatalogEntryId.New();
+        PlacedOccurrence[] heads = [Placed(opening, first, Copy("架空の物語", Noon), 0, 89), Placed(opening, second, Copy("架空の物語", Noon.AddDays(7)), 0, 89)];
+        CatalogEntry head = CatalogEntry.Start(opening, [.. Enumerable.Range(1, 5562).Select(frame => (uint)frame)], heads, SeriesLinks.None, Noon);
+
+        await KeepAsync(new CatalogChange([advert, head], [], [.. adverts, .. heads.Select(placed => placed.Occurrence)], [], []));
+
+        await using CarinaDbContext context = Context();
+        CatalogSurroundings around = await new CatalogRepository(context).SurroundingsAsync([first], CancellationToken.None);
+
+        Assert.Equal(CatalogKind.Opening, head.Kind);
+        Assert.Equal(
+            [(opening, ThemePart.Opening, Span(60, 149)), (advert.Id, ThemePart.None, Span(600, 615))],
+            around.In(first).Select(stretch => (stretch.Entry, stretch.Part, stretch.Span)));
+        Assert.Empty(around.In(second));
+    }
+
     [Fact(DisplayName = "an entry estimated again and a stretch taken for another kind are written as they now stand")]
     public async Task AChangeToKeptRowsIsWritten()
     {

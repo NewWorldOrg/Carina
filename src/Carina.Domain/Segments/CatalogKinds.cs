@@ -62,7 +62,7 @@ public static class CatalogKinds
     /// <summary>
     /// The version of these rows: an entry estimated with an earlier one is estimated again.
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     public static readonly TimeSpan Grid = TimeSpan.FromSeconds(15);
 
@@ -89,6 +89,12 @@ public static class CatalogKinds
     public static readonly TimeSpan EdgeWithin = TimeSpan.FromSeconds(15);
 
     public static readonly TimeSpan StationFixtureShorterThan = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// How far apart two pieces of an opening or ending lie at the most, and how far from where a piece lies
+    /// after the start of the opening or ending in another episode.
+    /// </summary>
+    public static readonly TimeSpan PiecesWithin = TimeSpan.FromSeconds(2);
 
     private const int FewestOnTheGrid = 1;
 
@@ -127,6 +133,128 @@ public static class CatalogKinds
             series.Count,
             stations,
             [.. occurrences.Select(placed => Override(placed, length, estimate.Kind, own, links))]);
+    }
+
+    /// <summary>
+    /// The pattern its own stretches give an entry of <paramref name="length"/>, carried on as an opening or an
+    /// ending when the entry is a piece of one (BR-CD-005). An entry that may carry one on
+    /// (<see cref="MayCarryOn"/>), whose whole stretches in two episodes lie at the same distance, give or take
+    /// <see cref="PiecesWithin"/>, from the start of a stretch of one opening or ending, in the run of pieces that
+    /// follows or leads up to that stretch, is that opening or ending, 0.8. In a run each piece lies no more than
+    /// <see cref="PiecesWithin"/> from the next, the whole is no longer than <see cref="ThemeLongest"/>, and the
+    /// pieces are the stretches of entries that may carry one on or already do. The stretches so placed are taken
+    /// for the opening or ending, and every other one for what the entry is on its own, the programme when that is
+    /// not known. An opening or ending is often matched in pieces, as a phrase it sings twice matches apart from the
+    /// rest, and a piece shorter than <see cref="ThemeShortest"/> or on the grid is otherwise taken for something else.
+    /// </summary>
+    public static CatalogPattern Estimate(TimeSpan length, IReadOnlyList<PlacedOccurrence> occurrences, SeriesLinks links, CatalogSurroundings around)
+    {
+        ArgumentNullException.ThrowIfNull(around);
+
+        CatalogPattern own = Estimate(length, occurrences, links);
+
+        if (!MayCarryOn(own))
+        {
+            return own;
+        }
+
+        CatalogEntryId[] itself = [.. occurrences.Select(placed => placed.Occurrence.EntryId).Distinct()];
+
+        return CarryOn(length, occurrences, own, around.Replacing(itself, Stretches(occurrences, own)));
+    }
+
+    /// <summary>
+    /// <paramref name="own"/>, what the stretches of an entry give it on their own, carried on as an opening or
+    /// an ending when the entry is a piece of one heard in <paramref name="around"/>, which holds the entry's
+    /// own stretches as <paramref name="own"/> takes them (<see cref="Estimate(TimeSpan, IReadOnlyList{PlacedOccurrence}, SeriesLinks, CatalogSurroundings)"/>).
+    /// </summary>
+    public static CatalogPattern CarryOn(TimeSpan length, IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern own, CatalogSurroundings around)
+    {
+        ArgumentNullException.ThrowIfNull(occurrences);
+        ArgumentNullException.ThrowIfNull(own);
+        ArgumentNullException.ThrowIfNull(around);
+
+        if (!MayCarryOn(own))
+        {
+            return own;
+        }
+
+        Carried[] carried = [.. occurrences.Where(placed => IsWhole(placed.Occurrence.Length, length)).SelectMany(placed => Carriers(placed, around))];
+        Carried[]? kept = carried
+            .Select(one => (Carried[])[.. carried.Where(other => other.SameAs(one))])
+            .Where(together => Episodes(together) >= FewestEpisodes)
+            .OrderByDescending(Episodes)
+            .ThenBy(together => together[0].Kind is CatalogKind.Opening ? 0 : 1)
+            .FirstOrDefault();
+
+        if (kept is null)
+        {
+            return own;
+        }
+
+        HashSet<CatalogOccurrence> taken = [.. kept.Select(one => one.Placed.Occurrence)];
+        SegmentKind elsewhere = CatalogHeard.CountsAs(own.Estimate.Kind) ?? SegmentKind.Programme;
+
+        return new CatalogPattern(
+            new CatalogEstimate(kept[0].Kind, EveryEpisode, CatalogDecision.Continuation),
+            own.SeriesCount,
+            own.StationCount,
+            [.. occurrences.Select(placed => taken.Contains(placed.Occurrence) ? null : (SegmentKind?)elsewhere)]);
+    }
+
+    /// <summary>
+    /// Whether an entry its own stretches take as <paramref name="own"/> may carry on an opening or an ending: it is of
+    /// one series, and taken for a programme fixture, for an advert of one series or for nothing known.
+    /// </summary>
+    public static bool MayCarryOn(CatalogPattern own)
+    {
+        ArgumentNullException.ThrowIfNull(own);
+
+        return CarriesOn(own.Estimate, own.SeriesCount);
+    }
+
+    /// <summary>
+    /// The stretches of an entry taken as <paramref name="pattern"/>, each with what it is to an opening or an ending
+    /// (<see cref="PartOf"/>).
+    /// </summary>
+    public static IEnumerable<ThemeStretch> Stretches(IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern pattern)
+    {
+        ArgumentNullException.ThrowIfNull(occurrences);
+        ArgumentNullException.ThrowIfNull(pattern);
+
+        return occurrences.Select((placed, at) => new ThemeStretch(
+            placed.Occurrence.EntryId,
+            placed.Occurrence.RecordingId,
+            placed.Occurrence.Span,
+            PartOf(pattern.Estimate, pattern.SeriesCount, pattern.Overrides[at])));
+    }
+
+    /// <summary>
+    /// What a stretch of an entry taken for <paramref name="estimate"/>, in <paramref name="seriesCount"/> series, is to an
+    /// opening or an ending, when it alone is taken for <paramref name="kindOverride"/>: a piece, when the entry
+    /// carries one on or could; the opening or the ending, when the entry is one by its own stretches and the stretch counts as
+    /// one; nothing otherwise.
+    /// </summary>
+    public static ThemePart PartOf(CatalogEstimate estimate, int seriesCount, SegmentKind? kindOverride)
+    {
+        ArgumentNullException.ThrowIfNull(estimate);
+
+        if (estimate.DecidedBy is CatalogDecision.Continuation || CarriesOn(estimate, seriesCount))
+        {
+            return ThemePart.Piece;
+        }
+
+        if (estimate.Kind is not (CatalogKind.Opening or CatalogKind.Ending))
+        {
+            return ThemePart.None;
+        }
+
+        return (kindOverride ?? CatalogHeard.CountsAs(estimate.Kind)) switch
+        {
+            SegmentKind.Opening => ThemePart.Opening,
+            SegmentKind.Ending => ThemePart.Ending,
+            _ => ThemePart.None,
+        };
     }
 
     /// <summary>
@@ -322,5 +450,90 @@ public static class CatalogKinds
         _ => null,
     };
 
+    private static bool CarriesOn(CatalogEstimate estimate, int seriesCount)
+        => seriesCount == 1
+           && (estimate.Kind is CatalogKind.ProgrammeFixture or CatalogKind.Unknown || estimate == new CatalogEstimate(CatalogKind.Cm, OneSeries, CatalogDecision.Pattern));
+
+    private static int Episodes(Carried[] together) => together.Select(one => one.Placed.Episode).Distinct().Count();
+
+    /// <summary>
+    /// The openings and endings whose run of pieces in its recording holds <paramref name="placed"/>, each with how far
+    /// after the start of its stretch there <paramref name="placed"/> starts.
+    /// </summary>
+    private static IEnumerable<Carried> Carriers(PlacedOccurrence placed, CatalogSurroundings around)
+    {
+        IReadOnlyList<ThemeStretch> heard = around.In(placed.Occurrence.RecordingId);
+        ThemeStretch? self = heard.FirstOrDefault(stretch => stretch.Entry.Equals(placed.Occurrence.EntryId) && stretch.Span.Equals(placed.Occurrence.Span));
+
+        if (self is not { Part: ThemePart.Piece })
+        {
+            return [];
+        }
+
+        return heard
+            .Where(stretch => stretch.Part is ThemePart.Opening or ThemePart.Ending)
+            .Where(theme => Run(heard, theme).Contains(self))
+            .Select(theme => new Carried(placed, theme.Entry, theme.Part is ThemePart.Opening ? CatalogKind.Opening : CatalogKind.Ending, placed.Occurrence.StartsAt - theme.Span.Starts));
+    }
+
+    /// <summary>
+    /// The stretch of an opening or ending and the pieces that follow it, then those that lead up to it, each no more
+    /// than <see cref="PiecesWithin"/> from the run so far, so long as the run is no longer than <see cref="ThemeLongest"/>:
+    /// pieces, and stretches of the same part. A stretch the run already covers is passed over, and any other one
+    /// ends the run on its side.
+    /// </summary>
+    private static List<ThemeStretch> Run(IReadOnlyList<ThemeStretch> heard, ThemeStretch theme)
+    {
+        List<ThemeStretch> run = [theme];
+        TimeSpan starts = theme.Span.Starts;
+        TimeSpan ends = theme.Span.Ends;
+
+        foreach (ThemeStretch next in heard)
+        {
+            if (next.Span.Ends <= ends)
+            {
+                continue;
+            }
+
+            if (next.Span.Starts > ends + PiecesWithin || !Joins(next, theme) || next.Span.Ends - starts > ThemeLongest)
+            {
+                break;
+            }
+
+            run.Add(next);
+            ends = next.Span.Ends;
+        }
+
+        foreach (ThemeStretch before in heard.OrderByDescending(stretch => stretch.Span.Ends))
+        {
+            if (before.Span.Starts >= starts)
+            {
+                continue;
+            }
+
+            if (before.Span.Ends < starts - PiecesWithin || !Joins(before, theme) || ends - before.Span.Starts > ThemeLongest)
+            {
+                break;
+            }
+
+            run.Add(before);
+            starts = before.Span.Starts;
+        }
+
+        return run;
+    }
+
+    private static bool Joins(ThemeStretch stretch, ThemeStretch theme) => stretch.Part is ThemePart.Piece || stretch.Part == theme.Part;
+
     private sealed record Theme(CatalogKind Kind, IReadOnlyList<PlacedOccurrence> Own, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> Series, bool Prevails);
+
+    /// <summary>
+    /// A whole stretch of an entry in the run of pieces of the opening or ending of <paramref name="Theme"/>, of
+    /// <paramref name="Kind"/>, starting <paramref name="After"/> the start of its stretch there.
+    /// </summary>
+    private sealed record Carried(PlacedOccurrence Placed, CatalogEntryId Theme, CatalogKind Kind, TimeSpan After)
+    {
+        public bool SameAs(Carried other)
+            => Theme.Equals(other.Theme) && Kind == other.Kind && (After - other.After).Duration() <= PiecesWithin;
+    }
 }
