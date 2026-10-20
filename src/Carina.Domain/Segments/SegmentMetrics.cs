@@ -8,7 +8,8 @@ public sealed record KindMetrics(SegmentKind Kind, double? Recall);
 
 /// <summary>
 /// How a version detects the recordings it is judged on, measured against what the catalog is sure of in them
-/// (<see cref="CatalogTruth"/>): the share of its boundaries with a detected boundary within <see cref="NearWithin"/>
+/// (<see cref="CatalogTruth"/>): the share of its boundaries, the outer edges of each pod of adverts and of each opening
+/// and ending, with a detected boundary within <see cref="NearWithin"/>
 /// and within <see cref="CloseWithin"/> turning the same way, that is into the kind where the kind starts and out of
 /// it where it ends, not known without one; the share of its seconds of breaks, of openings and of endings detected as
 /// the same kind, a kind the catalog is sure of nowhere not known; and the share of skips on the version's buttons that

@@ -50,8 +50,8 @@ public sealed record SegmentVersionResponder(int Number, SegmentModelVersionStat
 }
 
 /// <summary>
-/// What an evaluation stands on: the recordings the catalog is sure of an advert in and the boundaries of those
-/// adverts, whether that is enough to put a version in use, and how many of each it takes.
+/// What an evaluation stands on: the recordings the catalog is sure of an advert in and the outer edges of the pods of
+/// those adverts, not the joins between the adverts in a pod, whether that is enough to put a version in use, and how many of each it takes.
 /// </summary>
 public sealed record SegmentEvidenceResponder(int Recordings, int Boundaries, bool Enough, int RecordingsNeeded, int BoundariesNeeded)
 {
@@ -76,7 +76,8 @@ public sealed record SegmentKindMetricsResponder(SegmentKind Kind, double? Recal
 
 /// <summary>
 /// How the version in use detects the recordings it was judged on, against what the catalog is sure of in them: the
-/// share of the boundaries found within two seconds and within one, the seconds found of each kind it was measured
+/// share of the boundaries, the outer edges of each pod of adverts and of each opening and ending, found within two
+/// seconds and within one, the seconds found of each kind it was measured
 /// on, and the share of skips on its buttons viewers came back from over the last seven days, with how many skips
 /// that is of.
 /// </summary>
@@ -101,8 +102,8 @@ public sealed record SegmentMetricsResponder(
 }
 
 /// <summary>
-/// The figure a station or a version is compared by: the share of the boundaries the catalog is sure of found within
-/// two seconds.
+/// The figure a station or a version is compared by: the share of the boundaries the catalog is sure of, the outer
+/// edges of each pod of adverts and of each opening and ending, found within two seconds.
 /// </summary>
 public sealed record SegmentMetricsSummaryResponder(double? BoundaryRecallWithin2s)
 {
@@ -171,7 +172,7 @@ public sealed record SegmentVersionHistoryResponder(
 
 /// <summary>
 /// The figures a round of learning compares a candidate and the version in use by: the share of the boundaries the
-/// catalog is sure of found within two seconds, and the share of the seconds of adverts it is sure of detected as
+/// catalog is sure of, the outer edges of each pod of adverts and of each opening and ending, found within two seconds, and the share of the seconds of adverts it is sure of detected as
 /// breaks.
 /// </summary>
 public sealed record SegmentRoundMetricsResponder(double? BoundaryRecallWithin2s, double? BreakRecall)

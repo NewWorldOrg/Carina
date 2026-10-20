@@ -8,13 +8,15 @@ public readonly record struct TruthBoundary(TimeSpan At, SegmentKind Kind, bool 
 
 /// <summary>
 /// What the catalog is sure of in one recording, which a detection made without the catalog is measured against
-/// (BR-CD-008): the stretches it hears an advert in from an entry at least <see cref="SureOfBreaks"/> sure, which
-/// only an advert heard in two series or on two stations is, and those it hears an opening or an ending in from an
-/// entry at least <see cref="SureOfThemes"/> sure, each as the kind it counts as there; a stretch taken for the
-/// programme or for an advert by its place alone is left out. Stretches of one kind less than
-/// <see cref="JoinedWithin"/> apart are one, since a match is cut to the sound it hears and the silence between two
-/// adverts falls outside both. A boundary is where one starts or ends, except one less than
-/// <see cref="JoinedWithin"/> from the recording's zero or from its end, where no detection draws one.
+/// (BR-CD-008). The stretches it hears of one kind, an advert, an opening or an ending, less than
+/// <see cref="JoinedWithin"/> apart are one run, since a match is cut to the sound it hears and the silence between two
+/// adverts falls outside both: a pod of adverts, or an opening or an ending heard in parts. The catalog is sure of a run
+/// it hears an advert in from an entry at least <see cref="SureOfBreaks"/> sure, which only an advert heard in two series
+/// or on two stations is, or an opening or an ending from an entry at least <see cref="SureOfThemes"/> sure, each as the
+/// kind it counts as there; a stretch taken for the programme by its place alone is no part of a run. A boundary is
+/// where a run starts or ends, the outer edges of a pod and not the joins between its adverts, since a viewer skips a
+/// pod from one edge to the other; except one less than <see cref="JoinedWithin"/> from the recording's zero or from its
+/// end, where no detection draws one.
 /// </summary>
 public sealed class CatalogTruth
 {
@@ -58,10 +60,9 @@ public sealed class CatalogTruth
         SegmentSpan[] stretches =
         [
             .. heard
-                .Select(stretch => Sure(stretch) is SegmentKind kind ? new SegmentSpan(stretch.Starts, stretch.Ends, kind, null) : null)
-                .OfType<SegmentSpan>()
-                .GroupBy(stretch => stretch.Kind)
-                .SelectMany(Joined)
+                .Where(stretch => stretch.Kind is SegmentKind.Break or SegmentKind.Opening or SegmentKind.Ending)
+                .GroupBy(stretch => stretch.Kind!.Value)
+                .SelectMany(Runs)
                 .OrderBy(stretch => stretch.Starts)
                 .ThenBy(stretch => stretch.Kind),
         ];
@@ -92,28 +93,35 @@ public sealed class CatalogTruth
         };
     }
 
-    private static IEnumerable<SegmentSpan> Joined(IEnumerable<SegmentSpan> ofOneKind)
+    /// <summary>
+    /// The runs of the stretches heard of one kind that the catalog is sure of: the stretches less than
+    /// <see cref="JoinedWithin"/> apart joined, kept where one of them is sure.
+    /// </summary>
+    private static IEnumerable<SegmentSpan> Runs(IGrouping<SegmentKind, CatalogHeard> ofOneKind)
     {
         SegmentSpan? open = null;
+        bool sure = false;
 
-        foreach (SegmentSpan stretch in ofOneKind.OrderBy(stretch => stretch.Starts))
+        foreach (CatalogHeard stretch in ofOneKind.OrderBy(stretch => stretch.Starts))
         {
             if (open is not null && stretch.Starts - open.Ends < JoinedWithin)
             {
-                open = new SegmentSpan(open.Starts, stretch.Ends > open.Ends ? stretch.Ends : open.Ends, open.Kind, null);
+                open = new SegmentSpan(open.Starts, stretch.Ends > open.Ends ? stretch.Ends : open.Ends, ofOneKind.Key, null);
+                sure |= Sure(stretch) is not null;
 
                 continue;
             }
 
-            if (open is not null)
+            if (open is not null && sure)
             {
                 yield return open;
             }
 
-            open = stretch;
+            open = new SegmentSpan(stretch.Starts, stretch.Ends, ofOneKind.Key, null);
+            sure = Sure(stretch) is not null;
         }
 
-        if (open is not null)
+        if (open is not null && sure)
         {
             yield return open;
         }
