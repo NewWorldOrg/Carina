@@ -1,8 +1,8 @@
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// The 15-second grid adverts are laid on. A length is a multiple of it when it lies from one step to
-/// <see cref="MostSteps"/> steps and within the tolerance of a whole number of them.
+/// The 15-second grid adverts are laid on. A length is a multiple of it when it lies within the tolerance
+/// of a whole number of steps from one to <see cref="MostSteps"/>, on either side of it.
 /// </summary>
 public static class SegmentGrid
 {
@@ -42,8 +42,8 @@ public static class SegmentGrid
 
     public static bool IsAMultiple(TimeSpan shortest, TimeSpan longest, TimeSpan tolerance)
     {
-        TimeSpan from = shortest > Step ? shortest : Step;
-        TimeSpan to = longest < Longest ? longest : Longest;
+        TimeSpan from = shortest > Step - tolerance ? shortest : Step - tolerance;
+        TimeSpan to = longest < Longest + tolerance ? longest : Longest + tolerance;
 
         return from <= to && Off(Nearest(from, to)) <= tolerance;
     }

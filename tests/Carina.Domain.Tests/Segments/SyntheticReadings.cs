@@ -11,6 +11,11 @@ internal sealed class SyntheticReadings
 {
     public const byte Loud = 40;
 
+    /// <summary>
+    /// A pause, at -65 dBFS: quieter than the silence thresholds, far louder than the silence an edit leaves.
+    /// </summary>
+    public const byte Pause = 130;
+
     public const byte AlikeChannels = 190;
 
     public const int FramesASecond = 10;
@@ -53,16 +58,16 @@ internal sealed class SyntheticReadings
 
     /// <summary>
     /// Silence of whole readings centred on <paramref name="at"/>, half of <paramref name="lasting"/> on
-    /// either side.
+    /// either side, at <paramref name="level"/>.
     /// </summary>
-    public SyntheticReadings QuietAround(double at, double lasting = 0.5)
+    public SyntheticReadings QuietAround(double at, double lasting = 0.5, byte level = SoundLoudness.Silent)
     {
         long middle = Reading(at, LoudnessStep);
         long half = (long)Math.Round(lasting / 2 / LoudnessStep.TotalSeconds, MidpointRounding.AwayFromZero);
 
         for (long reading = Math.Max(0, middle - half); reading < middle + half && reading < loudness.Length; reading++)
         {
-            loudness[reading] = SoundLoudness.Silent;
+            loudness[reading] = level;
         }
 
         return this;

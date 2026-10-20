@@ -16,7 +16,8 @@ namespace Carina.Domain.Tests.Segments;
 /// 365 heard at the same place of that earlier episode, which it is sure of too; with black adverts, the black
 /// stretch heard elsewhere in that episode, which it labels a break without being sure of it; with break adverts,
 /// that many adverts of 15 seconds between silent cuts from 380 seconds, each aired by another series the week
-/// before, which it is sure of. In the recording judged in the end
+/// before, which it is sure of, or as broadcast, each 14.8 seconds between the silences edits leave with the picture
+/// changing less than the threshold at them, and a pause at -51 dBFS 7 seconds into the first. In the recording judged in the end
 /// the catalog hears the pod and the black stretch as adverts another series aired the week before, so it is sure
 /// of both, and the channels are unlike between the black frames.
 /// </summary>
@@ -57,6 +58,20 @@ internal static class LearningWorld
         null,
         null);
 
+    /// <summary>
+    /// <see cref="InUse"/> as the version of four kinds that hears silence from -55 dBFS would stand in its place.
+    /// </summary>
+    public static readonly SegmentModelVersion BelowPausesInUse = SegmentModelVersion.Rehydrate(
+        SegmentModelVersion.FirstNumber + 2,
+        SegmentModelVersionState.Active,
+        false,
+        SegmentModel.FourKindsBelowPauses,
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        null,
+        null,
+        null);
+
     public static readonly SegmentSearch OneSetting = new([SegmentThresholds.Initial], [0.1], [10]);
 
     public static readonly DateTime Now = Story.Episode(8).RecordingStartedAt;
@@ -83,7 +98,8 @@ internal static class LearningWorld
         bool blackAdverts = false,
         bool watched = false,
         int breakAdverts = 0,
-        bool stings = true)
+        bool stings = true,
+        bool asBroadcast = false)
     {
         List<LearningRecording> recordings = [];
         List<CatalogSound> sounds = [];
@@ -92,10 +108,14 @@ internal static class LearningWorld
         {
             RecordingId id = RecordingId.New();
 
-            double[] breakAt = [.. Enumerable.Range(0, breakAdverts).Select(advert => BreakStarts + (15.0 * advert))];
+            double advert = asBroadcast ? 14.8 : 15;
+            double[] breakAt = [.. Enumerable.Range(0, breakAdverts).Select(order => BreakStarts + (advert * order))];
+            SyntheticReadings readings = asBroadcast
+                ? AsBroadcast(Readings(quiet), [.. breakAt, BreakStarts + (advert * breakAdverts)])
+                : Readings(quiet, [.. breakAt, BreakStarts + (advert * breakAdverts)]);
 
-            recordings.Add(Recording(id, week, Readings(quiet, [.. breakAt, BreakStarts + (15.0 * breakAdverts)]), watched ? Watched(week) : null));
-            sounds.AddRange(breakAt.Select(at => Sound(15, id, week, at, (Across, at + 300), heardLongAgo, otherWeek: week - 1)));
+            recordings.Add(Recording(id, week, readings, watched ? Watched(week) : null));
+            sounds.AddRange(breakAt.Select(at => Sound(advert, id, week, at, (Across, at + 300), heardLongAgo, otherWeek: week - 1)));
             sounds.Add(Sound(15, id, week, 120, (StoryEarlier, 420), heardLongAgo));
             sounds.Add(Sound(15, id, week, 135, (StoryEarlier, 435), heardLongAgo));
             sounds.AddRange(Stings.Where(_ => stings).Select(at => Sound(20, id, week, at, (StoryEarlier, at), heardLongAgo)));
@@ -200,6 +220,16 @@ internal static class LearningWorld
               + $"{string.Join(",", metrics.Kinds.Select(kind => $"{kind.Kind}:{kind.Recall:F6}"))} {metrics.ReturnedAfterSkipShare:F9} {metrics.Skips}";
 
     public static SegmentSpan Span(double from, double to, SegmentKind kind) => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, null);
+
+    private static SyntheticReadings AsBroadcast(SyntheticReadings readings, IReadOnlyList<double> joins)
+    {
+        foreach (double join in joins)
+        {
+            readings.QuietAround(join).Cut(join, 0.2);
+        }
+
+        return readings.QuietAround(BreakStarts + 7, 0.3, 102);
+    }
 
     private static SyntheticReadings Readings(byte? quiet, IReadOnlyList<double>? breakCuts = null)
     {

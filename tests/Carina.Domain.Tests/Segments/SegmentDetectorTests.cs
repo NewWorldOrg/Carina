@@ -48,6 +48,25 @@ public sealed class SegmentDetectorTests
         Assert.Contains(detection.Segments, segment => segment.Kind is SegmentKind.Break);
     }
 
+    [Fact(DisplayName = "BR-CD-007: a pod of four adverts as broadcast, each a little off 15 seconds between the silences edits leave and the picture changing less than the threshold at them, is one break for the version made by hand that hears silence from -55 dBFS, where a pause at -51 dBFS inside an advert cuts it out for the one that hears silence from -50 dBFS")]
+    public void APodAsBroadcastIsOneBreak()
+    {
+        SyntheticReadings readings = new(Length);
+
+        foreach (double join in new[] { 600, 614.7, 629.8, 644.6, 659.8 })
+        {
+            readings.QuietAround(join).Cut(join, 0.2);
+        }
+
+        SegmentEvidence evidence = readings.QuietAround(637, 0.3, 102).Evidence();
+
+        SegmentDetection belowPauses = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.FourKindsBelowPauses);
+        SegmentDetection first = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.FirstOfFourKinds);
+
+        Assert.Equal([(600d, 660d)], Breaks(belowPauses));
+        Assert.Equal([(600d, 630d), (644.6, 659.6)], Breaks(first));
+    }
+
     [Fact(DisplayName = "breaks taking exactly half the recording are marked, not discarded")]
     public void ExactlyHalfIsMarked()
     {
@@ -177,7 +196,7 @@ public sealed class SegmentDetectorTests
             new Dictionary<string, double> { [judgedSeries ? "架空の物語" : "別の架空の話"] = 0.3 },
             SegmentThresholds.Initial,
             SegmentModel.First.Standardisation);
-        SegmentEvidence evidence = new SyntheticReadings(Length).QuietAround(600).QuietAround(660).Evidence();
+        SegmentEvidence evidence = new SyntheticReadings(Length).QuietAround(600, level: SyntheticReadings.Pause).QuietAround(660, level: SyntheticReadings.Pause).Evidence();
 
         SegmentDetection first = SegmentDetector.Detect(evidence, context, SegmentModel.First);
         SegmentDetection offsetDetection = SegmentDetector.Detect(evidence, context, offset);
@@ -218,6 +237,9 @@ public sealed class SegmentDetectorTests
         Assert.Throws<ArgumentNullException>(() => SegmentDetector.Detect(evidence, null!, SegmentModel.First));
         Assert.Throws<ArgumentNullException>(() => SegmentDetector.Detect(evidence, Context(CornerLogo.None), null!));
     }
+
+    private static (double Starts, double Ends)[] Breaks(SegmentDetection detection)
+        => [.. detection.Segments.Where(segment => segment.Kind is SegmentKind.Break).Select(segment => (Math.Round(segment.Starts.TotalSeconds, 2), Math.Round(segment.Ends.TotalSeconds, 2)))];
 
     private static SegmentEvidence Half() => Cuts(new SyntheticReadings(Length), 100, 280, 467, 647, 834, 1014, 1201, 1381, 1568, 1748).Evidence();
 

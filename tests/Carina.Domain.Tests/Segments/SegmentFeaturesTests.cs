@@ -11,14 +11,18 @@ public sealed class SegmentFeaturesTests
 
     private static readonly DateTime Evening = new(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc);
 
-    [Theory(DisplayName = "a piece is measured by its length, how far it lies off the 15-second grid, and whether it is a multiple of 15 seconds from 15 seconds to 3 minutes")]
+    [Theory(DisplayName = "a piece is measured by its length, how far it lies off the 15-second grid, and whether it lies within the tolerance of a multiple of 15 seconds from 15 seconds to 3 minutes, on either side of it")]
     [InlineData(60.7, 0.7, 1)]
     [InlineData(60.9, 0.9, 1)]
     [InlineData(61.1, 1.1, 0)]
     [InlineData(62.5, 2.5, 0)]
     [InlineData(20, 5, 0)]
-    [InlineData(14.5, 0.5, 0)]
+    [InlineData(14.5, 0.5, 1)]
+    [InlineData(14.1, 0.9, 1)]
+    [InlineData(13.9, 1.1, 0)]
     [InlineData(180, 0, 1)]
+    [InlineData(180.9, 0.9, 1)]
+    [InlineData(181.1, 1.1, 0)]
     [InlineData(195, 0, 0)]
     public void APieceIsMeasuredAgainstTheGrid(double seconds, double offTheGrid, double multiple)
     {

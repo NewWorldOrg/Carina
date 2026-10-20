@@ -19,6 +19,8 @@ public sealed class CatalogWeightsMigrationTests
 
     private const string BeforeTheCatalogWasTakenOut = "20261019102212_SegmentsAreNotAnsweredByHand";
 
+    private const string TheCatalogWasTakenOut = "20261019121457_VersionsWeighNothingTheCatalogHears";
+
     private const string Learned = """{"recordings": 12, "boundaries": 148, "labelsUntil": null}""";
 
     private const string LearningOn = "INSERT INTO segment_settings (id, learning, learning_changed_at) VALUES (1, true, now())";
@@ -43,7 +45,7 @@ public sealed class CatalogWeightsMigrationTests
             await ExecuteAsync(before, LearnedFrom(2, 3));
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheCatalogWasTakenOut, Cancel);
 
         await using (CarinaDbContext reading = CarinaDbContextFactory.Create(Scratch()))
         {
@@ -91,7 +93,7 @@ public sealed class CatalogWeightsMigrationTests
         IMigrator migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync(BeforeTheCatalogWasTakenOut, Cancel);
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheCatalogWasTakenOut, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {
@@ -127,7 +129,7 @@ public sealed class CatalogWeightsMigrationTests
                 : LearnedFrom(2, 3, "'Active'", "now()"));
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheCatalogWasTakenOut, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {

@@ -4,10 +4,12 @@ namespace Carina.Domain.Segments;
 /// Finds where a segment may start or end in one recording, from the cues a break is cut at: a silence,
 /// sound quieter than the threshold for at least <see cref="ShortestQuiet"/>, at its middle; black,
 /// frames darker than the threshold for as long, at its middle; the logo coming on or going off, each
-/// state held for <see cref="HeldSeconds"/> seconds; the edges of what the catalog heard; the programme's
-/// start and end by the guide; and the recording's own ends. A change of scene, a frame that moved from
-/// the one before by the threshold or more, is no candidate of its own: a silence with one within
-/// <see cref="CorroboratedWithin"/> of its middle, or with black over it, is a silent cut. Nothing past
+/// state held for <see cref="HeldSeconds"/> seconds; the edges of what the catalog heard as a kind it counts as,
+/// since a stretch of a kind it cannot tell ends where its match stopped, which may lie inside an advert; the
+/// programme's start and end by the guide; and the recording's own ends. A change of scene, a frame that moved
+/// from the one before by the threshold or more, is no candidate of its own: a silence with one within
+/// <see cref="CorroboratedWithin"/> of its middle, with black over it, or as quiet on average as
+/// <see cref="EditedDbfs"/>, the silence an edit leaves rather than a pause, is a silent cut. Nothing past
 /// the recording's length is a candidate. Going forward in time, a candidate within
 /// <see cref="MergedWithin"/> of the strongest of those merged before it joins them: a recording end is
 /// the strongest, then a silent cut, a catalog edge, a silence or black, and the rest.
@@ -21,6 +23,8 @@ public static class BoundaryCandidates
     public static readonly TimeSpan CorroboratedWithin = TimeSpan.FromSeconds(0.5);
 
     public static readonly TimeSpan MergedWithin = TimeSpan.FromSeconds(2);
+
+    public const double EditedDbfs = -90;
 
     private const double FullScale = byte.MaxValue;
 
@@ -39,7 +43,7 @@ public static class BoundaryCandidates
             .. Silences(evidence.Loudness, thresholds, blacks, scenes),
             .. blacks.Select(black => new Raw(black.Middle, BoundaryCue.Black)),
             .. LogoChanges(sightings ?? []),
-            .. context.Catalog.SelectMany(heard => new[] { new Raw(heard.Starts, BoundaryCue.CatalogEdge), new Raw(heard.Ends, BoundaryCue.CatalogEdge) }),
+            .. context.Catalog.Where(heard => heard.Kind is not null).SelectMany(heard => new[] { new Raw(heard.Starts, BoundaryCue.CatalogEdge), new Raw(heard.Ends, BoundaryCue.CatalogEdge) }),
             .. new[] { context.ProgrammeStarts, context.ProgrammeEnds }.OfType<TimeSpan>().Select(at => new Raw(at, BoundaryCue.GuideEdge)),
             new Raw(TimeSpan.Zero, BoundaryCue.RecordingEdge),
             new Raw(evidence.Length, BoundaryCue.RecordingEdge),
@@ -79,9 +83,11 @@ public static class BoundaryCandidates
                 continue;
             }
 
-            bool cut = scenes.Any(scene => (scene - quiet.Middle).Duration() <= CorroboratedWithin)
+            double mean = below.Skip(from).Take(to - from).Average();
+            bool cut = mean >= -EditedDbfs
+                || scenes.Any(scene => (scene - quiet.Middle).Duration() <= CorroboratedWithin)
                 || blacks.Any(black => black.From <= quiet.To && black.To >= quiet.From);
-            double depth = below.Skip(from).Take(to - from).Average() - quieterThan;
+            double depth = mean - quieterThan;
 
             found.Add(new Raw(quiet.Middle, cut ? BoundaryCue.Silence | BoundaryCue.SilentCut : BoundaryCue.Silence, depth, quiet.Length));
         }

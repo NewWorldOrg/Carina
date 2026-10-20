@@ -86,6 +86,24 @@ public sealed class SegmentLearningTests
         Assert.True(folds.Kinds.Single(kind => kind.Kind is SegmentKind.Break).Recall > 0);
     }
 
+    [Fact(DisplayName = "BR-CD-007: with adverts as broadcast, a little under 15 seconds between the silences edits leave, the picture changing less than the threshold at them and a pause inside one, the versions of four kinds made by hand find the adverts the catalog is sure of, the one hearing silence from -55 dBFS the advert the pause cuts as well, as many boundaries as with adverts cut cleanly, and the folds find as many as with adverts cut cleanly")]
+    public void TheVersionsMadeByHandFindAdvertsAsBroadcast()
+    {
+        (List<LearningRecording> clean, List<CatalogSound> cleanSounds) = Taught(Weeks, breakAdverts: 4, heardLongAgo: true);
+        (List<LearningRecording> broadcast, List<CatalogSound> broadcastSounds) = Taught(Weeks, breakAdverts: 4, heardLongAgo: true, asBroadcast: true);
+        (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks);
+
+        SegmentLearned first = Learn([.. broadcast, judged], [.. broadcastSounds, .. heard], active: FourKindsInUse);
+        SegmentLearned belowPauses = Learn([.. broadcast, judged], [.. broadcastSounds, .. heard], active: BelowPausesInUse);
+        SegmentLearned cleanly = Learn([.. clean, judged], [.. cleanSounds, .. heard], active: FourKindsInUse);
+
+        Assert.True(first.InUse.Metrics!.BreakRecall > 0.5);
+        Assert.True(belowPauses.InUse.Metrics!.BreakRecall > first.InUse.Metrics.BreakRecall);
+        Assert.True(belowPauses.InUse.Metrics.BoundaryRecallWithin1s > first.InUse.Metrics.BoundaryRecallWithin1s);
+        Assert.Equal(cleanly.InUse.Metrics!.BoundaryRecallWithin1s, belowPauses.InUse.Metrics.BoundaryRecallWithin1s);
+        Assert.Equal(cleanly.Evaluation.Metrics!.BoundaryRecallWithin1s, first.Evaluation.Metrics!.BoundaryRecallWithin1s);
+    }
+
     [Fact(DisplayName = "BR-CD-008: the labels of an entry first heard after the recording judged started are not learned from in its fold, and the same entries heard long before are")]
     public void EntriesFirstHeardLaterAreSetAside()
     {
