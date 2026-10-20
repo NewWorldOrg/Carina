@@ -12,8 +12,13 @@ namespace Carina.Domain.Segments;
 /// are one each at most, the opening before the ending, and each lasts from
 /// <see cref="CatalogKinds.ThemeShortest"/> to <see cref="CatalogKinds.ThemeLongest"/>; a segment of the opening
 /// starts in the first half of the programme and one of the ending ends in its second half, by where it lies from
-/// the programme's start and end when that is known, unless the catalog fixes it to that kind; a sequence that breaks
-/// one of these is not chosen. Entering a break costs nothing, so a break may start at the recording's zero,
+/// the programme's start and end when that is known, unless the catalog fixes it to that kind; neither runs on across a
+/// seam (<see cref="SegmentPiece.AfterASeam"/>); a sequence that breaks one of these is not chosen. The sequence goes
+/// from the recording's zero to its end through segments and through neighbouring segments read as one
+/// (<see cref="JoinedPiece"/>), each such piece taken for one of its kinds in place of the segments it joins: a joined
+/// advert counts as one segment, since a pod is cut at every advert and the advert it joins is whole; a joined opening or
+/// ending counts as the segments it joins, each at the chance of the whole, since any stretch of a song's length is
+/// joined, so that a song is taken whole where the whole is likelier than its parts. Entering a break costs nothing, so a break may start at the recording's zero,
 /// and one running on to the end is never left. A tie keeps the programme. Neighbouring segments of one kind
 /// are then one stretch, whose probability is the length-weighted mean of its segments' chances of that kind.
 /// A break that does not run on to the end, within the tolerance of the grid, is pulled onto it by moving its
@@ -63,27 +68,45 @@ public static class SegmentSequence
         Matched(pieces, chances);
         ArgumentNullException.ThrowIfNull(thresholds);
 
-        Column best = Column.Starting();
-        int[][] came = new int[pieces.Count][];
+        SegmentKind[] kinds = new SegmentKind[pieces.Count];
 
-        for (int at = 0; at < pieces.Count; at++)
+        foreach (Step step in Chosen(pieces, chances, [], [], thresholds))
         {
-            Column next = new();
-            Piece piece = new(pieces[at], chances[at]);
-
-            for (int state = 0; state < States; state++)
-            {
-                if (best.Reached[state].IsReached)
-                {
-                    Moved(next, state, best.Reached[state], best.Runs[state], piece, thresholds);
-                }
-            }
-
-            came[at] = next.Came;
-            best = next;
+            kinds.AsSpan(step.First, step.Last - step.First + 1).Fill(step.Kind);
         }
 
-        return Traced(came, Ending(best));
+        return kinds;
+    }
+
+    /// <summary>
+    /// The stretches of the kinds decided from the segments and the joined pieces over them: the sequence chosen goes
+    /// from the recording's zero to its end through segments and joined pieces, a joined piece taken for one of its kinds
+    /// at its own chance of that kind as one segment, in place of the segments it joins.
+    /// </summary>
+    public static IReadOnlyList<SegmentSpan> Decided(
+        IReadOnlyList<SegmentPiece> pieces,
+        IReadOnlyList<SegmentChances> chances,
+        IReadOnlyList<JoinedPiece> joined,
+        IReadOnlyList<SegmentChances> joinedChances,
+        TimeSpan length,
+        SegmentThresholds thresholds)
+    {
+        Matched(pieces, chances);
+        ArgumentNullException.ThrowIfNull(joined);
+        ArgumentNullException.ThrowIfNull(joinedChances);
+        ArgumentNullException.ThrowIfNull(thresholds);
+
+        if (joinedChances.Count != joined.Count)
+        {
+            throw new ArgumentException("Every joined piece is given its chances.", nameof(joinedChances));
+        }
+
+        if (joined.Any(piece => piece.Last >= pieces.Count))
+        {
+            throw new ArgumentException("A joined piece joins segments there are.", nameof(joined));
+        }
+
+        return Stretched(Chosen(pieces, chances, joined, joinedChances, thresholds), length, thresholds);
     }
 
     /// <summary>
@@ -113,14 +136,20 @@ public static class SegmentSequence
             throw new ArgumentException("Every piece is given a kind.", nameof(kinds));
         }
 
+        return Stretched([.. pieces.Select((piece, at) => new Step(at, at, new Piece(piece, chances[at]), kinds[at]))], length, thresholds);
+    }
+
+    private static List<SegmentSpan> Stretched(IReadOnlyList<Step> steps, TimeSpan length, SegmentThresholds thresholds)
+    {
         List<Stretch> stretches = [];
 
-        for (int at = 0; at < pieces.Count; at++)
+        foreach (Step step in steps)
         {
-            double chance = new Piece(pieces[at], chances[at]).Chance(kinds[at]);
-            Stretch piece = new(Rounded(pieces[at].Starts, length), Rounded(pieces[at].Ends, length), kinds[at], chance * pieces[at].Length.TotalSeconds, pieces[at].Length.TotalSeconds);
+            SegmentPiece segment = step.Piece.Segment;
+            double chance = step.Piece.Chance(step.Kind);
+            Stretch piece = new(Rounded(segment.Starts, length), Rounded(segment.Ends, length), step.Kind, chance * segment.Length.TotalSeconds, segment.Length.TotalSeconds);
 
-            if (stretches.Count > 0 && stretches[^1].Kind == kinds[at])
+            if (stretches.Count > 0 && stretches[^1].Kind == step.Kind)
             {
                 stretches[^1] = stretches[^1].Joined(piece);
                 continue;
@@ -132,6 +161,58 @@ public static class SegmentSequence
         PulledOntoTheGrid(stretches, length, TimeSpan.FromSeconds(thresholds.GridToleranceSec));
 
         return [.. stretches.Select(stretch => new SegmentSpan(stretch.Starts, stretch.Ends, stretch.Kind, Math.Clamp(stretch.Weighted / stretch.Weight, 0, 1)))];
+    }
+
+    /// <summary>
+    /// The steps of the sequence chosen, from the recording's zero to its end: each a segment, or a joined piece, and
+    /// the kind it is taken for.
+    /// </summary>
+    private static List<Step> Chosen(
+        IReadOnlyList<SegmentPiece> pieces,
+        IReadOnlyList<SegmentChances> chances,
+        IReadOnlyList<JoinedPiece> joined,
+        IReadOnlyList<SegmentChances> joinedChances,
+        SegmentThresholds thresholds)
+    {
+        List<Edge>[] leaving = [.. Enumerable.Range(0, pieces.Count).Select(at => new List<Edge> { new(at, at, new Piece(pieces[at], chances[at]), null) })];
+
+        for (int at = 0; at < joined.Count; at++)
+        {
+            JoinedPiece piece = joined[at];
+            int counts = piece.Kinds.Contains(SegmentKind.Break) ? 1 : piece.Last - piece.First + 1;
+
+            leaving[piece.First].Add(new Edge(piece.First, piece.Last, new Piece(piece.Piece, joinedChances[at], counts), piece.Kinds));
+        }
+
+        Column[] columns = [Column.Starting(), .. Enumerable.Range(0, pieces.Count).Select(_ => new Column())];
+
+        for (int node = 0; node < pieces.Count; node++)
+        {
+            for (int edge = 0; edge < leaving[node].Count; edge++)
+            {
+                Stepped(columns, node, edge, leaving[node][edge], thresholds);
+            }
+        }
+
+        return Traced(columns, leaving, Ending(columns[^1]));
+    }
+
+    /// <summary>
+    /// Offers every move from each state reached at <paramref name="node"/> through <paramref name="step"/>, the
+    /// <paramref name="edge"/>th of the steps leaving it, to the node it reaches.
+    /// </summary>
+    private static void Stepped(Column[] columns, int node, int edge, Edge step, SegmentThresholds thresholds)
+    {
+        Column from = columns[node];
+        Column to = columns[step.Last + 1];
+
+        for (int state = 0; state < States; state++)
+        {
+            if (from.Reached[state].IsReached)
+            {
+                Moved(to, new Came(node, state, edge), from.Reached[state], from.Runs[state], step, thresholds);
+            }
+        }
     }
 
     private static SegmentChances[] Breaks(IReadOnlyList<double> scores)
@@ -153,20 +234,25 @@ public static class SegmentSequence
     }
 
     /// <summary>
-    /// Offers every move from <paramref name="state"/> through <paramref name="piece"/>: to the programme, to a
-    /// break, to the opening and to the ending, in that order, so that a tie keeps the earlier.
+    /// Offers every move from the state <paramref name="came"/> from through <paramref name="step"/>, of the kinds it may
+    /// be taken for: to the programme, to a break, to the opening and to the ending, in that order, so that a tie keeps
+    /// the earlier.
     /// </summary>
-    private static void Moved(Column next, int state, Reach reach, TimeSpan run, Piece piece, SegmentThresholds thresholds)
+    private static void Moved(Column next, Came came, Reach reach, TimeSpan run, Edge step, SegmentThresholds thresholds)
     {
+        int state = came.State;
         SegmentKind kind = KindOf(state);
         int used = state / Block;
+        Piece piece = step.Piece;
         TimeSpan length = piece.Segment.Length;
+
+        bool across = piece.Segment.AfterASeam && kind is SegmentKind.Opening or SegmentKind.Ending;
 
         if (IsShort(state))
         {
-            if (piece.Lies(kind))
+            if (!across && step.Takes(kind) && piece.Lies(kind))
             {
-                Themed(next, (used * Block) + (kind is SegmentKind.Opening ? ShortOpening : ShortEnding), state, reach.Then(piece.Taken(kind)), run + length);
+                Themed(next, (used * Block) + (kind is SegmentKind.Opening ? ShortOpening : ShortEnding), came, reach.Then(piece.Taken(kind)), run + length);
             }
 
             return;
@@ -175,17 +261,24 @@ public static class SegmentSequence
         double leaving = Leaving(state, run, thresholds);
         TimeSpan breaks = (kind is SegmentKind.Break ? run : TimeSpan.Zero) + piece.Segment.Fitted;
 
-        next.Offer(used * Block, state, reach.Then(piece.Taken(SegmentKind.Programme), leaving), TimeSpan.Zero);
-        next.Offer((used * Block) + BreakState(breaks), state, reach.Then(piece.Taken(SegmentKind.Break)), breaks);
-
-        if ((kind is SegmentKind.Opening || used is 0) && piece.Lies(SegmentKind.Opening))
+        if (step.Takes(SegmentKind.Programme))
         {
-            Themed(next, (OpeningUsed * Block) + ShortOpening, state, reach.Then(piece.Taken(SegmentKind.Opening), leaving), (kind is SegmentKind.Opening ? run : TimeSpan.Zero) + length);
+            next.Offer(used * Block, came, reach.Then(piece.Taken(SegmentKind.Programme), leaving), TimeSpan.Zero);
         }
 
-        if ((kind is SegmentKind.Ending || (used & EndingUsed) is 0) && piece.Lies(SegmentKind.Ending))
+        if (step.Takes(SegmentKind.Break))
         {
-            Themed(next, ((used | EndingUsed) * Block) + ShortEnding, state, reach.Then(piece.Taken(SegmentKind.Ending), leaving), (kind is SegmentKind.Ending ? run : TimeSpan.Zero) + length);
+            next.Offer((used * Block) + BreakState(breaks), came, reach.Then(piece.Taken(SegmentKind.Break)), breaks);
+        }
+
+        if (((kind is SegmentKind.Opening && !across) || used is 0) && step.Takes(SegmentKind.Opening) && piece.Lies(SegmentKind.Opening))
+        {
+            Themed(next, (OpeningUsed * Block) + ShortOpening, came, reach.Then(piece.Taken(SegmentKind.Opening), leaving), (kind is SegmentKind.Opening ? run : TimeSpan.Zero) + length);
+        }
+
+        if (((kind is SegmentKind.Ending && !across) || (used & EndingUsed) is 0) && step.Takes(SegmentKind.Ending) && piece.Lies(SegmentKind.Ending))
+        {
+            Themed(next, ((used | EndingUsed) * Block) + ShortEnding, came, reach.Then(piece.Taken(SegmentKind.Ending), leaving), (kind is SegmentKind.Ending ? run : TimeSpan.Zero) + length);
         }
     }
 
@@ -194,11 +287,11 @@ public static class SegmentSequence
     /// <paramref name="shortState"/>, lasting <paramref name="run"/> with it: to that state while it is still that
     /// short, to the one after it once it may be left, and nowhere when it is longer than one may last.
     /// </summary>
-    private static void Themed(Column next, int shortState, int from, Reach reach, TimeSpan run)
+    private static void Themed(Column next, int shortState, Came came, Reach reach, TimeSpan run)
     {
         if (run <= CatalogKinds.ThemeLongest)
         {
-            next.Offer(run < CatalogKinds.ThemeShortest ? shortState : shortState + 1, from, reach, run);
+            next.Offer(run < CatalogKinds.ThemeShortest ? shortState : shortState + 1, came, reach, run);
         }
     }
 
@@ -242,18 +335,25 @@ public static class SegmentSequence
     private static double Leaving(int state, TimeSpan run, SegmentThresholds thresholds)
         => KindOf(state) is SegmentKind.Break && SegmentGrid.Off(run) > TimeSpan.FromSeconds(thresholds.GridToleranceSec) ? thresholds.GridPenalty : 0;
 
-    private static SegmentKind[] Traced(int[][] came, int last)
+    private static List<Step> Traced(Column[] columns, List<Edge>[] leaving, int last)
     {
-        SegmentKind[] kinds = new SegmentKind[came.Length];
+        List<Step> steps = [];
+        int node = columns.Length - 1;
         int state = last;
 
-        for (int at = came.Length - 1; at >= 0; at--)
+        while (node > 0)
         {
-            kinds[at] = KindOf(state);
-            state = came[at][state];
+            Came came = columns[node].Came[state];
+            Edge edge = leaving[came.Node][came.Edge];
+
+            steps.Add(new Step(edge.First, edge.Last, edge.Piece, KindOf(state)));
+            node = came.Node;
+            state = came.State;
         }
 
-        return kinds;
+        steps.Reverse();
+
+        return steps;
     }
 
     private static TimeSpan Rounded(TimeSpan at, TimeSpan length)
@@ -293,9 +393,10 @@ public static class SegmentSequence
     }
 
     /// <summary>
-    /// One segment with its chances, fixed when the catalog fixes it to a kind the model tells apart.
+    /// One segment with its chances, fixed when the catalog fixes it to a kind the model tells apart, counting as
+    /// <see cref="Counts"/> segments.
     /// </summary>
-    private readonly record struct Piece(SegmentPiece Segment, SegmentChances Chances)
+    private readonly record struct Piece(SegmentPiece Segment, SegmentChances Chances, int Counts = 1)
     {
         public CatalogFix? Fixed => Segment.Fixed is { } fix && Chances.Weighs(fix.Kind) ? fix : null;
 
@@ -316,7 +417,7 @@ public static class SegmentSequence
         {
             if (Fixed is not { } fix)
             {
-                return new Reach(0, Chances.LogOf(kind));
+                return new Reach(0, Counts * Chances.LogOf(kind));
             }
 
             return fix.Kind == kind ? new Reach(0, Math.Log(fix.Chance)) : new Reach(1, Chances.LogOf(kind));
@@ -325,13 +426,30 @@ public static class SegmentSequence
         public double Chance(SegmentKind kind) => Fixed is { } fix && fix.Kind == kind ? fix.Chance : Chances.Of(kind);
     }
 
+    /// <summary>
+    /// Where a state was reached from: the node before the step, the state there, and which of the steps leaving that
+    /// node it took.
+    /// </summary>
+    private readonly record struct Came(int Node, int State, int Edge);
+
+    /// <summary>
+    /// A step from one node to another: a segment, or a joined piece over the segments from <see cref="First"/> to
+    /// <see cref="Last"/>, which may be taken for any kind when <see cref="Kinds"/> is not given.
+    /// </summary>
+    private readonly record struct Edge(int First, int Last, Piece Piece, IReadOnlyList<SegmentKind>? Kinds)
+    {
+        public bool Takes(SegmentKind kind) => Kinds is null || Kinds.Contains(kind);
+    }
+
+    private readonly record struct Step(int First, int Last, Piece Piece, SegmentKind Kind);
+
     private sealed class Column
     {
         public Reach[] Reached { get; } = [.. Enumerable.Repeat(Reach.None, States)];
 
         public TimeSpan[] Runs { get; } = new TimeSpan[States];
 
-        public int[] Came { get; } = new int[States];
+        public Came[] Came { get; } = new Came[States];
 
         public static Column Starting()
         {
@@ -342,7 +460,7 @@ public static class SegmentSequence
             return start;
         }
 
-        public void Offer(int to, int from, Reach reach, TimeSpan run)
+        public void Offer(int to, Came from, Reach reach, TimeSpan run)
         {
             if (reach.IsReached && reach.Beats(Reached[to]))
             {

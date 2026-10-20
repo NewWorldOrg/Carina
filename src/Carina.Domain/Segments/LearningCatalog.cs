@@ -143,15 +143,13 @@ public sealed class LearningCatalog
             return [];
         }
 
-        SegmentKind? kind = CatalogHeard.CountsAs(pattern.Estimate.Kind);
-
         return kept
             .Select((placed, at) => (placed.Occurrence, Override: pattern.Overrides[at]))
             .Where(pair => pair.Occurrence.RecordingId.Equals(recording))
             .Select(pair => new CatalogHeard(
                 pair.Occurrence.StartsAt,
                 pair.Occurrence.EndsAt,
-                pair.Override ?? kind,
+                CatalogHeard.KindOf(pair.Override, pattern.Estimate.Kind),
                 kept.Length,
                 pattern.SeriesCount,
                 pattern.StationCount,

@@ -67,6 +67,57 @@ public sealed class SegmentDetectorTests
         Assert.Equal([(600d, 630d), (644.6, 659.6)], Breaks(first));
     }
 
+    [Fact(DisplayName = "BR-CD-007: in a pod of four adverts between the seams a broadcast leaves, an advert cut in three by a black frame and a pause is still one, so the version for pods finds the pod whole where its segments alone leave a hole")]
+    public void AnAdvertCutInsideAPodLeavesNoHole()
+    {
+        SegmentEvidence evidence = Seams(new SyntheticReadings(Length).Spoken(0, 600).Spoken(660, Length), 600, 615, 630, 645, 660)
+            .Black(634, 634.3)
+            .Quiet(640, 640.3, SyntheticReadings.Pause)
+            .Evidence();
+
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.FourKindsInPods);
+
+        Assert.Equal([(600d, 660d)], Breaks(detection));
+        Assert.True(detection.Segments.Single(segment => segment.Kind is SegmentKind.Break).Probability > SegmentSettingsStanding.DefaultSkipThreshold);
+        Assert.Equal([(600d, 630d), (645d, 660d)], Breaks(Apart(evidence, Context(CornerLogo.None), SegmentModel.FourKindsInPods)));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: an opening of 90 seconds in a first episode, cut by the logo going at its start and coming back 15 seconds in, going again 60 seconds in, into segments each as long as adverts, is found whole from its start by the version for pods at a chance a skip is offered at, where its segments alone offer none")]
+    public void AnOpeningTheLogoCutsIsFoundWhole()
+    {
+        SegmentEvidence evidence = Seams(new SyntheticReadings(Length).Spoken(0, 60).Spoken(150, Length), 60, 150)
+            .Corners(Drawn((int)Length, TopRight, second => second is not ((>= 60 and < 75) or (>= 120 and < 150) or >= 1500), 4))
+            .Evidence();
+
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(Logo), SegmentModel.FourKindsInPods);
+        SegmentSpan opening = detection.Segments.Single(segment => segment.Kind is SegmentKind.Opening);
+
+        Assert.Equal((60d, 150d), (opening.Starts.TotalSeconds, opening.Ends.TotalSeconds));
+        Assert.True(opening.Probability > SegmentSettingsStanding.DefaultSkipThreshold);
+        Assert.All(
+            Apart(evidence, Context(Logo), SegmentModel.FourKindsInPods).Where(segment => segment.Kind is SegmentKind.Opening),
+            segment => Assert.True(segment.Probability < SegmentSettingsStanding.DefaultSkipThreshold));
+    }
+
+    [Fact(DisplayName = "BR-CD-007: a shallow pause at a change of scene, inside an advert of a pod and inside an opening, is a silent cut but neither a cut between adverts nor a seam, so the pod is one break and the opening one opening")]
+    public void AShallowPauseAtAChangeOfSceneCutsNothing()
+    {
+        SegmentEvidence evidence = Seams(new SyntheticReadings(Length).Spoken(0, 60).Spoken(150, 600).Spoken(645, Length), 60, 150, 600, 615, 630, 645)
+            .QuietAround(105, 0.4, SyntheticReadings.Pause)
+            .Cut(105, 0.9)
+            .QuietAround(622, 0.4, SyntheticReadings.Pause)
+            .Cut(622, 0.9)
+            .Evidence();
+
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.FourKindsInPods);
+
+        Assert.Equal([(600d, 645d)], Breaks(detection));
+        Assert.Equal(
+            [(60d, 150d)],
+            detection.Segments.Where(segment => segment.Kind is SegmentKind.Opening).Select(segment => (segment.Starts.TotalSeconds, segment.Ends.TotalSeconds)));
+        Assert.Contains(SegmentDetector.Read(evidence, Context(CornerLogo.None), SegmentModel.FourKindsInPods.Thresholds).Pieces, piece => piece.Starts.TotalSeconds is 105 or 622);
+    }
+
     [Fact(DisplayName = "breaks taking exactly half the recording are marked, not discarded")]
     public void ExactlyHalfIsMarked()
     {
@@ -245,6 +296,34 @@ public sealed class SegmentDetectorTests
 
     private static SegmentEvidence Pods(int many)
         => Cuts(new SyntheticReadings(Length), [.. Enumerable.Range(0, many).SelectMany(pod => new[] { 40 + (85.0 * pod), 55 + (85.0 * pod) })]).Evidence();
+
+    /// <summary>
+    /// The stretches decided from the segments alone, without reading any of them as one.
+    /// </summary>
+    private static IReadOnlyList<SegmentSpan> Apart(SegmentEvidence evidence, SegmentContext context, SegmentModel model)
+    {
+        RecordingPieces read = SegmentDetector.Read(evidence, context, model.Thresholds);
+        SegmentChances[] chances = [.. read.Pieces.Select(piece => model.Chances(piece.Features, read.Station, read.Series))];
+
+        return SegmentSequence.Decided(read.Pieces, chances, [], [], read.Length, model.Thresholds);
+    }
+
+    private static (double Starts, double Ends)[] Breaks(IReadOnlyList<SegmentSpan> spans)
+        => [.. spans.Where(segment => segment.Kind is SegmentKind.Break).Select(segment => (Math.Round(segment.Starts.TotalSeconds, 2), Math.Round(segment.Ends.TotalSeconds, 2)))];
+
+    /// <summary>
+    /// The seams a broadcast is joined at, a second of silence as an edit leaves with the picture changing, at each of
+    /// <paramref name="at"/>.
+    /// </summary>
+    private static SyntheticReadings Seams(SyntheticReadings readings, params double[] at)
+    {
+        foreach (double second in at)
+        {
+            readings.QuietAround(second, 1).Cut(second, 0.9);
+        }
+
+        return readings;
+    }
 
     private static SyntheticReadings Cuts(SyntheticReadings readings, params double[] at)
     {
