@@ -260,7 +260,7 @@ public static class SegmentLearning
             Recording = recording;
             heard = catalog.HeardBy(recording.Id, recording.StartedAt);
             everything = catalog.HeardNow(recording.Id);
-            Truth = CatalogTruth.Of(everything, recording.Evidence.Length);
+            Truth = CatalogTruth.Of(everything, recording.Evidence);
             SetAside = Truth.Judges ? catalog.SetAsideFor(recording.Id, recording.StartedAt) : new HashSet<CatalogEntryId>();
         }
 

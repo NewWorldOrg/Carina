@@ -32,8 +32,26 @@ public static class BoundaryCandidates
 
     public static IReadOnlyList<BoundaryCandidate> Find(SegmentEvidence evidence, SegmentContext context, bool[]? sightings, SegmentThresholds thresholds)
     {
-        ArgumentNullException.ThrowIfNull(evidence);
         ArgumentNullException.ThrowIfNull(context);
+
+        return Found(
+            evidence,
+            thresholds,
+            [
+                .. LogoChanges(sightings ?? []),
+                .. context.Catalog.Where(heard => heard.Kind is not null).SelectMany(heard => new[] { new Raw(heard.Starts, BoundaryCue.CatalogEdge), new Raw(heard.Ends, BoundaryCue.CatalogEdge) }),
+                .. new[] { context.ProgrammeStarts, context.ProgrammeEnds }.OfType<TimeSpan>().Select(at => new Raw(at, BoundaryCue.GuideEdge)),
+            ]);
+    }
+
+    /// <summary>
+    /// The candidates the recording's sound and picture alone give: its silences, black and its own ends.
+    /// </summary>
+    public static IReadOnlyList<BoundaryCandidate> Find(SegmentEvidence evidence, SegmentThresholds thresholds) => Found(evidence, thresholds, []);
+
+    private static List<BoundaryCandidate> Found(SegmentEvidence evidence, SegmentThresholds thresholds, List<Raw> known)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
         ArgumentNullException.ThrowIfNull(thresholds);
 
         List<Stretch> blacks = Blacks(evidence.Frames, thresholds);
@@ -42,9 +60,7 @@ public static class BoundaryCandidates
         [
             .. Silences(evidence.Loudness, thresholds, blacks, scenes),
             .. blacks.Select(black => new Raw(black.Middle, BoundaryCue.Black)),
-            .. LogoChanges(sightings ?? []),
-            .. context.Catalog.Where(heard => heard.Kind is not null).SelectMany(heard => new[] { new Raw(heard.Starts, BoundaryCue.CatalogEdge), new Raw(heard.Ends, BoundaryCue.CatalogEdge) }),
-            .. new[] { context.ProgrammeStarts, context.ProgrammeEnds }.OfType<TimeSpan>().Select(at => new Raw(at, BoundaryCue.GuideEdge)),
+            .. known,
             new Raw(TimeSpan.Zero, BoundaryCue.RecordingEdge),
             new Raw(evidence.Length, BoundaryCue.RecordingEdge),
         ];

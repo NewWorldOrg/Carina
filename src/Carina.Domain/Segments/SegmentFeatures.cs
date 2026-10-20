@@ -225,8 +225,7 @@ public static class SegmentFeatures
             TimeSpan from = tail.Earliest - head.Latest > TimeSpan.Zero ? tail.Earliest - head.Latest : TimeSpan.Zero;
             TimeSpan longest = tail.Latest - head.Earliest;
 
-            return SegmentGrid.IsAMultiple(from, longest, TimeSpan.FromSeconds(thresholds.GridToleranceSec))
-                && Math.Round(SegmentGrid.Nearest(from, longest) / SegmentGrid.Step, MidpointRounding.AwayFromZero) <= LongestAdvertSteps;
+            return SegmentGrid.IsAsLongAsAnAdvert(from, longest, TimeSpan.FromSeconds(thresholds.GridToleranceSec));
         }
 
         /// <summary>

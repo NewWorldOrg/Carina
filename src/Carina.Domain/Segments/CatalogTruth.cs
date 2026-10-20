@@ -16,7 +16,11 @@ public readonly record struct TruthBoundary(TimeSpan At, SegmentKind Kind, bool 
 /// kind it counts as there; a stretch taken for the programme by its place alone is no part of a run. A boundary is
 /// where a run starts or ends, the outer edges of a pod and not the joins between its adverts, since a viewer skips a
 /// pod from one edge to the other; except one less than <see cref="JoinedWithin"/> from the recording's zero or from its
-/// end, where no detection draws one.
+/// end, where no detection draws one, and one beside an advert: the stretch outside it, to the first seam more than
+/// <see cref="JoinedWithin"/> beyond it, as long as an advert lasts (<see cref="SegmentGrid.IsAsLongAsAnAdvert"/>), where an
+/// advert the catalog has not heard twice yet may carry the run on, so that a detection taking the whole pod would miss
+/// the boundary for being right. A seam is a silent cut or one of the recording's own ends among the boundary candidates
+/// of its sound and picture alone, read with <see cref="SegmentThresholds.Initial"/> whatever version is measured.
 /// </summary>
 public sealed class CatalogTruth
 {
@@ -51,12 +55,25 @@ public sealed class CatalogTruth
     public int BreakBoundaries => Boundaries.Count(boundary => boundary.Kind is SegmentKind.Break);
 
     /// <summary>
-    /// What the catalog is sure of among the stretches it hears in a recording of <paramref name="length"/>.
+    /// What the catalog is sure of among the stretches it hears in a recording of <paramref name="evidence"/>.
     /// </summary>
-    public static CatalogTruth Of(IReadOnlyList<CatalogHeard> heard, TimeSpan length)
+    public static CatalogTruth Of(IReadOnlyList<CatalogHeard> heard, SegmentEvidence evidence)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        return Of(heard, evidence.Length, BoundaryCandidates.Find(evidence, SegmentThresholds.Initial));
+    }
+
+    /// <summary>
+    /// What the catalog is sure of among the stretches it hears in a recording of <paramref name="length"/> whose sound
+    /// and picture alone give <paramref name="candidates"/>.
+    /// </summary>
+    public static CatalogTruth Of(IReadOnlyList<CatalogHeard> heard, TimeSpan length, IReadOnlyList<BoundaryCandidate> candidates)
     {
         ArgumentNullException.ThrowIfNull(heard);
+        ArgumentNullException.ThrowIfNull(candidates);
 
+        BoundaryCandidate[] seams = [.. candidates.Where(candidate => candidate.IsSilentCut || candidate.IsRecordingEdge).OrderBy(candidate => candidate.At)];
         SegmentSpan[] stretches =
         [
             .. heard
@@ -71,6 +88,7 @@ public sealed class CatalogTruth
             .. stretches
                 .SelectMany(stretch => new[] { new TruthBoundary(stretch.Starts, stretch.Kind, true), new TruthBoundary(stretch.Ends, stretch.Kind, false) })
                 .Where(boundary => boundary.At >= JoinedWithin && boundary.At <= length - JoinedWithin)
+                .Where(boundary => !BesideAnAdvert(boundary, seams))
                 .OrderBy(boundary => boundary.At)
                 .ThenBy(boundary => boundary.Kind),
         ];
@@ -91,6 +109,30 @@ public sealed class CatalogTruth
             { Kind: SegmentKind.Opening or SegmentKind.Ending, Confidence: >= SureOfThemes } => heard.Kind,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Whether the stretch outside <paramref name="boundary"/>, from it to the first of <paramref name="seams"/> more than
+    /// <see cref="JoinedWithin"/> beyond it, is as long as an advert lasts.
+    /// </summary>
+    private static bool BesideAnAdvert(TruthBoundary boundary, BoundaryCandidate[] seams)
+    {
+        BoundaryCandidate? next = boundary.Enters
+            ? seams.LastOrDefault(seam => seam.At < boundary.At - JoinedWithin)
+            : seams.FirstOrDefault(seam => seam.At > boundary.At + JoinedWithin);
+
+        if (next is null)
+        {
+            return false;
+        }
+
+        TimeSpan shortest = boundary.Enters ? boundary.At - next.Latest : next.Earliest - boundary.At;
+        TimeSpan longest = boundary.Enters ? boundary.At - next.Earliest : next.Latest - boundary.At;
+
+        return SegmentGrid.IsAsLongAsAnAdvert(
+            shortest > TimeSpan.Zero ? shortest : TimeSpan.Zero,
+            longest,
+            TimeSpan.FromSeconds(SegmentThresholds.Initial.GridToleranceSec));
     }
 
     /// <summary>

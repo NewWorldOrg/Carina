@@ -47,4 +47,12 @@ public static class SegmentGrid
 
         return from <= to && Off(Nearest(from, to)) <= tolerance;
     }
+
+    /// <summary>
+    /// Whether a length from <paramref name="shortest"/> to <paramref name="longest"/> is as long as an advert lasts: a
+    /// multiple of the grid of at most <see cref="SegmentFeatures.LongestAdvertSteps"/> steps.
+    /// </summary>
+    public static bool IsAsLongAsAnAdvert(TimeSpan shortest, TimeSpan longest, TimeSpan tolerance)
+        => IsAMultiple(shortest, longest, tolerance)
+           && Math.Round(Nearest(shortest, longest) / Step, MidpointRounding.AwayFromZero) <= SegmentFeatures.LongestAdvertSteps;
 }

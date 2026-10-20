@@ -131,7 +131,7 @@ public sealed class SegmentMetricsTests
                 Heard(700, 715, null, null),
                 Heard(1790, 1799.5, SegmentKind.Break, 0.9),
             ],
-            TimeSpan.FromSeconds(Length));
+            TimeSpan.FromSeconds(Length), []);
 
         Assert.Equal(
             [
@@ -155,7 +155,7 @@ public sealed class SegmentMetricsTests
             ],
             truth.Boundaries);
         Assert.Equal((true, true, 6), (truth.Judges, truth.HoldsBreaks, truth.BreakBoundaries));
-        Assert.False(CatalogTruth.Of([Heard(300, 315, SegmentKind.Break, 0.5)], TimeSpan.FromSeconds(Length)).Judges);
+        Assert.False(CatalogTruth.Of([Heard(300, 315, SegmentKind.Break, 0.5)], TimeSpan.FromSeconds(Length), []).Judges);
         Assert.Throws<ArgumentException>(() => Compared(CatalogTruth.None, Detected(Span(0, Length, SegmentKind.Programme, 0.9))));
     }
 
@@ -172,7 +172,7 @@ public sealed class SegmentMetricsTests
                 Heard(1200, 1265, SegmentKind.Ending, 0.8),
                 Heard(1266, 1290, SegmentKind.Ending, 0.8),
             ],
-            TimeSpan.FromSeconds(Length));
+            TimeSpan.FromSeconds(Length), []);
 
         Assert.Equal([Span(600, 645, SegmentKind.Break), Span(1200, 1290, SegmentKind.Ending)], truth.Stretches);
         Assert.Equal(
@@ -187,7 +187,7 @@ public sealed class SegmentMetricsTests
     {
         CatalogTruth pod = CatalogTruth.Of(
             [Heard(600, 615, SegmentKind.Break, 0.9), Heard(615.8, 630, SegmentKind.Break, 0.5), Heard(630.8, 645, SegmentKind.Break, 0.9)],
-            TimeSpan.FromSeconds(Length));
+            TimeSpan.FromSeconds(Length), []);
         SegmentDetection whole = Detected(Span(0, 600, SegmentKind.Programme), Span(600, 645, SegmentKind.Break), Span(645, Length, SegmentKind.Programme));
         SegmentDetection cut = Detected(
             Span(0, 600, SegmentKind.Programme),
@@ -201,6 +201,82 @@ public sealed class SegmentMetricsTests
         Assert.Equal(1.0, SegmentMetrics.Of([Compared(pod, cut)], SkipReturns.None)!.BoundaryRecallWithin2s);
         Assert.Equal(0.0, SegmentMetrics.Of([Compared(pod, joins)], SkipReturns.None)!.BoundaryRecallWithin2s);
         Assert.Equal(1.0, SegmentMetrics.Of([Compared(pod, whole)], SkipReturns.None)!.BreakRecall);
+    }
+
+    [Fact(DisplayName = "BR-CD-008: an edge of a run with an advert's length outside it to the next silent cut is no boundary, since an advert the catalog has not heard twice may lie there, and one with the programme outside it is; a silence that is no cut is no seam, and openings and endings are treated alike")]
+    public void AnEdgeBesideAnAdvertsLengthIsNoBoundary()
+    {
+        CatalogTruth truth = CatalogTruth.Of(
+            [
+                Heard(50, 140, SegmentKind.Opening, 0.8),
+                Heard(600, 615, SegmentKind.Break, 0.9),
+                Heard(615.5, 630, SegmentKind.Break, 0.9),
+                Heard(1200, 1215, SegmentKind.Break, 0.9),
+                Heard(1215.5, 1230, SegmentKind.Break, 0.9),
+                Heard(1500, 1590, SegmentKind.Ending, 0.8),
+            ],
+            TimeSpan.FromSeconds(Length),
+            [
+                Ends(0),
+                .. Cuts(140.4, 155.5, 548, 585, 600.2, 615.3, 630.3, 660.5, 700, 1150, 1200, 1215.3, 1230.2, 1283, 1590.2, 1640),
+                Silence(1245.2),
+                Ends(Length),
+            ]);
+
+        Assert.Equal(
+            [
+                Boundary(50, SegmentKind.Opening, true),
+                Boundary(1200, SegmentKind.Break, true),
+                Boundary(1230, SegmentKind.Break, false),
+                Boundary(1500, SegmentKind.Ending, true),
+                Boundary(1590, SegmentKind.Ending, false),
+            ],
+            truth.Boundaries);
+        Assert.Equal(2, truth.BreakBoundaries);
+        Assert.Equal(new EvaluationEvidence(1, 2, null), EvaluationEvidence.Of([truth]));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a detection that takes a whole pod, unheard adverts of fifteen and thirty seconds on either side of what the catalog is sure of included, finds every boundary, and one that cuts the pod where the catalog stops hearing finds no more")]
+    public void TakingAPodWithUnheardAdvertsWholeIsRight()
+    {
+        SegmentEvidence evidence = new SyntheticReadings(Length)
+            .QuietAround(548)
+            .QuietAround(585)
+            .QuietAround(600)
+            .QuietAround(615)
+            .QuietAround(630)
+            .QuietAround(660)
+            .QuietAround(1137)
+            .QuietAround(1200)
+            .QuietAround(1215)
+            .QuietAround(1230)
+            .QuietAround(1283)
+            .Evidence();
+        CatalogTruth truth = CatalogTruth.Of(
+            [
+                Heard(600.3, 614.7, SegmentKind.Break, 0.9),
+                Heard(615.3, 629.7, SegmentKind.Break, 0.9),
+                Heard(1200.3, 1214.7, SegmentKind.Break, 0.9),
+                Heard(1215.3, 1229.7, SegmentKind.Break, 0.9),
+            ],
+            evidence);
+        SegmentDetection whole = Detected(
+            Span(0, 585, SegmentKind.Programme),
+            Span(585, 660, SegmentKind.Break),
+            Span(660, 1200, SegmentKind.Programme),
+            Span(1200, 1230, SegmentKind.Break),
+            Span(1230, Length, SegmentKind.Programme));
+        SegmentDetection cut = Detected(
+            Span(0, 600, SegmentKind.Programme),
+            Span(600, 630, SegmentKind.Break),
+            Span(630, 1200, SegmentKind.Programme),
+            Span(1200, 1230, SegmentKind.Break),
+            Span(1230, Length, SegmentKind.Programme));
+
+        Assert.Equal([Boundary(1200.3, SegmentKind.Break, true), Boundary(1229.7, SegmentKind.Break, false)], truth.Boundaries);
+        Assert.Equal(1.0, SegmentMetrics.Of([Compared(truth, whole)], SkipReturns.None)!.BoundaryRecallWithin2s);
+        Assert.Equal(1.0, SegmentMetrics.Of([Compared(truth, cut)], SkipReturns.None)!.BoundaryRecallWithin2s);
+        Assert.Equal(1.0, SegmentMetrics.Of([Compared(truth, whole)], SkipReturns.None)!.BreakRecall);
     }
 
     [Theory(DisplayName = "BR-CD-008: an evaluation stands on enough with ten recordings the catalog is sure of an advert in and a hundred boundaries of the pods of those adverts, and not with one fewer of either")]
@@ -263,12 +339,22 @@ public sealed class SegmentMetricsTests
     }
 
     private static CatalogTruth Truth(params (double From, double To, SegmentKind Kind)[] stretches)
-        => CatalogTruth.Of([.. stretches.Select(stretch => Heard(stretch.From, stretch.To, stretch.Kind, stretch.Kind is SegmentKind.Break ? 0.9 : 0.8))], TimeSpan.FromSeconds(Length));
+        => CatalogTruth.Of([.. stretches.Select(stretch => Heard(stretch.From, stretch.To, stretch.Kind, stretch.Kind is SegmentKind.Break ? 0.9 : 0.8))], TimeSpan.FromSeconds(Length), []);
 
     private static CatalogHeard Heard(double from, double to, SegmentKind? kind, double? confidence)
         => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, 2, 2, 2, confidence, CatalogEntryId.New());
 
     private static TruthBoundary Boundary(double at, SegmentKind kind, bool enters) => new(TimeSpan.FromSeconds(at), kind, enters);
+
+    private static IEnumerable<BoundaryCandidate> Cuts(params double[] seconds)
+        => seconds.Select(at => Candidate(at, BoundaryCue.Silence | BoundaryCue.SilentCut));
+
+    private static BoundaryCandidate Silence(double at) => Candidate(at, BoundaryCue.Silence);
+
+    private static BoundaryCandidate Ends(double at) => Candidate(at, BoundaryCue.RecordingEdge);
+
+    private static BoundaryCandidate Candidate(double at, BoundaryCue cues)
+        => new(TimeSpan.FromSeconds(at), TimeSpan.FromSeconds(at), TimeSpan.FromSeconds(at), cues, 30, TimeSpan.FromSeconds(0.5));
 
     private static ViewerAction Action(ViewerActionKind action, int days, int? version)
         => new(Evening.AddDays(days), action, SegmentKind.Break, TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(690), version);
