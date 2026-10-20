@@ -19,6 +19,8 @@ public sealed class BelowPausesVersionMigrationTests
 
     private const string BeforeTheVersionWasMade = "20261019121457_VersionsWeighNothingTheCatalogHears";
 
+    private const string TheVersionWasMade = "20261020013101_AVersionMadeByHandHearsSilenceBelowThePausesInAdverts";
+
     private const string Learned = """{"recordings": 12, "boundaries": 148, "labelsUntil": null}""";
 
     private const string LearningOn = "INSERT INTO segment_settings (id, learning, learning_changed_at) VALUES (1, true, now())";
@@ -40,7 +42,7 @@ public sealed class BelowPausesVersionMigrationTests
             await ExecuteAsync(before, "UPDATE segment_model_version SET state = 'Active', adopted_at = now() WHERE number = 3");
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (CarinaDbContext reading = CarinaDbContextFactory.Create(Scratch()))
         {
@@ -79,7 +81,7 @@ public sealed class BelowPausesVersionMigrationTests
         IMigrator migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync(BeforeTheVersionWasMade, Cancel);
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {
@@ -115,7 +117,7 @@ public sealed class BelowPausesVersionMigrationTests
                 : LearnedFrom(3, 4));
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {
