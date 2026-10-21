@@ -13,6 +13,8 @@ namespace Carina.Domain.Segments;
 /// </summary>
 public sealed class CatalogOccurrence
 {
+    private string? seriesReadAgain;
+
     private CatalogOccurrence()
     {
     }
@@ -45,11 +47,17 @@ public sealed class CatalogOccurrence
 
     public SoundSpan Span => new(StartsAt, EndsAt);
 
-    public SeriesMember Member => new(RecordingId, NetworkId, ServiceId, SeriesName, RecordingStartedAt);
+    /// <summary>
+    /// What says which series the stretch's recording is of, with the series name kept read again
+    /// (<see cref="SeriesNames.Of"/>), so that a stretch kept before a rule of series names changed is of the
+    /// series a stretch found now is of.
+    /// </summary>
+    public SeriesMember Member => new(RecordingId, NetworkId, ServiceId, SeriesReadAgain(), RecordingStartedAt);
 
     /// <summary>
-    /// The stretch found at <paramref name="span"/> of the recording, not yet kept. A copy kept before
-    /// series names were made has one made from its programme's name.
+    /// The stretch found at <paramref name="span"/> of the recording, not yet kept, with the series name of
+    /// the copy made again by today's rules; a copy kept before series names were made has one made from its
+    /// programme's name.
     /// </summary>
     public static CatalogOccurrence Found(
         CatalogEntryId entryId,
@@ -70,7 +78,7 @@ public sealed class CatalogOccurrence
             span.Ends,
             programme.NetworkId,
             programme.ServiceId,
-            programme.SeriesName ?? SeriesNames.Of(programme.Name),
+            SeriesNames.Of(programme.SeriesName ?? programme.Name),
             programme.RecordingStartedAt,
             (float)bitErrorRate,
             null,
@@ -105,6 +113,8 @@ public sealed class CatalogOccurrence
 
         KindOverride = kind;
     }
+
+    private string? SeriesReadAgain() => SeriesName is null ? null : (seriesReadAgain ??= SeriesNames.Of(SeriesName));
 
     private static CatalogOccurrence Made(
         long id,

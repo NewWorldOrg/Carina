@@ -69,7 +69,54 @@ public sealed class SeriesNamesTests
     {
         Assert.Equal("架空の物語", SeriesNames.Of("架空の物語 #3「架空の副題」"));
         Assert.Equal("架空の物語", SeriesNames.Of("架空の物語 第3話 「架空の副題」"));
-        Assert.Equal("架空の物語「架空の題」", SeriesNames.Of("架空の物語「架空の題」"));
+    }
+
+    [Theory(DisplayName = "BR-CD-011: a subtitle that ends the name goes without an episode, in 「」 or 『』 or after ▽, half-width brackets folded")]
+    [InlineData("アニメ 架空の忍者「架空の段」", "アニメ 架空の忍者")]
+    [InlineData("アニメ 架空の忍者『架空の段』", "アニメ 架空の忍者")]
+    [InlineData("アニメ 架空の忍者 ｢架空の段｣", "アニメ 架空の忍者")]
+    [InlineData("アニメ 架空の忍者「架空の段」「後編」", "アニメ 架空の忍者")]
+    [InlineData("アニメ 架空の忍者「架空の『巻』の段」", "アニメ 架空の忍者")]
+    [InlineData("架空のニュース ▽架空の話題▽別の「架空の」話題", "架空のニュース")]
+    [InlineData("架空の物語「架空の題」", "架空の物語")]
+    public void ASubtitleThatEndsTheNameGoes(string name, string series)
+    {
+        Assert.Equal(series, SeriesNames.Of(name));
+        Assert.Null(SeriesNames.EpisodeOf(name));
+    }
+
+    [Fact(DisplayName = "BR-CD-011: two days of a daily programme whose names differ only in the subtitle and the marks are one series")]
+    public void TwoDaysDifferingOnlyInTheSubtitleAreOneSeries()
+    {
+        string? monday = SeriesNames.Of($"アニメ 架空の忍者「架空の巻物の段」{Captioned}");
+        string? tuesday = SeriesNames.Of("[新]アニメ 架空の忍者「架空の手裏剣の段」[字]");
+
+        Assert.Equal("アニメ 架空の忍者", monday);
+        Assert.True(SeriesNames.Same(monday, tuesday));
+        Assert.True(SeriesNames.Link(monday, tuesday));
+    }
+
+    [Theory(DisplayName = "BR-CD-011: a name in brackets is the programme's own, alone or after a word of fewer than four characters, and stays while a subtitle after it goes")]
+    [InlineData("「架空の物語」", "「架空の物語」")]
+    [InlineData("[新]「架空の物語」 #1", "「架空の物語」")]
+    [InlineData("「架空の物語」「架空の副題」", "「架空の物語」")]
+    [InlineData("アニメ「架空の物語」", "アニメ「架空の物語」")]
+    [InlineData("▽架空の特集", "▽架空の特集")]
+    public void ANameInBracketsStays(string name, string series)
+    {
+        Assert.Equal(series, SeriesNames.Of(name));
+    }
+
+    [Theory(DisplayName = "a series name read again is the same, and one kept by the rule before subtitles went is made as it is now")]
+    [InlineData("アニメ 架空の忍者「架空の段」", "アニメ 架空の忍者")]
+    [InlineData("架空の物語 第2期", "架空の物語 第2期")]
+    [InlineData("架空の物語", "架空の物語")]
+    [InlineData("「架空の物語」", "「架空の物語」")]
+    [InlineData("アニメ「架空の物語」", "アニメ「架空の物語」")]
+    public void ASeriesNameReadAgainIsTheSame(string kept, string series)
+    {
+        Assert.Equal(series, SeriesNames.Of(kept));
+        Assert.Equal(series, SeriesNames.Of(SeriesNames.Of(kept)!));
     }
 
     [Fact(DisplayName = "every episode in the name is taken out, and the first one is the episode")]

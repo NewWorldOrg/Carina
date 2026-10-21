@@ -11,9 +11,13 @@ namespace Carina.Domain.Segments;
 /// guide carries no description of a series. The marks are taken out of the name, as symbols or as
 /// their letters in square brackets; the name is folded with NFKC and cut at its first full-width
 /// space; every episode is taken out with the subtitle in brackets that follows it, and the spaces at
-/// either end. An episode is written <c>#N</c>, <c>第N話</c>, <c>第N回</c>, <c>N話</c>, or <c>第</c>, a number in
-/// kanji up to ninety-nine and <c>話</c>. A season, chapter or part number is not an episode, and nor is
-/// a number that is part of the name.
+/// either end; then a subtitle that ends the name, in <c>「」</c> or <c>『』</c> or after <c>▽</c>, is taken
+/// out while at least <see cref="ShortestSharedHead"/> characters stay before it, so that a programme
+/// whose name is in brackets, alone or after a word as short as <c>アニメ</c>, keeps it. An episode is
+/// written <c>#N</c>, <c>第N話</c>, <c>第N回</c>, <c>N話</c>, or <c>第</c>, a number in kanji up to ninety-nine
+/// and <c>話</c>. A season, chapter or part number is not an episode, and nor is a number that is part of
+/// the name. A series name kept by an earlier rule is read again with <see cref="Of"/> before it is
+/// compared, since the rules only ever take more out of a name.
 /// </summary>
 public static partial class SeriesNames
 {
@@ -39,7 +43,7 @@ public static partial class SeriesNames
         string folded = Folded(programmeName).Trim(Ends);
         int cut = folded.IndexOf(Cut, StringComparison.Ordinal);
         string head = cut < 0 ? folded : folded[..cut];
-        string series = Episode().Replace(head, string.Empty).Trim(Ends);
+        string series = WithoutSubtitles(Episode().Replace(head, string.Empty).Trim(Ends));
 
         return series.Length is 0 ? null : series;
     }
@@ -93,6 +97,20 @@ public static partial class SeriesNames
         return BracketedMarks.Aggregate(folded, (text, mark) => text.Replace(mark, string.Empty, StringComparison.Ordinal));
     }
 
+    private static string WithoutSubtitles(string name)
+    {
+        Match subtitle = Subtitle().Match(name);
+
+        if (!subtitle.Success)
+        {
+            return name;
+        }
+
+        string before = name[..subtitle.Index].Trim(Ends);
+
+        return before.Length < ShortestSharedHead ? name : WithoutSubtitles(before);
+    }
+
     private static int? Counted(Match match)
     {
         if (match.Groups["kanji"].Success)
@@ -124,4 +142,7 @@ public static partial class SeriesNames
         @"(?:第(?<number>[0-9]+)[話回]|第(?<kanji>[一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])話|#(?<number>[0-9]+)|(?<number>[0-9]+)話)[ \t]*(?:「[^」]*」)?",
         RegexOptions.CultureInvariant)]
     private static partial Regex Episode();
+
+    [GeneratedRegex(@"(?:「[^「」]*」|『[^『』]*』|▽.*)\z", RegexOptions.CultureInvariant)]
+    private static partial Regex Subtitle();
 }

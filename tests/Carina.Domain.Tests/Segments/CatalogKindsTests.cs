@@ -1,3 +1,6 @@
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
 using static Carina.Domain.Tests.Segments.CatalogSeries;
@@ -477,6 +480,49 @@ public sealed class CatalogKindsTests
         Assert.Equal(CatalogKind.Cm, CatalogKinds.Estimate(TimeSpan.FromSeconds(15), [first, second], SeriesLinks.None).Estimate.Kind);
         Assert.Equal(0.9, CatalogKinds.Estimate(TimeSpan.FromSeconds(15), [first, second], SeriesLinks.None).Estimate.Confidence);
         Assert.Equal(0.5, CatalogKinds.Estimate(TimeSpan.FromSeconds(15), [first, second], links).Estimate.Confidence);
+    }
+
+    [Fact(DisplayName = "BR-CD-011: a daily programme of ten minutes kept under names that differ only in the subtitle hears its opening and its ending in two episodes of one series, 0.8")]
+    public void ADailyProgrammeUnderSubtitledNamesHasItsOpeningAndEnding()
+    {
+        ProgrammeCopy monday = Daily(0, "架空の巻物の段");
+        ProgrammeCopy tuesday = Daily(1, "架空の手裏剣の段");
+
+        CatalogPattern opening = Estimated(80, At(Entry, monday, 11, 80), At(Entry, tuesday, 12, 80));
+        CatalogPattern ending = Estimated(62, KeptAt(1, monday, 484, 62), KeptAt(2, tuesday, 485, 62));
+
+        Assert.Equal(new CatalogEstimate(CatalogKind.Opening, 0.8, CatalogDecision.Pattern), opening.Estimate);
+        Assert.Equal(1, opening.SeriesCount);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Ending, 0.8, CatalogDecision.Pattern), ending.Estimate);
+        Assert.Equal(1, ending.SeriesCount);
+    }
+
+    private static ProgrammeCopy Daily(int day, string subtitle)
+    {
+        DateTime starts = Evening.AddDays(day);
+        string keptBefore = $"アニメ 架空の忍者「{subtitle}」";
+
+        return new ProgrammeCopy(new NetworkId(3), new ServiceId(3), starts, starts.AddMinutes(10), starts - Lead, $"{keptBefore}[字]", [], [], null, AudioMode.Stereo, keptBefore);
+    }
+
+    private static PlacedOccurrence KeptAt(long id, ProgrammeCopy programme, double fromProgrammeStart, double seconds)
+    {
+        TimeSpan starts = Lead + TimeSpan.FromSeconds(fromProgrammeStart);
+        CatalogOccurrence kept = CatalogOccurrence.Rehydrate(
+            id,
+            Entry,
+            RecordingId.New(),
+            starts,
+            starts + TimeSpan.FromSeconds(seconds),
+            programme.NetworkId,
+            programme.ServiceId,
+            programme.SeriesName,
+            programme.RecordingStartedAt,
+            0.05f,
+            null,
+            Now);
+
+        return PlacedOccurrence.Of(kept, programme);
     }
 
     private static CatalogPattern Estimated(double seconds, params PlacedOccurrence[] occurrences)
