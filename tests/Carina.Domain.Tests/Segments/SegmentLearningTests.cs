@@ -430,9 +430,9 @@ public sealed class SegmentLearningTests
 
     /// <summary>
     /// The samples of <paramref name="recording"/> read hearing what it heard of <paramref name="catalog"/> when it
-    /// was made, labelled as if it heard only <paramref name="labelledBy"/>, every stretch the catalog has in it now
-    /// keeping the programme by elimination off the segments it lies over, or only those it heard then unless
-    /// <paramref name="touchingNow"/>.
+    /// was made, sure of none of it, its segments and the neighbouring segments read as one alike, labelled as if it
+    /// heard only <paramref name="labelledBy"/>, every stretch the catalog has in it now keeping the programme by
+    /// elimination off the segments it lies over, or only those it heard then unless <paramref name="touchingNow"/>.
     /// </summary>
     private static IEnumerable<SegmentSample> Samples(
         LearningRecording recording,
@@ -443,12 +443,17 @@ public sealed class SegmentLearningTests
         bool touchingNow = true)
     {
         IReadOnlyList<CatalogHeard> heard = catalog.HeardBy(recording.Id, recording.StartedAt);
-        RecordingPieces pieces = SegmentDetector.Read(recording.Evidence, recording.Context.Hearing(heard), setting);
-        IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces.Pieces, recording.Context.Hearing(labelledBy), recording.Actions, touchingNow ? catalog.HeardNow(recording.Id) : heard);
+        SegmentContext unsure = recording.Context.Hearing([.. heard.Select(stretch => new CatalogHeard(stretch.Starts, stretch.Ends, stretch.Kind, stretch.Occurrences, stretch.Series, stretch.Stations, entry: stretch.Entry))]);
+        RecordingPieces read = SegmentDetector.Read(recording.Evidence, unsure, setting);
+        SegmentContext labelling = recording.Context.Hearing(labelledBy);
+        IReadOnlyList<CatalogHeard> touching = touchingNow ? catalog.HeardNow(recording.Id) : heard;
+        IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(read.Pieces, labelling, recording.Actions, touching);
+        IReadOnlyList<SegmentLabel?> joined = SegmentLabels.OfJoined(read.Joined, labelling, recording.Actions);
 
-        return pieces.Pieces
+        return read.Pieces
             .Zip(labels)
+            .Concat(read.Joined.Select(whole => whole.Piece).Zip(joined))
             .Where(pair => pair.Second is not null && (uncovered || pair.Second.Source is not SegmentLabelSource.Uncovered))
-            .Select(pair => new SegmentSample(pair.First.Features, pieces.Station, pieces.Series, pair.Second!.Kind, pair.Second.Weight));
+            .Select(pair => new SegmentSample(pair.First.Features, read.Station, read.Series, pair.Second!.Kind, pair.Second.Weight));
     }
 }
