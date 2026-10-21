@@ -17,7 +17,11 @@ namespace Carina.Domain.Segments;
 /// where the station's logo shows through at least <see cref="LogoSeenThrough"/> of it; with no logo known for
 /// the station it stays at the lower weight. The catalog wins over viewers and viewers over a segment no stretch touches; within one source
 /// the heavier label wins, a tie going to the programme. A segment more than half outside the guide's programme
-/// is never a label.
+/// is never a label. Neighbouring segments read as one (<see cref="JoinedPiece"/>) take the catalog's kind only when its
+/// stretches of that kind cover all of them but <see cref="MostUncoveredOfJoined"/>, since a run reaching past a sound
+/// the catalog places is no example of it, and a viewer's as a segment does, since a skip starts where the viewer
+/// pressed the button, partway into what it offered; they are never the programme by elimination, being read as one
+/// only where an advert, an opening or an ending may lie across them, which is likelier one the catalog has not heard yet.
 /// </summary>
 public static class SegmentLabels
 {
@@ -38,6 +42,12 @@ public static class SegmentLabels
     public const double LogoSeenThrough = 0.8;
 
     public static readonly TimeSpan ReturnedSpan = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// How much of neighbouring segments read as one the catalog's stretches of a kind may leave uncovered and still
+    /// label them: as far as boundary candidates are merged, at each of the two ends.
+    /// </summary>
+    public static readonly TimeSpan MostUncoveredOfJoined = BoundaryCandidates.MergedWithin * 2;
 
     /// <summary>
     /// How far a segment may reach out of the guide's programme and still count as inside it for the programme by
@@ -70,11 +80,43 @@ public static class SegmentLabels
 
         return
         [
-            .. pieces.Select(piece => piece.Features[SegmentFeature.OutsideGuide] > MostOutsideTheGuide
+            .. pieces.Select(piece => IsOutsideTheGuide(piece)
                 ? null
-                : Over(piece, heard, SegmentLabelSource.Catalog) ?? Over(piece, viewed, SegmentLabelSource.Viewer) ?? Uncovered(piece, touched, viewed)),
+                : Over(piece, heard, SegmentLabelSource.Catalog, MoreThanHalf) ?? Over(piece, viewed, SegmentLabelSource.Viewer, MoreThanHalf) ?? Uncovered(piece, touched, viewed)),
         ];
     }
+
+    /// <summary>
+    /// The labels of <paramref name="joined"/> by what <paramref name="context"/> hears of the catalog and what viewers
+    /// did, each read as one segment from the start of its first to the end of its last, which the catalog labels only
+    /// when its stretches of a kind leave no more than <see cref="MostUncoveredOfJoined"/> of it uncovered; none is the
+    /// programme by elimination.
+    /// </summary>
+    public static IReadOnlyList<SegmentLabel?> OfJoined(
+        IReadOnlyList<JoinedPiece> joined,
+        SegmentContext context,
+        IReadOnlyList<ViewerAction> actions)
+    {
+        ArgumentNullException.ThrowIfNull(joined);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(actions);
+
+        Stretch[] heard = [.. context.Catalog.Select(Heard).OfType<Stretch>()];
+        Stretch[] viewed = Viewed(actions);
+
+        return
+        [
+            .. joined.Select(whole => IsOutsideTheGuide(whole.Piece)
+                ? null
+                : Over(whole.Piece, heard, SegmentLabelSource.Catalog, AllButTheEnds) ?? Over(whole.Piece, viewed, SegmentLabelSource.Viewer, MoreThanHalf)),
+        ];
+    }
+
+    private static bool IsOutsideTheGuide(SegmentPiece piece) => piece.Features[SegmentFeature.OutsideGuide] > MostOutsideTheGuide;
+
+    private static bool MoreThanHalf(TimeSpan covered, TimeSpan length) => covered * 2 > length;
+
+    private static bool AllButTheEnds(TimeSpan covered, TimeSpan length) => length - covered <= MostUncoveredOfJoined;
 
     /// <summary>
     /// The programme a segment is taken for when the recording holds an advert the catalog is sure of and neither
@@ -141,16 +183,15 @@ public static class SegmentLabels
         return [.. viewed];
     }
 
-    private static SegmentLabel? Over(SegmentPiece piece, Stretch[] stretches, SegmentLabelSource source)
-        => Over(piece.Starts, piece.Ends, stretches, source);
-
-    private static SegmentLabel? Over(TimeSpan starts, TimeSpan ends, Stretch[] stretches, SegmentLabelSource source)
+    private static SegmentLabel? Over(SegmentPiece piece, Stretch[] stretches, SegmentLabelSource source, Func<TimeSpan, TimeSpan, bool> enough)
     {
+        TimeSpan starts = piece.Starts;
+        TimeSpan ends = piece.Ends;
         Stretch[] over = [.. stretches.Where(stretch => stretch.Starts < ends && stretch.Ends > starts)];
 
         return over
             .GroupBy(stretch => stretch.Kind)
-            .Where(kind => Covered(starts, ends, kind) * 2 > ends - starts)
+            .Where(kind => enough(Covered(starts, ends, kind), ends - starts))
             .Select(kind => new SegmentLabel(kind.Key, kind.Max(stretch => stretch.Weight), source))
             .OrderByDescending(label => label.Weight)
             .ThenBy(label => label.Kind)
