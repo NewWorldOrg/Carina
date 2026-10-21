@@ -83,7 +83,7 @@ public sealed record SegmentContext
         return new SegmentContext(
             programme.NetworkId,
             programme.ServiceId,
-            programme.SeriesName ?? SeriesNames.Of(programme.Name),
+            SeriesNames.Of(programme.SeriesName ?? programme.Name),
             programme.ProgrammeStartsAt - programme.RecordingStartedAt,
             programme.ProgrammeEndsAt - programme.RecordingStartedAt,
             programme.Genres,

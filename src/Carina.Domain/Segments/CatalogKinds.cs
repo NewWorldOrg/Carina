@@ -62,7 +62,7 @@ public static class CatalogKinds
     /// <summary>
     /// The version of these rows: an entry estimated with an earlier one is estimated again.
     /// </summary>
-    public const int Version = 3;
+    public const int Version = 4;
 
     public static readonly TimeSpan Grid = TimeSpan.FromSeconds(15);
 
@@ -382,7 +382,7 @@ public static class CatalogKinds
     }
 
     private static bool NamedAs(IReadOnlyList<PlacedOccurrence> group, IReadOnlyList<PlacedOccurrence> main)
-        => group.Any(placed => main.Any(member => SeriesNames.Same(member.Occurrence.SeriesName, placed.Occurrence.SeriesName)));
+        => group.Any(placed => main.Any(member => SeriesNames.Same(member.Occurrence.Member.SeriesName, placed.Occurrence.Member.SeriesName)));
 
     /// <summary>
     /// What the place of a stretch makes a theme heard there, by the guide's start and end of its programme:

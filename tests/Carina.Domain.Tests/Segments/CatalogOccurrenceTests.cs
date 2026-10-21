@@ -71,6 +71,30 @@ public sealed class CatalogOccurrenceTests
             occurrence.Member);
     }
 
+    [Fact(DisplayName = "BR-CD-011: a series name kept by the rule before subtitles went is made again, when found and when kept")]
+    public void ASeriesNameKeptByAnEarlierRuleIsMadeAgain()
+    {
+        const string KeptBefore = "アニメ 架空の忍者「架空の段」";
+        CatalogOccurrence found = Found(Stretch, Copy("アニメ 架空の忍者「架空の段」[字]", KeptBefore), 0);
+        CatalogOccurrence kept = CatalogOccurrence.Rehydrate(
+            3,
+            CatalogEntryId.New(),
+            RecordingId.New(),
+            Stretch.Starts,
+            Stretch.Ends,
+            new NetworkId(1),
+            new ServiceId(2),
+            KeptBefore,
+            Evening,
+            0.1f,
+            null,
+            Evening);
+
+        Assert.Equal("アニメ 架空の忍者", found.SeriesName);
+        Assert.Equal(KeptBefore, kept.SeriesName);
+        Assert.Equal("アニメ 架空の忍者", kept.Member.SeriesName);
+    }
+
     private static CatalogOccurrence Found(SoundSpan span, ProgrammeCopy programme, double bitErrorRate)
         => CatalogOccurrence.Found(CatalogEntryId.New(), RecordingId.New(), span, programme, bitErrorRate, Evening);
 

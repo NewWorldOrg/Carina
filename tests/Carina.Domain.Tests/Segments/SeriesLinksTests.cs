@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
@@ -125,6 +126,24 @@ public sealed class SeriesLinksTests
 
         Assert.Equal([week1, week2], SeriesLinks.None.SeriesOf(judged, [week1, elsewhere, judged, another, week2]));
         Assert.Empty(SeriesLinks.None.SeriesOf(judged, [elsewhere, another]));
+    }
+
+    [Fact(DisplayName = "BR-CD-011: two days of a daily programme kept under names that differ only in the subtitle are one series")]
+    public void TwoDaysKeptUnderSubtitledNamesAreOneSeries()
+    {
+        SeriesMember monday = Daily(0, "架空の巻物の段").MemberAs(RecordingId.New());
+        SeriesMember tuesday = Daily(1, "架空の手裏剣の段").MemberAs(RecordingId.New());
+
+        Assert.Equal("アニメ 架空の忍者", monday.SeriesName);
+        Assert.True(SeriesLinks.None.Link(monday, tuesday));
+    }
+
+    private static ProgrammeCopy Daily(int day, string subtitle)
+    {
+        DateTime starts = Evening.AddDays(day);
+        string name = $"アニメ 架空の忍者「{subtitle}」";
+
+        return new ProgrammeCopy(new NetworkId(1), new ServiceId(1), starts, starts.AddMinutes(10), starts.AddMinutes(-1), $"{name}[字]", [], [], null, AudioMode.Stereo, name);
     }
 
     private static SeriesMember Member(int station, string? series, DateTime startedAt)
