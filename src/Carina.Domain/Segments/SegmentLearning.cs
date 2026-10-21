@@ -9,7 +9,10 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// <summary>
 /// Learns a candidate from every recording handed over and judges it on those the catalog is sure of something in
 /// (<see cref="CatalogTruth"/>). Each recording is read with the catalog as it would have heard it
-/// (<see cref="LearningCatalog"/>) and labelled by <see cref="SegmentLabels"/>; labels of the programme, of breaks, of
+/// (<see cref="LearningCatalog"/>), sure of none of it, so that no segment is fixed and neighbouring segments are read
+/// as one (<see cref="JoinedPiece"/>) across its stretches as across what it does not know, and labelled by
+/// <see cref="SegmentLabels"/>, its segments and those runs alike, each learned with the features detection scores it by
+/// (<see cref="SegmentSamples"/>); labels of the programme, of breaks, of
 /// openings and of endings are learned from, and with an opening or an ending among them the candidate tells four
 /// kinds apart. Beside a version in use that tells four kinds apart, the candidate keeps that version's opening, or
 /// its ending, as it is when nothing is labelled to learn it from, so that a round with nothing to learn one of them
@@ -281,11 +284,20 @@ public static class SegmentLearning
         public bool Hears(IReadOnlySet<CatalogEntryId> entries)
             => entries.Count is not 0 && heard.Any(stretch => stretch.Entry is CatalogEntryId entry && entries.Contains(entry));
 
+        /// <summary>
+        /// This recording read to learn from and its samples: read hearing what it heard of the catalog when it was made,
+        /// its stretches cutting segments where they start and end, but sure of none of them, so that none fixes a
+        /// segment and neighbouring segments are read as one across them. A run of segments read as one that takes no
+        /// label with all the catalog heard takes none without some of it either, so only the runs that take one are
+        /// kept.
+        /// </summary>
         public Labelled Labelled(SegmentThresholds thresholds)
         {
-            RecordingPieces pieces = Read(thresholds);
+            RecordingPieces read = SegmentDetector.Read(Recording.Evidence, Recording.Context.Hearing([.. heard.Select(Unsure)]), thresholds);
+            IReadOnlyList<SegmentLabel?> labels = SegmentLabels.OfJoined(read.Joined, Context(null), Recording.Actions);
+            RecordingPieces kept = read with { Joined = [.. read.Joined.Where((_, at) => labels[at] is not null)] };
 
-            return new Labelled(this, pieces, Samples(pieces));
+            return new Labelled(this, kept, Samples(kept));
         }
 
         /// <summary>
@@ -294,18 +306,13 @@ public static class SegmentLearning
         /// <paramref name="without"/> included, still keeps the segments it lies over from being taken for the programme.
         /// </summary>
         public IReadOnlyList<SegmentSample> Samples(RecordingPieces pieces, IReadOnlySet<CatalogEntryId>? without = null)
-        {
-            IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces.Pieces, Context(without), Recording.Actions, everything);
-            string? series = pieces.Series is string named && SegmentModel.IsASeries(named) ? named : null;
+            => SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything);
 
-            return
-            [
-                .. pieces.Pieces
-                    .Zip(labels)
-                    .Where(pair => pair.Second is not null)
-                    .Select(pair => new SegmentSample(pair.First.Features, pieces.Station, series, pair.Second!.Kind, pair.Second.Weight)),
-            ];
-        }
+        /// <summary>
+        /// <paramref name="stretch"/> with its confidence not known, which fixes nothing (<see cref="SegmentFeatures"/>).
+        /// </summary>
+        private static CatalogHeard Unsure(CatalogHeard stretch)
+            => new(stretch.Starts, stretch.Ends, stretch.Kind, stretch.Occurrences, stretch.Series, stretch.Stations, entry: stretch.Entry);
 
         public SegmentComparison Compared(SegmentDetection detection)
             => new(Recording.Context.NetworkId, Recording.Context.ServiceId, Truth, detection);
