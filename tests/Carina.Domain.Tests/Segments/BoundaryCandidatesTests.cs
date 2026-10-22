@@ -95,6 +95,18 @@ public sealed class BoundaryCandidatesTests
         Assert.Equal([TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(160)], [.. found.Where(candidate => candidate.Cues is BoundaryCue.LogoChange).Select(candidate => candidate.At)]);
     }
 
+    [Fact(DisplayName = "the logo showing for two seconds in an ending or an advert is no candidate, and the logo held for five seconds on each side of a switch is")]
+    public void OnlyALogoHeldOnBothSidesOfASwitchIsACandidate()
+    {
+        bool[] blinked = [.. Enumerable.Range(0, (int)Length).Select(second => second is (>= 200 and < 202) or (>= 300 and < 303))];
+        bool[] held = [.. Enumerable.Range(0, (int)Length).Select(second => second is >= 200 and < 205)];
+
+        Assert.DoesNotContain(BoundaryCandidates.Find(new SyntheticReadings(Length).Evidence(), Bare, blinked, SegmentThresholds.Initial), candidate => candidate.Cues is BoundaryCue.LogoChange);
+        Assert.Equal(
+            [TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(205)],
+            [.. BoundaryCandidates.Find(new SyntheticReadings(Length).Evidence(), Bare, held, SegmentThresholds.Initial).Where(candidate => candidate.Cues is BoundaryCue.LogoChange).Select(candidate => candidate.At)]);
+    }
+
     [Fact(DisplayName = "the edges of what the catalog heard as a kind it counts as and the programme's start and end by the guide are candidates, and the edges of a stretch of a kind it cannot tell are not")]
     public void CatalogAndGuideEdgesAreCandidates()
     {
