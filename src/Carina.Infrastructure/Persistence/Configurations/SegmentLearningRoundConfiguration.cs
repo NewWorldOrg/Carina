@@ -8,9 +8,10 @@ namespace Carina.Infrastructure.Persistence.Configurations;
 /// <summary>
 /// The rounds of learning taken, one row per day, so that a round already taken is not taken again after the
 /// process starts again, each with the candidate it kept, so that a round knows what is new since the last one
-/// that learned, and with what became of it, the verdict on its candidate and the figures of the version in use
-/// it was judged against, so that the settings screen can say why the version in use did or did not change. Rows
-/// kept before the last three were kept leave them empty.
+/// that learned, and with what became of it, the verdict on its candidate, the figures of the version in use it was
+/// judged against and that version's number, so that the settings screen can say why the version in use did or did
+/// not change and what the version in use is measured by. Rows kept before these were kept leave them empty, but for
+/// the number, which a row kept before it with figures has when one version was in use at the time.
 /// </summary>
 public sealed class SegmentLearningRoundConfiguration : IEntityTypeConfiguration<SegmentLearningRound>
 {
@@ -30,7 +31,8 @@ public sealed class SegmentLearningRoundConfiguration : IEntityTypeConfiguration
             table.HasCheckConstraint("ck_segment_learning_round_verdict", $"verdict IN ({SegmentVocabulary.Names<AdoptionVerdict>()})");
             table.HasCheckConstraint(
                 "ck_segment_learning_round_judged",
-                "(candidate IS NOT NULL OR (verdict IS NULL AND in_use_metrics IS NULL)) AND (in_use_metrics IS NULL OR jsonb_typeof(in_use_metrics) = 'object')");
+                "(candidate IS NOT NULL OR (verdict IS NULL AND in_use_metrics IS NULL AND in_use_version IS NULL)) AND (in_use_metrics IS NULL OR jsonb_typeof(in_use_metrics) = 'object')");
+            table.HasCheckConstraint("ck_segment_learning_round_in_use_version", $"in_use_version >= {SegmentModelVersion.FirstNumber}");
         });
 
         builder.HasKey(round => round.Day);
@@ -58,5 +60,7 @@ public sealed class SegmentLearningRoundConfiguration : IEntityTypeConfiguration
             .HasConversion(metrics => SegmentJson.Written(metrics!), stored => SegmentJson.Metrics(stored), SegmentJson.ComparedAsWritten<SegmentMetrics>(SegmentJson.Written))
             .HasColumnName("in_use_metrics")
             .HasColumnType("jsonb");
+
+        builder.Property(round => round.InUseVersion).HasColumnName("in_use_version");
     }
 }

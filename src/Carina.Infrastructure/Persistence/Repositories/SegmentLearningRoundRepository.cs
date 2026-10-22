@@ -29,11 +29,12 @@ public sealed class SegmentLearningRoundRepository(CarinaDbContext context) : IS
         string? outcome = round.Outcome?.ToString();
         string? verdict = round.Verdict?.ToString();
         string? inUseMetrics = round.InUseMetrics is { } metrics ? SegmentJson.Written(metrics) : null;
+        int? inUseVersion = round.InUseVersion;
 
         return await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            INSERT INTO segment_learning_round (day, taken_at, candidate, outcome, verdict, in_use_metrics)
-            VALUES ({day}::date, {takenAt}::timestamptz, {candidate}::integer, {outcome}::varchar, {verdict}::varchar, {inUseMetrics}::jsonb)
+            INSERT INTO segment_learning_round (day, taken_at, candidate, outcome, verdict, in_use_metrics, in_use_version)
+            VALUES ({day}::date, {takenAt}::timestamptz, {candidate}::integer, {outcome}::varchar, {verdict}::varchar, {inUseMetrics}::jsonb, {inUseVersion}::integer)
             ON CONFLICT (day) DO NOTHING
             """,
             cancellationToken) is 1;
@@ -49,6 +50,13 @@ public sealed class SegmentLearningRoundRepository(CarinaDbContext context) : IS
         => await context.Set<SegmentLearningRound>()
             .AsNoTracking()
             .Where(round => round.Outcome != null)
+            .OrderByDescending(round => round.Day)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<SegmentLearningRound?> LatestMeasuredAsync(int version, CancellationToken cancellationToken)
+        => await context.Set<SegmentLearningRound>()
+            .AsNoTracking()
+            .Where(round => round.InUseVersion == version && round.InUseMetrics != null)
             .OrderByDescending(round => round.Day)
             .FirstOrDefaultAsync(cancellationToken);
 

@@ -9,8 +9,8 @@ namespace Carina.Infrastructure.Segments;
 /// <summary>
 /// What the day's round did: the rollback made before learning, if one was; what became of the candidate; the
 /// candidate kept, what judging it against the version in use said, and the figures of the version in use on the
-/// same recordings, when one was learned; the version in use after the round; and, when the round stopped partway,
-/// what stood in the way.
+/// same recordings with its number, when one was learned; the version in use after the round; and, when the round
+/// stopped partway, what stood in the way.
 /// </summary>
 public sealed record SegmentTrainingRound(
     DateOnly Day,
@@ -23,6 +23,8 @@ public sealed record SegmentTrainingRound(
     public SpareTimeVerdict? StoppedBy { get; init; }
 
     public SegmentMetrics? InUseMetrics { get; init; }
+
+    public int? InUseVersion { get; init; }
 }
 
 /// <summary>
@@ -111,8 +113,8 @@ public sealed class SegmentTrainingJob(
 
     /// <summary>
     /// Makes the round and keeps it as finished, with what became of it, the candidate it kept, the verdict on it and
-    /// the figures of the version in use it was judged against, unless it stopped partway; a round that fails is kept
-    /// as finished too, as failed, so that the next try is the next day's.
+    /// the figures of the version in use it was judged against and its number, unless it stopped partway; a round
+    /// that fails is kept as finished too, as failed, so that the next try is the next day's.
     /// </summary>
     private async Task<SegmentTrainingRound> FinishedAsync(
         IServiceProvider services,
@@ -137,7 +139,7 @@ public sealed class SegmentTrainingJob(
         if (made.Outcome is not SegmentTrainingOutcome.Stopped)
         {
             await rounds.TakeAsync(
-                SegmentLearningRound.Ended(day, started, made.Outcome, made.Candidate?.Number, made.Verdict, made.InUseMetrics),
+                SegmentLearningRound.Ended(day, started, made.Outcome, made.Candidate?.Number, made.Verdict, made.InUseMetrics, made.InUseVersion),
                 cancellationToken);
         }
 
@@ -203,7 +205,7 @@ public sealed class SegmentTrainingJob(
             _ => new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.Kept, candidate, verdict, active),
         };
 
-        return decided with { InUseMetrics = learned.InUse.Metrics };
+        return decided with { InUseMetrics = learned.InUse.Metrics, InUseVersion = active.Number };
     }
 
     /// <summary>

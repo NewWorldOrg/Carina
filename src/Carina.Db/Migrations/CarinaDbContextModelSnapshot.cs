@@ -4017,6 +4017,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("in_use_metrics");
 
+                    b.Property<int?>("InUseVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("in_use_version");
+
                     b.Property<string>("Outcome")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
@@ -4036,7 +4040,9 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("segment_learning_round", null, t =>
                         {
-                            t.HasCheckConstraint("ck_segment_learning_round_judged", "(candidate IS NOT NULL OR (verdict IS NULL AND in_use_metrics IS NULL)) AND (in_use_metrics IS NULL OR jsonb_typeof(in_use_metrics) = 'object')");
+                            t.HasCheckConstraint("ck_segment_learning_round_in_use_version", "in_use_version >= 1");
+
+                            t.HasCheckConstraint("ck_segment_learning_round_judged", "(candidate IS NOT NULL OR (verdict IS NULL AND in_use_metrics IS NULL AND in_use_version IS NULL)) AND (in_use_metrics IS NULL OR jsonb_typeof(in_use_metrics) = 'object')");
 
                             t.HasCheckConstraint("ck_segment_learning_round_outcome", "outcome IN ('NothingToLearnFrom', 'Kept', 'Adopted', 'Stopped', 'InUseChangedMeanwhile', 'NothingNew', 'HeldAfterRollback', 'Failed') AND outcome <> 'Stopped'");
 

@@ -26,6 +26,12 @@ public interface ISegmentLearningRoundRepository
     Task<SegmentLearningRound?> LatestAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// The latest round finished that kept the figures of the version numbered <paramref name="version"/> as the
+    /// version in use it was judged against; none while no round has, as a round that learned nothing keeps none.
+    /// </summary>
+    Task<SegmentLearningRound?> LatestMeasuredAsync(int version, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Holds the turn to take a round until what it answers is disposed, so that no other process takes one
     /// meanwhile; none while another holds it.
     /// </summary>

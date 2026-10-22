@@ -42,6 +42,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal([(1, SegmentModelVersionState.Retired), (2, SegmentModelVersionState.Active)], harness.Versions.Written.Select(version => (version.Number, version.State)));
         Assert.Equal([(SegmentModelVersion.FirstNumber, SegmentTrainingHarness.Start)], harness.Trainer.Asked);
         Assert.Equal([Kept(SegmentTrainingOutcome.Adopted, 2, AdoptionVerdict.Adopted, harness.Trainer.InUse.Metrics)], harness.Rounds.Taken.Select(KeptAs));
+        Assert.Equal([(int?)SegmentModelVersion.FirstNumber], harness.Rounds.Taken.Select(round => round.InUseVersion));
     }
 
     [Theory(DisplayName = "BR-CD-008: a candidate that finds no more boundaries, as many with fewer seconds of adverts, or stands on too little is kept as a candidate only, beside the candidates before it")]
@@ -109,6 +110,32 @@ public sealed class SegmentTrainingJobTests : IDisposable
         SegmentModelVersion left = harness.Versions.Others.Single(version => version.Number == 2);
         Assert.Equal((SegmentModelVersionState.Retired, (DateTime?)harness.Now, new SegmentRollback(0.4, 0.1, 25, 1)), (left.State, left.RolledBackAt, left.Rollback));
         Assert.Equal([SegmentModelVersion.FirstNumber], harness.Trainer.Asked.Select(asked => asked.Active));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a round that rolls the version in use back and learns a candidate keeps the number of the version it went back to as the version in use it measured")]
+    public async Task ARoundThatRollsBackKeepsTheNumberOfTheVersionItWentBackTo()
+    {
+        await harness.SecondInUseAsync(daysAgo: 3);
+        DateTime adopted = harness.Versions.Active.AdoptedAt!.Value;
+        await harness.SkippedAsync(2, adopted.AddHours(1), skips: 25, returned: 10);
+        await harness.SkippedAsync(1, adopted.AddDays(-3), skips: 40, returned: 4);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
+
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.NotNull(look.Round?.Rollback);
+        Assert.Equal([SegmentModelVersion.FirstNumber], harness.Trainer.Asked.Select(asked => asked.Active));
+        SegmentLearningRound kept = Assert.Single(harness.Rounds.Taken);
+        Assert.Equal((SegmentModelVersion.FirstNumber, harness.Trainer.InUse.Metrics), (kept.InUseVersion, kept.InUseMetrics));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a round that learns nothing keeps the number of no version")]
+    public async Task ARoundThatLearnsNothingKeepsNoVersionNumber()
+    {
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal(SegmentTrainingOutcome.NothingToLearnFrom, look.Round?.Outcome);
+        Assert.Equal([(int?)null], harness.Rounds.Taken.Select(round => round.InUseVersion));
     }
 
     [Theory(DisplayName = "BR-CD-008: the version in use stays with no more than one and a half times the returns, fewer than twenty skips, or seven days on")]

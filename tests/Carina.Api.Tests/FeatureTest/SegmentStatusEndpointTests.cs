@@ -331,6 +331,24 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(JsonValueKind.Null, data.GetProperty("versions")[0].GetProperty("metrics").ValueKind);
     }
 
+    [Fact(DisplayName = "BR-CD-008: a version in use that was never evaluated itself is answered with the figures the latest round measured it by, in its figures and in its row of the history")]
+    public async Task AVersionInUseNeverEvaluatedIsAnsweredWithTheFiguresOfTheLatestRound()
+    {
+        await using SegmentStatusFeature feature = new();
+        DateTime taken = new(2026, 11, 7, 18, 6, 0, DateTimeKind.Utc);
+        await feature.Rounds.TakeAsync(
+            SegmentLearningRound.Ended(new DateOnly(2026, 11, 8), taken, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, new SegmentMetrics(0.08, 0.05, [new KindMetrics(SegmentKind.Break, 0.38)], null, 0), SegmentModelVersion.FirstNumber),
+            CancellationToken.None);
+
+        (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
+        JsonElement metrics = data.GetProperty("metrics");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal((0.08, 0.05), (metrics.GetProperty("boundaryRecallWithin2s").GetDouble(), metrics.GetProperty("boundaryRecallWithin1s").GetDouble()));
+        Assert.Equal(0.38, Assert.Single(metrics.GetProperty("kinds").EnumerateArray()).GetProperty("recall").GetDouble());
+        Assert.Equal(0.08, Assert.Single(data.GetProperty("versions").EnumerateArray()).GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
+    }
+
     [Fact(DisplayName = "BR-CD-004: before any round of learning there is no last round, and the next may begin at three in the morning in Japan of the day it is")]
     public async Task BeforeAnyRoundThereIsNoLastRound()
     {

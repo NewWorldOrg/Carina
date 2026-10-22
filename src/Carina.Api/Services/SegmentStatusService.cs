@@ -5,7 +5,8 @@ namespace Carina.Api.Services;
 
 /// <summary>
 /// Where CM, OP and ED detection stands, as the settings screen shows it: the settings, the learning data and
-/// the catalog; the version in use, and its figures beside what viewers did with its buttons lately; what the
+/// the catalog; the version in use, and its figures beside what viewers did with its buttons lately, taken from the
+/// latest round that measured it when it was never evaluated itself; what the
 /// latest evaluation stands on, or what the catalog as it stands would give one while no version has been
 /// evaluated; every version kept, the highest number first; the latest round of learning that says what became of
 /// it, with the candidate it kept when that is still kept; and the first moment the next round may begin.
@@ -54,7 +55,9 @@ public sealed class SegmentStatusService(
 
     private async Task<SegmentMetrics?> MetricsAsync(SegmentModelVersion active, CancellationToken cancellationToken)
     {
-        if (active.Metrics is not { } evaluated)
+        SegmentMetrics? measured = active.Metrics ?? (await rounds.LatestMeasuredAsync(active.Number, cancellationToken))?.InUseMetrics;
+
+        if (measured is not { } evaluated)
         {
             return null;
         }
