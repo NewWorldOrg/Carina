@@ -13,7 +13,8 @@ public sealed record DetectionInputs(SegmentEvidence Evidence, SegmentContext Co
 /// Detects the segments of one recording with one version of the model. It reads the recording's readings;
 /// the catalog's stretches heard in it, each counted as the kind the stretch alone is taken for when that
 /// differs from its entry; the corner outlines of the <see cref="SegmentDetectionSettings.LogoFrom"/> most
-/// recent earlier recordings on its station, to learn the station's logo from; and the earlier episodes of its
+/// recent earlier recordings on its station, with the catalog's stretches heard in them, to learn the station's logo
+/// from; and the earlier episodes of its
 /// series, found among the <see cref="SegmentDetectionSettings.EpisodesAmong"/> most recent earlier recordings on
 /// the station and the recordings sharing the sound of a programme fixture with it, each by the detection the same
 /// version made of it, leaving out one thrown away, with where its programme starts and ends. The counting is done
@@ -71,25 +72,28 @@ public sealed class SegmentDetecting(
     }
 
     private async Task<IReadOnlyList<CatalogHeard>> HeardAsync(RecordingId id, CancellationToken cancellationToken)
+        => [.. (await HeardInAsync([id], cancellationToken))[id]];
+
+    private async Task<ILookup<RecordingId, CatalogHeard>> HeardInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
     {
-        IReadOnlyList<CatalogOccurrence> occurrences = await catalog.OccurrencesInAsync([id], cancellationToken);
+        IReadOnlyList<CatalogOccurrence> occurrences = recordings.Count is 0 ? [] : await catalog.OccurrencesInAsync(recordings, cancellationToken);
+        IReadOnlyList<CatalogEntry> found = occurrences.Count is 0
+            ? []
+            : await catalog.EntriesAsync([.. occurrences.Select(occurrence => occurrence.EntryId).Distinct()], cancellationToken);
+        Dictionary<CatalogEntryId, CatalogEntry> entries = found.ToDictionary(entry => entry.Id);
 
-        if (occurrences.Count is 0)
-        {
-            return [];
-        }
-
-        Dictionary<CatalogEntryId, CatalogEntry> entries = (await catalog.EntriesAsync([.. occurrences.Select(occurrence => occurrence.EntryId).Distinct()], cancellationToken))
-            .ToDictionary(entry => entry.Id);
-
-        return [.. occurrences.Where(occurrence => entries.ContainsKey(occurrence.EntryId)).Select(occurrence => CatalogHeard.Of(occurrence, entries[occurrence.EntryId]))];
+        return occurrences
+            .Where(occurrence => entries.ContainsKey(occurrence.EntryId))
+            .ToLookup(occurrence => occurrence.RecordingId, occurrence => CatalogHeard.Of(occurrence, entries[occurrence.EntryId]));
     }
 
     private async Task<IReadOnlyList<RecordedCorners>> CornersAsync(IEnumerable<LearningExtraction> records, CancellationToken cancellationToken)
     {
+        LearningExtraction[] read = [.. records.Where(record => record.ReadThrough > TimeSpan.Zero)];
+        ILookup<RecordingId, CatalogHeard> heard = await HeardInAsync([.. read.Select(record => record.RecordingId)], cancellationToken);
         List<RecordedCorners> corners = [];
 
-        foreach (LearningExtraction record in records.Where(record => record.ReadThrough > TimeSpan.Zero))
+        foreach (LearningExtraction record in read)
         {
             IReadOnlyList<LearningDataPart> parts = await worklist.PartsAsync(record.RecordingId, [LearningDataKind.CornerOutlines], cancellationToken);
 
@@ -100,7 +104,7 @@ public sealed class SegmentDetecting(
 
             byte[] outlines = SegmentEvidence.Of(parts, record.ReadThrough).Outlines.ToArray();
 
-            corners.Add(new RecordedCorners(record.Programme.MemberAs(record.RecordingId), outlines));
+            corners.Add(new RecordedCorners(record.Programme.MemberAs(record.RecordingId), outlines, [.. heard[record.RecordingId]]));
         }
 
         return corners;

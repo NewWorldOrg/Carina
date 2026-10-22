@@ -2,9 +2,9 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// The corner outlines of one recording, one a second, beside what says which station it is of and
-/// when it started.
+/// when it started, and the stretches the catalog heard in it, when they are known.
 /// </summary>
-public sealed record RecordedCorners(SeriesMember Member, ReadOnlyMemory<byte> Outlines);
+public sealed record RecordedCorners(SeriesMember Member, ReadOnlyMemory<byte> Outlines, IReadOnlyList<CatalogHeard>? Catalog = null);
 
 /// <summary>
 /// The shapes a station's logo draws in the corner outlines, learned from the station's other recordings that
@@ -21,10 +21,14 @@ public sealed record RecordedCorners(SeriesMember Member, ReadOnlyMemory<byte> O
 /// (<see cref="SeriesMember.Episode"/>), as the blocks steady in at least that many of those broadcasts and
 /// in at least half of them, less any whose mirror across the middle of the picture is kept too, as the
 /// borders of a letterboxed picture are; and when it then has from <see cref="FewestBlocks"/> blocks to
-/// <see cref="MostOfTheCorners"/> of the corners. A station may keep several shapes, as its logo changes with
-/// the season. A second shows the logo when at least <see cref="SeenShare"/> of the blocks of one of the
-/// shapes are on. A logo seen in at least <see cref="NearlyEverywhere"/> of a recording's seconds, or in no
-/// more than <see cref="NearlyNowhere"/> of them, tells programme from break nowhere in it.
+/// <see cref="MostOfTheCorners"/> of the corners. A shape is kept only when, in those recordings, the share
+/// of the seconds the catalog heard as a break, away from their edges by
+/// <see cref="SegmentFeatures.LogoAwayFromTheEdges"/>, that show it is at most <see cref="MostSeenInBreaks"/>
+/// of the share of the rest of their seconds that show it; with nothing heard as a break, nothing says
+/// otherwise. A station may keep several shapes, as its logo changes with the season. A second shows the logo
+/// when at least <see cref="SeenShare"/> of the blocks of one of the shapes are on. A logo seen in at least
+/// <see cref="NearlyEverywhere"/> of a recording's seconds, or in no more than <see cref="NearlyNowhere"/> of
+/// them, tells programme from break nowhere in it.
 /// </summary>
 public sealed class CornerLogo
 {
@@ -41,6 +45,8 @@ public sealed class CornerLogo
     public const int FewestRecordings = 2;
 
     public const double SeenShare = 0.5;
+
+    public const double MostSeenInBreaks = 0.3;
 
     public const double NearlyEverywhere = 0.95;
 
@@ -63,16 +69,15 @@ public sealed class CornerLogo
         ArgumentNullException.ThrowIfNull(judged);
         ArgumentNullException.ThrowIfNull(recordings);
 
-        SteadyBlocks[] steady =
+        RecordedCorners[] earlier =
         [
             .. recordings
                 .Where(recording => IsEarlierOnTheStation(recording.Member, judged))
                 .DistinctBy(recording => recording.Member.RecordingId)
                 .OrderByDescending(recording => recording.Member.StartedAt)
-                .ThenBy(recording => recording.Member.RecordingId.Value)
-                .Select(Steady)
-                .OfType<SteadyBlocks>(),
+                .ThenBy(recording => recording.Member.RecordingId.Value),
         ];
+        SteadyBlocks[] steady = [.. earlier.Select(Steady).OfType<SteadyBlocks>()];
         List<List<SteadyBlocks>> gathered = [];
 
         foreach (SteadyBlocks blocks in steady.Where(blocks => !blocks.IsStill).Concat(steady.Where(blocks => blocks.IsStill)))
@@ -89,7 +94,7 @@ public sealed class CornerLogo
             }
         }
 
-        return new CornerLogo([.. gathered.Select(Agreed).OfType<int[]>()]);
+        return new CornerLogo([.. gathered.Select(Agreed).OfType<int[]>().Where(shape => TellsBreaks(shape, earlier))]);
     }
 
     /// <summary>
@@ -203,6 +208,70 @@ public sealed class CornerLogo
         return holding >= FewestRecordings && holding * 2 >= broadcasts && drawn.Any(blocks => !blocks.IsStill && blocks.Blocks[block]);
     }
 
+    private static bool TellsBreaks(int[] shape, RecordedCorners[] recordings)
+    {
+        Tally[] tallies = [.. recordings.Select(recording => Tallied(shape, recording))];
+        long breaks = tallies.Sum(tally => (long)tally.Breaks);
+        long rest = tallies.Sum(tally => (long)tally.Rest);
+
+        return breaks is 0 || rest is 0
+            || tallies.Sum(tally => (long)tally.SeenInBreaks) * rest <= MostSeenInBreaks * tallies.Sum(tally => (long)tally.SeenInRest) * breaks;
+    }
+
+    private static Tally Tallied(int[] shape, RecordedCorners recording)
+    {
+        ReadOnlySpan<byte> outlines = recording.Outlines.Span;
+
+        if (outlines.Length % CornerOutline.Bytes is not 0)
+        {
+            return new Tally(0, 0, 0, 0);
+        }
+
+        int seconds = outlines.Length / CornerOutline.Bytes;
+        CatalogHeard[] breaks = [.. (recording.Catalog ?? []).Where(heard => heard.Kind is SegmentKind.Break)];
+        bool[] heard = Marked(seconds, breaks.Select(stretch => (stretch.Starts, stretch.Ends)));
+        bool[] inside = Marked(
+            seconds,
+            breaks.Select(stretch => (stretch.Starts + SegmentFeatures.LogoAwayFromTheEdges + TimeSpan.FromSeconds(1), stretch.Ends - SegmentFeatures.LogoAwayFromTheEdges)));
+        int inBreaks = 0;
+        int seenInBreaks = 0;
+        int rest = 0;
+        int seenInRest = 0;
+
+        for (int second = 0; second < seconds; second++)
+        {
+            int seen = Shows(outlines.Slice(second * CornerOutline.Bytes, CornerOutline.Bytes), shape) ? 1 : 0;
+
+            if (inside[second])
+            {
+                inBreaks++;
+                seenInBreaks += seen;
+            }
+            else if (!heard[second])
+            {
+                rest++;
+                seenInRest += seen;
+            }
+        }
+
+        return new Tally(inBreaks, seenInBreaks, rest, seenInRest);
+    }
+
+    private static bool[] Marked(int seconds, IEnumerable<(TimeSpan From, TimeSpan To)> stretches)
+    {
+        bool[] marked = new bool[seconds];
+
+        foreach ((TimeSpan from, TimeSpan to) in stretches)
+        {
+            int first = (int)Math.Clamp(Math.Floor(from.TotalSeconds), 0, seconds);
+            int last = (int)Math.Clamp(Math.Ceiling(to.TotalSeconds), first, seconds);
+
+            marked.AsSpan(first, last - first).Fill(true);
+        }
+
+        return marked;
+    }
+
     private static bool CoversTooMuch(int blocks) => blocks > CornerOutline.Bits * MostOfTheCorners;
 
     private static bool IsOnTheEdge(int block)
@@ -257,6 +326,12 @@ public sealed class CornerLogo
     /// The steady blocks of one recording, with the broadcast it is of; a recording whose steady blocks cover
     /// too much of the corners carries a still picture.
     /// </summary>
+    /// <summary>
+    /// The seconds of one recording inside what the catalog heard as a break and the rest of its seconds, each with
+    /// how many of them show a shape.
+    /// </summary>
+    private readonly record struct Tally(int Breaks, int SeenInBreaks, int Rest, int SeenInRest);
+
     private sealed record SteadyBlocks(SeriesEpisode Episode, bool[] Blocks, int Count)
     {
         public bool IsStill => CoversTooMuch(Count);

@@ -194,12 +194,33 @@ public sealed class CornerLogoTests
                 ]).Shapes));
     }
 
+    [Fact(DisplayName = "a shape seen as much in what the catalog heard as a break as in the rest of the recordings it was learned from is no logo")]
+    public void AShapeSeenAsMuchInBreaksAsElsewhereIsNoLogo()
+    {
+        CatalogHeard[] shown = [Heard(100, 160, SegmentKind.Break), Heard(400, 460, SegmentKind.Break)];
+        CatalogHeard[] dark = [Heard(0, 60, SegmentKind.Break), Heard(300, 360, SegmentKind.Break)];
+
+        Assert.Empty(CornerLogo.Learn(Judged, [Recorded(Member(1, Evening.AddDays(-7)), TopRight, 1, shown), Recorded(Member(1, Evening.AddDays(-1)), TopRight, 2, shown)]).Shapes);
+        Assert.Single(CornerLogo.Learn(Judged, [Recorded(Member(1, Evening.AddDays(-7)), TopRight, 1, dark), Recorded(Member(1, Evening.AddDays(-1)), TopRight, 2, dark)]).Shapes);
+    }
+
+    [Fact(DisplayName = "a station's shape is kept when the catalog heard nothing as a break in the recordings it was learned from")]
+    public void AShapeIsKeptWhenNothingWasHeardAsABreak()
+    {
+        CatalogHeard[] themes = [Heard(100, 160, SegmentKind.Opening), Heard(400, 460, null)];
+
+        Assert.Single(CornerLogo.Learn(Judged, [Recorded(Member(1, Evening.AddDays(-7)), TopRight, 1, themes), Recorded(Member(1, Evening.AddDays(-1)), TopRight, 2, themes)]).Shapes);
+    }
+
     [Fact(DisplayName = "outlines that are not whole seconds of corners are refused")]
     public void BrokenOutlinesAreRefused()
         => Assert.Throws<ArgumentException>(() => CornerLogo.None.Sightings(new byte[CornerOutline.Bytes + 1]));
 
-    private static RecordedCorners Recorded(SeriesMember member, int[] logo, int seed)
-        => new(member, Drawn(Seconds, logo, second => second % 300 >= 60, seed));
+    private static RecordedCorners Recorded(SeriesMember member, int[] logo, int seed, IReadOnlyList<CatalogHeard>? catalog = null)
+        => new(member, Drawn(Seconds, logo, second => second % 300 >= 60, seed), catalog);
+
+    private static CatalogHeard Heard(int from, int to, SegmentKind? kind)
+        => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, 4, 2, 2);
 
     private static RecordedCorners Thin(SeriesMember member, int seed)
         => new(member, Drawn(Seconds, TopRight, second => second % 20 < 9, seed));
