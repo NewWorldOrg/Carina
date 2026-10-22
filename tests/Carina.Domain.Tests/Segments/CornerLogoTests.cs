@@ -118,6 +118,51 @@ public sealed class CornerLogoTests
         Assert.Equal(logo.Sightings(Drawn(Seconds, TopRight, second => second >= 31, 3)), logo.Telling(Drawn(Seconds, TopRight, second => second >= 31, 3)));
     }
 
+    [Fact(DisplayName = "a logo inside a still picture covering much of the corners is learned from that recording and one clean recording")]
+    public void ALogoInsideAStillPictureIsLearnedWithOneCleanRecording()
+    {
+        int[] still = [.. Rectangle(0, 1, 1, 28, 15), .. Rectangle(1, 1, 1, 28, 15)];
+        RecordedCorners pictured = new(Member(1, Evening.AddDays(-7)), Drawn(Seconds, [.. still, .. TopRight], second => second % 300 >= 60, 1));
+
+        CornerLogo logo = CornerLogo.Learn(Judged, [pictured, Recorded(Member(1, Evening.AddDays(-1)), TopRight, 2)]);
+
+        Assert.Equal(TopRight.Order(), Assert.Single(logo.Shapes));
+        Assert.Empty(CornerLogo.Learn(Judged, [pictured]).Shapes);
+    }
+
+    [Fact(DisplayName = "still pictures draw no logo among themselves, however much of the corners they share")]
+    public void StillPicturesDrawNoLogoAmongThemselves()
+    {
+        RecordedCorners one = new(Member(1, Evening.AddDays(-14)), Drawn(Seconds, [.. Rectangle(0, 1, 1, 28, 15), .. Rectangle(1, 1, 1, 28, 8)], _ => true, 1));
+        RecordedCorners other = new(Member(1, Evening.AddDays(-7)), Drawn(Seconds, [.. Rectangle(1, 1, 4, 28, 12), .. Rectangle(3, 1, 1, 28, 15)], _ => true, 2));
+        RecordedCorners again = new(Member(1, Evening.AddDays(-1)), Drawn(Seconds, [.. Rectangle(1, 1, 4, 28, 12), .. Rectangle(3, 1, 1, 28, 15)], _ => true, 3));
+
+        Assert.Empty(CornerLogo.Learn(Judged, [one, other]).Shapes);
+        Assert.Empty(CornerLogo.Learn(Judged, [one, other, again]).Shapes);
+    }
+
+    [Fact(DisplayName = "a picture busy all over a corner confirms no logo there by chance")]
+    public void APictureBusyAllOverACornerConfirmsNoLogoByChance()
+    {
+        int[] checkered = [.. Enumerable.Range(0, CornerOutline.BlocksInACorner)
+            .Where(at => ((at / CornerOutline.Columns) + (at % CornerOutline.Columns)) % 2 is 0)
+            .Select(at => CornerOutline.BlocksInACorner + at)];
+        RecordedCorners busy = new(Member(1, Evening.AddDays(-7)), Drawn(Seconds, checkered, _ => true, 1));
+
+        Assert.Empty(CornerLogo.Learn(Judged, [busy, Recorded(Member(1, Evening.AddDays(-1)), TopRight, 2)]).Shapes);
+    }
+
+    [Fact(DisplayName = "two recordings of one broadcast count as one recording")]
+    public void TwoRecordingsOfOneBroadcastCountAsOne()
+    {
+        DateTime broadcast = Evening.AddDays(-7);
+        RecordedCorners first = Recorded(Member(1, broadcast, broadcast), TopRight, 1);
+        RecordedCorners second = Recorded(Member(1, broadcast.AddSeconds(5), broadcast), TopRight, 2);
+
+        Assert.Empty(CornerLogo.Learn(Judged, [first, second]).Shapes);
+        Assert.Single(CornerLogo.Learn(Judged, [first, second, Recorded(Member(1, Evening.AddDays(-1), Evening.AddDays(-1)), TopRight, 3)]).Shapes);
+    }
+
     [Fact(DisplayName = "outlines that are not whole seconds of corners are refused")]
     public void BrokenOutlinesAreRefused()
         => Assert.Throws<ArgumentException>(() => CornerLogo.None.Sightings(new byte[CornerOutline.Bytes + 1]));
@@ -125,6 +170,6 @@ public sealed class CornerLogoTests
     private static RecordedCorners Recorded(SeriesMember member, int[] logo, int seed)
         => new(member, Drawn(Seconds, logo, second => second % 300 >= 60, seed));
 
-    private static SeriesMember Member(int station, DateTime startedAt)
-        => new(RecordingId.New(), new NetworkId(station), new ServiceId(station), "架空の物語", startedAt);
+    private static SeriesMember Member(int station, DateTime startedAt, DateTime? programmeStartsAt = null)
+        => new(RecordingId.New(), new NetworkId(station), new ServiceId(station), "架空の物語", startedAt, programmeStartsAt);
 }
