@@ -6,7 +6,7 @@ namespace Carina.Api.Services;
 /// <summary>
 /// Where CM, OP and ED detection stands, as the settings screen shows it: the settings, the learning data and
 /// the catalog; the version in use, and its figures beside what viewers did with its buttons lately, taken from the
-/// latest round that kept any when the version was never evaluated itself but was the one that round measured; what the
+/// latest round that measured it when it was never evaluated itself; what the
 /// latest evaluation stands on, or what the catalog as it stands would give one while no version has been
 /// evaluated; every version kept, the highest number first; the latest round of learning that says what became of
 /// it, with the candidate it kept when that is still kept; and the first moment the next round may begin.
@@ -38,7 +38,6 @@ public sealed class SegmentStatusService(
         IReadOnlyList<SegmentModelVersion> kept = [.. (await versions.ListAsync(cancellationToken)).OrderByDescending(version => version.Number)];
         SegmentModelVersion active = kept.Single(version => version.State is SegmentModelVersionState.Active);
         SegmentLearningRound? last = await rounds.LatestAsync(cancellationToken);
-        SegmentLearningRound? measured = await rounds.LatestMeasuredAsync(cancellationToken);
         DateTime now = clock.GetUtcNow().UtcDateTime;
 
         return ServiceResult<SegmentStatus>.Success(new SegmentStatus(
@@ -46,7 +45,7 @@ public sealed class SegmentStatusService(
             await learningData.ReadAsync(cancellationToken),
             await catalog.ReadAsync(cancellationToken),
             active,
-            await MetricsAsync(active, measured, cancellationToken),
+            await MetricsAsync(active, cancellationToken),
             kept.FirstOrDefault(version => version.Evidence is not null)?.Evidence ?? await evidence.ReadAsync(cancellationToken),
             kept,
             last,
@@ -54,9 +53,11 @@ public sealed class SegmentStatusService(
             SegmentLearningRound.NextNotBefore(now, await rounds.TakenAsync(SegmentLearningRound.DayOf(now), cancellationToken))));
     }
 
-    private async Task<SegmentMetrics?> MetricsAsync(SegmentModelVersion active, SegmentLearningRound? measured, CancellationToken cancellationToken)
+    private async Task<SegmentMetrics?> MetricsAsync(SegmentModelVersion active, CancellationToken cancellationToken)
     {
-        if ((active.Metrics ?? MeasuredBy(active, measured)) is not { } evaluated)
+        SegmentMetrics? measured = active.Metrics ?? (await rounds.LatestMeasuredAsync(active.Number, cancellationToken))?.InUseMetrics;
+
+        if (measured is not { } evaluated)
         {
             return null;
         }
@@ -65,11 +66,4 @@ public sealed class SegmentStatusService(
 
         return evaluated.WithReturns(await skips.ReturnsAsync(active.Number, now - SegmentLearning.ReturnsOver, now, cancellationToken));
     }
-
-    /// <summary>
-    /// The figures <paramref name="measured"/> kept of the version in use, when it was put in use no later than that
-    /// round was taken and so was the version that round measured; none otherwise.
-    /// </summary>
-    private static SegmentMetrics? MeasuredBy(SegmentModelVersion active, SegmentLearningRound? measured)
-        => measured is { InUseMetrics: { } figures } && active.AdoptedAt <= measured.TakenAt ? figures : null;
 }

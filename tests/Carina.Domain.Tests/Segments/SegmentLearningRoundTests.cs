@@ -68,6 +68,30 @@ public sealed class SegmentLearningRoundTests
             (round.Day, round.TakenAt, round.Candidate, round.Outcome, round.Verdict, round.InUseMetrics));
     }
 
+    [Fact(DisplayName = "BR-CD-008: a round that learned a candidate is kept with the number of the version in use it measured, which a round kept before the number was kept may lack")]
+    public void ARoundThatLearnedIsKeptWithTheNumberOfTheVersionItMeasured()
+    {
+        DateTime at = new(2026, 10, 19, 18, 30, 0, DateTimeKind.Utc);
+        DateOnly day = SegmentLearningRound.DayOf(at);
+        SegmentMetrics inUse = new(0.08, 0.05, [], null, 0);
+
+        Assert.Equal(3, SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, inUse, 3).InUseVersion);
+        Assert.Equal(3, SegmentLearningRound.Rehydrate(day, at, 5, SegmentTrainingOutcome.Kept, AdoptionVerdict.TooLittleEvidence, inUse, 3).InUseVersion);
+        Assert.Null(SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, inUse).InUseVersion);
+        Assert.Null(SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.NothingNew).InUseVersion);
+    }
+
+    [Fact(DisplayName = "BR-CD-008: the number of the version in use a round measured is a version number, and only a round that kept a candidate has one")]
+    public void TheNumberOfTheVersionMeasuredIsAVersionNumberOfARoundThatKeptACandidate()
+    {
+        DateTime at = new(2026, 10, 19, 18, 30, 0, DateTimeKind.Utc);
+        DateOnly day = SegmentLearningRound.DayOf(at);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, null, 0));
+        Assert.Throws<ArgumentException>(() => SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.NothingNew, null, null, null, 1));
+        Assert.Throws<ArgumentException>(() => SegmentLearningRound.Rehydrate(day, at, null, null, null, null, 1));
+    }
+
     [Theory(DisplayName = "BR-CD-004: a round that learned nothing, or failed, is kept with what became of it and nothing of a candidate")]
     [InlineData(SegmentTrainingOutcome.NothingNew)]
     [InlineData(SegmentTrainingOutcome.NothingToLearnFrom)]

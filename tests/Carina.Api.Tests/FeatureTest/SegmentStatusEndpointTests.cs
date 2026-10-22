@@ -337,7 +337,7 @@ public sealed class SegmentStatusEndpointTests
         await using SegmentStatusFeature feature = new();
         DateTime taken = new(2026, 11, 7, 18, 6, 0, DateTimeKind.Utc);
         await feature.Rounds.TakeAsync(
-            SegmentLearningRound.Ended(new DateOnly(2026, 11, 8), taken, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, new SegmentMetrics(0.08, 0.05, [new KindMetrics(SegmentKind.Break, 0.38)], null, 0)),
+            SegmentLearningRound.Ended(new DateOnly(2026, 11, 8), taken, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, new SegmentMetrics(0.08, 0.05, [new KindMetrics(SegmentKind.Break, 0.38)], null, 0), SegmentModelVersion.FirstNumber),
             CancellationToken.None);
 
         (HttpStatusCode status, JsonElement data) = await feature.DataAsync();

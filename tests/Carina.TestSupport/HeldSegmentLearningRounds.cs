@@ -63,11 +63,11 @@ public sealed class HeldSegmentLearningRounds : ISegmentLearningRoundRepository
         }
     }
 
-    public Task<SegmentLearningRound?> LatestMeasuredAsync(CancellationToken cancellationToken)
+    public Task<SegmentLearningRound?> LatestMeasuredAsync(int version, CancellationToken cancellationToken)
     {
         lock (gate)
         {
-            return Task.FromResult(taken.Values.Where(round => round.InUseMetrics is not null).MaxBy(round => round.Day));
+            return Task.FromResult(taken.Values.Where(round => round.InUseVersion == version && round.InUseMetrics is not null).MaxBy(round => round.Day));
         }
     }
 
