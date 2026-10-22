@@ -52,6 +52,8 @@ public sealed class CornerLogo
 
     public const double NearlyNowhere = 0.05;
 
+    private const int BlocksOffTheEdge = CornerOutline.BlocksInACorner - CornerOutline.Columns - CornerOutline.Rows + 1;
+
     private readonly int[][] shapes;
 
     private CornerLogo(int[][] shapes)
@@ -323,20 +325,21 @@ public sealed class CornerLogo
     private static bool IsOn(ReadOnlySpan<byte> outline, int block) => (outline[block >> 3] & (1 << (block & 7))) is not 0;
 
     /// <summary>
-    /// The steady blocks of one recording, with the broadcast it is of; a recording whose steady blocks cover
-    /// too much of the corners carries a still picture.
-    /// </summary>
-    /// <summary>
     /// The seconds of one recording inside what the catalog heard as a break and the rest of its seconds, each with
     /// how many of them show a shape.
     /// </summary>
     private readonly record struct Tally(int Breaks, int SeenInBreaks, int Rest, int SeenInRest);
 
+    /// <summary>
+    /// The steady blocks of one recording, with the broadcast it is of; a recording whose steady blocks cover
+    /// too much of the corners carries a still picture. How much of a corner they cover is counted among the
+    /// blocks off the edge of the picture, the only ones that can be steady.
+    /// </summary>
     private sealed record SteadyBlocks(SeriesEpisode Episode, bool[] Blocks, int Count)
     {
         public bool IsStill => CoversTooMuch(Count);
 
         public double Covered(int corner)
-            => Blocks.Skip(corner * CornerOutline.BlocksInACorner).Take(CornerOutline.BlocksInACorner).Count(block => block) / (double)CornerOutline.BlocksInACorner;
+            => Blocks.Skip(corner * CornerOutline.BlocksInACorner).Take(CornerOutline.BlocksInACorner).Count(block => block) / (double)BlocksOffTheEdge;
     }
 }
