@@ -16,7 +16,7 @@ namespace Carina.Domain.Segments;
 /// </summary>
 public static class BoundaryCandidates
 {
-    public const int HeldSeconds = 2;
+    public const int HeldSeconds = 5;
 
     public static readonly TimeSpan ShortestQuiet = TimeSpan.FromSeconds(0.15);
 

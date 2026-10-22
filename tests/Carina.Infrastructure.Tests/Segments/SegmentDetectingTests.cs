@@ -73,6 +73,27 @@ public sealed class SegmentDetectingTests
         Assert.Equal(8, Assert.Single(learned.Context.Logo.Shapes).Count);
     }
 
+    [Fact(DisplayName = "BR-CD-012: a shape seen as much in what the catalog heard as a break in the earlier recordings as elsewhere is not learned as the logo")]
+    public async Task AShapeSeenInTheEarlierRecordingsBreaksIsNotLearned()
+    {
+        using SegmentDetectionHarness harness = new();
+        RecordingId judged = await harness.ReadAsync(3, "架空の物語", logo: true);
+        RecordingId weather = await harness.ReadAsync(4, "架空の天気", logo: true);
+        RecordingId quiz = await harness.ReadAsync(5, "架空のクイズ", logo: true);
+        CatalogEntryId id = CatalogEntryId.New();
+        CatalogOccurrence[] heard =
+        [
+            CatalogOccurrence.Found(id, weather, new SoundSpan(TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(130)), harness.Records.Row(weather)!.Programme, 0.05, Now),
+            CatalogOccurrence.Found(id, quiz, new SoundSpan(TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(130)), harness.Records.Row(quiz)!.Programme, 0.05, Now),
+        ];
+        harness.Catalog.Entries.Add(Fixture(id, heard, CatalogKind.Cm));
+        harness.Catalog.Occurrences.AddRange(heard);
+
+        DetectionInputs inputs = await GatherAsync(harness, judged);
+
+        Assert.Empty(inputs.Context.Logo.Shapes);
+    }
+
     [Fact(DisplayName = "the earlier episodes are what the version in use detected of the series' earlier recordings, leaving out what it threw away, other series and later episodes")]
     public async Task TheEarlierEpisodesAreWhatTheVersionInUseDetected()
     {
