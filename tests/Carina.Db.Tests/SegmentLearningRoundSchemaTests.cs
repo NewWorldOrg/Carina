@@ -78,6 +78,41 @@ public sealed class SegmentLearningRoundSchemaTests(MigratedScratchDatabase data
                 """));
     }
 
+    [Fact(DisplayName = "BR-CD-008: the latest round that kept the figures of the version in use is read back whatever came after it, and the latest round that says what became of it stays the last of them")]
+    public async Task TheLatestRoundThatKeptFiguresIsReadBackWhateverCameAfterIt()
+    {
+        DateTime first = new(2028, 3, 1, 18, 6, 0, DateTimeKind.Utc);
+        SegmentMetrics older = new(0.31, 0.2, [new KindMetrics(SegmentKind.Break, 0.5)], null, 0);
+        SegmentMetrics newer = new(0.44, 0.3, [new KindMetrics(SegmentKind.Break, 0.6)], null, 0);
+
+        try
+        {
+            await TakeAsync(SegmentLearningRound.Ended(SegmentLearningRound.DayOf(first), first, SegmentTrainingOutcome.Kept, 6, AdoptionVerdict.TooLittleEvidence, older));
+            await TakeAsync(SegmentLearningRound.Ended(SegmentLearningRound.DayOf(first.AddDays(1)), first.AddDays(1), SegmentTrainingOutcome.NothingNew));
+            await TakeAsync(SegmentLearningRound.Ended(SegmentLearningRound.DayOf(first.AddDays(2)), first.AddDays(2), SegmentTrainingOutcome.Failed));
+            await TakeAsync(SegmentLearningRound.Taken(first.AddDays(3)));
+
+            SegmentLearningRound? measured = await LatestMeasuredAsync();
+
+            Assert.NotNull(measured);
+            Assert.Equal((first, (int?)6, 0.31, 0.5), (measured.TakenAt, measured.Candidate, measured.InUseMetrics?.BoundaryRecallWithin2s, measured.InUseMetrics?.BreakRecall));
+            Assert.Equal(SegmentTrainingOutcome.Failed, (await LatestAsync())?.Outcome);
+
+            await TakeAsync(SegmentLearningRound.Ended(SegmentLearningRound.DayOf(first.AddDays(4)), first.AddDays(4), SegmentTrainingOutcome.Kept, 7, AdoptionVerdict.NoBetterAtBoundaries, newer));
+            await TakeAsync(SegmentLearningRound.Ended(SegmentLearningRound.DayOf(first.AddDays(5)), first.AddDays(5), SegmentTrainingOutcome.NothingToLearnFrom));
+
+            measured = await LatestMeasuredAsync();
+
+            Assert.NotNull(measured);
+            Assert.Equal((first.AddDays(4), (int?)7, 0.44), (measured.TakenAt, measured.Candidate, measured.InUseMetrics?.BoundaryRecallWithin2s));
+            Assert.Equal(SegmentTrainingOutcome.NothingToLearnFrom, (await LatestAsync())?.Outcome);
+        }
+        finally
+        {
+            await ScalarAsync("DELETE FROM segment_learning_round WHERE day >= '2028-01-01'");
+        }
+    }
+
     [Theory(DisplayName = "BR-CD-004: no round is kept as stopped, and none says how a candidate was judged without having kept one")]
     [InlineData("2027-04-01", "NULL", "'Stopped'", "NULL", "NULL")]
     [InlineData("2027-04-02", "NULL", "'NothingNew'", "'Adopted'", "NULL")]
@@ -217,6 +252,13 @@ public sealed class SegmentLearningRoundSchemaTests(MigratedScratchDatabase data
         await using CarinaDbContext context = Context();
 
         return await new SegmentLearningRoundRepository(context).LatestAsync(Cancel);
+    }
+
+    private async Task<SegmentLearningRound?> LatestMeasuredAsync()
+    {
+        await using CarinaDbContext context = Context();
+
+        return await new SegmentLearningRoundRepository(context).LatestMeasuredAsync(Cancel);
     }
 
     private async Task<bool> TakeAsync(SegmentLearningRound round)

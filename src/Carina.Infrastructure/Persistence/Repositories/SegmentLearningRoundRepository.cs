@@ -52,6 +52,13 @@ public sealed class SegmentLearningRoundRepository(CarinaDbContext context) : IS
             .OrderByDescending(round => round.Day)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<SegmentLearningRound?> LatestMeasuredAsync(CancellationToken cancellationToken)
+        => await context.Set<SegmentLearningRound>()
+            .AsNoTracking()
+            .Where(round => round.InUseMetrics != null)
+            .OrderByDescending(round => round.Day)
+            .FirstOrDefaultAsync(cancellationToken);
+
     /// <summary>
     /// Opens a transaction on this context's connection and takes a lock that lasts as long as it does, without
     /// waiting for it; the context is then for holding the turn and nothing else.

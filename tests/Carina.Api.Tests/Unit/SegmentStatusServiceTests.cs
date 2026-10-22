@@ -57,6 +57,36 @@ public sealed class SegmentStatusServiceTests
         Assert.Equal(0.08, StandingOf(status, SegmentModelVersion.FirstNumber));
     }
 
+    [Fact(DisplayName = "BR-CD-008: a version in use that was never evaluated itself keeps the figures of the latest round that measured it when later rounds learned nothing and kept none, while the last round stays the latest")]
+    public async Task AVersionNeverEvaluatedKeepsTheFiguresOfAnOlderRoundWhenLaterRoundsMeasuredNone()
+    {
+        await TakeRoundAsync(InUseFigures());
+        await TakeWithoutFiguresAsync(Taken.AddDays(1), SegmentTrainingOutcome.NothingNew);
+        await TakeWithoutFiguresAsync(Taken.AddDays(2), SegmentTrainingOutcome.NothingToLearnFrom);
+        await TakeWithoutFiguresAsync(Taken.AddDays(3), SegmentTrainingOutcome.Failed);
+
+        SegmentStatus status = await ReadAsync();
+
+        Assert.Equal(SegmentTrainingOutcome.Failed, status.LastRound?.Outcome);
+        Assert.NotNull(status.Metrics);
+        Assert.Equal((0.08, 0.38), (status.Metrics.BoundaryRecallWithin2s, status.Metrics.BreakRecall));
+        Assert.Equal(0.08, StandingOf(status, SegmentModelVersion.FirstNumber));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a version in use put in use after the latest round that measured any has no figures, however many rounds came after that learned nothing")]
+    public async Task AVersionNeverEvaluatedPutInUseAfterTheLatestMeasuringRoundHasNoFigures()
+    {
+        versions.Active = HeldSegmentModelVersions.InUse(3, Taken.AddHours(2));
+        versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, Taken.AddHours(2), null, null));
+        await TakeRoundAsync(InUseFigures());
+        await TakeWithoutFiguresAsync(Taken.AddDays(1), SegmentTrainingOutcome.NothingNew);
+
+        SegmentStatus status = await ReadAsync();
+
+        Assert.Null(status.Metrics);
+        Assert.Null(StandingOf(status, 3));
+    }
+
     [Fact(DisplayName = "BR-CD-008: a version in use that was never evaluated itself has no figures when the latest round measured another version")]
     public async Task AVersionNeverEvaluatedHasNoFiguresWhenTheRoundMeasuredAnother()
     {
@@ -101,6 +131,9 @@ public sealed class SegmentStatusServiceTests
         => await rounds.TakeAsync(
             SegmentLearningRound.Ended(SegmentLearningRound.DayOf(Taken), Taken, SegmentTrainingOutcome.Kept, 9, AdoptionVerdict.TooLittleEvidence, inUse),
             CancellationToken.None);
+
+    private async Task TakeWithoutFiguresAsync(DateTime at, SegmentTrainingOutcome outcome)
+        => await rounds.TakeAsync(SegmentLearningRound.Ended(SegmentLearningRound.DayOf(at), at, outcome), CancellationToken.None);
 
     private async Task SkippedAsync(int version, ViewerActionKind action, int count)
     {
