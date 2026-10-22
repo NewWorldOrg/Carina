@@ -7,17 +7,15 @@ public enum SegmentVersionFailure
 {
     Unreadable = 1,
 
-    LearningOff = 2,
-
     NoSuchVersion = 3,
 }
 
 /// <summary>
-/// Chooses the version of the model in use by hand, or leaves the choice to learning again, while learning is
-/// on. Either goes through the one change that moves the version in use; once it has moved, detection in spare
-/// time detects the recordings still kept again with it.
+/// Chooses the version of the model in use by hand, or leaves the choice to learning again. Either goes through the
+/// one change that moves the version in use; once it has moved, detection in spare time detects the recordings still
+/// kept again with it.
 /// </summary>
-public sealed class SegmentVersionService(ISegmentModelVersionRepository versions, ILearningSwitch learning, TimeProvider clock)
+public sealed class SegmentVersionService(ISegmentModelVersionRepository versions, TimeProvider clock)
 {
     public async Task<ServiceResult<SegmentModelVersion, SegmentVersionFailure>> ChooseAsync(
         int? number,
@@ -30,13 +28,6 @@ public sealed class SegmentVersionService(ISegmentModelVersionRepository version
                 "number: expected the number of the version to choose by hand, or byHand: false to leave the choice to learning again; "
                 + "a change names one of the two, not both.",
                 SegmentVersionFailure.Unreadable);
-        }
-
-        if (!await learning.IsOnAsync(cancellationToken))
-        {
-            return ServiceResult<SegmentModelVersion, SegmentVersionFailure>.Failure(
-                "Learning is off: the version in use is chosen only while CM, OP and ED learning is on.",
-                SegmentVersionFailure.LearningOff);
         }
 
         return await versions.ChangeAsync(change, clock.GetUtcNow().UtcDateTime, cancellationToken) is { } active

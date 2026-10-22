@@ -2,7 +2,6 @@ using System.Globalization;
 
 using Carina.Domain.Base;
 using Carina.Domain.Captions;
-using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
@@ -23,16 +22,12 @@ namespace Carina.Infrastructure.Encodings;
 /// The run writes on the job where it ran, each programme's id and start before its output is read,
 /// and its headway at every tenth and at least every <see cref="HeartbeatEvery"/>. The chapters come
 /// from the recording's detection by the version of the model in use, as <see cref="EncodeChapterChoice"/>
-/// decides; while learning is off and nothing detected the recording, the source is looked at instead. Where
-/// they came from goes into the ledger before the encode starts, whatever the answer; any chapters are
-/// handed to the encode as a metadata file recorded as a scratch file. Before the artefact is placed, the
-/// text of the recording's captions is put into the work file as a text track when it was taken by then.
-/// A look at the source is handed the
-/// station watermark learned ahead from another recording of the same service, and the watermark it
-/// learns from this recording is kept once the reading is in the ledger; failing to read or keep a
-/// watermark does not fail the job. Chapters taken from a detection take no watermark: the detection
-/// judged the station's logo from the corners of the station's other recordings. Once a job has completed, what earlier jobs of the recording
-/// made is replaced; a failure there leaves the job completed and is settled at the next start.
+/// decides; a recording that version has not detected yet is encoded with no chapters, without waiting, and
+/// they are written into the artefact once it has. Where they came from goes into the ledger before the
+/// encode starts, whatever the answer; any chapters are handed to the encode as a metadata file recorded as
+/// a scratch file. Before the artefact is placed, the text of the recording's captions is put into the work
+/// file as a text track when it was taken by then. Once a job has completed, what earlier jobs of the
+/// recording made is replaced; a failure there leaves the job completed and is settled at the next start.
 /// </remarks>
 public sealed class EncodeJobRunner(
     IEncodeJobRepository jobs,
@@ -46,10 +41,8 @@ public sealed class EncodeJobRunner(
     IMachineCapabilityReader machine,
     ISourceLengthReader lengths,
     ISourceHeadReader heads,
-    IChapterDetector detector,
     EncodeChapterChoices choices,
     IEncodeChapterRepository chapters,
-    IStationWatermarkRepository watermarks,
     ICaptionRecords captionRecords,
     CaptionTrackMux captionTracks,
     MachineSettings programmes,
@@ -163,9 +156,7 @@ public sealed class EncodeJobRunner(
         int cores = Math.Min((await autoRun.ReadAsync(cancellationToken)).MostCores, programmes.Cores);
 
         EncodeChapterChoice choice = await choices.ReadAsync(recording.Id, cancellationToken);
-        string? metadata = choice.AsksTheReader
-            ? await LookedAsync(job, recording, source.FullName, timeline, cores, cancellationToken)
-            : await ChosenAsync(job, choice, timeline, cancellationToken);
+        string? metadata = await ChosenAsync(job, choice, timeline, cancellationToken);
         string? breaks = null;
 
         if (metadata is not null)
@@ -282,56 +273,6 @@ public sealed class EncodeJobRunner(
     }
 
     /// <summary>
-    /// Asks the reader of the source the machine is set up with where the breaks are and writes its answer down
-    /// whatever it was, handing back the chapters it marked on the clock the metadata is read on, or none.
-    /// </summary>
-    private async Task<string?> LookedAsync(
-        EncodeJob job,
-        Recording recording,
-        string source,
-        EncodeTimeline timeline,
-        int cores,
-        CancellationToken cancellationToken)
-    {
-        WatermarkMask? learnedAhead = await LearnedAheadAsync(job, recording, cancellationToken);
-
-        ChapterDetection marks = await MarkedAsync(
-            source,
-            recording.ServiceId,
-            timeline,
-            learnedAhead,
-            cores,
-            spawned => SpawnedAsync(job, spawned, cancellationToken),
-            cancellationToken);
-
-        if (marks.Verdict is not ChapterVerdict.NotAsked)
-        {
-            logger.LogInformation(
-                "Job {Job} was read for the breaks in it and came back {Verdict} with {Chapters} chapter(s) over {Share} of its length: {Note}",
-                job.Id.Wire,
-                marks.Verdict,
-                marks.Segments.Count,
-                marks.BreakShare.ToString("0.000", CultureInfo.InvariantCulture),
-                marks.Note);
-        }
-
-        job.Judged(ChapterReading.Of(detector.Name, marks, clock.GetUtcNow().UtcDateTime));
-        await jobs.SaveAsync(job, cancellationToken);
-
-        if (marks.Learned is { } learned)
-        {
-            await KeepAsync(job, recording, learned, cancellationToken);
-        }
-
-        await chapters.RecordAsync(
-            job.Id,
-            marks.Marks ? EncodeChapter.Mark(job.Id, marks.Segments) : [],
-            cancellationToken);
-
-        return marks.Marks ? ChapterMetadataFile.Written(marks.Segments, timeline.HeadSkip) : null;
-    }
-
-    /// <summary>
     /// Writes down that the chapters come from the recording's detection by the version in use, or from nothing,
     /// and hands back the stretches embedded in the recording's own time, or none.
     /// </summary>
@@ -360,7 +301,7 @@ public sealed class EncodeJobRunner(
         else
         {
             logger.LogInformation(
-                "Job {Job} is encoded with no chapters, because learning is on and version {Version} has not detected its recording; they are written into the artefact once it has.",
+                "Job {Job} is encoded with no chapters, because version {Version} has not detected its recording; they are written into the artefact once it has.",
                 job.Id.Wire,
                 choice.ModelVersion);
         }
@@ -380,87 +321,6 @@ public sealed class EncodeJobRunner(
         => head.Fault is SourceHeadFault.Refused
             ? $"the programme exited {head.ExitCode} while reading the head of the source: {head.Note}"
             : $"the head of the source could not be read ({head.Fault}), so nothing says where the artefact's clock would begin: {head.Note}";
-
-    /// <summary>
-    /// Asks where the breaks are and comes back with an answer whatever happens, except for a stop the
-    /// caller asked for.
-    /// </summary>
-    private async Task<ChapterDetection> MarkedAsync(
-        string source,
-        ServiceId service,
-        EncodeTimeline timeline,
-        WatermarkMask? learnedAhead,
-        int cores,
-        Func<RunningProgramme, Task> began,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await detector.MarkAsync(source, service, timeline, learnedAhead, cores, began, cancellationToken);
-        }
-        catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
-        {
-            return ChapterDetection.Unreadable(
-                $"looking for the breaks ended in {failure.GetType().Name}: {ProgrammeNote.Of(failure.Message, LongestComplaint)}");
-        }
-    }
-
-    private async Task<WatermarkMask?> LearnedAheadAsync(EncodeJob job, Recording recording, CancellationToken cancellationToken)
-    {
-        if (!settings.Chapters.Watermark || detector.Name is ChapterDetectorName.Nobody)
-        {
-            return null;
-        }
-
-        try
-        {
-            StationWatermark? ahead = await watermarks.FindAheadOfAsync(
-                recording.NetworkId,
-                recording.ServiceId,
-                recording.Id,
-                cancellationToken);
-
-            return ahead?.Mask;
-        }
-        catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
-        {
-            logger.LogWarning(
-                "Job {Job} is looked at with no watermark learned ahead, because the watermarks kept could not be read ({Failure}): {Note}",
-                job.Id.Wire,
-                failure.GetType().Name,
-                ProgrammeNote.Of(failure.Message, LongestComplaint));
-
-            return null;
-        }
-    }
-
-    private async Task KeepAsync(EncodeJob job, Recording recording, WatermarkMask learned, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await watermarks.KeepAsync(
-                StationWatermark.Learn(
-                    recording.NetworkId,
-                    recording.ServiceId,
-                    recording.Id,
-                    learned,
-                    clock.GetUtcNow().UtcDateTime),
-                cancellationToken);
-
-            logger.LogInformation(
-                "Job {Job} learned its service's watermark over {Pixels} pixels, for the recordings of that service read after it.",
-                job.Id.Wire,
-                learned.Pixels);
-        }
-        catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
-        {
-            logger.LogWarning(
-                "Job {Job} learned a watermark that could not be kept ({Failure}): {Note}",
-                job.Id.Wire,
-                failure.GetType().Name,
-                ProgrammeNote.Of(failure.Message, LongestComplaint));
-        }
-    }
 
     private async Task MeasureAsync(EncodeJob job, string work, CancellationToken cancellationToken)
     {

@@ -27,18 +27,6 @@ public sealed class EncodeDispatchRuleTests
         "Encodings",
         "FfmpegEncodeInvocation.cs");
 
-    private static string Looking => Path.Combine(
-        RepositoryLayout.SourceDirectory,
-        "Carina.Infrastructure",
-        "Encodings",
-        "FfmpegChapterInvocation.cs");
-
-    private static string Look => Path.Combine(
-        RepositoryLayout.SourceDirectory,
-        "Carina.Infrastructure",
-        "Encodings",
-        "FfmpegChapterRun.cs");
-
     [Fact(DisplayName = "the two places a job is moved to running are the entity's own move and the ledger's conditional update, and nothing beside them")]
     public void TheTwoPlacesAJobIsMovedToRunningAreTheEntityAndTheLedgersConditionalUpdate()
     {
@@ -132,14 +120,13 @@ public sealed class EncodeDispatchRuleTests
             EncodeDispatchRules.WhatNamesTheArtefact(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "the encode feature starts a programme in six places — the run, which hands the ledger the programme's identity, the look for the breaks, the two probes of the source's head and length, the copy that puts a text track of captions in and the copy that writes a standing artefact's chapters again, each with the probes that check it, each bounded by a deadline and unable to outlive the process by more than that — and nowhere else")]
-    public void TheEncodeFeatureStartsAProgrammeInSixPlacesAndNowhereElse()
+    [Fact(DisplayName = "the encode feature starts a programme in five places — the run, which hands the ledger the programme's identity, the two probes of the source's head and length, the copy that puts a text track of captions in and the copy that writes a standing artefact's chapters again, each with the probes that check it, each bounded by a deadline and unable to outlive the process by more than that — and nowhere else")]
+    public void TheEncodeFeatureStartsAProgrammeInFivePlacesAndNowhereElse()
     {
         Assert.Equal(
             [
                 "/Carina.Infrastructure/Encodings/CaptionTrackMux.cs AnotherProgramme.SayAsync(",
                 "/Carina.Infrastructure/Encodings/ChapterRewriteMux.cs AnotherProgramme.SayAsync(",
-                "/Carina.Infrastructure/Encodings/FfmpegChapterRun.cs AnotherProgramme.Start(",
                 "/Carina.Infrastructure/Encodings/FfmpegEncodeRun.cs AnotherProgramme.Start(",
                 "/Carina.Infrastructure/Encodings/FfprobeSourceHead.cs AnotherProgramme.SayAsync(",
                 "/Carina.Infrastructure/Encodings/FfprobeSourceLength.cs AnotherProgramme.SayAsync(",
@@ -147,15 +134,11 @@ public sealed class EncodeDispatchRuleTests
             EncodeDispatchRules.WhatStartsAProgramme(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "the encode moves the clock in one place only, the -ss its invocation writes after the input; the look for the breaks seeks before its input and keeps the source's own clock, and nothing in the feature spells -output_ts_offset, -start_at_zero, -avoid_negative_ts or -itsoffset")]
-    public void TheOnlyPlacesTheEncodeFeatureMovesTheClockAreTheTwoItBuildsCommandsIn()
+    [Fact(DisplayName = "the encode moves the clock in one place only, the -ss its invocation writes after the input, and nothing in the feature spells -copyts, -output_ts_offset, -start_at_zero, -avoid_negative_ts or -itsoffset")]
+    public void TheOnlyPlaceTheEncodeFeatureMovesTheClockIsTheEncodesTrim()
     {
         Assert.Equal(
-            [
-                "/Carina.Infrastructure/Encodings/FfmpegChapterInvocation.cs \"-copyts\"",
-                "/Carina.Infrastructure/Encodings/FfmpegChapterInvocation.cs \"-ss\"",
-                "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs \"-ss\"",
-            ],
+            ["/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs \"-ss\""],
             EncodeDispatchRules.WhatMovesTheClock(RepositoryLayout.SourceDirectory));
 
         string source = File.ReadAllText(Invocation);
@@ -164,46 +147,6 @@ public sealed class EncodeDispatchRuleTests
 
         Assert.True(input >= 0 && skip > input, "the skip is written after the input, as a trim, not before it as a seek");
         Assert.Equal(1, source.Split("\"-ss\"").Length - 1);
-
-        string peeking = File.ReadAllText(Looking);
-        string body = peeking[peeking.IndexOf("Peeking(", StringComparison.Ordinal)..];
-        int read = body.IndexOf("\"-i\",", StringComparison.Ordinal);
-        int seek = body.IndexOf("\"-ss\",", StringComparison.Ordinal);
-
-        Assert.True(seek >= 0 && read > seek, "the look seeks before its input, so only the seconds it asked for are decoded");
-        Assert.Equal(1, peeking.Split("\"-ss\"").Length - 1);
-        Assert.Equal(1, peeking.Split("\"-copyts\"").Length - 1);
-    }
-
-    [Fact(DisplayName = "the look hands over who its programme is before it reads a line of either stream, and stops the programme when that cannot be written down")]
-    public void TheLookHandsOverWhoItsProgrammeIsBeforeItReadsALine()
-    {
-        string source = File.ReadAllText(Look);
-        int started = source.IndexOf("AnotherProgramme.Start(programme, arguments, ProgrammePriority.Yielding)", StringComparison.Ordinal);
-        int handedOver = source.IndexOf("await began(spawned);", StringComparison.Ordinal);
-        int stoppedInstead = source.IndexOf("AnotherProgramme.GiveUpOn(running);\n\n                throw;", StringComparison.Ordinal);
-        int read = source.IndexOf("ReadAsync(running.Standard", StringComparison.Ordinal);
-
-        Assert.True(started >= 0, "the programme is started yielding");
-        Assert.True(handedOver > started, "the identity is handed over after the start");
-        Assert.True(stoppedInstead > handedOver, "a hand-over that fails stops the programme");
-        Assert.True(read > handedOver, "neither stream is read until the identity is handed over");
-    }
-
-    [Fact(DisplayName = "the look for the breaks starts its programme yielding, reads both of its streams as they come, and starts nothing else")]
-    public void TheLookForTheBreaksStartsItsProgrammeYielding()
-    {
-        string source = File.ReadAllText(Look);
-
-        Assert.Contains(
-            "AnotherProgramme.Start(programme, arguments, ProgrammePriority.Yielding)",
-            source,
-            StringComparison.Ordinal);
-        Assert.Contains("running.StandardError", source, StringComparison.Ordinal);
-        Assert.Contains("running.StandardOutput", source, StringComparison.Ordinal);
-        Assert.Contains("ReadLineAsync(", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ReadToEndAsync(", source, StringComparison.Ordinal);
-        Assert.Equal(1, source.Split("AnotherProgramme.Start(").Length - 1);
     }
 
     [Fact(DisplayName = "the run hands over who the programme is before it reads a line of progress, stops the programme when that cannot be written down, and starts it yielding")]

@@ -5,11 +5,10 @@ using Carina.Domain.Segments;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// Reads where an encode of a recording takes its chapters from: whether learning is on, the version of the
-/// model in use and how the recording stands by that version's detection, read the way playback reads them.
+/// Reads where an encode of a recording takes its chapters from: the version of the model in use and how the
+/// recording stands by that version's detection, read the way playback reads them.
 /// </summary>
 public sealed class EncodeChapterChoices(
-    ILearningSwitch learning,
     ISegmentModelVersionRepository versions,
     IRecordingDetectionRepository detections)
 {
@@ -17,10 +16,9 @@ public sealed class EncodeChapterChoices(
     {
         ArgumentNullException.ThrowIfNull(recording);
 
-        bool on = await learning.IsOnAsync(cancellationToken);
         SegmentModelVersion version = await versions.ActiveAsync(cancellationToken);
         RecordingDetection? detection = await detections.FindAsync(recording, version.Number, cancellationToken);
 
-        return EncodeChapterChoice.Of(on, version.Number, SegmentStanding.Of(detection));
+        return EncodeChapterChoice.Of(version.Number, SegmentStanding.Of(detection));
     }
 }

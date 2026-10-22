@@ -31,7 +31,6 @@ public sealed class LearningExtractionTests
             ["finish"] = extraction => extraction.Finish(Later),
             ["finish partway"] = extraction => extraction.FinishPartway(Later),
             ["fail"] = extraction => extraction.Fail(ExtractionFailure.Other, "it stopped", Later),
-            ["pause"] = extraction => extraction.Pause(Later),
             ["outdate"] = extraction => extraction.Outdate(Newer, Later),
             ["reopen"] = extraction => extraction.Reopen(Later),
             ["retry"] = extraction => extraction.Retry(Later),
@@ -41,9 +40,9 @@ public sealed class LearningExtractionTests
     private static readonly IReadOnlyDictionary<LearningExtractionState, string[]> Allowed =
         new Dictionary<LearningExtractionState, string[]>
         {
-            [LearningExtractionState.Following] = ["open", "reach", "miss", "finish", "finish partway", "fail", "pause", "recover"],
+            [LearningExtractionState.Following] = ["open", "reach", "miss", "finish", "finish partway", "fail", "recover"],
             [LearningExtractionState.Waiting] = ["follow", "read"],
-            [LearningExtractionState.Reading] = ["open", "reach", "miss", "finish", "finish partway", "fail", "pause", "recover"],
+            [LearningExtractionState.Reading] = ["open", "reach", "miss", "finish", "finish partway", "fail", "recover"],
             [LearningExtractionState.Done] = ["outdate"],
             [LearningExtractionState.Partial] = ["reopen"],
             [LearningExtractionState.Failed] = ["retry"],
@@ -328,23 +327,6 @@ public sealed class LearningExtractionTests
         Assert.Equal(0, extraction.Failures);
     }
 
-    [Theory(DisplayName = "turning learning off sends following and reading back to waiting, keeping what was read")]
-    [MemberData(nameof(Running))]
-    public void TurningLearningOffSendsItBackToWaiting(LearningExtractionState state)
-    {
-        LearningExtraction extraction = In(state);
-        var gap = new LearningDataGap(TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(30));
-        extraction.Missed(gap, Later);
-        extraction.Reached(TimeSpan.FromMinutes(20), Later);
-
-        extraction.Pause(Later);
-
-        Assert.Equal(LearningExtractionState.Waiting, extraction.State);
-        Assert.Equal(TimeSpan.FromMinutes(20), extraction.ReadThrough);
-        Assert.Equal([gap], extraction.Gaps);
-        Assert.Equal(Current, extraction.Version);
-    }
-
     [Fact(DisplayName = "reading again starts from the head, forgetting where the last reading got to")]
     public void ReadingAgainStartsFromTheHead()
     {
@@ -352,7 +334,7 @@ public sealed class LearningExtractionTests
         extraction.Opened(new ExtractionSound(0, TimeSpan.Zero), Later);
         extraction.Missed(new LearningDataGap(TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(30)), Later);
         extraction.Reached(TimeSpan.FromMinutes(20), Later);
-        extraction.Pause(Later);
+        extraction.Recover(false, Current, Later);
 
         extraction.Read(Newer, Later);
 

@@ -23,14 +23,14 @@ public sealed record ChapterRewriteSettings
 }
 
 /// <summary>
-/// What one look did: what stood in the way when nothing was compared — spare time, or learning being off — and
-/// the round when one was made.
+/// What one look did: what in spare time stood in the way when nothing was compared, and the round when one was
+/// made.
 /// </summary>
 public sealed record ChapterRewriteLook(SpareTimeVerdict Verdict, ChapterRewriteRound? Round);
 
 /// <summary>
 /// Writes the chapters of standing artefacts again in <see cref="SpareTime"/>, so nothing of it happens while
-/// learning is off, while anything is recorded or watched, or just before a reservation. Each look compares at
+/// anything is recorded or watched, or just before a reservation. Each look compares at
 /// most <see cref="ChapterRewriteSettings.AtMostALook"/> artefacts with the detection of their recording by the
 /// version in use, and gives way as soon as the machine is needed. An artefact that could not be written again
 /// is passed over for a day, or until the process starts again.

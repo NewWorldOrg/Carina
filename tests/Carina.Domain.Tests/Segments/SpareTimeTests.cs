@@ -6,18 +6,11 @@ public sealed class SpareTimeTests
 {
     private static readonly DateTime Noon = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
 
-    private static readonly Occupancy Idle = new(true, false, false, null);
+    private static readonly Occupancy Idle = new(false, false, null);
 
-    [Fact(DisplayName = "with learning on and nothing recorded, watched or reserved, it is spare time")]
+    [Fact(DisplayName = "with nothing recorded, watched or reserved, it is spare time")]
     public void WithNothingGoingOnItIsSpareTime()
         => Assert.Equal(SpareTimeVerdict.Spare, SpareTime.Judge(Idle, Noon));
-
-    [Fact(DisplayName = "with learning off it is never spare time, whatever else is going on")]
-    public void WithLearningOffItIsNeverSpareTime()
-    {
-        Assert.Equal(SpareTimeVerdict.LearningOff, SpareTime.Judge(Idle with { Learning = false }, Noon));
-        Assert.Equal(SpareTimeVerdict.LearningOff, SpareTime.Judge(new Occupancy(false, true, true, Noon), Noon));
-    }
 
     [Fact(DisplayName = "while anything is being recorded it is not spare time")]
     public void WhileRecordingItIsNotSpareTime()

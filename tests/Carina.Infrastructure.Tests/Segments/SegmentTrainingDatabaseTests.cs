@@ -44,8 +44,6 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
             .AddScoped<ISegmentLearningRoundRepository, SegmentLearningRoundRepository>()
             .AddScoped<ILearningMaterialChanges, LearningMaterialChanges>()
             .AddScoped<ISkipEventRepository, SkipEventRepository>()
-            .AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>()
-            .AddScoped<ILearningSwitch, LearningSwitch>()
             .AddScoped<IOccupancyReader, OccupancyReader>()
             .AddSingleton<IBusynessReader>(new HeldBusyness(() => new Busyness(false, false, null)))
             .AddSingleton<ISegmentTrainer>(trainer)
@@ -56,7 +54,6 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
     {
         await ResetAsync();
         await using CarinaDbContext writing = database.Open();
-        await new SegmentSettingsRepository(writing).SaveAsync(SegmentSettings.LearningSwitched(true, Installed), Cancel);
         writing.Add(SegmentModelVersion.Learned(71, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), Installed.AddHours(1)));
         await writing.SaveChangesAsync(Cancel);
     }

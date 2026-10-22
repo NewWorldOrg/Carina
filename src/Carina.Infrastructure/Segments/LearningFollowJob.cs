@@ -12,13 +12,12 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Segments;
 
 /// <summary>
-/// What one look at the recordings being written did: how many records it put back after a start,
-/// how many follows it began and how many it stopped because learning was switched off, how many
-/// records it made waiting, and how many follows were running when it was done.
+/// What one look at the recordings being written did: how many records it put back after a start, how many
+/// follows it began, and how many follows were running when it was done.
 /// </summary>
-public sealed record LearningLook(int Recovered, int Began, int Stopped, int Waiting, int Following)
+public sealed record LearningLook(int Recovered, int Began, int Following)
 {
-    public bool SaysAnything => Recovered > 0 || Began > 0 || Stopped > 0 || Waiting > 0;
+    public bool SaysAnything => Recovered > 0 || Began > 0;
 }
 
 /// <summary>
@@ -27,14 +26,11 @@ public sealed record LearningLook(int Recovered, int Began, int Stopped, int Wai
 /// then every <see cref="LearningFollowSettings.BetweenLooks"/> and whenever the driver tells of a
 /// recording's progress. The first look puts back the records a follow left running when the process
 /// last stopped: a recording still being written is followed again from its head, and one that has
-/// ended or gone waits to be read. While learning is off nothing is followed: a
-/// recording being written gets a waiting record with the copy of its programme, and the follows
-/// running when learning was switched off are stopped, their chunks kept and their records put back
-/// to waiting. While learning is on, a recording being written whose file is there is followed from
-/// its head, its record made following, and a follow is told when its recording ends or goes. A follow that
-/// comes to its end, rather than being stopped, is told to the matching against the catalog
-/// (<see cref="FollowedToTheEnd"/>). Stopping the process stops every follow and leaves its record for the
-/// next start.
+/// ended or gone waits to be read. A recording being written whose file is there is followed from its
+/// head, its record made following, one left waiting included, and a follow is told when its recording
+/// ends or goes. A follow that comes to its end, rather than being stopped, is told to the matching against
+/// the catalog (<see cref="FollowedToTheEnd"/>). Stopping the process stops every follow and leaves its
+/// record for the next start.
 /// </summary>
 public sealed class LearningFollowJob(
     IServiceScopeFactory scopes,
@@ -67,7 +63,6 @@ public sealed class LearningFollowJob(
 
         recovered = true;
 
-        bool learning = await scope.ServiceProvider.GetRequiredService<ILearningSwitch>().IsOnAsync(cancellationToken);
         IReadOnlyList<Recording> recording = await worklist.BeingRecordedAsync(
             [.. mounts.OutputRoots.Select(mounted => mounted.Root)],
             cancellationToken);
@@ -75,11 +70,9 @@ public sealed class LearningFollowJob(
         Reap();
         await TellAsync(worklist, recording, cancellationToken);
 
-        (int began, int stopped, int waiting) = learning
-            ? (await FollowEachAsync(worklist, recording, cancellationToken), 0, 0)
-            : await HoldEachAsync(worklist, recording, cancellationToken);
+        int began = await FollowEachAsync(worklist, recording, cancellationToken);
 
-        return new LearningLook(putBack, began, stopped, waiting, follows.Count);
+        return new LearningLook(putBack, began, follows.Count);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -184,61 +177,6 @@ public sealed class LearningFollowJob(
             default:
                 return false;
         }
-    }
-
-    private async Task<(int Began, int Stopped, int Waiting)> HoldEachAsync(
-        ILearningWorklist worklist,
-        IReadOnlyList<Recording> recording,
-        CancellationToken cancellationToken)
-    {
-        int stopped = await StopEachAsync(cancellationToken);
-        int waiting = 0;
-
-        foreach (Recording being in recording)
-        {
-            LearningExtraction? record = await records.FindAsync(being.Id, cancellationToken);
-
-            if (record is null)
-            {
-                await records.AddAsync(LearningExtraction.Waiting(being.Id, await CopyAsync(worklist, being, cancellationToken), Now()), cancellationToken);
-                waiting++;
-            }
-            else if (record.State is LearningExtractionState.Following
-                     && await ChangedAsync(being.Id, LearningExtractionState.Following, found => found.Pause(Now()), cancellationToken))
-            {
-                stopped++;
-            }
-        }
-
-        return (0, stopped, waiting);
-    }
-
-    private async Task<int> StopEachAsync(CancellationToken cancellationToken)
-    {
-        Follow[] stopping = [.. follows.Values];
-
-        follows.Clear();
-
-        foreach (Follow follow in stopping)
-        {
-            await follow.Stopping.CancelAsync();
-        }
-
-        foreach (Follow follow in stopping)
-        {
-            await EndedAsync(follow);
-            follow.Stopping.Dispose();
-            await ChangedAsync(follow.Recording.Id, LearningExtractionState.Following, found => found.Pause(Now()), cancellationToken);
-        }
-
-        if (stopping.Length > 0)
-        {
-            logger.LogInformation(
-                "Learning was switched off, so {Stopped} follow(s) stopped; what they kept stays, and their records wait to be read.",
-                stopping.Length);
-        }
-
-        return stopping.Length;
     }
 
     private async Task<bool> ChangedAsync(
@@ -367,11 +305,9 @@ public sealed class LearningFollowJob(
 
         logger.LogInformation(
             "A look for recordings to follow for their learning data put back {Recovered} record(s) left running, began "
-            + "{Began} follow(s), stopped {Stopped}, made {Waiting} record(s) waiting, and leaves {Following} follow(s) running.",
+            + "{Began} follow(s), and leaves {Following} follow(s) running.",
             look.Recovered,
             look.Began,
-            look.Stopped,
-            look.Waiting,
             look.Following);
     }
 

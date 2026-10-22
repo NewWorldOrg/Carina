@@ -144,7 +144,7 @@ public sealed class SegmentStatusEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
-            ["catalog", "evidence", "lastRound", "learning", "learningData", "metrics", "nextRoundNotBefore", "skipThreshold", "stations", "version", "versions"],
+            ["catalog", "evidence", "lastRound", "learningData", "metrics", "nextRoundNotBefore", "skipThreshold", "stations", "version", "versions"],
             data.EnumerateObject().Select(field => field.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(
             ["cm", "ending", "opening", "programmeFixture", "stationFixture", "unknown"],
@@ -218,7 +218,6 @@ public sealed class SegmentStatusEndpointTests
         JsonElement version = Assert.Single(data.GetProperty("versions").EnumerateArray());
 
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.False(data.GetProperty("learning").GetBoolean());
         Assert.Equal(["recordings", "boundaries", "enough", "recordingsNeeded", "boundariesNeeded"], Names(evidence));
         Assert.Equal((4, 40, false, 10, 30), (evidence.GetProperty("recordings").GetInt32(), evidence.GetProperty("boundaries").GetInt32(), evidence.GetProperty("enough").GetBoolean(), evidence.GetProperty("recordingsNeeded").GetInt32(), evidence.GetProperty("boundariesNeeded").GetInt32()));
         Assert.Equal(1, feature.Evidence.Reads);
@@ -241,7 +240,7 @@ public sealed class SegmentStatusEndpointTests
         feature.Versions.Others.Add(Version(4, SegmentModelVersionState.Candidate, trained.AddDays(1), null, null, Evaluation(0.95, 13)));
         feature.Versions.Others.Add(Version(2, SegmentModelVersionState.Retired, trained.AddDays(-7), trained.AddDays(-7), trained.AddMinutes(5), Evaluation(0.9, 11), new SegmentRollback(0.09, 0.03, 25, 1)));
         feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained.AddDays(-7), null, null));
-        await feature.Settings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, true, trained, 0.6, trained), CancellationToken.None);
+        await feature.Settings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, 0.6, trained), CancellationToken.None);
         feature.Evidence.Evidence = new EvaluationEvidence(1, 10, null);
         await SkippedAsync(feature, 3, ViewerActionKind.Skipped, 64, SegmentStatusFeature.Now.AddDays(-1));
         await SkippedAsync(feature, 3, ViewerActionKind.Returned, 2, SegmentStatusFeature.Now.AddDays(-6));
@@ -255,7 +254,6 @@ public sealed class SegmentStatusEndpointTests
         JsonElement[] versions = [.. data.GetProperty("versions").EnumerateArray()];
 
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.True(data.GetProperty("learning").GetBoolean());
         Assert.Equal(3, data.GetProperty("version").GetProperty("number").GetInt32());
         Assert.Equal(["recordings", "boundaries", "enough", "recordingsNeeded", "boundariesNeeded"], Names(data.GetProperty("evidence")));
         Assert.Equal((13, 150, true), (data.GetProperty("evidence").GetProperty("recordings").GetInt32(), data.GetProperty("evidence").GetProperty("boundaries").GetInt32(), data.GetProperty("evidence").GetProperty("enough").GetBoolean()));

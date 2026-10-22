@@ -125,7 +125,7 @@ public sealed class SegmentLearningRound
     /// <summary>
     /// The first moment the next round may begin, as seen at <paramref name="now"/>: the start of the day
     /// <paramref name="now"/> falls in while its round has not been finished, and of the next day once it has.
-    /// When it begins after that is up to spare time and to learning being on.
+    /// When it begins after that is up to spare time.
     /// </summary>
     public static DateTime NextNotBefore(DateTime now, bool finishedToday)
     {

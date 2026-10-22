@@ -20,7 +20,6 @@ public sealed class PatchSegmentVersionAction(SegmentVersionService versions) : 
     [ProducesResponseType<BaseResponder<SegmentVersionResponder>>(StatusCodes.Status200OK)]
     [ProducesResponseType<BaseResponder<SegmentVersionResponder>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<BaseResponder<SegmentVersionResponder>>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<BaseResponder<SegmentVersionResponder>>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Invoke(
         [FromBody] PatchSegmentVersionRequest? request,
         CancellationToken cancellationToken)
@@ -34,11 +33,6 @@ public sealed class PatchSegmentVersionAction(SegmentVersionService versions) : 
 
         BaseResponder<SegmentVersionResponder> refused = BaseResponder<SegmentVersionResponder>.Error(chosen.ErrorMessage!);
 
-        return chosen.ErrorType switch
-        {
-            SegmentVersionFailure.LearningOff => Conflict(refused),
-            SegmentVersionFailure.NoSuchVersion => NotFound(refused),
-            _ => BadRequest(refused),
-        };
+        return chosen.ErrorType is SegmentVersionFailure.NoSuchVersion ? NotFound(refused) : BadRequest(refused);
     }
 }

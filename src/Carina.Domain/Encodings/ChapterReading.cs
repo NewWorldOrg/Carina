@@ -4,7 +4,8 @@ using Carina.Domain.Segments;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// Which reader of a source answered where the breaks in it are, as the ledger keeps it.
+/// Which reader of a source answered where the breaks in it are, as the ledger keeps it. An encode takes its chapters
+/// from the segments; nobody and ffmpeg answered for artefacts encoded before, and the ledger keeps saying so.
 /// </summary>
 public enum ChapterDetectorName
 {
@@ -79,13 +80,6 @@ public sealed record ChapterReading
     public int? ModelVersion { get; }
 
     public bool Marks => Verdict is ChapterVerdict.Marked;
-
-    public static ChapterReading Of(ChapterDetectorName detector, ChapterDetection detection, DateTime at)
-    {
-        ArgumentNullException.ThrowIfNull(detection);
-
-        return new ChapterReading(detector, detection.Verdict, detection.BreakShare, at);
-    }
 
     private static string? Unsourced(ChapterDetectorName detector, ChapterVerdict verdict, int? modelVersion)
     {

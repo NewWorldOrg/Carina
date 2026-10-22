@@ -11,28 +11,10 @@ public sealed class SegmentDetectionJobTests
 {
     private static readonly double[] ABreak = [100, 130, 160];
 
-    [Fact(DisplayName = "BR-CD-013: while learning is off no recording is detected on either path, and nothing is read or kept")]
-    public async Task NothingIsDetectedWhileLearningIsOff()
-    {
-        using SegmentDetectionHarness harness = new();
-        RecordingId recording = await harness.ReadAsync(0, "架空の物語", cuts: ABreak);
-        SegmentDetectionJob job = harness.Job();
-
-        SegmentDetectionLook atOnce = await job.DetectMatchedAsync(recording, CancellationToken.None);
-        SegmentDetectionLook inSpareTime = await job.LookAsync(CancellationToken.None);
-
-        Assert.Equal(new SegmentDetectionLook(SpareTimeVerdict.LearningOff, null), atOnce);
-        Assert.Equal(new SegmentDetectionLook(SpareTimeVerdict.LearningOff, null), inSpareTime);
-        Assert.Equal(0, harness.Worklist.Asked);
-        Assert.Empty(harness.Worklist.Read);
-        Assert.Equal(0, harness.Detections.Keeps);
-    }
-
     [Fact(DisplayName = "BR-CD-004: nothing is detected in spare time while something is being recorded")]
     public async Task NothingIsDetectedInSpareTimeWhileRecording()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         await harness.ReadAsync(0, "架空の物語");
         harness.Recording = true;
 
@@ -46,7 +28,6 @@ public sealed class SegmentDetectionJobTests
     public async Task ADetectionIsKeptForTheVersionInUse()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId plain = await harness.ReadAsync(1, "架空のクイズ");
         RecordingId withABreak = await harness.ReadAsync(0, "架空の物語", cuts: ABreak);
         SegmentDetectionJob job = harness.Job();
@@ -74,7 +55,6 @@ public sealed class SegmentDetectionJobTests
     public async Task ARecordingMatchedAtOnceIsDetectedAtOnce()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId waiting = await harness.ReadAsync(7, "架空のクイズ");
         RecordingId matched = await harness.ReadAsync(0, "架空の物語", cuts: ABreak);
         harness.Recording = true;
@@ -94,7 +74,6 @@ public sealed class SegmentDetectionJobTests
     public async Task OnlyARecordingMatchedAndNotYetDetectedIsDetected()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId unmatched = await harness.ReadAsync(0, "架空の物語", matched: false);
         RecordingId detected = await harness.ReadAsync(1, "架空のクイズ");
         SegmentDetectionJob job = harness.Job();
@@ -115,7 +94,6 @@ public sealed class SegmentDetectionJobTests
     public async Task OneRecordingIsDetectedALook()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId older = await harness.ReadAsync(3, "架空のクイズ");
         RecordingId thrownAway = await harness.ReadAsync(2, "架空の天気");
         RecordingId newer = await harness.ReadAsync(1, "架空の物語");
@@ -136,7 +114,6 @@ public sealed class SegmentDetectionJobTests
     public async Task ANewVersionInUseDetectsEveryRecordingAgain()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId older = await harness.ReadAsync(2, "架空のクイズ");
         RecordingId newer = await harness.ReadAsync(1, "架空の物語", cuts: ABreak);
         SegmentDetectionJob job = harness.Job();
@@ -160,7 +137,6 @@ public sealed class SegmentDetectionJobTests
     public async Task TheFirstVersionOfFourKindsDetectsTheOpeningAgain()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId recording = await harness.ReadAsync(1, "架空の物語");
         Opened(harness, recording, 20, 110);
         SegmentDetectionJob job = harness.Job();
@@ -184,7 +160,6 @@ public sealed class SegmentDetectionJobTests
     public async Task ARecordingMatchedAgainIsDetectedAgain()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId recording = await harness.ReadAsync(1, "架空の物語");
         SegmentDetectionJob job = harness.Job();
         await job.LookAsync(CancellationToken.None);
@@ -202,7 +177,6 @@ public sealed class SegmentDetectionJobTests
     public async Task ARecordingWhoseCatalogChangedIsDetectedAgain()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId changed = await harness.ReadAsync(2, "架空の物語");
         RecordingId unchanged = await harness.ReadAsync(1, "架空のクイズ");
         SegmentDetectionJob job = harness.Job();
@@ -218,26 +192,10 @@ public sealed class SegmentDetectionJobTests
         Assert.Equal(3, harness.Detections.Keeps);
     }
 
-    [Fact(DisplayName = "BR-CD-013: a detection finished after learning was switched off is not kept, and the recording still waits")]
-    public async Task ADetectionFinishedAfterLearningWasSwitchedOffIsNotKept()
-    {
-        using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
-        RecordingId recording = await harness.ReadAsync(1, "架空の物語");
-        harness.Worklist.WhileReading = _ => harness.LearningOff();
-
-        SegmentDetectionLook look = await harness.Job().LookAsync(CancellationToken.None);
-
-        Assert.Equal(new SegmentDetectionLook(SpareTimeVerdict.LearningOff, null), look);
-        Assert.Equal(0, harness.Detections.Keeps);
-        Assert.True(RecordingDetection.IsAwaited(harness.Records.Row(recording)!, null));
-    }
-
     [Fact(DisplayName = "a recording whose detection fails is passed over until the app starts again, and the next one is detected")]
     public async Task ARecordingWhoseDetectionFailsIsPassedOver()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId older = await harness.ReadAsync(2, "架空のクイズ");
         RecordingId unreadable = await harness.ReadAsync(1, "架空の物語");
         harness.Worklist.Unreadable.Add(unreadable);
@@ -258,7 +216,6 @@ public sealed class SegmentDetectionJobTests
     public async Task TheRunningJobDetectsARecordingAsSoonAsItIsTold()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId waiting = await harness.ReadAsync(7, "架空のクイズ");
         RecordingId matched = await harness.ReadAsync(0, "架空の物語");
         harness.Recording = true;
@@ -276,7 +233,6 @@ public sealed class SegmentDetectionJobTests
     public async Task TheRunningJobDetectsTheWaitingRecordingsOnItsOwnLooks()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId older = await harness.ReadAsync(3, "架空のクイズ");
         RecordingId newer = await harness.ReadAsync(1, "架空の物語");
         SegmentDetectionJob job = harness.Job(new SegmentDetectionSettings
@@ -299,7 +255,6 @@ public sealed class SegmentDetectionJobTests
     public async Task TheCountingRunsOnTheLowestPriorityScheduler()
     {
         using SegmentDetectionHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId recording = await harness.ReadAsync(0, "架空の物語");
         long before = harness.Lowest.Ran;
 

@@ -25,8 +25,6 @@ internal sealed class HeldDetectionWorklist(HeldLearningExtractions records, Hel
 
     public List<RecordingId> Read { get; } = [];
 
-    public Action<RecordingId>? WhileReading { get; set; }
-
     public Task<LearningExtraction?> NextAsync(int modelVersion, IReadOnlyCollection<RecordingId> passedOver, CancellationToken cancellationToken)
     {
         Asked++;
@@ -70,7 +68,6 @@ internal sealed class HeldDetectionWorklist(HeldLearningExtractions records, Hel
         }
 
         Read.Add(recording);
-        WhileReading?.Invoke(recording);
 
         return Task.FromResult<IReadOnlyList<LearningDataPart>>(
         [
@@ -113,9 +110,7 @@ internal sealed class SegmentDetectionHarness : IDisposable
         Busyness = new HeldBusyness(() => new Busyness(Recording, false, null));
         provider = new ServiceCollection()
             .AddSingleton<ILearningExtractionRepository>(Records)
-            .AddSingleton<ISegmentSettingsRepository>(Settings)
             .AddSingleton<IBusynessReader>(Busyness)
-            .AddScoped<ILearningSwitch, LearningSwitch>()
             .AddScoped<IOccupancyReader, OccupancyReader>()
             .AddSingleton<IDetectionWorklist>(Worklist)
             .AddSingleton<ICatalogRepository>(Catalog)
@@ -133,8 +128,6 @@ internal sealed class SegmentDetectionHarness : IDisposable
 
     public HeldLearningData Data { get; } = new();
 
-    public HeldSegmentSettings Settings { get; } = new();
-
     public HeldBusyness Busyness { get; }
 
     public HeldDetectionWorklist Worklist { get; }
@@ -144,7 +137,6 @@ internal sealed class SegmentDetectionHarness : IDisposable
     public HeldSegmentModelVersions Versions { get; } = new();
 
     public HeldRecordingDetections Detections { get; } = new();
-
 
     public LearningRecords Store { get; }
 
@@ -178,10 +170,6 @@ internal sealed class SegmentDetectionHarness : IDisposable
             NullLogger<SegmentDetectionJob>.Instance);
 
     public SegmentDetecting Detecting() => provider.CreateScope().ServiceProvider.GetRequiredService<SegmentDetecting>();
-
-    public async Task LearningAsync(bool on) => await Settings.SaveAsync(SegmentSettings.LearningSwitched(on, Now), CancellationToken.None);
-
-    public void LearningOff() => Settings.SaveAsync(SegmentSettings.LearningSwitched(false, Now), CancellationToken.None).GetAwaiter().GetResult();
 
     /// <summary>
     /// The record of a recording <see cref="Seconds"/> long, still kept, read to its end and matched against the

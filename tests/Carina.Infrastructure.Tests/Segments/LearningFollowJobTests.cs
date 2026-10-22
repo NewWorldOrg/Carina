@@ -16,26 +16,9 @@ public sealed class LearningFollowJobTests : IDisposable
 
     public void Dispose() => harness.Dispose();
 
-    [Fact(DisplayName = "while learning is off a recording being written is not followed, and its record waits with the copy of its programme")]
-    public async Task WhileLearningIsOffARecordingWaitsWithTheCopyOfItsProgramme()
+    [Fact(DisplayName = "a recording being written is followed from the head of its file, its record following")]
+    public async Task ARecordingIsFollowedFromTheHead()
     {
-        Recording recording = harness.Recording();
-        harness.Worklist.Ends[recording.Id] = Now.AddMinutes(55);
-
-        LearningLook look = await harness.Job().LookAsync(Cancel);
-
-        LearningExtraction record = Assert.IsType<LearningExtraction>(harness.Records.Row(recording.Id));
-        Assert.Equal(LearningExtractionState.Waiting, record.State);
-        Assert.Null(record.Version);
-        Assert.Equal(ProgrammeCopy.Of(recording, Now.AddMinutes(55)), record.Programme);
-        Assert.Empty(harness.Follower.Asked);
-        Assert.Equal(new LearningLook(0, 0, 0, 1, 0), look);
-    }
-
-    [Fact(DisplayName = "while learning is on a recording being written is followed from the head of its file, its record following")]
-    public async Task WhileLearningIsOnARecordingIsFollowedFromTheHead()
-    {
-        await harness.LearningAsync(true);
         Recording recording = harness.Recording();
         LearningFollowJob job = harness.Job();
 
@@ -47,50 +30,30 @@ public sealed class LearningFollowJobTests : IDisposable
         await Eventually.Happens(() => !harness.Follower.Asked.IsEmpty, "the follow never began");
         FollowedRecording followed = Assert.Single(harness.Follower.Asked);
         Assert.Equal((recording.Id, harness.Source(recording), recording.ServiceId), (followed.Id, followed.Source, followed.Service));
-        Assert.Equal(new LearningLook(0, 1, 0, 0, 1), look);
+        Assert.Equal(new LearningLook(0, 1, 1), look);
 
         Assert.Equal(0, (await job.LookAsync(Cancel)).Began);
         Assert.Single(harness.Follower.Asked);
     }
 
-    [Fact(DisplayName = "a recording whose record waits is followed from its head once learning is on")]
-    public async Task AWaitingRecordIsFollowedOnceLearningIsOn()
+    [Fact(DisplayName = "a recording being written whose record waits is followed from its head")]
+    public async Task AWaitingRecordIsFollowed()
     {
         Recording recording = harness.Recording();
+        harness.Records.Hold(LearningExtraction.Waiting(recording.Id, ProgrammeCopy.Of(recording, null), Now));
         LearningFollowJob job = harness.Job();
-        await job.LookAsync(Cancel);
 
-        await harness.LearningAsync(true);
-        await job.LookAsync(Cancel);
-
-        Assert.Equal(LearningExtractionState.Following, harness.Records.Row(recording.Id)?.State);
-        Assert.Equal([recording.Id], job.Following);
-    }
-
-    [Fact(DisplayName = "switching learning off stops the follows, keeps what they wrote, and puts their records back to wait")]
-    public async Task SwitchingLearningOffStopsTheFollowsAndPutsTheirRecordsBackToWait()
-    {
-        await harness.LearningAsync(true);
-        Recording recording = harness.Recording();
-        LearningFollowJob job = harness.Job();
-        await job.LookAsync(Cancel);
-        await Eventually.Happens(() => !harness.Follower.Asked.IsEmpty, "the follow never began");
-        await harness.Data.KeepAsync(Written(recording), Cancel);
-
-        await harness.LearningAsync(false);
         LearningLook look = await job.LookAsync(Cancel);
 
-        Assert.Equal([recording.Id], harness.Follower.Stopped);
-        Assert.Equal(LearningExtractionState.Waiting, harness.Records.Row(recording.Id)?.State);
-        Assert.Single(harness.Data.Of(recording.Id));
-        Assert.Empty(job.Following);
-        Assert.Equal(new LearningLook(0, 0, 1, 0, 0), look);
+        LearningExtraction record = Assert.IsType<LearningExtraction>(harness.Records.Row(recording.Id));
+        Assert.Equal((LearningExtractionState.Following, ExtractionVersion.Current), (record.State, record.Version));
+        Assert.Equal([recording.Id], job.Following);
+        Assert.Equal(1, look.Began);
     }
 
     [Fact(DisplayName = "at the first look a record left following a recording still being written is followed again from the head")]
     public async Task AtTheFirstLookARecordLeftFollowingIsFollowedAgainFromTheHead()
     {
-        await harness.LearningAsync(true);
         Recording recording = harness.Recording();
         harness.Records.Hold(Left(recording, LearningExtractionState.Following));
         LearningFollowJob job = harness.Job();
@@ -105,7 +68,6 @@ public sealed class LearningFollowJobTests : IDisposable
     [Fact(DisplayName = "at the first look a record left following a recording that ended or went waits to be read, and one left reading is left to the reading")]
     public async Task AtTheFirstLookARecordLeftFollowingAnEndedRecordingWaits()
     {
-        await harness.LearningAsync(true);
         Recording ended = harness.Recording(eventId: 7302);
         End(ended);
         Recording gone = harness.Recording(eventId: 7303);
@@ -125,22 +87,9 @@ public sealed class LearningFollowJobTests : IDisposable
         Assert.Empty(harness.Follower.Asked);
     }
 
-    [Fact(DisplayName = "at the first look with learning off a record left following a recording still being written waits")]
-    public async Task AtTheFirstLookWithLearningOffARecordLeftFollowingWaits()
-    {
-        Recording recording = harness.Recording();
-        harness.Records.Hold(Left(recording, LearningExtractionState.Following));
-
-        await harness.Job().LookAsync(Cancel);
-
-        Assert.Equal(LearningExtractionState.Waiting, harness.Records.Row(recording.Id)?.State);
-        Assert.Empty(harness.Follower.Asked);
-    }
-
     [Fact(DisplayName = "a follow is told when its recording ends, and when its recording goes")]
     public async Task AFollowIsToldWhenItsRecordingEndsOrGoes()
     {
-        await harness.LearningAsync(true);
         Recording ending = harness.Recording(eventId: 7304);
         Recording going = harness.Recording(eventId: 7305);
         LearningFollowJob job = harness.Job();
@@ -162,10 +111,9 @@ public sealed class LearningFollowJobTests : IDisposable
             "the settled follows were never let go");
     }
 
-    [Fact(DisplayName = "a follow that comes to its end is told to the matching against the catalog, and a follow stopped is not")]
+    [Fact(DisplayName = "a follow that comes to its end is told to the matching against the catalog, and a follow stopped with the process is not")]
     public async Task AFollowThatComesToItsEndIsToldToTheMatching()
     {
-        await harness.LearningAsync(true);
         Recording ending = harness.Recording(eventId: 7306);
         Recording stopped = harness.Recording(eventId: 7307);
         LearningFollowJob job = harness.Job();
@@ -176,10 +124,12 @@ public sealed class LearningFollowJobTests : IDisposable
         await job.LookAsync(Cancel);
         RecordingId? told = null;
         await Eventually.Happens(() => harness.Finished.TryTake(out told), "the follow that came to its end was never told");
-        await harness.LearningAsync(false);
-        await job.LookAsync(Cancel);
+        using CancellationTokenSource stopping = new();
+        await job.StartAsync(stopping.Token);
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
 
-        await Eventually.Happens(() => harness.Follower.Stopped.Contains(stopped.Id), "the other follow was never stopped");
+        Assert.Contains(stopped.Id, harness.Follower.Stopped);
         Assert.Equal(ending.Id, told);
         Assert.Equal(LearningExtractionState.Done, harness.Records.Row(ending.Id)?.State);
         Assert.False(harness.Finished.TryTake(out _));
@@ -188,7 +138,6 @@ public sealed class LearningFollowJobTests : IDisposable
     [Fact(DisplayName = "a recording under a root this process does not mount is not looked at, and one whose file is not there yet is not followed yet")]
     public async Task ARecordingOutOfReachOrWithoutItsFileIsNotFollowed()
     {
-        await harness.LearningAsync(true);
         Recording unreached = harness.Recording(Unmounted, eventId: 7306);
         Recording early = harness.Recording(withAFile: false, eventId: 7307);
 
@@ -202,7 +151,6 @@ public sealed class LearningFollowJobTests : IDisposable
     [Fact(DisplayName = "the first look comes after its wait, and the driver telling of a recording's progress wakes the next before its wait is over")]
     public async Task TheDriversProgressWakesTheNextLook()
     {
-        await harness.LearningAsync(true);
         Recording first = harness.Recording(eventId: 7308);
         using LearningFollowJob job = harness.Job(new LearningFollowSettings
         {
@@ -228,7 +176,6 @@ public sealed class LearningFollowJobTests : IDisposable
     [Fact(DisplayName = "the driver telling of a recording's progress while a look is under way wakes the next look once that one is over")]
     public async Task ProgressToldDuringALookWakesTheNextLook()
     {
-        await harness.LearningAsync(true);
         Recording first = harness.Recording(eventId: 7310);
         System.Collections.Concurrent.ConcurrentQueue<Recording> begunDuringTheLook = new();
         harness.Worklist.WhileLooking = _ =>

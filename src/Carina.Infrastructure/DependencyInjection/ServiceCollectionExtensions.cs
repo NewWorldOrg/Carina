@@ -220,7 +220,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeStandingReader, EncodeStandingReader>();
         services.AddScoped<IEncodeScratchLedger, EncodeScratchLedger>();
         services.AddScoped<IEncodeChapterRepository, EncodeChapterRepository>();
-        services.AddScoped<IStationWatermarkRepository, StationWatermarkRepository>();
         services.AddScoped<IQualityLedgerReader, QualityLedgerReader>();
         services.AddScoped<IQualityThresholdRepository, QualityThresholdRepository>();
         services.AddScoped<IQualityThresholdChangeRepository, QualityThresholdChangeRepository>();
@@ -242,7 +241,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeArtefactPlacer>();
         services.AddScoped<EncodeArtefactSuccession>();
         services.AddScoped<IEncodeAutoRunReader, EncodeAutoRunReader>();
-        services.AddScoped<ILearningSwitch, LearningSwitch>();
         services.AddScoped<ILearningWorklist, LearningWorklist>();
         services.AddScoped<IOccupancyReader, OccupancyReader>();
         services.AddScoped<CatalogMatching>();
@@ -406,17 +404,6 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ISourceHeadReader>(provider => new FfprobeSourceHead(
             provider.GetRequiredService<MachineSettings>(),
             provider.GetRequiredService<TimeProvider>()));
-        services.TryAddSingleton<IChapterDetector>(provider =>
-        {
-            EncodeSettings encoding = provider.GetRequiredService<EncodeSettings>();
-
-            return encoding.Chapters.Marked
-                ? new FfmpegChapterDetector(
-                    provider.GetRequiredService<MachineSettings>(),
-                    encoding,
-                    provider.GetRequiredService<TimeProvider>())
-                : new NoChapterDetector();
-        });
         services.TryAddSingleton<IStrayProgrammes, StrayProgrammes>();
         services.TryAddSingleton<IMachineCapabilityReader>(provider => new MachineCapabilityReader(
             provider.GetRequiredService<MachineSettings>(),

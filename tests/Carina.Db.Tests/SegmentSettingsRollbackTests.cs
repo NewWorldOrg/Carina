@@ -15,6 +15,8 @@ public sealed class SegmentSettingsRollbackTests
 
     private const string BeforeTheThreshold = "20261018165013_TheAnswersAndTheSkipsAreKeptWithoutAKeyIntoTheRecording";
 
+    private const string TheThreshold = "20261018181106_SkipButtonsAreOfferedFromAThresholdTheSettingsKeep";
+
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     [Fact(DisplayName = "the settings go back to before the threshold, letting go of a row where only the threshold was changed, and forward again with the threshold at its default")]
@@ -23,7 +25,7 @@ public sealed class SegmentSettingsRollbackTests
         await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
         await context.Database.EnsureDeletedAsync(Cancel);
         IMigrator migrator = context.GetService<IMigrator>();
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheThreshold, Cancel);
 
         await using (NpgsqlConnection writing = await OpenAsync())
         {
@@ -38,7 +40,7 @@ public sealed class SegmentSettingsRollbackTests
             await RunAsync(reading, "INSERT INTO segment_settings (id, learning, learning_changed_at) VALUES (1, true, now())");
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheThreshold, Cancel);
 
         await using NpgsqlConnection forward = await OpenAsync();
 

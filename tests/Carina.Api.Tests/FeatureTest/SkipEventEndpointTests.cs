@@ -10,8 +10,8 @@ public sealed class SkipEventEndpointTests
 {
     private const string Skipped = """{"event":"skipped","kind":"break","fromSec":915.004,"toSec":1002.3,"modelVersion":1}""";
 
-    [Fact(DisplayName = "BR-CV-003: a skip event is taken while learning is off, answered as it was kept, and keeps nothing of who sent it")]
-    public async Task ASkipEventIsTakenWhileLearningIsOff()
+    [Fact(DisplayName = "BR-CV-003: a skip event is taken, answered as it was kept, and keeps nothing of who sent it")]
+    public async Task ASkipEventIsTakenAsItWasKept()
     {
         await using var feature = new RecordingSegmentsFeature();
         Recording recording = feature.Ended();

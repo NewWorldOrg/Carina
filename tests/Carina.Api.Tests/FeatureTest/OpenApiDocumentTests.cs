@@ -673,17 +673,17 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal("byte", schemas["DataBroadcastEventResponder"]!["properties"]!["privateData"]!["format"]!.GetValue<string>());
     }
 
-    [Fact(DisplayName = "BR-CV-002: the segment settings are described with learning and the skip threshold, each with when it last changed, and a change may name either")]
+    [Fact(DisplayName = "BR-CV-002: the segment settings are described with the skip threshold and when it last changed, and a change names the threshold alone")]
     public async Task TheSegmentSettingsAreDescribedWithTheSkipThreshold()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
         JsonNode schemas = document["components"]!["schemas"]!;
 
         Assert.Equal(
-            ["learning", "learningChangedAt", "skipThreshold", "skipThresholdChangedAt"],
+            ["skipThreshold", "skipThresholdChangedAt"],
             schemas["SegmentSettingsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal(
-            ["learning", "skipThreshold"],
+            ["skipThreshold"],
             schemas["PatchSegmentSettingsRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
@@ -694,7 +694,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         JsonNode schemas = document["components"]!["schemas"]!;
 
         Assert.Equal(
-            ["learning", "learningData", "catalog", "version", "evidence", "metrics", "stations", "versions", "skipThreshold", "lastRound", "nextRoundNotBefore"],
+            ["learningData", "catalog", "version", "evidence", "metrics", "stations", "versions", "skipThreshold", "lastRound", "nextRoundNotBefore"],
             schemas["SegmentStatusResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
         Assert.Equal(
             ["number", "state", "byHand", "trainedAt", "adoptedAt"],
@@ -760,7 +760,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Equal(["patch"], path.Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
         Assert.Equal(
-            ["200", "400", "401", "404", "409", "500"],
+            ["200", "400", "401", "404", "500"],
             path["patch"]!["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(["number", "byHand"], Properties(schemas, "PatchSegmentVersionRequest"));
         Assert.EndsWith(

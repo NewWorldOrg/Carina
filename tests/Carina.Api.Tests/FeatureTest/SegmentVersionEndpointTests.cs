@@ -27,20 +27,14 @@ internal sealed class SegmentVersionFeature : IAsyncDisposable
 
     private readonly TestingWebApplicationFactory factory = new();
 
-    public SegmentVersionFeature(bool learning = true)
+    public SegmentVersionFeature()
     {
-        if (learning)
-        {
-            Settings.SaveAsync(SegmentSettings.LearningSwitched(true, Trained), CancellationToken.None).GetAwaiter().GetResult();
-        }
-
         Versions.Others.Add(SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Candidate, false, SegmentModel.First, Trained, null, null, null, null));
 
         Built = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();
             services.AddSingleton<TimeProvider>(new MovingClock(Now));
-            services.AddSingleton<ISegmentSettingsRepository>(Settings);
             services.AddSingleton<ISegmentModelVersionRepository>(Versions);
             services.AddSingleton<IOccupancyReader>(new Unoccupied());
             services.AddSingleton<IDetectionWorklist>(Worklist);
@@ -53,8 +47,6 @@ internal sealed class SegmentVersionFeature : IAsyncDisposable
     public WebApplicationFactory<Program> Built { get; }
 
     public HttpClient Client { get; }
-
-    public HeldSegmentSettings Settings { get; } = new();
 
     public HeldSegmentModelVersions Versions { get; } = new();
 
@@ -87,7 +79,7 @@ internal sealed class SegmentVersionFeature : IAsyncDisposable
     internal sealed class Unoccupied : IOccupancyReader
     {
         public Task<Occupancy> ReadAsync(DateTime now, CancellationToken cancellationToken)
-            => Task.FromResult(new Occupancy(true, false, false, null));
+            => Task.FromResult(new Occupancy(false, false, null));
     }
 
     /// <summary>
@@ -227,22 +219,6 @@ public sealed class SegmentVersionEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, status);
         Assert.Equal(JsonValueKind.Null, body.GetProperty("data").ValueKind);
         Assert.Equal(1, feature.Versions.Active.Number);
-        Assert.Empty(feature.Versions.Written);
-    }
-
-    [Theory(DisplayName = "BR-CD-013: while learning is off no version is chosen and the choice is not left to learning either, whatever the number")]
-    [InlineData("""{"number":2}""")]
-    [InlineData("""{"number":7}""")]
-    [InlineData("""{"byHand":false}""")]
-    public async Task WhileLearningIsOffNothingIsChosen(string json)
-    {
-        await using var feature = new SegmentVersionFeature(learning: false);
-
-        (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(json);
-
-        Assert.Equal(HttpStatusCode.Conflict, status);
-        Assert.Contains("learning", body.GetProperty("message").GetString()!, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("data").ValueKind);
         Assert.Empty(feature.Versions.Written);
     }
 

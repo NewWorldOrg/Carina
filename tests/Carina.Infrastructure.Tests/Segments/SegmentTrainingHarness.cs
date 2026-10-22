@@ -103,9 +103,7 @@ internal sealed class SegmentTrainingHarness : IDisposable
     {
         Busyness = new HeldBusyness(() => new Busyness(Recording, false, null));
         provider = new ServiceCollection()
-            .AddSingleton<ISegmentSettingsRepository>(Settings)
             .AddSingleton<IBusynessReader>(Busyness)
-            .AddScoped<ILearningSwitch, LearningSwitch>()
             .AddScoped<IOccupancyReader, OccupancyReader>()
             .AddSingleton<ISegmentModelVersionRepository>(Versions)
             .AddSingleton<ISkipEventRepository>(Skips)
@@ -113,12 +111,9 @@ internal sealed class SegmentTrainingHarness : IDisposable
             .AddSingleton<ILearningMaterialChanges>(Changes)
             .AddSingleton<ISegmentTrainer>(Trainer)
             .BuildServiceProvider();
-        LearningAsync(true).GetAwaiter().GetResult();
     }
 
     public HandTurnedClock Clock { get; } = new(new DateTimeOffset(Start));
-
-    public HeldSegmentSettings Settings { get; } = new();
 
     public HeldBusyness Busyness { get; }
 
@@ -146,8 +141,6 @@ internal sealed class SegmentTrainingHarness : IDisposable
 
     public SegmentTrainingJob Job(SegmentTrainingSettings? settings = null)
         => new(provider.GetRequiredService<IServiceScopeFactory>(), settings ?? SegmentTrainingSettings.Default, Clock, Log);
-
-    public async Task LearningAsync(bool on) => await Settings.SaveAsync(SegmentSettings.LearningSwitched(on, Now), CancellationToken.None);
 
     /// <summary>
     /// Puts version 2 in use <paramref name="daysAgo"/> days ago in the place of the first, as learning would.

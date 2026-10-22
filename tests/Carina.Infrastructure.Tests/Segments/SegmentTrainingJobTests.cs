@@ -173,20 +173,6 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Empty(harness.Versions.Written);
     }
 
-    [Fact(DisplayName = "BR-CD-013: while learning is off nothing is learned, nothing moves and the day's round is not taken")]
-    public async Task NothingHappensWhileLearningIsOff()
-    {
-        await harness.LearningAsync(false);
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
-
-        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
-
-        Assert.Equal(new SegmentTrainingLook(SpareTimeVerdict.LearningOff, null), look);
-        Assert.Empty(harness.Trainer.Asked);
-        Assert.Empty(harness.Rounds.Taken);
-        Assert.Empty(harness.Versions.Added);
-    }
-
     [Fact(DisplayName = "BR-CD-004: while anything is recorded nothing is learned and the day's round waits for spare time")]
     public async Task NothingHappensWhileTheMachineIsBusy()
     {
@@ -201,23 +187,6 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal(new SegmentTrainingLook(SpareTimeVerdict.Recording, null), busy);
         Assert.Equal(SegmentTrainingOutcome.Adopted, spare.Round?.Outcome);
         Assert.Single(harness.Trainer.Asked);
-    }
-
-    [Fact(DisplayName = "BR-CD-013: learning switched off while a round learns stops it at the next boundary, keeps nothing and moves nothing, and the round is taken again once learning is on")]
-    public async Task LearningSwitchedOffStopsTheRound()
-    {
-        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
-        harness.Trainer.WhileLearning = () => harness.LearningAsync(false);
-
-        SegmentTrainingLook stopped = await harness.Job().LookAsync(Cancel);
-        harness.Trainer.WhileLearning = null;
-        await harness.LearningAsync(true);
-        SegmentTrainingLook resumed = await harness.Job().LookAsync(Cancel);
-
-        Assert.Equal((SegmentTrainingOutcome.Stopped, (SpareTimeVerdict?)SpareTimeVerdict.LearningOff), (stopped.Round?.Outcome, stopped.Round?.StoppedBy));
-        Assert.Equal(SegmentTrainingOutcome.Adopted, resumed.Round?.Outcome);
-        Assert.Equal([2], harness.Versions.Added.Select(version => version.Number));
-        Assert.Single(harness.Rounds.Taken);
     }
 
     [Fact(DisplayName = "BR-CD-004: a recording starting while a round learns stops it at the next boundary, nothing kept and no day taken, and the round is taken again in spare time the same day")]

@@ -8,9 +8,9 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Segments;
 
 /// <summary>
-/// What one look at the catalog did: what stood in the way when nothing was done — spare time, or learning
-/// being off; null when nothing was asked of spare time — what the matching found and changed, whether the
-/// record was marked as matched, and the entry estimated again when no recording waited to be matched.
+/// What one look at the catalog did: what in spare time stood in the way when nothing was done, null when nothing
+/// was asked of spare time; what the matching found and changed, whether the record was marked as matched, and the
+/// entry estimated again when no recording waited to be matched.
 /// </summary>
 public sealed record CatalogMatchingLook(SpareTimeVerdict? Verdict, CatalogMatched? Matched, bool Marked, CatalogEntry? Reestimated = null);
 
@@ -24,16 +24,15 @@ public sealed record CatalogMatchingLook(SpareTimeVerdict? Verdict, CatalogMatch
 /// every <see cref="CatalogMatchingSettings.BetweenLooks"/>, or after
 /// <see cref="CatalogMatchingSettings.AfterAMatch"/> once a look has matched one. A recording told to the
 /// first path is taken as soon as it is told, before the next look, and once marked as matched it is told on
-/// (<see cref="MatchedAtOnce"/>) to be detected at once. Neither path matches while learning is off, and a
-/// match finished after learning was switched off is not written. What a match changes is written
-/// before the record is marked as matched; a record that changed meanwhile is left waiting and is matched
-/// again, which adds no stretch twice. A look in spare time that finds no recording waiting estimates again
-/// the entry first seen earliest of those last estimated with an earlier version of the estimation
+/// (<see cref="MatchedAtOnce"/>) to be detected at once. What a match changes is written before the record is
+/// marked as matched; a record that changed meanwhile is left waiting and is matched again, which adds no
+/// stretch twice. A look in spare time that finds no recording waiting estimates again the entry first seen
+/// earliest of those last estimated with an earlier version of the estimation
 /// (<see cref="CatalogEntry.AwaitsReestimation"/>), one a look until none is left, and is followed as soon as a
-/// match is; an estimate finished after learning was switched off is not written either. Once a match or an estimate is
-/// written, every recording that hears an entry whose kind or confidence it changed, or a stretch it took for another
-/// kind, is taken as matched again (<see cref="LearningExtraction.CatalogChanged"/>), so that it waits to be detected
-/// again; an estimate that leaves an entry as it was has none detected again.
+/// match is. Once a match or an estimate is written, every recording that hears an entry whose kind or confidence
+/// it changed, or a stretch it took for another kind, is taken as matched again
+/// (<see cref="LearningExtraction.CatalogChanged"/>), so that it waits to be detected again; an estimate that
+/// leaves an entry as it was has none detected again.
 /// </summary>
 public sealed class CatalogMatchingJob(
     IServiceScopeFactory scopes,
@@ -45,8 +44,8 @@ public sealed class CatalogMatchingJob(
     ILogger<CatalogMatchingJob> logger) : BackgroundService
 {
     /// <summary>
-    /// The first path: matches at once the recording followed to its end, when learning is on and its data
-    /// was read to the end and waits to be matched.
+    /// The first path: matches at once the recording followed to its end, when its data was read to the end and
+    /// waits to be matched.
     /// </summary>
     public async Task<CatalogMatchingLook> MatchFollowedAsync(RecordingId id, CancellationToken cancellationToken)
     {
@@ -54,11 +53,6 @@ public sealed class CatalogMatchingJob(
 
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IServiceProvider services = scope.ServiceProvider;
-
-        if (!await services.GetRequiredService<ILearningSwitch>().IsOnAsync(cancellationToken))
-        {
-            return new CatalogMatchingLook(SpareTimeVerdict.LearningOff, null, false);
-        }
 
         if (await records.FindAsync(id, cancellationToken) is not { State: LearningExtractionState.Done, AwaitsMatching: true } record)
         {
@@ -127,12 +121,6 @@ public sealed class CatalogMatchingJob(
         CancellationToken cancellationToken)
     {
         CatalogMatched matched = await services.GetRequiredService<CatalogMatching>().MatchAsync(record, settings.Around, Now(), cancellationToken);
-
-        if (!await services.GetRequiredService<ILearningSwitch>().IsOnAsync(cancellationToken))
-        {
-            return new CatalogMatchingLook(SpareTimeVerdict.LearningOff, null, false);
-        }
-
         ICatalogRepository catalog = services.GetRequiredService<ICatalogRepository>();
 
         await catalog.KeepAsync(matched.Change, cancellationToken);
@@ -151,12 +139,6 @@ public sealed class CatalogMatchingJob(
         CancellationToken cancellationToken)
     {
         CatalogChange change = await services.GetRequiredService<CatalogMatching>().ReestimateAsync(entry, Now(), cancellationToken);
-
-        if (!await services.GetRequiredService<ILearningSwitch>().IsOnAsync(cancellationToken))
-        {
-            return new CatalogMatchingLook(SpareTimeVerdict.LearningOff, null, false);
-        }
-
         ICatalogRepository catalog = services.GetRequiredService<ICatalogRepository>();
 
         await catalog.KeepAsync(change, cancellationToken);

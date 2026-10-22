@@ -16,14 +16,13 @@ public sealed class LearningBacklogJobTests : IDisposable
 
     private readonly LearningBacklogHarness harness = new();
 
-    public static TheoryData<string> Occupied => ["learning off", "recording", "watching", "a reservation soon"];
+    public static TheoryData<string> Occupied => ["recording", "watching", "a reservation soon"];
 
     public void Dispose() => harness.Dispose();
 
     [Fact(DisplayName = "in spare time the most recently started recording waiting is read from the head of its file to the end, its record reading")]
     public async Task InSpareTimeTheNewestRecordingWaitingIsRead()
     {
-        await harness.LearningAsync(true);
         harness.Ended(90, 7601);
         Recording newest = harness.Ended(40, 7602);
         harness.Worklist.Ends[newest.Id] = Now.AddMinutes(25);
@@ -44,7 +43,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "only one recording is read at a time, and the next begins once the one before has settled")]
     public async Task OnlyOneRecordingIsReadAtATime()
     {
-        await harness.LearningAsync(true);
         Recording older = harness.Ended(90, 7603);
         Recording newer = harness.Ended(40, 7604);
         LearningBacklogJob job = harness.Job();
@@ -67,7 +65,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a recording is not read while another is recorded as being read, and nothing is read twice at once")]
     public async Task ARecordingIsNotReadWhileAnotherIs()
     {
-        await harness.LearningAsync(true);
         Recording elsewhere = harness.Ended(120, 7605);
         harness.Records.Hold(Left(elsewhere, LearningExtractionState.Done));
         Recording waiting = harness.Ended(30, 7606);
@@ -94,7 +91,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a record left reading while nothing is read is put back to wait at the next look, and its recording read again")]
     public async Task ARecordLeftReadingWhileNothingIsReadIsPutBack()
     {
-        await harness.LearningAsync(true);
         LearningBacklogJob job = harness.Job();
         await job.LookAsync(Cancel);
         Recording left = harness.Ended(30, 7628);
@@ -107,34 +103,9 @@ public sealed class LearningBacklogJobTests : IDisposable
         Assert.Empty(harness.Records.Row(left.Id)!.Gaps);
     }
 
-    [Fact(DisplayName = "a reading stopped by switching learning off is held until its record is put back to wait, though the first write fails")]
-    public async Task AStoppedReadingIsHeldUntilItsRecordIsWritten()
-    {
-        await harness.LearningAsync(true);
-        Recording recording = harness.Ended(40, 7633);
-        LearningBacklogJob job = harness.Job();
-        await job.LookAsync(Cancel);
-        await Eventually.Happens(() => harness.Records.Row(recording.Id)?.ReadThrough == HeldReader.ReadsAtOnce, "the reading never read");
-        await harness.LearningAsync(false);
-        harness.Records.FailsSaving = _ => true;
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => job.LookAsync(Cancel));
-
-        Assert.Equal(recording.Id, job.Reading);
-        Assert.Equal(LearningExtractionState.Reading, harness.Records.Row(recording.Id)?.State);
-
-        harness.Records.FailsSaving = null;
-        LearningBacklogLook look = await job.LookAsync(Cancel);
-
-        Assert.Equal((recording.Id, null), (look.Stopped, job.Reading));
-        Assert.Equal(LearningExtractionState.Waiting, harness.Records.Row(recording.Id)?.State);
-        Assert.Equal([recording.Id], harness.Reader.Stopped);
-    }
-
     [Fact(DisplayName = "a reading that ended leaving its record reading is held until its record is taken as failed, though the first write fails")]
     public async Task AReadingLeftUnsettledIsHeldUntilItsRecordIsWritten()
     {
-        await harness.LearningAsync(true);
         harness.Reader.LeavesItsRecord = true;
         Recording recording = harness.Ended(40, 7634);
         LearningBacklogJob job = harness.Job();
@@ -153,7 +124,7 @@ public sealed class LearningBacklogJobTests : IDisposable
         Assert.Equal(LearningExtractionState.Reading, harness.Records.Row(recording.Id)?.State);
 
         harness.Records.FailsSaving = null;
-        await harness.LearningAsync(false);
+        harness.Watching.Anyone = true;
         await job.LookAsync(Cancel);
 
         Assert.Null(job.Reading);
@@ -162,11 +133,10 @@ public sealed class LearningBacklogJobTests : IDisposable
             (harness.Records.Row(recording.Id)?.State, harness.Records.Row(recording.Id)?.Failure?.Reason));
     }
 
-    [Theory(DisplayName = "outside spare time nothing begins: with learning off, while recording, while watching, or with a reservation within thirty minutes")]
+    [Theory(DisplayName = "outside spare time nothing begins: while recording, while watching, or with a reservation within thirty minutes")]
     [MemberData(nameof(Occupied))]
     public async Task OutsideSpareTimeNothingBegins(string occupied)
     {
-        await harness.LearningAsync(occupied is not "learning off");
         Recording ended = harness.Ended(40, 7607);
         SpareTimeVerdict expected = await OccupyAsync(occupied);
 
@@ -181,7 +151,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a reservation further away than thirty minutes, its margin counted, leaves spare time")]
     public async Task AReservationFurtherAwayLeavesSpareTime()
     {
-        await harness.LearningAsync(true);
         Recording ended = harness.Ended(40, 7608);
         await harness.Reservations.AddAsync(ReservationFixtures.Planned(startAt: Now.AddMinutes(45), marginBefore: Margin.OfSeconds(10 * 60)), Cancel);
         await harness.Reservations.AddAsync(ReservationFixtures.Planned(startAt: Now.AddHours(-3), endAt: Now.AddHours(-2)), Cancel);
@@ -194,7 +163,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a recording begun is read to its end though recording starts meanwhile, and the next waits for spare time again")]
     public async Task ARecordingBegunIsReadToItsEndThoughRecordingStarts()
     {
-        await harness.LearningAsync(true);
         Recording older = harness.Ended(90, 7609);
         Recording newer = harness.Ended(40, 7610);
         LearningBacklogJob job = harness.Job();
@@ -204,7 +172,7 @@ public sealed class LearningBacklogJobTests : IDisposable
 
         LearningBacklogLook meanwhile = await job.LookAsync(Cancel);
 
-        Assert.Equal((null, newer.Id), (meanwhile.Stopped, meanwhile.Reading));
+        Assert.Equal(newer.Id, meanwhile.Reading);
         Assert.Empty(harness.Reader.Stopped);
 
         harness.Reader.Release(newer.Id);
@@ -215,34 +183,9 @@ public sealed class LearningBacklogJobTests : IDisposable
         Assert.Null(harness.Records.Row(older.Id));
     }
 
-    [Fact(DisplayName = "switching learning off stops the reading within a look, keeps what it wrote, and puts its record back to wait")]
-    public async Task SwitchingLearningOffStopsTheReading()
-    {
-        await harness.LearningAsync(true);
-        Recording recording = harness.Ended(40, 7612);
-        LearningBacklogJob job = harness.Job();
-        await job.LookAsync(Cancel);
-        await Eventually.Happens(() => !harness.Reader.Asked.IsEmpty, "the reading never began");
-        await harness.Data.KeepAsync(Written(recording), Cancel);
-
-        await harness.LearningAsync(false);
-        LearningBacklogLook look = await job.LookAsync(Cancel);
-
-        Assert.Equal((recording.Id, null, SpareTimeVerdict.LearningOff), (look.Stopped, look.Reading, look.Verdict));
-        Assert.Equal([recording.Id], harness.Reader.Stopped);
-        Assert.Equal(LearningExtractionState.Waiting, harness.Records.Row(recording.Id)?.State);
-        Assert.Single(harness.Data.Of(recording.Id));
-        Assert.Null(job.Reading);
-
-        await harness.LearningAsync(true);
-
-        Assert.Equal(recording.Id, (await job.LookAsync(Cancel)).Began);
-    }
-
     [Fact(DisplayName = "a recording whose row goes while it is read is read no further, and its record keeps what was read, partway")]
     public async Task ARecordingWhoseRowGoesEndsPartway()
     {
-        await harness.LearningAsync(true);
         Recording recording = harness.Ended(40, 7613);
         LearningBacklogJob job = harness.Job();
         await job.LookAsync(Cancel);
@@ -259,7 +202,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a recording whose file goes while it is read is read no further, and its record keeps what was read, partway")]
     public async Task ARecordingWhoseFileGoesEndsPartway()
     {
-        await harness.LearningAsync(true);
         Recording recording = harness.Ended(40, 7614);
         LearningBacklogJob job = harness.Job();
         await job.LookAsync(Cancel);
@@ -274,7 +216,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "the recording's file is still there, as it was, once it has been read")]
     public async Task TheFileIsStillThereOnceRead()
     {
-        await harness.LearningAsync(true);
         Recording recording = harness.Ended(40, 7615);
         byte[] before = await File.ReadAllBytesAsync(harness.Source(recording));
         LearningBacklogJob job = harness.Job();
@@ -290,7 +231,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a recording whose file is out of reach is passed over and keeps waiting, and the next is read")]
     public async Task ARecordingOutOfReachIsPassedOver()
     {
-        await harness.LearningAsync(true);
         Recording reachable = harness.Ended(90, 7616);
         Recording withoutAFile = harness.Ended(40, 7617, withAFile: false);
         Recording waitingWithoutAFile = harness.Ended(30, 7618, withAFile: false);
@@ -308,7 +248,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "more recordings out of reach than a look takes at once are passed over, and an older one whose file is there is read")]
     public async Task MoreRecordingsOutOfReachThanALookTakesArePassedOver()
     {
-        await harness.LearningAsync(true);
         Recording older = harness.Ended(600, 7630);
 
         for (int unreachable = 0; unreachable <= LearningBacklogSettings.Default.AtMostALook; unreachable++)
@@ -324,7 +263,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a recording that failed is not read, its file or no")]
     public async Task ARecordingThatFailedIsNotRead()
     {
-        await harness.LearningAsync(true);
         Recording failed = harness.Ended(40, 7631, failed: true);
 
         LearningBacklogLook look = await harness.Job().LookAsync(Cancel);
@@ -336,7 +274,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a record done or partway before them is given whether captions are shown, though more whose captions are not kept than a look takes come first")]
     public async Task CaptionsNotKeptDoNotHoldBackTheRest()
     {
-        await harness.LearningAsync(true);
         Recording older = harness.Ended(600, 7632);
         older.Caption(CaptionState.Ready, 2, Now.AddMinutes(-30));
         harness.Records.Hold(Read(older, TimeSpan.FromSeconds(60)));
@@ -358,7 +295,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a record waiting, failed with a try left, done another way or left partway before the end is read again from the head")]
     public async Task ARecordThatWaitsIsReadAgain()
     {
-        await harness.LearningAsync(true);
         Recording partway = harness.Ended(40, 7620);
         harness.Records.Hold(LeftPartwayBeforeTheEnd(partway));
         LearningBacklogJob job = harness.Job();
@@ -373,7 +309,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "a record done the way it is done now, or out of tries, is not read again")]
     public async Task ARecordThatDoesNotWaitIsNotReadAgain()
     {
-        await harness.LearningAsync(true);
         Recording done = harness.Ended(40, 7621);
         harness.Records.Hold(Left(done, LearningExtractionState.Done));
         Recording spent = harness.Ended(30, 7622);
@@ -386,22 +321,22 @@ public sealed class LearningBacklogJobTests : IDisposable
         Assert.Equal(LearningExtractionState.Failed, harness.Records.Row(spent.Id)?.State);
     }
 
-    [Fact(DisplayName = "at the first look a record left reading waits to be read, whether or not learning is on")]
+    [Fact(DisplayName = "at the first look a record left reading waits to be read, whether or not it is spare time")]
     public async Task AtTheFirstLookARecordLeftReadingWaits()
     {
         Recording recording = harness.Ended(40, 7623);
         harness.Records.Hold(Left(recording, LearningExtractionState.Reading));
+        harness.Watching.Anyone = true;
 
         LearningBacklogLook look = await harness.Job().LookAsync(Cancel);
 
-        Assert.Equal((1, SpareTimeVerdict.LearningOff), (look.Recovered, look.Verdict));
+        Assert.Equal((1, SpareTimeVerdict.Watching), (look.Recovered, look.Verdict));
         Assert.Equal(LearningExtractionState.Waiting, harness.Records.Row(recording.Id)?.State);
     }
 
     [Fact(DisplayName = "a reading that ends leaving its record reading is taken as failed, so that it is tried again a few times only")]
     public async Task AReadingThatLeavesItsRecordReadingIsTakenAsFailed()
     {
-        await harness.LearningAsync(true);
         harness.Reader.LeavesItsRecord = true;
         Recording recording = harness.Ended(40, 7624);
         LearningBacklogJob job = harness.Job();
@@ -427,7 +362,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     [Fact(DisplayName = "in spare time a recording read whose captions are ready is given whether captions are shown, second by second, chunk by chunk")]
     public async Task ARecordingWhoseCaptionsAreReadyIsGivenWhetherCaptionsAreShown()
     {
-        await harness.LearningAsync(true);
         Recording captioned = harness.Ended(40, 7625);
         captioned.Caption(CaptionState.Ready, 2, Now.AddMinutes(-30));
         harness.Records.Hold(Read(captioned, TimeSpan.FromSeconds(1300)));
@@ -455,14 +389,20 @@ public sealed class LearningBacklogJobTests : IDisposable
         Recording captioned = harness.Ended(40, 7627);
         captioned.Caption(CaptionState.Ready, 2, Now.AddMinutes(-30));
         harness.Records.Hold(Read(captioned, TimeSpan.FromSeconds(60)));
+        harness.Captions.Kept[captioned.Id] = new CaptionRecord(1440, 1080, TimeSpan.Zero, [Cue(2, shown: true)]);
+        Recording unkept = harness.Ended(30, 7635);
+        unkept.Caption(CaptionState.Ready, 2, Now.AddMinutes(-20));
+        harness.Records.Hold(Read(unkept, TimeSpan.FromSeconds(60)));
         LearningBacklogJob job = harness.Job();
-
-        Assert.Equal(0, (await job.LookAsync(Cancel)).Captioned);
-
-        await harness.LearningAsync(true);
+        harness.Watching.Anyone = true;
 
         Assert.Equal(0, (await job.LookAsync(Cancel)).Captioned);
         Assert.Empty(harness.Data.Of(captioned.Id));
+
+        harness.Watching.Anyone = false;
+
+        Assert.Equal(1, (await job.LookAsync(Cancel)).Captioned);
+        Assert.Empty(harness.Data.Of(unkept.Id));
     }
 
     private static async Task<bool> RefusedAsync(LearningBacklogJob job)
@@ -503,7 +443,7 @@ public sealed class LearningBacklogJobTests : IDisposable
 
                 return SpareTimeVerdict.ReservationSoon;
             default:
-                return SpareTimeVerdict.LearningOff;
+                throw new ArgumentOutOfRangeException(nameof(occupied), occupied, "Spare time is taken by recording, watching or a reservation soon.");
         }
     }
 

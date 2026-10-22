@@ -15,18 +15,15 @@ public sealed record PlayedChapters(IReadOnlyList<PlaybackChapter> Chapters, Pla
 /// <summary>
 /// The chapters a playback offer plays, on the clock of the file it hands over: the stretches the version of the
 /// model in use detected, placed by <see cref="PlaybackFileClock"/> and offered to be skipped by the threshold the
-/// settings stand at. While learning is off and the version in use has not detected the recording, an artefact is
-/// played with the chapters its encode marked, each taken as certain, only when the reader of the source marked
-/// them; chapters an encode took from a detection by another version are not played. An artefact whose timeline was not kept has no stretch placed on it. Whichever
-/// chapters are played, the clock that places the recording's time on the file is handed back beside them. Nothing
-/// here writes.
+/// settings stand at, and none while that version has not detected the recording. An artefact whose timeline was
+/// not kept has no stretch placed on it. The clock that places the recording's time on the file is handed back
+/// beside the chapters. Nothing here writes.
 /// </summary>
 public sealed class PlaybackChapterService(
     ISegmentSettingsRepository settings,
     ISegmentModelVersionRepository versions,
     IRecordingDetectionRepository detections,
-    IEncodeJobRepository jobs,
-    IEncodeChapterRepository marked)
+    IEncodeJobRepository jobs)
 {
     public async Task<ServiceResult<PlayedChapters>> ChaptersAsync(
         RecordingId id,
@@ -37,41 +34,15 @@ public sealed class PlaybackChapterService(
         ArgumentNullException.ThrowIfNull(offer);
 
         EncodeJobId? artefact = offer.Plan.Route is PlaybackRoute.Direct ? offer.Artefact : null;
-        EncodeJob? made = artefact is { } encoded ? await jobs.FindAsync(encoded, cancellationToken) : null;
-        PlaybackFileClock? clock = artefact is null ? PlaybackFileClock.AsItIs : ClockOf(made);
+        PlaybackFileClock? clock = artefact is { } encoded ? ClockOf(await jobs.FindAsync(encoded, cancellationToken)) : PlaybackFileClock.AsItIs;
         SegmentSettingsStanding standing = SegmentSettingsStanding.Over(await settings.ReadAsync(cancellationToken));
         SegmentModelVersion version = await versions.ActiveAsync(cancellationToken);
         SegmentStanding segments = SegmentStanding.Of(await detections.FindAsync(id, version.Number, cancellationToken));
+        IReadOnlyList<PlaybackChapter> chapters = clock is null ? [] : PlaybackChapter.Of(segments.Played, clock, standing.SkipThreshold);
 
-        if (segments.Source is SegmentSource.None && !standing.Learning && artefact is not null)
-        {
-            return Played(PlaybackChapter.Of(await MarkedAsync(made, cancellationToken), PlaybackFileClock.AsItIs, standing.SkipThreshold), clock);
-        }
-
-        return Played(clock is null ? [] : PlaybackChapter.Of(segments.Played, clock, standing.SkipThreshold), clock);
+        return ServiceResult<PlayedChapters>.Success(new PlayedChapters(chapters, clock));
     }
-
-    private static ServiceResult<PlayedChapters> Played(IReadOnlyList<PlaybackChapter> chapters, PlaybackFileClock? clock)
-        => ServiceResult<PlayedChapters>.Success(new PlayedChapters(chapters, clock));
 
     private static PlaybackFileClock? ClockOf(EncodeJob? made)
         => made is { Timeline: { } timeline } ? PlaybackFileClock.Of(timeline) : null;
-
-    private async Task<IReadOnlyList<SegmentSpan>> MarkedAsync(EncodeJob? made, CancellationToken cancellationToken)
-    {
-        if (made is not { Chapters: null or { Detector: not ChapterDetectorName.Segments } })
-        {
-            return [];
-        }
-
-        return [.. (await marked.ListForJobAsync(made.Id, cancellationToken)).Select(chapter => new SegmentSpan(chapter.StartsAt, chapter.EndsAt, KindOf(chapter.Kind), 1))];
-    }
-
-    private static SegmentKind KindOf(ChapterKind kind) => kind switch
-    {
-        ChapterKind.Break => SegmentKind.Break,
-        ChapterKind.Opening => SegmentKind.Opening,
-        ChapterKind.Ending => SegmentKind.Ending,
-        _ => SegmentKind.Programme,
-    };
 }

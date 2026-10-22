@@ -23,7 +23,7 @@ public sealed class PatchSegmentSettingsAction(SegmentSettingsService settings) 
         [FromBody] PatchSegmentSettingsRequest? request,
         CancellationToken cancellationToken)
     {
-        ServiceResult<SegmentSettingsStanding> changed = await settings.ChangeAsync(request?.Learning, request?.SkipThreshold, cancellationToken);
+        ServiceResult<SegmentSettingsStanding> changed = await settings.ChangeAsync(request?.SkipThreshold, cancellationToken);
 
         return changed.Data is { } standing
             ? Ok(BaseResponder<SegmentSettingsResponder>.Success(SegmentSettingsResponder.Of(standing)))

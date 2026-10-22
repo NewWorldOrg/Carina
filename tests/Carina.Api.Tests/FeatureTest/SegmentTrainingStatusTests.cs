@@ -15,8 +15,8 @@ using Microsoft.Extensions.Hosting;
 namespace Carina.Api.Tests.FeatureTest;
 
 /// <summary>
-/// The status of detection beside the day's round of learning, learning on and the machine idle; learning comes
-/// to what a test sets.
+/// The status of detection beside the day's round of learning, the machine idle; learning comes to what a test
+/// sets.
 /// </summary>
 internal sealed class SegmentTrainingFeature : IAsyncDisposable
 {
@@ -26,8 +26,6 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
 
     public SegmentTrainingFeature()
     {
-        Settings.SaveAsync(SegmentSettings.LearningSwitched(true, Now.AddDays(-30)), CancellationToken.None).GetAwaiter().GetResult();
-
         Built = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();

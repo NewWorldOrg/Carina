@@ -59,16 +59,4 @@ internal static class WatermarkPictures
 
         return frame;
     }
-
-    public static WatermarkMask Learned(int frames = WatermarkLearner.FewestFrames)
-    {
-        var learner = new WatermarkLearner();
-
-        for (int step = 0; step < frames; step++)
-        {
-            learner.Pictured(Moving(step, marked: true));
-        }
-
-        return learner.Learned() ?? throw new InvalidOperationException("The mark drawn in the corner was not learned.");
-    }
 }
