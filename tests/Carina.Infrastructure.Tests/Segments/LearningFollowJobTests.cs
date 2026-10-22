@@ -116,16 +116,19 @@ public sealed class LearningFollowJobTests : IDisposable
     {
         Recording ending = harness.Recording(eventId: 7306);
         Recording stopped = harness.Recording(eventId: 7307);
-        LearningFollowJob job = harness.Job();
-        await job.LookAsync(Cancel);
+        using LearningFollowJob job = harness.Job(new LearningFollowSettings
+        {
+            BeforeFirstLook = TimeSpan.FromMilliseconds(10),
+            BetweenLooks = TimeSpan.FromHours(1),
+        });
+        using CancellationTokenSource stopping = new();
+        await job.StartAsync(stopping.Token);
         await Eventually.Happens(() => harness.Follower.Asked.Count is 2, "the follows never began");
 
         End(ending);
-        await job.LookAsync(Cancel);
+        harness.Signals.Publish(DriverEvents.RecordingProgress);
         RecordingId? told = null;
         await Eventually.Happens(() => harness.Finished.TryTake(out told), "the follow that came to its end was never told");
-        using CancellationTokenSource stopping = new();
-        await job.StartAsync(stopping.Token);
         await stopping.CancelAsync();
         await job.StopAsync(Cancel);
 

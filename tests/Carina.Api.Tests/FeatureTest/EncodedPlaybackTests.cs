@@ -7,6 +7,8 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 
+using Segments = Carina.Domain.Segments;
+
 namespace Carina.Api.Tests.FeatureTest;
 
 public sealed class EncodedPlaybackTests
@@ -469,73 +471,38 @@ public sealed class EncodedPlaybackTests
         Assert.Empty(await answer.Content.ReadAsByteArrayAsync());
     }
 
-    [Fact]
-    public async Task TheChaptersAJobMarkedComeBackWithThePlanOfTheArtefactItMade()
+    [Fact(DisplayName = "the chapters that come back are placed on the clock of the artefact that is played rather than of an earlier one")]
+    public async Task TheChaptersThatComeBackArePlacedOnTheClockOfTheArtefactThatIsPlayed()
     {
         await using var feature = new PlayFeature();
         Recording recording = feature.Ended(RecordingOutcome.Complete);
-        feature.Encoded(recording);
-        await feature.MarkedAsync(
-            feature.Jobs.Jobs[0],
-            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(90), ChapterKind.Programme),
-            new ChapterSegment(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(150), ChapterKind.Break),
-            new ChapterSegment(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(300), ChapterKind.Programme));
+        feature.Encoded(recording, bytes: 700, timeline: Skipped(0.5));
+        feature.Encoded(recording, minutesLater: 90, bytes: 1_300, timeline: Skipped(1.5));
+        await APodAsync(feature, recording);
 
         JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
-        JsonElement[] chapters = [.. read.GetProperty("chapters").EnumerateArray()];
 
-        Assert.Equal("direct", read.GetProperty("route").GetString());
-        Assert.Equal([0d, 90d, 150d], chapters.Select(chapter => chapter.GetProperty("startsAtSec").GetDouble()).ToArray());
-        Assert.Equal([90d, 150d, 300d], chapters.Select(chapter => chapter.GetProperty("endsAtSec").GetDouble()).ToArray());
-        Assert.Equal(
-            ["programme", "break", "programme"],
-            chapters.Select(chapter => chapter.GetProperty("kind").GetString()!).ToArray());
+        Assert.Equal(1_300, read.GetProperty("bytes").GetInt64());
+        Assert.Equal([0d, 298.5d, 358.5d], read.GetProperty("chapters").EnumerateArray().Select(chapter => chapter.GetProperty("startsAtSec").GetDouble()).ToArray());
     }
 
-    [Fact]
-    public async Task TheChaptersThatComeBackBelongToTheArtefactThatIsPlayedRatherThanToAnEarlierOne()
+    [Theory(DisplayName = "with an earlier artefact in H.264 and a later one in H.265, a browser is handed the newest one it decodes, with the chapters placed on that artefact's clock")]
+    [InlineData("?decodes=h265", 1_300, 298.5d)]
+    [InlineData("", 700, 299.5d)]
+    public async Task ABrowserIsHandedTheNewestArtefactItDecodesWithItsOwnChapters(string query, long bytes, double breakStartsAt)
     {
         await using var feature = new PlayFeature();
         Recording recording = feature.Ended(RecordingOutcome.Complete);
-        feature.Encoded(recording, bytes: 700);
-        feature.Encoded(recording, minutesLater: 90, bytes: 1_300);
-        await feature.MarkedAsync(
-            feature.Jobs.Jobs[0],
-            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(30), ChapterKind.Break));
-        await feature.MarkedAsync(
-            feature.Jobs.Jobs[1],
-            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(45), ChapterKind.Programme));
-
-        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
-        JsonElement[] chapters = [.. read.GetProperty("chapters").EnumerateArray()];
-        JsonElement chapter = Assert.Single(chapters);
-
-        Assert.Equal(45d, chapter.GetProperty("endsAtSec").GetDouble());
-        Assert.Equal("programme", chapter.GetProperty("kind").GetString());
-    }
-
-    [Theory(DisplayName = "with an earlier artefact in H.264 and a later one in H.265, a browser is handed the newest one it decodes, with the chapters that artefact's job marked")]
-    [InlineData("?decodes=h265", 1_300, 45d)]
-    [InlineData("", 700, 30d)]
-    public async Task ABrowserIsHandedTheNewestArtefactItDecodesWithItsOwnChapters(string query, long bytes, double endsAt)
-    {
-        await using var feature = new PlayFeature();
-        Recording recording = feature.Ended(RecordingOutcome.Complete);
-        feature.Encoded(recording, EncodeCodec.H264, bytes: 700, fileReadAs: EncodeCodec.H264);
-        feature.Encoded(recording, EncodeCodec.H265, minutesLater: 90, bytes: 1_300, fileReadAs: EncodeCodec.H265, taggedAs: "hvc1");
-        await feature.MarkedAsync(
-            feature.Jobs.Jobs[0],
-            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(30), ChapterKind.Break));
-        await feature.MarkedAsync(
-            feature.Jobs.Jobs[1],
-            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(45), ChapterKind.Programme));
+        feature.Encoded(recording, EncodeCodec.H264, bytes: 700, fileReadAs: EncodeCodec.H264, timeline: Skipped(0.5));
+        feature.Encoded(recording, EncodeCodec.H265, minutesLater: 90, bytes: 1_300, fileReadAs: EncodeCodec.H265, taggedAs: "hvc1", timeline: Skipped(1.5));
+        await APodAsync(feature, recording);
 
         JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording, query))).GetProperty("data");
-        JsonElement chapter = Assert.Single(read.GetProperty("chapters").EnumerateArray());
+        JsonElement[] chapters = [.. read.GetProperty("chapters").EnumerateArray()];
 
         Assert.Equal("direct", read.GetProperty("route").GetString());
         Assert.Equal(bytes, read.GetProperty("bytes").GetInt64());
-        Assert.Equal(endsAt, chapter.GetProperty("endsAtSec").GetDouble());
+        Assert.Equal(("break", breakStartsAt), (chapters[1].GetProperty("kind").GetString(), chapters[1].GetProperty("startsAtSec").GetDouble()));
     }
 
     [Fact]
@@ -766,6 +733,32 @@ public sealed class EncodedPlaybackTests
 
         Assert.Equal("recording", read.GetProperty("source").GetString());
         Assert.Empty(read.GetProperty("chapters").EnumerateArray());
+    }
+
+    private static EncodeTimeline Skipped(double head)
+        => new(TimeSpan.FromSeconds(1.4), TimeSpan.FromSeconds(head), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30) - TimeSpan.FromSeconds(head));
+
+    /// <summary>
+    /// Keeps a detection of the recording by the version in use with a pod of adverts five minutes in.
+    /// </summary>
+    private static async Task APodAsync(PlayFeature feature, Recording recording)
+    {
+        Segments.SegmentSpan[] segments =
+        [
+            new(TimeSpan.Zero, TimeSpan.FromSeconds(300), Segments.SegmentKind.Programme, 0.98),
+            new(TimeSpan.FromSeconds(300), TimeSpan.FromSeconds(360), Segments.SegmentKind.Break, 0.93),
+            new(TimeSpan.FromSeconds(360), TimeSpan.FromMinutes(30), Segments.SegmentKind.Programme, 0.99),
+        ];
+
+        await feature.Detections.KeepAsync(
+            Segments.RecordingDetection.Of(
+                recording.Id,
+                Segments.SegmentModelVersion.FirstNumber,
+                Segments.SegmentDetection.Judged(segments, TimeSpan.FromMinutes(30), []),
+                2,
+                RecordingFeature.Noon,
+                RecordingFeature.Noon),
+            CancellationToken.None);
     }
 
     private static string? Header(HttpResponseMessage answer, string named)
