@@ -132,7 +132,7 @@ public sealed class SegmentTrainingStatusTests
         Assert.Equal("2026-11-08T18:00:00Z", data.GetProperty("nextRoundNotBefore").GetString());
     }
 
-    [Fact(DisplayName = "BR-CD-008: a candidate the day's round keeps only is answered among the versions with its figures, while the version in use and its figures stay")]
+    [Fact(DisplayName = "BR-CD-008: a candidate the day's round keeps only is answered among the versions with its figures, while the version in use stays and is answered with the figures the round measured it by")]
     public async Task ACandidateKeptOnlyIsAnsweredAmongTheVersions()
     {
         await using var feature = new SegmentTrainingFeature();
@@ -147,7 +147,8 @@ public sealed class SegmentTrainingStatusTests
         Assert.Equal([(2, "candidate"), (1, "active")], versions.Select(version => (version.GetProperty("number").GetInt32(), version.GetProperty("state").GetString())));
         Assert.Equal(0.80, versions[0].GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
         Assert.Equal(JsonValueKind.Null, versions[0].GetProperty("adoptedAt").ValueKind);
-        Assert.Equal(JsonValueKind.Null, data.GetProperty("metrics").ValueKind);
+        Assert.Equal(0.85, versions[1].GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
+        Assert.Equal(0.85, data.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
         Assert.Equal(12, data.GetProperty("evidence").GetProperty("recordings").GetInt32());
         JsonElement round = data.GetProperty("lastRound");
         Assert.Equal(("kept", 2, "noBetterAtBoundaries"), (round.GetProperty("outcome").GetString(), round.GetProperty("candidate").GetInt32(), round.GetProperty("verdict").GetString()));

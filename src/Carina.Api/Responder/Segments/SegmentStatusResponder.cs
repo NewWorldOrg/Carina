@@ -141,7 +141,8 @@ public sealed record SegmentRolledBackResponder(DateTime At, double ReturnedAfte
 
 /// <summary>
 /// One version kept: its number, where it stands, whether it was chosen by hand, when it was made, put in use
-/// and taken out of use, why when a rollback took it out, and its figure when it was evaluated on a recording.
+/// and taken out of use, why when a rollback took it out, and its figure when it was evaluated on a recording or,
+/// for the version in use, measured by the latest round.
 /// </summary>
 public sealed record SegmentVersionHistoryResponder(
     int Number,
@@ -153,7 +154,7 @@ public sealed record SegmentVersionHistoryResponder(
     SegmentRolledBackResponder? RolledBack,
     SegmentMetricsSummaryResponder? Metrics)
 {
-    public static SegmentVersionHistoryResponder Of(SegmentModelVersion version)
+    public static SegmentVersionHistoryResponder Of(SegmentModelVersion version, SegmentMetrics? metrics)
     {
         ArgumentNullException.ThrowIfNull(version);
 
@@ -167,7 +168,7 @@ public sealed record SegmentVersionHistoryResponder(
             version is { RolledBackAt: DateTime at, Rollback: { } rollback }
                 ? new SegmentRolledBackResponder(at, rollback.ReturnedAfterSkipShare, rollback.PreviousShare, rollback.Skips)
                 : null,
-            version.Metrics is { } metrics ? SegmentMetricsSummaryResponder.Of(metrics) : null);
+            metrics is not null ? SegmentMetricsSummaryResponder.Of(metrics) : null);
     }
 }
 
@@ -256,7 +257,7 @@ public sealed record SegmentStatusResponder(
             SegmentEvidenceResponder.Of(status.Evidence),
             status.Metrics is { } metrics ? SegmentMetricsResponder.Of(metrics) : null,
             [.. (status.Version.Stations ?? []).Select(SegmentStationResponder.Of)],
-            [.. status.Versions.Select(SegmentVersionHistoryResponder.Of)],
+            [.. status.Versions.Select(version => SegmentVersionHistoryResponder.Of(version, version.Number == status.Version.Number ? status.Metrics : version.Metrics))],
             new SkipThresholdResponder(status.Settings.SkipThreshold),
             status.LastRound is { } round ? SegmentLearningRoundResponder.Of(round, status.LastCandidate) : null,
             status.NextRoundNotBefore);

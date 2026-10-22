@@ -5,7 +5,8 @@ namespace Carina.Api.Services;
 
 /// <summary>
 /// Where CM, OP and ED detection stands, as the settings screen shows it: the settings, the learning data and
-/// the catalog; the version in use, and its figures beside what viewers did with its buttons lately; what the
+/// the catalog; the version in use, and its figures beside what viewers did with its buttons lately, taken from the
+/// latest round when the version was never evaluated itself but was the one that round measured; what the
 /// latest evaluation stands on, or what the catalog as it stands would give one while no version has been
 /// evaluated; every version kept, the highest number first; the latest round of learning that says what became of
 /// it, with the candidate it kept when that is still kept; and the first moment the next round may begin.
@@ -44,7 +45,7 @@ public sealed class SegmentStatusService(
             await learningData.ReadAsync(cancellationToken),
             await catalog.ReadAsync(cancellationToken),
             active,
-            await MetricsAsync(active, cancellationToken),
+            await MetricsAsync(active, last, cancellationToken),
             kept.FirstOrDefault(version => version.Evidence is not null)?.Evidence ?? await evidence.ReadAsync(cancellationToken),
             kept,
             last,
@@ -52,9 +53,9 @@ public sealed class SegmentStatusService(
             SegmentLearningRound.NextNotBefore(now, await rounds.TakenAsync(SegmentLearningRound.DayOf(now), cancellationToken))));
     }
 
-    private async Task<SegmentMetrics?> MetricsAsync(SegmentModelVersion active, CancellationToken cancellationToken)
+    private async Task<SegmentMetrics?> MetricsAsync(SegmentModelVersion active, SegmentLearningRound? last, CancellationToken cancellationToken)
     {
-        if (active.Metrics is not { } evaluated)
+        if ((active.Metrics ?? MeasuredBy(active, last)) is not { } evaluated)
         {
             return null;
         }
@@ -63,4 +64,11 @@ public sealed class SegmentStatusService(
 
         return evaluated.WithReturns(await skips.ReturnsAsync(active.Number, now - SegmentLearning.ReturnsOver, now, cancellationToken));
     }
+
+    /// <summary>
+    /// The figures <paramref name="last"/> measured the version in use by, when it was put in use no later than that
+    /// round was taken and so was the version that round measured; none otherwise.
+    /// </summary>
+    private static SegmentMetrics? MeasuredBy(SegmentModelVersion active, SegmentLearningRound? last)
+        => last is { InUseMetrics: { } measured } && active.AdoptedAt <= last.TakenAt ? measured : null;
 }
