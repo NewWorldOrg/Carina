@@ -26,7 +26,7 @@ public sealed record RecordedCorners(SeriesMember Member, ReadOnlyMemory<byte> O
 /// </summary>
 public sealed class CornerLogo
 {
-    public const double SteadyShare = 0.5;
+    public const double SteadyShare = 0.4;
 
     public const int FewestSeconds = 60;
 

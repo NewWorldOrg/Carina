@@ -152,6 +152,15 @@ public sealed class CornerLogoTests
         Assert.Empty(CornerLogo.Learn(Judged, [busy, Recorded(Member(1, Evening.AddDays(-1)), TopRight, 2)]).Shapes);
     }
 
+    [Fact(DisplayName = "a thin logo on in fewer than half the seconds is learned when two recordings agree on it")]
+    public void AThinLogoIsLearnedWhenTwoRecordingsAgreeOnIt()
+    {
+        CornerLogo logo = CornerLogo.Learn(Judged, [Thin(Member(1, Evening.AddDays(-7)), 1), Thin(Member(1, Evening.AddDays(-1)), 2)]);
+
+        Assert.Equal(TopRight.Order(), Assert.Single(logo.Shapes));
+        Assert.Empty(CornerLogo.Learn(Judged, [Thin(Member(1, Evening.AddDays(-1)), 2)]).Shapes);
+    }
+
     [Fact(DisplayName = "two recordings of one broadcast count as one recording")]
     public void TwoRecordingsOfOneBroadcastCountAsOne()
     {
@@ -169,6 +178,9 @@ public sealed class CornerLogoTests
 
     private static RecordedCorners Recorded(SeriesMember member, int[] logo, int seed)
         => new(member, Drawn(Seconds, logo, second => second % 300 >= 60, seed));
+
+    private static RecordedCorners Thin(SeriesMember member, int seed)
+        => new(member, Drawn(Seconds, TopRight, second => second % 20 < 9, seed));
 
     private static SeriesMember Member(int station, DateTime startedAt, DateTime? programmeStartsAt = null)
         => new(RecordingId.New(), new NetworkId(station), new ServiceId(station), "架空の物語", startedAt, programmeStartsAt);
