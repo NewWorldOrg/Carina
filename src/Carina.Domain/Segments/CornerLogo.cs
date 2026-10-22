@@ -9,16 +9,18 @@ public sealed record RecordedCorners(SeriesMember Member, ReadOnlyMemory<byte> O
 /// <summary>
 /// The shapes a station's logo draws in the corner outlines, learned from the station's other recordings that
 /// started before the one judged, never from the one judged. A block on in at least <see cref="SteadyShare"/>
-/// of the seconds of a recording of at least <see cref="FewestSeconds"/> seconds is steady there; a recording
-/// with fewer than <see cref="FewestBlocks"/> steady blocks shows no logo. A recording whose steady blocks
-/// cover more than <see cref="MostOfTheCorners"/> of the corners carries a still picture besides any logo: it
-/// may agree with a shape another recording draws and count towards its blocks, but a block only such
-/// recordings hold steady is never part of a shape. Each recording, newest first and those carrying a still
-/// picture last, joins the first shape it agrees with by at least <see cref="SameShape"/>
+/// of the seconds of a recording of at least <see cref="FewestSeconds"/> seconds is steady there, save one on
+/// the outermost column or row of the picture, where the edge of a letterboxed or pillarboxed picture lies; a
+/// recording with fewer than <see cref="FewestBlocks"/> steady blocks shows no logo. A recording whose steady
+/// blocks cover more than <see cref="MostOfTheCorners"/> of the corners carries a still picture besides any
+/// logo: it may agree with a shape another recording draws and count towards its blocks, but a block only
+/// such recordings hold steady is never part of a shape. Each recording, newest first and those carrying a
+/// still picture last, joins the first shape it agrees with by at least <see cref="SameShape"/>
 /// (<see cref="Agreement"/>), or else draws a new one. A shape is kept when at least
 /// <see cref="FewestRecordings"/> broadcasts agree on it, two recordings of one broadcast counting once
 /// (<see cref="SeriesMember.Episode"/>), as the blocks steady in at least that many of those broadcasts and
-/// in at least half of them, and when it then has from <see cref="FewestBlocks"/> blocks to
+/// in at least half of them, less any whose mirror across the middle of the picture is kept too, as the
+/// borders of a letterboxed picture are; and when it then has from <see cref="FewestBlocks"/> blocks to
 /// <see cref="MostOfTheCorners"/> of the corners. A station may keep several shapes, as its logo changes with
 /// the season. A second shows the logo when at least <see cref="SeenShare"/> of the blocks of one of the
 /// shapes are on. A logo seen in at least <see cref="NearlyEverywhere"/> of a recording's seconds, or in no
@@ -150,7 +152,7 @@ public sealed class CornerLogo
             Count(outlines.Slice(second * CornerOutline.Bytes, CornerOutline.Bytes), on);
         }
 
-        bool[] steady = [.. on.Select(count => count >= seconds * SteadyShare)];
+        bool[] steady = [.. on.Select((count, block) => count >= seconds * SteadyShare && !IsOnTheEdge(block))];
         int blocks = steady.Count(block => block);
 
         return blocks >= FewestBlocks ? new SteadyBlocks(recording.Member.Episode, steady, blocks) : null;
@@ -188,7 +190,8 @@ public sealed class CornerLogo
     private static int[]? Agreed(List<SteadyBlocks> drawn)
     {
         int broadcasts = drawn.Select(blocks => blocks.Episode).Distinct().Count();
-        int[] shape = [.. Enumerable.Range(0, CornerOutline.Bits).Where(block => IsAgreed(drawn, broadcasts, block))];
+        bool[] agreed = [.. Enumerable.Range(0, CornerOutline.Bits).Select(block => IsAgreed(drawn, broadcasts, block))];
+        int[] shape = [.. Enumerable.Range(0, CornerOutline.Bits).Where(block => agreed[block] && !agreed[Mirrored(block)])];
 
         return broadcasts >= FewestRecordings && shape.Length >= FewestBlocks && !CoversTooMuch(shape.Length) ? shape : null;
     }
@@ -201,6 +204,24 @@ public sealed class CornerLogo
     }
 
     private static bool CoversTooMuch(int blocks) => blocks > CornerOutline.Bits * MostOfTheCorners;
+
+    private static bool IsOnTheEdge(int block)
+    {
+        int corner = block / CornerOutline.BlocksInACorner;
+        int row = block % CornerOutline.BlocksInACorner / CornerOutline.Columns;
+        int column = block % CornerOutline.Columns;
+
+        return column == (corner % 2 is 0 ? 0 : CornerOutline.Columns - 1) || row == (corner / 2 is 0 ? 0 : CornerOutline.Rows - 1);
+    }
+
+    private static int Mirrored(int block)
+    {
+        int corner = block / CornerOutline.BlocksInACorner;
+        int row = block % CornerOutline.BlocksInACorner / CornerOutline.Columns;
+        int column = block % CornerOutline.Columns;
+
+        return ((corner ^ 1) * CornerOutline.BlocksInACorner) + (row * CornerOutline.Columns) + (CornerOutline.Columns - 1 - column);
+    }
 
     private bool ShowsAny(ReadOnlySpan<byte> outline)
     {

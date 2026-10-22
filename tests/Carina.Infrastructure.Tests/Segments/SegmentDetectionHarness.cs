@@ -97,6 +97,12 @@ internal sealed class SegmentDetectionHarness : IDisposable
 
     public const byte Loud = 40;
 
+    /// <summary>
+    /// The byte of a corner outline the logo lights: eight blocks in the third row of the top left corner, clear of
+    /// the edge of the picture.
+    /// </summary>
+    private const int LogoByte = 8;
+
     public static readonly DateTime Now = new(2026, 11, 1, 3, 0, 0, DateTimeKind.Utc);
 
     private readonly ServiceProvider provider;
@@ -282,7 +288,7 @@ internal sealed class SegmentDetectionHarness : IDisposable
 
         for (int second = 0; second < Seconds; second++)
         {
-            outlines[second * CornerOutline.Bytes] = 0xFF;
+            outlines[(second * CornerOutline.Bytes) + LogoByte] = 0xFF;
         }
 
         return outlines;

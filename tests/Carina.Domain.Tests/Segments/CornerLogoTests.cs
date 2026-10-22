@@ -172,6 +172,28 @@ public sealed class CornerLogoTests
         Assert.Single(CornerLogo.Learn(Judged, [first, second, Recorded(Member(1, Evening.AddDays(-1), Evening.AddDays(-1)), TopRight, 3)]).Shapes);
     }
 
+    [Fact(DisplayName = "the edge and the borders of a letterboxed or pillarboxed picture are no logo, nor part of one")]
+    public void TheEdgeAndTheBordersOfThePictureAreNoLogo()
+    {
+        int[] edge =
+        [
+            .. Rectangle(0, 0, 0, 1, CornerOutline.Rows), .. Rectangle(1, CornerOutline.Columns - 1, 0, 1, CornerOutline.Rows),
+            .. Rectangle(2, 0, 0, 1, CornerOutline.Rows), .. Rectangle(3, CornerOutline.Columns - 1, 0, 1, CornerOutline.Rows),
+        ];
+        int[] border = [.. Enumerable.Range(0, CornerOutline.Corners).SelectMany(corner => Rectangle(corner, 0, 8, CornerOutline.Columns, 1))];
+
+        Assert.Empty(CornerLogo.Learn(Judged, [Recorded(Member(1, Evening.AddDays(-7)), edge, 1), Recorded(Member(1, Evening.AddDays(-1)), edge, 2)]).Shapes);
+        Assert.Empty(CornerLogo.Learn(Judged, [Recorded(Member(1, Evening.AddDays(-7)), border, 1), Recorded(Member(1, Evening.AddDays(-1)), border, 2)]).Shapes);
+        Assert.Equal(
+            TopRight.Order(),
+            Assert.Single(CornerLogo.Learn(
+                Judged,
+                [
+                    Recorded(Member(1, Evening.AddDays(-7)), [.. edge, .. border, .. TopRight], 1),
+                    Recorded(Member(1, Evening.AddDays(-1)), [.. edge, .. border, .. TopRight], 2),
+                ]).Shapes));
+    }
+
     [Fact(DisplayName = "outlines that are not whole seconds of corners are refused")]
     public void BrokenOutlinesAreRefused()
         => Assert.Throws<ArgumentException>(() => CornerLogo.None.Sightings(new byte[CornerOutline.Bytes + 1]));
