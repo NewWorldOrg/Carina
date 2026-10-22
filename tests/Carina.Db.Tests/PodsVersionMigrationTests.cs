@@ -19,6 +19,8 @@ public sealed class PodsVersionMigrationTests
 
     private const string BeforeTheVersionWasMade = "20261020230000_AVersionMadeByHandTakesDynamicSongsForThemes";
 
+    private const string TheVersionWasMade = "20261021090000_AVersionMadeByHandTakesAdvertsInPods";
+
     private const string Learned = """{"recordings": 12, "boundaries": 148, "labelsUntil": null}""";
 
     private const string LearningOn = "INSERT INTO segment_settings (id, learning, learning_changed_at) VALUES (1, true, now())";
@@ -40,7 +42,7 @@ public sealed class PodsVersionMigrationTests
             await ExecuteAsync(before, "UPDATE segment_model_version SET state = 'Active', adopted_at = now() WHERE number = 6");
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (CarinaDbContext reading = CarinaDbContextFactory.Create(Scratch()))
         {
@@ -71,7 +73,7 @@ public sealed class PodsVersionMigrationTests
         await context.Database.EnsureDeletedAsync(Cancel);
     }
 
-    [Fact(DisplayName = "BR-CD-013: while learning is off, the first version stays in use and the version for pods of adverts waits as a candidate after the other versions of four kinds, and turning learning on puts it in use")]
+    [Fact(DisplayName = "BR-CD-013: while learning is off, the first version stays in use and the version for pods of adverts waits as a candidate after the other versions of four kinds")]
     public async Task WhileLearningIsOffTheVersionForPodsWaits()
     {
         await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
@@ -79,18 +81,11 @@ public sealed class PodsVersionMigrationTests
         IMigrator migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync(BeforeTheVersionWasMade, Cancel);
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {
             Assert.Equal("1:Active 2:Candidate 3:Candidate 4:Candidate 5:Candidate 6:Candidate 7:Candidate", await StatesAsync(after));
-        }
-
-        await using (CarinaDbContext changing = CarinaDbContextFactory.Create(Scratch()))
-        {
-            SegmentModelVersion? active = await new SegmentModelVersionRepository(changing).ChangeAsync(SegmentVersionChange.LatestMadeByHand, DateTime.UtcNow, Cancel);
-
-            Assert.Equal((7, SegmentModel.FourKindsInPods), (active?.Number, active?.Model));
         }
 
         await context.Database.EnsureDeletedAsync(Cancel);
@@ -115,7 +110,7 @@ public sealed class PodsVersionMigrationTests
                 : LearnedFrom(6, 7));
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheVersionWasMade, Cancel);
 
         await using (NpgsqlConnection after = await OpenAsync())
         {

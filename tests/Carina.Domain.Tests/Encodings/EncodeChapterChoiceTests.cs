@@ -18,9 +18,8 @@ public sealed class EncodeChapterChoiceTests
     public void ADetectionThatMarkedBreaksIsEmbedded()
     {
         RecordingDetection marked = Detected([Span(0, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Break), Span(360, 1800, SegmentKind.Programme)]);
-        EncodeChapterChoice choice = EncodeChapterChoice.Of(true, 1, SegmentStanding.Of(marked));
+        EncodeChapterChoice choice = EncodeChapterChoice.Of(1, SegmentStanding.Of(marked));
 
-        Assert.False(choice.AsksTheReader);
         Assert.Equal(marked.Segments, choice.Embedded(Artefact));
         Assert.Equal(
             [
@@ -35,42 +34,37 @@ public sealed class EncodeChapterChoiceTests
     public void AStretchTheArtefactDoesNotPlayIsNotEmbedded()
     {
         RecordingDetection marked = Detected([Span(0, 0.4, SegmentKind.Break), Span(0.4, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Break), Span(360, 1800, SegmentKind.Programme)]);
-        EncodeChapterChoice choice = EncodeChapterChoice.Of(false, 1, SegmentStanding.Of(marked));
+        EncodeChapterChoice choice = EncodeChapterChoice.Of(1, SegmentStanding.Of(marked));
 
         Assert.Equal(marked.Segments.Skip(1), choice.Embedded(Artefact));
         Assert.Equal(3, choice.Chapters(Artefact).Count);
         Assert.Equal(TimeSpan.Zero, choice.Chapters(Artefact)[0].Starts);
     }
 
-    [Fact(DisplayName = "BR-CD-010: a detection that found only the programme, or was thrown away, embeds nothing, whether learning is on or off")]
+    [Fact(DisplayName = "BR-CD-010: a detection that found only the programme, or was thrown away, embeds nothing")]
     public void ADetectionWithNoBreaksToKeepEmbedsNothing()
     {
         RecordingDetection plain = Detected([Span(0, 1800, SegmentKind.Programme)]);
         RecordingDetection discarded = Detected([Span(0, 600, SegmentKind.Programme), Span(600, 1800, SegmentKind.Break)]);
 
-        foreach (bool learning in new[] { true, false })
+        foreach (RecordingDetection detection in new[] { plain, discarded })
         {
-            foreach (RecordingDetection detection in new[] { plain, discarded })
-            {
-                EncodeChapterChoice choice = EncodeChapterChoice.Of(learning, 1, SegmentStanding.Of(detection));
+            EncodeChapterChoice choice = EncodeChapterChoice.Of(1, SegmentStanding.Of(detection));
 
-                Assert.False(choice.AsksTheReader);
-                Assert.Empty(choice.Embedded(Artefact));
-                Assert.Empty(choice.Chapters(Artefact));
-            }
+            Assert.Empty(choice.Embedded(Artefact));
+            Assert.Empty(choice.Chapters(Artefact));
         }
     }
 
-    [Fact(DisplayName = "BR-CD-013: with learning off and no detection the reader of the source is asked; with learning on it is not, and nothing is embedded")]
-    public void WithoutADetectionTheReaderIsAskedOnlyWhileLearningIsOff()
+    [Fact(DisplayName = "BR-CD-010: with no detection by the version in use nothing is embedded, and the ledger keeps that nobody was asked")]
+    public void WithoutADetectionNothingIsEmbedded()
     {
-        EncodeChapterChoice off = EncodeChapterChoice.Of(false, 1, SegmentStanding.None);
-        EncodeChapterChoice on = EncodeChapterChoice.Of(true, 1, SegmentStanding.None);
+        EncodeChapterChoice choice = EncodeChapterChoice.Of(1, SegmentStanding.None);
+        ChapterReading reading = choice.Reading(Noon);
 
-        Assert.True(off.AsksTheReader);
-        Assert.Throws<InvalidOperationException>(() => off.Reading(Noon));
-        Assert.False(on.AsksTheReader);
-        Assert.Empty(on.Chapters(Artefact));
+        Assert.Empty(choice.Embedded(Artefact));
+        Assert.Empty(choice.Chapters(Artefact));
+        Assert.Equal((ChapterDetectorName.Segments, ChapterVerdict.NotAsked, (int?)null), (reading.Detector, reading.Verdict, reading.ModelVersion));
     }
 
     [Fact(DisplayName = "BR-CD-010: the ledger keeps that the chapters came from the segments, with the version that detected them and the share breaks take")]
@@ -79,9 +73,9 @@ public sealed class EncodeChapterChoiceTests
         RecordingDetection marked = Detected([Span(0, 300, SegmentKind.Programme), Span(300, 360, SegmentKind.Break), Span(360, 1800, SegmentKind.Programme)], version: 3);
         RecordingDetection discarded = Detected([Span(0, 600, SegmentKind.Programme), Span(600, 1800, SegmentKind.Break)], version: 3);
 
-        ChapterReading embedded = EncodeChapterChoice.Of(true, 3, SegmentStanding.Of(marked)).Reading(Noon);
-        ChapterReading thrownAway = EncodeChapterChoice.Of(true, 3, SegmentStanding.Of(discarded)).Reading(Noon);
-        ChapterReading none = EncodeChapterChoice.Of(true, 3, SegmentStanding.None).Reading(Noon);
+        ChapterReading embedded = EncodeChapterChoice.Of(3, SegmentStanding.Of(marked)).Reading(Noon);
+        ChapterReading thrownAway = EncodeChapterChoice.Of(3, SegmentStanding.Of(discarded)).Reading(Noon);
+        ChapterReading none = EncodeChapterChoice.Of(3, SegmentStanding.None).Reading(Noon);
 
         Assert.Equal((ChapterDetectorName.Segments, ChapterVerdict.Marked, 3, Noon), (embedded.Detector, embedded.Verdict, embedded.ModelVersion, embedded.DecidedAt));
         Assert.Equal(marked.CmShare, embedded.BreakShare);
@@ -92,7 +86,7 @@ public sealed class EncodeChapterChoiceTests
 
     [Fact]
     public void ARecordingStandsWithTheDetectionByTheVersionInUse()
-        => Assert.Throws<ArgumentException>(() => EncodeChapterChoice.Of(true, 2, SegmentStanding.Of(Detected([Span(0, 1800, SegmentKind.Programme)]))));
+        => Assert.Throws<ArgumentException>(() => EncodeChapterChoice.Of(2, SegmentStanding.Of(Detected([Span(0, 1800, SegmentKind.Programme)]))));
 
     [Fact(DisplayName = "BR-CD-010: a stretch is embedded as a chapter of its own kind: the programme, a break, an opening or an ending")]
     public void AStretchIsEmbeddedAsAChapterOfItsOwnKind()
@@ -116,7 +110,7 @@ public sealed class EncodeChapterChoiceTests
             Span(960, 1710, SegmentKind.Programme),
             Span(1710, 1800, SegmentKind.Ending),
         ]);
-        EncodeChapterChoice choice = EncodeChapterChoice.Of(true, 1, SegmentStanding.Of(marked));
+        EncodeChapterChoice choice = EncodeChapterChoice.Of(1, SegmentStanding.Of(marked));
 
         Assert.Equal(
             [ChapterKind.Programme, ChapterKind.Opening, ChapterKind.Programme, ChapterKind.Break, ChapterKind.Programme, ChapterKind.Ending],

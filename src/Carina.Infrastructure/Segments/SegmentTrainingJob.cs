@@ -28,16 +28,16 @@ public sealed record SegmentTrainingRound(
 }
 
 /// <summary>
-/// What one look did: what stood in the way when no round was made — spare time, or learning being off; null when
-/// nothing was asked of spare time because the day's round had been finished or another process was taking it —
-/// and the round when one was made.
+/// What one look did: what in spare time stood in the way when no round was made, null when nothing was asked of
+/// spare time because the day's round had been finished or another process was taking it; and the round when one
+/// was made.
 /// </summary>
 public sealed record SegmentTrainingLook(SpareTimeVerdict? Verdict, SegmentTrainingRound? Round);
 
 /// <summary>
 /// Takes the day's round of learning (<see cref="SegmentLearningRound"/>) once a day, in <see cref="SpareTime"/>
-/// once the day has begun, so nothing of it happens while learning is off, while anything is recorded or watched, or
-/// just before a reservation. Spare time is asked again after each recording learning reads and after each step it
+/// once the day has begun, so nothing of it happens while anything is recorded or watched, or just before a
+/// reservation. Spare time is asked again after each recording learning reads and after each step it
 /// takes; when it has ended, the round stops there, throws what it learned away, and is taken again at the next look
 /// in spare time the same day. A round is kept as finished once it ends otherwise, failing included, so it is not
 /// taken again that day; one process takes a round at a time. A round first rolls the version in use back when

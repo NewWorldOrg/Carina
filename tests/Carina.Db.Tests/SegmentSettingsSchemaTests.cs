@@ -34,17 +34,27 @@ public sealed class SegmentSettingsSchemaTests(MigratedScratchDatabase database)
         Assert.Equal([SegmentSettingsConfiguration.SingleRowCheck, SegmentSettingsConfiguration.SkipThresholdCheck], names);
     }
 
-    [Fact(DisplayName = "BR-CV-002: a row written without the threshold stands at 0.70, changed by nobody, and learning need not have been switched")]
+    [Fact(DisplayName = "BR-CV-002: a row written without the threshold stands at 0.70, changed by nobody")]
     public async Task ARowWrittenWithoutTheThresholdStandsAtItsDefault()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         await RunAsync(connection, $"DELETE FROM {SegmentSettingsConfiguration.TableName}");
 
-        await RunAsync(connection, $"INSERT INTO {SegmentSettingsConfiguration.TableName} (id, learning) VALUES (1, false)");
+        await RunAsync(connection, $"INSERT INTO {SegmentSettingsConfiguration.TableName} (id) VALUES (1)");
 
         Assert.Equal(
-            "0.70 NULL NULL",
-            await ScalarAsync(connection, $"SELECT concat_ws(' ', skip_threshold::text, coalesce(skip_threshold_changed_at::text, 'NULL'), coalesce(learning_changed_at::text, 'NULL')) FROM {SegmentSettingsConfiguration.TableName}"));
+            "0.70 NULL",
+            await ScalarAsync(connection, $"SELECT concat_ws(' ', skip_threshold::text, coalesce(skip_threshold_changed_at::text, 'NULL')) FROM {SegmentSettingsConfiguration.TableName}"));
+    }
+
+    [Fact(DisplayName = "the migrated settings table holds the threshold and when it changed, and nothing that switches learning")]
+    public async Task TheMigratedSettingsTableHoldsNoSwitch()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "id skip_threshold skip_threshold_changed_at",
+            await ScalarAsync(connection, $"SELECT string_agg(column_name::text, ' ' ORDER BY column_name) FROM information_schema.columns WHERE table_name = '{SegmentSettingsConfiguration.TableName}'"));
     }
 
     [Theory(DisplayName = "BR-CV-002: the migrated settings table keeps a threshold from 0.50 to 0.95, in hundredths, and refuses one outside")]
@@ -58,7 +68,7 @@ public sealed class SegmentSettingsSchemaTests(MigratedScratchDatabase database)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         await RunAsync(connection, $"DELETE FROM {SegmentSettingsConfiguration.TableName}");
-        string inserting = $"INSERT INTO {SegmentSettingsConfiguration.TableName} (id, learning, skip_threshold, skip_threshold_changed_at) VALUES (1, false, {written}, {Changed})";
+        string inserting = $"INSERT INTO {SegmentSettingsConfiguration.TableName} (id, skip_threshold, skip_threshold_changed_at) VALUES (1, {written}, {Changed})";
 
         if (kept is null)
         {
@@ -74,11 +84,11 @@ public sealed class SegmentSettingsSchemaTests(MigratedScratchDatabase database)
         Assert.Equal(kept, await ScalarAsync(connection, $"SELECT skip_threshold::text FROM {SegmentSettingsConfiguration.TableName}"));
     }
 
-    [Theory(DisplayName = "the migrated settings table is one row, whichever way learning stands")]
-    [InlineData("1, true", null)]
-    [InlineData("1, false", null)]
-    [InlineData("2, true", SegmentSettingsConfiguration.SingleRowCheck)]
-    [InlineData("0, false", SegmentSettingsConfiguration.SingleRowCheck)]
+    [Theory(DisplayName = "the migrated settings table is one row")]
+    [InlineData("1, 0.70", null)]
+    [InlineData("1, 0.65", null)]
+    [InlineData("2, 0.70", SegmentSettingsConfiguration.SingleRowCheck)]
+    [InlineData("0, 0.65", SegmentSettingsConfiguration.SingleRowCheck)]
     public async Task TheMigratedSettingsTableIsOneRow(string values, string? refusedBy)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -88,7 +98,7 @@ public sealed class SegmentSettingsSchemaTests(MigratedScratchDatabase database)
         }
 
         await using var writing = new NpgsqlCommand(
-            $"INSERT INTO {SegmentSettingsConfiguration.TableName} (id, learning, learning_changed_at) VALUES ({values}, {Changed})",
+            $"INSERT INTO {SegmentSettingsConfiguration.TableName} (id, skip_threshold, skip_threshold_changed_at) VALUES ({values}, {Changed})",
             connection);
 
         if (refusedBy is null)

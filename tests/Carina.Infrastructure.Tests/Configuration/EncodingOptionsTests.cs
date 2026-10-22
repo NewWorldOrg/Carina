@@ -123,108 +123,13 @@ public sealed class EncodingOptionsTests
         Assert.DoesNotContain(value, refusal.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void NothingConfiguredLooksForTheBreaksOnTheFifteenSecondGrid()
+    [Fact(DisplayName = "a setting left under Encodings:Chapters is not read, and stops nothing at startup")]
+    public void ASettingLeftUnderChaptersIsNotRead()
     {
-        ChapterSettings chapters = Read().Chapters;
+        EncodingOptions written = Written("Encodings:Chapters:Marked", "sometimes");
 
-        Assert.True(chapters.Marked);
-        Assert.True(chapters.Watermark);
-        Assert.Equal(-50, chapters.Noise);
-        Assert.Equal(TimeSpan.FromMilliseconds(150), chapters.ShortestSilence);
-        Assert.Equal(0.30, chapters.Scene);
-        Assert.Equal(TimeSpan.FromSeconds(15), chapters.Grid);
-        Assert.Equal(TimeSpan.FromSeconds(1), chapters.GridTolerance);
-        Assert.Equal(0.5, chapters.MostBreakShare);
-        Assert.Equal(40, chapters.MostChapters);
-    }
-
-    [Fact]
-    public void EachChapterSettingReachesTheThingThatUsesIt()
-    {
-        ChapterSettings chapters = Read(
-            ("Encodings:Chapters:Marked", "false"),
-            ("Encodings:Chapters:Watermark", "false"),
-            ("Encodings:Chapters:Noise", "-42"),
-            ("Encodings:Chapters:ShortestSilence", "00:00:00.400"),
-            ("Encodings:Chapters:Scene", "0.45"),
-            ("Encodings:Chapters:Grid", "00:00:30"),
-            ("Encodings:Chapters:GridTolerance", "00:00:02"),
-            ("Encodings:Chapters:MostBreakShare", "0.75"),
-            ("Encodings:Chapters:MostChapters", "12")).Chapters;
-
-        Assert.False(chapters.Marked);
-        Assert.False(chapters.Watermark);
-        Assert.Equal(-42, chapters.Noise);
-        Assert.Equal(TimeSpan.FromMilliseconds(400), chapters.ShortestSilence);
-        Assert.Equal(0.45, chapters.Scene);
-        Assert.Equal(TimeSpan.FromSeconds(30), chapters.Grid);
-        Assert.Equal(TimeSpan.FromSeconds(2), chapters.GridTolerance);
-        Assert.Equal(0.75, chapters.MostBreakShare);
-        Assert.Equal(12, chapters.MostChapters);
-    }
-
-    [Theory]
-    [InlineData("Encodings:Chapters:Marked", "true")]
-    [InlineData("Encodings:Chapters:Watermark", "false")]
-    [InlineData("Encodings:Chapters:Noise", "-100")]
-    [InlineData("Encodings:Chapters:Noise", "-1")]
-    [InlineData("Encodings:Chapters:ShortestSilence", "00:00:00.001")]
-    [InlineData("Encodings:Chapters:Scene", "0.001")]
-    [InlineData("Encodings:Chapters:Scene", "1")]
-    [InlineData("Encodings:Chapters:Grid", "00:00:03")]
-    [InlineData("Encodings:Chapters:GridTolerance", "00:00:07.499")]
-    [InlineData("Encodings:Chapters:MostBreakShare", "0.001")]
-    [InlineData("Encodings:Chapters:MostBreakShare", "1")]
-    [InlineData("Encodings:Chapters:MostChapters", "1")]
-    public void AChapterSettingOnTheAllowedSideOfItsBoundIsRead(string key, string value)
-    {
-        Assert.True(new EncodingValidation().Validate(null, Written(key, value)).Succeeded);
-    }
-
-    [Theory]
-    [InlineData("Encodings:Chapters:Marked", "sometimes")]
-    [InlineData("Encodings:Chapters:Watermark", "in the corner")]
-    [InlineData("Encodings:Chapters:Noise", "-101")]
-    [InlineData("Encodings:Chapters:Noise", "+0")]
-    [InlineData("Encodings:Chapters:Noise", "quiet")]
-    [InlineData("Encodings:Chapters:ShortestSilence", "00:00:00")]
-    [InlineData("Encodings:Chapters:ShortestSilence", "-00:00:01")]
-    [InlineData("Encodings:Chapters:Scene", "0.0")]
-    [InlineData("Encodings:Chapters:Scene", "1.001")]
-    [InlineData("Encodings:Chapters:Scene", "a lot")]
-    [InlineData("Encodings:Chapters:Grid", "00:00:00")]
-    [InlineData("Encodings:Chapters:Grid", "-00:00:15")]
-    [InlineData("Encodings:Chapters:GridTolerance", "00:00:00")]
-    [InlineData("Encodings:Chapters:GridTolerance", "00:00:07.500")]
-    [InlineData("Encodings:Chapters:MostBreakShare", "0.0")]
-    [InlineData("Encodings:Chapters:MostBreakShare", "1.001")]
-    [InlineData("Encodings:Chapters:MostBreakShare", "half")]
-    [InlineData("Encodings:Chapters:MostChapters", "0")]
-    [InlineData("Encodings:Chapters:MostChapters", "forty")]
-    public void AChapterSettingThatCannotBeReadIsRefusedNamingTheSetting(string key, string value)
-    {
-        ArgumentException refusal = Assert.Throws<ArgumentException>(() => Read((key, value)));
-
-        Assert.Contains(key, refusal.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(value, refusal.Message, StringComparison.Ordinal);
-        Assert.True(new EncodingValidation().Validate(null, Written(key, value)).Failed);
-    }
-
-    [Fact]
-    public void AToleranceThatWouldAdmitEveryPairIsRefusedAgainstTheGridItWasWrittenBeside()
-    {
-        Assert.Equal(
-            TimeSpan.FromSeconds(14),
-            Read(
-                ("Encodings:Chapters:Grid", "00:00:30"),
-                ("Encodings:Chapters:GridTolerance", "00:00:14")).Chapters.GridTolerance);
-
-        ArgumentException refusal = Assert.Throws<ArgumentException>(() => Read(
-            ("Encodings:Chapters:Grid", "00:00:30"),
-            ("Encodings:Chapters:GridTolerance", "00:00:15")));
-
-        Assert.Contains("Encodings:Chapters:GridTolerance", refusal.Message, StringComparison.Ordinal);
+        Assert.True(new EncodingValidation().Validate(null, written).Succeeded);
+        Assert.Equal(new EncodeSettings().MostCores, written.Read().MostCores);
     }
 
     private static EncodingOptions Written(string key, string value)

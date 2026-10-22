@@ -22,25 +22,29 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
 
     private int nextEvent = 8_100;
 
-    [Fact(DisplayName = "BR-CS-003: the first version is in use from the start, holding the first model and no figures of an evaluation, and the versions of four kinds made by hand, the later without the catalog's weights as the earlier now is, the next hearing silence from -55 dBFS, the one after telling the opening and the ending in any series, the next taking songs whose loudness moves for them and the latest taking adverts in pods for breaks the more, wait beside it as candidates while learning is off")]
-    public async Task TheFirstVersionIsInUseFromTheStart()
+    [Fact(DisplayName = "BR-CS-003: from the start the latest version of four kinds made by hand, taking adverts in pods for breaks the more, is in use in place of the first, with no figures of an evaluation; the first is kept as used before, and the versions of four kinds made by hand before the latest, the later without the catalog's weights as the earlier now is, the next hearing silence from -55 dBFS, the one after telling the opening and the ending in any series and the next taking songs whose loudness moves for them, wait beside it as candidates")]
+    public async Task TheLatestVersionMadeByHandIsInUseFromTheStart()
     {
         await using CarinaDbContext context = Context();
         IReadOnlyList<SegmentModelVersion> kept = await new SegmentModelVersionRepository(context).ListAsync(CancellationToken.None);
+        SegmentModelVersion first = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber);
         SegmentModelVersion four = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber + 1);
         SegmentModelVersion later = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber + 2);
         SegmentModelVersion belowPauses = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber + 3);
         SegmentModelVersion anySeries = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber + 4);
         SegmentModelVersion dynamicSongs = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber + 5);
-        SegmentModelVersion latest = kept.Single(version => version.Number == SegmentModelVersion.FirstNumber + 6);
         SegmentModelVersion active = await ActiveAsync();
 
-        Assert.Equal(SegmentModelVersion.FirstNumber, active.Number);
+        Assert.Equal(SegmentModelVersion.FirstNumber + 6, active.Number);
         Assert.False(active.ByHand);
-        Assert.Equal(2, active.Kinds);
-        Assert.Equal(SegmentModel.First, active.Model);
-        Assert.Equal(active.TrainedAt, active.AdoptedAt);
+        Assert.Equal(4, active.Kinds);
+        Assert.Equal(SegmentModel.FourKindsInPods, active.Model);
+        Assert.NotNull(active.AdoptedAt);
         Assert.Null(active.RetiredAt);
+        Assert.Null(active.Evaluation);
+        Assert.Equal((SegmentModelVersionState.Retired, 2, SegmentModel.First), (first.State, first.Kinds, first.Model));
+        Assert.Equal(first.TrainedAt, first.AdoptedAt);
+        Assert.NotNull(first.RetiredAt);
         Assert.Equal(SegmentModelVersionState.Candidate, four.State);
         Assert.Equal(4, four.Kinds);
         Assert.Equal(SegmentModel.FirstOfFourKinds, four.Model);
@@ -49,7 +53,6 @@ public sealed class SegmentDetectionSchemaTests(MigratedScratchDatabase database
         Assert.Equal((SegmentModelVersionState.Candidate, SegmentModel.FourKindsBelowPauses, (SegmentEvaluation?)null), (belowPauses.State, belowPauses.Model, belowPauses.Evaluation));
         Assert.Equal((SegmentModelVersionState.Candidate, SegmentModel.FourKindsInAnySeries, (SegmentEvaluation?)null), (anySeries.State, anySeries.Model, anySeries.Evaluation));
         Assert.Equal((SegmentModelVersionState.Candidate, SegmentModel.FourKindsWithDynamicSongs, (SegmentEvaluation?)null), (dynamicSongs.State, dynamicSongs.Model, dynamicSongs.Evaluation));
-        Assert.Equal((SegmentModelVersionState.Candidate, SegmentModel.FourKindsInPods, (SegmentEvaluation?)null), (latest.State, latest.Model, latest.Evaluation));
         Assert.Equal(
             "NULL NULL NULL NULL",
             await ScalarAsync("SELECT concat_ws(' ', coalesce(metrics::text, 'NULL'), coalesce(stations::text, 'NULL'), coalesce(evidence::text, 'NULL'), coalesce(rollback::text, 'NULL')) FROM segment_model_version WHERE number = 1"));

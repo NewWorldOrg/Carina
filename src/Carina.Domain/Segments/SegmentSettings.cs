@@ -3,9 +3,8 @@ using Carina.Domain.Base;
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// The one row of the segment settings changed from a screen: whether CM, OP and ED learning is on, and the
-/// threshold a skip button is offered from, each with when it last changed, or none while it never has. No row
-/// is held until somebody changes one of them.
+/// The one row of the segment settings changed from a screen: the threshold a skip button is offered from, with when
+/// it last changed, or none while it never has. No row is held until somebody changes it.
 /// </summary>
 public sealed class SegmentSettings
 {
@@ -17,23 +16,11 @@ public sealed class SegmentSettings
 
     public int Id { get; private set; }
 
-    public bool Learning { get; private set; }
-
-    public DateTime? LearningChangedAt { get; private set; }
-
     public double SkipThreshold { get; private set; }
 
     public DateTime? SkipThresholdChangedAt { get; private set; }
 
-    public static SegmentSettings LearningSwitched(bool learning, DateTime at)
-        => Rehydrate(TheOnlyRow, learning, at, SegmentSettingsStanding.DefaultSkipThreshold, null);
-
-    public static SegmentSettings Rehydrate(
-        int id,
-        bool learning,
-        DateTime? learningChangedAt,
-        double skipThreshold,
-        DateTime? skipThresholdChangedAt)
+    public static SegmentSettings Rehydrate(int id, double skipThreshold, DateTime? skipThresholdChangedAt)
     {
         if (!(skipThreshold is >= SegmentSettingsStanding.LowestSkipThreshold and <= SegmentSettingsStanding.HighestSkipThreshold))
         {
@@ -43,8 +30,6 @@ public sealed class SegmentSettings
         return new SegmentSettings
         {
             Id = id,
-            Learning = learning,
-            LearningChangedAt = UtcTimes.Optional(learningChangedAt, nameof(learningChangedAt)),
             SkipThreshold = skipThreshold,
             SkipThresholdChangedAt = UtcTimes.Optional(skipThresholdChangedAt, nameof(skipThresholdChangedAt)),
         };
@@ -52,12 +37,12 @@ public sealed class SegmentSettings
 }
 
 /// <summary>
-/// The segment settings as they stand: the row where there is one, and learning off where there is not; and how
-/// likely a break, an opening or an ending is to be before a button offers to skip it, which stands at
-/// <see cref="DefaultSkipThreshold"/> while no setting holds another and is set from
-/// <see cref="LowestSkipThreshold"/> to <see cref="HighestSkipThreshold"/>, to the hundredth.
+/// The segment settings as they stand: how likely a break, an opening or an ending is to be before a button offers
+/// to skip it, which stands at <see cref="DefaultSkipThreshold"/> while no setting holds another and is set from
+/// <see cref="LowestSkipThreshold"/> to <see cref="HighestSkipThreshold"/>, to the hundredth, and when it last
+/// changed.
 /// </summary>
-public sealed record SegmentSettingsStanding(bool Learning, DateTime? LearningChangedAt)
+public sealed record SegmentSettingsStanding
 {
     public const double DefaultSkipThreshold = 0.70;
 
@@ -67,7 +52,7 @@ public sealed record SegmentSettingsStanding(bool Learning, DateTime? LearningCh
 
     private const int ThresholdDigits = 2;
 
-    public static SegmentSettingsStanding Unset { get; } = new(false, null);
+    public static SegmentSettingsStanding Unset { get; } = new();
 
     public double SkipThreshold { get; init; } = DefaultSkipThreshold;
 
@@ -76,7 +61,7 @@ public sealed record SegmentSettingsStanding(bool Learning, DateTime? LearningCh
     public static SegmentSettingsStanding Over(SegmentSettings? held)
         => held is null
             ? Unset
-            : new SegmentSettingsStanding(held.Learning, held.LearningChangedAt)
+            : new SegmentSettingsStanding
             {
                 SkipThreshold = held.SkipThreshold,
                 SkipThresholdChangedAt = held.SkipThresholdChangedAt,
@@ -92,30 +77,18 @@ public sealed record SegmentSettingsStanding(bool Learning, DateTime? LearningCh
             : null;
 
     /// <summary>
-    /// The row once learning and the threshold are set as named at <paramref name="at"/>, a setting taking the
-    /// time only when its value moves; none when no value moves. A threshold named is one
-    /// <see cref="SkipThresholdOf"/> takes.
+    /// The row once the threshold is set to <paramref name="skipThreshold"/> at <paramref name="at"/>; none when it
+    /// does not move. The threshold is one <see cref="SkipThresholdOf"/> takes.
     /// </summary>
-    public SegmentSettings? Set(bool? learning, double? skipThreshold, DateTime at)
+    public SegmentSettings? Set(double skipThreshold, DateTime at)
     {
-        if (skipThreshold is double named && SkipThresholdOf(named) != named)
+        if (SkipThresholdOf(skipThreshold) != skipThreshold)
         {
             throw new ArgumentOutOfRangeException(nameof(skipThreshold), skipThreshold, "A threshold is set to the hundredth, from 0.50 to 0.95.");
         }
 
-        bool switches = learning is bool on && on != Learning;
-        bool moves = skipThreshold is double threshold && threshold != SkipThreshold;
-
-        if (!switches && !moves)
-        {
-            return null;
-        }
-
-        return SegmentSettings.Rehydrate(
-            SegmentSettings.TheOnlyRow,
-            learning ?? Learning,
-            switches ? at : LearningChangedAt,
-            skipThreshold ?? SkipThreshold,
-            moves ? at : SkipThresholdChangedAt);
+        return skipThreshold == SkipThreshold
+            ? null
+            : SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, skipThreshold, at);
     }
 }

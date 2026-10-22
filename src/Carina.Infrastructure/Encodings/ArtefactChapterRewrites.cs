@@ -157,7 +157,7 @@ public sealed class ArtefactChapterRewrites(
             return ChapterRewriteOutcome.PassedOver;
         }
 
-        EncodeChapterChoice choice = EncodeChapterChoice.Of(true, subject.Detection.ModelVersion, SegmentStanding.Of(subject.Detection));
+        EncodeChapterChoice choice = EncodeChapterChoice.Of(subject.Detection.ModelVersion, SegmentStanding.Of(subject.Detection));
         IReadOnlyList<ChapterSegment> wanted = choice.Chapters(PlaybackFileClock.Of(timeline));
         IReadOnlyList<ChapterSegment> carried = [.. (await chapters.ListForJobAsync(job.Id, cancellationToken)).Select(chapter => chapter.Segment)];
 

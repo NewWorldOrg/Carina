@@ -325,14 +325,6 @@ public sealed class LearningExtraction
         Touch(when);
     }
 
-    public void Pause(DateTime at)
-    {
-        DateTime when = Moving(at, "is put back to wait", Running);
-
-        State = LearningExtractionState.Waiting;
-        Touch(when);
-    }
-
     public void Outdate(ExtractionVersion current, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(current);

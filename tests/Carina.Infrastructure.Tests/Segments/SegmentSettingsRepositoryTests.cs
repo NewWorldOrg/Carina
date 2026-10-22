@@ -1,7 +1,3 @@
-using Carina.Domain.Base;
-using Carina.Domain.Channels;
-using Carina.Domain.Programmes;
-using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Configurations;
@@ -22,8 +18,8 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "a database nobody has switched learning on holds no row at all")]
-    public async Task ADatabaseNobodyHasSwitchedHoldsNoRow()
+    [Fact(DisplayName = "a database where nobody has changed the threshold holds no row at all")]
+    public async Task ADatabaseNobodyHasChangedHoldsNoRow()
     {
         await ClearAsync();
 
@@ -32,97 +28,85 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
         Assert.Null(await new SegmentSettingsRepository(reading).ReadAsync(Cancel));
     }
 
-    [Fact(DisplayName = "what was switched is read back as it was written, and switching again keeps one row")]
-    public async Task WhatWasSwitchedIsReadBackAndSwitchingAgainKeepsOneRow()
+    [Fact(DisplayName = "BR-CV-002: a threshold is read back as it was written, one never changed included, and setting it again keeps one row")]
+    public async Task AThresholdIsReadBackAndSettingItAgainKeepsOneRow()
     {
         await ClearAsync();
 
-        await SaveAsync(SegmentSettings.LearningSwitched(true, Noon));
-        await SaveAsync(SegmentSettings.LearningSwitched(false, Noon.AddHours(3)));
+        await SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, 0.70, null));
+        SegmentSettings? unchanged = await ReadAsync();
+        await SaveAsync(SegmentSettingsStanding.Over(unchanged).Set(0.65, Noon)!);
+        await SaveAsync(SegmentSettingsStanding.Over(await ReadAsync()).Set(0.8, Noon.AddHours(3))!);
 
         await using CarinaDbContext reading = database.Open();
         SegmentSettings? held = await new SegmentSettingsRepository(reading).ReadAsync(Cancel);
 
-        Assert.NotNull(held);
-        Assert.Equal(SegmentSettings.TheOnlyRow, held.Id);
-        Assert.False(held.Learning);
-        Assert.Equal(Noon.AddHours(3), held.LearningChangedAt);
+        Assert.Equal((0.70, (DateTime?)null), (unchanged!.SkipThreshold, unchanged.SkipThresholdChangedAt));
+        Assert.Equal((SegmentSettings.TheOnlyRow, 0.8, (DateTime?)Noon.AddHours(3)), (held!.Id, held.SkipThreshold, held.SkipThresholdChangedAt));
         Assert.Equal(1, await reading.Set<SegmentSettings>().CountAsync(Cancel));
     }
 
-    [Fact(DisplayName = "BR-CV-002: a threshold and learning never switched are kept as written and read back so, and switching learning later keeps the threshold")]
-    public async Task AThresholdAndLearningNeverSwitchedAreReadBack()
-    {
-        await ClearAsync();
-
-        await SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, false, null, 0.65, Noon));
-        SegmentSettings? set = await ReadAsync();
-        await SaveAsync(SegmentSettingsStanding.Over(set).Set(true, null, Noon.AddHours(1))!);
-        SegmentSettings? switched = await ReadAsync();
-
-        Assert.Equal((false, (DateTime?)null, 0.65, (DateTime?)Noon), (set!.Learning, set.LearningChangedAt, set.SkipThreshold, set.SkipThresholdChangedAt));
-        Assert.Equal((true, (DateTime?)Noon.AddHours(1), 0.65, (DateTime?)Noon), (switched!.Learning, switched.LearningChangedAt, switched.SkipThreshold, switched.SkipThresholdChangedAt));
-    }
-
-    [Fact(DisplayName = "BR-CV-002: a change of the settings holds its turn until its transaction ends, so a change made at the same time reads it, and both are kept")]
-    public async Task AChangeHoldsItsTurnSoBothChangesAreKept()
+    [Fact(DisplayName = "BR-CV-002: a change of the settings holds its turn until its transaction ends, so a change made at the same time reads it")]
+    public async Task AChangeHoldsItsTurnSoTheNextReadsIt()
     {
         await ClearAsync();
         await using CarinaDbContext first = database.Open();
         await using CarinaDbContext second = database.Open();
         await using IDbContextTransaction holding = await first.Database.BeginTransactionAsync(Cancel);
-        SegmentSettingsRepository switching = new(first);
-        await switching.TakeTurnAsync(Cancel);
-        SegmentSettingsStanding before = SegmentSettingsStanding.Over(await switching.ReadAsync(Cancel));
+        SegmentSettingsRepository earlier = new(first);
+        await earlier.TakeTurnAsync(Cancel);
+        SegmentSettingsStanding before = SegmentSettingsStanding.Over(await earlier.ReadAsync(Cancel));
+        double? seenByTheLater = null;
 
         Task moving = Task.Run(
             async () =>
             {
                 await using IDbContextTransaction waiting = await second.Database.BeginTransactionAsync(Cancel);
-                SegmentSettingsRepository threshold = new(second);
-                await threshold.TakeTurnAsync(Cancel);
-                SegmentSettingsStanding seen = SegmentSettingsStanding.Over(await threshold.ReadAsync(Cancel));
-                await threshold.SaveAsync(seen.Set(null, 0.65, Noon.AddMinutes(1))!, Cancel);
+                SegmentSettingsRepository later = new(second);
+                await later.TakeTurnAsync(Cancel);
+                SegmentSettingsStanding seen = SegmentSettingsStanding.Over(await later.ReadAsync(Cancel));
+                seenByTheLater = seen.SkipThreshold;
+                await later.SaveAsync(seen.Set(0.8, Noon.AddMinutes(1))!, Cancel);
                 await waiting.CommitAsync(Cancel);
             },
             Cancel);
 
         Assert.NotSame(moving, await Task.WhenAny(moving, Task.Delay(TimeSpan.FromMilliseconds(300), Cancel)));
 
-        await switching.SaveAsync(before.Set(true, null, Noon)!, Cancel);
+        await earlier.SaveAsync(before.Set(0.65, Noon)!, Cancel);
         await holding.CommitAsync(Cancel);
         await moving.WaitAsync(TimeSpan.FromSeconds(10), Cancel);
 
-        SegmentSettings? both = await ReadAsync();
-        Assert.Equal((true, (DateTime?)Noon, 0.65, (DateTime?)Noon.AddMinutes(1)), (both!.Learning, both.LearningChangedAt, both.SkipThreshold, both.SkipThresholdChangedAt));
+        SegmentSettings? held = await ReadAsync();
+        Assert.Equal(0.65, seenByTheLater);
+        Assert.Equal((0.8, (DateTime?)Noon.AddMinutes(1)), (held!.SkipThreshold, held.SkipThresholdChangedAt));
     }
 
     [Fact(DisplayName = "the table itself refuses a second row")]
     public async Task TheTableItselfRefusesASecondRow()
     {
         await ClearAsync();
-        await SaveAsync(SegmentSettings.LearningSwitched(true, Noon));
+        await SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, 0.65, Noon));
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => RunAsync($"INSERT INTO {SegmentSettingsConfiguration.TableName} "
-                + "(id, learning, learning_changed_at) VALUES (2, true, now())"));
+            () => RunAsync($"INSERT INTO {SegmentSettingsConfiguration.TableName} (id, skip_threshold) VALUES (2, 0.70)"));
 
         Assert.Equal(SegmentSettingsConfiguration.SingleRowCheck, refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "hands switching learning at once on a table that holds no row all get through, and one of them stands")]
-    public async Task HandsSwitchingAtOnceAllGetThroughAndOneOfThemStands()
+    [Fact(DisplayName = "hands setting the threshold at once on a table that holds no row all get through, and one of them stands")]
+    public async Task HandsSettingAtOnceAllGetThroughAndOneOfThemStands()
     {
         await ClearAsync();
 
         const int Hands = 8;
         using var gate = new Barrier(Hands);
-        SegmentSettings[] switching =
+        SegmentSettings[] setting =
         [
-            .. Enumerable.Range(0, Hands).Select(hand => SegmentSettings.LearningSwitched(hand % 2 is 0, Noon.AddMinutes(hand))),
+            .. Enumerable.Range(0, Hands).Select(hand => SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, 0.50 + (0.05 * hand), Noon.AddMinutes(hand))),
         ];
 
-        await Task.WhenAll(switching.Select(settings => Task.Run(async () =>
+        await Task.WhenAll(setting.Select(settings => Task.Run(async () =>
         {
             await using CarinaDbContext writing = database.Open();
             await writing.Database.OpenConnectionAsync(Cancel);
@@ -137,85 +121,8 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
         Assert.NotNull(held);
         Assert.Equal(1, await reading.Set<SegmentSettings>().CountAsync(Cancel));
         Assert.Contains(
-            (held.Learning, held.LearningChangedAt),
-            switching.Select(settings => (settings.Learning, settings.LearningChangedAt)));
-    }
-
-    [Fact(DisplayName = "switching learning off and on again leaves every row of the learning data where it was")]
-    public async Task SwitchingLearningLeavesEveryRowOfTheLearningData()
-    {
-        await ClearAsync();
-
-        foreach (int recorded in Enumerable.Range(0, 3))
-        {
-            RecordingId recording = RecordingId.New();
-            await AddAsync(LearningExtraction.Following(recording, Copy(Noon.AddHours(recorded)), ExtractionVersion.Current, Noon));
-            await KeepAsync(Block(recording, LearningDataKind.SoundFingerprints, 0));
-            await KeepAsync(Block(recording, LearningDataKind.Loudness, 0));
-        }
-
-        (long Extractions, long Blocks) before = await CountedAsync();
-
-        Assert.True(before.Extractions >= 3);
-        Assert.True(before.Blocks >= 6);
-
-        await SaveAsync(SegmentSettings.LearningSwitched(true, Noon));
-        Assert.Equal(before, await CountedAsync());
-
-        await SaveAsync(SegmentSettings.LearningSwitched(false, Noon.AddMinutes(1)));
-        Assert.Equal(before, await CountedAsync());
-
-        await SaveAsync(SegmentSettings.LearningSwitched(true, Noon.AddMinutes(2)));
-        Assert.Equal(before, await CountedAsync());
-    }
-
-    private static ProgrammeCopy Copy(DateTime recordedAt)
-        => new(
-            new NetworkId(40_001),
-            new ServiceId(60_001),
-            recordedAt,
-            recordedAt.AddMinutes(30),
-            recordedAt,
-            "架空の番組",
-            [new ProgrammeGenre(7, 0)],
-            [],
-            null,
-            AudioMode.Stereo,
-            null);
-
-    private static LearningDataBlock Block(RecordingId recording, LearningDataKind kind, int chunk)
-    {
-        LearningDataChunk sample = LearningDataChunk.Of(
-            chunk,
-            FrameClock.Of(30000, 1001, LearningData.ChunkStarts(chunk)),
-            [1u, 2u, 3u],
-            [10, 20, 30],
-            [],
-            [],
-            []);
-
-        return LearningDataBlock.Of(recording, LearningDataPart.Of(sample, kind), ExtractionVersion.Current, Noon);
-    }
-
-    private async Task<(long Extractions, long Blocks)> CountedAsync()
-    {
-        await using CarinaDbContext counting = database.Open();
-
-        return (
-            await counting.Set<LearningExtraction>().LongCountAsync(Cancel),
-            await counting.Set<LearningDataBlock>().LongCountAsync(Cancel));
-    }
-
-    private async Task AddAsync(LearningExtraction extraction)
-    {
-        await using CarinaDbContext writing = database.Open();
-        await new LearningExtractionRepository(writing).AddAsync(extraction, Cancel);
-    }
-
-    private async Task KeepAsync(LearningDataBlock block)
-    {
-        await using CarinaDbContext writing = database.Open();
-        await new LearningDataRepository(writing).KeepAsync(block, Cancel);
+            (Math.Round(held.SkipThreshold, 2), held.SkipThresholdChangedAt),
+            setting.Select(settings => (Math.Round(settings.SkipThreshold, 2), settings.SkipThresholdChangedAt)));
     }
 
     private async Task SaveAsync(SegmentSettings settings)

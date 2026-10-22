@@ -11,26 +11,10 @@ public sealed class CatalogMatchingJobTests
 {
     private const int Advert = 938;
 
-    [Fact(DisplayName = "BR-CD-013: while learning is off no recording is matched, and nothing is read or kept")]
-    public async Task NothingIsMatchedWhileLearningIsOff()
-    {
-        using CatalogMatchingHarness harness = new();
-        await harness.ReadAsync(Sound(1), 0, "架空の物語");
-
-        CatalogMatchingLook look = await harness.Job().LookAsync(CancellationToken.None);
-
-        Assert.Equal(SpareTimeVerdict.LearningOff, look.Verdict);
-        Assert.Null(look.Matched);
-        Assert.Equal(0, harness.Worklist.Asked);
-        Assert.Empty(harness.Worklist.Heard);
-        Assert.Equal(0, harness.Catalog.Keeps);
-    }
-
     [Fact(DisplayName = "BR-CD-004: nothing is matched while something is being recorded")]
     public async Task NothingIsMatchedWhileRecording()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         await harness.ReadAsync(Sound(1), 0, "架空の物語");
         harness.Recording = true;
 
@@ -45,7 +29,6 @@ public sealed class CatalogMatchingJobTests
     public async Task ARecordingIsMatchedAgainstARecentOne()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         uint[] earlier = Sound(1);
         RecordingId before = await harness.ReadAsync(earlier, 7, "架空のクイズ");
         RecordingId heard = await harness.ReadAsync(Sharing(Sound(2), earlier, 5_000, 9_000, Advert), 0, "架空の物語");
@@ -66,7 +49,6 @@ public sealed class CatalogMatchingJobTests
     public async Task OneRecordingIsMatchedALook()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId older = await harness.ReadAsync(Sound(1), 3, "架空のクイズ");
         RecordingId newer = await harness.ReadAsync(Sound(2), 1, "架空の物語");
         CatalogMatchingJob job = harness.Job();
@@ -86,7 +68,6 @@ public sealed class CatalogMatchingJobTests
     public async Task APieceFoundOnceIsNotFoundAgain()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         uint[] source = Sound(1);
         await harness.ReadAsync(Sharing(Sound(3), source, 1_000, 9_000, Advert), 14, "架空のクイズ");
         await harness.ReadAsync(Sharing(Sound(2), source, 5_000, 9_000, Advert), 7, "架空の物語");
@@ -107,7 +88,6 @@ public sealed class CatalogMatchingJobTests
     public async Task ARecordingFarApartIsNotMatchedAgainst()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         uint[] earlier = Sound(1);
         RecordingId longAgo = await harness.ReadAsync(earlier, 61, "架空のクイズ");
         LearningExtraction kept = harness.Records.Row(longAgo)!;
@@ -122,28 +102,10 @@ public sealed class CatalogMatchingJobTests
         Assert.Empty(harness.Catalog.Entries);
     }
 
-    [Fact(DisplayName = "BR-CD-013: a match finished after learning was switched off is not kept, and the recording still waits")]
-    public async Task AMatchFinishedAfterLearningWasSwitchedOffIsNotKept()
-    {
-        using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
-        uint[] earlier = Sound(1);
-        await harness.ReadAsync(earlier, 7, "架空のクイズ");
-        RecordingId heard = await harness.ReadAsync(Sharing(Sound(2), earlier, 5_000, 9_000, Advert), 0, "架空の物語");
-        harness.Worklist.WhileHearing = _ => harness.LearningAsync(false).GetAwaiter().GetResult();
-
-        CatalogMatchingLook look = await harness.Job().LookAsync(CancellationToken.None);
-
-        Assert.Equal(SpareTimeVerdict.LearningOff, look.Verdict);
-        Assert.Equal(0, harness.Catalog.Keeps);
-        Assert.True(harness.Records.Row(heard)!.AwaitsMatching);
-    }
-
     [Fact(DisplayName = "a record that changed while it was matched keeps waiting, and is matched again without adding a stretch twice")]
     public async Task ARecordThatChangedMeanwhileKeepsWaiting()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         uint[] earlier = Sound(1);
         await harness.ReadAsync(earlier, 7, "架空のクイズ");
         RecordingId heard = await harness.ReadAsync(Sharing(Sound(2), earlier, 5_000, 9_000, Advert), 0, "架空の物語");
@@ -165,7 +127,6 @@ public sealed class CatalogMatchingJobTests
     public async Task ARecordingFollowedToItsEndIsMatchedAtOnce()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         uint[] earlier = Sound(1);
         RecordingId waiting = await harness.ReadAsync(earlier, 7, "架空のクイズ");
         RecordingId followed = await harness.ReadAsync(Sharing(Sound(2), earlier, 5_000, 9_000, Advert), 0, "架空の物語");
@@ -188,7 +149,6 @@ public sealed class CatalogMatchingJobTests
     public async Task ARecordingMatchedAtOnceIsToldOnToBeDetected()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId waiting = await harness.ReadAsync(Sound(1), 7, "架空のクイズ");
         RecordingId followed = await harness.ReadAsync(Sound(2), 0, "架空の物語");
         CatalogMatchingJob job = harness.Job();
@@ -203,42 +163,10 @@ public sealed class CatalogMatchingJobTests
         Assert.False(harness.MatchedAtOnce.TryTake(out _));
     }
 
-    [Fact(DisplayName = "a recording followed to its end that is not matched at once is not told on to be detected")]
-    public async Task ARecordingNotMatchedAtOnceIsNotToldOn()
-    {
-        using CatalogMatchingHarness harness = new();
-        RecordingId followed = await harness.ReadAsync(Sound(1), 0, "架空の物語");
-        CatalogMatchingJob job = harness.Job();
-
-        CatalogMatchingLook off = await job.MatchFollowedAsync(followed, CancellationToken.None);
-
-        Assert.Equal(SpareTimeVerdict.LearningOff, off.Verdict);
-        Assert.False(harness.MatchedAtOnce.TryTake(out _));
-    }
-
-    [Fact(DisplayName = "BR-CD-013: while learning is off a recording followed to its end is not matched, and is matched in spare time once learning is on")]
-    public async Task ARecordingFollowedWhileLearningIsOffWaitsForSpareTime()
-    {
-        using CatalogMatchingHarness harness = new();
-        RecordingId followed = await harness.ReadAsync(Sound(1), 0, "架空の物語");
-        CatalogMatchingJob job = harness.Job();
-
-        CatalogMatchingLook off = await job.MatchFollowedAsync(followed, CancellationToken.None);
-        int heardWhileOff = harness.Worklist.Heard.Count;
-        await harness.LearningAsync(true);
-        CatalogMatchingLook later = await job.LookAsync(CancellationToken.None);
-
-        Assert.Equal(SpareTimeVerdict.LearningOff, off.Verdict);
-        Assert.Null(off.Matched);
-        Assert.Equal(0, heardWhileOff);
-        Assert.Equal(followed, later.Matched?.Recording);
-    }
-
-    [Fact(DisplayName = "a recording followed to its end whose data was not read to the end, or that is already matched, is not matched at once")]
+    [Fact(DisplayName = "a recording followed to its end whose data was not read to the end, or that is already matched, is not matched at once nor told on to be detected")]
     public async Task OnlyARecordReadToTheEndAndWaitingIsMatchedAtOnce()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId cutShort = await harness.ReadAsync(Sound(1), 0, "架空の物語");
         RecordingId matched = await harness.ReadAsync(Sound(2), 1, "架空のクイズ");
         LearningExtraction partway = harness.Records.Row(cutShort)!;
@@ -258,13 +186,13 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(new CatalogMatchingLook(null, null, false), again);
         Assert.Empty(harness.Worklist.Heard);
         Assert.True(harness.Records.Row(cutShort)!.AwaitsMatching);
+        Assert.False(harness.MatchedAtOnce.TryTake(out _));
     }
 
     [Fact(DisplayName = "the running job takes a recording followed to its end as soon as it is told, without waiting for its next look")]
     public async Task TheRunningJobTakesAFollowedRecordingAsSoonAsItIsTold()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId waiting = await harness.ReadAsync(Sound(1), 7, "架空のクイズ");
         RecordingId followed = await harness.ReadAsync(Sound(2), 0, "架空の物語");
         harness.Recording = true;
@@ -283,7 +211,6 @@ public sealed class CatalogMatchingJobTests
     public async Task TheRunningJobMatchesTheWaitingRecordingsOnItsOwnLooks()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId older = await harness.ReadAsync(Sound(1), 3, "架空のクイズ");
         RecordingId newer = await harness.ReadAsync(Sound(2), 1, "架空の物語");
         CatalogMatchingJob job = harness.Job(new CatalogMatchingSettings
@@ -306,7 +233,6 @@ public sealed class CatalogMatchingJobTests
     public async Task TheCountingOfAMatchRunsOnTheLowestPriorityScheduler()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         uint[] earlier = Sound(1);
         await harness.ReadAsync(earlier, 7, "架空のクイズ");
         RecordingId heard = await harness.ReadAsync(Sharing(Sound(2), earlier, 5_000, 9_000, Advert), 0, "架空の物語");
@@ -337,7 +263,6 @@ public sealed class CatalogMatchingJobTests
     public async Task AnEntryEstimatedBeforeTheThemesIsEstimatedAgainOnce()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         CatalogEntry entry = await OutdatedAsync(harness);
         CatalogMatchingJob job = harness.Job();
 
@@ -357,7 +282,6 @@ public sealed class CatalogMatchingJobTests
     public async Task AnEntryEstimatedAgainCarriesOnTheOpeningItFollows()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         RecordingId[] weeks = [await harness.ReadAsync(Sound(12), 14, "架空の物語"), await harness.ReadAsync(Sound(11), 7, "架空の物語")];
 
         foreach (RecordingId week in weeks)
@@ -383,7 +307,6 @@ public sealed class CatalogMatchingJobTests
     public async Task AnEntryRecastHasItsRecordingsDetectedAgain(bool asItWas)
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         CatalogEntry entry = await OutdatedAsync(harness, asTheOpening: asItWas, matched: Now.AddHours(-1));
         RecordingId[] hearing = [.. harness.Catalog.Occurrences.Select(occurrence => occurrence.RecordingId)];
         Dictionary<RecordingId, RecordingDetection> detected = hearing.ToDictionary(recording => recording, Detected);
@@ -401,7 +324,6 @@ public sealed class CatalogMatchingJobTests
     public async Task AMatchStartingAnAdvertHasTheOtherRecordingDetectedAgain()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         uint[] source = Sound(1);
         RecordingId before = await harness.ReadAsync(Sharing(Sound(3), source, 1_000, 9_000, Advert), 14, "架空のクイズ");
         LearningExtraction earlier = harness.Records.Row(before)!;
@@ -426,7 +348,6 @@ public sealed class CatalogMatchingJobTests
     public async Task AnEntryPutBackIsEstimatedAgainOnce()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         CatalogEntry entry = await OutdatedAsync(harness, CatalogKinds.Unsettled);
         CatalogMatchingJob job = harness.Job();
 
@@ -439,19 +360,16 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(1, harness.Catalog.Keeps);
     }
 
-    [Fact(DisplayName = "BR-CD-004: no entry is estimated again while something is being recorded or while learning is off")]
+    [Fact(DisplayName = "BR-CD-004: no entry is estimated again while something is being recorded")]
     public async Task NoEntryIsEstimatedAgainOutsideSpareTime()
     {
         using CatalogMatchingHarness harness = new();
         CatalogEntry entry = await OutdatedAsync(harness);
         CatalogMatchingJob job = harness.Job();
 
-        CatalogMatchingLook off = await job.LookAsync(CancellationToken.None);
-        await harness.LearningAsync(true);
         harness.Recording = true;
         CatalogMatchingLook recording = await job.LookAsync(CancellationToken.None);
 
-        Assert.Equal(new CatalogMatchingLook(SpareTimeVerdict.LearningOff, null, false), off);
         Assert.Equal(new CatalogMatchingLook(SpareTimeVerdict.Recording, null, false), recording);
         Assert.True(entry.AwaitsReestimation);
         Assert.Equal(0, harness.Catalog.Keeps);
@@ -461,7 +379,6 @@ public sealed class CatalogMatchingJobTests
     public async Task ARecordingWaitingIsMatchedFirst()
     {
         using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
         CatalogEntry entry = await OutdatedAsync(harness);
         RecordingId waiting = await harness.ReadAsync(Sound(3), 0, "架空のクイズ");
         CatalogMatchingJob job = harness.Job();
@@ -472,20 +389,6 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal(waiting, first.Matched?.Recording);
         Assert.Null(first.Reestimated);
         Assert.Same(entry, second.Reestimated);
-    }
-
-    [Fact(DisplayName = "BR-CD-013: an entry estimated again after learning was switched off is not kept")]
-    public async Task AnEstimateFinishedAfterLearningWasSwitchedOffIsNotKept()
-    {
-        using CatalogMatchingHarness harness = new();
-        await harness.LearningAsync(true);
-        await OutdatedAsync(harness);
-        harness.Catalog.WhileReading = () => harness.LearningAsync(false).GetAwaiter().GetResult();
-
-        CatalogMatchingLook look = await harness.Job().LookAsync(CancellationToken.None);
-
-        Assert.Equal(new CatalogMatchingLook(SpareTimeVerdict.LearningOff, null, false), look);
-        Assert.Equal(0, harness.Catalog.Keeps);
     }
 
     private static string? NiceOfThisThread()

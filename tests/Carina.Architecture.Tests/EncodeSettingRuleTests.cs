@@ -8,21 +8,6 @@ public sealed class EncodeSettingRuleTests
 
     private static readonly string[] Kept =
     [
-        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.BreakShare double",
-        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Learned WatermarkMask?",
-        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Note string",
-        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Segments IReadOnlyList<ChapterSegment>",
-        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Verdict ChapterVerdict",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterEvidence.Blacks IReadOnlyList<ChapterSpan>",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterEvidence.Scenes IReadOnlyList<ChapterScene>",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterEvidence.Sightings IReadOnlyList<WatermarkSighting>",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterEvidence.Silences IReadOnlyList<ChapterSpan>",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterScene.At TimeSpan",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterScene.Score double",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterSpan.Ends TimeSpan",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterSpan.Starts TimeSpan",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs WatermarkSighting.At TimeSpan",
-        "/Carina.Domain/Encodings/ChapterEvidence.cs WatermarkSighting.Seen bool",
         "/Carina.Domain/Encodings/ChapterReading.cs ChapterReading.BreakShare double",
         "/Carina.Domain/Encodings/ChapterReading.cs ChapterReading.DecidedAt DateTime",
         "/Carina.Domain/Encodings/ChapterReading.cs ChapterReading.Detector ChapterDetectorName",
@@ -45,7 +30,6 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeChapter.cs EncodeChapter.Kind ChapterKind",
         "/Carina.Domain/Encodings/EncodeChapter.cs EncodeChapter.Ordinal int",
         "/Carina.Domain/Encodings/EncodeChapter.cs EncodeChapter.StartsAt TimeSpan",
-        "/Carina.Domain/Encodings/EncodeChapterChoice.cs EncodeChapterChoice.AsksTheReader bool",
         "/Carina.Domain/Encodings/EncodeChapterChoice.cs EncodeChapterChoice.ModelVersion int",
         "/Carina.Domain/Encodings/EncodeChapterChoice.cs EncodeChapterChoice.Standing SegmentStanding",
         "/Carina.Domain/Encodings/EncodeDestination.cs EncodeDestination.DefaultProfileId EncodeProfileId",
@@ -120,19 +104,9 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.OutputRoot OutputRoot",
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.RemovedAt DateTime?",
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.WrittenAt DateTime",
-        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.Grid TimeSpan",
-        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.GridTolerance TimeSpan",
-        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.Marked bool",
-        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.MostBreakShare double",
-        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.MostChapters int",
-        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.Noise int",
-        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.Scene double",
-        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.ShortestSilence TimeSpan",
-        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.Watermark bool",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.Automatically bool",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.BeforeFirstLook TimeSpan",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.BetweenLooks TimeSpan",
-        "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.Chapters ChapterSettings",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.MostAttempts int",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.MostCores int",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.OutputRoots IReadOnlyList<StorageRootPath>",
@@ -184,18 +158,10 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Fault SourceLengthFault?",
         "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Length TimeSpan?",
         "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Note string",
-        "/Carina.Domain/Encodings/StationWatermark.cs StationWatermark.LearnedAt DateTime",
-        "/Carina.Domain/Encodings/StationWatermark.cs StationWatermark.LearnedFrom RecordingId",
-        "/Carina.Domain/Encodings/StationWatermark.cs StationWatermark.NetworkId NetworkId",
-        "/Carina.Domain/Encodings/StationWatermark.cs StationWatermark.Pattern byte[]",
-        "/Carina.Domain/Encodings/StationWatermark.cs StationWatermark.ServiceId ServiceId",
-        "/Carina.Domain/Encodings/WatermarkLearner.cs WatermarkLearner.Frames int",
     ];
 
     private static readonly string[] WorkedOut =
     [
-        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Breaks int",
-        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Marks bool",
         "/Carina.Domain/Encodings/ChapterReading.cs ChapterReading.Marks bool",
         "/Carina.Domain/Encodings/ChapterSegment.cs ChapterSegment.Length TimeSpan",
         "/Carina.Domain/Encodings/EncodeChapter.cs EncodeChapter.Segment ChapterSegment",
@@ -230,13 +196,10 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/SourceHeadReading.cs SourceHeadReading.HeadSkip TimeSpan?",
         "/Carina.Domain/Encodings/SourceHeadReading.cs SourceHeadReading.Measured bool",
         "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Measured bool",
-        "/Carina.Domain/Encodings/StationWatermark.cs StationWatermark.Mask WatermarkMask",
-        "/Carina.Domain/Encodings/WatermarkMask.cs WatermarkMask.Pixels int",
     ];
 
     private static readonly string[] TheOnlyFreeTextTakenIn =
     [
-        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Note string",
         "/Carina.Domain/Encodings/EncodeFailure.cs EncodeFailureDetail.Note string",
         "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Note string",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.WorkedIn string?",

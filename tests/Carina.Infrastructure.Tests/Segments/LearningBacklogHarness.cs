@@ -158,8 +158,6 @@ internal sealed class HeldImporter(LearningRecords records, DateTime at) : IRedu
 
     public ConcurrentQueue<ReducedCopy> Asked { get; } = new();
 
-    public ConcurrentQueue<RecordingId> Stopped { get; } = new();
-
     public bool ReleasesAtOnce { get; set; }
 
     public bool Fails { get; set; }
@@ -170,18 +168,9 @@ internal sealed class HeldImporter(LearningRecords records, DateTime at) : IRedu
     {
         Asked.Enqueue(copy);
 
-        try
+        while (!ReleasesAtOnce && !Released(copy.Id).Task.IsCompleted)
         {
-            while (!ReleasesAtOnce && !Released(copy.Id).Task.IsCompleted)
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            Stopped.Enqueue(copy.Id);
-
-            throw;
+            await Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken);
         }
 
         await records.ChangeAsync(copy.Id, Settle, CancellationToken.None);
@@ -260,8 +249,6 @@ internal sealed class LearningBacklogHarness : IDisposable
         provider = new ServiceCollection()
             .AddSingleton<ILearningExtractionRepository>(Records)
             .AddSingleton<ILearningDataRepository>(Data)
-            .AddSingleton<ISegmentSettingsRepository>(Settings)
-            .AddScoped<ILearningSwitch, LearningSwitch>()
             .AddSingleton<ILearningWorklist>(Worklist)
             .AddSingleton<ILearningBacklog>(Backlog)
             .AddSingleton<IRecordingRepository>(new WorklistRecordings(Worklist))
@@ -279,8 +266,6 @@ internal sealed class LearningBacklogHarness : IDisposable
     public HeldLearningExtractions Records { get; } = new();
 
     public HeldLearningData Data { get; } = new();
-
-    public HeldSegmentSettings Settings { get; } = new();
 
     public HeldLearningWorklist Worklist { get; } = new();
 
@@ -318,8 +303,6 @@ internal sealed class LearningBacklogHarness : IDisposable
             settings ?? LearningBacklogSettings.Default,
             new StillClock(Now),
             NullLogger<LearningBacklogJob>.Instance);
-
-    public async Task LearningAsync(bool on) => await Settings.SaveAsync(SegmentSettings.LearningSwitched(on, Now), CancellationToken.None);
 
     /// <summary>
     /// A recording that ended <paramref name="startedMinutesAgo"/> minutes after it started, with its file

@@ -21,8 +21,8 @@ public enum SkipEventFailure
 public sealed record SentSkip(ViewerActionKind? Event, SegmentKind? Kind, double? FromSec, double? ToSec, int? ModelVersion);
 
 /// <summary>
-/// Takes what a viewer did with a skip button on a recording whose row is still there, whether or not learning is
-/// on and whether or not the recording is still being written, keeping nothing of who did it.
+/// Takes what a viewer did with a skip button on a recording whose row is still there, whether or not the recording
+/// is still being written, keeping nothing of who did it.
 /// </summary>
 public sealed class SkipEventService(
     IRecordingDirectory recordings,

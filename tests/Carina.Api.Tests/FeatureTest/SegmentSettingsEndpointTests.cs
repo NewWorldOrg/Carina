@@ -32,7 +32,6 @@ internal sealed class SegmentSettingsFeature : IAsyncDisposable
             services.RemoveAll<IHostedService>();
             services.AddSingleton<TimeProvider>(Clock);
             services.AddSingleton<ISegmentSettingsRepository>(Settings);
-            services.AddSingleton<ISegmentModelVersionRepository>(Versions);
             services.AddSingleton<IAtomicWrite, UnguardedWrites>();
         }));
 
@@ -47,8 +46,6 @@ internal sealed class SegmentSettingsFeature : IAsyncDisposable
     public MovingClock Clock { get; } = new(Noon);
 
     public HeldSegmentSettings Settings { get; } = new();
-
-    public HeldSegmentModelVersions Versions { get; } = new();
 
     public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
 
@@ -97,50 +94,8 @@ internal sealed class SegmentSettingsFeature : IAsyncDisposable
 
 public sealed class SegmentSettingsEndpointTests
 {
-    [Fact(DisplayName = "BR-CD-013: turning learning on puts the version of four kinds made by hand in place of the first still in use as installed, and turning it off moves nothing")]
-    public async Task TurningLearningOnPutsTheVersionOfFourKindsInUse()
-    {
-        await using var feature = new SegmentSettingsFeature();
-        feature.Versions.Active = HeldSegmentModelVersions.InUse(SegmentModelVersion.FirstNumber, SegmentSettingsFeature.Noon.AddDays(-2));
-        feature.Versions.Others.Add(FourKinds());
-
-        (HttpStatusCode off, _) = await feature.PatchAsync(new { learning = false, skipThreshold = 0.8 });
-        int stillFirst = feature.Versions.Active.Number;
-        (HttpStatusCode on, _) = await feature.PatchAsync(new { learning = true });
-
-        Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (off, on));
-        Assert.Equal(SegmentModelVersion.FirstNumber, stillFirst);
-        Assert.Equal((2, 4), (feature.Versions.Active.Number, feature.Versions.Active.Kinds));
-        Assert.Equal(SegmentSettingsFeature.Noon, feature.Versions.Active.AdoptedAt);
-        Assert.Equal(SegmentModelVersionState.Retired, feature.Versions.Others.Single(version => version.Number == SegmentModelVersion.FirstNumber).State);
-    }
-
-    [Fact(DisplayName = "BR-CD-013: turning learning on beside a version learned in use leaves it in use, and the version of four kinds a candidate")]
-    public async Task TurningLearningOnLeavesALearnedVersionInUse()
-    {
-        await using var feature = new SegmentSettingsFeature();
-        feature.Versions.Active = SegmentModelVersion.Rehydrate(
-            3,
-            SegmentModelVersionState.Active,
-            false,
-            SegmentModel.First,
-            SegmentSettingsFeature.Noon.AddDays(-2),
-            SegmentSettingsFeature.Noon.AddDays(-2),
-            null,
-            null,
-            null,
-            new SegmentEvaluation(null, [], new EvaluationEvidence(12, 148, null)));
-        feature.Versions.Others.Add(FourKinds());
-
-        (HttpStatusCode on, _) = await feature.PatchAsync(new { learning = true });
-
-        Assert.Equal(HttpStatusCode.OK, on);
-        Assert.Equal(3, feature.Versions.Active.Number);
-        Assert.Empty(feature.Versions.Written);
-    }
-
-    [Fact(DisplayName = "with no row held learning reads as off, and nobody has changed it")]
-    public async Task WithNoRowHeldLearningReadsAsOff()
+    [Fact(DisplayName = "with no row held the threshold reads at 0.70, and nobody has changed it")]
+    public async Task WithNoRowHeldTheThresholdReadsAtItsDefault()
     {
         await using var feature = new SegmentSettingsFeature();
 
@@ -148,18 +103,14 @@ public sealed class SegmentSettingsEndpointTests
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(
-            ["learning", "learningChangedAt", "skipThreshold", "skipThresholdChangedAt"],
-            data.EnumerateObject().Select(field => field.Name).ToArray());
-        Assert.False(data.GetProperty("learning").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, data.GetProperty("learningChangedAt").ValueKind);
+        Assert.Equal(["skipThreshold", "skipThresholdChangedAt"], data.EnumerateObject().Select(field => field.Name).ToArray());
         Assert.Equal(0.70, data.GetProperty("skipThreshold").GetDouble());
         Assert.Equal(JsonValueKind.Null, data.GetProperty("skipThresholdChangedAt").ValueKind);
         Assert.Equal(0, feature.Settings.Saves);
     }
 
-    [Fact(DisplayName = "BR-CV-002: changing the threshold on no row keeps learning off and unswitched, answers when the threshold changed, and is read back")]
-    public async Task ChangingTheThresholdOnNoRowKeepsLearningOff()
+    [Fact(DisplayName = "BR-CV-002: changing the threshold on no row answers when it changed, and is read back")]
+    public async Task ChangingTheThresholdOnNoRowIsReadBack()
     {
         await using var feature = new SegmentSettingsFeature();
 
@@ -170,8 +121,6 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(0.65, data.GetProperty("skipThreshold").GetDouble());
         Assert.Equal(SegmentSettingsFeature.Noon, data.GetProperty("skipThresholdChangedAt").GetDateTime());
-        Assert.False(data.GetProperty("learning").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, data.GetProperty("learningChangedAt").ValueKind);
         Assert.Equal(0.65, read.GetProperty("data").GetProperty("skipThreshold").GetDouble());
         Assert.Equal(1, feature.Settings.Saves);
         Assert.Equal(1, feature.Settings.Turns);
@@ -192,14 +141,13 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(taken, body.GetProperty("data").GetProperty("skipThreshold").GetDouble());
     }
 
-    [Theory(DisplayName = "BR-CV-002: a threshold outside 0.50 to 0.95 is refused naming it, and nothing is written, not even learning sent beside it")]
+    [Theory(DisplayName = "BR-CV-002: a threshold outside 0.50 to 0.95 is refused naming it, and nothing is written")]
     [InlineData("""{"skipThreshold":0.49}""")]
     [InlineData("""{"skipThreshold":0.4999}""")]
     [InlineData("""{"skipThreshold":0.96}""")]
     [InlineData("""{"skipThreshold":0.9501}""")]
     [InlineData("""{"skipThreshold":1}""")]
     [InlineData("""{"skipThreshold":-0.7}""")]
-    [InlineData("""{"learning":true,"skipThreshold":0.99}""")]
     public async Task AThresholdOutsideTheRangeIsRefused(string json)
     {
         await using var feature = new SegmentSettingsFeature();
@@ -213,17 +161,16 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(0, feature.Settings.Turns);
     }
 
-    [Fact(DisplayName = "BR-CV-002: sending the threshold that stands writes nothing and keeps when it last changed; a new one moves only its own time")]
+    [Fact(DisplayName = "BR-CV-002: sending the threshold that stands writes nothing and keeps when it last changed")]
     public async Task SendingTheThresholdThatStandsWritesNothing()
     {
         await using var feature = new SegmentSettingsFeature();
         (HttpStatusCode untouched, JsonElement unset) = await feature.PatchAsync(new { skipThreshold = 0.70 });
-        await feature.PatchAsync(new { learning = true });
         feature.Clock.Now = SegmentSettingsFeature.Noon.AddMinutes(5);
         await feature.PatchAsync(new { skipThreshold = 0.8 });
         feature.Clock.Now = SegmentSettingsFeature.Noon.AddMinutes(10);
 
-        (HttpStatusCode again, JsonElement body) = await feature.PatchAsync(new { skipThreshold = 0.8, learning = true });
+        (HttpStatusCode again, JsonElement body) = await feature.PatchAsync(new { skipThreshold = 0.8 });
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, untouched);
@@ -231,112 +178,22 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(HttpStatusCode.OK, again);
         Assert.Equal(0.8, data.GetProperty("skipThreshold").GetDouble());
         Assert.Equal(SegmentSettingsFeature.Noon.AddMinutes(5), data.GetProperty("skipThresholdChangedAt").GetDateTime());
-        Assert.Equal(SegmentSettingsFeature.Noon, data.GetProperty("learningChangedAt").GetDateTime());
-        Assert.Equal(2, feature.Settings.Saves);
-        Assert.Equal(4, feature.Settings.Turns);
-    }
-
-    [Fact(DisplayName = "BR-CV-002: learning and the threshold changed together are written at once, each with the time of the change")]
-    public async Task LearningAndTheThresholdChangedTogetherAreWrittenAtOnce()
-    {
-        await using var feature = new SegmentSettingsFeature();
-
-        (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(new { learning = true, skipThreshold = 0.9 });
-        JsonElement data = body.GetProperty("data");
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.True(data.GetProperty("learning").GetBoolean());
-        Assert.Equal(0.9, data.GetProperty("skipThreshold").GetDouble());
-        Assert.Equal(SegmentSettingsFeature.Noon, data.GetProperty("learningChangedAt").GetDateTime());
-        Assert.Equal(SegmentSettingsFeature.Noon, data.GetProperty("skipThresholdChangedAt").GetDateTime());
         Assert.Equal(1, feature.Settings.Saves);
-        Assert.Equal(1, feature.Settings.Turns);
+        Assert.Equal(3, feature.Settings.Turns);
     }
 
-    [Fact(DisplayName = "BR-CV-002: switching learning keeps the threshold as it stood, and when it changed")]
-    public async Task SwitchingLearningKeepsTheThreshold()
-    {
-        await using var feature = new SegmentSettingsFeature();
-        await feature.PatchAsync(new { skipThreshold = 0.6 });
-        feature.Clock.Now = SegmentSettingsFeature.Noon.AddMinutes(5);
-
-        (_, JsonElement body) = await feature.PatchAsync(new { learning = true });
-        JsonElement data = body.GetProperty("data");
-
-        Assert.Equal(0.6, data.GetProperty("skipThreshold").GetDouble());
-        Assert.Equal(SegmentSettingsFeature.Noon, data.GetProperty("skipThresholdChangedAt").GetDateTime());
-        Assert.Equal(SegmentSettingsFeature.Noon.AddMinutes(5), data.GetProperty("learningChangedAt").GetDateTime());
-        Assert.Equal(2, feature.Settings.Turns);
-    }
-
-    [Fact(DisplayName = "switching learning on writes the row, answers when it changed, and is read back")]
-    public async Task SwitchingLearningOnWritesTheRow()
-    {
-        await using var feature = new SegmentSettingsFeature();
-
-        (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(new { learning = true });
-        (_, JsonElement read) = await feature.GetAsync();
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.True(body.GetProperty("data").GetProperty("learning").GetBoolean());
-        Assert.Equal(SegmentSettingsFeature.Noon, body.GetProperty("data").GetProperty("learningChangedAt").GetDateTime());
-        Assert.True(read.GetProperty("data").GetProperty("learning").GetBoolean());
-        Assert.Equal(1, feature.Settings.Saves);
-        Assert.Equal(1, feature.Settings.Turns);
-    }
-
-    [Fact(DisplayName = "switching learning off again writes when it changed")]
-    public async Task SwitchingLearningOffAgainWritesWhenItChanged()
-    {
-        await using var feature = new SegmentSettingsFeature();
-        await feature.PatchAsync(new { learning = true });
-        feature.Clock.Now = SegmentSettingsFeature.Noon.AddMinutes(5);
-
-        (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(new { learning = false });
-        JsonElement data = body.GetProperty("data");
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.False(data.GetProperty("learning").GetBoolean());
-        Assert.Equal(SegmentSettingsFeature.Noon.AddMinutes(5), data.GetProperty("learningChangedAt").GetDateTime());
-        Assert.Equal(2, feature.Settings.Saves);
-    }
-
-    [Fact(DisplayName = "sending what learning already is changes nothing, and keeps when it last changed")]
-    public async Task SendingWhatLearningAlreadyIsChangesNothing()
-    {
-        await using var feature = new SegmentSettingsFeature();
-        await using var untouched = new SegmentSettingsFeature();
-        await feature.PatchAsync(new { learning = true });
-        feature.Clock.Now = SegmentSettingsFeature.Noon.AddMinutes(5);
-
-        (HttpStatusCode again, JsonElement body) = await feature.PatchAsync(new { learning = true });
-        (HttpStatusCode never, JsonElement off) = await untouched.PatchAsync(new { learning = false });
-
-        Assert.Equal(HttpStatusCode.OK, again);
-        Assert.Equal(SegmentSettingsFeature.Noon, body.GetProperty("data").GetProperty("learningChangedAt").GetDateTime());
-        Assert.Equal(1, feature.Settings.Saves);
-        Assert.Equal(HttpStatusCode.OK, never);
-        Assert.False(off.GetProperty("data").GetProperty("learning").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, off.GetProperty("data").GetProperty("learningChangedAt").ValueKind);
-        Assert.Equal(0, untouched.Settings.Saves);
-        Assert.Equal((2, 1), (feature.Settings.Turns, untouched.Settings.Turns));
-    }
-
-    [Theory(DisplayName = "a change that names nothing, or names learning as anything but true or false, is refused")]
+    [Theory(DisplayName = "a change that names no threshold is refused naming it")]
     [InlineData("{}")]
-    [InlineData("""{"learning":null}""")]
-    [InlineData("""{"learning":null,"skipThreshold":null}""")]
-    [InlineData("""{"learning":"true"}""")]
-    [InlineData("""{"learning":1}""")]
+    [InlineData("""{"skipThreshold":null}""")]
     [InlineData("null")]
-    public async Task AChangeThatNamesNothingOrNamesLearningWronglyIsRefused(string json)
+    public async Task AChangeThatNamesNoThresholdIsRefused(string json)
     {
         await using var feature = new SegmentSettingsFeature();
 
         (HttpStatusCode status, JsonElement body) = await feature.PatchAsync(json);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
-        Assert.Contains("learning", body.GetProperty("message").GetString()!, StringComparison.Ordinal);
+        Assert.Contains("skipThreshold", body.GetProperty("message").GetString()!, StringComparison.Ordinal);
         Assert.Equal(0, feature.Settings.Saves);
         Assert.Equal(0, feature.Settings.Turns);
     }
@@ -355,8 +212,10 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(0, feature.Settings.Saves);
     }
 
-    [Theory(DisplayName = "a change naming a setting this cannot change is refused naming it, even beside learning")]
-    [InlineData("""{"learning":true,"other":1}""", "other")]
+    [Theory(DisplayName = "BR-CD-013: a change naming a setting this cannot change, learning included, is refused naming it, even beside the threshold")]
+    [InlineData("""{"learning":true}""", "learning")]
+    [InlineData("""{"learning":false,"skipThreshold":0.8}""", "learning")]
+    [InlineData("""{"skipThreshold":0.8,"other":1}""", "other")]
     [InlineData("""{"skipThreshold":0.8,"threshold":0.8}""", "threshold")]
     public async Task AChangeNamingASettingThisCannotChangeIsRefused(string json, string named)
     {
@@ -376,7 +235,7 @@ public sealed class SegmentSettingsEndpointTests
         feature.Client.DefaultRequestHeaders.Remove(HeaderNames.Origin);
         feature.Client.DefaultRequestHeaders.Add(HeaderNames.Origin, "https://elsewhere.example");
 
-        (HttpStatusCode status, _) = await feature.PatchAsync(new { learning = true });
+        (HttpStatusCode status, _) = await feature.PatchAsync(new { skipThreshold = 0.8 });
 
         Assert.Equal(HttpStatusCode.Forbidden, status);
         Assert.Equal(0, feature.Settings.Saves);
@@ -386,7 +245,7 @@ public sealed class SegmentSettingsEndpointTests
     public async Task AChangeSentAsAFormIsRefused()
     {
         await using var feature = new SegmentSettingsFeature();
-        using var form = new StringContent("learning=true", Encoding.UTF8, "application/x-www-form-urlencoded");
+        using var form = new StringContent("skipThreshold=0.8", Encoding.UTF8, "application/x-www-form-urlencoded");
 
         using HttpResponseMessage response = await feature.Client.PatchAsync(
             new Uri(SegmentSettingsFeature.Path, UriKind.Relative),
@@ -405,14 +264,11 @@ public sealed class SegmentSettingsEndpointTests
         using HttpResponseMessage read = await anonymous.GetAsync(new Uri(SegmentSettingsFeature.Path, UriKind.Relative));
         using HttpResponseMessage changed = await anonymous.PatchAsJsonAsync(
             new Uri(SegmentSettingsFeature.Path, UriKind.Relative),
-            new { learning = true });
+            new { skipThreshold = 0.8 });
 
         Assert.Equal(HttpStatusCode.Unauthorized, read.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, changed.StatusCode);
         Assert.Equal(0, feature.Settings.Reads);
         Assert.Equal(0, feature.Settings.Saves);
     }
-
-    private static SegmentModelVersion FourKinds()
-        => SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Candidate, false, SegmentModel.FirstOfFourKinds, SegmentSettingsFeature.Noon.AddDays(-1), null, null, null, null);
 }

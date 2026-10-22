@@ -85,7 +85,7 @@ public sealed class CatalogWeightsMigrationTests
         await context.Database.EnsureDeletedAsync(Cancel);
     }
 
-    [Fact(DisplayName = "BR-CD-013: while learning is off, the first version stays in use and the version without the catalog waits as a candidate after the first version of four kinds, and turning learning on puts the later one in use")]
+    [Fact(DisplayName = "BR-CD-013: while learning is off, the first version stays in use and the version without the catalog waits as a candidate after the first version of four kinds")]
     public async Task WhileLearningIsOffTheVersionWithoutTheCatalogWaits()
     {
         await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
@@ -98,13 +98,6 @@ public sealed class CatalogWeightsMigrationTests
         await using (NpgsqlConnection after = await OpenAsync())
         {
             Assert.Equal("1:Active 2:Candidate 3:Candidate", await StatesAsync(after));
-        }
-
-        await using (CarinaDbContext changing = CarinaDbContextFactory.Create(Scratch()))
-        {
-            SegmentModelVersion? active = await new SegmentModelVersionRepository(changing).ChangeAsync(SegmentVersionChange.LatestMadeByHand, DateTime.UtcNow, Cancel);
-
-            Assert.Equal((3, SegmentModel.FirstOfFourKinds), (active?.Number, active?.Model));
         }
 
         await context.Database.EnsureDeletedAsync(Cancel);

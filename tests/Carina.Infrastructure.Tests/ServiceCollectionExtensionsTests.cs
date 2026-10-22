@@ -80,36 +80,6 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void AMachineToldToLookForTheBreaksGetsTheOneThatLooks()
-    {
-        Dictionary<string, string?> settings = ValidSettings();
-        settings["Encodings:Chapters:Marked"] = "true";
-
-        using ServiceProvider provider = Build(settings);
-
-        Assert.IsType<FfmpegChapterDetector>(provider.GetRequiredService<IChapterDetector>());
-    }
-
-    [Fact]
-    public void AMachineToldNotToLookGetsTheOneThatReadsNothingAndSaysNobodyAsked()
-    {
-        Dictionary<string, string?> settings = ValidSettings();
-        settings["Encodings:Chapters:Marked"] = "false";
-
-        using ServiceProvider provider = Build(settings);
-
-        Assert.IsType<NoChapterDetector>(provider.GetRequiredService<IChapterDetector>());
-    }
-
-    [Fact]
-    public void AMachineToldNothingLooksForTheBreaks()
-    {
-        using ServiceProvider provider = Build(ValidSettings());
-
-        Assert.IsType<FfmpegChapterDetector>(provider.GetRequiredService<IChapterDetector>());
-    }
-
-    [Fact]
     public void RegistersThePersistenceContext()
     {
         using ServiceProvider provider = Build(ValidSettings());
@@ -482,16 +452,14 @@ public sealed class ServiceCollectionExtensionsTests
             service => ReferenceEquals(service, provider.GetRequiredService<SegmentTrainingJob>()));
     }
 
-    [Fact(DisplayName = "registers where the segment settings are kept and the switch that says whether learning is on")]
-    public void RegistersTheSegmentSettingsAndTheLearningSwitch()
+    [Fact(DisplayName = "registers where the segment settings are kept")]
+    public void RegistersTheSegmentSettings()
     {
         using ServiceProvider provider = Build(ValidSettings());
         using IServiceScope scope = provider.CreateScope();
 
         Assert.IsType<SegmentSettingsRepository>(
             scope.ServiceProvider.GetRequiredService<ISegmentSettingsRepository>());
-        Assert.IsType<LearningSwitch>(
-            scope.ServiceProvider.GetRequiredService<ILearningSwitch>());
     }
 
     [Fact(DisplayName = "BR-BD-011: registers one relay to broadcasters' servers over the system's own network, knowing no host of its own by name until one is given")]

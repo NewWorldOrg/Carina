@@ -83,7 +83,7 @@ public sealed class SegmentChapterPlaybackTests
     public async Task TheThresholdTheSettingsHoldDecidesWhichBreaksAreOffered(double threshold, bool unlikely, bool likely)
     {
         await using var feature = new PlayFeature();
-        await feature.SegmentSettings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, false, null, threshold, RecordingFeature.Noon), CancellationToken.None);
+        await feature.SegmentSettings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, threshold, RecordingFeature.Noon), CancellationToken.None);
         Recording recording = feature.Ended(RecordingOutcome.Complete);
         await DetectedAsync(
             feature,
@@ -140,7 +140,7 @@ public sealed class SegmentChapterPlaybackTests
     public async Task TheThresholdDecidesForAnOpeningAndAnEnding(double threshold, bool opening, bool breaks, bool ending)
     {
         await using var feature = new PlayFeature();
-        await feature.SegmentSettings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, false, null, threshold, RecordingFeature.Noon), CancellationToken.None);
+        await feature.SegmentSettings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, threshold, RecordingFeature.Noon), CancellationToken.None);
         Recording recording = feature.Ended(RecordingOutcome.Complete);
         await DetectedAsync(
             feature,
@@ -162,27 +162,6 @@ public sealed class SegmentChapterPlaybackTests
             plan.GetProperty("chapters").EnumerateArray().Select(chapter => chapter.GetProperty("skippable").GetBoolean()));
     }
 
-    [Fact(DisplayName = "BR-CD-013: while learning is off, an artefact of a recording not detected plays each chapter its encode marked as the kind it was marked")]
-    public async Task WhileLearningIsOffEachMarkedChapterIsPlayedAsItsKind()
-    {
-        await using var feature = new PlayFeature();
-        Recording recording = feature.Ended(RecordingOutcome.Complete);
-        feature.Encoded(recording);
-        await feature.MarkedAsync(
-            feature.Jobs.Jobs[0],
-            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(90), ChapterKind.Opening),
-            new ChapterSegment(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(900), ChapterKind.Programme),
-            new ChapterSegment(TimeSpan.FromSeconds(900), TimeSpan.FromSeconds(960), ChapterKind.Break),
-            new ChapterSegment(TimeSpan.FromSeconds(960), TimeSpan.FromSeconds(1710), ChapterKind.Programme),
-            new ChapterSegment(TimeSpan.FromSeconds(1710), TimeSpan.FromSeconds(1799), ChapterKind.Ending));
-
-        JsonElement plan = await PlanAsync(feature, recording);
-
-        Assert.Equal(
-            [(0d, 90d, "opening", true), (90d, 900d, "programme", false), (900d, 960d, "break", true), (960d, 1710d, "programme", false), (1710d, 1799d, "ending", false)],
-            plan.GetProperty("chapters").EnumerateArray().Select(Read));
-    }
-
     [Fact(DisplayName = "BR-CS-002: a recording whose detected sequence was thrown away plays with no chapters, even with chapters its encode marked")]
     public async Task ASequenceThrownAwayPlaysWithNoChapters()
     {
@@ -197,11 +176,10 @@ public sealed class SegmentChapterPlaybackTests
         Assert.Empty(plan.GetProperty("chapters").EnumerateArray());
     }
 
-    [Fact(DisplayName = "BR-CD-013: while learning is on, a recording not detected plays with no chapters, whatever its encode marked")]
-    public async Task WhileLearningIsOnANotDetectedRecordingPlaysWithNoChapters()
+    [Fact(DisplayName = "BR-CD-013: a recording not detected plays with no chapters, whatever its encode marked")]
+    public async Task ANotDetectedRecordingPlaysWithNoChapters()
     {
         await using var feature = new PlayFeature();
-        await feature.SegmentSettings.SaveAsync(SegmentSettings.LearningSwitched(true, RecordingFeature.Noon), CancellationToken.None);
         Recording recording = feature.Ended(RecordingOutcome.Complete);
         feature.Encoded(recording, timeline: HalfASecondSkipped);
         await feature.MarkedAsync(feature.Jobs.Jobs[0], new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(90), ChapterKind.Programme), new ChapterSegment(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(150), ChapterKind.Break), new ChapterSegment(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(300), ChapterKind.Programme));
@@ -211,31 +189,10 @@ public sealed class SegmentChapterPlaybackTests
         Assert.Empty(plan.GetProperty("chapters").EnumerateArray());
     }
 
-    [Fact(DisplayName = "BR-CD-013: while learning is off, an artefact of a recording not detected plays the chapters its encode marked, each break with something after it offered to be skipped")]
-    public async Task WhileLearningIsOffTheMarkedChaptersArePlayed()
-    {
-        await using var feature = new PlayFeature();
-        Recording recording = feature.Ended(RecordingOutcome.Complete);
-        feature.Encoded(recording);
-        await feature.MarkedAsync(
-            feature.Jobs.Jobs[0],
-            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(90), ChapterKind.Programme),
-            new ChapterSegment(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(150), ChapterKind.Break),
-            new ChapterSegment(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(1740), ChapterKind.Programme),
-            new ChapterSegment(TimeSpan.FromSeconds(1740), TimeSpan.FromSeconds(1799), ChapterKind.Break));
-
-        JsonElement plan = await PlanAsync(feature, recording);
-
-        Assert.Equal(
-            [(0d, 90d, "programme", false), (90d, 150d, "break", true), (150d, 1740d, "programme", false), (1740d, 1799d, "break", false)],
-            plan.GetProperty("chapters").EnumerateArray().Select(Read));
-    }
-
     [Fact(DisplayName = "BR-CS-002: a detection by a version no longer in use is not played")]
     public async Task ADetectionByAnotherVersionIsNotPlayed()
     {
         await using var feature = new PlayFeature();
-        await feature.SegmentSettings.SaveAsync(SegmentSettings.LearningSwitched(true, RecordingFeature.Noon), CancellationToken.None);
         Recording recording = feature.Ended(RecordingOutcome.Complete);
         await DetectedAsync(feature, recording.Id, (0, 300, SegmentKind.Programme, 0.98), (300, 360, SegmentKind.Break, 0.93), (360, 1800, SegmentKind.Programme, 0.99));
         feature.Versions.Active = HeldSegmentModelVersions.InUse(2, RecordingFeature.Noon);
@@ -319,8 +276,8 @@ public sealed class SegmentChapterPlaybackTests
         Assert.Equal(JsonValueKind.Null, plan.GetProperty("recordingOffsetSec").ValueKind);
     }
 
-    [Fact(DisplayName = "BR-CS-002: while learning is off, chapters an encode took from a detection are not played on an artefact the version in use has not detected, and those the reader of the source marked are")]
-    public async Task ChaptersEncodedFromADetectionAreNotPlayedWithoutIt()
+    [Fact(DisplayName = "BR-CS-002: chapters an encode took from a detection, or from the reader of the source, are not played on an artefact the version in use has not detected")]
+    public async Task ChaptersEncodedAreNotPlayedWithoutADetection()
     {
         await using var fromADetection = new PlayFeature();
         Recording detected = fromADetection.Ended(RecordingOutcome.Complete);
@@ -331,13 +288,11 @@ public sealed class SegmentChapterPlaybackTests
         fromTheReader.Encoded(read, timeline: HalfASecondSkipped, chapters: new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.Marked, 0.03, RecordingFeature.Noon.AddHours(1)));
         await fromTheReader.MarkedAsync(fromTheReader.Jobs.Jobs[0], Marked());
 
-        JsonElement notPlayed = await PlanAsync(fromADetection, detected);
-        JsonElement played = await PlanAsync(fromTheReader, read);
+        JsonElement fromTheSegments = await PlanAsync(fromADetection, detected);
+        JsonElement fromAReader = await PlanAsync(fromTheReader, read);
 
-        Assert.Empty(notPlayed.GetProperty("chapters").EnumerateArray());
-        Assert.Equal(
-            [(0d, 90d, "programme", false), (90d, 150d, "break", true), (150d, 1799.5d, "programme", false)],
-            played.GetProperty("chapters").EnumerateArray().Select(Read));
+        Assert.Empty(fromTheSegments.GetProperty("chapters").EnumerateArray());
+        Assert.Empty(fromAReader.GetProperty("chapters").EnumerateArray());
     }
 
     [Fact(DisplayName = "BR-CA-001: asking for the plan writes nothing: no detection is kept and no setting saved")]

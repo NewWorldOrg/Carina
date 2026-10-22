@@ -26,8 +26,6 @@ internal sealed class HeldCatalog : ICatalogRepository
 
     public int Keeps { get; private set; }
 
-    public Action? WhileReading { get; set; }
-
     public Task<IReadOnlyList<CatalogEntry>> ListEntriesAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<CatalogEntry>>([.. Entries]);
 
@@ -35,11 +33,7 @@ internal sealed class HeldCatalog : ICatalogRepository
         => Task.FromResult<IReadOnlyList<CatalogEntry>>([.. Entries.Where(entry => entries.Contains(entry.Id))]);
 
     public Task<IReadOnlyList<CatalogOccurrence>> OccurrencesOfAsync(IReadOnlyCollection<CatalogEntryId> entries, CancellationToken cancellationToken)
-    {
-        WhileReading?.Invoke();
-
-        return Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => entries.Contains(occurrence.EntryId))]);
-    }
+        => Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => entries.Contains(occurrence.EntryId))]);
 
     public Task<IReadOnlyList<CatalogOccurrence>> OccurrencesInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<CatalogOccurrence>>([.. Occurrences.Where(occurrence => recordings.Contains(occurrence.RecordingId))]);
@@ -158,9 +152,7 @@ internal sealed class CatalogMatchingHarness : IDisposable
         Busyness = new HeldBusyness(() => new Busyness(Recording, false, null));
         provider = new ServiceCollection()
             .AddSingleton<ILearningExtractionRepository>(Records)
-            .AddSingleton<ISegmentSettingsRepository>(Settings)
             .AddSingleton<IBusynessReader>(Busyness)
-            .AddScoped<ILearningSwitch, LearningSwitch>()
             .AddScoped<IOccupancyReader, OccupancyReader>()
             .AddSingleton<ICatalogWorklist>(Worklist)
             .AddSingleton<ICatalogRepository>(Catalog)
@@ -177,14 +169,11 @@ internal sealed class CatalogMatchingHarness : IDisposable
 
     public HeldLearningData Data { get; } = new();
 
-    public HeldSegmentSettings Settings { get; } = new();
-
     public HeldBusyness Busyness { get; }
 
     public HeldCatalogWorklist Worklist { get; }
 
     public HeldCatalog Catalog { get; } = new();
-
 
     public HeldRecordingDetections Detections { get; } = new();
 
@@ -209,8 +198,6 @@ internal sealed class CatalogMatchingHarness : IDisposable
             settings ?? CatalogMatchingSettings.Default,
             new FixedClock(at ?? Now),
             NullLogger<CatalogMatchingJob>.Instance);
-
-    public async Task LearningAsync(bool on) => await Settings.SaveAsync(SegmentSettings.LearningSwitched(on, Now), CancellationToken.None);
 
     /// <summary>
     /// Fingerprints that sound like nothing else, of a recording <see cref="Minutes"/> long.

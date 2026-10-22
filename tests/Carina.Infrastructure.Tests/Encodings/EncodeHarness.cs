@@ -93,19 +93,13 @@ internal sealed class EncodeHarness : IDisposable
 
     public ISourceHeadReader HeadReader { get; set; }
 
-    public IChapterDetector ChapterDetector { get; set; } = new NoChapterDetector();
-
     public HeldEncodeChapters Chapters { get; } = new();
-
-    public HeldSegmentSettings SegmentRows { get; } = new();
 
     public HeldSegmentModelVersions Versions { get; } = new();
 
     public HeldRecordingDetections Detections { get; } = new();
 
-    public EncodeChapterChoices ChapterChoices => new(new LearningSwitch(SegmentRows), Versions, Detections);
-
-    public HeldStationWatermarks Watermarks { get; } = new();
+    public EncodeChapterChoices ChapterChoices => new(Versions, Detections);
 
     public MachineSettings Programmes { get; set; } = new();
 
@@ -143,10 +137,8 @@ internal sealed class EncodeHarness : IDisposable
         MachineReader,
         LengthReader,
         HeadReader,
-        ChapterDetector,
         ChapterChoices,
         Chapters,
-        Watermarks,
         CaptionShelf,
         CaptionTracks,
         Programmes,
@@ -154,12 +146,6 @@ internal sealed class EncodeHarness : IDisposable
         AutoRun,
         Clock,
         RunnerLog);
-
-    /// <summary>
-    /// Switches learning on or off, as the developer switch does.
-    /// </summary>
-    public void Learning(bool on)
-        => SegmentRows.SaveAsync(SegmentSettings.LearningSwitched(on, Queued), CancellationToken.None).GetAwaiter().GetResult();
 
     /// <summary>
     /// Keeps a detection of the recording by the version in use, standing as it is told, its stretches given
@@ -452,32 +438,6 @@ internal sealed class MeasuredLengths : ISourceLengthReader
         Asked.Add(source);
 
         return Task.FromResult(ByPath?.Invoke(source) ?? Reading);
-    }
-}
-
-internal sealed class ScriptedChapters : IChapterDetector
-{
-    public Func<ChapterDetection>? Answers { get; set; }
-
-    public ChapterDetectorName Name { get; init; } = ChapterDetectorName.Ffmpeg;
-
-    public List<(string Source, ServiceId Service, int Cores)> Asked { get; } = [];
-
-    public List<WatermarkMask?> LearnedAhead { get; } = [];
-
-    public Task<ChapterDetection> MarkAsync(
-        string source,
-        ServiceId service,
-        EncodeTimeline timeline,
-        WatermarkMask? learnedAhead,
-        int cores,
-        Func<RunningProgramme, Task> began,
-        CancellationToken cancellationToken)
-    {
-        Asked.Add((source, service, cores));
-        LearnedAhead.Add(learnedAhead);
-
-        return Task.FromResult(Answers?.Invoke() ?? ChapterDetection.NotAsked);
     }
 }
 

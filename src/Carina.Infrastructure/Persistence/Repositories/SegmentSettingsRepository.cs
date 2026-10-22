@@ -19,8 +19,7 @@ public sealed class SegmentSettingsRepository(CarinaDbContext context) : ISegmen
             .FirstOrDefaultAsync(row => row.Id == SegmentSettings.TheOnlyRow, cancellationToken);
 
     /// <summary>
-    /// Inserts the one row, or writes every setting and when it changed over the row held, in a single
-    /// statement.
+    /// Inserts the one row, or writes the threshold and when it changed over the row held, in a single statement.
     /// </summary>
     public async Task SaveAsync(SegmentSettings settings, CancellationToken cancellationToken)
     {
@@ -30,11 +29,9 @@ public sealed class SegmentSettingsRepository(CarinaDbContext context) : ISegmen
 
         await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            INSERT INTO segment_settings (id, learning, learning_changed_at, skip_threshold, skip_threshold_changed_at)
-            VALUES ({settings.Id}, {settings.Learning}, {settings.LearningChangedAt}, {threshold}, {settings.SkipThresholdChangedAt})
+            INSERT INTO segment_settings (id, skip_threshold, skip_threshold_changed_at)
+            VALUES ({settings.Id}, {threshold}, {settings.SkipThresholdChangedAt})
             ON CONFLICT (id) DO UPDATE SET
-                learning = excluded.learning,
-                learning_changed_at = excluded.learning_changed_at,
                 skip_threshold = excluded.skip_threshold,
                 skip_threshold_changed_at = excluded.skip_threshold_changed_at
             """,

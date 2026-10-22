@@ -13,9 +13,8 @@ namespace Carina.Infrastructure.Segments;
 /// What one look at the recordings that have ended did: how many records it put back after a start,
 /// what stood in the way of spare time when it was not, how many recordings it gave whether captions
 /// are shown, which recording it began to import from a reduced copy, which recording it began to read,
-/// which reading or import it stopped because learning was switched off, how many recordings waiting to
-/// be read it passed over because their file was out of reach, and which recording is being read or
-/// imported when it was done.
+/// how many recordings waiting to be read it passed over because their file was out of reach, and which
+/// recording is being read or imported when it was done.
 /// </summary>
 public sealed record LearningBacklogLook(
     int Recovered,
@@ -23,11 +22,10 @@ public sealed record LearningBacklogLook(
     int Captioned,
     RecordingId? Importing,
     RecordingId? Began,
-    RecordingId? Stopped,
     int OutOfReach,
     RecordingId? Reading)
 {
-    public bool SaysAnything => Recovered > 0 || Captioned > 0 || Importing is not null || Began is not null || Stopped is not null;
+    public bool SaysAnything => Recovered > 0 || Captioned > 0 || Importing is not null || Began is not null;
 }
 
 /// <summary>
@@ -42,9 +40,7 @@ public sealed record LearningBacklogLook(
 /// stopped, or by a reading whose record could not be written as it ended. A reading is let go only
 /// once its record is written, so a write that fails is made again at the next look. Nothing begins outside
 /// <see cref="SpareTime"/>, which is judged again before each recording; a recording begun is read to its
-/// end even when recording or watching starts meanwhile, but switching learning off stops it within a
-/// look, keeping what it wrote and putting its record back to waiting; an import is stopped the same way.
-/// A recording whose file is out of reach is passed over and keeps waiting, and one whose row or file goes
+/// end, and an import carried to its end, even when recording or watching starts meanwhile. A recording whose file is out of reach is passed over and keeps waiting, and one whose row or file goes
 /// while it is read is read no further and ends partway. Stopping the process stops the reading and leaves
 /// its record for the next start. No recording's file, and nothing in a reduced copy, is removed.
 /// </summary>
@@ -68,7 +64,7 @@ public sealed class LearningBacklogJob(
     public async Task<LearningBacklogLook> LookAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
-        RecordingId? stopped = await ReapAsync(cancellationToken);
+        await ReapAsync(cancellationToken);
 
         if (run is { } running)
         {
@@ -83,7 +79,7 @@ public sealed class LearningBacklogJob(
 
         if (verdict is not SpareTimeVerdict.Spare)
         {
-            return new LearningBacklogLook(putBack, verdict, 0, null, null, stopped, 0, null);
+            return new LearningBacklogLook(putBack, verdict, 0, null, null, 0, null);
         }
 
         ILearningBacklog backlog = scope.ServiceProvider.GetRequiredService<ILearningBacklog>();
@@ -91,7 +87,7 @@ public sealed class LearningBacklogJob(
         RecordingId? importing = await BeginImportAsync(cancellationToken);
         (RecordingId? began, int outOfReach) = importing is null ? await BeginNextAsync(scope, backlog, cancellationToken) : (null, 0);
 
-        return new LearningBacklogLook(putBack, verdict, captioned, importing, began, stopped, outOfReach, Reading);
+        return new LearningBacklogLook(putBack, verdict, captioned, importing, began, outOfReach, Reading);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -152,16 +148,9 @@ public sealed class LearningBacklogJob(
     {
         RecordingId id = running.Id;
 
-        if (!await scope.ServiceProvider.GetRequiredService<ILearningSwitch>().IsOnAsync(cancellationToken))
-        {
-            bool letGo = await StopReadingAsync(running, cancellationToken);
-
-            return new LearningBacklogLook(0, SpareTimeVerdict.LearningOff, 0, null, null, letGo ? id : null, 0, Reading);
-        }
-
         if (running.Followed is not { } followed)
         {
-            return new LearningBacklogLook(0, null, 0, null, null, null, 0, id);
+            return new LearningBacklogLook(0, null, 0, null, null, 0, id);
         }
 
         RecordingStanding? standing = await scope.ServiceProvider.GetRequiredService<ILearningWorklist>().StandingAsync(id, cancellationToken);
@@ -171,7 +160,7 @@ public sealed class LearningBacklogJob(
             followed.Went();
         }
 
-        return new LearningBacklogLook(0, null, 0, null, null, null, 0, id);
+        return new LearningBacklogLook(0, null, 0, null, null, 0, id);
     }
 
     private async Task<int> CaptionEachAsync(ILearningBacklog backlog, CancellationToken cancellationToken)
@@ -336,52 +325,29 @@ public sealed class LearningBacklogJob(
     }
 
     /// <summary>
-    /// Lets go of a reading that has ended, once its record is written; the recording it was stopped
-    /// for, when it was stopped.
+    /// Takes the record of a reading that has ended as failed when the reading ended leaving it reading, and lets
+    /// the reading go once that is written. A record that kept moving is left for the next look.
     /// </summary>
-    private async Task<RecordingId?> ReapAsync(CancellationToken cancellationToken)
+    private async Task ReapAsync(CancellationToken cancellationToken)
     {
         if (run is not { Task.IsCompleted: true } ended)
         {
-            return null;
+            return;
         }
 
-        bool letGo = await LetGoOfAsync(ended, cancellationToken);
-
-        return letGo && ended.Stopping.IsCancellationRequested ? ended.Id : null;
-    }
-
-    private async Task<bool> StopReadingAsync(Run running, CancellationToken cancellationToken)
-    {
-        await running.Stopping.CancelAsync();
-        await EndedAsync(running);
-
-        return await LetGoOfAsync(running, cancellationToken);
-    }
-
-    /// <summary>
-    /// Puts the record of a reading that has ended back to waiting when the reading was stopped, or takes
-    /// it as failed when the reading ended leaving it reading, and lets the reading go once that is
-    /// written. A record that kept moving is left for the next look.
-    /// </summary>
-    private async Task<bool> LetGoOfAsync(Run ended, CancellationToken cancellationToken)
-    {
-        bool stopped = ended.Stopping.IsCancellationRequested;
         ExtractionChange change = await ChangeReadingAsync(
             ended.Id,
-            stopped ? found => found.Pause(Now()) : found => found.Fail(ExtractionFailure.Other, LeftUnsettled, Now()),
+            found => found.Fail(ExtractionFailure.Other, LeftUnsettled, Now()),
             cancellationToken);
 
         if (change is ExtractionChange.KeptMoving)
         {
-            return false;
+            return;
         }
 
         run = null;
         ended.Stopping.Dispose();
-        Told(ended, stopped, change is ExtractionChange.Written);
-
-        return true;
+        Told(ended, change is ExtractionChange.Written);
     }
 
     private async Task LetGoAsync()
@@ -438,25 +404,14 @@ public sealed class LearningBacklogJob(
         return true;
     }
 
-    private void Told(Run ended, bool stopped, bool settled)
+    private void Told(Run ended, bool leftReading)
     {
         if (ended.Task.Exception is { } failure)
         {
             logger.LogError(failure, "Reading recording {Recording} for its learning data failed.", ended.Id.Wire);
         }
 
-        if (!settled)
-        {
-            return;
-        }
-
-        if (stopped)
-        {
-            logger.LogInformation(
-                "Learning was switched off, so the reading of recording {Recording} stopped; what it kept stays, and its record waits to be read.",
-                ended.Id.Wire);
-        }
-        else
+        if (leftReading)
         {
             logger.LogWarning("Reading recording {Recording} ended and left its record reading, so it is taken as failed.", ended.Id.Wire);
         }
@@ -471,13 +426,12 @@ public sealed class LearningBacklogJob(
 
         logger.LogInformation(
             "A look for recordings to read for their learning data put back {Recovered} record(s) left reading, gave {Captioned} "
-            + "recording(s) whether captions are shown, began importing {Importing}, began reading {Began}, stopped reading {Stopped}, "
+            + "recording(s) whether captions are shown, began importing {Importing}, began reading {Began}, "
             + "passed over {OutOfReach} recording(s) out of reach, and leaves {Reading} being read.",
             look.Recovered,
             look.Captioned,
             look.Importing?.Wire ?? "none",
             look.Began?.Wire ?? "none",
-            look.Stopped?.Wire ?? "none",
             look.OutOfReach,
             look.Reading?.Wire ?? "none");
     }

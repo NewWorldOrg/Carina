@@ -59,17 +59,14 @@ public sealed class ChapterEmbeddingMaterialTests
         TimeSpan artefactLength = source.Length!.Value - HeadOfItsOwn;
         TimeSpan opens = PodOpens - HeadOfItsOwn;
         TimeSpan closes = PodCloses - HeadOfItsOwn;
-        ChapterDetection pod = ChapterDetection.Marked(
-            [
-                new ChapterSegment(TimeSpan.Zero, opens, ChapterKind.Programme),
-                new ChapterSegment(opens, closes, ChapterKind.Break),
-                new ChapterSegment(closes, artefactLength, ChapterKind.Programme),
-            ],
-            artefactLength,
-            (closes - opens) / artefactLength);
-        harness.ChapterDetector = new ScriptedChapters { Answers = () => pod };
 
         Recording recording = harness.RecordedFrom(broadcast, SyntheticBroadcast.SomeProgramNumber);
+        harness.Detected(
+            recording,
+            SegmentDetectionState.Marked,
+            new SegmentSpan(TimeSpan.Zero, PodOpens, SegmentKind.Programme, 0.9),
+            new SegmentSpan(PodOpens, PodCloses, SegmentKind.Break, 0.9),
+            new SegmentSpan(PodCloses, source.Length.Value, SegmentKind.Programme, 0.9));
         EncodeProfile profile = harness.Defined();
         EncodeJob job = harness.Running(recording.Id, profile.Id);
 
@@ -78,7 +75,7 @@ public sealed class ChapterEmbeddingMaterialTests
         Assert.Equal(EncodeJobStatus.Completed, ended);
         Assert.Equal(HeadOfItsOwn, job.Timeline!.HeadSkip);
         Assert.Equal(ChapterVerdict.Marked, job.Chapters!.Verdict);
-        Assert.Equal(ChapterDetectorName.Ffmpeg, job.Chapters.Detector);
+        Assert.Equal(ChapterDetectorName.Segments, job.Chapters.Detector);
 
         string artefact = harness.ArtefactPathOf(job);
         IReadOnlyList<(TimeSpan Starts, TimeSpan Ends, string Title)> carried = await ChaptersOfAsync(artefact);
@@ -106,7 +103,7 @@ public sealed class ChapterEmbeddingMaterialTests
         Assert.False(File.Exists(harness.ChaptersPathOf(job)), "the chapters file is swept once the job has ended");
     }
 
-    [Fact(DisplayName = "an artefact of a run that marked nothing carries no chapters at all, and the streams in it are the ones a run without chapters always made")]
+    [Fact(DisplayName = "an artefact of a recording no version has detected carries no chapters at all, and the streams in it are the ones a run without chapters always made")]
     public async Task AnArtefactOfARunThatMarkedNothingCarriesNoChapters()
     {
         using var harness = new EncodeHarness();
@@ -233,7 +230,6 @@ public sealed class ChapterEmbeddingMaterialTests
         harness.MachineReader = new MachineCapabilityReader(machine, TimeProvider.System);
         harness.LengthReader = new FfprobeSourceLength(machine, TimeProvider.System);
         harness.HeadReader = new AHeadOfItsOwn(new FfprobeSourceHead(machine, TimeProvider.System), HeadOfItsOwn);
-        harness.Learning(true);
 
         string broadcast = await new SyntheticBroadcast
         {

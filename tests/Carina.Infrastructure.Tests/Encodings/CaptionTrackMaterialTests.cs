@@ -7,6 +7,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
+using Carina.Domain.Segments;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Machines;
@@ -62,17 +63,12 @@ public sealed class CaptionTrackMaterialTests
     {
         using EncodeHarness harness = OnThisMachine();
         (Recording recording, CaptionRecord record) = await CaptionedAsync(harness);
-        harness.ChapterDetector = new ScriptedChapters
-        {
-            Answers = () => ChapterDetection.Marked(
-                [
-                    new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(4), ChapterKind.Programme),
-                    new ChapterSegment(TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(6), ChapterKind.Break),
-                    new ChapterSegment(TimeSpan.FromSeconds(6), TimeSpan.FromSeconds(10), ChapterKind.Programme),
-                ],
-                TimeSpan.FromSeconds(10),
-                0.2),
-        };
+        harness.Detected(
+            recording,
+            SegmentDetectionState.Marked,
+            new SegmentSpan(TimeSpan.Zero, TimeSpan.FromSeconds(4), SegmentKind.Programme, 0.9),
+            new SegmentSpan(TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(6), SegmentKind.Break, 0.9),
+            new SegmentSpan(TimeSpan.FromSeconds(6), TimeSpan.FromSeconds(10), SegmentKind.Programme, 0.9));
         EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
 
         Assert.Equal(EncodeJobStatus.Completed, await harness.Runner.RunAsync(job, Cancel));

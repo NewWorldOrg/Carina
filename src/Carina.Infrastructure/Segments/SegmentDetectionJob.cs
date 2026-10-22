@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Segments;
 
 /// <summary>
-/// What one detection did: what stood in the way when nothing was detected — spare time, or learning being
-/// off; null when nothing was asked of spare time — and the detection kept.
+/// What one detection did: what in spare time stood in the way when nothing was detected, null when nothing was
+/// asked of spare time; and the detection kept.
 /// </summary>
 public sealed record SegmentDetectionLook(SpareTimeVerdict? Verdict, RecordingDetection? Detected);
 
@@ -23,9 +23,8 @@ public sealed record SegmentDetectionLook(SpareTimeVerdict? Verdict, RecordingDe
 /// detected the most recently started first, one a look: after
 /// <see cref="SegmentDetectionSettings.BeforeFirstLook"/>, then every
 /// <see cref="SegmentDetectionSettings.BetweenLooks"/>, or after
-/// <see cref="SegmentDetectionSettings.AfterADetection"/> once a look has detected one. Neither path detects
-/// while learning is off, and a detection finished after learning was switched off is not kept. A detection
-/// takes the place of the one kept for the same recording and version; none is removed. A recording whose
+/// <see cref="SegmentDetectionSettings.AfterADetection"/> once a look has detected one. A detection takes the
+/// place of the one kept for the same recording and version; none is removed. A recording whose
 /// detection fails is passed over until the process starts again, so that it does not hold back the rest.
 /// </summary>
 public sealed class SegmentDetectionJob(
@@ -52,8 +51,8 @@ public sealed class SegmentDetectionJob(
     }
 
     /// <summary>
-    /// The first path: detects at once the recording matched at once, when learning is on and it waits to be
-    /// detected by the version in use.
+    /// The first path: detects at once the recording matched at once, when it waits to be detected by the version
+    /// in use.
     /// </summary>
     public async Task<SegmentDetectionLook> DetectMatchedAsync(RecordingId id, CancellationToken cancellationToken)
     {
@@ -61,11 +60,6 @@ public sealed class SegmentDetectionJob(
 
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IServiceProvider services = scope.ServiceProvider;
-
-        if (!await services.GetRequiredService<ILearningSwitch>().IsOnAsync(cancellationToken))
-        {
-            return new SegmentDetectionLook(SpareTimeVerdict.LearningOff, null);
-        }
 
         if (await records.FindAsync(id, cancellationToken) is not { } record)
         {
@@ -140,11 +134,6 @@ public sealed class SegmentDetectionJob(
             PassOver(record.RecordingId, failure);
 
             return new SegmentDetectionLook(verdict, null);
-        }
-
-        if (!await services.GetRequiredService<ILearningSwitch>().IsOnAsync(cancellationToken))
-        {
-            return new SegmentDetectionLook(SpareTimeVerdict.LearningOff, null);
         }
 
         await services.GetRequiredService<IRecordingDetectionRepository>().KeepAsync(detection, cancellationToken);

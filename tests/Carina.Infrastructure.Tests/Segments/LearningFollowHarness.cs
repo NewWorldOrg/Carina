@@ -108,8 +108,6 @@ internal sealed class LearningFollowHarness : IDisposable
         provider = new ServiceCollection()
             .AddSingleton<ILearningExtractionRepository>(Records)
             .AddSingleton<ILearningDataRepository>(Data)
-            .AddSingleton<ISegmentSettingsRepository>(Settings)
-            .AddScoped<ILearningSwitch, LearningSwitch>()
             .AddSingleton<ILearningWorklist>(Worklist)
             .BuildServiceProvider();
 
@@ -120,8 +118,6 @@ internal sealed class LearningFollowHarness : IDisposable
     public HeldLearningExtractions Records { get; } = new();
 
     public HeldLearningData Data { get; } = new();
-
-    public HeldSegmentSettings Settings { get; } = new();
 
     public HeldLearningWorklist Worklist { get; } = new();
 
@@ -146,8 +142,6 @@ internal sealed class LearningFollowHarness : IDisposable
             Signals,
             new StillClock(Now),
             NullLogger<LearningFollowJob>.Instance);
-
-    public async Task LearningAsync(bool on) => await Settings.SaveAsync(SegmentSettings.LearningSwitched(on, Now), CancellationToken.None);
 
     public Recording Recording(OutputRoot? root = null, bool withAFile = true, int eventId = 7301)
     {

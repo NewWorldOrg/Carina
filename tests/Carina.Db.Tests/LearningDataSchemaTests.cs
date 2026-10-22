@@ -253,14 +253,14 @@ public sealed class LearningDataSchemaTests(MigratedScratchDatabase database)
         await AddAsync(LearningExtraction.Following(recording, Copy(Noon, "架空の番組"), ExtractionVersion.Current, Noon));
 
         await using CarinaDbContext followingContext = Context();
-        await using CarinaDbContext switchingContext = Context();
+        await using CarinaDbContext recoveringContext = Context();
         var following = new LearningExtractionRepository(followingContext);
-        var switching = new LearningExtractionRepository(switchingContext);
+        var recovering = new LearningExtractionRepository(recoveringContext);
         LearningExtraction followed = (await following.FindAsync(recording, CancellationToken.None))!;
-        LearningExtraction switched = (await switching.FindAsync(recording, CancellationToken.None))!;
+        LearningExtraction recovered = (await recovering.FindAsync(recording, CancellationToken.None))!;
 
-        switched.Pause(Noon.AddMinutes(2));
-        Assert.Equal(LearningExtractionWrite.Written, await switching.SaveAsync(switched, CancellationToken.None));
+        recovered.Recover(false, ExtractionVersion.Current, Noon.AddMinutes(2));
+        Assert.Equal(LearningExtractionWrite.Written, await recovering.SaveAsync(recovered, CancellationToken.None));
 
         followed.Reached(TimeSpan.FromMinutes(5), Noon.AddMinutes(3));
         LearningExtractionMovedMeanwhileException refusal = await Assert.ThrowsAsync<LearningExtractionMovedMeanwhileException>(

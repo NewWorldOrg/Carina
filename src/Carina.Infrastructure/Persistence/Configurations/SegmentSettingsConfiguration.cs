@@ -33,10 +33,6 @@ public sealed class SegmentSettingsConfiguration : IEntityTypeConfiguration<Segm
             .HasColumnName("id")
             .ValueGeneratedNever();
 
-        builder.Property(settings => settings.Learning).IsRequired();
-
-        builder.Property(settings => settings.LearningChangedAt);
-
         builder.Property(settings => settings.SkipThreshold)
             .HasConversion<decimal>()
             .HasColumnType("numeric(3,2)")

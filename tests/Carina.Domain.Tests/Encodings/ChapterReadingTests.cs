@@ -9,11 +9,8 @@ public sealed class ChapterReadingTests
     [Fact(DisplayName = "a reading carries who read it, what they answered and how much of the length they took for breaks, whatever the answer was")]
     public void AReadingCarriesWhoReadItAndWhatTheyAnswered()
     {
-        ChapterReading discarded = ChapterReading.Of(
-            ChapterDetectorName.Ffmpeg,
-            ChapterDetection.Discarded(0.7, "the breaks came to too much of the length"),
-            At);
-        ChapterReading unasked = ChapterReading.Of(ChapterDetectorName.Nobody, ChapterDetection.NotAsked, At);
+        ChapterReading discarded = new(ChapterDetectorName.Ffmpeg, ChapterVerdict.Discarded, 0.7, At);
+        ChapterReading unasked = new(ChapterDetectorName.Nobody, ChapterVerdict.NotAsked, 0, At);
 
         Assert.Equal(ChapterDetectorName.Ffmpeg, discarded.Detector);
         Assert.Equal(ChapterVerdict.Discarded, discarded.Verdict);
@@ -45,7 +42,7 @@ public sealed class ChapterReadingTests
 
         Assert.Equal(2, embedded.ModelVersion);
         Assert.Null(nothing.ModelVersion);
-        Assert.Null(ChapterReading.Of(ChapterDetectorName.Ffmpeg, ChapterDetection.NothingFound(), At).ModelVersion);
+        Assert.Null(new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.NothingFound, 0, At).ModelVersion);
 
         Assert.Throws<ArgumentException>(() => new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.Marked, 0.1, At, 2));
         Assert.Throws<ArgumentException>(() => new ChapterReading(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.1, At));

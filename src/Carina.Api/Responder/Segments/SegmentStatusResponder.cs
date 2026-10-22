@@ -230,10 +230,9 @@ public sealed record SkipThresholdResponder(double Current);
 
 /// <summary>
 /// Where CM, OP and ED detection stands, with the latest round of learning, none before the first, and the first
-/// moment the next round may begin, whether learning is on or off.
+/// moment the next round may begin.
 /// </summary>
 public sealed record SegmentStatusResponder(
-    bool Learning,
     LearningDataResponder LearningData,
     CatalogResponder Catalog,
     SegmentVersionResponder Version,
@@ -250,7 +249,6 @@ public sealed record SegmentStatusResponder(
         ArgumentNullException.ThrowIfNull(status);
 
         return new SegmentStatusResponder(
-            status.Settings.Learning,
             LearningDataResponder.Of(status.LearningData),
             CatalogResponder.Of(status.Catalog),
             SegmentVersionResponder.Of(status.Version),

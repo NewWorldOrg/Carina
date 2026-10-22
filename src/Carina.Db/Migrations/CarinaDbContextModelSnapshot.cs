@@ -1115,43 +1115,6 @@ namespace Carina.Db.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Carina.Domain.Encodings.StationWatermark", b =>
-                {
-                    b.Property<int>("NetworkId")
-                        .HasColumnType("integer")
-                        .HasColumnName("network_id");
-
-                    b.Property<int>("ServiceId")
-                        .HasColumnType("integer")
-                        .HasColumnName("service_id");
-
-                    b.Property<Guid>("LearnedFrom")
-                        .HasColumnType("uuid")
-                        .HasColumnName("learned_from");
-
-                    b.Property<DateTime>("LearnedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("learned_at");
-
-                    b.Property<byte[]>("Pattern")
-                        .IsRequired()
-                        .HasColumnType("bytea")
-                        .HasColumnName("pattern");
-
-                    b.HasKey("NetworkId", "ServiceId", "LearnedFrom")
-                        .HasName("pk_encode_watermark");
-
-                    b.HasIndex("NetworkId", "ServiceId", "LearnedAt")
-                        .HasDatabaseName("ix_encode_watermark_learned_at");
-
-                    b.ToTable("encode_watermark", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_encode_watermark_pattern", "octet_length(pattern) = 16200");
-
-                            t.HasCheckConstraint("ck_encode_watermark_service", "network_id BETWEEN 0 AND 65535 AND service_id BETWEEN 0 AND 65535");
-                        });
-                });
-
             modelBuilder.Entity("Carina.Domain.Integrity.IntegrityCheck", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4164,14 +4127,6 @@ namespace Carina.Db.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("integer")
                         .HasColumnName("id");
-
-                    b.Property<bool>("Learning")
-                        .HasColumnType("boolean")
-                        .HasColumnName("learning");
-
-                    b.Property<DateTime?>("LearningChangedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("learning_changed_at");
 
                     b.Property<decimal>("SkipThreshold")
                         .ValueGeneratedOnAdd()

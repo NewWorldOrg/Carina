@@ -20,7 +20,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "in spare time a reduced copy is imported before any recording is read, its record reading with the version of a reduced copy and the copy of the programme its rows give")]
     public async Task InSpareTimeACopyIsImportedBeforeAnyRecordingIsRead()
     {
-        await harness.LearningAsync(true);
         harness.Ended(40, 7701);
         CopyDescription copied = harness.Copied("one");
         LearningBacklogJob job = harness.Job();
@@ -39,7 +38,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "one copy or recording at a time: a recording is read once the import before it has settled")]
     public async Task ARecordingIsReadOnceTheImportBeforeItHasSettled()
     {
-        await harness.LearningAsync(true);
         Recording recording = harness.Ended(40, 7702);
         CopyDescription copied = harness.Copied("one");
         LearningBacklogJob job = harness.Job();
@@ -65,7 +63,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "as many recordings are imported as there are copies, and a second start imports none of them again")]
     public async Task AsManyAreImportedAsThereAreCopiesAndASecondStartImportsNone()
     {
-        await harness.LearningAsync(true);
         harness.Importer.ReleasesAtOnce = true;
         CopyDescription[] copied = [harness.Copied("a"), harness.Copied("b"), harness.Copied("c")];
 
@@ -87,7 +84,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "a copy of a recording whose row and file are kept is read again from the file once it is imported")]
     public async Task ACopyOfARecordingStillKeptIsReadAgainFromItsFile()
     {
-        await harness.LearningAsync(true);
         Recording recording = harness.Ended(40, 7703);
         harness.Copied("kept", recording);
         LearningBacklogJob job = harness.Job();
@@ -110,7 +106,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "a copy of a recording whose data was already read from its file is not imported")]
     public async Task ACopyOfARecordingAlreadyReadIsNotImported()
     {
-        await harness.LearningAsync(true);
         Recording recording = harness.Ended(40, 7704);
         LearningExtraction read = LearningExtraction.Waiting(recording.Id, ProgrammeCopy.Of(recording, null), Now);
         read.Read(ExtractionVersion.Current, Now);
@@ -128,7 +123,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "a copy of another shape or lacking a file is not imported, and the rest are")]
     public async Task ACopyOfAnotherShapeOrLackingAFileIsNotImported()
     {
-        await harness.LearningAsync(true);
         harness.Importer.ReleasesAtOnce = true;
         CopyDescription whole = harness.Copied("whole");
         CopyDescription lacking = harness.Copied("lacking", null, ReducedCopy.Frames);
@@ -145,7 +139,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "a copy whose probe gives a time no file's clock could hold is not imported, and the look goes on to the next copy")]
     public async Task ACopyWithATimeOutOfReachIsPassedOver()
     {
-        await harness.LearningAsync(true);
         harness.Importer.ReleasesAtOnce = true;
         CopyDescription vast = new() { FileBegins = "1e30" };
         CopyDescription far = new() { PictureBegins = "1e13", SoundBegins = "1e13" };
@@ -163,7 +156,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "a copy that failed to import is not tried again until the next start, and is tried again then")]
     public async Task ACopyThatFailedIsTriedAgainAtTheNextStart()
     {
-        await harness.LearningAsync(true);
         harness.Importer.ReleasesAtOnce = true;
         harness.Importer.Fails = true;
         CopyDescription copied = harness.Copied("failing");
@@ -180,31 +172,9 @@ public sealed class LearningBacklogImportTests : IDisposable
         Assert.Equal(LearningExtractionState.Done, harness.Records.Row(copied.Id)?.State);
     }
 
-    [Fact(DisplayName = "switching learning off stops the import within a look and puts its record back to wait, and it is imported again once learning is back on")]
-    public async Task SwitchingLearningOffStopsTheImport()
-    {
-        await harness.LearningAsync(true);
-        CopyDescription copied = harness.Copied("stopped");
-        LearningBacklogJob job = harness.Job();
-        await job.LookAsync(Cancel);
-        await Eventually.Happens(() => !harness.Importer.Asked.IsEmpty, "the import never began");
-
-        await harness.LearningAsync(false);
-        LearningBacklogLook look = await job.LookAsync(Cancel);
-
-        Assert.Equal((copied.Id, null, SpareTimeVerdict.LearningOff), (look.Stopped, look.Reading, look.Verdict));
-        Assert.Equal([copied.Id], harness.Importer.Stopped);
-        Assert.Equal(LearningExtractionState.Waiting, harness.Records.Row(copied.Id)?.State);
-
-        await harness.LearningAsync(true);
-
-        Assert.Equal(copied.Id, (await job.LookAsync(Cancel)).Importing);
-    }
-
     [Fact(DisplayName = "outside spare time no copy is imported")]
     public async Task OutsideSpareTimeNoCopyIsImported()
     {
-        await harness.LearningAsync(true);
         harness.BeingRecorded(7705);
         CopyDescription copied = harness.Copied("waiting");
 
@@ -217,7 +187,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "with no directory to import from, no copy is imported and the recordings are read as before")]
     public async Task WithNoDirectoryNoCopyIsImported()
     {
-        await harness.LearningAsync(true);
         Recording recording = harness.Ended(40, 7706);
         harness.Copied("unread");
 
@@ -230,7 +199,6 @@ public sealed class LearningBacklogImportTests : IDisposable
     [Fact(DisplayName = "nothing on the shelf of copies is written, moved or removed")]
     public async Task NothingOnTheShelfIsTouched()
     {
-        await harness.LearningAsync(true);
         harness.Importer.ReleasesAtOnce = true;
         harness.Copied("a");
         harness.Copied("b", null, ReducedCopy.Corners);

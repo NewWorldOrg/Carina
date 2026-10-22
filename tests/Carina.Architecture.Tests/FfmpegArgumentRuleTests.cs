@@ -5,7 +5,6 @@ public sealed class FfmpegArgumentRuleTests
     private static readonly string[] Builders =
     [
         "/Carina.Infrastructure/Encodings/FfmpegCaptionTrackInvocation.cs",
-        "/Carina.Infrastructure/Encodings/FfmpegChapterInvocation.cs",
         "/Carina.Infrastructure/Encodings/FfmpegChapterRewriteInvocation.cs",
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs",
         "/Carina.Infrastructure/Encodings/FfprobeHeadInvocation.cs",
@@ -23,11 +22,6 @@ public sealed class FfmpegArgumentRuleTests
 
     private static readonly string[] Inventory =
     [
-        "/Carina.Infrastructure/Encodings/FfmpegChapterInvocation.cs {Blackness}",
-        "/Carina.Infrastructure/Encodings/FfmpegChapterInvocation.cs {Printed}",
-        "/Carina.Infrastructure/Encodings/FfmpegChapterInvocation.cs {changed}",
-        "/Carina.Infrastructure/Encodings/FfmpegChapterInvocation.cs {lasting}",
-        "/Carina.Infrastructure/Encodings/FfmpegChapterInvocation.cs {under}",
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs string.Join(",
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs {ordinal}",
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs {programNumber}",
