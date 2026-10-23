@@ -28,7 +28,7 @@ public sealed class DataBroadcastSettingsTests
 
     [Theory(DisplayName = "BR-BD-016: a postal code is seven digits, and an empty one or none is not registered")]
     [InlineData("0000000", true, "0000000")]
-    [InlineData("9990000", true, "9990000")]
+    [InlineData("0000001", true, "0000001")]
     [InlineData("", true, null)]
     [InlineData(null, true, null)]
     [InlineData("000000", false, null)]

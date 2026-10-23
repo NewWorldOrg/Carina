@@ -35,7 +35,7 @@ public sealed class DataBroadcastSettingsRepositoryTests(RepositoryDatabase data
         DataBroadcastSettings? first = await ReadAsync();
         await SaveAsync(DataBroadcastSettingsStanding.Over(first).Set(null, 49, Noon.AddHours(1))!);
         DataBroadcastSettings? second = await ReadAsync();
-        await SaveAsync(DataBroadcastSettingsStanding.Over(second).Set("9990000", null, Noon.AddHours(2))!);
+        await SaveAsync(DataBroadcastSettingsStanding.Over(second).Set("0000001", null, Noon.AddHours(2))!);
 
         await using CarinaDbContext reading = database.Open();
         DataBroadcastSettings? held = await new DataBroadcastSettingsRepository(reading).ReadAsync(Cancel);
@@ -43,7 +43,7 @@ public sealed class DataBroadcastSettingsRepositoryTests(RepositoryDatabase data
         Assert.Equal(("0000000", (int?)0, Noon), (first!.PostalCode, first.Prefecture, first.ChangedAt));
         Assert.Equal(((string?)null, (int?)49), (second!.PostalCode, second.Prefecture));
         Assert.Equal(
-            (DataBroadcastSettings.TheOnlyRow, "9990000", (int?)null, Noon.AddHours(2)),
+            (DataBroadcastSettings.TheOnlyRow, "0000001", (int?)null, Noon.AddHours(2)),
             (held!.Id, held.PostalCode, held.Prefecture, held.ChangedAt));
         Assert.Equal(1, await reading.Set<DataBroadcastSettings>().CountAsync(Cancel));
     }
