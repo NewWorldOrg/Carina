@@ -19,7 +19,7 @@ public sealed class VaapiProbeInvocationTests
                 "-f",
                 "lavfi",
                 "-i",
-                "color=black:s=64x64:r=1:d=1",
+                "color=black:s=256x256:r=1:d=1",
                 "-vf",
                 "format=nv12,hwupload",
                 "-c:v",
@@ -29,6 +29,17 @@ public sealed class VaapiProbeInvocationTests
                 "-",
             ],
             VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode));
+    }
+
+    [Fact]
+    public void ThePictureIsNoSmallerThanTheSmallestEitherCodecEncodesOnTheCard()
+    {
+        string[] arguments = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.H265OnTheCard)];
+        string picture = arguments[arguments.IndexOf("-i") + 1];
+        string[] size = picture.Split(':')[1]["s=".Length..].Split('x');
+
+        Assert.True(int.Parse(size[0], System.Globalization.CultureInfo.InvariantCulture) >= 128);
+        Assert.True(int.Parse(size[1], System.Globalization.CultureInfo.InvariantCulture) >= 128);
     }
 
     [Fact]
