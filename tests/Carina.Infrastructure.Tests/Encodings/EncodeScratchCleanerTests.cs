@@ -33,6 +33,34 @@ public sealed class EncodeScratchCleanerTests
         Assert.Equal([$"settled {failed.WorkFileName.Value} Removed"], harness.Scratch.Moves);
     }
 
+    [Fact(DisplayName = "a running job's file it will not use is removed by its name off the ledger and settled there, and nothing else the job owes is touched")]
+    public async Task ARunningJobsFileItWillNotUseIsRemovedByItsName()
+    {
+        using var harness = new EncodeHarness();
+        EncodeJob running = harness.Running();
+        string work = harness.WorkFileOf(running, "the first picture");
+        string remade = Path.Combine(harness.WorkDirectory, running.RemadeFileName.Value);
+        File.WriteAllText(remade, "the second picture");
+        harness.Scratch.Files.Add(EncodeScratchFile.Record(
+            EncodeScratchFileId.New(),
+            running.Id,
+            EncodeScratchKind.WorkFile,
+            EncodeHarness.Encodes,
+            running.RemadeFileName,
+            EncodeHarness.Queued));
+
+        EncodeScratchFate? fate = await harness.Cleaner.ClearOneAsync(running, running.WorkFileName, Cancel);
+        EncodeScratchFate? unheardOf = await harness.Cleaner.ClearOneAsync(running, running.ChaptersFileName, Cancel);
+
+        Assert.Equal(EncodeScratchFate.Removed, fate);
+        Assert.Null(unheardOf);
+        Assert.False(File.Exists(work));
+        Assert.True(File.Exists(remade), "the file the job keeps was left where it was");
+        Assert.Equal(EncodeJobStatus.Running, running.Status);
+        Assert.Equal([$"settled {running.WorkFileName.Value} Removed"], harness.Scratch.Moves);
+        Assert.True(harness.Scratch.Files.Single(file => file.FileName.Equals(running.RemadeFileName)).IsOwedARemoval);
+    }
+
     [Fact(DisplayName = "a file that is already gone is written down as gone, not as an error")]
     public async Task AFileThatIsAlreadyGoneIsWrittenDownAsGone()
     {

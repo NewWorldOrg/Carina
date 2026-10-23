@@ -325,7 +325,8 @@ public sealed class EncodeJobRunner(
     /// Makes the work file a second time, coarser, when it came out larger than the recording, writes down which
     /// of the two the job keeps, and hands back where that one is. A recording whose size is not known is outgrown
     /// by nothing, a profile already at the coarsest is not made again, and a second run that fails leaves the
-    /// first. The one not kept is swept with the rest of the job's scratch once it ends.
+    /// first. The one not kept, or what a second run that failed left, is removed there and then, before the
+    /// kept one is measured and captioned.
     /// </summary>
     private async Task<string> NoLargerThanTheSourceAsync(EncodeJob job, EncodeRemakeRun run, CancellationToken cancellationToken)
     {
@@ -382,33 +383,50 @@ public sealed class EncodeJobRunner(
         job.MadeAgain(EncodeRemakes.Judge(recorded, first, second));
         await jobs.SaveAsync(job, cancellationToken);
 
+        bool keepsTheSecond = job.KeptWorkFileName.Equals(job.RemadeFileName);
+        EncodeScratchFate? cleared = await cleaner.ClearOneAsync(
+            job,
+            keepsTheSecond ? job.WorkFileName : job.RemadeFileName,
+            cancellationToken);
+
         if (second is not { } made)
         {
             logger.LogWarning(
-                "Job {Job} could not make it again ({Why}), and keeps the first of {Made} bytes against a recording of {Recorded} bytes.",
+                "Job {Job} could not make it again ({Why}), keeps the first of {Made} bytes against a recording of {Recorded} bytes, and what the second run left is {Cleared}.",
                 job.Id.Wire,
-                WhyARunMadeNothing(ran),
+                WhyTheSecondRunMadeNothing(ran),
                 first,
-                recorded);
+                recorded,
+                cleared);
         }
         else
         {
             logger.Log(
                 job.Remade is EncodeRemake.LargerThanTheSource ? LogLevel.Information : LogLevel.Warning,
-                "Job {Job} made it again to {Second} bytes against a recording of {Recorded} bytes, and comes to {Remade}.",
+                "Job {Job} made it again to {Second} bytes against a recording of {Recorded} bytes, comes to {Remade}, and the one it does not keep is {Cleared}.",
                 job.Id.Wire,
                 made,
                 recorded,
-                job.Remade);
+                job.Remade,
+                cleared);
         }
 
-        return job.KeptWorkFileName.Equals(job.RemadeFileName) ? again : run.Work;
+        return keepsTheSecond ? again : run.Work;
     }
 
-    private static string WhyARunMadeNothing(EncodeRunOutcome ran)
-        => ran.Fault is { } fault
-            ? $"{fault}: {ran.Complained}"
-            : $"the programme exited {ran.ExitCode?.ToString(CultureInfo.InvariantCulture)}: {ran.Complained}";
+    /// <summary>
+    /// Why the second run made no file, named the way a failed job's reason is, so a disk with no room left is
+    /// told apart from the programme refusing.
+    /// </summary>
+    private static string WhyTheSecondRunMadeNothing(EncodeRunOutcome ran)
+        => ran.Fault switch
+        {
+            EncodeRunFault.ProgrammeMissing => $"{EncodeFailure.CapabilityUnavailable}: {ran.Complained}",
+            EncodeRunFault.Stalled => $"{EncodeFailure.TimedOut}: {ran.Complained}",
+            _ when ran.ExitCode is not 0 =>
+                $"{FfmpegComplaint.Classified(ran.Complained)}: the programme exited {ran.ExitCode?.ToString(CultureInfo.InvariantCulture)}: {ran.Complained}",
+            _ => "the programme exited 0 and wrote no file",
+        };
 
     private static long BytesOf(string path)
     {
