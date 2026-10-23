@@ -142,7 +142,7 @@ public sealed class SegmentDetectionJobTests
         SegmentDetectionJob job = harness.Job();
         await job.LookAsync(CancellationToken.None);
 
-        harness.Versions.Active = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, false, SegmentModel.FirstOfFourKinds, Now.AddMinutes(-1), Now.AddMinutes(-1), null, null, null);
+        harness.Versions.Active = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, false, HandMadeModels.FirstOfFourKinds, Now.AddMinutes(-1), Now.AddMinutes(-1), null, null, null);
         SegmentDetectionLook again = await job.LookAsync(CancellationToken.None);
 
         Assert.Equal(SegmentDetectionState.NothingFound, harness.Detections.Of(recording, SegmentModelVersion.FirstNumber)!.State);

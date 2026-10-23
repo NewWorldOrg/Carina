@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace Carina.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// The versions of the model, with the figures an evaluation leaves — the metrics overall and by station and the
+/// The versions of the model, each marked when it is built in, with the figures an evaluation leaves — the metrics overall and by station and the
 /// evidence they rest on — and what a rollback measured, in the shapes the HTTP surface answers them in.
 /// </summary>
 public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<SegmentModelVersion>
@@ -30,6 +30,7 @@ public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<
             table.HasCheckConstraint("ck_segment_model_version_number", $"number >= {SegmentModelVersion.FirstNumber}");
             table.HasCheckConstraint("ck_segment_model_version_state", $"state IN ({SegmentVocabulary.Names<SegmentModelVersionState>()})");
             table.HasCheckConstraint("ck_segment_model_version_kinds", "kinds IN (2, 4)");
+            table.HasCheckConstraint("ck_segment_model_version_built_in", "NOT built_in OR evidence IS NULL");
             table.HasCheckConstraint(
                 "ck_segment_model_version_by_hand",
                 $"NOT by_hand OR (state = '{Active}' AND chosen_by_hand_at IS NOT NULL)");
@@ -75,6 +76,7 @@ public sealed class SegmentModelVersionConfiguration : IEntityTypeConfiguration<
             .IsRequired();
 
         builder.Property(version => version.ByHand).IsRequired();
+        builder.Property(version => version.BuiltIn).IsRequired();
         builder.Property(version => version.Kinds).HasColumnType("smallint").IsRequired();
 
         builder.Property(version => version.Weights)

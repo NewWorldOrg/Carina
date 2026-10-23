@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 
 using Carina.Domain.Channels;
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Segments;
 
@@ -25,7 +26,7 @@ public sealed class SegmentModelTests
     [Fact(DisplayName = "the first version carries the hand-set weights, no offsets, the initial thresholds and an identity scale for what it weighs")]
     public void TheFirstVersionIsHandSet()
     {
-        SegmentModel first = SegmentModel.First;
+        SegmentModel first = HandMadeModels.First;
         SegmentClassWeights weights = first.Weights.Classes[SegmentKind.Break];
 
         Assert.Equal(-2.5, weights.Bias);
@@ -50,7 +51,7 @@ public sealed class SegmentModelTests
     {
         SegmentWeights read = JsonSerializer.Deserialize<SegmentWeights>(FirstWeights, Jsonb)!;
 
-        Assert.Equal(SegmentModel.First.Weights, read);
+        Assert.Equal(HandMadeModels.First.Weights, read);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(FirstWeights), JsonSerializer.SerializeToNode(read, Jsonb)));
     }
 
@@ -101,7 +102,7 @@ public sealed class SegmentModelTests
     [Fact(DisplayName = "the first version scores a 15-second piece between two silent cuts with no logo above even, and the same piece under the logo below it")]
     public void TheFirstVersionScoresByTheRuleItWasMadeFrom()
     {
-        SegmentModel first = SegmentModel.First;
+        SegmentModel first = HandMadeModels.First;
 
         double pod = first.BreakScore(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 0)), Station, null);
         double branded = first.BreakScore(Features((SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.LogoShare, 1)), Station, null);
@@ -137,11 +138,11 @@ public sealed class SegmentModelTests
     public void TheOffsetsAreAdded()
     {
         SegmentModel offset = new(
-            SegmentModel.First.Weights,
+            HandMadeModels.First.Weights,
             new Dictionary<string, double> { [Station] = 0.3 },
             new Dictionary<string, double> { ["架空の物語"] = -0.2 },
             SegmentThresholds.Initial,
-            SegmentModel.First.Standardisation);
+            HandMadeModels.First.Standardisation);
         string elsewhere = SegmentModel.StationKey(new NetworkId(4), new ServiceId(101));
 
         Assert.Equal(-2.5 + 0.3 - 0.2, offset.BreakScore(Features(), Station, "架空の物語"), 12);
@@ -183,10 +184,10 @@ public sealed class SegmentModelTests
     [Fact(DisplayName = "BR-CD-007: the first version of four kinds weighs the break as the first version does, and the opening and the ending by where earlier episodes had theirs, the catalog weighing nothing")]
     public void TheFirstVersionOfFourKindsIsHandSet()
     {
-        SegmentModel four = SegmentModel.FirstOfFourKinds;
+        SegmentModel four = HandMadeModels.FirstOfFourKinds;
 
         Assert.Equal(4, four.Kinds);
-        Assert.Equal(SegmentModel.First.Weights.Classes[SegmentKind.Break], four.Weights.Classes[SegmentKind.Break]);
+        Assert.Equal(HandMadeModels.First.Weights.Classes[SegmentKind.Break], four.Weights.Classes[SegmentKind.Break]);
         Assert.Equal(
             (-6.0, 4.0),
             (four.Weights.Classes[SegmentKind.Opening].Bias, four.Weights.Classes[SegmentKind.Opening].Features[SegmentFeature.PastOpeningShare]));
@@ -244,7 +245,7 @@ public sealed class SegmentModelTests
     [Fact(DisplayName = "BR-CD-007: the first version of four kinds takes a piece where earlier episodes had their opening or their ending likelier for one, never likely enough on that alone, and a plain piece for the programme")]
     public void TheFirstVersionOfFourKindsLeavesOpeningsToTheCatalog()
     {
-        SegmentModel four = SegmentModel.FirstOfFourKinds;
+        SegmentModel four = HandMadeModels.FirstOfFourKinds;
 
         SegmentChances remembered = four.Chances(Features((SegmentFeature.PastOpeningShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
         SegmentChances ending = four.Chances(Features((SegmentFeature.PastEndingShare, 1), (SegmentFeature.LogoShare, 1)), Station, null);
@@ -262,10 +263,10 @@ public sealed class SegmentModelTests
     [Fact(DisplayName = "BR-CD-007: the version of four kinds for any series hears silence as the version hearing silence from -55 dBFS does and weighs the break as it does but for the grid, which counts only up to a minute, and weighs the opening and the ending by where they lie, how long they last, how steady their loudness is and the grid, an advert's length most, earlier episodes adding to it")]
     public void TheVersionForAnySeriesIsHandSet()
     {
-        SegmentModel any = SegmentModel.FourKindsInAnySeries;
+        SegmentModel any = HandMadeModels.FourKindsInAnySeries;
 
         Assert.Equal(4, any.Kinds);
-        Assert.Equal(SegmentModel.FourKindsBelowPauses.Thresholds, any.Thresholds);
+        Assert.Equal(HandMadeModels.FourKindsBelowPauses.Thresholds, any.Thresholds);
         Assert.Equal(
             new SegmentClassWeights(-2.5, new Dictionary<string, double>
             {
@@ -287,7 +288,7 @@ public sealed class SegmentModelTests
     [Fact(DisplayName = "BR-CD-007: with neither the catalog nor earlier episodes, the version for any series takes a song as long as a whole one where an opening or an ending lies for one at 0.6 to 0.8, one of a minute and a half between two silent cuts likelier for one than anything else, and speech there, a pod of adverts there and a song in the middle of the programme for what they are")]
     public void TheVersionForAnySeriesFindsAThemeInAFirstEpisode()
     {
-        SegmentModel any = SegmentModel.FourKindsInAnySeries;
+        SegmentModel any = HandMadeModels.FourKindsInAnySeries;
 
         SegmentChances opening = any.Chances(Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 3)), Station, null);
         SegmentChances ending = any.Chances(Features((SegmentFeature.EndingWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.LoudnessRange, 3)), Station, null);
@@ -314,8 +315,8 @@ public sealed class SegmentModelTests
     [Fact(DisplayName = "BR-CD-007: the version with songs whose loudness moves weighs as the version for any series but centres the loudness range on 10 dB and weighs an advert's length 0.8 more against the opening and the ending, so a song of 7 dB where an ending lies is the ending and an advert there is taken as before")]
     public void TheVersionWithDynamicSongsIsHandSet()
     {
-        SegmentModel any = SegmentModel.FourKindsInAnySeries;
-        SegmentModel dynamic = SegmentModel.FourKindsWithDynamicSongs;
+        SegmentModel any = HandMadeModels.FourKindsInAnySeries;
+        SegmentModel dynamic = HandMadeModels.FourKindsWithDynamicSongs;
         SegmentFeatureValues song = Features((SegmentFeature.EndingWindow, 1), (SegmentFeature.LoudnessRange, 7));
         SegmentFeatureValues advert = Features(
             (SegmentFeature.EndingWindow, 1),
@@ -335,11 +336,11 @@ public sealed class SegmentModelTests
         Assert.Equal(any.Chances(advert, Station, null).Of(SegmentKind.Break), dynamic.Chances(advert, Station, null).Of(SegmentKind.Break), 12);
     }
 
-    [Fact(DisplayName = "BR-CD-007: the version for pods weighs as the version with songs whose loudness moves but adds 1.5 to an advert with another beside it and no longer weighs a multiple of the grid against the opening and the ending, so an advert of a pod is a break at more than 0.9, a lone one as before, and a whole opening of 90 seconds on the grid as likely as one off it")]
-    public void TheVersionForPodsIsHandSet()
+    [Fact(DisplayName = "BR-CD-007: the built-in version weighs as the version with songs whose loudness moves but adds 1.5 to an advert with another beside it and no longer weighs a multiple of the grid against the opening and the ending, so an advert of a pod is a break at more than 0.9, a lone one as before, and a whole opening of 90 seconds on the grid as likely as one off it")]
+    public void TheBuiltInVersionTakesAdvertsInPods()
     {
-        SegmentModel dynamic = SegmentModel.FourKindsWithDynamicSongs;
-        SegmentModel pods = SegmentModel.FourKindsInPods;
+        SegmentModel dynamic = HandMadeModels.FourKindsWithDynamicSongs;
+        SegmentModel pods = SegmentModel.BuiltIn;
         SegmentFeatureValues lone = Features((SegmentFeature.IsShortMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1));
         SegmentFeatureValues beside = Features((SegmentFeature.IsShortMultipleOf15s, 1), (SegmentFeature.EdgeSilence, 1), (SegmentFeature.AdvertBeside, 1));
         SegmentFeatureValues onTheGrid = Features((SegmentFeature.OpeningWindow, 1), (SegmentFeature.IsThemeLength, 1), (SegmentFeature.IsMultipleOf15s, 1), (SegmentFeature.LoudnessRange, 4));
@@ -358,17 +359,17 @@ public sealed class SegmentModelTests
     public void TheOffsetsWeighTheBreakAlone()
     {
         SegmentModel offset = new(
-            SegmentModel.FirstOfFourKinds.Weights,
+            HandMadeModels.FirstOfFourKinds.Weights,
             new Dictionary<string, double> { [Station] = 0.3 },
             new Dictionary<string, double> { ["架空の物語"] = -0.2 },
             SegmentThresholds.Initial,
-            SegmentModel.FirstOfFourKinds.Standardisation);
+            HandMadeModels.FirstOfFourKinds.Standardisation);
 
         Assert.Equal(-2.5 + 0.3 - 0.2, offset.Score(SegmentKind.Break, Features(), Station, "架空の物語"), 12);
         Assert.Equal(-6.0, offset.Score(SegmentKind.Opening, Features(), Station, "架空の物語"), 12);
         Assert.Equal(-6.0, offset.Score(SegmentKind.Ending, Features(), Station, null), 12);
         Assert.Equal(0, offset.Score(SegmentKind.Programme, Features(), Station, "架空の物語"));
-        Assert.Throws<ArgumentException>(() => SegmentModel.First.Score(SegmentKind.Opening, Features(), Station, null));
+        Assert.Throws<ArgumentException>(() => HandMadeModels.First.Score(SegmentKind.Opening, Features(), Station, null));
     }
 
     [Fact(DisplayName = "a number that is not finite, a scale of no spread and a malformed station key are refused")]
@@ -429,7 +430,7 @@ public sealed class SegmentModelTests
             scales);
 
     private static SegmentModel Offsets(IReadOnlyDictionary<string, double> stations)
-        => new(SegmentModel.First.Weights, stations, new Dictionary<string, double>(), SegmentThresholds.Initial, SegmentModel.First.Standardisation);
+        => new(HandMadeModels.First.Weights, stations, new Dictionary<string, double>(), SegmentThresholds.Initial, HandMadeModels.First.Standardisation);
 
     private static SegmentClassWeights Theme(string place, string past)
         => new(-6.0, new Dictionary<string, double>

@@ -1,6 +1,7 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 using static Carina.Domain.Tests.Segments.SyntheticCorners;
 
@@ -28,7 +29,7 @@ public sealed class SegmentDetectorTests
             .Corners(Drawn((int)Length, TopRight, second => second < 1500, 5))
             .Evidence();
 
-        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(Logo), SegmentModel.First);
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(Logo), HandMadeModels.First);
 
         Assert.Equal(SegmentDetectionState.NothingFound, detection.State);
         Assert.Equal(0, detection.CmShare);
@@ -41,7 +42,7 @@ public sealed class SegmentDetectorTests
         SegmentDetection detection = SegmentDetector.Detect(
             Cuts(new SyntheticReadings(Length), [.. Enumerable.Range(1, 29).Select(minute => minute * 60.0)]).Evidence(),
             Context(CornerLogo.None),
-            SegmentModel.First);
+            HandMadeModels.First);
 
         Assert.Equal(SegmentDetectionState.Discarded, detection.State);
         Assert.Equal(1680d / 1800, detection.CmShare, 9);
@@ -60,8 +61,8 @@ public sealed class SegmentDetectorTests
 
         SegmentEvidence evidence = readings.QuietAround(637, 0.3, 102).Evidence();
 
-        SegmentDetection belowPauses = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.FourKindsBelowPauses);
-        SegmentDetection first = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.FirstOfFourKinds);
+        SegmentDetection belowPauses = SegmentDetector.Detect(evidence, Context(CornerLogo.None), HandMadeModels.FourKindsBelowPauses);
+        SegmentDetection first = SegmentDetector.Detect(evidence, Context(CornerLogo.None), HandMadeModels.FirstOfFourKinds);
 
         Assert.Equal([(600d, 660d)], Breaks(belowPauses));
         Assert.Equal([(600d, 630d), (644.6, 659.6)], Breaks(first));
@@ -75,11 +76,11 @@ public sealed class SegmentDetectorTests
             .Quiet(640, 640.3, SyntheticReadings.Pause)
             .Evidence();
 
-        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.FourKindsInPods);
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.BuiltIn);
 
         Assert.Equal([(600d, 660d)], Breaks(detection));
         Assert.True(detection.Segments.Single(segment => segment.Kind is SegmentKind.Break).Probability > SegmentSettingsStanding.DefaultSkipThreshold);
-        Assert.Equal([(600d, 630d), (645d, 660d)], Breaks(Apart(evidence, Context(CornerLogo.None), SegmentModel.FourKindsInPods)));
+        Assert.Equal([(600d, 630d), (645d, 660d)], Breaks(Apart(evidence, Context(CornerLogo.None), SegmentModel.BuiltIn)));
     }
 
     [Fact(DisplayName = "BR-CD-007: an opening of 90 seconds in a first episode, cut by the logo going at its start and coming back 15 seconds in, going again 60 seconds in, into segments each as long as adverts, is found whole from its start by the version for pods at a chance a skip is offered at, where its segments alone offer none")]
@@ -89,13 +90,13 @@ public sealed class SegmentDetectorTests
             .Corners(Drawn((int)Length, TopRight, second => second is not ((>= 60 and < 75) or (>= 120 and < 150) or >= 1500), 4))
             .Evidence();
 
-        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(Logo), SegmentModel.FourKindsInPods);
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(Logo), SegmentModel.BuiltIn);
         SegmentSpan opening = detection.Segments.Single(segment => segment.Kind is SegmentKind.Opening);
 
         Assert.Equal((60d, 150d), (opening.Starts.TotalSeconds, opening.Ends.TotalSeconds));
         Assert.True(opening.Probability > SegmentSettingsStanding.DefaultSkipThreshold);
         Assert.All(
-            Apart(evidence, Context(Logo), SegmentModel.FourKindsInPods).Where(segment => segment.Kind is SegmentKind.Opening),
+            Apart(evidence, Context(Logo), SegmentModel.BuiltIn).Where(segment => segment.Kind is SegmentKind.Opening),
             segment => Assert.True(segment.Probability < SegmentSettingsStanding.DefaultSkipThreshold));
     }
 
@@ -109,19 +110,19 @@ public sealed class SegmentDetectorTests
             .Cut(622, 0.9)
             .Evidence();
 
-        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.FourKindsInPods);
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.BuiltIn);
 
         Assert.Equal([(600d, 645d)], Breaks(detection));
         Assert.Equal(
             [(60d, 150d)],
             detection.Segments.Where(segment => segment.Kind is SegmentKind.Opening).Select(segment => (segment.Starts.TotalSeconds, segment.Ends.TotalSeconds)));
-        Assert.Contains(SegmentDetector.Read(evidence, Context(CornerLogo.None), SegmentModel.FourKindsInPods.Thresholds).Pieces, piece => piece.Starts.TotalSeconds is 105 or 622);
+        Assert.Contains(SegmentDetector.Read(evidence, Context(CornerLogo.None), SegmentModel.BuiltIn.Thresholds).Pieces, piece => piece.Starts.TotalSeconds is 105 or 622);
     }
 
     [Fact(DisplayName = "breaks taking exactly half the recording are marked, not discarded")]
     public void ExactlyHalfIsMarked()
     {
-        SegmentDetection detection = SegmentDetector.Detect(Half(), Context(CornerLogo.None), SegmentModel.First);
+        SegmentDetection detection = SegmentDetector.Detect(Half(), Context(CornerLogo.None), HandMadeModels.First);
 
         Assert.Equal(SegmentDetectionState.Marked, detection.State);
         Assert.Equal(0.5, detection.CmShare, 12);
@@ -132,8 +133,8 @@ public sealed class SegmentDetectorTests
     [Fact(DisplayName = "a recording with more than 80 stretches an hour is discarded, and one with fewer is marked")]
     public void TooManyStretchesAnHourAreDiscarded()
     {
-        SegmentDetection twenty = SegmentDetector.Detect(Pods(20), Context(CornerLogo.None), SegmentModel.First);
-        SegmentDetection nineteen = SegmentDetector.Detect(Pods(19), Context(CornerLogo.None), SegmentModel.First);
+        SegmentDetection twenty = SegmentDetector.Detect(Pods(20), Context(CornerLogo.None), HandMadeModels.First);
+        SegmentDetection nineteen = SegmentDetector.Detect(Pods(19), Context(CornerLogo.None), HandMadeModels.First);
 
         Assert.Equal(SegmentDetectionState.Discarded, twenty.State);
         Assert.Equal(41, twenty.Segments.Count);
@@ -150,7 +151,7 @@ public sealed class SegmentDetectorTests
     {
         SegmentContext context = Context(CornerLogo.None, [new CatalogHeard(TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), heardAs, 4, 2, 2, heardAs is null ? null : 0.9)]);
 
-        SegmentDetection detection = SegmentDetector.Detect(new SyntheticReadings(Length).Evidence(), context, SegmentModel.First);
+        SegmentDetection detection = SegmentDetector.Detect(new SyntheticReadings(Length).Evidence(), context, HandMadeModels.First);
 
         Assert.Equal(state, detection.State);
         Assert.Equal(heardAs is SegmentKind.Break ? 30d / 1800 : 0, detection.CmShare, 9);
@@ -164,12 +165,12 @@ public sealed class SegmentDetectorTests
         SegmentEvidence evidence = new SyntheticReadings(Length).Corners(Drawn((int)Length, TopRight, _ => true, 3)).Evidence();
         CatalogHeard advert = new(TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), SegmentKind.Break, 4, 2, 2, confidence);
 
-        SegmentDetection heard = SegmentDetector.Detect(evidence, Context(Logo, [advert]), SegmentModel.First);
+        SegmentDetection heard = SegmentDetector.Detect(evidence, Context(Logo, [advert]), HandMadeModels.First);
         RecordingPieces read = SegmentDetector.Read(evidence, Context(Logo, [advert]), SegmentThresholds.Initial);
         SegmentPiece covered = read.Pieces.Single(piece => piece.Fixed?.Kind is SegmentKind.Break);
         SegmentSpan found = heard.Segments.Single(segment => segment.Kind is SegmentKind.Break);
 
-        Assert.True(SegmentModel.First.Chances(covered.Features, read.Station, read.Series).Of(SegmentKind.Break) < 0.5);
+        Assert.True(HandMadeModels.First.Chances(covered.Features, read.Station, read.Series).Of(SegmentKind.Break) < 0.5);
         Assert.Equal((TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(630), confidence), (found.Starts, found.Ends, found.Probability!.Value));
         Assert.Equal(
             skippable,
@@ -182,7 +183,7 @@ public sealed class SegmentDetectorTests
     {
         SegmentEvidence evidence = Cuts(new SyntheticReadings(Length), 600, 615).Cut(604, 0.9).Cut(610, 0.9).Evidence();
 
-        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.First);
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), HandMadeModels.First);
         SegmentSpan advert = detection.Segments.Single(segment => segment.Kind is SegmentKind.Break);
 
         Assert.Equal(SegmentDetectionState.Marked, detection.State);
@@ -194,7 +195,7 @@ public sealed class SegmentDetectorTests
     {
         SegmentEvidence evidence = Cuts(new SyntheticReadings(Length), 600, 615).Captioned(second => second < 600 && second % 9 < 5).Evidence();
 
-        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), SegmentModel.First);
+        SegmentDetection detection = SegmentDetector.Detect(evidence, Context(CornerLogo.None), HandMadeModels.First);
 
         Assert.Equal([TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(615)], detection.Snaps);
         Assert.Equal((TimeSpan.Zero, TimeSpan.FromSeconds(600), SegmentKind.Programme), (detection.Segments[0].Starts, detection.Segments[0].Ends, detection.Segments[0].Kind));
@@ -206,8 +207,8 @@ public sealed class SegmentDetectorTests
         SyntheticReadings branded = Cuts(new SyntheticReadings(Length), 600, 660).Corners(Drawn((int)Length, TopRight, second => second is not (>= 1000 and < 1300), 6));
         SyntheticReadings dark = Cuts(new SyntheticReadings(Length), 600, 660).Corners(Drawn((int)Length, TopRight, second => second is not (>= 600 and < 900), 6));
 
-        Assert.Equal(SegmentDetectionState.NothingFound, SegmentDetector.Detect(branded.Evidence(), Context(Logo), SegmentModel.First).State);
-        Assert.Equal(SegmentDetectionState.Marked, SegmentDetector.Detect(dark.Evidence(), Context(Logo), SegmentModel.First).State);
+        Assert.Equal(SegmentDetectionState.NothingFound, SegmentDetector.Detect(branded.Evidence(), Context(Logo), HandMadeModels.First).State);
+        Assert.Equal(SegmentDetectionState.Marked, SegmentDetector.Detect(dark.Evidence(), Context(Logo), HandMadeModels.First).State);
     }
 
     [Fact(DisplayName = "every segment is standardised with the scales the version carries: weights rescaled with them detect the same, and the same weights under other scales do not")]
@@ -219,7 +220,7 @@ public sealed class SegmentDetectorTests
             [SegmentFeature.EdgeSilence] = new(0.2, 0.4),
             [SegmentFeature.LogoShare] = new(0, 0.3),
         };
-        SegmentClassWeights first = SegmentModel.First.Weights.Classes[SegmentKind.Break];
+        SegmentClassWeights first = HandMadeModels.First.Weights.Classes[SegmentKind.Break];
         SegmentModel rescaled = Model(
             first.Bias + first.Features.Sum(weight => weight.Value * scales[weight.Key].Mean),
             first.Features.ToDictionary(weight => weight.Key, weight => weight.Value * scales[weight.Key].Sd),
@@ -227,7 +228,7 @@ public sealed class SegmentDetectorTests
         SegmentModel spread = Model(first.Bias, first.Features, first.Features.Keys.ToDictionary(name => name, _ => new FeatureScale(0, 2)));
         SegmentEvidence half = Half();
 
-        Assert.Equal(Summary(SegmentDetector.Detect(half, Context(CornerLogo.None), SegmentModel.First)), Summary(SegmentDetector.Detect(half, Context(CornerLogo.None), rescaled)));
+        Assert.Equal(Summary(SegmentDetector.Detect(half, Context(CornerLogo.None), HandMadeModels.First)), Summary(SegmentDetector.Detect(half, Context(CornerLogo.None), rescaled)));
         Assert.Equal(SegmentDetectionState.NothingFound, SegmentDetector.Detect(half, Context(CornerLogo.None), spread).State);
     }
 
@@ -242,14 +243,14 @@ public sealed class SegmentDetectorTests
         ServiceId service = new(1024);
         SegmentContext context = new(network, service, "架空の物語", null, null, [], [], CornerLogo.None, []);
         SegmentModel offset = new(
-            SegmentModel.First.Weights,
+            HandMadeModels.First.Weights,
             new Dictionary<string, double> { [judgedStation ? SegmentModel.StationKey(network, service) : SegmentModel.StationKey(new NetworkId(4), new ServiceId(101))] = 0.3 },
             new Dictionary<string, double> { [judgedSeries ? "架空の物語" : "別の架空の話"] = 0.3 },
             SegmentThresholds.Initial,
-            SegmentModel.First.Standardisation);
+            HandMadeModels.First.Standardisation);
         SegmentEvidence evidence = new SyntheticReadings(Length).QuietAround(600, level: SyntheticReadings.Pause).QuietAround(660, level: SyntheticReadings.Pause).Evidence();
 
-        SegmentDetection first = SegmentDetector.Detect(evidence, context, SegmentModel.First);
+        SegmentDetection first = SegmentDetector.Detect(evidence, context, HandMadeModels.First);
         SegmentDetection offsetDetection = SegmentDetector.Detect(evidence, context, offset);
 
         Assert.Equal(SegmentDetectionState.NothingFound, first.State);
@@ -271,8 +272,8 @@ public sealed class SegmentDetectorTests
             new(TimeSpan.FromSeconds(1500), TimeSpan.FromSeconds(1510), SegmentKind.Programme, 3, 1, 1),
         ];
 
-        SegmentDetection once = SegmentDetector.Detect(evidence, Context(Logo, catalog), SegmentModel.First);
-        SegmentDetection again = SegmentDetector.Detect(evidence, Context(Logo, [.. catalog.Reverse()]), SegmentModel.First);
+        SegmentDetection once = SegmentDetector.Detect(evidence, Context(Logo, catalog), HandMadeModels.First);
+        SegmentDetection again = SegmentDetector.Detect(evidence, Context(Logo, [.. catalog.Reverse()]), HandMadeModels.First);
 
         Assert.Equal(Summary(once), Summary(again));
         Assert.Equal(once.Snaps, again.Snaps);
@@ -284,8 +285,8 @@ public sealed class SegmentDetectorTests
     {
         SegmentEvidence evidence = new SyntheticReadings(Length).Evidence();
 
-        Assert.Throws<ArgumentNullException>(() => SegmentDetector.Detect(null!, Context(CornerLogo.None), SegmentModel.First));
-        Assert.Throws<ArgumentNullException>(() => SegmentDetector.Detect(evidence, null!, SegmentModel.First));
+        Assert.Throws<ArgumentNullException>(() => SegmentDetector.Detect(null!, Context(CornerLogo.None), HandMadeModels.First));
+        Assert.Throws<ArgumentNullException>(() => SegmentDetector.Detect(evidence, null!, HandMadeModels.First));
         Assert.Throws<ArgumentNullException>(() => SegmentDetector.Detect(evidence, Context(CornerLogo.None), null!));
     }
 

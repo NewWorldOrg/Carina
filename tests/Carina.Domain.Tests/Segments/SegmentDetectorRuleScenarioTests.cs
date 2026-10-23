@@ -1,5 +1,6 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Segments;
 
@@ -107,27 +108,27 @@ public sealed class SegmentDetectorRuleScenarioTests
 
     [Theory(DisplayName = "the first version detects the breaks each scenario marks")]
     [MemberData(nameof(Scenarios))]
-    public void TheFirstVersionDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, SegmentModel.First);
+    public void TheFirstVersionDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, HandMadeModels.First);
 
     [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand, without the catalog's weights, detects the breaks each scenario marks")]
     [MemberData(nameof(Scenarios))]
-    public void TheVersionOfFourKindsDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, SegmentModel.FirstOfFourKinds);
+    public void TheVersionOfFourKindsDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, HandMadeModels.FirstOfFourKinds);
 
     [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand that hears silence from -55 dBFS detects the breaks each scenario marks")]
     [MemberData(nameof(Scenarios))]
-    public void TheVersionBelowPausesDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, SegmentModel.FourKindsBelowPauses);
+    public void TheVersionBelowPausesDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, HandMadeModels.FourKindsBelowPauses);
 
     [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand that tells the opening and the ending in any series detects on speech the breaks each scenario marks where every pod is cut at every advert")]
     [MemberData(nameof(ScenariosCutAtEveryAdvert))]
-    public void TheVersionForAnySeriesDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, SegmentModel.FourKindsInAnySeries, spoken: true);
+    public void TheVersionForAnySeriesDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, HandMadeModels.FourKindsInAnySeries, spoken: true);
 
     [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand with songs whose loudness moves detects on speech the breaks each scenario marks where every pod is cut at every advert")]
     [MemberData(nameof(ScenariosCutAtEveryAdvert))]
-    public void TheVersionWithDynamicSongsDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, SegmentModel.FourKindsWithDynamicSongs, spoken: true);
+    public void TheVersionWithDynamicSongsDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, HandMadeModels.FourKindsWithDynamicSongs, spoken: true);
 
     [Theory(DisplayName = "BR-CD-007: the version of four kinds made by hand for pods of adverts detects on speech the breaks each scenario marks where every pod is cut at every advert")]
     [MemberData(nameof(ScenariosCutAtEveryAdvert))]
-    public void TheVersionForPodsDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, SegmentModel.FourKindsInPods, spoken: true);
+    public void TheVersionForPodsDetectsWhatEachScenarioMarks(string scenario) => DetectsWhatTheScenarioMarks(scenario, SegmentModel.BuiltIn, spoken: true);
 
     private static void DetectsWhatTheScenarioMarks(string scenario, SegmentModel made, bool spoken = false)
     {
@@ -165,7 +166,7 @@ public sealed class SegmentDetectorRuleScenarioTests
     {
         (Observation observed, TimeSpan length, Tuning tuning, Marks _) = Listed[scenario];
 
-        return SegmentDetector.Detect(Translated(observed, length), Bare, Model(tuning, SegmentModel.First));
+        return SegmentDetector.Detect(Translated(observed, length), Bare, Model(tuning, HandMadeModels.First));
     }
 
     private static (TimeSpan Starts, TimeSpan Ends) Break(SegmentDetection detection)

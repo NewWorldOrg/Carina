@@ -4023,6 +4023,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("adopted_at");
 
+                    b.Property<bool>("BuiltIn")
+                        .HasColumnType("boolean")
+                        .HasColumnName("built_in");
+
                     b.Property<bool>("ByHand")
                         .HasColumnType("boolean")
                         .HasColumnName("by_hand");
@@ -4104,6 +4108,8 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("segment_model_version", null, t =>
                         {
+                            t.HasCheckConstraint("ck_segment_model_version_built_in", "NOT built_in OR evidence IS NULL");
+
                             t.HasCheckConstraint("ck_segment_model_version_by_hand", "NOT by_hand OR (state = 'Active' AND chosen_by_hand_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_segment_model_version_evaluation", "(metrics IS NULL OR jsonb_typeof(metrics) = 'object')\nAND (stations IS NULL OR jsonb_typeof(stations) = 'array')\nAND (evidence IS NULL OR jsonb_typeof(evidence) = 'object')\nAND (rollback IS NULL OR jsonb_typeof(rollback) = 'object')");

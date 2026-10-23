@@ -1,4 +1,5 @@
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Segments;
 
@@ -8,11 +9,11 @@ public sealed class SegmentAdoptionTests
 
     private static readonly DateTime Adopted = new(2026, 10, 10, 3, 0, 0, DateTimeKind.Utc);
 
-    private static readonly SegmentModelVersion InUse = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, false, SegmentModel.First, Made, Adopted, null, null, null);
+    private static readonly SegmentModelVersion InUse = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, false, HandMadeModels.First, Made, Adopted, null, null, null);
 
-    private static readonly SegmentModelVersion ChosenByHand = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, true, SegmentModel.First, Made, Adopted, null, Adopted, null);
+    private static readonly SegmentModelVersion ChosenByHand = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, true, HandMadeModels.First, Made, Adopted, null, Adopted, null);
 
-    private static readonly SegmentModelVersion Before = SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, Made, Made, Adopted, null, null);
+    private static readonly SegmentModelVersion Before = SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, HandMadeModels.First, Made, Made, Adopted, null, null);
 
     private static readonly EvaluationEvidence Enough = new(12, 148, Made);
 
@@ -109,7 +110,7 @@ public sealed class SegmentAdoptionTests
     public void ACandidateIsHeldOutAfterARollback()
     {
         DateTime rolledBack = Adopted.AddDays(1);
-        SegmentModelVersion left = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, SegmentModel.First, Made, Adopted, rolledBack, null, rolledBack, rollback: new SegmentRollback(0.2, 0.1, 25, 2));
+        SegmentModelVersion left = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, HandMadeModels.First, Made, Adopted, rolledBack, null, rolledBack, rollback: new SegmentRollback(0.2, 0.1, 25, 2));
         SegmentModelVersion[] kept = [left, InUse, Before];
 
         Assert.Equal(AdoptionVerdict.HeldAfterRollback, SegmentAdoption.AfterRollbacks(AdoptionVerdict.Adopted, kept, rolledBack));
@@ -155,8 +156,8 @@ public sealed class SegmentAdoptionTests
     [Fact(DisplayName = "BR-CD-008: the version before the one in use is the one taken out of use as it was put in use")]
     public void TheVersionBeforeIsTheOneItTookThePlaceOf()
     {
-        SegmentModelVersion older = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, SegmentModel.First, Made, Made, Made.AddDays(2), null, null);
-        SegmentModelVersion candidate = SegmentModelVersion.Rehydrate(4, SegmentModelVersionState.Candidate, false, SegmentModel.First, Adopted.AddDays(1), null, null, null, null);
+        SegmentModelVersion older = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, HandMadeModels.First, Made, Made, Made.AddDays(2), null, null);
+        SegmentModelVersion candidate = SegmentModelVersion.Rehydrate(4, SegmentModelVersionState.Candidate, false, HandMadeModels.First, Adopted.AddDays(1), null, null, null, null);
 
         Assert.Equal(Before.Number, SegmentRollback.Previous([candidate, older, InUse, Before])?.Number);
         Assert.Null(SegmentRollback.Previous([candidate, HeldFirst()]));
@@ -166,7 +167,7 @@ public sealed class SegmentAdoptionTests
     [Fact(DisplayName = "BR-CD-008: a version put back in use by a rollback is never rolled back to the version it was put back from")]
     public void AVersionPutBackIsNotRolledBackToTheOneItLeft()
     {
-        SegmentModelVersion rolledBackFrom = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, SegmentModel.First, Made, Made, Adopted, null, Adopted, rollback: new SegmentRollback(0.2, 0.1, 25, 2));
+        SegmentModelVersion rolledBackFrom = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Retired, false, HandMadeModels.First, Made, Made, Adopted, null, Adopted, rollback: new SegmentRollback(0.2, 0.1, 25, 2));
 
         Assert.Null(SegmentRollback.Previous([rolledBackFrom, InUse]));
     }
@@ -175,7 +176,7 @@ public sealed class SegmentAdoptionTests
         => new(new SegmentMetrics(recall, recall - 0.1, [new KindMetrics(SegmentKind.Break, seconds), new KindMetrics(SegmentKind.Opening, null)], null, 0), [], evidence);
 
     private static SegmentModelVersion HeldFirst()
-        => SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, SegmentModel.First, Made, Made, null, null, null);
+        => SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, HandMadeModels.First, Made, Made, null, null, null);
 
     private static IEnumerable<ViewerAction> Actions(int version, DateTime from, int skips, int returned)
         => Enumerable.Range(0, skips).Select(at => Action(ViewerActionKind.Skipped, version, from.AddMinutes(at)))

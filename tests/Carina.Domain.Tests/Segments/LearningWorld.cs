@@ -1,5 +1,6 @@
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Segments;
 
@@ -37,7 +38,7 @@ internal static class LearningWorld
         SegmentModelVersion.FirstNumber,
         SegmentModelVersionState.Active,
         false,
-        SegmentModel.First,
+        HandMadeModels.First,
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         null,
@@ -51,7 +52,7 @@ internal static class LearningWorld
         SegmentModelVersion.FirstNumber + 1,
         SegmentModelVersionState.Active,
         false,
-        SegmentModel.FirstOfFourKinds,
+        HandMadeModels.FirstOfFourKinds,
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         null,
@@ -65,7 +66,7 @@ internal static class LearningWorld
         SegmentModelVersion.FirstNumber + 2,
         SegmentModelVersionState.Active,
         false,
-        SegmentModel.FourKindsBelowPauses,
+        HandMadeModels.FourKindsBelowPauses,
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         null,
@@ -80,7 +81,7 @@ internal static class LearningWorld
         SegmentModelVersion.FirstNumber + 3,
         SegmentModelVersionState.Active,
         false,
-        SegmentModel.FourKindsInAnySeries,
+        HandMadeModels.FourKindsInAnySeries,
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         null,
@@ -94,7 +95,7 @@ internal static class LearningWorld
         SegmentModelVersion.FirstNumber + 4,
         SegmentModelVersionState.Active,
         false,
-        SegmentModel.FourKindsWithDynamicSongs,
+        HandMadeModels.FourKindsWithDynamicSongs,
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         null,
@@ -108,7 +109,7 @@ internal static class LearningWorld
         SegmentModelVersion.FirstNumber + 4,
         SegmentModelVersionState.Active,
         false,
-        SegmentModel.FourKindsInPods,
+        SegmentModel.BuiltIn,
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         null,

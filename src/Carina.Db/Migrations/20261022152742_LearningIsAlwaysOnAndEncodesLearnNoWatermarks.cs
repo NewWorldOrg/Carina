@@ -8,40 +8,16 @@ namespace Carina.Db.Migrations;
 
 /// <summary>
 /// Lets go of the setting that turned CM, OP and ED learning on and off, since learning now always runs, and of the
-/// watermarks an encode learned of each station, since an encode now takes its chapters from the segments alone. What
-/// turning learning on did is done here once, under the lock a round of learning keeps its candidate under: the latest
-/// version of four kinds made by hand that is still a candidate takes the place of the version in use when that one was
-/// made by hand too, has never been evaluated and was not chosen by hand. The version in use changing is what has the
-/// detections made again in spare time. Going back brings the setting back with learning on and leaves the version in
-/// use where it is; the watermarks come back empty.
+/// watermarks an encode learned of each station, since an encode now takes its chapters from the segments alone. It
+/// once also put the latest version made by hand in use; the built-in version of a release is now kept and put in use
+/// when the application starts. Going back brings the setting back with learning on; the watermarks come back empty.
 /// </summary>
 public partial class LearningIsAlwaysOnAndEncodesLearnNoWatermarks : Migration
 {
-    private const string TakeTurn = "SELECT pg_advisory_xact_lock(5243197610103)";
-
-    private const string LatestMadeByHand =
-        "SELECT max(number) FROM segment_model_version WHERE state = 'Candidate' AND kinds = 4 AND evidence IS NULL";
-
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
-
-        migrationBuilder.Sql(TakeTurn);
-        migrationBuilder.Sql(
-            $"""
-            UPDATE segment_model_version
-            SET state = 'Retired', retired_at = now()
-            WHERE state = 'Active' AND NOT by_hand AND evidence IS NULL
-              AND number < ({LatestMadeByHand})
-            """);
-        migrationBuilder.Sql(
-            $"""
-            UPDATE segment_model_version
-            SET state = 'Active', adopted_at = now()
-            WHERE number = ({LatestMadeByHand})
-              AND NOT EXISTS (SELECT 1 FROM segment_model_version WHERE state = 'Active')
-            """);
 
         migrationBuilder.DropTable(name: "encode_watermark");
 

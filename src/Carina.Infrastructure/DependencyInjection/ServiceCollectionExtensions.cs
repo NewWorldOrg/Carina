@@ -449,6 +449,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(new AppEventHub());
         services.TryAddSingleton<IAppEventPublisher>(provider =>
             provider.GetRequiredService<AppEventHub>());
+        services.AddHostedService<BuiltInSegmentVersion>();
         services.AddHostedService<LocalAccountBootstrap>();
         services.AddHostedService<ClientSecretSealing>();
         services.AddHostedService<AuthUpkeepJob>();

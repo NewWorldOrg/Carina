@@ -4,7 +4,8 @@ namespace Carina.TestSupport;
 
 /// <summary>
 /// The version of the model in use, as a test sets it: the first, put in use at <see cref="Installed"/>,
-/// until a test puts another in its place; and the versions used before it, as a test adds them.
+/// until a test puts another in its place; and the versions used before it, as a test adds them. The built-in
+/// version is taken as kept already: asking for it is kept and writes nothing, or fails as a test sets it.
 /// </summary>
 public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
 {
@@ -20,10 +21,14 @@ public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
 
     public List<SegmentModelVersion> Added { get; } = [];
 
+    public List<(SegmentModel Model, DateTime At)> BuiltInAsked { get; } = [];
+
+    public Exception? BuiltInFailure { get; set; }
+
     private SegmentModelVersion[] Kept => [Active, .. Others];
 
     public static SegmentModelVersion InUse(int number, DateTime adoptedAt)
-        => SegmentModelVersion.Rehydrate(number, SegmentModelVersionState.Active, false, SegmentModel.First, adoptedAt, adoptedAt, null, null, null);
+        => SegmentModelVersion.Rehydrate(number, SegmentModelVersionState.Active, false, HandMadeModels.First, adoptedAt, adoptedAt, null, null, null);
 
     public Task<IReadOnlyList<SegmentModelVersion>> ListAsync(CancellationToken cancellationToken)
     {
@@ -57,6 +62,15 @@ public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
         Added.Add(candidate);
 
         return Task.FromResult(candidate);
+    }
+
+    public Task<SegmentBuiltInKept?> KeepBuiltInAsync(SegmentModel builtIn, DateTime at, CancellationToken cancellationToken)
+    {
+        BuiltInAsked.Add((builtIn, at));
+
+        return BuiltInFailure is { } failure
+            ? Task.FromException<SegmentBuiltInKept?>(failure)
+            : Task.FromResult<SegmentBuiltInKept?>(null);
     }
 
     public Task<SegmentModelVersion> ActiveAsync(CancellationToken cancellationToken)

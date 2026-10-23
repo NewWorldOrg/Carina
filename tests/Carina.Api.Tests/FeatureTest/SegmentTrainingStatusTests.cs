@@ -97,7 +97,7 @@ internal sealed class SegmentTrainingFeature : IAsyncDisposable
             DateTime now,
             Func<CancellationToken, Task<bool>> mayGoOn,
             CancellationToken cancellationToken)
-            => Task.FromResult(new Trained(new SegmentLearned(SegmentModel.First, Candidate, InUse, SegmentAdoption.Judge(active, InUse, Candidate)), false));
+            => Task.FromResult(new Trained(new SegmentLearned(HandMadeModels.First, Candidate, InUse, SegmentAdoption.Judge(active, InUse, Candidate)), false));
     }
 }
 

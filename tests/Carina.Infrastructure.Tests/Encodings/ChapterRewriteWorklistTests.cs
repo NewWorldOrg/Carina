@@ -30,8 +30,8 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
         await using CarinaDbContext context = database.Open();
         await context.Database.ExecuteSqlRawAsync(
             """
-            INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, adopted_at)
-            VALUES (1, 'Active', false, 2, '{{}}', '{{}}', '{{}}', '{{}}', '{{}}', now(), now())
+            INSERT INTO segment_model_version (number, state, by_hand, built_in, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, adopted_at)
+            VALUES (1, 'Active', false, true, 2, '{{}}', '{{}}', '{{}}', '{{}}', '{{}}', now(), now())
             ON CONFLICT DO NOTHING
             """,
             Cancel);

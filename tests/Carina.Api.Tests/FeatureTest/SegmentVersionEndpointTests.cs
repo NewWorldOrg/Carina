@@ -29,7 +29,7 @@ internal sealed class SegmentVersionFeature : IAsyncDisposable
 
     public SegmentVersionFeature()
     {
-        Versions.Others.Add(SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Candidate, false, SegmentModel.First, Trained, null, null, null, null));
+        Versions.Others.Add(SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Candidate, false, HandMadeModels.First, Trained, null, null, null, null));
 
         Built = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {

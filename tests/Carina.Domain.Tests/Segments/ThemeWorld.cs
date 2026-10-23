@@ -1,5 +1,6 @@
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Segments;
 
@@ -30,7 +31,7 @@ internal static class ThemeWorld
 
     public static readonly DateTime Now = Garden.Episode(4).RecordingStartedAt;
 
-    public static readonly SegmentSearch OneSetting = new([SegmentModel.FourKindsInAnySeries.Thresholds], [0.1], [10]);
+    public static readonly SegmentSearch OneSetting = new([HandMadeModels.FourKindsInAnySeries.Thresholds], [0.1], [10]);
 
     private static readonly CatalogSeries Elsewhere = new(6, "架空の番組", new DateTime(2026, 8, 31, 18, 0, 0, DateTimeKind.Utc));
 

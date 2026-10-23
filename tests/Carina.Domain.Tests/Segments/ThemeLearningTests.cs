@@ -1,5 +1,6 @@
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 using static Carina.Domain.Tests.Segments.ThemeWorld;
 
@@ -14,7 +15,7 @@ public sealed class ThemeLearningTests
         (List<LearningRecording> voyage, List<CatalogSound> heardInVoyage) = Episodes(Voyage, 2);
         (List<LearningRecording> garden, List<CatalogSound> heardInGarden) = Episodes(Garden, 1);
 
-        SegmentModel candidate = Learn([.. mystery, .. voyage], [.. heardInMystery, .. heardInVoyage], SegmentModel.FourKindsBelowPauses).Candidate;
+        SegmentModel candidate = Learn([.. mystery, .. voyage], [.. heardInMystery, .. heardInVoyage], HandMadeModels.FourKindsBelowPauses).Candidate;
         SegmentDetection first = Unheard(garden[0], candidate);
 
         Assert.DoesNotContain(heardInGarden, sound => sound.Length.TotalSeconds is ThemeLasts);
@@ -23,7 +24,7 @@ public sealed class ThemeLearningTests
             [(OpeningStarts, OpeningStarts + ThemeLasts, SegmentKind.Opening), (EndingStarts, EndingStarts + ThemeLasts, SegmentKind.Ending)],
             Themes(first));
         Assert.Contains(first.Segments, span => span.Kind is SegmentKind.Break && span.Starts.TotalSeconds is OpeningStarts + ThemeLasts);
-        Assert.Empty(Themes(Unheard(garden[0], SegmentModel.FourKindsBelowPauses)));
+        Assert.Empty(Themes(Unheard(garden[0], HandMadeModels.FourKindsBelowPauses)));
     }
 
     [Fact(DisplayName = "BR-CD-008: a series' opening and ending held out are judged by what the other series taught, so the figures of the opening and the ending say how the first episode of a series is found; the version made by hand for any series finds them as well, and the breaks as the version hearing silence from -55 dBFS does")]
@@ -35,8 +36,8 @@ public sealed class ThemeLearningTests
         List<LearningRecording> recordings = [.. mystery, .. voyage, .. garden];
         List<CatalogSound> sounds = [.. heardInMystery, .. heardInVoyage, .. heardInGarden];
 
-        SegmentLearned forAnySeries = Learn(recordings, sounds, SegmentModel.FourKindsInAnySeries);
-        SegmentLearned belowPauses = Learn(recordings, sounds, SegmentModel.FourKindsBelowPauses);
+        SegmentLearned forAnySeries = Learn(recordings, sounds, HandMadeModels.FourKindsInAnySeries);
+        SegmentLearned belowPauses = Learn(recordings, sounds, HandMadeModels.FourKindsBelowPauses);
 
         Assert.All([forAnySeries.Evaluation.Metrics!, forAnySeries.InUse.Metrics!], metrics =>
         {
@@ -54,11 +55,11 @@ public sealed class ThemeLearningTests
     {
         (List<LearningRecording> garden, _) = Episodes(Garden, 1, lasts: 90);
 
-        SegmentDetection belowPauses = Unheard(garden[0], SegmentModel.FourKindsBelowPauses);
+        SegmentDetection belowPauses = Unheard(garden[0], HandMadeModels.FourKindsBelowPauses);
 
         Assert.Equal(
             [(OpeningStarts, OpeningStarts + 90, SegmentKind.Opening), (EndingStarts, EndingStarts + 90, SegmentKind.Ending)],
-            Themes(Unheard(garden[0], SegmentModel.FourKindsInAnySeries)));
+            Themes(Unheard(garden[0], HandMadeModels.FourKindsInAnySeries)));
         Assert.Contains(belowPauses.Segments, span => span.Kind is SegmentKind.Break && span.Starts.TotalSeconds is OpeningStarts && span.Ends.TotalSeconds >= OpeningStarts + 90);
         Assert.Contains(belowPauses.Segments, span => span.Kind is SegmentKind.Break && span.Starts.TotalSeconds is EndingStarts && span.Ends.TotalSeconds is EndingStarts + 90);
     }
@@ -70,8 +71,8 @@ public sealed class ThemeLearningTests
 
         Assert.Equal(
             [(OpeningStarts, OpeningStarts + ThemeLasts, SegmentKind.Opening), (EndingStarts, EndingStarts + ThemeLasts, SegmentKind.Ending)],
-            Themes(Unheard(garden[0], SegmentModel.FourKindsWithDynamicSongs)));
-        Assert.Equal([(OpeningStarts, OpeningStarts + ThemeLasts, SegmentKind.Opening)], Themes(Unheard(garden[0], SegmentModel.FourKindsInAnySeries)));
+            Themes(Unheard(garden[0], HandMadeModels.FourKindsWithDynamicSongs)));
+        Assert.Equal([(OpeningStarts, OpeningStarts + ThemeLasts, SegmentKind.Opening)], Themes(Unheard(garden[0], HandMadeModels.FourKindsInAnySeries)));
     }
 
     private static double? Recall(SegmentMetrics metrics, SegmentKind kind) => metrics.Kinds.Single(measured => measured.Kind == kind).Recall;

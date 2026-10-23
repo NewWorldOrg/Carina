@@ -196,7 +196,7 @@ public sealed class SegmentStatusEndpointTests
     {
         await using var feature = new SegmentStatusFeature();
         DateTime trained = new(2026, 11, 1, 18, 0, 0, DateTimeKind.Utc);
-        feature.Versions.Active = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Active, true, SegmentModel.First, trained, trained.AddMinutes(5), null, trained.AddDays(1), null);
+        feature.Versions.Active = SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Active, true, HandMadeModels.First, trained, trained.AddMinutes(5), null, trained.AddDays(1), null);
 
         (_, JsonElement data) = await feature.DataAsync();
         JsonElement version = data.GetProperty("version");
@@ -239,7 +239,7 @@ public sealed class SegmentStatusEndpointTests
         feature.Versions.Active = Version(3, SegmentModelVersionState.Active, trained, trained.AddMinutes(5), null, Evaluation(0.93, 12));
         feature.Versions.Others.Add(Version(4, SegmentModelVersionState.Candidate, trained.AddDays(1), null, null, Evaluation(0.95, 13)));
         feature.Versions.Others.Add(Version(2, SegmentModelVersionState.Retired, trained.AddDays(-7), trained.AddDays(-7), trained.AddMinutes(5), Evaluation(0.9, 11), new SegmentRollback(0.09, 0.03, 25, 1)));
-        feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained.AddDays(-7), null, null));
+        feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, HandMadeModels.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained.AddDays(-7), null, null));
         await feature.Settings.SaveAsync(SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, 0.6, trained), CancellationToken.None);
         feature.Evidence.Evidence = new EvaluationEvidence(1, 10, null);
         await SkippedAsync(feature, 3, ViewerActionKind.Skipped, 64, SegmentStatusFeature.Now.AddDays(-1));
@@ -300,7 +300,7 @@ public sealed class SegmentStatusEndpointTests
             trained,
             null,
             new SegmentEvaluation(metrics, [new StationMetrics(new NetworkId(1), new ServiceId(2), 5, metrics)], new EvaluationEvidence(12, 150, null)));
-        feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained, null, null));
+        feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, HandMadeModels.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained, null, null));
 
         (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
 
@@ -318,7 +318,7 @@ public sealed class SegmentStatusEndpointTests
         await using var feature = new SegmentStatusFeature();
         DateTime trained = new(2026, 11, 1, 18, 0, 0, DateTimeKind.Utc);
         feature.Versions.Active = Version(2, SegmentModelVersionState.Active, trained, trained, null, new SegmentEvaluation(null, [], new EvaluationEvidence(0, 0, null)));
-        feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained, null, null));
+        feature.Versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, HandMadeModels.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, trained, null, null));
         feature.Evidence.Evidence = new EvaluationEvidence(2, 20, null);
         await SkippedAsync(feature, 2, ViewerActionKind.Skipped, 3, SegmentStatusFeature.Now.AddDays(-1));
 
@@ -466,5 +466,5 @@ public sealed class SegmentStatusEndpointTests
         DateTime? retiredAt,
         SegmentEvaluation evaluation,
         SegmentRollback? rollback = null)
-        => SegmentModelVersion.Rehydrate(number, state, false, SegmentModel.First, trainedAt, adoptedAt, retiredAt, null, rollback is null ? null : retiredAt, evaluation, rollback);
+        => SegmentModelVersion.Rehydrate(number, state, false, HandMadeModels.First, trainedAt, adoptedAt, retiredAt, null, rollback is null ? null : retiredAt, evaluation, rollback);
 }

@@ -27,6 +27,21 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal([Kept(SegmentTrainingOutcome.NothingToLearnFrom, null, null, null)], harness.Rounds.Taken.Select(KeptAs));
     }
 
+    [Fact(DisplayName = "BR-CD-008: a round that judged no recording keeps no candidate, says there was nothing to learn from, and leaves the version in use")]
+    public async Task ARoundThatJudgedNoRecordingKeepsNoCandidate()
+    {
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9, new EvaluationEvidence(0, 0, null));
+
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal((SegmentTrainingOutcome.NothingToLearnFrom, (SegmentModelVersion?)null), (look.Round?.Outcome, look.Round?.Candidate));
+        Assert.Empty(harness.Versions.Added);
+        Assert.Empty(harness.Versions.Written);
+        Assert.Equal(SegmentModelVersion.FirstNumber, harness.Versions.Active.Number);
+        Assert.Equal([Kept(SegmentTrainingOutcome.NothingToLearnFrom, null, null, null)], harness.Rounds.Taken.Select(KeptAs));
+        Assert.Equal([(int?)null], harness.Rounds.Taken.Select(round => round.InUseVersion));
+    }
+
     [Fact(DisplayName = "BR-CD-008: a candidate on enough evidence that finds more boundaries is kept and put in use in place of the version in use")]
     public async Task ABetterCandidateOnEnoughEvidenceIsPutInUse()
     {
@@ -51,7 +66,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     [InlineData(0.93, 0.9, 9, AdoptionVerdict.TooLittleEvidence)]
     public async Task AWorseCandidateIsKeptOnly(double recall, double seconds, int recordings, AdoptionVerdict verdict)
     {
-        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), SegmentTrainingHarness.Start.AddDays(-1)));
+        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, HandMadeModels.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), SegmentTrainingHarness.Start.AddDays(-1)));
         harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(recall, seconds, new EvaluationEvidence(recordings, 148, SegmentTrainingHarness.Start));
 
         SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
@@ -68,7 +83,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
     [Fact(DisplayName = "BR-CD-008: while the version in use is chosen by hand, learning still keeps and evaluates a candidate but never puts it in use")]
     public async Task AVersionChosenByHandIsNeverReplaced()
     {
-        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), SegmentTrainingHarness.Start.AddDays(-2)));
+        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, HandMadeModels.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), SegmentTrainingHarness.Start.AddDays(-2)));
         await harness.Versions.ChangeAsync(SegmentVersionChange.ChosenByHand(2), SegmentTrainingHarness.Start.AddDays(-1), Cancel);
         harness.Versions.Written.Clear();
         harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.99, 0.9);

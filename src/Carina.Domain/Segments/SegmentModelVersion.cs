@@ -16,14 +16,15 @@ public enum SegmentModelVersionState
 }
 
 /// <summary>
-/// One version of the model segments are detected with, kept for good: its number, counted from
-/// <see cref="FirstNumber"/>; where it stands; whether it was chosen by hand, which only the version in use
-/// can be; its parameters and the number of kinds they tell apart; how it did when it was evaluated, if it
-/// was; when it was made, put in use, chosen by hand, taken out of use and rolled back from, and what the
-/// rollback measured. Only a candidate has never been put in use, and only a version used before has been
-/// taken out of use or rolled back from. Exactly one version is in use at a time, which the store holds; the
-/// first holds <see cref="SegmentModel.First"/>. The version in use changes only through
-/// <see cref="Change"/>.
+/// One version of the model segments are detected with: its number, counted from <see cref="FirstNumber"/>;
+/// where it stands; whether it was chosen by hand, which only the version in use can be; whether it is built in,
+/// made by hand and shipped with a release rather than learned, which is never evaluated; its parameters and the
+/// number of kinds they tell apart; how it did when it was evaluated, if it was; when it was made, put in use,
+/// chosen by hand, taken out of use and rolled back from, and what the rollback measured. Only a candidate has
+/// never been put in use, and only a version used before has been taken out of use or rolled back from. Exactly
+/// one version is in use at a time, which the store holds. The built-in version of a release
+/// (<see cref="SegmentModel.BuiltIn"/>) is kept through <see cref="KeepBuiltIn"/>; the version in use changes
+/// only through <see cref="Change"/> and that.
 /// </summary>
 public sealed class SegmentModelVersion
 {
@@ -40,6 +41,8 @@ public sealed class SegmentModelVersion
     public SegmentModelVersionState State { get; private set; }
 
     public bool ByHand { get; private set; }
+
+    public bool BuiltIn { get; private set; }
 
     public int Kinds { get; private set; }
 
@@ -86,7 +89,8 @@ public sealed class SegmentModelVersion
         DateTime? chosenByHandAt,
         DateTime? rolledBackAt,
         SegmentEvaluation? evaluation = null,
-        SegmentRollback? rollback = null)
+        SegmentRollback? rollback = null,
+        bool builtIn = false)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(number, FirstNumber);
         ArgumentNullException.ThrowIfNull(model);
@@ -101,7 +105,9 @@ public sealed class SegmentModelVersion
         DateTime? retired = UtcTimes.Optional(retiredAt, nameof(retiredAt));
         DateTime? chosen = UtcTimes.Optional(chosenByHandAt, nameof(chosenByHandAt));
         DateTime? rolledBack = UtcTimes.Optional(rolledBackAt, nameof(rolledBackAt));
-        string? fault = Fault(state, byHand, trained, adopted, retired, chosen, rolledBack) ?? RollbackFault(rolledBack, rollback);
+        string? fault = Fault(state, byHand, trained, adopted, retired, chosen, rolledBack)
+                        ?? RollbackFault(rolledBack, rollback)
+                        ?? (builtIn && evaluation is not null ? "A version built in is never evaluated." : null);
 
         if (fault is not null)
         {
@@ -113,6 +119,7 @@ public sealed class SegmentModelVersion
             Number = number,
             State = state,
             ByHand = byHand,
+            BuiltIn = builtIn,
             Kinds = model.Kinds,
             Weights = model.Weights,
             StationOffsets = model.StationOffsets,
@@ -141,6 +148,45 @@ public sealed class SegmentModelVersion
         ArgumentNullException.ThrowIfNull(evaluation);
 
         return Rehydrate(number, SegmentModelVersionState.Candidate, false, model, trainedAt, null, null, null, null, evaluation);
+    }
+
+    /// <summary>
+    /// What keeping <paramref name="builtIn"/>, the built-in version of a release, at <paramref name="at"/> among the
+    /// versions <paramref name="kept"/> writes; nothing when a built-in version already holds the same parameters,
+    /// whatever its state. Otherwise the version holding it is numbered after the highest and made at
+    /// <paramref name="at"/>. With no version in use it is put in use. It takes the place of the version in use when
+    /// that one is built in and not chosen by hand, which is taken out of use; beside a version chosen by hand or
+    /// learned it is kept as a candidate, and the version in use stays.
+    /// </summary>
+    public static SegmentBuiltInKept? KeepBuiltIn(IReadOnlyList<SegmentModelVersion> kept, SegmentModel builtIn, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(kept);
+        ArgumentNullException.ThrowIfNull(builtIn);
+
+        if (kept.Any(version => version.BuiltIn && version.Model.Equals(builtIn)))
+        {
+            return null;
+        }
+
+        int number = kept.Count is 0 ? FirstNumber : kept.Max(version => version.Number) + 1;
+
+        if (kept.SingleOrDefault(version => version.State is SegmentModelVersionState.Active) is not { } inUse)
+        {
+            SegmentModelVersion first = Rehydrate(number, SegmentModelVersionState.Active, false, builtIn, at, at, null, null, null, builtIn: true);
+
+            return new SegmentBuiltInKept(first, [], first);
+        }
+
+        SegmentModelVersion candidate = Rehydrate(number, SegmentModelVersionState.Candidate, false, builtIn, at, null, null, null, null, builtIn: true);
+
+        if (!inUse.BuiltIn || inUse.ByHand)
+        {
+            return new SegmentBuiltInKept(candidate, [], inUse);
+        }
+
+        SegmentVersionChanged changed = Moved(inUse, candidate, SegmentVersionChange.Adopting(number), at);
+
+        return new SegmentBuiltInKept(changed.Active, [.. changed.Written.Where(version => version.Number != number)], changed.Active);
     }
 
     /// <summary>
@@ -264,7 +310,7 @@ public sealed class SegmentModelVersion
         SegmentRollback? rollback,
         bool byHand = false,
         DateTime? chosenByHandAt = null)
-        => Rehydrate(Number, state, byHand, Model, TrainedAt, adoptedAt, retiredAt, chosenByHandAt, rolledBackAt, Evaluation, rollback);
+        => Rehydrate(Number, state, byHand, Model, TrainedAt, adoptedAt, retiredAt, chosenByHandAt, rolledBackAt, Evaluation, rollback, BuiltIn);
 }
 
 /// <summary>
@@ -308,3 +354,9 @@ public sealed record SegmentVersionChange
 /// in use after it.
 /// </summary>
 public sealed record SegmentVersionChanged(IReadOnlyList<SegmentModelVersion> Written, SegmentModelVersion Active);
+
+/// <summary>
+/// What keeping the built-in version of a release wrote: the version added, as it stands; the version it took the
+/// place of in use, if it did, to be written before it; and the version in use after it.
+/// </summary>
+public sealed record SegmentBuiltInKept(SegmentModelVersion Added, IReadOnlyList<SegmentModelVersion> Moved, SegmentModelVersion Active);
