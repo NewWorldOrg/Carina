@@ -43,7 +43,8 @@ public sealed record SegmentTrainingLook(SpareTimeVerdict? Verdict, SegmentTrain
 /// taken again that day; one process takes a round at a time. A round first rolls the version in use back when
 /// <see cref="SegmentRollback"/> says so; then, when <see cref="SegmentLearningRound.HasNews"/> finds something
 /// learning reads changed since the last round that kept a candidate, learns a candidate beside the version in use
-/// and keeps it as a candidate; and puts it in use when <see cref="SegmentAdoption"/> says so, no version was rolled
+/// and keeps it as a candidate, unless no recording was judged, when there was nothing to learn from; and puts it in
+/// use when <see cref="SegmentAdoption"/> says so, no version was rolled
 /// back from in the days <see cref="SegmentAdoption.AfterRollbacks"/> holds candidates out, and the version in use
 /// is still the one it was judged against. The version in use moves only through
 /// <see cref="ISegmentModelVersionRepository.ChangeAsync"/>, after which detection in spare time detects the
@@ -190,7 +191,7 @@ public sealed class SegmentTrainingJob(
             return new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.Stopped, null, null, active) { StoppedBy = stoppedBy };
         }
 
-        if (trained.Learned is not { } learned)
+        if (trained.Learned is not { } learned || learned.Evaluation.Evidence.Recordings is 0)
         {
             return new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.NothingToLearnFrom, null, null, active);
         }

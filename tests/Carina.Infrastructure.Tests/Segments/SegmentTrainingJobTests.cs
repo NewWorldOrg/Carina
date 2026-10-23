@@ -27,6 +27,21 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal([Kept(SegmentTrainingOutcome.NothingToLearnFrom, null, null, null)], harness.Rounds.Taken.Select(KeptAs));
     }
 
+    [Fact(DisplayName = "BR-CD-008: a round that judged no recording keeps no candidate, says there was nothing to learn from, and leaves the version in use")]
+    public async Task ARoundThatJudgedNoRecordingKeepsNoCandidate()
+    {
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9, new EvaluationEvidence(0, 0, null));
+
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal((SegmentTrainingOutcome.NothingToLearnFrom, (SegmentModelVersion?)null), (look.Round?.Outcome, look.Round?.Candidate));
+        Assert.Empty(harness.Versions.Added);
+        Assert.Empty(harness.Versions.Written);
+        Assert.Equal(SegmentModelVersion.FirstNumber, harness.Versions.Active.Number);
+        Assert.Equal([Kept(SegmentTrainingOutcome.NothingToLearnFrom, null, null, null)], harness.Rounds.Taken.Select(KeptAs));
+        Assert.Equal([(int?)null], harness.Rounds.Taken.Select(round => round.InUseVersion));
+    }
+
     [Fact(DisplayName = "BR-CD-008: a candidate on enough evidence that finds more boundaries is kept and put in use in place of the version in use")]
     public async Task ABetterCandidateOnEnoughEvidenceIsPutInUse()
     {
