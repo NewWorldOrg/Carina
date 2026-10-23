@@ -1,4 +1,5 @@
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Segments;
 
@@ -101,7 +102,7 @@ public sealed class SegmentRegressionTests
 
         SegmentFit once = SegmentRegression.Fit(samples, SegmentThresholds.Initial);
         SegmentFit again = SegmentRegression.Fit(samples, SegmentThresholds.Initial);
-        SegmentFit started = SegmentRegression.Fit(samples, SegmentThresholds.Initial, SegmentModel.First);
+        SegmentFit started = SegmentRegression.Fit(samples, SegmentThresholds.Initial, HandMadeModels.First);
 
         Assert.Equal(once.Model, again.Model);
         Assert.Equal(once.Iterations, again.Iterations);
@@ -117,7 +118,7 @@ public sealed class SegmentRegressionTests
         Assert.Equal(2, SegmentRegression.Fit(twoKinds, SegmentThresholds.Initial).Model.Kinds);
         Assert.Equal(4, SegmentRegression.Fit([.. twoKinds, Sample(SegmentKind.Opening, 1.0, 90)], SegmentThresholds.Initial).Model.Kinds);
         Assert.Equal(4, SegmentRegression.Fit([.. twoKinds, Sample(SegmentKind.Ending, 1.0, 90)], SegmentThresholds.Initial).Model.Kinds);
-        Assert.Equal(2, SegmentRegression.Fit(twoKinds, SegmentThresholds.Initial, SegmentModel.FirstOfFourKinds).Model.Kinds);
+        Assert.Equal(2, SegmentRegression.Fit(twoKinds, SegmentThresholds.Initial, HandMadeModels.FirstOfFourKinds).Model.Kinds);
     }
 
     [Fact(DisplayName = "with nothing but the labels to go on, each kind's intercept is the log of its weighted odds against the programme")]
@@ -245,7 +246,7 @@ public sealed class SegmentRegressionTests
             .. new[] { 85.0, 89.5, 90.0 }.Select(seconds => Sample(labelled, 0.8, seconds, 0.2)),
             .. new[] { 120.0, 200.0, 300.0, 31.0 }.Select(seconds => Sample(SegmentKind.Programme, 1.0, seconds, 0.6)),
         ];
-        SegmentModel kept = SegmentModel.FirstOfFourKinds;
+        SegmentModel kept = HandMadeModels.FirstOfFourKinds;
 
         SegmentModel fitted = SegmentRegression.Fit(samples, SegmentThresholds.Initial, kept: kept).Model;
         SegmentModel alone = SegmentRegression.Fit(samples, SegmentThresholds.Initial).Model;
@@ -254,7 +255,7 @@ public sealed class SegmentRegressionTests
         Assert.Equal(kept.Weights.Classes[unlabelled], fitted.Weights.Classes[unlabelled]);
         Assert.NotEqual(kept.Weights.Classes[labelled], fitted.Weights.Classes[labelled]);
         Assert.True(alone.Weights.Classes[unlabelled].Bias < -10);
-        Assert.Throws<ArgumentException>(() => SegmentRegression.Fit(samples, SegmentThresholds.Initial, kept: SegmentModel.First));
+        Assert.Throws<ArgumentException>(() => SegmentRegression.Fit(samples, SegmentThresholds.Initial, kept: HandMadeModels.First));
     }
 
     [Fact(DisplayName = "the same four-kind samples give an identical model every time, and starting from the first version of four kinds or of two reaches the same one")]
@@ -267,8 +268,8 @@ public sealed class SegmentRegressionTests
 
         SegmentFit once = SegmentRegression.Fit(samples, SegmentThresholds.Initial);
         SegmentFit again = SegmentRegression.Fit(samples, SegmentThresholds.Initial);
-        SegmentFit fromFour = SegmentRegression.Fit(samples, SegmentThresholds.Initial, SegmentModel.FirstOfFourKinds);
-        SegmentFit fromTwo = SegmentRegression.Fit(samples, SegmentThresholds.Initial, SegmentModel.First);
+        SegmentFit fromFour = SegmentRegression.Fit(samples, SegmentThresholds.Initial, HandMadeModels.FirstOfFourKinds);
+        SegmentFit fromTwo = SegmentRegression.Fit(samples, SegmentThresholds.Initial, HandMadeModels.First);
 
         Assert.Equal(once.Model, again.Model);
         Assert.Equal(once.Iterations, again.Iterations);

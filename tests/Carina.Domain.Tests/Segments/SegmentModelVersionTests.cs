@@ -1,5 +1,6 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Segments;
 
@@ -16,7 +17,7 @@ public sealed class SegmentModelVersionTests
         Assert.Equal(SegmentModelVersionState.Active, version.State);
         Assert.False(version.ByHand);
         Assert.Equal(2, version.Kinds);
-        Assert.Equal(SegmentModel.First, version.Model);
+        Assert.Equal(HandMadeModels.First, version.Model);
         Assert.Equal(Noon.AddHours(-1), version.TrainedAt);
         Assert.Equal(Noon, version.AdoptedAt);
         Assert.Null(version.RetiredAt);
@@ -27,11 +28,11 @@ public sealed class SegmentModelVersionTests
     {
         SegmentEvaluation judged = new(null, [], new EvaluationEvidence(3, 20, Noon.AddHours(-2)));
 
-        SegmentModelVersion learned = SegmentModelVersion.Learned(5, SegmentModel.First, judged, Noon);
+        SegmentModelVersion learned = SegmentModelVersion.Learned(5, HandMadeModels.First, judged, Noon);
 
         Assert.Equal((5, SegmentModelVersionState.Candidate, false, Noon, (DateTime?)null), (learned.Number, learned.State, learned.ByHand, learned.TrainedAt, learned.AdoptedAt));
         Assert.Equal(judged.Evidence, learned.Evaluation?.Evidence);
-        Assert.Throws<ArgumentNullException>(() => SegmentModelVersion.Learned(5, SegmentModel.First, null!, Noon));
+        Assert.Throws<ArgumentNullException>(() => SegmentModelVersion.Learned(5, HandMadeModels.First, null!, Noon));
     }
 
     [Fact(DisplayName = "BR-CS-003: only a candidate has never been put in use, and only a version used before has been taken out of use")]
@@ -216,5 +217,5 @@ public sealed class SegmentModelVersionTests
         DateTime? rolledBackAt = null,
         SegmentEvaluation? evaluation = null,
         SegmentRollback? rollback = null)
-        => SegmentModelVersion.Rehydrate(number, state, byHand, SegmentModel.First, Noon.AddHours(-1), adoptedAt, retiredAt, chosenAt, rolledBackAt, evaluation, rollback);
+        => SegmentModelVersion.Rehydrate(number, state, byHand, HandMadeModels.First, Noon.AddHours(-1), adoptedAt, retiredAt, chosenAt, rolledBackAt, evaluation, rollback);
 }

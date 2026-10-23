@@ -2,6 +2,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -118,7 +119,7 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         SegmentModelVersion read = (await ListAsync()).Single(version => version.Number == 62);
         Assert.Equal((SegmentModelVersionState.Candidate, Noon.AddDays(1), (DateTime?)null), (read.State, read.TrainedAt, read.AdoptedAt));
         Assert.Equal(Evaluated.Evidence, read.Evidence);
-        Assert.Equal(SegmentModel.First.Weights, read.Weights);
+        Assert.Equal(HandMadeModels.First.Weights, read.Weights);
         Assert.Equal(
             "Candidate t t t",
             await ScalarAsync(
@@ -157,7 +158,7 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
             await writing.Database.OpenConnectionAsync(Cancel);
             gate.SignalAndWait(Cancel);
 
-            return (await new SegmentModelVersionRepository(writing).AddCandidateAsync(SegmentModel.First, Evaluated, Noon.AddDays(1), Cancel)).Number;
+            return (await new SegmentModelVersionRepository(writing).AddCandidateAsync(HandMadeModels.First, Evaluated, Noon.AddDays(1), Cancel)).Number;
         })));
 
         Assert.Equal([62, 63, 64], numbers.Order());
@@ -205,7 +206,7 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         SegmentEvaluation? evaluation = null,
         DateTime? rolledBackAt = null,
         SegmentRollback? rollback = null)
-        => SegmentModelVersion.Rehydrate(number, state, false, SegmentModel.First, Noon.AddHours(-1), adoptedAt, retiredAt, null, rolledBackAt, evaluation, rollback);
+        => SegmentModelVersion.Rehydrate(number, state, false, HandMadeModels.First, Noon.AddHours(-1), adoptedAt, retiredAt, null, rolledBackAt, evaluation, rollback);
 
     private async Task AddAsync(SegmentModelVersion version)
     {
@@ -225,7 +226,7 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
     {
         await using CarinaDbContext writing = database.Open();
 
-        return await new SegmentModelVersionRepository(writing).AddCandidateAsync(SegmentModel.First, Evaluated, trainedAt, Cancel);
+        return await new SegmentModelVersionRepository(writing).AddCandidateAsync(HandMadeModels.First, Evaluated, trainedAt, Cancel);
     }
 
     private async Task<SegmentModelVersion> ActiveAsync()
@@ -263,7 +264,7 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         await using CarinaDbContext context = database.Open();
         await context.Database.ExecuteSqlRawAsync($"DELETE FROM segment_model_version WHERE {Ours}", Cancel);
         await context.Database.ExecuteSqlRawAsync(OthersOutOfUse, Cancel);
-        SegmentModelVersion first = SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, SegmentModel.First, Installed, Installed, null, null, null);
+        SegmentModelVersion first = SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, HandMadeModels.First, Installed, Installed, null, null, null);
 
         int restored = await context.Set<SegmentModelVersion>()
             .Where(version => version.Number == SegmentModelVersion.FirstNumber)

@@ -6,7 +6,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <inheritdoc />
+/// <summary>
+/// Makes the tables of the versions of the model and of the detections made with them. No version is kept here: the
+/// built-in version of a release is kept when the application starts.
+/// </summary>
 public partial class TheDetectionIsKeptPerVersionOfTheModelWithoutAKeyIntoTheRecording : Migration
 {
     /// <inheritdoc />
@@ -94,23 +97,6 @@ public partial class TheDetectionIsKeptPerVersionOfTheModelWithoutAKeyIntoTheRec
             column: "state",
             unique: true,
             filter: "state = 'Active'");
-
-        migrationBuilder.Sql(
-            """
-            INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, adopted_at)
-            VALUES (
-                1,
-                'Active',
-                false,
-                2,
-                '{"classes": {"Break": {"bias": -2.5, "features": {"isMultipleOf15s": 2.0, "edgeSilence": 1.5, "logoShare": -3.0, "catalogCmShare": 4.0}}}}',
-                '{}',
-                '{}',
-                '{"silenceDbfs": -50, "blackLevel": 0.10, "sceneChange": 0.30, "gridToleranceSec": 1.0, "gridPenalty": -3.0, "lambda": 1, "lambdaStation": 10, "lambdaSeries": 10}',
-                '{"isMultipleOf15s": {"mean": 0, "sd": 1}, "edgeSilence": {"mean": 0, "sd": 1}, "logoShare": {"mean": 0, "sd": 1}, "catalogCmShare": {"mean": 0, "sd": 1}}',
-                now(),
-                now())
-            """);
     }
 
     /// <inheritdoc />

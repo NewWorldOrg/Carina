@@ -1,7 +1,7 @@
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// Where the versions of the model are kept. Nothing is removed from it.
+/// Where the versions of the model are kept. Nothing is removed from it here.
 /// </summary>
 public interface ISegmentModelVersionRepository
 {
@@ -14,7 +14,8 @@ public interface ISegmentModelVersionRepository
     /// Makes <paramref name="change"/> at <paramref name="at"/> as <see cref="SegmentModelVersion.Change"/>
     /// works it out, against the versions as they stand once no other change is being made, and writes what
     /// it moves all or nothing, the version leaving use first. Answers the version in use after it; none when
-    /// the change names a number no version has. The only way the version in use changes.
+    /// the change names a number no version has. The only way the version in use changes beside keeping the built-in
+    /// version.
     /// </summary>
     Task<SegmentModelVersion?> ChangeAsync(SegmentVersionChange change, DateTime at, CancellationToken cancellationToken);
 
@@ -25,7 +26,15 @@ public interface ISegmentModelVersionRepository
     Task<SegmentModelVersion> AddCandidateAsync(SegmentModel model, SegmentEvaluation evaluation, DateTime trainedAt, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The version in use; there is always exactly one.
+    /// Keeps <paramref name="builtIn"/>, the built-in version of this release, at <paramref name="at"/> as
+    /// <see cref="SegmentModelVersion.KeepBuiltIn"/> works it out, against the versions as they stand once no other
+    /// change is being made, and writes what it moves all or nothing, the version leaving use first. Answers what was
+    /// kept; none when a built-in version already holds the same parameters.
+    /// </summary>
+    Task<SegmentBuiltInKept?> KeepBuiltInAsync(SegmentModel builtIn, DateTime at, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The version in use; there is always exactly one once the built-in version has been kept.
     /// </summary>
     Task<SegmentModelVersion> ActiveAsync(CancellationToken cancellationToken);
 

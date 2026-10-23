@@ -1,5 +1,6 @@
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
+using Carina.TestSupport;
 
 using static Carina.Domain.Tests.Segments.LearningWorld;
 
@@ -300,7 +301,7 @@ public sealed class SegmentLearningTests
     {
         (List<LearningRecording> recordings, List<CatalogSound> sounds) = Taught(Weeks);
         (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks);
-        SegmentModelVersion chosen = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, true, SegmentModel.First, InUse.TrainedAt, InUse.AdoptedAt, null, InUse.AdoptedAt, null);
+        SegmentModelVersion chosen = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, true, HandMadeModels.First, InUse.TrainedAt, InUse.AdoptedAt, null, InUse.AdoptedAt, null);
 
         SegmentLearned learned = SegmentLearning.Learn([.. recordings, judged], new LearningCatalog([.. sounds, .. heard], SeriesLinks.None), chosen, OneSetting, Now);
 
@@ -365,11 +366,11 @@ public sealed class SegmentLearningTests
     private static SegmentMetrics? Metrics(SegmentComparison compared) => SegmentMetrics.Of([compared], SkipReturns.None);
 
     /// <summary>
-    /// <see cref="SegmentModel.FirstOfFourKinds"/> taking a segment for an opening on the earlier episodes alone.
+    /// <see cref="HandMadeModels.FirstOfFourKinds"/> taking a segment for an opening on the earlier episodes alone.
     /// </summary>
     private static SegmentModel RemembersOpenings()
     {
-        SegmentModel first = SegmentModel.FirstOfFourKinds;
+        SegmentModel first = HandMadeModels.FirstOfFourKinds;
         Dictionary<SegmentKind, SegmentClassWeights> classes = new(first.Weights.Classes)
         {
             [SegmentKind.Opening] = new(-6.0, new Dictionary<string, double> { [SegmentFeature.PastOpeningShare] = 8.0 }),

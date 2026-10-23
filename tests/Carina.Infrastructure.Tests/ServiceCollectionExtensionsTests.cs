@@ -452,6 +452,21 @@ public sealed class ServiceCollectionExtensionsTests
             service => ReferenceEquals(service, provider.GetRequiredService<SegmentTrainingJob>()));
     }
 
+    [Fact(DisplayName = "BR-CS-003: the built-in version is kept at startup before detection, learning or the chapters of an encode can ask for the version in use")]
+    public void KeepsTheBuiltInVersionBeforeTheJobsThatReadTheVersionInUse()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        IHostedService[] started = [.. provider.GetServices<IHostedService>()];
+        int kept = Array.FindIndex(started, service => service is BuiltInSegmentVersion);
+
+        Assert.Single(started.OfType<BuiltInSegmentVersion>());
+        Assert.True(kept < Array.FindIndex(started, service => ReferenceEquals(service, provider.GetRequiredService<SegmentDetectionJob>())));
+        Assert.True(kept < Array.FindIndex(started, service => ReferenceEquals(service, provider.GetRequiredService<SegmentTrainingJob>())));
+        Assert.True(kept < Array.FindIndex(started, service => ReferenceEquals(service, provider.GetRequiredService<ChapterRewriteJob>())));
+        Assert.True(kept < Array.FindIndex(started, service => service is EncodeDispatch));
+    }
+
     [Fact(DisplayName = "registers where the segment settings are kept")]
     public void RegistersTheSegmentSettings()
     {

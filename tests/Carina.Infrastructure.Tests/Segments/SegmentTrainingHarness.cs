@@ -49,7 +49,7 @@ internal sealed class HeldTrainer : ISegmentTrainer
         }
 
         return Candidate is { } candidate
-            ? new Trained(new SegmentLearned(SegmentModel.First, candidate, InUse, SegmentAdoption.Judge(active, InUse, candidate)), false)
+            ? new Trained(new SegmentLearned(HandMadeModels.First, candidate, InUse, SegmentAdoption.Judge(active, InUse, candidate)), false)
             : Trained.NothingToLearnFrom;
     }
 }
@@ -149,7 +149,7 @@ internal sealed class SegmentTrainingHarness : IDisposable
     {
         DateTime adopted = Now.AddDays(-daysAgo);
 
-        Versions.Others.Add(SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Candidate, false, SegmentModel.First, adopted.AddHours(-1), null, null, null, null));
+        Versions.Others.Add(SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Candidate, false, HandMadeModels.First, adopted.AddHours(-1), null, null, null, null));
         await Versions.ChangeAsync(SegmentVersionChange.Adopting(2), adopted, CancellationToken.None);
         Versions.Written.Clear();
     }

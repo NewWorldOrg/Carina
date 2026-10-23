@@ -54,7 +54,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
     {
         await ResetAsync();
         await using CarinaDbContext writing = database.Open();
-        writing.Add(SegmentModelVersion.Learned(71, SegmentModel.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), Installed.AddHours(1)));
+        writing.Add(SegmentModelVersion.Learned(71, HandMadeModels.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), Installed.AddHours(1)));
         await writing.SaveChangesAsync(Cancel);
     }
 
@@ -183,7 +183,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
         await context.Database.ExecuteSqlRawAsync("DELETE FROM segment_learning_round", Cancel);
         await context.Database.ExecuteSqlRawAsync("DELETE FROM segment_settings", Cancel);
 
-        SegmentModel first = SegmentModel.First;
+        SegmentModel first = HandMadeModels.First;
         int restored = await context.Set<SegmentModelVersion>()
             .Where(version => version.Number == SegmentModelVersion.FirstNumber)
             .ExecuteUpdateAsync(
@@ -205,7 +205,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
 
         if (restored is 0)
         {
-            context.Add(SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, SegmentModel.First, Installed, Installed, null, null, null));
+            context.Add(SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, HandMadeModels.First, Installed, Installed, null, null, null));
             await context.SaveChangesAsync(Cancel);
         }
     }

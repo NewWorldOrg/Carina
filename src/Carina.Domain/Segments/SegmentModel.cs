@@ -11,25 +11,8 @@ namespace Carina.Domain.Segments;
 /// thresholds, and the mean and standard deviation each feature is standardised with. Every feature the
 /// weights name has a scale. A kind weighed against the programme is scored by its own weights, and a break
 /// by both offsets besides, which tell how much more often a station or a series breaks for adverts.
-/// <see cref="First"/> is the version made by hand from the rule-based detection before any learning: a piece
-/// of 15-second multiples between two silent cuts, out of the logo, is a break. <see cref="FirstOfFourKinds"/>
-/// weighs the break the same way and adds the opening and the ending made by hand, which earlier episodes of the
-/// series having one at the same place make likelier but never enough on their own. <see cref="FourKindsBelowPauses"/>
-/// weighs as that one does and hears silence only from -55 dBFS, below the pauses inside an advert that would cut it
-/// in two. <see cref="FourKindsInAnySeries"/> hears silence as that one does and weighs the break as it does but for the
-/// grid, which counts only up to a minute, as long as an advert lasts, so that an opening of a minute and a half between
-/// two silent cuts is no break; it tells the opening and the ending by what they are like in any series, its first
-/// episode included: a segment that starts where an opening does, or ends where an ending does, keeps its loudness as a
-/// song does and is no multiple of the grid, least of all one as long as an advert, the more so when it lasts as long
-/// as a whole one, is likelier one than the programme; earlier episodes having one at the same place add to that.
-/// <see cref="FourKindsWithDynamicSongs"/> weighs as that one does but centres the loudness range on 10 dB rather than
-/// 8, so that a song whose loudness moves more, such as an ending that starts quietly, is still taken for one rather
-/// than for speech, and weighs an advert's length that much more against the opening and the ending, so that an
-/// advert where they lie is taken as that one takes it. <see cref="FourKindsInPods"/> weighs as that one does but takes
-/// an advert with another beside it for a break the more, since a pod of adverts is cut at every advert at the length of
-/// one, and no longer weighs a multiple of the grid of more than a minute against the opening and the ending, since a
-/// whole one read as one segment commonly lasts a minute and a half. What the catalog hears is fixed when the sequence is
-/// decided (<see cref="SegmentSequence"/>), not weighed.
+/// <see cref="BuiltIn"/> is the version a release ships, made by hand. What the catalog hears is fixed when the
+/// sequence is decided (<see cref="SegmentSequence"/>), not weighed.
 /// </summary>
 public sealed class SegmentModel : IEquatable<SegmentModel>
 {
@@ -57,106 +40,17 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
         Standardisation = SortedMaps.Copied(standardisation, StringComparer.Ordinal);
     }
 
-    public static SegmentModel First { get; } = new(
-        new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
-        {
-            [SegmentKind.Break] = new(-2.5, new Dictionary<string, double>
-            {
-                [SegmentFeature.IsMultipleOf15s] = 2.0,
-                [SegmentFeature.EdgeSilence] = 1.5,
-                [SegmentFeature.LogoShare] = -3.0,
-            }),
-        }),
-        new Dictionary<string, double>(),
-        new Dictionary<string, double>(),
-        SegmentThresholds.Initial,
-        new Dictionary<string, FeatureScale>
-        {
-            [SegmentFeature.IsMultipleOf15s] = FeatureScale.Identity,
-            [SegmentFeature.EdgeSilence] = FeatureScale.Identity,
-            [SegmentFeature.LogoShare] = FeatureScale.Identity,
-        });
-
-    public static SegmentModel FirstOfFourKinds { get; } = new(
-        new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
-        {
-            [SegmentKind.Break] = First.Weights.Classes[SegmentKind.Break],
-            [SegmentKind.Opening] = new(-6.0, new Dictionary<string, double>
-            {
-                [SegmentFeature.PastOpeningShare] = 4.0,
-            }),
-            [SegmentKind.Ending] = new(-6.0, new Dictionary<string, double>
-            {
-                [SegmentFeature.PastEndingShare] = 4.0,
-            }),
-        }),
-        new Dictionary<string, double>(),
-        new Dictionary<string, double>(),
-        SegmentThresholds.Initial,
-        new Dictionary<string, FeatureScale>
-        {
-            [SegmentFeature.IsMultipleOf15s] = FeatureScale.Identity,
-            [SegmentFeature.EdgeSilence] = FeatureScale.Identity,
-            [SegmentFeature.LogoShare] = FeatureScale.Identity,
-            [SegmentFeature.PastOpeningShare] = FeatureScale.Identity,
-            [SegmentFeature.PastEndingShare] = FeatureScale.Identity,
-        });
-
-    public static SegmentModel FourKindsBelowPauses { get; } = new(
-        FirstOfFourKinds.Weights,
-        FirstOfFourKinds.StationOffsets,
-        FirstOfFourKinds.SeriesOffsets,
-        new SegmentThresholds(
-            -55,
-            SegmentThresholds.Initial.BlackLevel,
-            SegmentThresholds.Initial.SceneChange,
-            SegmentThresholds.Initial.GridToleranceSec,
-            SegmentThresholds.Initial.GridPenalty,
-            SegmentThresholds.Initial.Lambda,
-            SegmentThresholds.Initial.LambdaStation,
-            SegmentThresholds.Initial.LambdaSeries),
-        FirstOfFourKinds.Standardisation);
-
-    public static SegmentModel FourKindsInAnySeries { get; } = new(
-        new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
-        {
-            [SegmentKind.Break] = new(-2.5, new Dictionary<string, double>
-            {
-                [SegmentFeature.IsShortMultipleOf15s] = 2.0,
-                [SegmentFeature.EdgeSilence] = 1.5,
-                [SegmentFeature.LogoShare] = -3.0,
-            }),
-            [SegmentKind.Opening] = ThemeWeights(SegmentFeature.OpeningWindow, SegmentFeature.PastOpeningShare),
-            [SegmentKind.Ending] = ThemeWeights(SegmentFeature.EndingWindow, SegmentFeature.PastEndingShare),
-        }),
-        FourKindsBelowPauses.StationOffsets,
-        FourKindsBelowPauses.SeriesOffsets,
-        FourKindsBelowPauses.Thresholds,
-        new Dictionary<string, FeatureScale>(FourKindsBelowPauses.Standardisation)
-        {
-            [SegmentFeature.OpeningWindow] = FeatureScale.Identity,
-            [SegmentFeature.EndingWindow] = FeatureScale.Identity,
-            [SegmentFeature.IsThemeLength] = FeatureScale.Identity,
-            [SegmentFeature.LoudnessRange] = new(8, 1),
-            [SegmentFeature.IsShortMultipleOf15s] = FeatureScale.Identity,
-        });
-
-    public static SegmentModel FourKindsWithDynamicSongs { get; } = new(
-        new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
-        {
-            [SegmentKind.Break] = FourKindsInAnySeries.Weights.Classes[SegmentKind.Break],
-            [SegmentKind.Opening] = ThemeWeights(SegmentFeature.OpeningWindow, SegmentFeature.PastOpeningShare, -2.8),
-            [SegmentKind.Ending] = ThemeWeights(SegmentFeature.EndingWindow, SegmentFeature.PastEndingShare, -2.8),
-        }),
-        FourKindsInAnySeries.StationOffsets,
-        FourKindsInAnySeries.SeriesOffsets,
-        FourKindsInAnySeries.Thresholds,
-        new Dictionary<string, FeatureScale>(FourKindsInAnySeries.Standardisation)
-        {
-            [SegmentFeature.LoudnessRange] = new(10, 1),
-        });
-
-    public static SegmentModel FourKindsInPods { get; } = new(
+    /// <summary>
+    /// The version this release ships, made by hand, and changed only from one release to the next. It hears silence
+    /// from -55 dBFS, below the pauses inside an advert that would cut it in two. A piece between two silent cuts,
+    /// out of the logo, whose length is a multiple of the 15-second grid up to a minute, as long as an advert lasts,
+    /// is a break, the more so with another such advert beside it, since a pod of adverts is cut at every advert. An
+    /// opening or an ending is told by what it is like in any series, its first episode included: a piece that starts
+    /// where an opening does, or ends where an ending does, keeps its loudness as a song does, centred on 10 dB so that
+    /// a song whose loudness moves is still one, lasts as long as a whole one and is not as long as an advert; earlier
+    /// episodes having one at the same place add to that.
+    /// </summary>
+    public static SegmentModel BuiltIn { get; } = new(
         new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
         {
             [SegmentKind.Break] = new(-2.5, new Dictionary<string, double>
@@ -166,14 +60,38 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
                 [SegmentFeature.LogoShare] = -3.0,
                 [SegmentFeature.AdvertBeside] = 1.5,
             }),
-            [SegmentKind.Opening] = ThemeWeights(SegmentFeature.OpeningWindow, SegmentFeature.PastOpeningShare, -2.8, 0),
-            [SegmentKind.Ending] = ThemeWeights(SegmentFeature.EndingWindow, SegmentFeature.PastEndingShare, -2.8, 0),
+            [SegmentKind.Opening] = new(-6.0, new Dictionary<string, double>
+            {
+                [SegmentFeature.OpeningWindow] = 4.8,
+                [SegmentFeature.IsThemeLength] = 0.5,
+                [SegmentFeature.LoudnessRange] = -0.4,
+                [SegmentFeature.IsShortMultipleOf15s] = -2.8,
+                [SegmentFeature.PastOpeningShare] = 4.0,
+            }),
+            [SegmentKind.Ending] = new(-6.0, new Dictionary<string, double>
+            {
+                [SegmentFeature.EndingWindow] = 4.8,
+                [SegmentFeature.IsThemeLength] = 0.5,
+                [SegmentFeature.LoudnessRange] = -0.4,
+                [SegmentFeature.IsShortMultipleOf15s] = -2.8,
+                [SegmentFeature.PastEndingShare] = 4.0,
+            }),
         }),
-        FourKindsWithDynamicSongs.StationOffsets,
-        FourKindsWithDynamicSongs.SeriesOffsets,
-        FourKindsWithDynamicSongs.Thresholds,
-        new Dictionary<string, FeatureScale>(FourKindsWithDynamicSongs.Standardisation)
+        new Dictionary<string, double>(),
+        new Dictionary<string, double>(),
+        new SegmentThresholds(-55, 0.10, 0.30, 1.0, -3.0, 1, 10, 10),
+        new Dictionary<string, FeatureScale>
         {
+            [SegmentFeature.IsMultipleOf15s] = FeatureScale.Identity,
+            [SegmentFeature.EdgeSilence] = FeatureScale.Identity,
+            [SegmentFeature.LogoShare] = FeatureScale.Identity,
+            [SegmentFeature.PastOpeningShare] = FeatureScale.Identity,
+            [SegmentFeature.PastEndingShare] = FeatureScale.Identity,
+            [SegmentFeature.OpeningWindow] = FeatureScale.Identity,
+            [SegmentFeature.EndingWindow] = FeatureScale.Identity,
+            [SegmentFeature.IsThemeLength] = FeatureScale.Identity,
+            [SegmentFeature.LoudnessRange] = new(10, 1),
+            [SegmentFeature.IsShortMultipleOf15s] = FeatureScale.Identity,
             [SegmentFeature.AdvertBeside] = FeatureScale.Identity,
         });
 
@@ -301,30 +219,6 @@ public sealed class SegmentModel : IEquatable<SegmentModel>
         {
             throw new ArgumentException("Every feature the weights name has a scale to standardise it with.", nameof(standardisation));
         }
-    }
-
-    /// <summary>
-    /// The weights made by hand of the opening, or of the ending, whose place is <paramref name="place"/>, whose
-    /// earlier episodes are <paramref name="past"/>, against which an advert's length weighs <paramref name="advert"/>
-    /// and any multiple of the grid <paramref name="multiple"/>, not at all when that is 0.
-    /// </summary>
-    private static SegmentClassWeights ThemeWeights(string place, string past, double advert = -2.0, double multiple = -1.0)
-    {
-        Dictionary<string, double> features = new(StringComparer.Ordinal)
-        {
-            [place] = 4.8,
-            [SegmentFeature.IsThemeLength] = 0.5,
-            [SegmentFeature.LoudnessRange] = -0.4,
-            [SegmentFeature.IsShortMultipleOf15s] = advert,
-            [past] = 4.0,
-        };
-
-        if (multiple is not 0)
-        {
-            features[SegmentFeature.IsMultipleOf15s] = multiple;
-        }
-
-        return new(-6.0, features);
     }
 
     internal static bool IsAStation(string key)

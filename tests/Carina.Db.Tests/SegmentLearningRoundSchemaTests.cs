@@ -28,10 +28,13 @@ public sealed class SegmentLearningRoundSchemaTests(MigratedScratchDatabase data
 
     private static readonly string[] VersionsInUseOverTime =
     [
-        "UPDATE segment_model_version SET state = 'Retired', trained_at = '2026-08-01T00:00:00Z', adopted_at = '2026-08-01T00:00:00Z', retired_at = '2026-09-10T12:00:00Z' WHERE number = 1",
-        "UPDATE segment_model_version SET state = 'Active', trained_at = '2026-09-01T00:00:00Z', adopted_at = '2026-09-28T03:00:20Z', retired_at = NULL WHERE number = 2",
-        "UPDATE segment_model_version SET state = 'Retired', trained_at = '2026-09-15T00:00:00Z', adopted_at = '2026-09-20T12:00:00Z', retired_at = '2026-09-28T03:00:20Z', rolled_back_at = '2026-09-28T03:00:20Z', rollback = '{}'::jsonb WHERE number = 3",
-        "UPDATE segment_model_version SET state = 'Retired', trained_at = '2026-09-30T00:00:00Z', adopted_at = '2026-10-01T00:00:00Z', retired_at = '2026-10-03T00:00:00Z' WHERE number = 4",
+        """
+        INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, adopted_at, retired_at, rolled_back_at, rollback) VALUES
+            (1, 'Retired', false, 2, '{}', '{}', '{}', '{}', '{}', '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z', '2026-09-10T12:00:00Z', NULL, NULL),
+            (2, 'Active', false, 2, '{}', '{}', '{}', '{}', '{}', '2026-09-01T00:00:00Z', '2026-09-28T03:00:20Z', NULL, NULL, NULL),
+            (3, 'Retired', false, 2, '{}', '{}', '{}', '{}', '{}', '2026-09-15T00:00:00Z', '2026-09-20T12:00:00Z', '2026-09-28T03:00:20Z', '2026-09-28T03:00:20Z', '{}'::jsonb),
+            (4, 'Retired', false, 2, '{}', '{}', '{}', '{}', '{}', '2026-09-30T00:00:00Z', '2026-10-01T00:00:00Z', '2026-10-03T00:00:00Z', NULL, NULL)
+        """,
         """
         INSERT INTO segment_learning_round (day, taken_at, candidate, outcome, verdict, in_use_metrics) VALUES
             ('2026-07-02', '2026-07-01T18:00:00Z', 5, 'Kept', 'TooLittleEvidence', '{}'::jsonb),

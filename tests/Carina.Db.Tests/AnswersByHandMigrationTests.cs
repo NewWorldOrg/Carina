@@ -66,8 +66,8 @@ public sealed class AnswersByHandMigrationTests
                 {{Stretch(heardElsewhere, Guid.NewGuid(), 300)}};
                 INSERT INTO segment_answer (recording_id, segments, length, confirmed, confirmed_at, answered_at, answers, withdrawn_at)
                 VALUES ('{{answered}}', '[{"startsAtSec": 0, "endsAtSec": 1800, "kind": "Programme"}]', interval '00:30:00', true, {{Made}}, {{Made}}, 1, NULL);
-                INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, recommended_threshold)
-                VALUES (90, 'Candidate', false, 2, '{}', '{}', '{}', '{}', '{}', {{Made}}, 0.65);
+                INSERT INTO segment_model_version (number, state, by_hand, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, recommended_threshold, evidence)
+                VALUES (90, 'Candidate', false, 2, '{}', '{}', '{}', '{}', '{}', {{Made}}, 0.65, '{"recordings": 12, "boundaries": 148, "labelsUntil": null}');
                 INSERT INTO encode_profile (id, label, codec, resolution, deinterlace, rate_factor, quantiser, defined_at)
                 VALUES ('{{Profile}}', 'Viewing', 'H264', 'AsSource', 'Leave', 23, 24, {{Queued}});
                 INSERT INTO encode_destination (id, label, output_root, default_profile_id, defined_at)

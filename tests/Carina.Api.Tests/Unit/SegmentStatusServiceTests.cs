@@ -26,7 +26,7 @@ public sealed class SegmentStatusServiceTests
             2,
             SegmentModelVersionState.Active,
             false,
-            SegmentModel.First,
+            HandMadeModels.First,
             Taken.AddDays(-3),
             Taken.AddDays(-3),
             null,
@@ -89,8 +89,8 @@ public sealed class SegmentStatusServiceTests
     public async Task AVersionPutInUseAfterTheRoundWasTakenAnswersTheFiguresOfTheRoundThatMeasuredIt()
     {
         DateTime rolledBack = Taken.AddSeconds(30);
-        versions.Active = SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Active, false, SegmentModel.First, HeldSegmentModelVersions.Installed, rolledBack, null, null, null);
-        versions.Others.Add(SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Retired, false, SegmentModel.First, Taken.AddDays(-3), Taken.AddDays(-3), rolledBack, null, rolledBack, null, new SegmentRollback(0.4, 0.1, 25, 1)));
+        versions.Active = SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Active, false, HandMadeModels.First, HeldSegmentModelVersions.Installed, rolledBack, null, null, null);
+        versions.Others.Add(SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Retired, false, HandMadeModels.First, Taken.AddDays(-3), Taken.AddDays(-3), rolledBack, null, rolledBack, null, new SegmentRollback(0.4, 0.1, 25, 1)));
         await TakeRoundAsync(InUseFigures(), SegmentModelVersion.FirstNumber);
 
         SegmentStatus status = await ReadAsync();
@@ -104,7 +104,7 @@ public sealed class SegmentStatusServiceTests
     public async Task AVersionNeverEvaluatedHasNoFiguresWhenTheRoundsMeasuredAnother()
     {
         versions.Active = HeldSegmentModelVersions.InUse(3, Taken.AddHours(2));
-        versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, SegmentModel.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, Taken.AddHours(2), null, null));
+        versions.Others.Add(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, HandMadeModels.First, HeldSegmentModelVersions.Installed, HeldSegmentModelVersions.Installed, Taken.AddHours(2), null, null));
         await TakeRoundAsync(InUseFigures(), SegmentModelVersion.FirstNumber);
         await TakeWithoutFiguresAsync(Taken.AddDays(1), SegmentTrainingOutcome.NothingNew);
         await SkippedAsync(3, ViewerActionKind.Skipped, 4);
