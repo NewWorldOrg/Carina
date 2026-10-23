@@ -30,6 +30,29 @@ public sealed record EncodeProfileResponder(
     }
 }
 
+/// <summary>
+/// What a new profile starts from on this machine: every field a profile is defined by but its label.
+/// </summary>
+public sealed record EncodeProfileDefaultsResponder(
+    EncodeCodec Codec,
+    EncodeResolution Resolution,
+    Deinterlace Deinterlace,
+    int RateFactor,
+    int Quantiser)
+{
+    public static EncodeProfileDefaultsResponder Of(EncodeProfileDefaults defaults)
+    {
+        ArgumentNullException.ThrowIfNull(defaults);
+
+        return new EncodeProfileDefaultsResponder(
+            defaults.Codec,
+            defaults.Resolution,
+            defaults.Deinterlace,
+            defaults.SoftwareRateControl.RateFactor,
+            defaults.VaapiRateControl.Quantiser);
+    }
+}
+
 public sealed record EncodeProfileListResponder(IReadOnlyList<EncodeProfileResponder> Items)
 {
     public static EncodeProfileListResponder Of(IReadOnlyList<EncodeProfile> profiles)

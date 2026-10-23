@@ -146,6 +146,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getDetectedTuners",
                 "getDriverStatus",
                 "getEncodeDurations",
+                "getEncodeProfileDefaults",
                 "getEncodeSettings",
                 "getHealth",
                 "getLiveDataBroadcastAit",
@@ -706,6 +707,20 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             ["postalCode", "prefecture"],
             request["required"]!.AsArray().Select(name => name!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact(DisplayName = "what a new profile starts at is described with the fields a profile is defined by but its label")]
+    public async Task WhatANewProfileStartsAtIsDescribedWithTheFieldsOfAProfile()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(
+            ["codec", "resolution", "deinterlace", "rateFactor", "quantiser"],
+            schemas["EncodeProfileDefaultsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            schemas["CreateEncodeProfileRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).Where(name => name != "label").ToArray(),
+            schemas["EncodeProfileDefaultsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
     [Fact(DisplayName = "the status of CM, OP and ED detection is described with the learning data kept, the catalog's count of each kind and the version of the model in use")]

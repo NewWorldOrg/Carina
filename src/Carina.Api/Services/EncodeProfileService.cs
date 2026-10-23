@@ -1,5 +1,6 @@
 using Carina.Api.Common;
 using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
 
 namespace Carina.Api.Services;
 
@@ -16,10 +17,17 @@ public sealed class EncodeProfileService(
     IEncodeProfileRepository profiles,
     IEncodeDestinationRepository destinations,
     IEncodeJobRepository jobs,
+    IMachineCapabilityReader machine,
     TimeProvider clock)
 {
     public async Task<ServiceResult<IReadOnlyList<EncodeProfile>>> ListAsync(CancellationToken cancellationToken)
         => ServiceResult<IReadOnlyList<EncodeProfile>>.Success(await profiles.ListAsync(cancellationToken));
+
+    /// <summary>
+    /// What a new profile starts from on this machine, which depends on what it can encode H.265 with.
+    /// </summary>
+    public async Task<ServiceResult<EncodeProfileDefaults>> DefaultsAsync(CancellationToken cancellationToken)
+        => ServiceResult<EncodeProfileDefaults>.Success(EncodeProfileDefaults.For(await machine.ReadAsync(cancellationToken)));
 
     public async Task<ServiceResult<EncodeProfile, EncodingFailure>> DefineAsync(
         EncodeProfileDraft draft,
