@@ -1,0 +1,17 @@
+namespace Carina.Domain.DataBroadcast;
+
+public interface IDataBroadcastSettingsRepository
+{
+    /// <summary>
+    /// Waits, inside the write it is part of, until no other change of the settings is being made, so that
+    /// what is read next is what the change is made against.
+    /// </summary>
+    Task TakeTurnAsync(CancellationToken cancellationToken);
+
+    Task<DataBroadcastSettings?> ReadAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Writes the one row as it is handed over, in place of the row held where there is one.
+    /// </summary>
+    Task SaveAsync(DataBroadcastSettings settings, CancellationToken cancellationToken);
+}

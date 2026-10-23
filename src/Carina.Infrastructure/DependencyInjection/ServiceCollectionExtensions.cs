@@ -208,6 +208,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISkipEventRepository, SkipEventRepository>();
         services.AddScoped<IDetectionWorklist, DetectionWorklist>();
         services.AddScoped<ISegmentSettingsRepository, SegmentSettingsRepository>();
+        services.AddScoped<IDataBroadcastSettingsRepository, DataBroadcastSettingsRepository>();
         services.AddScoped<ISegmentLearningRoundRepository, SegmentLearningRoundRepository>();
         services.AddScoped<ILearningMaterialChanges, LearningMaterialChanges>();
         services.AddScoped<ITrainingWorklist, TrainingWorklist>();

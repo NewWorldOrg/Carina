@@ -276,6 +276,20 @@ public sealed class PersistenceBoundaryRuleTests
                 .Select(key => $"{key.DeclaringEntityType.GetTableName()} -> {key.PrincipalEntityType.GetTableName()}"));
     }
 
+    [Fact(DisplayName = "BR-BD-016: the data broadcast keeps one table, its settings, which holds no key and is held by none")]
+    public void TheDataBroadcastKeepsOneTableWithNoKey()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            ["data_broadcast_settings"],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.DataBroadcast));
+        Assert.DoesNotContain(
+            context.Model.GetEntityTypes().SelectMany(entityType => entityType.GetForeignKeys()),
+            key => key.DeclaringEntityType.GetTableName() == "data_broadcast_settings"
+                   || key.PrincipalEntityType.GetTableName() == "data_broadcast_settings");
+    }
+
     [Theory(DisplayName = "the learning data reaches the recording it was taken from by value, not by key")]
     [InlineData("segment_extraction")]
     [InlineData("segment_learning_data")]

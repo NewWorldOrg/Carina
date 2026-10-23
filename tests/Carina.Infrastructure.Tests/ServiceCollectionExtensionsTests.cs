@@ -477,6 +477,16 @@ public sealed class ServiceCollectionExtensionsTests
             scope.ServiceProvider.GetRequiredService<ISegmentSettingsRepository>());
     }
 
+    [Fact(DisplayName = "BR-BD-016: registers where the data broadcast settings are kept")]
+    public void RegistersTheDataBroadcastSettings()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<DataBroadcastSettingsRepository>(
+            scope.ServiceProvider.GetRequiredService<IDataBroadcastSettingsRepository>());
+    }
+
     [Fact(DisplayName = "BR-BD-011: registers one relay to broadcasters' servers over the system's own network, knowing no host of its own by name until one is given")]
     public void RegistersTheRelay()
     {

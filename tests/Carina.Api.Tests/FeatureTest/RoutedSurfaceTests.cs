@@ -231,6 +231,24 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Equal([EndpointEffect.Reading, EndpointEffect.Changing], segments.Select(surface => surface.Effect).ToArray());
     }
 
+    [Fact(DisplayName = "BR-BD-016: the data broadcast settings are read and changed through two surfaces, and changing them discards nothing")]
+    public void TheDataBroadcastSettingsSurfacesAreTheTwoTheyAreReadAndChangedThrough()
+    {
+        RoutedSurface[] settings =
+        [
+            .. Inventory()
+                .Where(surface => surface.Pattern.StartsWith("/api/data-broadcast", StringComparison.Ordinal))
+                .OrderBy(surface => surface.ToString(), StringComparer.Ordinal),
+        ];
+
+        Assert.Equal(
+            ["GET /api/data-broadcast/settings", "PUT /api/data-broadcast/settings"],
+            settings.Select(surface => surface.ToString()).ToArray());
+        Assert.Equal(
+            [EndpointEffect.Reading, EndpointEffect.Changing],
+            settings.Select(surface => surface.Effect).ToArray());
+    }
+
     [Fact]
     public void TheReservationSurfacesAreTheNineAReservationIsMadeChangedThrownAwayAndAccountedForThrough()
     {

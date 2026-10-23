@@ -142,6 +142,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "fetchLiveDataBroadcast",
                 "forgetArchivedService",
                 "getCollectionStatus",
+                "getDataBroadcastSettings",
                 "getDetectedTuners",
                 "getDriverStatus",
                 "getEncodeDurations",
@@ -209,6 +210,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "patchTuner",
                 "playVideo",
                 "previewRules",
+                "putDataBroadcastSettings",
                 "putEncodeSettings",
                 "putOidcConfig",
                 "putPlaybackPosition",
@@ -274,6 +276,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "programs",
                 "encoding",
                 "driver",
+                "data-broadcast",
                 "auth",
             ],
             tags);
@@ -685,6 +688,24 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             ["skipThreshold"],
             schemas["PatchSegmentSettingsRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-BD-016: the data broadcast settings are described with the postal code, the prefecture and when they changed, and a change names both, neither of which may be left out")]
+    public async Task TheDataBroadcastSettingsAreDescribedWithWhereTheReceiverIs()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+        JsonNode request = schemas["PutDataBroadcastSettingsRequest"]!;
+
+        Assert.Equal(
+            ["postalCode", "prefecture", "changedAt"],
+            schemas["DataBroadcastSettingsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["postalCode", "prefecture"],
+            request["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["postalCode", "prefecture"],
+            request["required"]!.AsArray().Select(name => name!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
     }
 
     [Fact(DisplayName = "the status of CM, OP and ED detection is described with the learning data kept, the catalog's count of each kind and the version of the model in use")]

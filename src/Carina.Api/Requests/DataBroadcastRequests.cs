@@ -23,3 +23,13 @@ public sealed record StartHybridcastRequest
 
     public string? ReceiverScript { get; init; }
 }
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PutDataBroadcastSettingsRequest
+{
+    [JsonRequired]
+    public string? PostalCode { get; init; }
+
+    [JsonRequired]
+    public int? Prefecture { get; init; }
+}

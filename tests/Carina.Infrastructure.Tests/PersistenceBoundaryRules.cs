@@ -16,6 +16,7 @@ public enum PersistenceFamily
     Migration,
     Viewing,
     Segments,
+    DataBroadcast,
 }
 
 public static class PersistenceBoundaryRules
@@ -35,6 +36,7 @@ public static class PersistenceBoundaryRules
             ["Migration"] = PersistenceFamily.Migration,
             ["Viewing"] = PersistenceFamily.Viewing,
             ["Segments"] = PersistenceFamily.Segments,
+            ["DataBroadcast"] = PersistenceFamily.DataBroadcast,
             ["Auth"] = PersistenceFamily.Unrelated,
         };
 
