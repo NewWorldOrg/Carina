@@ -6,8 +6,8 @@ using Carina.Domain.Recordings;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// The name of a file this domain writes under an output root. A work file, the chapters an attempt
-/// reads, the text of captions a track is made from, the artefact with that track put in and the artefact
+/// The name of a file this domain writes under an output root. A work file and the one an attempt writes
+/// when it makes its artefact a second time, the chapters an attempt reads, the text of captions a track is made from, the artefact with that track put in and the artefact
 /// with its chapters written again are named for the recording, the job and the attempt; the artefact is
 /// named for the recording and the profile.
 /// </summary>
@@ -27,6 +27,8 @@ public sealed class EncodeFileName : CommonValueObject<string>
 
     public const string ChapteredExtension = ".chaptered";
 
+    public const string RemadeExtension = ".remade";
+
     private static readonly char[] Separators = ['/', '\\', '\0'];
 
     public EncodeFileName(string value)
@@ -44,6 +46,12 @@ public sealed class EncodeFileName : CommonValueObject<string>
             CultureInfo.InvariantCulture,
             $"{recording.Wire}.{job.Wire}.attempt{attempt}{WorkExtension}"));
     }
+
+    /// <summary>
+    /// The work file an attempt writes when it makes its artefact a second time, beside the first.
+    /// </summary>
+    public static EncodeFileName Remade(RecordingId recording, EncodeJobId job, int attempt)
+        => Attempted(recording, job, attempt, RemadeExtension + WorkExtension);
 
     public static EncodeFileName Chapters(RecordingId recording, EncodeJobId job, int attempt)
     {

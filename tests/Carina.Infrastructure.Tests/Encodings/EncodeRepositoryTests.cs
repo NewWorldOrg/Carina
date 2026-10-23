@@ -133,6 +133,46 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.True(ended.Timeline.LengthsAgree);
     }
 
+    [Fact(DisplayName = "why a job made its artefact again goes into the ledger and comes back with the job, and goes when the job starts over")]
+    public async Task WhyAJobMadeItsArtefactAgainComesBackWithTheJob()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob running = Job(profile, destination);
+        running.Start(Started);
+        running.Remaking();
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(running, Cancel);
+        }
+
+        await using (CarinaDbContext reading = database.Open())
+        {
+            EncodeJob read = (await new EncodeJobRepository(reading).FindAsync(running.Id, Cancel))!;
+
+            Assert.Equal(EncodeRemake.LargerThanTheSource, read.Remade);
+
+            read.MadeAgain(EncodeRemake.StillLargerThanTheSource);
+            await new EncodeJobRepository(reading).SaveAsync(read, Cancel);
+        }
+
+        await using (CarinaDbContext reading = database.Open())
+        {
+            EncodeJob read = (await new EncodeJobRepository(reading).FindAsync(running.Id, Cancel))!;
+
+            Assert.Equal(EncodeRemake.StillLargerThanTheSource, read.Remade);
+
+            read.Requeue(Ended);
+            await new EncodeJobRepository(reading).SaveAsync(read, Cancel);
+        }
+
+        await using CarinaDbContext again = database.Open();
+        EncodeJob? putBack = await new EncodeJobRepository(again).FindAsync(running.Id, Cancel);
+
+        Assert.Null(putBack!.Remade);
+    }
+
     [Fact(DisplayName = "the name goes into the ledger and is read back with the job")]
     public async Task TheNameGoesIntoTheLedgerAndIsReadBackWithTheJob()
     {

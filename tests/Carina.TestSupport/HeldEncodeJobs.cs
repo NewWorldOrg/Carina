@@ -194,7 +194,8 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
             job.Chapters,
             job.MakesItAgain,
             job.NameGivenUpAt,
-            job.ReplacedAt);
+            job.ReplacedAt,
+            remade: job.Remade);
 
     public Task<IReadOnlyList<EncodeJob>> ListRunningAsync(CancellationToken cancellationToken)
     {

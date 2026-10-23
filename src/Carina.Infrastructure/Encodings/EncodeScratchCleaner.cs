@@ -6,10 +6,10 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// Removes what a job that has ended still owes a removal for, and the artefact a completed job
-/// made. What is removed is read off the ledger: scratch from where the work goes, a replaced
-/// artefact from where the artefact went. A file that is not there any more is settled as already
-/// gone.
+/// Removes what a job that has ended still owes a removal for, a file a running job wrote and will
+/// not use, and the artefact a completed job made. What is removed is read off the ledger: scratch
+/// from where the work goes, a replaced artefact from where the artefact went. A file that is not
+/// there any more is settled as already gone.
 /// </summary>
 public sealed class EncodeScratchCleaner(
     IEncodeScratchLedger ledger,
@@ -31,16 +31,40 @@ public sealed class EncodeScratchCleaner(
 
         foreach (EncodeScratchFile scratch in owed)
         {
-            EncodeScratchFate fate = RoomOf(scratch) is { } room
-                ? Remove(room, scratch.FileName, scratch.JobId, scratch.OutputRoot)
-                : Unplaceable(scratch.FileName, scratch.JobId, scratch.OutputRoot);
-
-            scratch.Settle(fate, clock.GetUtcNow().UtcDateTime);
-
-            await ledger.SaveAsync(scratch, cancellationToken);
+            await SettleAsync(scratch, cancellationToken);
         }
 
         return owed;
+    }
+
+    /// <summary>
+    /// Removes the one file named <paramref name="unused"/> that a running job wrote and will not use, read off
+    /// the ledger among what the job owes a removal for, so it does not wait on the disk for the job to end.
+    /// Nothing, when the ledger holds no such file as owed.
+    /// </summary>
+    public async Task<EncodeScratchFate?> ClearOneAsync(EncodeJob job, EncodeFileName unused, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        ArgumentNullException.ThrowIfNull(unused);
+
+        IReadOnlyList<EncodeScratchFile> owed = await ledger.ListOwedAsync(job.Id, cancellationToken);
+
+        return owed.FirstOrDefault(scratch => scratch.FileName.Equals(unused)) is { } named
+            ? await SettleAsync(named, cancellationToken)
+            : null;
+    }
+
+    private async Task<EncodeScratchFate> SettleAsync(EncodeScratchFile scratch, CancellationToken cancellationToken)
+    {
+        EncodeScratchFate fate = RoomOf(scratch) is { } room
+            ? Remove(room, scratch.FileName, scratch.JobId, scratch.OutputRoot)
+            : Unplaceable(scratch.FileName, scratch.JobId, scratch.OutputRoot);
+
+        scratch.Settle(fate, clock.GetUtcNow().UtcDateTime);
+
+        await ledger.SaveAsync(scratch, cancellationToken);
+
+        return fate;
     }
 
     /// <summary>

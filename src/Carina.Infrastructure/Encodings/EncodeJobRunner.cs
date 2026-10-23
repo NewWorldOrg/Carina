@@ -193,28 +193,38 @@ public sealed class EncodeJobRunner(
             headSkip.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture),
             timeline.CaptionShift.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture));
 
-        var heard = new Heartbeat();
-        EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
-            programmes.Programme,
-            [
-                .. FfmpegEncodeInvocation.Arguments(
-                    recording.ServiceId,
-                    profile,
-                    encoder,
-                    programmes,
-                    source.FullName,
-                    cores,
-                    headSkip,
-                    EncodeSound.Of(recording.SnapshotAudio, recording.SnapshotSounds),
-                    breaks),
-                .. FfmpegEncodeInvocation.Delivery(work),
-            ],
-            timeline.Expected,
-            settings.StalledAfter,
-            spawned => SpawnedAsync(job, spawned, cancellationToken),
-            progress => TellAsync(job, progress, heard, cancellationToken),
-            clock,
-            cancellationToken);
+        EncodeSound sound = EncodeSound.Of(recording.SnapshotAudio, recording.SnapshotSounds);
+        EncodeRate rate = EncodeRate.Of(profile);
+
+        Task<EncodeRunOutcome> EncodeAsync(EncodeRate at, string into)
+        {
+            var heard = new Heartbeat();
+
+            return FfmpegEncodeRun.RunAsync(
+                programmes.Programme,
+                [
+                    .. FfmpegEncodeInvocation.Arguments(
+                        recording.ServiceId,
+                        profile,
+                        encoder,
+                        programmes,
+                        source.FullName,
+                        cores,
+                        headSkip,
+                        sound,
+                        breaks,
+                        at),
+                    .. FfmpegEncodeInvocation.Delivery(into),
+                ],
+                timeline.Expected,
+                settings.StalledAfter,
+                spawned => SpawnedAsync(job, spawned, cancellationToken),
+                progress => TellAsync(job, progress, heard, cancellationToken),
+                clock,
+                cancellationToken);
+        }
+
+        EncodeRunOutcome ran = await EncodeAsync(rate, work);
 
         if (ran.Fault is EncodeRunFault.ProgrammeMissing)
         {
@@ -239,8 +249,10 @@ public sealed class EncodeJobRunner(
                 cancellationToken);
         }
 
-        await MeasureAsync(job, work, cancellationToken);
-        await CaptionAsync(job, work, cancellationToken);
+        string kept = await NoLargerThanTheSourceAsync(job, new EncodeRemakeRun(source.FullName, work, rate, encoder, EncodeAsync), cancellationToken);
+
+        await MeasureAsync(job, kept, cancellationToken);
+        await CaptionAsync(job, kept, cancellationToken);
 
         EncodePlacementOutcome placed = await placer.PlaceAsync(job, cancellationToken);
 
@@ -307,6 +319,120 @@ public sealed class EncodeJobRunner(
         }
 
         return embedded.Count is 0 ? null : ChapterMetadataFile.InRecordingTime(embedded);
+    }
+
+    /// <summary>
+    /// Makes the work file a second time, coarser, when it came out larger than the recording, writes down which
+    /// of the two the job keeps, and hands back where that one is. A recording whose size is not known is outgrown
+    /// by nothing, a profile already at the coarsest is not made again, and a second run that fails leaves the
+    /// first. The one not kept, or what a second run that failed left, is removed there and then, before the
+    /// kept one is measured and captioned.
+    /// </summary>
+    private async Task<string> NoLargerThanTheSourceAsync(EncodeJob job, EncodeRemakeRun run, CancellationToken cancellationToken)
+    {
+        long recorded = BytesOf(run.Source);
+        long first = BytesOf(run.Work);
+
+        if (!EncodeRemakes.Outgrew(first, recorded))
+        {
+            return run.Work;
+        }
+
+        EncodeRate coarser = run.Rate.Coarser();
+
+        if (coarser.On(run.Encoder) == run.Rate.On(run.Encoder))
+        {
+            logger.LogWarning(
+                "Job {Job} made {Made} bytes, larger than its recording of {Recorded} bytes, at {Rate} on the {Encoder}, the coarsest there is, so it is not made again.",
+                job.Id.Wire,
+                first,
+                recorded,
+                run.Rate.On(run.Encoder),
+                run.Encoder);
+
+            return run.Work;
+        }
+
+        if (await scratch.RecordAsync(job, EncodeScratchKind.WorkFile, job.RemadeFileName, cancellationToken) is not { } again)
+        {
+            logger.LogWarning(
+                "Job {Job} made {Made} bytes, larger than its recording of {Recorded} bytes, and nothing tells this process where output root '{Root}' is mounted to make it again.",
+                job.Id.Wire,
+                first,
+                recorded,
+                job.OutputRoot.Value);
+
+            return run.Work;
+        }
+
+        job.Remaking();
+        await jobs.SaveAsync(job, cancellationToken);
+
+        logger.LogWarning(
+            "Job {Job} made {Made} bytes, larger than its recording of {Recorded} bytes, and makes it again at {Coarser} on the {Encoder} in place of {Rate}.",
+            job.Id.Wire,
+            first,
+            recorded,
+            coarser.On(run.Encoder),
+            run.Encoder,
+            run.Rate.On(run.Encoder));
+
+        EncodeRunOutcome ran = await run.EncodeAsync(coarser, again);
+        long? second = ran.Succeeded && File.Exists(again) ? BytesOf(again) : null;
+
+        job.MadeAgain(EncodeRemakes.Judge(recorded, first, second));
+        await jobs.SaveAsync(job, cancellationToken);
+
+        bool keepsTheSecond = job.KeptWorkFileName.Equals(job.RemadeFileName);
+        EncodeScratchFate? cleared = await cleaner.ClearOneAsync(
+            job,
+            keepsTheSecond ? job.WorkFileName : job.RemadeFileName,
+            cancellationToken);
+
+        if (second is not { } made)
+        {
+            logger.LogWarning(
+                "Job {Job} could not make it again ({Why}), keeps the first of {Made} bytes against a recording of {Recorded} bytes, and what the second run left is {Cleared}.",
+                job.Id.Wire,
+                WhyTheSecondRunMadeNothing(ran),
+                first,
+                recorded,
+                cleared);
+        }
+        else
+        {
+            logger.Log(
+                job.Remade is EncodeRemake.LargerThanTheSource ? LogLevel.Information : LogLevel.Warning,
+                "Job {Job} made it again to {Second} bytes against a recording of {Recorded} bytes, comes to {Remade}, and the one it does not keep is {Cleared}.",
+                job.Id.Wire,
+                made,
+                recorded,
+                job.Remade,
+                cleared);
+        }
+
+        return keepsTheSecond ? again : run.Work;
+    }
+
+    /// <summary>
+    /// Why the second run made no file, named the way a failed job's reason is, so a disk with no room left is
+    /// told apart from the programme refusing.
+    /// </summary>
+    private static string WhyTheSecondRunMadeNothing(EncodeRunOutcome ran)
+        => ran.Fault switch
+        {
+            EncodeRunFault.ProgrammeMissing => $"{EncodeFailure.CapabilityUnavailable}: {ran.Complained}",
+            EncodeRunFault.Stalled => $"{EncodeFailure.TimedOut}: {ran.Complained}",
+            _ when ran.ExitCode is not 0 =>
+                $"{FfmpegComplaint.Classified(ran.Complained)}: the programme exited {ran.ExitCode?.ToString(CultureInfo.InvariantCulture)}: {ran.Complained}",
+            _ => "the programme exited 0 and wrote no file",
+        };
+
+    private static long BytesOf(string path)
+    {
+        var file = new FileInfo(path);
+
+        return file.Exists ? file.Length : 0;
     }
 
     private static EncodeFailure WhatAnUnreadHeadIsCalled(SourceHeadReading head)
@@ -465,6 +591,13 @@ public sealed class EncodeJobRunner(
 
         return job.Status;
     }
+
+    private sealed record EncodeRemakeRun(
+        string Source,
+        string Work,
+        EncodeRate Rate,
+        EncodeEncoder Encoder,
+        Func<EncodeRate, string, Task<EncodeRunOutcome>> EncodeAsync);
 
     private sealed class Heartbeat
     {

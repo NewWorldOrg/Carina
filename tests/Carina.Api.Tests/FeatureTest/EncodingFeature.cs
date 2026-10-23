@@ -61,7 +61,7 @@ internal sealed class EncodingFeature : IAsyncDisposable
 
     private readonly RecordingStore shelf = new();
 
-    public EncodingFeature(EncodeEncoder prefer = EncodeEncoder.Software)
+    public EncodingFeature(EncodeEncoder prefer = EncodeEncoder.Software, MachineCapabilities? can = null)
     {
         Settings = new EncodeSettings { OutputRoots = [new StorageRootPath(Encodes, shelf.Root)], Prefer = prefer };
         Driver.Roots.Add(new StorageRootDto { Name = Primary.Value, FreeBytes = 900, TotalBytes = 1_000, Writable = true });
@@ -84,7 +84,7 @@ internal sealed class EncodingFeature : IAsyncDisposable
                 services.AddSingleton(Machine);
                 services.AddSingleton<IStrayProgrammes>(Strays);
                 services.AddSingleton<Carina.Domain.Streaming.ITranscodeBudget>(Transcoders);
-                services.AddSingleton<IMachineCapabilityReader>(new AnsweredMachine(WithACard));
+                services.AddSingleton<IMachineCapabilityReader>(new AnsweredMachine(can ?? WithACard));
             }));
 
         Client = configured.WithTestScheme().CreateClient();

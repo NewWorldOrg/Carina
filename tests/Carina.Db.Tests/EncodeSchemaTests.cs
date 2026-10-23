@@ -286,6 +286,35 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(1, await failing.ExecuteNonQueryAsync());
     }
 
+    [Fact(DisplayName = "why a job made its artefact again is one of the reasons named, and only on a job that has run")]
+    public async Task WhyAJobMadeItsArtefactAgainIsOneOfTheReasonsNamed()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var recording = Guid.NewGuid();
+        var made = Guid.NewGuid();
+        var waiting = Guid.NewGuid();
+        await JobAsync(connection, made, recording, "'Completed'", Started, Ended, "NULL, NULL, NULL", $"'{recording:N}.{ProfileWire}.mp4'");
+        await JobAsync(connection, waiting, Guid.NewGuid(), "'Queued'", "NULL", "NULL", "NULL, NULL, NULL", "NULL");
+
+        PostgresException unnamed = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"UPDATE encode_job SET remade = 'Smaller' WHERE id = '{made}'",
+            connection).ExecuteNonQueryAsync());
+        PostgresException early = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"UPDATE encode_job SET remade = 'LargerThanTheSource' WHERE id = '{waiting}'",
+            connection).ExecuteNonQueryAsync());
+
+        Assert.All([unnamed, early], refusal => Assert.Equal("ck_encode_job_remade", refusal.ConstraintName));
+
+        foreach (string remade in Enum.GetNames<EncodeRemake>())
+        {
+            await using var settling = new NpgsqlCommand($"UPDATE encode_job SET remade = '{remade}' WHERE id = '{made}'", connection);
+
+            Assert.Equal(1, await settling.ExecuteNonQueryAsync());
+        }
+    }
+
     [Fact(DisplayName = "a job is written down as replaced only once it completed, named what it made, and ended no later than it was replaced")]
     public async Task AJobIsReplacedOnlyOnceItCompleted()
     {
@@ -542,6 +571,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 "ck_encode_job_name_given_up",
                 "ck_encode_job_output_root",
                 "ck_encode_job_programme",
+                "ck_encode_job_remade",
                 "ck_encode_job_replaced",
                 "ck_encode_job_route",
                 "ck_encode_job_status",
