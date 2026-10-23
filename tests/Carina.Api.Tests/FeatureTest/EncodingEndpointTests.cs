@@ -540,6 +540,30 @@ public sealed class EncodingEndpointTests
         Assert.Equal(JsonValueKind.Null, waits.GetProperty("quietForSeconds").ValueKind);
     }
 
+    [Fact(DisplayName = "the list says why a job made its artefact again and what it kept, and says nothing of it for a job that made it once")]
+    public async Task TheListSaysWhyAJobMadeItsArtefactAgain()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        EncodeJob remaking = feature.Queued(feature.Recorded(), profile, destination);
+        remaking.Start(EncodingFeature.Noon.AddMinutes(-25));
+        remaking.Remaking();
+        EncodeJob larger = feature.Queued(feature.Recorded(), profile, destination);
+        larger.Start(EncodingFeature.Noon.AddMinutes(-90));
+        larger.Remaking();
+        larger.MadeAgain(EncodeRemake.StillLargerThanTheSource);
+        larger.Fail(EncodeFailure.NotEnoughRoom, "No space left on device", EncodingFeature.Noon.AddMinutes(-30));
+        EncodeJob once = feature.Queued(feature.Recorded(), profile, destination);
+
+        (_, JsonElement body) = await feature.GetAsync("/api/encoding/jobs");
+        JsonElement[] items = [.. body.GetProperty("data").GetProperty("items").EnumerateArray()];
+
+        Assert.Equal("largerThanTheSource", items.Single(item => item.GetProperty("id").GetGuid() == remaking.Id.Value).GetProperty("remade").GetString());
+        Assert.Equal("stillLargerThanTheSource", items.Single(item => item.GetProperty("id").GetGuid() == larger.Id.Value).GetProperty("remade").GetString());
+        Assert.Equal(JsonValueKind.Null, items.Single(item => item.GetProperty("id").GetGuid() == once.Id.Value).GetProperty("remade").ValueKind);
+    }
+
     [Fact(DisplayName = "A job waiting because the card is making a picture for someone watching says so on the list, and a running one does not")]
     public async Task AJobWaitingBecauseSomeoneIsWatchingSaysSoOnTheList()
     {

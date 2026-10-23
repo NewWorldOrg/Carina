@@ -723,6 +723,18 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             schemas["EncodeProfileDefaultsResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
+    [Fact(DisplayName = "a job says why it made its artefact again and what it kept, in the values that take")]
+    public async Task AJobSaysWhyItMadeItsArtefactAgain()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.True(schemas["EncodeJobResponder"]!["properties"]!.AsObject().ContainsKey("remade"));
+        Assert.Equal(
+            ["largerThanTheSource", "stillLargerThanTheSource", "noSmallerTheSecondTime", "absent"],
+            schemas["EncodeRemake"]!["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent").ToArray());
+    }
+
     [Fact(DisplayName = "the status of CM, OP and ED detection is described with the learning data kept, the catalog's count of each kind and the version of the model in use")]
     public async Task TheSegmentStatusIsDescribedWithTheCatalog()
     {

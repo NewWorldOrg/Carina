@@ -830,6 +830,11 @@ namespace Carina.Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("recording_id");
 
+                    b.Property<string>("Remade")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("remade");
+
                     b.Property<DateTime?>("ReplacedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("replaced_at");
@@ -1008,6 +1013,8 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_encode_job_output_root", "btrim(output_root) = output_root\nAND length(output_root) > 0\nAND output_root <> '.'\nAND strpos(output_root, '/') = 0\nAND strpos(output_root, chr(92)) = 0\nAND strpos(output_root, '..') = 0");
 
                             t.HasCheckConstraint("ck_encode_job_programme", "((process_id IS NULL) = (process_started_at IS NULL))\nAND (process_id IS NULL OR status = 'Running')\nAND (process_id IS NULL OR process_id >= 1)\nAND (process_started_at IS NULL OR process_started_at >= started_at)");
+
+                            t.HasCheckConstraint("ck_encode_job_remade", "remade IS NULL OR (remade IN ('LargerThanTheSource', 'StillLargerThanTheSource', 'NoSmallerTheSecondTime') AND status <> 'Queued')");
 
                             t.HasCheckConstraint("ck_encode_job_replaced", "replaced_at IS NULL OR (status = 'Completed' AND artefact_name IS NOT NULL AND replaced_at >= ended_at)");
 

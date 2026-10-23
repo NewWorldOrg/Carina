@@ -33,7 +33,8 @@ public static class FfmpegEncodeInvocation
     /// The arguments for one run. The core cap is written for the decoder, the filters and the encoder.
     /// The card is opened through the render node the machine is set to, and only when it is what encodes.
     /// Chapters to bake into the artefact come in as a second input, after the recording; with none,
-    /// no argument is added.
+    /// no argument is added. The picture is encoded at <paramref name="rate"/>, and at the profile's own
+    /// when none is handed.
     /// </summary>
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
@@ -44,7 +45,8 @@ public static class FfmpegEncodeInvocation
         int cores,
         TimeSpan headSkip,
         EncodeSound sound,
-        string? chapters = null)
+        string? chapters = null,
+        EncodeRate? rate = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
@@ -87,7 +89,7 @@ public static class FfmpegEncodeInvocation
             .. Mapping(service, sound),
             .. BakingChapters(chapters),
             .. Filtering(profile, encoder),
-            .. Encoding(profile, encoder),
+            .. Encoding(profile, encoder, rate ?? EncodeRate.Of(profile)),
             "-threads",
             threads,
             .. Audio(sound),
@@ -211,9 +213,10 @@ public static class FfmpegEncodeInvocation
         return string.Join(',', steps);
     }
 
-    internal static IReadOnlyList<string> Encoding(EncodeProfile profile, EncodeEncoder encoder)
+    internal static IReadOnlyList<string> Encoding(EncodeProfile profile, EncodeEncoder encoder, EncodeRate rate)
     {
         ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(rate);
 
         return EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi
             ?
@@ -223,7 +226,7 @@ public static class FfmpegEncodeInvocation
                 "-rc_mode",
                 "CQP",
                 "-qp",
-                profile.VaapiRateControl.Quantiser.ToString(CultureInfo.InvariantCulture),
+                rate.Quantiser.Quantiser.ToString(CultureInfo.InvariantCulture),
                 .. Tagging(profile.Codec),
             ]
             :
@@ -233,7 +236,7 @@ public static class FfmpegEncodeInvocation
                 "-preset",
                 "medium",
                 "-crf",
-                profile.SoftwareRateControl.RateFactor.ToString(CultureInfo.InvariantCulture),
+                rate.RateFactor.RateFactor.ToString(CultureInfo.InvariantCulture),
                 .. Tagging(profile.Codec),
             ];
     }

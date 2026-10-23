@@ -85,6 +85,12 @@ public sealed class EncodeJob
     /// </summary>
     public int CaptionTrackAttempts { get; private set; }
 
+    /// <summary>
+    /// Why this attempt made its artefact a second time, and once it has, what it kept. Nothing while it made it
+    /// once.
+    /// </summary>
+    public EncodeRemake? Remade { get; private set; }
+
     public bool HasEnded => EncodeStandings.IsTerminal(Status);
 
     /// <summary>
@@ -102,6 +108,15 @@ public sealed class EncodeJob
 
     public EncodeFileName WorkFileName => EncodeFileName.Working(RecordingId, Id, Attempt);
 
+    public EncodeFileName RemadeFileName => EncodeFileName.Remade(RecordingId, Id, Attempt);
+
+    /// <summary>
+    /// The work file this attempt keeps: the second it wrote when it made its artefact again and kept that, and
+    /// the first otherwise.
+    /// </summary>
+    public EncodeFileName KeptWorkFileName
+        => Remade is null or EncodeRemake.NoSmallerTheSecondTime ? WorkFileName : RemadeFileName;
+
     public EncodeFileName ChaptersFileName => EncodeFileName.Chapters(RecordingId, Id, Attempt);
 
     public EncodeFileName CaptionTrackFileName => EncodeFileName.CaptionTrack(RecordingId, Id, Attempt);
@@ -109,10 +124,10 @@ public sealed class EncodeJob
     public EncodeFileName CaptionedFileName => EncodeFileName.Captioned(RecordingId, Id, Attempt);
 
     /// <summary>
-    /// The file a running job places as its artefact: the work file with the text track of captions put in
-    /// when this attempt put one in, and the work file as the encode wrote it otherwise.
+    /// The file a running job places as its artefact: the work file it keeps with the text track of captions put
+    /// in when this attempt put one in, and the work file it keeps as the encode wrote it otherwise.
     /// </summary>
-    public EncodeFileName FileToPlace => CaptionTrack is EncodeCaptionTrack.Added ? CaptionedFileName : WorkFileName;
+    public EncodeFileName FileToPlace => CaptionTrack is EncodeCaptionTrack.Added ? CaptionedFileName : KeptWorkFileName;
 
     public static EncodeJob Queue(
         EncodeJobId id,
@@ -187,7 +202,8 @@ public sealed class EncodeJob
         DateTime? replacedAt = null,
         EncodeCaptionTrack? captionTrack = null,
         DateTime? captionTrackFrom = null,
-        int captionTrackAttempts = 0)
+        int captionTrackAttempts = 0,
+        EncodeRemake? remade = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(recordingId);
@@ -241,6 +257,11 @@ public sealed class EncodeJob
             throw new ArgumentException("A job that is waiting has run nowhere and got nowhere.", nameof(route));
         }
 
+        if (remade is not null && status is EncodeJobStatus.Queued)
+        {
+            throw new ArgumentException("A job that is waiting has made nothing, let alone made it again.", nameof(remade));
+        }
+
         return new EncodeJob
         {
             Id = id,
@@ -266,6 +287,7 @@ public sealed class EncodeJob
             CaptionTrack = captionTrack is { } track ? Track(track) : null,
             CaptionTrackFrom = UtcTimes.Optional(captionTrackFrom, nameof(captionTrackFrom)),
             CaptionTrackAttempts = captionTrackAttempts,
+            Remade = remade is { } again ? Again(again) : null,
         };
     }
 
@@ -309,6 +331,44 @@ public sealed class EncodeJob
         CaptionTrackFrom = madeAt;
         CaptionTrackAttempts = settled is EncodeCaptionTrack.Failed ? before + 1 : 0;
     }
+
+    /// <summary>
+    /// Writes down that what this run made came out larger than the recording, and that it is made a second
+    /// time, coarser. An attempt does it once.
+    /// </summary>
+    public void Remaking()
+    {
+        Only(EncodeJobStatus.Running, "make its artefact again");
+
+        if (Remade is not null)
+        {
+            throw new InvalidOperationException("An attempt makes its artefact again once, and this one has already.");
+        }
+
+        Remade = EncodeRemake.LargerThanTheSource;
+    }
+
+    /// <summary>
+    /// Writes down what this run kept once it made its artefact a second time, as
+    /// <see cref="EncodeRemakes.Judge"/> answers.
+    /// </summary>
+    public void MadeAgain(EncodeRemake kept)
+    {
+        EncodeRemake judged = Again(kept);
+        Only(EncodeJobStatus.Running, "say what it kept after making it again");
+
+        if (Remade is not EncodeRemake.LargerThanTheSource)
+        {
+            throw new InvalidOperationException("Only an attempt making its artefact again says what it kept, and says it once.");
+        }
+
+        Remade = judged;
+    }
+
+    private static EncodeRemake Again(EncodeRemake remade)
+        => Enum.IsDefined(remade)
+            ? remade
+            : throw new ArgumentOutOfRangeException(nameof(remade), remade, "An artefact is made again for one of the reasons named here.");
 
     private static EncodeCaptionTrack Track(EncodeCaptionTrack track)
         => Enum.IsDefined(track)
@@ -567,6 +627,7 @@ public sealed class EncodeJob
         CaptionTrack = null;
         CaptionTrackFrom = null;
         CaptionTrackAttempts = 0;
+        Remade = null;
     }
 
     /// <summary>

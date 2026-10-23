@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
@@ -692,6 +694,26 @@ public sealed class FfmpegEncodeInvocationTests
         Assert.Contains("-crf", onTheProcessor);
         Assert.DoesNotContain("-qp", onTheProcessor);
         Assert.DoesNotContain("-b:v", onTheProcessor);
+    }
+
+    [Fact(DisplayName = "a run handed a coarser rate writes it where the profile's would be, and changes nothing else")]
+    public void ARunHandedACoarserRateWritesItWhereTheProfilesWouldBe()
+    {
+        EncodeProfile profile = Profile();
+        EncodeRate coarser = EncodeRate.Of(profile).Coarser();
+
+        foreach (EncodeEncoder encoder in Enum.GetValues<EncodeEncoder>())
+        {
+            string[] asDefined = [.. FfmpegEncodeInvocation.Arguments(Service, profile, encoder, Machine, Source, Cores, HeadSkip, AsItStands, Breaks)];
+            string[] again = [.. FfmpegEncodeInvocation.Arguments(Service, profile, encoder, Machine, Source, Cores, HeadSkip, AsItStands, Breaks, coarser)];
+            string flag = encoder is EncodeEncoder.Vaapi ? "-qp" : "-crf";
+            int at = Array.IndexOf(asDefined, flag) + 1;
+
+            Assert.Equal(EncodeRate.Of(profile).On(encoder).ToString(CultureInfo.InvariantCulture), asDefined[at]);
+            Assert.Equal(coarser.On(encoder).ToString(CultureInfo.InvariantCulture), again[at]);
+            Assert.Equal(asDefined.Where((_, index) => index != at), again.Where((_, index) => index != at));
+            Assert.Equal(asDefined, FfmpegEncodeInvocation.Arguments(Service, profile, encoder, Machine, Source, Cores, HeadSkip, AsItStands, Breaks, EncodeRate.Of(profile)));
+        }
     }
 
     [Theory(DisplayName = "nothing that reaches an argument was written by anyone but this repository")]

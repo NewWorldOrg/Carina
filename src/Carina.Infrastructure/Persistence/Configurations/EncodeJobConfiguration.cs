@@ -128,6 +128,9 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
                 AND caption_track_attempts >= 0
                 AND (caption_track_attempts = 0 OR caption_track = 'Failed')
                 """);
+            table.HasCheckConstraint(
+                "ck_encode_job_remade",
+                $"remade IS NULL OR (remade IN ({EncodeVocabulary.Of<EncodeRemake>()}) AND status <> 'Queued')");
         });
 
         builder.Property<uint>(ConcurrencyToken)
@@ -193,6 +196,7 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
         builder.Property(job => job.CaptionTrack).HasConversion<string>().HasMaxLength(32);
         builder.Property(job => job.CaptionTrackFrom);
         builder.Property(job => job.CaptionTrackAttempts).HasDefaultValue(0).IsRequired();
+        builder.Property(job => job.Remade).HasConversion<string>().HasMaxLength(32);
 
         builder.ComplexProperty(job => job.Route, route =>
         {
@@ -263,6 +267,7 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
         builder.Ignore(job => job.StandsAsTheArtefact);
         builder.Ignore(job => job.Standing);
         builder.Ignore(job => job.WorkFileName);
+        builder.Ignore(job => job.RemadeFileName);
         builder.Ignore(job => job.ChaptersFileName);
         builder.Ignore(job => job.CaptionTrackFileName);
         builder.Ignore(job => job.CaptionedFileName);
