@@ -269,6 +269,7 @@ public sealed class ChannelSchemaTests
                 "broadcast_service",
                 "candidate_channel",
                 "collection_epoch",
+                "data_broadcast_settings",
                 "encode_auto_run",
                 "encode_chapter",
                 "encode_destination",

@@ -616,6 +616,38 @@ namespace Carina.Db.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Carina.Domain.DataBroadcast.DataBroadcastSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<string>("PostalCode")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("postal_code");
+
+                    b.Property<short?>("Prefecture")
+                        .HasColumnType("smallint")
+                        .HasColumnName("prefecture");
+
+                    b.HasKey("Id")
+                        .HasName("pk_data_broadcast_settings");
+
+                    b.ToTable("data_broadcast_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_data_broadcast_settings_postal_code", "postal_code ~ '^[0-9]{7}$'");
+
+                            t.HasCheckConstraint("ck_data_broadcast_settings_prefecture", "prefecture BETWEEN 0 AND 49");
+
+                            t.HasCheckConstraint("ck_data_broadcast_settings_single_row", "id = 1");
+                        });
+                });
+
             modelBuilder.Entity("Carina.Domain.Encodings.EncodeAutoRun", b =>
                 {
                     b.Property<int>("Id")
