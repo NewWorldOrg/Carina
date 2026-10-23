@@ -2,7 +2,7 @@ namespace Carina.Infrastructure.Machines;
 
 public static class VaapiProbeInvocation
 {
-    public const string Picture = "color=black:s=64x64:r=1:d=1";
+    public const string Picture = "color=black:s=256x256:r=1:d=1";
 
     public static IReadOnlyList<string> Arguments(string renderNode)
         => Arguments(renderNode, FfmpegFaculties.H264OnTheCard);
