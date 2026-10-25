@@ -79,7 +79,9 @@ public interface IProgrammeRepository : IAnnouncedProgrammes
 
     /// <summary>
     /// Lists the programmes that carry a relayed or moved link, together with the programmes those
-    /// links name, as far as the guide holds them.
+    /// links name, as far as the guide holds them, and the named programmes another service carries as
+    /// the same broadcast at the same time: joined by event sharing, or under the same name on the same
+    /// transport stream from the same start to the same end.
     /// </summary>
     Task<IReadOnlyList<Programme>> ListGroupedAsync(CancellationToken cancellationToken);
 }

@@ -75,6 +75,35 @@ public sealed class BroadcastGroupsFromTheGuideTests
     }
 
     [Fact]
+    public async Task BrRd010ASubChannelThePresentFollowingTableNamesIsTheSameBroadcastAsTheMainItShares()
+    {
+        HeldProgrammes held = await ReadAsync(
+            Table(EventInformationTable.FirstScheduleActualTableId, 1, Event(14, Noon, 30, "Shared", Group(EventGroupKind.Shared, (1, 14), (6, 14)))),
+            Table(EventInformationTable.FirstScheduleActualTableId, 6, Event(14, Noon, 30, null, Group(EventGroupKind.Shared, (1, 14)))));
+        BroadcastResolution whileAShadow =
+            BroadcastGroupResolver.Of(await held.ListGroupedAsync(Cancel)).Resolve(Find(held, 6, 14), At);
+
+        await ReadMoreAsync(
+            held,
+            Table(EventInformationTable.PresentFollowingActualTableId, 6, Event(14, Noon, 30, "Shared", Group(EventGroupKind.Shared, (1, 14)), running: 4)));
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of(await held.ListGroupedAsync(Cancel));
+        BroadcastTarget onTheSub = Assert.Single(resolver.Resolve(Find(held, 6, 14), At).Targets);
+
+        Assert.Equal(BroadcastExclusion.Shadow, whileAShadow.Exclusion);
+        Assert.Equal(Id(1, 14), resolver.SimulcastPrimaryOf(onTheSub)!.Programme.Id);
+    }
+
+    [Fact]
+    public async Task BrRd010TheGuideHeldInMemoryReadsNoProgrammesAsOneBroadcastByNameWhileTheirEndsAreNotAnnounced()
+    {
+        HeldProgrammes held = new();
+        held.Programmes.Add(Untimed(1, 15, "Unended"));
+        held.Programmes.Add(Untimed(7, 15, "Unended"));
+
+        Assert.Empty(await held.ListGroupedAsync(Cancel));
+    }
+
+    [Fact]
     public async Task BrRd010AGroupReadsTheProgrammesItNamesEvenWhenOnlyOneSideCarriesTheLink()
     {
         HeldProgrammes held = await ReadAsync(
@@ -90,15 +119,24 @@ public sealed class BroadcastGroupsFromTheGuideTests
     private static async Task<HeldProgrammes> ReadAsync(params EventInformationTable[] tables)
     {
         HeldProgrammes held = new();
+
+        await ReadMoreAsync(held, tables);
+
+        return held;
+    }
+
+    private static async Task ReadMoreAsync(HeldProgrammes held, params EventInformationTable[] tables)
+    {
         ProgrammeWriter writer = new(held, new UnguardedWrites(), new StillClock(), new SilentEvents(), new CountedNotices());
 
         foreach (EventInformationTable table in tables)
         {
             await writer.WriteAsync([table], [], Cancel);
         }
-
-        return held;
     }
+
+    private static Programme Untimed(int service, int carried, string name)
+        => Programme.Rehydrate(Id(service, carried), new TransportStreamId(Stream), At.AddHours(3), null, name, string.Empty, false, At);
 
     private static Programme Find(HeldProgrammes held, int service, int carried)
         => held.Programmes.Single(programme => programme.Id.Equals(Id(service, carried)));

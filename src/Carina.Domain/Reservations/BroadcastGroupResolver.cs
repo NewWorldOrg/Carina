@@ -36,10 +36,16 @@ public sealed record BroadcastResolution(IReadOnlyList<BroadcastTarget> Targets,
 public sealed record BroadcastPlacement(BroadcastTarget Own, IReadOnlyList<BroadcastTarget> Alongside);
 
 /// <summary>
-/// Groups the programmes the guide links as relayed or moved, and answers which of them to reserve.
+/// Groups the programmes the guide links as relayed or moved, and the programmes several services of
+/// one broadcaster carry as the same broadcast at the same time, and answers which of them to reserve.
 /// A group is the set of programmes the links join, whichever side carries the link, and a programme
 /// that is named but not in the guide stays in the group as an absent member.
 /// </summary>
+/// <remarks>
+/// The same broadcast on several services is told by event sharing between programmes that both carry
+/// a name, or, where no link says so, by one transport stream carrying the same name from the same start
+/// to the same end on more than one service.
+/// </remarks>
 public sealed class BroadcastGroupResolver
 {
     private const string RelayPrefix = "relay";
@@ -52,11 +58,18 @@ public sealed class BroadcastGroupResolver
 
     private readonly Grouping movements;
 
-    private BroadcastGroupResolver(Dictionary<Node, Programme> present, Grouping relays, Grouping movements)
+    private readonly Grouping simulcasts;
+
+    private BroadcastGroupResolver(
+        Dictionary<Node, Programme> present,
+        Grouping relays,
+        Grouping movements,
+        Grouping simulcasts)
     {
         this.present = present;
         this.relays = relays;
         this.movements = movements;
+        this.simulcasts = simulcasts;
     }
 
     public static BroadcastGroupResolver Of(IEnumerable<Programme> grouped)
@@ -72,6 +85,7 @@ public sealed class BroadcastGroupResolver
 
         Grouping relays = new();
         Grouping movements = new();
+        Grouping simulcasts = new();
 
         foreach ((Node node, Programme programme) in present)
         {
@@ -87,10 +101,22 @@ public sealed class BroadcastGroupResolver
                 {
                     movements.Join(node, other);
                 }
+                else if (related.Kind is RelationKind.Shared && SharedAlike(present, programme, other))
+                {
+                    simulcasts.Join(node, other);
+                }
             }
         }
 
-        return new BroadcastGroupResolver(present, relays, movements);
+        foreach (Node[] alike in Alike(present.Values))
+        {
+            foreach (Node member in alike)
+            {
+                simulcasts.Join(alike[0], member);
+            }
+        }
+
+        return new BroadcastGroupResolver(present, relays, movements, simulcasts);
     }
 
     /// <summary>
@@ -108,6 +134,7 @@ public sealed class BroadcastGroupResolver
 
             found.UnionWith(relays.MembersOf(node));
             found.UnionWith(movements.MembersOf(node));
+            found.UnionWith(simulcasts.MembersOf(node));
         }
 
         return
@@ -135,6 +162,31 @@ public sealed class BroadcastGroupResolver
         return new BroadcastResolution(
             Targets(held, at),
             ReferenceEquals(primary, held) ? BroadcastExclusion.None : BroadcastExclusion.Moved);
+    }
+
+    /// <summary>
+    /// The programme for a rule to reserve in place of <paramref name="target"/> when other services of
+    /// the same broadcaster carry the same broadcast at the same time: the one on the service with the
+    /// smallest identifier, or the primary listing of a moved broadcast that one belongs to. A programme
+    /// among <paramref name="kept"/>, where a person changed the reservation standing on it, is
+    /// reserved instead, and is never replaced itself. Null when that comes back to
+    /// <paramref name="target"/>, or when no other service carries its broadcast.
+    /// </summary>
+    public BroadcastTarget? SimulcastPrimaryOf(BroadcastTarget target, IReadOnlySet<ProgrammeRef>? kept = null)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        Programme held = present.GetValueOrDefault(Node.Of(target.Programme.Id), target.Programme);
+        IReadOnlyList<Programme> cluster = ClustersOf(simulcasts, Node.Of(held.Id))
+            .FirstOrDefault(run => run.Contains(held)) ?? [];
+        Programme[] chosen = [.. cluster.Where(member => kept?.Contains(Reference(member)) is true)];
+        Programme? reserved = chosen.Length > 0
+            ? chosen.MinBy(member => Node.Of(member.Id))
+            : PrimaryOrNone(cluster);
+
+        return reserved is null || chosen.Contains(held) || ReferenceEquals(reserved, held)
+            ? null
+            : Target(reserved, reserved);
     }
 
     public BroadcastPlacement? Place(ProgrammeRef reserved, DateTime endsAt, DateTime at)
@@ -235,7 +287,7 @@ public sealed class BroadcastGroupResolver
 
     private Programme PrimaryOf(Programme programme)
     {
-        IReadOnlyList<IReadOnlyList<Programme>> clusters = ClustersOf(Node.Of(programme.Id));
+        IReadOnlyList<IReadOnlyList<Programme>> clusters = ClustersOf(movements, Node.Of(programme.Id));
 
         foreach (IReadOnlyList<Programme> cluster in clusters)
         {
@@ -248,9 +300,12 @@ public sealed class BroadcastGroupResolver
         return programme;
     }
 
+    private Programme? PrimaryOrNone(IReadOnlyList<Programme> cluster)
+        => cluster.Count is 0 ? null : PrimaryOf(cluster.MinBy(member => Node.Of(member.Id))!);
+
     private Programme? OverlappingPrimary(Node node, DateTime startsAt, DateTime endsAt)
     {
-        foreach (IReadOnlyList<Programme> cluster in ClustersOf(node))
+        foreach (IReadOnlyList<Programme> cluster in ClustersOf(movements, node))
         {
             if (cluster.Any(member => member.StartsAt < endsAt && EndsOf(member) > startsAt))
             {
@@ -262,12 +317,12 @@ public sealed class BroadcastGroupResolver
     }
 
     /// <summary>
-    /// The listings of a moved broadcast that are in the guide, gathered into runs of listings whose
-    /// times overlap, in the order they start.
+    /// The listings of one group that are in the guide, gathered into runs of listings whose times
+    /// overlap, in the order they start.
     /// </summary>
-    private IReadOnlyList<IReadOnlyList<Programme>> ClustersOf(Node node)
+    private IReadOnlyList<IReadOnlyList<Programme>> ClustersOf(Grouping grouping, Node node)
     {
-        IReadOnlySet<Node> members = movements.MembersOf(node);
+        IReadOnlySet<Node> members = grouping.MembersOf(node);
 
         if (members.Count <= 1)
         {
@@ -314,6 +369,31 @@ public sealed class BroadcastGroupResolver
             .ThenBy(member => member.StartsAt)
             .ThenBy(member => Node.Of(member.Id))
             .First();
+
+    private static ProgrammeRef Reference(Programme programme)
+        => new(programme.NetworkId, programme.ServiceId, programme.EventId, programme.StartsAt);
+
+    private static bool SharedAlike(Dictionary<Node, Programme> present, Programme programme, Node other)
+        => !programme.IsShadow
+            && other.ServiceId != programme.ServiceId.Value
+            && present.TryGetValue(other, out Programme? sharing)
+            && !sharing.IsShadow;
+
+    /// <summary>
+    /// The programmes one transport stream carries on more than one service under the same name, from
+    /// the same start to the same announced end.
+    /// </summary>
+    private static IEnumerable<Node[]> Alike(IEnumerable<Programme> programmes)
+        => programmes
+            .Where(programme => !programme.IsShadow && programme.Name.Length > 0 && programme.EndsAt is not null)
+            .GroupBy(programme => (
+                programme.NetworkId.Value,
+                programme.TransportStreamId.Value,
+                programme.StartsAt,
+                programme.EndsAt,
+                programme.Name))
+            .Select(alike => alike.Select(programme => Node.Of(programme.Id)).Order().ToArray())
+            .Where(alike => alike.Select(member => member.ServiceId).Distinct().Count() > 1);
 
     private static DateTime EndsOf(Programme programme)
         => programme.EndsAt ?? programme.StartsAt + Reservation.ProvisionalLengthWhenTheEndIsNotAnnounced;

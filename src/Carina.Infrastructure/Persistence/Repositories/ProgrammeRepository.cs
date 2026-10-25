@@ -273,8 +273,12 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         List<Programme> linking = await context.Set<Programme>()
             .FromSqlRaw(ProgrammeGrouping.LinkingSql)
             .ToListAsync(cancellationToken);
+        List<Programme> simulcast = await context.Set<Programme>()
+            .FromSqlRaw(ProgrammeGrouping.SimulcastSql)
+            .ToListAsync(cancellationToken);
 
         HashSet<ProgrammeId> held = [.. linking.Select(programme => programme.Id)];
+        linking.AddRange(simulcast.Where(programme => held.Add(programme.Id)));
         ProgrammeId[] named =
         [
             .. linking
