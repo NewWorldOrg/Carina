@@ -643,6 +643,12 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
             Aired(network, 902, 7, noon.AddHours(3), 45, "島"),
             Aired(network, 901, 8, noon.AddHours(4), 60, "空") with { Related = [new RelatedProgramme(network, 901, 9, RelationKind.Shared)] },
             Aired(network, 901, 9, noon.AddHours(5), 60, "空"),
+            Aired(network, 901, 10, noon.AddHours(6), 60, "森") with { Related = [new RelatedProgramme(network, 902, 10, RelationKind.Shared)] },
+            Aired(network, 902, 10, noon.AddHours(6), 60, "森の続き") with { Related = [new RelatedProgramme(network, 901, 10, RelationKind.Shared)] },
+            Aired(network, 901, 11, noon.AddHours(7), 60, "谷") with { Related = [new RelatedProgramme(network, 902, 11, RelationKind.Shared)] },
+            Aired(network, 902, 11, noon.AddHours(7), 45, "谷") with { Related = [new RelatedProgramme(network, 901, 11, RelationKind.Shared)] },
+            Aired(network, 901, 12, noon.AddHours(8), 60, "湖") with { EndsAt = null },
+            Aired(network, 902, 12, noon.AddHours(8), 60, "湖") with { EndsAt = null },
         ];
 
         foreach (ProgrammeBroadcast broadcast in carried)
@@ -654,7 +660,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         IReadOnlyList<Programme> grouped = await new ProgrammeRepository(reading).ListGroupedAsync(Cancel);
 
         Assert.Equal(
-            [(901, 1), (901, 2), (902, 1), (902, 3)],
+            [(901, 1), (901, 2), (901, 10), (901, 11), (902, 1), (902, 3), (902, 10), (902, 11)],
             grouped
                 .Where(programme => programme.NetworkId.Value == network)
                 .Select(programme => (programme.ServiceId.Value, programme.EventId.Value))

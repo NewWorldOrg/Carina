@@ -94,6 +94,16 @@ public sealed class BroadcastGroupsFromTheGuideTests
     }
 
     [Fact]
+    public async Task BrRd010TheGuideHeldInMemoryReadsNoProgrammesAsOneBroadcastByNameWhileTheirEndsAreNotAnnounced()
+    {
+        HeldProgrammes held = new();
+        held.Programmes.Add(Untimed(1, 15, "Unended"));
+        held.Programmes.Add(Untimed(7, 15, "Unended"));
+
+        Assert.Empty(await held.ListGroupedAsync(Cancel));
+    }
+
+    [Fact]
     public async Task BrRd010AGroupReadsTheProgrammesItNamesEvenWhenOnlyOneSideCarriesTheLink()
     {
         HeldProgrammes held = await ReadAsync(
@@ -124,6 +134,9 @@ public sealed class BroadcastGroupsFromTheGuideTests
             await writer.WriteAsync([table], [], Cancel);
         }
     }
+
+    private static Programme Untimed(int service, int carried, string name)
+        => Programme.Rehydrate(Id(service, carried), new TransportStreamId(Stream), At.AddHours(3), null, name, string.Empty, false, At);
 
     private static Programme Find(HeldProgrammes held, int service, int carried)
         => held.Programmes.Single(programme => programme.Id.Equals(Id(service, carried)));
