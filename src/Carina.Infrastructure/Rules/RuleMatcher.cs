@@ -23,7 +23,14 @@ public sealed record RuleFault(Rule Rule, Exception Cause);
 public sealed record RuleMatchRun(
     IReadOnlyList<RuleMatch> Matches,
     IReadOnlyList<Rule> TurnedOff,
-    IReadOnlyList<RuleFault> Faulted);
+    IReadOnlyList<RuleFault> Faulted)
+{
+    /// <summary>
+    /// The search each rule read was matched by, bound to the services the guide lists.
+    /// </summary>
+    public IReadOnlyDictionary<RuleId, ProgrammeSearch> Searches { get; init; } =
+        new Dictionary<RuleId, ProgrammeSearch>();
+}
 
 public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
 {
@@ -54,6 +61,7 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
         var found = new List<RuleMatch>();
         var turnedOff = new List<Rule>();
         var faulted = new List<RuleFault>();
+        var searches = new Dictionary<RuleId, ProgrammeSearch>();
 
         foreach (Rule rule in InPrecedence(rules))
         {
@@ -74,7 +82,10 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
 
             try
             {
-                takes = Takes(rule, bounds.Bound(asked), programmes, taken, at);
+                ProgrammeSearch bound = bounds.Bound(asked);
+
+                takes = Takes(rule, bound, programmes, taken, at);
+                searches[rule.Id] = bound;
             }
             catch (Exception cause) when (cause is not OperationCanceledException)
             {
@@ -90,21 +101,25 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
             }
         }
 
-        return new RuleMatchRun(found, turnedOff, faulted);
+        return new RuleMatchRun(found, turnedOff, faulted) { Searches = searches };
     }
 
     /// <summary>
     /// Replaces every match by the programmes that stand for its broadcast: the primary listing of a
-    /// moved broadcast, every segment still to come of a relayed one. The first rule to reach a
-    /// programme keeps it, as it does before the replacement.
+    /// moved broadcast, every segment still to come of a relayed one, and the programme on the service
+    /// with the smallest identifier when several services carry the broadcast at the same time and the
+    /// rule's search reaches that service too. The first rule to reach a programme keeps it, as it does
+    /// before the replacement.
     /// </summary>
     public static RuleTaking Resolved(
         IReadOnlyList<RuleMatch> matches,
+        IReadOnlyDictionary<RuleId, ProgrammeSearch> searches,
         BroadcastGroupResolver groups,
         IReadOnlyList<Programme> read,
         DateTime at)
     {
         ArgumentNullException.ThrowIfNull(matches);
+        ArgumentNullException.ThrowIfNull(searches);
         ArgumentNullException.ThrowIfNull(groups);
         ArgumentNullException.ThrowIfNull(read);
 
@@ -138,8 +153,9 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
                 moved++;
             }
 
-            foreach (BroadcastTarget target in resolution.Targets)
+            foreach (BroadcastTarget resolved in resolution.Targets)
             {
+                BroadcastTarget target = Reserved(resolved, match.Rule, searches, groups, at);
                 ProgrammeMatch standing = ReferenceEquals(target.Programme, programme)
                     ? match.Programme
                     : ProgrammeMatch.Of(target.Programme);
@@ -152,6 +168,27 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
         }
 
         return new RuleTaking(taking, moved);
+    }
+
+    /// <summary>
+    /// The programme the rule reserves for <paramref name="target"/>: the same broadcast on the service
+    /// with the smallest identifier when the rule's search reaches it, so a rule that names only a sub
+    /// channel keeps the sub channel it named.
+    /// </summary>
+    private static BroadcastTarget Reserved(
+        BroadcastTarget target,
+        Rule rule,
+        IReadOnlyDictionary<RuleId, ProgrammeSearch> searches,
+        BroadcastGroupResolver groups,
+        DateTime at)
+    {
+        if (groups.SimulcastPrimaryOf(target) is not { } primary
+            || !searches.TryGetValue(rule.Id, out ProgrammeSearch? search))
+        {
+            return target;
+        }
+
+        return ProgrammeSearchMatching.Matches(ProgrammeMatch.Of(primary.Programme), search, at) ? primary : target;
     }
 
     public async Task<int> ShadowedByAsync(

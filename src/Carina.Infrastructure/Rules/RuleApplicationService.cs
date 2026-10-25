@@ -154,10 +154,11 @@ public sealed class RuleApplicationService(
         Rule[] alongside = [.. enabled.Where(rule => !rule.Id.Equals(draft.Id)), draft];
 
         RuleMatchRun run = await matcher.AgainstAsync(alongside, guide, cancellationToken);
-        RuleTaking resolved = RuleMatcher.Resolved(run.Matches, groups, read, at);
+        RuleTaking resolved = RuleMatcher.Resolved(run.Matches, run.Searches, groups, read, at);
         RuleMatch[] taking = [.. resolved.Matches.Where(match => match.Rule.Id.Equals(draft.Id))];
         RuleTaking drafted = RuleMatcher.Resolved(
             [.. run.Matches.Where(match => match.Rule.Id.Equals(draft.Id))],
+            run.Searches,
             groups,
             read,
             at);
@@ -261,7 +262,7 @@ public sealed class RuleApplicationService(
             enabled,
             ProgrammeSearchMatching.Layered([.. read.Where(programme => StillToCome(programme, at))], []),
             cancellationToken);
-        RuleTaking resolved = RuleMatcher.Resolved(run.Matches, groups, read, at);
+        RuleTaking resolved = RuleMatcher.Resolved(run.Matches, run.Searches, groups, read, at);
 
         foreach (Rule off in run.TurnedOff)
         {
@@ -551,7 +552,7 @@ public sealed class RuleApplicationService(
 
     /// <summary>
     /// The programmes read, together with every programme in the guide that shares a relayed or moved
-    /// broadcast with one of them.
+    /// broadcast with one of them, or carries the same broadcast on another service at the same time.
     /// </summary>
     private static IReadOnlyList<Programme> Alongside(IReadOnlyList<Programme> read, BroadcastGroupResolver groups)
     {
