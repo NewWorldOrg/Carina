@@ -281,8 +281,110 @@ public sealed class BroadcastGroupResolverTests
         Assert.Empty(resolver.MembersAlongside([elsewhere.Id]));
     }
 
+    [Fact]
+    public void BrRd010AProgrammeOtherServicesShareByEventSharingIsReservedOnTheServiceWithTheSmallestIdentifier()
+    {
+        Programme main = Listing(1, 101, 60, 120, related: [Link(2, 101, RelationKind.Shared), Link(3, 101, RelationKind.Shared)]);
+        Programme sub = Listing(2, 101, 60, 120, related: [Link(1, 101, RelationKind.Shared)]);
+        Programme third = Listing(3, 101, 60, 120, related: [Link(1, 101, RelationKind.Shared)]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([third, sub, main]);
+
+        BroadcastTarget? fromSub = resolver.SimulcastPrimaryOf(Own(resolver, sub));
+        BroadcastTarget? fromThird = resolver.SimulcastPrimaryOf(Own(resolver, third));
+
+        Assert.Same(main, fromSub!.Programme);
+        Assert.Null(fromSub.Key);
+        Assert.Equal(BroadcastGroupRole.Standalone, fromSub.Role);
+        Assert.Equal(fromSub, fromThird);
+        Assert.Null(resolver.SimulcastPrimaryOf(Own(resolver, main)));
+    }
+
+    [Fact]
+    public void BrRd010ServicesOfOneStreamCarryingTheSameNameFromTheSameStartToTheSameEndAreOneBroadcastWithoutALink()
+    {
+        Programme main = Listing(1, 101, 60, 120, name: "山歩き");
+        Programme sub = Listing(2, 207, 60, 120, name: "山歩き");
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([sub, main]);
+
+        Assert.Same(main, resolver.SimulcastPrimaryOf(Own(resolver, sub))!.Programme);
+        Assert.Null(resolver.SimulcastPrimaryOf(Own(resolver, main)));
+    }
+
+    [Fact]
+    public void BrRd010AnotherStreamAnotherEndAnEndNotYetAnnouncedOrAnotherNameMakeTwoBroadcasts()
+    {
+        Programme main = Listing(1, 101, 60, 120, name: "山歩き");
+        Programme[] apart =
+        [
+            Listing(2, 207, 60, 120, name: "山歩き", stream: 32002),
+            Listing(2, 208, 60, 125, name: "山歩き"),
+            Listing(2, 209, 60, null, name: "山歩き"),
+            Listing(2, 210, 60, 120, name: "川釣り"),
+        ];
+
+        foreach (Programme sub in apart)
+        {
+            BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([main, sub]);
+
+            Assert.Null(resolver.SimulcastPrimaryOf(Own(resolver, sub)));
+        }
+    }
+
+    [Fact]
+    public void BrRd010AShadowSharesNoBroadcastWithTheProgrammeItIsAShadowOf()
+    {
+        Programme shadow = Listing(1, 101, 60, 120, isShadow: true, related: [Link(2, 101, RelationKind.Shared)]);
+        Programme sub = Listing(2, 101, 60, 120, related: [Link(1, 101, RelationKind.Shared)]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([shadow, sub]);
+
+        Assert.Null(resolver.SimulcastPrimaryOf(Own(resolver, sub)));
+    }
+
+    [Fact]
+    public void BrRd010TwoSubChannelsCarryingOneBroadcastWhileTheMainCarriesAnotherAreReservedOnTheSmallerOfThem()
+    {
+        Programme main = Listing(1, 101, 60, 120, name: "ニュース");
+        Programme second = Listing(2, 201, 60, 120, name: "山歩き");
+        Programme third = Listing(3, 301, 60, 120, name: "山歩き");
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([main, second, third]);
+
+        Assert.Same(second, resolver.SimulcastPrimaryOf(Own(resolver, third))!.Programme);
+        Assert.Null(resolver.SimulcastPrimaryOf(Own(resolver, main)));
+    }
+
+    [Fact]
+    public void BrRd010AProgrammeOnASubChannelStillResolvesAndIsPlacedAsItselfSoAReservationAPersonMadeThereStays()
+    {
+        Programme main = Listing(1, 101, 60, 120, related: [Link(2, 101, RelationKind.Shared)]);
+        Programme sub = Listing(2, 101, 60, 120, related: [Link(1, 101, RelationKind.Shared)]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([main, sub]);
+
+        BroadcastResolution resolved = resolver.Resolve(sub, At);
+        BroadcastPlacement? placed = resolver.Place(Reference(sub), sub.EndsAt!.Value, At);
+
+        Assert.Same(sub, Assert.Single(resolved.Targets).Programme);
+        Assert.Equal(BroadcastExclusion.None, resolved.Exclusion);
+        Assert.Same(sub, placed!.Own.Programme);
+        Assert.Equal(BroadcastGroupRole.Standalone, placed.Own.Role);
+        Assert.Empty(placed.Alongside);
+    }
+
+    [Fact]
+    public void BrRd010TheMembersAlongsideAProgrammeIncludeTheSameBroadcastOnTheOtherServices()
+    {
+        Programme main = Listing(1, 101, 60, 120, related: [Link(2, 101, RelationKind.Shared)]);
+        Programme sub = Listing(2, 101, 60, 120, related: [Link(1, 101, RelationKind.Shared)]);
+        Programme twin = Listing(3, 301, 60, 120, name: main.Name);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([main, sub, twin]);
+
+        Assert.Equal([main, sub, twin], resolver.MembersAlongside([sub.Id]));
+    }
+
     private static RelatedProgramme Link(int service, int carried, RelationKind kind)
         => new(Network, service, carried, kind);
+
+    private static BroadcastTarget Own(BroadcastGroupResolver resolver, Programme programme)
+        => Assert.Single(resolver.Resolve(programme, At).Targets);
 
     private static ProgrammeRef Reference(Programme programme)
         => new(programme.NetworkId, programme.ServiceId, programme.EventId, programme.StartsAt);
@@ -294,16 +396,18 @@ public sealed class BroadcastGroupResolverTests
         int service,
         int carried,
         int startMinutes,
-        int endMinutes,
+        int? endMinutes,
         bool isShadow = false,
         ProgrammeRunning running = ProgrammeRunning.Undetermined,
-        IReadOnlyList<RelatedProgramme>? related = null)
+        IReadOnlyList<RelatedProgramme>? related = null,
+        string? name = null,
+        int stream = 32001)
         => Programme.Rehydrate(
             new ProgrammeId(new NetworkId(Network), new ServiceId(service), new EventId(carried)),
-            new TransportStreamId(32001),
+            new TransportStreamId(stream),
             At.AddMinutes(startMinutes),
-            At.AddMinutes(endMinutes),
-            isShadow ? string.Empty : $"番組 {service}-{carried}",
+            endMinutes is { } ends ? At.AddMinutes(ends) : null,
+            isShadow ? string.Empty : name ?? $"番組 {service}-{carried}",
             string.Empty,
             isShadow,
             At,
