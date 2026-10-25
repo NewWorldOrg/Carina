@@ -180,9 +180,26 @@ public sealed class HeldProgrammes : IProgrammeRepository
             .. Programmes
                 .Where(programme => !linking.Contains(programme))
                 .Where(programme => named.Contains(
-                    (programme.NetworkId.Value, programme.ServiceId.Value, programme.EventId.Value))),
+                    (programme.NetworkId.Value, programme.ServiceId.Value, programme.EventId.Value))
+                    || Programmes.Any(other => Simulcast(programme, other) || Simulcast(other, programme))),
         ]);
     }
+
+    private static bool Simulcast(Programme one, Programme other)
+        => !one.IsShadow
+            && !other.IsShadow
+            && one.NetworkId.Equals(other.NetworkId)
+            && !one.ServiceId.Equals(other.ServiceId)
+            && (one.Related.Any(related => related.Kind is RelationKind.Shared
+                    && related.NetworkId == other.NetworkId.Value
+                    && related.ServiceId == other.ServiceId.Value
+                    && related.EventId == other.EventId.Value)
+                || (one.Name.Length > 0
+                    && one.Name == other.Name
+                    && one.TransportStreamId.Equals(other.TransportStreamId)
+                    && one.StartsAt == other.StartsAt
+                    && one.EndsAt is not null
+                    && one.EndsAt == other.EndsAt));
 
     public Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
     {

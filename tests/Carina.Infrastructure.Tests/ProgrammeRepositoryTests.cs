@@ -619,6 +619,49 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task BrRd010TheGroupedProgrammesTakeInTheSameBroadcastOnAnotherServiceSharedOrAlike()
+    {
+        int network = NextNetwork();
+        DateTime noon = At.AddHours(22);
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        ProgrammeBroadcast[] carried =
+        [
+            Aired(network, 901, 1, noon, 60, "山歩き") with { Related = [new RelatedProgramme(network, 902, 1, RelationKind.Shared)] },
+            Aired(network, 902, 1, noon, 60, "山歩き") with { Related = [new RelatedProgramme(network, 901, 1, RelationKind.Shared)] },
+            Aired(network, 903, 1, noon, 60, string.Empty) with
+            {
+                IsShadow = true,
+                Related = [new RelatedProgramme(network, 901, 1, RelationKind.Shared)],
+            },
+            Aired(network, 901, 2, noon.AddHours(1), 60, "川釣り"),
+            Aired(network, 902, 3, noon.AddHours(1), 60, "川釣り"),
+            Aired(network, 901, 4, noon.AddHours(2), 60, "海"),
+            Aired(network, 902, 5, noon.AddHours(2), 60, "海", stream: 9003),
+            Aired(network, 901, 6, noon.AddHours(3), 60, "島"),
+            Aired(network, 902, 7, noon.AddHours(3), 45, "島"),
+            Aired(network, 901, 8, noon.AddHours(4), 60, "空") with { Related = [new RelatedProgramme(network, 901, 9, RelationKind.Shared)] },
+            Aired(network, 901, 9, noon.AddHours(5), 60, "空"),
+        ];
+
+        foreach (ProgrammeBroadcast broadcast in carried)
+        {
+            await programmes.AddAsync(Programme.Discover(broadcast, At), Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<Programme> grouped = await new ProgrammeRepository(reading).ListGroupedAsync(Cancel);
+
+        Assert.Equal(
+            [(901, 1), (901, 2), (902, 1), (902, 3)],
+            grouped
+                .Where(programme => programme.NetworkId.Value == network)
+                .Select(programme => (programme.ServiceId.Value, programme.EventId.Value))
+                .Order());
+    }
+
+    [Fact]
     public async Task BrRd010AProgrammeNamedByALinkButNotInTheGuideIsLeftOutOfTheGroupedOnes()
     {
         int network = NextNetwork();
@@ -658,6 +701,23 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
             (startsAt ?? At.AddHours(22)).AddHours(1),
             "トップニュース先出し\U0001F211",
             "きょうのみどころ",
+            IsShadow: false);
+
+    private static ProgrammeBroadcast Aired(
+        int network,
+        int service,
+        int carried,
+        DateTime startsAt,
+        int minutes,
+        string name,
+        int stream = 9002)
+        => new(
+            new ProgrammeId(new NetworkId(network), new ServiceId(service), new EventId(carried)),
+            new TransportStreamId(stream),
+            startsAt,
+            startsAt.AddMinutes(minutes),
+            name,
+            string.Empty,
             IsShadow: false);
 
     private static ProgrammeBroadcast Carried(int network, int service, int carried, DateTime startsAt)
