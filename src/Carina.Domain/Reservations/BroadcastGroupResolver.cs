@@ -167,8 +167,8 @@ public sealed class BroadcastGroupResolver
     /// <summary>
     /// The programme for a rule to reserve in place of <paramref name="target"/> when other services of
     /// the same broadcaster carry the same broadcast at the same time: the one on the service with the
-    /// smallest identifier. Null when <paramref name="target"/> is that programme already, or when no
-    /// other service carries its broadcast.
+    /// smallest identifier, or the primary listing of a moved broadcast that one belongs to. Null when
+    /// that comes back to <paramref name="target"/>, or when no other service carries its broadcast.
     /// </summary>
     public BroadcastTarget? SimulcastPrimaryOf(BroadcastTarget target)
     {
@@ -178,8 +178,9 @@ public sealed class BroadcastGroupResolver
         Programme? primary = ClustersOf(simulcasts, Node.Of(held.Id))
             .FirstOrDefault(cluster => cluster.Contains(held))
             ?.MinBy(member => Node.Of(member.Id));
+        Programme? reserved = primary is null ? null : PrimaryOf(primary);
 
-        return primary is null || ReferenceEquals(primary, held) ? null : Target(primary, primary);
+        return reserved is null || ReferenceEquals(reserved, held) ? null : Target(reserved, reserved);
     }
 
     public BroadcastPlacement? Place(ProgrammeRef reserved, DateTime endsAt, DateTime at)

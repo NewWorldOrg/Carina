@@ -353,6 +353,19 @@ public sealed class BroadcastGroupResolverTests
     }
 
     [Fact]
+    public void BrRd010AMovedBroadcastWhoseListingsRunAtOnceUnderOneNameStaysOnTheListingTheMoveChose()
+    {
+        Programme listed = Listing(1, 101, 60, 120, name: "山歩き", related: [Link(2, 201, RelationKind.Moved)]);
+        Programme running = Listing(2, 201, 60, 120, name: "山歩き", running: ProgrammeRunning.Running);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([listed, running]);
+
+        BroadcastTarget moved = Own(resolver, listed);
+
+        Assert.Same(running, moved.Programme);
+        Assert.Null(resolver.SimulcastPrimaryOf(moved));
+    }
+
+    [Fact]
     public void BrRd010AProgrammeOnASubChannelStillResolvesAndIsPlacedAsItselfSoAReservationAPersonMadeThereStays()
     {
         Programme main = Listing(1, 101, 60, 120, related: [Link(2, 101, RelationKind.Shared)]);
