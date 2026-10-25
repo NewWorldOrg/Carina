@@ -174,32 +174,59 @@ public sealed class HeldProgrammes : IProgrammeRepository
                 .Select(related => (related.NetworkId, related.ServiceId, related.EventId)),
         ];
 
+        HashSet<(int, int, int)> simulcast = Simulcasts();
+
         return Task.FromResult<IReadOnlyList<Programme>>(
         [
             .. linking,
             .. Programmes
                 .Where(programme => !linking.Contains(programme))
-                .Where(programme => named.Contains(
-                    (programme.NetworkId.Value, programme.ServiceId.Value, programme.EventId.Value))
-                    || Programmes.Any(other => Simulcast(programme, other) || Simulcast(other, programme))),
+                .Where(programme => named.Contains(Key(programme)) || simulcast.Contains(Key(programme))),
         ]);
     }
 
-    private static bool Simulcast(Programme one, Programme other)
-        => !one.IsShadow
-            && !other.IsShadow
-            && one.NetworkId.Equals(other.NetworkId)
-            && !one.ServiceId.Equals(other.ServiceId)
-            && (one.Related.Any(related => related.Kind is RelationKind.Shared
-                    && related.NetworkId == other.NetworkId.Value
-                    && related.ServiceId == other.ServiceId.Value
-                    && related.EventId == other.EventId.Value)
-                || (one.Name.Length > 0
-                    && one.Name == other.Name
-                    && one.TransportStreamId.Equals(other.TransportStreamId)
-                    && one.StartsAt == other.StartsAt
-                    && one.EndsAt is not null
-                    && one.EndsAt == other.EndsAt));
+    private HashSet<(int, int, int)> Simulcasts()
+    {
+        Dictionary<(int, int, int), Programme> heard = [];
+
+        foreach (Programme programme in Programmes.Where(programme => !programme.IsShadow))
+        {
+            heard.TryAdd(Key(programme), programme);
+        }
+
+        HashSet<(int, int, int)> found = [];
+
+        foreach (Programme one in heard.Values)
+        {
+            foreach (RelatedProgramme related in one.Related.Where(related => related.Kind is RelationKind.Shared
+                && related.ServiceId != one.ServiceId.Value
+                && heard.ContainsKey((related.NetworkId, related.ServiceId, related.EventId))))
+            {
+                found.Add(Key(one));
+                found.Add((related.NetworkId, related.ServiceId, related.EventId));
+            }
+        }
+
+        IEnumerable<IGrouping<(int, int, DateTime, DateTime?, string), Programme>> alike = heard.Values
+            .Where(programme => programme.Name.Length > 0 && programme.EndsAt is not null)
+            .GroupBy(programme => (
+                programme.NetworkId.Value,
+                programme.TransportStreamId.Value,
+                programme.StartsAt,
+                programme.EndsAt,
+                programme.Name));
+
+        foreach (IGrouping<(int, int, DateTime, DateTime?, string), Programme> carried in alike
+            .Where(carried => carried.Select(programme => programme.ServiceId.Value).Distinct().Count() > 1))
+        {
+            found.UnionWith(carried.Select(Key));
+        }
+
+        return found;
+    }
+
+    private static (int, int, int) Key(Programme programme)
+        => (programme.NetworkId.Value, programme.ServiceId.Value, programme.EventId.Value);
 
     public Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
     {
