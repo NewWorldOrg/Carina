@@ -108,20 +108,35 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
     /// Replaces every match by the programmes that stand for its broadcast: the primary listing of a
     /// moved broadcast, every segment still to come of a relayed one, and the programme on the service
     /// with the smallest identifier when several services carry the broadcast at the same time and the
-    /// rule's search reaches that service too. The first rule to reach a programme keeps it, as it does
+    /// rule's search reaches that service too. Of a broadcast several services carry, a programme on
+    /// which a reservation of the same rule stands that a person changed (<paramref name="changed"/>) is
+    /// kept and taken in place of the others. The first rule to reach a programme keeps it, as it does
     /// before the replacement.
     /// </summary>
     public static RuleTaking Resolved(
         IReadOnlyList<RuleMatch> matches,
         IReadOnlyDictionary<RuleId, ProgrammeSearch> searches,
+        IReadOnlyList<Reservation> changed,
         BroadcastGroupResolver groups,
         IReadOnlyList<Programme> read,
         DateTime at)
     {
         ArgumentNullException.ThrowIfNull(matches);
         ArgumentNullException.ThrowIfNull(searches);
+        ArgumentNullException.ThrowIfNull(changed);
         ArgumentNullException.ThrowIfNull(groups);
         ArgumentNullException.ThrowIfNull(read);
+
+        Dictionary<RuleId, HashSet<ProgrammeRef>> kept = [];
+
+        foreach (Reservation reservation in changed)
+        {
+            if (reservation.RuleId is { } ruleId)
+            {
+                kept.TryAdd(ruleId, []);
+                kept[ruleId].Add(reservation.Programme);
+            }
+        }
 
         Dictionary<ProgrammeKey, Programme> held = [];
 
@@ -155,7 +170,7 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
 
             foreach (BroadcastTarget resolved in resolution.Targets)
             {
-                BroadcastTarget target = Reserved(resolved, match.Rule, searches, groups, at);
+                BroadcastTarget target = Reserved(resolved, match.Rule, searches, kept, groups, at);
                 ProgrammeMatch standing = ReferenceEquals(target.Programme, programme)
                     ? match.Programme
                     : ProgrammeMatch.Of(target.Programme);
@@ -172,17 +187,19 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
 
     /// <summary>
     /// The programme the rule reserves for <paramref name="target"/>: the same broadcast on the service
-    /// with the smallest identifier when the rule's search reaches it, so a rule that names only a sub
-    /// channel keeps the sub channel it named.
+    /// with the smallest identifier, or on the service where a person changed the rule's reservation,
+    /// when the rule's search reaches it, so a rule that names only a sub channel keeps the sub channel
+    /// it named.
     /// </summary>
     private static BroadcastTarget Reserved(
         BroadcastTarget target,
         Rule rule,
         IReadOnlyDictionary<RuleId, ProgrammeSearch> searches,
+        Dictionary<RuleId, HashSet<ProgrammeRef>> kept,
         BroadcastGroupResolver groups,
         DateTime at)
     {
-        if (groups.SimulcastPrimaryOf(target) is not { } primary
+        if (groups.SimulcastPrimaryOf(target, kept.GetValueOrDefault(rule.Id)) is not { } primary
             || !searches.TryGetValue(rule.Id, out ProgrammeSearch? search))
         {
             return target;

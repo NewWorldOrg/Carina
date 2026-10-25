@@ -154,11 +154,13 @@ public sealed class RuleApplicationService(
         Rule[] alongside = [.. enabled.Where(rule => !rule.Id.Equals(draft.Id)), draft];
 
         RuleMatchRun run = await matcher.AgainstAsync(alongside, guide, cancellationToken);
-        RuleTaking resolved = RuleMatcher.Resolved(run.Matches, run.Searches, groups, read, at);
+        IReadOnlyList<Reservation> changed = await ChangedByHandAsync(alongside, at, cancellationToken);
+        RuleTaking resolved = RuleMatcher.Resolved(run.Matches, run.Searches, changed, groups, read, at);
         RuleMatch[] taking = [.. resolved.Matches.Where(match => match.Rule.Id.Equals(draft.Id))];
         RuleTaking drafted = RuleMatcher.Resolved(
             [.. run.Matches.Where(match => match.Rule.Id.Equals(draft.Id))],
             run.Searches,
+            changed,
             groups,
             read,
             at);
@@ -262,7 +264,13 @@ public sealed class RuleApplicationService(
             enabled,
             ProgrammeSearchMatching.Layered([.. read.Where(programme => StillToCome(programme, at))], []),
             cancellationToken);
-        RuleTaking resolved = RuleMatcher.Resolved(run.Matches, run.Searches, groups, read, at);
+        RuleTaking resolved = RuleMatcher.Resolved(
+            run.Matches,
+            run.Searches,
+            await ChangedByHandAsync(enabled, at, cancellationToken),
+            groups,
+            read,
+            at);
 
         foreach (Rule off in run.TurnedOff)
         {
@@ -287,6 +295,39 @@ public sealed class RuleApplicationService(
             enabled.Count,
             clock.GetElapsedTime(began));
     }
+
+    /// <summary>
+    /// The reservations still to come that a rule made and a person has since changed: their priority,
+    /// a margin or whether they are encoded is no longer what the rule asks. The ledger keeps no mark of
+    /// a change, so the values are the only witness, and a rule edited after it made a reservation makes
+    /// that reservation look changed too.
+    /// </summary>
+    private async Task<IReadOnlyList<Reservation>> ChangedByHandAsync(
+        IReadOnlyList<Rule> standing,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        Dictionary<RuleId, Rule> asked = [];
+
+        foreach (Rule rule in standing)
+        {
+            asked.TryAdd(rule.Id, rule);
+        }
+
+        return
+        [
+            .. (await reservations.ListPendingAsync(Everything(at), cancellationToken))
+                .Where(reservation => reservation.RuleId is { } ruleId
+                    && asked.TryGetValue(ruleId, out Rule? rule)
+                    && !AsTheRuleAsks(reservation, rule)),
+        ];
+    }
+
+    private static bool AsTheRuleAsks(Reservation reservation, Rule rule)
+        => reservation.Priority.Equals(rule.Priority)
+            && reservation.MarginBefore.Equals(rule.MarginBefore)
+            && reservation.MarginAfter.Equals(rule.MarginAfter)
+            && reservation.EncodeWhenRecorded == rule.EncodeWhenRecorded;
 
     private async Task<Making> MakeAsync(
         IReadOnlyList<RuleMatch> matches,

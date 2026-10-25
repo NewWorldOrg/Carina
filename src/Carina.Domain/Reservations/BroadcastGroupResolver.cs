@@ -167,20 +167,26 @@ public sealed class BroadcastGroupResolver
     /// <summary>
     /// The programme for a rule to reserve in place of <paramref name="target"/> when other services of
     /// the same broadcaster carry the same broadcast at the same time: the one on the service with the
-    /// smallest identifier, or the primary listing of a moved broadcast that one belongs to. Null when
-    /// that comes back to <paramref name="target"/>, or when no other service carries its broadcast.
+    /// smallest identifier, or the primary listing of a moved broadcast that one belongs to. A programme
+    /// among <paramref name="kept"/>, where a person changed the reservation standing on it, is
+    /// reserved instead, and is never replaced itself. Null when that comes back to
+    /// <paramref name="target"/>, or when no other service carries its broadcast.
     /// </summary>
-    public BroadcastTarget? SimulcastPrimaryOf(BroadcastTarget target)
+    public BroadcastTarget? SimulcastPrimaryOf(BroadcastTarget target, IReadOnlySet<ProgrammeRef>? kept = null)
     {
         ArgumentNullException.ThrowIfNull(target);
 
         Programme held = present.GetValueOrDefault(Node.Of(target.Programme.Id), target.Programme);
-        Programme? primary = ClustersOf(simulcasts, Node.Of(held.Id))
-            .FirstOrDefault(cluster => cluster.Contains(held))
-            ?.MinBy(member => Node.Of(member.Id));
-        Programme? reserved = primary is null ? null : PrimaryOf(primary);
+        IReadOnlyList<Programme> cluster = ClustersOf(simulcasts, Node.Of(held.Id))
+            .FirstOrDefault(run => run.Contains(held)) ?? [];
+        Programme[] chosen = [.. cluster.Where(member => kept?.Contains(Reference(member)) is true)];
+        Programme? reserved = chosen.Length > 0
+            ? chosen.MinBy(member => Node.Of(member.Id))
+            : PrimaryOrNone(cluster);
 
-        return reserved is null || ReferenceEquals(reserved, held) ? null : Target(reserved, reserved);
+        return reserved is null || chosen.Contains(held) || ReferenceEquals(reserved, held)
+            ? null
+            : Target(reserved, reserved);
     }
 
     public BroadcastPlacement? Place(ProgrammeRef reserved, DateTime endsAt, DateTime at)
@@ -294,6 +300,9 @@ public sealed class BroadcastGroupResolver
         return programme;
     }
 
+    private Programme? PrimaryOrNone(IReadOnlyList<Programme> cluster)
+        => cluster.Count is 0 ? null : PrimaryOf(cluster.MinBy(member => Node.Of(member.Id))!);
+
     private Programme? OverlappingPrimary(Node node, DateTime startsAt, DateTime endsAt)
     {
         foreach (IReadOnlyList<Programme> cluster in ClustersOf(movements, node))
@@ -360,6 +369,9 @@ public sealed class BroadcastGroupResolver
             .ThenBy(member => member.StartsAt)
             .ThenBy(member => Node.Of(member.Id))
             .First();
+
+    private static ProgrammeRef Reference(Programme programme)
+        => new(programme.NetworkId, programme.ServiceId, programme.EventId, programme.StartsAt);
 
     private static bool SharedAlike(Dictionary<Node, Programme> present, Programme programme, Node other)
         => !programme.IsShadow

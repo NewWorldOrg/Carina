@@ -151,6 +151,52 @@ public sealed class RuleSimulcastTests
         Assert.Contains(byHand, world.Reservations.Held);
     }
 
+    [Theory]
+    [InlineData("priority")]
+    [InlineData("margin before")]
+    [InlineData("margin after")]
+    [InlineData("encoding")]
+    public async Task BrRd010ASubChannelReservationARuleMadeAndAPersonChangedStaysAndTheMainIsNotReservedBesideIt(string changed)
+    {
+        World world = World.Of();
+        Rule rule = Written("keyword=hill");
+        world.Rules.Rules.Add(rule);
+        world.Visited(VisitOutcome.Complete);
+        Programme sub = Listing(Sub, "hill walking", related: [Shared(Main)]);
+        world.Guide(Listing(Main, "hill walking", related: [Shared(Sub)]), sub);
+        Reservation onTheSub = Standing(sub, rule.Id);
+        Changed(onTheSub, changed);
+        world.Reservations.Standing(onTheSub);
+
+        RuleApplicationRun swept = await world.Applying.EverythingAsync(Cancel);
+        RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(rule, Cancel);
+
+        Assert.Empty(swept.Withdrawn);
+        Assert.Empty(swept.Made);
+        Assert.Equal([onTheSub.Id], world.Reservations.Held.Select(reservation => reservation.Id));
+        Assert.Empty(rehearsed!.Making);
+        Assert.Empty(rehearsed.Withdrawing);
+    }
+
+    private static void Changed(Reservation reservation, string what)
+    {
+        switch (what)
+        {
+            case "priority":
+                reservation.Reprioritise(new Priority(40));
+                break;
+            case "margin before":
+                reservation.Remargin(Margin.OfSeconds(60), Margin.None);
+                break;
+            case "margin after":
+                reservation.Remargin(Margin.None, Margin.OfSeconds(60));
+                break;
+            default:
+                reservation.Rewish(false);
+                break;
+        }
+    }
+
     private static RelatedProgramme Shared(int service, int carried = Event)
         => new(Network, service, carried, RelationKind.Shared);
 

@@ -331,6 +331,33 @@ public sealed class BroadcastGroupResolverTests
     }
 
     [Fact]
+    public void BrRd010TwoProgrammesWhoseEndsAreBothNotYetAnnouncedAreNotTakenForOneBroadcastByTheirName()
+    {
+        Programme main = Listing(1, 101, 60, null, name: "山歩き");
+        Programme sub = Listing(2, 207, 60, null, name: "山歩き");
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([main, sub]);
+
+        Assert.Null(resolver.SimulcastPrimaryOf(Own(resolver, sub)));
+    }
+
+    [Fact]
+    public void BrRd010AProgrammeWhoseReservationAPersonChangedIsKeptAndTakenInPlaceOfTheMain()
+    {
+        Programme main = Listing(1, 101, 60, 120, related: [Link(2, 101, RelationKind.Shared), Link(3, 101, RelationKind.Shared)]);
+        Programme sub = Listing(2, 101, 60, 120, related: [Link(1, 101, RelationKind.Shared)]);
+        Programme third = Listing(3, 101, 60, 120, related: [Link(1, 101, RelationKind.Shared)]);
+        BroadcastGroupResolver resolver = BroadcastGroupResolver.Of([main, sub, third]);
+        HashSet<ProgrammeRef> changedOnTheThird = [Reference(third)];
+        HashSet<ProgrammeRef> changedOnBoth = [Reference(sub), Reference(third)];
+
+        Assert.Same(third, resolver.SimulcastPrimaryOf(Own(resolver, main), changedOnTheThird)!.Programme);
+        Assert.Same(third, resolver.SimulcastPrimaryOf(Own(resolver, sub), changedOnTheThird)!.Programme);
+        Assert.Null(resolver.SimulcastPrimaryOf(Own(resolver, third), changedOnTheThird));
+        Assert.Null(resolver.SimulcastPrimaryOf(Own(resolver, third), changedOnBoth));
+        Assert.Null(resolver.SimulcastPrimaryOf(Own(resolver, sub), changedOnBoth));
+    }
+
+    [Fact]
     public void BrRd010AShadowSharesNoBroadcastWithTheProgrammeItIsAShadowOf()
     {
         Programme shadow = Listing(1, 101, 60, 120, isShadow: true, related: [Link(2, 101, RelationKind.Shared)]);
