@@ -23,6 +23,8 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
 
     private readonly RecordingId skipped = RecordingId.New();
 
+    private readonly RecordingId sought = RecordingId.New();
+
     private readonly RecordingId nothing = RecordingId.New();
 
     private readonly RecordingId unread = RecordingId.New();
@@ -31,13 +33,13 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
 
     private readonly CatalogEntryId notKnown = CatalogEntryId.New();
 
-    private RecordingId[] Ours => [advertised, unknown, skipped, nothing, unread];
+    private RecordingId[] Ours => [advertised, unknown, skipped, sought, nothing, unread];
 
     public Task InitializeAsync() => ClearAsync();
 
     public Task DisposeAsync() => ClearAsync();
 
-    [Fact(DisplayName = "BR-CD-004: a round could read every recording read through with a stretch of the catalog or a skip event, those the catalog hears an advert in first, and no other")]
+    [Fact(DisplayName = "BR-CD-004: a round could read every recording read through with a stretch of the catalog, a skip event or a seek, those the catalog hears an advert in first, and no other")]
     public async Task EveryRecordingWithSomethingToLearnItByIsACandidate()
     {
         foreach (RecordingId recording in Ours.Where(recording => !recording.Equals(unread)))
@@ -51,6 +53,9 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
         {
             await new SkipEventRepository(writing).TakeAsync(
                 SkipEvent.Of(skipped, new ViewerAction(Started.AddDays(1), ViewerActionKind.Skipped, SegmentKind.Break, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(115), null)),
+                Cancel);
+            await new SeekEventRepository(writing).TakeAsync(
+                SeekEvent.Of(sought, new ViewerSeek(Started.AddDays(1), SeekAction.Forward, SeekMeans.Bar, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(190))),
                 Cancel);
             CatalogOccurrence[] adverts = [Found(advert, advertised, 100), Found(advert, advertised, 200), Found(advert, unread, 100)];
             CatalogOccurrence[] unknowns = [Found(notKnown, unknown, 100), Found(notKnown, unknown, 300)];
@@ -67,7 +72,7 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
         IReadOnlyList<LearningCandidate> candidates = await new TrainingWorklist(reading).CandidatesAsync(Cancel);
 
         Assert.Equal(
-            [(advertised, LearningGround.CatalogAdverts), (unknown, LearningGround.Other), (skipped, LearningGround.Other)],
+            [(advertised, LearningGround.CatalogAdverts), (unknown, LearningGround.Other), (skipped, LearningGround.Other), (sought, LearningGround.Other)],
             candidates.Where(candidate => Ours.Contains(candidate.Recording)).OrderBy(candidate => Array.IndexOf(Ours, candidate.Recording)).Select(candidate => (candidate.Recording, candidate.Ground)));
         Assert.All(
             candidates.Where(candidate => Ours.Contains(candidate.Recording)),
@@ -105,6 +110,7 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
 
         await using CarinaDbContext context = database.Open();
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_skip_event WHERE recording_id = ANY({recordings})", Cancel);
+        await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_seek_event WHERE recording_id = ANY({recordings})", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_catalog_occurrence WHERE entry_id = ANY({entries})", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_catalog_entry WHERE id = ANY({entries})", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_extraction WHERE recording_id = ANY({recordings})", Cancel);

@@ -64,6 +64,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DataBroadcastSettingsService>();
         services.AddScoped<SegmentStatusService>();
         services.AddScoped<SkipEventService>();
+        services.AddScoped<SeekEventService>();
         services.AddScoped<QualityService>();
         services.AddScoped<QualityThresholdService>();
         services.AddScoped<QualityIncidentService>();

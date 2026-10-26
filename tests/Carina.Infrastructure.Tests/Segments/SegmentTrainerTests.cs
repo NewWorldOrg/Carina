@@ -21,28 +21,35 @@ public sealed class SegmentTrainerTests : IDisposable
 
     private readonly ListedSkips skips = new();
 
+    private readonly HeldSeekEvents seeks = new();
+
     private readonly KeptLines<SegmentTrainer> log = new();
 
     public void Dispose() => harness.Dispose();
 
-    [Fact(DisplayName = "BR-CD-006: learning reads every recording with data read from it and a stretch of the catalog or a skip event, kept or not, and no other")]
+    [Fact(DisplayName = "BR-CD-006: learning reads every recording with data read from it and a stretch of the catalog, a skip event or a seek, kept or not, and no other, each with its skip events and its seeks")]
     public async Task LearningReadsEveryRecordingWithSomethingToLearnItBy()
     {
-        RecordingId skipped = await harness.ReadAsync(4, "架空の物語", cuts: [100]);
+        RecordingId skipped = await harness.ReadAsync(5, "架空の物語", cuts: [100]);
+        RecordingId sought = await harness.ReadAsync(4, "架空の物語");
         RecordingId heard = await harness.ReadAsync(3, "架空のクイズ");
         await harness.ReadAsync(1, "架空の物語");
         harness.Worklist.Kept.Remove(skipped);
         await SkippedAsync(skipped);
+        await seeks.TakeAsync(SeekEvent.Of(sought, new ViewerSeek(Now, SeekAction.Forward, SeekMeans.Step, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(140))), Cancel);
         HeardIn(CatalogEntryId.New(), (heard, 100), (heard, 200));
 
         TrainingMaterial material = (await Trainer().GatherAsync(harness.Versions.Active, Now, GoOn, Cancel))!;
 
-        Assert.Equal([skipped, heard], material.Recordings.Select(recording => recording.Id));
+        Assert.Equal([skipped, sought, heard], material.Recordings.Select(recording => recording.Id));
         LearningRecording first = material.Recordings[0];
         Assert.Equal(TimeSpan.FromSeconds(Seconds), first.Evidence.Length);
         Assert.Equal(harness.Records.Row(skipped)!.Programme.RecordingStartedAt, first.StartedAt);
         Assert.Equal([ViewerActionKind.Skipped], first.Actions.Select(action => action.Action));
-        Assert.Empty(material.Recordings[1].Actions);
+        Assert.Empty(first.Seeks);
+        Assert.Equal([(SeekMeans.Step, TimeSpan.FromSeconds(140))], material.Recordings[1].Seeks.Select(seek => (seek.Means, seek.To)));
+        Assert.Empty(material.Recordings[2].Actions);
+        Assert.Empty(material.Recordings[2].Seeks);
     }
 
     [Fact(DisplayName = "BR-CD-005: the catalog is handed over with every stretch, as each recording would have heard it and as it stands now")]
@@ -181,11 +188,12 @@ public sealed class SegmentTrainerTests : IDisposable
     private SegmentTrainer Trainer(SegmentTrainingSettings? settings = null)
         => new(
             harness.Detecting(),
-            new HeldTrainingWorklist(harness.Records, harness.Catalog, skips),
+            new HeldTrainingWorklist(harness.Records, harness.Catalog, skips, seeks),
             harness.Worklist,
             harness.Catalog,
             new HeldCatalogWorklist(harness.Records, harness.Data),
             skips,
+            seeks,
             harness.Lowest,
             settings ?? OneSetting,
             log);
@@ -215,9 +223,9 @@ public sealed class SegmentTrainerTests : IDisposable
 }
 
 /// <summary>
-/// The recordings a round could read, from the records, catalog and skip events held, as the store finds them.
+/// The recordings a round could read, from the records, catalog, skip events and seeks held, as the store finds them.
 /// </summary>
-internal sealed class HeldTrainingWorklist(HeldLearningExtractions records, HeldCatalog catalog, ISkipEventRepository skips) : ITrainingWorklist
+internal sealed class HeldTrainingWorklist(HeldLearningExtractions records, HeldCatalog catalog, ISkipEventRepository skips, ISeekEventRepository seeks) : ITrainingWorklist
 {
     public async Task<IReadOnlyList<LearningCandidate>> CandidatesAsync(CancellationToken cancellationToken)
     {
@@ -228,7 +236,9 @@ internal sealed class HeldTrainingWorklist(HeldLearningExtractions records, Held
             CatalogOccurrence[] heard = [.. catalog.Occurrences.Where(occurrence => occurrence.RecordingId.Equals(record.RecordingId))];
             bool adverts = heard.Any(occurrence => catalog.Entries.Any(entry => entry.Id.Equals(occurrence.EntryId) && entry.Kind is CatalogKind.Cm));
 
-            if (heard.Length > 0 || (await skips.ListAsync([record.RecordingId], cancellationToken)).Count > 0)
+            if (heard.Length > 0
+                || (await skips.ListAsync([record.RecordingId], cancellationToken)).Count > 0
+                || (await seeks.ListAsync([record.RecordingId], cancellationToken)).Count > 0)
             {
                 candidates.Add(new LearningCandidate(
                     record.RecordingId,

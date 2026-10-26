@@ -40,4 +40,21 @@ public sealed record BoundaryCandidate(
     public bool IsSilentCut => Cues.HasFlag(BoundaryCue.SilentCut);
 
     public bool IsRecordingEdge => Cues.HasFlag(BoundaryCue.RecordingEdge);
+
+    /// <summary>
+    /// How strongly the cues say a segment starts or ends here, as merging weighs them.
+    /// </summary>
+    public int Strength => StrengthOf(Cues);
+
+    /// <summary>
+    /// A recording end is the strongest, then a silent cut, a catalog edge, a silence or black, and the rest.
+    /// </summary>
+    public static int StrengthOf(BoundaryCue cues) => cues switch
+    {
+        _ when cues.HasFlag(BoundaryCue.RecordingEdge) => 5,
+        _ when cues.HasFlag(BoundaryCue.SilentCut) => 4,
+        _ when cues.HasFlag(BoundaryCue.CatalogEdge) => 3,
+        _ when (cues & (BoundaryCue.Silence | BoundaryCue.Black)) is not BoundaryCue.None => 2,
+        _ => 1,
+    };
 }

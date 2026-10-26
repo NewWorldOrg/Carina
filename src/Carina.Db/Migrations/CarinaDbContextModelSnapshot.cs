@@ -4005,6 +4005,64 @@ namespace Carina.Db.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Carina.Domain.Segments.SeekEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Event")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("event");
+
+                    b.Property<TimeSpan>("From")
+                        .HasColumnType("interval")
+                        .HasColumnName("from_at");
+
+                    b.Property<DateTime>("HappenedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("happened_at");
+
+                    b.Property<string>("Means")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("means");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recording_id");
+
+                    b.Property<TimeSpan>("To")
+                        .HasColumnType("interval")
+                        .HasColumnName("to_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_segment_seek_event");
+
+                    b.HasIndex("HappenedAt")
+                        .HasDatabaseName("ix_segment_seek_event_happened_at");
+
+                    b.HasIndex("RecordingId", "HappenedAt")
+                        .HasDatabaseName("ix_segment_seek_event_recording_id_happened_at");
+
+                    b.ToTable("segment_seek_event", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_segment_seek_event_event", "event IN ('Forward', 'Returned')");
+
+                            t.HasCheckConstraint("ck_segment_seek_event_means", "means IN ('Bar', 'Step', 'Chapter', 'Key')");
+
+                            t.HasCheckConstraint("ck_segment_seek_event_moments", "from_at >= interval '0' AND to_at >= interval '0'");
+
+                            t.HasCheckConstraint("ck_segment_seek_event_way", "(event = 'Forward') = (to_at > from_at) AND to_at <> from_at");
+                        });
+                });
+
             modelBuilder.Entity("Carina.Domain.Segments.SegmentLearningRound", b =>
                 {
                     b.Property<DateOnly>("Day")

@@ -43,7 +43,7 @@ public interface ISegmentTrainer
 /// Gathers what learning reads and learns from it with <see cref="SegmentLearning"/>, a step at a time. The
 /// recordings learned from are those <see cref="LearningSelection"/> chooses among the candidates of
 /// <see cref="ITrainingWorklist"/>, read the way detection reads them (<see cref="SegmentDetecting.GatherAsync"/>),
-/// with the earlier episodes as the version in use detected them; only their skip events are read. Every catalog
+/// with the earlier episodes as the version in use detected them; only their skip events and seeks are read. Every catalog
 /// entry is handed over with all its stretches, each placed in its programme. A recording whose data cannot be
 /// read is left out and said so. Each step of the learning is its own piece of work on the
 /// <see cref="LowestPriorityScheduler"/>, so that whatever else waits there goes between them. Nothing is written
@@ -56,6 +56,7 @@ public sealed class SegmentTrainer(
     ICatalogRepository catalog,
     ICatalogWorklist programmes,
     ISkipEventRepository skips,
+    ISeekEventRepository seeks,
     LowestPriorityScheduler lowest,
     SegmentTrainingSettings settings,
     ILogger<SegmentTrainer> logger) : ISegmentTrainer
@@ -117,11 +118,12 @@ public sealed class SegmentTrainer(
         }
 
         ILookup<RecordingId, ViewerAction> actions = (await skips.ListAsync(chosen, cancellationToken)).ToLookup(skip => skip.RecordingId, skip => skip.Action());
+        ILookup<RecordingId, ViewerSeek> sought = (await seeks.ListAsync(chosen, cancellationToken)).ToLookup(seek => seek.RecordingId, seek => seek.Seek());
         List<LearningRecording> recordings = [];
 
         foreach (LearningExtraction record in (await worklist.RecordsAsync(chosen, cancellationToken)).Where(record => record.ReadThrough > TimeSpan.Zero && record.Version is not null))
         {
-            if (await ReadAsync(record, active, now, [.. actions[record.RecordingId]], cancellationToken) is { } read)
+            if (await ReadAsync(record, active, now, [.. actions[record.RecordingId]], [.. sought[record.RecordingId]], cancellationToken) is { } read)
             {
                 recordings.Add(read);
             }
@@ -145,13 +147,14 @@ public sealed class SegmentTrainer(
         SegmentModelVersion active,
         DateTime now,
         IReadOnlyList<ViewerAction> actions,
+        IReadOnlyList<ViewerSeek> sought,
         CancellationToken cancellationToken)
     {
         try
         {
             DetectionInputs inputs = await detecting.GatherAsync(record, active.Number, now, cancellationToken);
 
-            return new LearningRecording(record.RecordingId, record.Programme.RecordingStartedAt, inputs.Evidence, inputs.Context, actions);
+            return new LearningRecording(record.RecordingId, record.Programme.RecordingStartedAt, inputs.Evidence, inputs.Context, actions, sought);
         }
         catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
         {
