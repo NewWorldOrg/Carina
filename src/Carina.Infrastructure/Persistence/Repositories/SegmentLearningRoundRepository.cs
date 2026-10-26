@@ -30,11 +30,13 @@ public sealed class SegmentLearningRoundRepository(CarinaDbContext context) : IS
         string? verdict = round.Verdict?.ToString();
         string? inUseMetrics = round.InUseMetrics is { } metrics ? SegmentJson.Written(metrics) : null;
         int? inUseVersion = round.InUseVersion;
+        string? candidateMetrics = round.CandidateMetrics is { } figures ? SegmentJson.Written(figures) : null;
+        string? candidateEvidence = round.CandidateEvidence is { } evidence ? SegmentJson.Written(evidence) : null;
 
         return await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            INSERT INTO segment_learning_round (day, taken_at, candidate, outcome, verdict, in_use_metrics, in_use_version)
-            VALUES ({day}::date, {takenAt}::timestamptz, {candidate}::integer, {outcome}::varchar, {verdict}::varchar, {inUseMetrics}::jsonb, {inUseVersion}::integer)
+            INSERT INTO segment_learning_round (day, taken_at, candidate, outcome, verdict, in_use_metrics, in_use_version, candidate_metrics, candidate_evidence)
+            VALUES ({day}::date, {takenAt}::timestamptz, {candidate}::integer, {outcome}::varchar, {verdict}::varchar, {inUseMetrics}::jsonb, {inUseVersion}::integer, {candidateMetrics}::jsonb, {candidateEvidence}::jsonb)
             ON CONFLICT (day) DO NOTHING
             """,
             cancellationToken) is 1;

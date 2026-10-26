@@ -391,6 +391,52 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal("2026-11-08T18:00:00Z", data.GetProperty("nextRoundNotBefore").GetString());
     }
 
+    [Fact(DisplayName = "BR-CS-003: a round whose candidate learning let go is answered with the candidate's evidence and figures as the round kept them, under the number it was given, and the versions answered keep their numbers")]
+    public async Task ARoundWhoseCandidateWasLetGoIsAnsweredFromTheRound()
+    {
+        await using SegmentStatusFeature feature = new();
+        DateTime taken = new(2026, 11, 7, 18, 6, 0, DateTimeKind.Utc);
+        feature.Versions.Others.Add(Version(7, SegmentModelVersionState.Candidate, taken.AddDays(-1), null, null, Evaluation(0.2, 3)));
+        await feature.Rounds.TakeAsync(
+            SegmentLearningRound.Ended(
+                new DateOnly(2026, 11, 8),
+                taken,
+                SegmentTrainingOutcome.Kept,
+                9,
+                AdoptionVerdict.NoBetterAtBoundaries,
+                new SegmentMetrics(0.14, 0.1, [new KindMetrics(SegmentKind.Break, 0.4)], null, 0),
+                SegmentModelVersion.FirstNumber,
+                new SegmentMetrics(0.11, 0.07, [new KindMetrics(SegmentKind.Break, 0.42)], null, 0),
+                new EvaluationEvidence(12, 56, null)),
+            CancellationToken.None);
+
+        (HttpStatusCode status, JsonElement data) = await feature.DataAsync();
+        JsonElement round = data.GetProperty("lastRound");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal((9, "noBetterAtBoundaries"), (round.GetProperty("candidate").GetInt32(), round.GetProperty("verdict").GetString()));
+        Assert.Equal((0.11, 0.42), (round.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("metrics").GetProperty("breakRecall").GetDouble()));
+        Assert.Equal((0.14, 0.4), (round.GetProperty("inUse").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("inUse").GetProperty("breakRecall").GetDouble()));
+        Assert.Equal((12, 56), (round.GetProperty("evidence").GetProperty("recordings").GetInt32(), round.GetProperty("evidence").GetProperty("boundaries").GetInt32()));
+        Assert.Equal([7, 1], data.GetProperty("versions").EnumerateArray().Select(version => version.GetProperty("number").GetInt32()));
+    }
+
+    [Fact(DisplayName = "BR-CS-003: a round kept before rounds kept their candidate's figures is answered with them from the candidate while it is still kept")]
+    public async Task ARoundKeptBeforeItsCandidatesFiguresIsAnsweredFromTheCandidate()
+    {
+        await using SegmentStatusFeature feature = new();
+        DateTime taken = new(2026, 11, 7, 18, 6, 0, DateTimeKind.Utc);
+        feature.Versions.Others.Add(Version(9, SegmentModelVersionState.Candidate, taken.AddMinutes(20), null, null, Evaluation(0.3, 12)));
+        await feature.Rounds.TakeAsync(
+            SegmentLearningRound.Ended(new DateOnly(2026, 11, 8), taken, SegmentTrainingOutcome.Kept, 9, AdoptionVerdict.NoBetterAtBoundaries, new SegmentMetrics(0.4, 0.3, [], null, 0), SegmentModelVersion.FirstNumber),
+            CancellationToken.None);
+
+        (_, JsonElement data) = await feature.DataAsync();
+        JsonElement round = data.GetProperty("lastRound");
+
+        Assert.Equal((0.3, 12), (round.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("evidence").GetProperty("recordings").GetInt32()));
+    }
+
     [Theory(DisplayName = "BR-CD-004: a round that learned nothing, or failed, is answered with what became of it and nothing of a candidate")]
     [InlineData(SegmentTrainingOutcome.NothingNew, "nothingNew")]
     [InlineData(SegmentTrainingOutcome.NothingToLearnFrom, "nothingToLearnFrom")]

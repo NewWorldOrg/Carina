@@ -8,8 +8,10 @@ namespace Carina.Api.Services;
 /// the catalog; the version in use, and its figures beside what viewers did with its buttons lately, taken from the
 /// latest round that measured it when it was never evaluated itself; what the
 /// latest evaluation stands on, or what the catalog as it stands would give one while no version has been
-/// evaluated; every version kept, the highest number first; the latest round of learning that says what became of
-/// it, with the candidate it kept when that is still kept; and the first moment the next round may begin.
+/// evaluated; every version kept, the highest number first, learning having let go of the candidates it did not
+/// take but the latest; the latest round of learning that says what became of it, with the candidate it kept when
+/// that is still kept, for a round kept before rounds kept their candidate's figures; and the first moment the next
+/// round may begin.
 /// </summary>
 public sealed record SegmentStatus(
     SegmentSettingsStanding Settings,

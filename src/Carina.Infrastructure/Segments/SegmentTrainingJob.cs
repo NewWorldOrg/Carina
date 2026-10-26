@@ -8,9 +8,9 @@ namespace Carina.Infrastructure.Segments;
 
 /// <summary>
 /// What the day's round did: the rollback made before learning, if one was; what became of the candidate; the
-/// candidate kept, what judging it against the version in use said, and the figures of the version in use on the
-/// same recordings with its number, when one was learned; the version in use after the round; and, when the round
-/// stopped partway, what stood in the way.
+/// candidate kept, what judging it against the version in use said, the figures of the version in use on the
+/// same recordings with its number, and the candidates before it let go, when one was learned; the version in use
+/// after the round; and, when the round stopped partway, what stood in the way.
 /// </summary>
 public sealed record SegmentTrainingRound(
     DateOnly Day,
@@ -25,6 +25,8 @@ public sealed record SegmentTrainingRound(
     public SegmentMetrics? InUseMetrics { get; init; }
 
     public int? InUseVersion { get; init; }
+
+    public IReadOnlyList<int> LetGo { get; init; } = [];
 }
 
 /// <summary>
@@ -43,7 +45,9 @@ public sealed record SegmentTrainingLook(SpareTimeVerdict? Verdict, SegmentTrain
 /// taken again that day; one process takes a round at a time. A round first rolls the version in use back when
 /// <see cref="SegmentRollback"/> says so; then, when <see cref="SegmentLearningRound.HasNews"/> finds something
 /// learning reads changed since the last round that kept a candidate, learns a candidate beside the version in use
-/// and keeps it as a candidate, unless no recording was judged, when there was nothing to learn from; and puts it in
+/// and keeps it as a candidate, unless no recording was judged, when there was nothing to learn from; lets go of the
+/// candidates before it that were never used (<see cref="ISegmentModelVersionRepository.LetGoOfCandidatesBeforeAsync"/>),
+/// the round keeping the candidate's figures so that what it says outlasts it; and puts it in
 /// use when <see cref="SegmentAdoption"/> says so, no version was rolled
 /// back from in the days <see cref="SegmentAdoption.AfterRollbacks"/> holds candidates out, and the version in use
 /// is still the one it was judged against. The version in use moves only through
@@ -113,9 +117,10 @@ public sealed class SegmentTrainingJob(
     }
 
     /// <summary>
-    /// Makes the round and keeps it as finished, with what became of it, the candidate it kept, the verdict on it and
-    /// the figures of the version in use it was judged against and its number, unless it stopped partway; a round
-    /// that fails is kept as finished too, as failed, so that the next try is the next day's.
+    /// Makes the round and keeps it as finished, with what became of it, the candidate it kept, the verdict on it, the
+    /// figures of the version in use it was judged against and its number, and the candidate's own figures and what
+    /// they stand on, unless it stopped partway; a round that fails is kept as finished too, as failed, so that the
+    /// next try is the next day's.
     /// </summary>
     private async Task<SegmentTrainingRound> FinishedAsync(
         IServiceProvider services,
@@ -140,7 +145,16 @@ public sealed class SegmentTrainingJob(
         if (made.Outcome is not SegmentTrainingOutcome.Stopped)
         {
             await rounds.TakeAsync(
-                SegmentLearningRound.Ended(day, started, made.Outcome, made.Candidate?.Number, made.Verdict, made.InUseMetrics, made.InUseVersion),
+                SegmentLearningRound.Ended(
+                    day,
+                    started,
+                    made.Outcome,
+                    made.Candidate?.Number,
+                    made.Verdict,
+                    made.InUseMetrics,
+                    made.InUseVersion,
+                    made.Candidate?.Metrics,
+                    made.Candidate?.Evidence),
                 cancellationToken);
         }
 
@@ -197,6 +211,7 @@ public sealed class SegmentTrainingJob(
         }
 
         SegmentModelVersion candidate = await versions.AddCandidateAsync(learned.Candidate, learned.Evaluation, Now(), cancellationToken);
+        IReadOnlyList<int> letGo = await versions.LetGoOfCandidatesBeforeAsync(candidate.Number, cancellationToken);
         AdoptionVerdict verdict = SegmentAdoption.AfterRollbacks(learned.Verdict, await versions.ListAsync(cancellationToken), Now());
 
         SegmentTrainingRound decided = verdict switch
@@ -206,7 +221,7 @@ public sealed class SegmentTrainingJob(
             _ => new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.Kept, candidate, verdict, active),
         };
 
-        return decided with { InUseMetrics = learned.InUse.Metrics, InUseVersion = active.Number };
+        return decided with { InUseMetrics = learned.InUse.Metrics, InUseVersion = active.Number, LetGo = letGo };
     }
 
     /// <summary>
@@ -325,6 +340,14 @@ public sealed class SegmentTrainingJob(
                     round.Verdict,
                     round.Active.Number);
                 break;
+        }
+
+        if (round.LetGo.Count is not 0)
+        {
+            logger.LogInformation(
+                "The round of learning of {Day} let go of candidates {LetGo}, never used and not taken.",
+                round.Day,
+                string.Join(", ", round.LetGo));
         }
     }
 }

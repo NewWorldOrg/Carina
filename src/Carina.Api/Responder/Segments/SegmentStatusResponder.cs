@@ -189,8 +189,9 @@ public sealed record SegmentRoundMetricsResponder(double? BoundaryRecallWithin2s
 
 /// <summary>
 /// The latest round of learning: the day it was for, when it was taken and what became of it; when it learned a
-/// candidate, the candidate's number, the verdict on it and the figures of the version in use on the same
-/// recordings; and, while that candidate is still kept, what its evaluation stands on and its figures.
+/// candidate, the candidate's number, the verdict on it, the figures of the version in use on the same recordings,
+/// and what the candidate's evaluation stands on and its figures, as the round kept them, or, for a round kept before
+/// it kept them, as the candidate keeps them while it is still kept.
 /// </summary>
 public sealed record SegmentLearningRoundResponder(
     DateOnly Day,
@@ -218,8 +219,8 @@ public sealed record SegmentLearningRoundResponder(
             round.Candidate,
             round.Verdict,
             round.InUseMetrics is { } inUse ? SegmentRoundMetricsResponder.Of(inUse) : null,
-            candidate?.Evidence is { } evidence ? SegmentEvidenceResponder.Of(evidence) : null,
-            candidate?.Metrics is { } metrics ? SegmentRoundMetricsResponder.Of(metrics) : null);
+            (round.CandidateEvidence ?? candidate?.Evidence) is { } evidence ? SegmentEvidenceResponder.Of(evidence) : null,
+            (round.CandidateMetrics ?? candidate?.Metrics) is { } metrics ? SegmentRoundMetricsResponder.Of(metrics) : null);
     }
 }
 

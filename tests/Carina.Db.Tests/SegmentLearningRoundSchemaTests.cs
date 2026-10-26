@@ -24,6 +24,8 @@ public sealed class SegmentLearningRoundSchemaTests(MigratedScratchDatabase data
 
     private const string BeforeTheVersionTheyMeasured = "20261021090000_AVersionMadeByHandTakesAdvertsInPods";
 
+    private const string BeforeTheFiguresOfTheirCandidate = "20261023122253_AJobMakesAnArtefactLargerThanItsRecordingAgain";
+
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly string[] VersionsInUseOverTime =
@@ -161,6 +163,87 @@ public sealed class SegmentLearningRoundSchemaTests(MigratedScratchDatabase data
         {
             await ScalarAsync("DELETE FROM segment_learning_round WHERE day >= '2028-01-01'");
         }
+    }
+
+    [Fact(DisplayName = "BR-CS-003: a round is kept with its candidate's own figures and what they stand on, in the shapes the status answers, and read back as they were")]
+    public async Task ARoundIsKeptWithTheFiguresOfItsCandidate()
+    {
+        DateTime at = new(2028, 7, 1, 18, 6, 0, DateTimeKind.Utc);
+        SegmentMetrics inUse = new(0.08, 0.05, [new KindMetrics(SegmentKind.Break, 0.38)], null, 0);
+        SegmentMetrics candidate = new(0.11, 0.07, [new KindMetrics(SegmentKind.Break, 0.42)], null, 0);
+        EvaluationEvidence evidence = new(12, 56, at.AddHours(-6));
+
+        try
+        {
+            await TakeAsync(SegmentLearningRound.Ended(SegmentLearningRound.DayOf(at), at, SegmentTrainingOutcome.Kept, 14, AdoptionVerdict.TooLittleEvidence, inUse, 10, candidate, evidence));
+
+            SegmentLearningRound? latest = await LatestAsync();
+
+            Assert.Equal((14, 0.11, 0.07, 0.42), (latest?.Candidate, latest?.CandidateMetrics?.BoundaryRecallWithin2s, latest?.CandidateMetrics?.BoundaryRecallWithin1s, latest?.CandidateMetrics?.BreakRecall));
+            Assert.Equal(evidence, latest?.CandidateEvidence);
+            Assert.Equal(
+                "t t",
+                await ScalarAsync(
+                    """
+                    SELECT concat_ws(' ',
+                        candidate_metrics = '{"boundaryRecallWithin2s": 0.11, "boundaryRecallWithin1s": 0.07, "kinds": [{"kind": "Break", "recall": 0.42}], "returnedAfterSkipShare": null, "skips": 0}'::jsonb,
+                        candidate_evidence = '{"recordings": 12, "boundaries": 56, "labelsUntil": "2028-07-01T12:06:00Z"}'::jsonb)
+                    FROM segment_learning_round WHERE day = '2028-07-02'
+                    """));
+        }
+        finally
+        {
+            await ScalarAsync("DELETE FROM segment_learning_round WHERE day >= '2028-01-01'");
+        }
+    }
+
+    [Theory(DisplayName = "BR-CS-003: no round keeps a candidate's figures without having kept a candidate, nor figures that are not an object")]
+    [InlineData("2027-06-01", "NULL", "'NothingNew'", "'{}'::jsonb", "NULL")]
+    [InlineData("2027-06-02", "NULL", "'Failed'", "NULL", "'{}'::jsonb")]
+    [InlineData("2027-06-03", "3", "'Kept'", "'[]'::jsonb", "NULL")]
+    [InlineData("2027-06-04", "3", "'Kept'", "NULL", "'[]'::jsonb")]
+    public async Task NoRoundKeepsTheFiguresOfACandidateItDidNotKeep(string day, string candidate, string outcome, string figures, string evidence)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        string verdict = candidate is "NULL" ? "NULL" : "'NoBetterAtBoundaries'";
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => ScalarAsync(
+            connection,
+            $"INSERT INTO segment_learning_round (day, taken_at, candidate, outcome, verdict, candidate_metrics, candidate_evidence) VALUES ('{day}', '{day}T00:00:00Z', {candidate}, {outcome}, {verdict}, {figures}, {evidence})"));
+
+        Assert.Equal((PostgresErrorCodes.CheckViolation, "ck_segment_learning_round_candidate_figures"), (refusal.SqlState, refusal.ConstraintName));
+    }
+
+    [Fact(DisplayName = "the candidate's figures go back with the migration that kept them, leaving the rounds, and come forward again empty")]
+    public async Task TheFiguresOfTheCandidateGoBackAndComeForwardAgain()
+    {
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
+        await context.Database.EnsureDeletedAsync(Cancel);
+        IMigrator migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(cancellationToken: Cancel);
+        DateTime at = new(2026, 9, 2, 10, 30, 0, DateTimeKind.Utc);
+        SegmentMetrics figures = new(0.5, 0.4, [], null, 0);
+        await new SegmentLearningRoundRepository(context).TakeAsync(
+            SegmentLearningRound.Ended(SegmentLearningRound.DayOf(at), at, SegmentTrainingOutcome.Kept, 3, AdoptionVerdict.NoBetterAtBoundaries, figures, 1, figures, new EvaluationEvidence(12, 56, at)),
+            Cancel);
+
+        await migrator.MigrateAsync(BeforeTheFiguresOfTheirCandidate, Cancel);
+
+        await using (NpgsqlConnection back = await OpenAsync(Scratch()))
+        {
+            Assert.Equal(
+                "0",
+                await ScalarAsync(back, "SELECT count(*) FROM information_schema.columns WHERE table_name = 'segment_learning_round' AND column_name IN ('candidate_metrics', 'candidate_evidence')"));
+            Assert.Equal("2026-09-02 3 Kept 1", await ScalarAsync(back, "SELECT concat_ws(' ', day::text, candidate, outcome, in_use_version) FROM segment_learning_round"));
+        }
+
+        await migrator.MigrateAsync(cancellationToken: Cancel);
+
+        await using NpgsqlConnection forward = await OpenAsync(Scratch());
+        Assert.Equal(
+            "3 t",
+            await ScalarAsync(forward, "SELECT concat_ws(' ', candidate, candidate_metrics IS NULL AND candidate_evidence IS NULL) FROM segment_learning_round"));
+        await context.Database.EnsureDeletedAsync(Cancel);
     }
 
     [Theory(DisplayName = "BR-CD-008: no round keeps the number of the version it measured without having kept a candidate, nor a number below the first")]
