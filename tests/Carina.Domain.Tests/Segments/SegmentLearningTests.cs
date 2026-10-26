@@ -296,6 +296,83 @@ public sealed class SegmentLearningTests
         Assert.Equal(AdoptionVerdict.TooLittleEvidence, learned.Verdict);
     }
 
+    [Fact(DisplayName = "BR-CV-004: seeks past a pod the catalog does not hear, read against the version in use, label its adverts breaks at a tenth and nothing else, the candidate takes them for breaks more readily, and the evidence counts labels up to the latest of them")]
+    public void SeeksPastAPodAreLearnedFrom()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> taught) = Taught(Weeks, breakAdverts: 3);
+        CatalogSound[] sounds = Unheard(taught, recordings, 379, 411);
+        (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks);
+        DateTime sought = Now.AddDays(-1);
+        LearningRecording[] seeking = [.. recordings.Select(recording => Seeking(recording, Seek(sought, 375, 431)))];
+        LearningCatalog catalog = new([.. sounds, .. heard], SeriesLinks.None);
+
+        SegmentLearned without = Learn([.. recordings, judged], [.. sounds, .. heard]);
+        SegmentLearned with = Learn([.. seeking, judged], [.. sounds, .. heard]);
+        (RecordingPieces read, SegmentContext context, ViewerSeeks seeks) = AsTheRoundReads(seeking[2], catalog);
+        IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(read.Pieces, context, [], seeks: seeks);
+        SegmentPiece[] pod = [.. read.Pieces.Where(piece => piece.Starts >= TimeSpan.FromSeconds(380) && piece.Ends <= TimeSpan.FromSeconds(425))];
+
+        Assert.Equal((TimeSpan.FromSeconds(380), TimeSpan.FromSeconds(425)), (Assert.Single(seeks.Spans).Starts, seeks.Spans[0].Ends));
+        Assert.Equal(3, pod.Length);
+        Assert.Equal(
+            [.. read.Pieces.Select(piece => pod.Contains(piece) ? new SegmentLabel(SegmentKind.Break, ViewerSeeks.MostWeight, SegmentLabelSource.Viewer) : null)],
+            labels.Select(label => label?.Source is SegmentLabelSource.Viewer ? label : null));
+        Assert.True(BreakChance(with.Candidate, read, pod) > BreakChance(without.Candidate, read, pod));
+        Assert.Equal(sought, with.Evaluation.Evidence.LabelsUntil);
+    }
+
+    [Fact(DisplayName = "BR-CV-004: seeks over cuts in the programme that are not an advert's lengths apart, the version in use finding the programme there, label nothing and leave the candidate as it is")]
+    public void SeeksOverTheProgrammeTeachNothing()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> sounds) = Taught(Weeks, breakAdverts: 3);
+        (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks);
+        LearningRecording[] seeking = [.. recordings.Select(recording => Seeking(recording, Seek(Now.AddDays(-1), 248, 289)))];
+        LearningCatalog catalog = new([.. sounds, .. heard], SeriesLinks.None);
+
+        SegmentLearned without = Learn([.. recordings, judged], [.. sounds, .. heard]);
+        SegmentLearned with = Learn([.. seeking, judged], [.. sounds, .. heard]);
+        (RecordingPieces read, SegmentContext context, ViewerSeeks seeks) = AsTheRoundReads(seeking[2], catalog);
+
+        SeekSpan span = Assert.Single(seeks.Spans);
+        Assert.Equal((TimeSpan.FromSeconds(250), TimeSpan.FromSeconds(287), (SegmentKind?)null, false), (span.Starts, span.Ends, span.Detected, span.InAdvertSteps));
+        Assert.Null(ViewerSeeks.KindOf(span, context.Catalog));
+        Assert.Equal(without.Candidate, with.Candidate);
+    }
+
+    private static CatalogSound[] Unheard(List<CatalogSound> sounds, List<LearningRecording> recordings, double from, double to)
+        =>
+        [
+            .. sounds.Where(sound => !sound.Occurrences.Any(placed => recordings.Any(recording => recording.Id.Equals(placed.Occurrence.RecordingId))
+                                                                     && placed.Occurrence.StartsAt >= TimeSpan.FromSeconds(from)
+                                                                     && placed.Occurrence.StartsAt <= TimeSpan.FromSeconds(to))),
+        ];
+
+    private static ViewerSeek Seek(DateTime at, double from, double to) => new(at, SeekAction.Forward, SeekMeans.Bar, TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to));
+
+    private static LearningRecording Seeking(LearningRecording recording, ViewerSeek seek)
+        => new(recording.Id, recording.StartedAt, recording.Evidence, recording.Context, recording.Actions, [seek]);
+
+    /// <summary>
+    /// The recording read as a round reads it to learn from, hearing what it heard of the catalog when it was made but
+    /// sure of none of it, and its seeks read against that reading and the version in use's detection of it.
+    /// </summary>
+    private static (RecordingPieces Read, SegmentContext Context, ViewerSeeks Seeks) AsTheRoundReads(LearningRecording recording, LearningCatalog catalog)
+    {
+        IReadOnlyList<CatalogHeard> heard = catalog.HeardBy(recording.Id, recording.StartedAt);
+        SegmentContext context = recording.Context.Hearing(heard);
+        RecordingPieces inUse = SegmentDetector.Read(recording.Evidence, context, InUse.Thresholds);
+        ViewerSeeks seeks = ViewerSeeks.Read(recording.Seeks, inUse.Candidates, SegmentDetector.Detect(inUse, InUse.Model), TimeSpan.FromSeconds(InUse.Thresholds.GridToleranceSec));
+        RecordingPieces read = SegmentDetector.Read(
+            recording.Evidence,
+            recording.Context.Hearing([.. heard.Select(stretch => new CatalogHeard(stretch.Starts, stretch.Ends, stretch.Kind, stretch.Occurrences, stretch.Series, stretch.Stations, entry: stretch.Entry))]),
+            InUse.Thresholds);
+
+        return (read, context, seeks);
+    }
+
+    private static double BreakChance(SegmentModel model, RecordingPieces read, SegmentPiece[] pieces)
+        => pieces.Average(piece => model.Chances(piece.Features, read.Station, read.Series).Of(SegmentKind.Break));
+
     [Fact(DisplayName = "a version chosen by hand stays in use whatever a round of learning makes")]
     public void AVersionChosenByHandStaysWhateverIsLearned()
     {

@@ -12,7 +12,8 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// (<see cref="LearningCatalog"/>), sure of none of it, so that no segment is fixed and neighbouring segments are read
 /// as one (<see cref="JoinedPiece"/>) across its stretches as across what it does not know, and labelled by
 /// <see cref="SegmentLabels"/>, its segments and those runs alike, each learned with the features detection scores it by
-/// (<see cref="SegmentSamples"/>); labels of the programme, of breaks, of
+/// (<see cref="SegmentSamples"/>), its seeks read once against its boundary candidates and the version in use's detection
+/// of it (<see cref="ViewerSeeks"/>); labels of the programme, of breaks, of
 /// openings and of endings are learned from, and with an opening or an ending among them the candidate tells four
 /// kinds apart. Beside a version in use that tells four kinds apart, the candidate keeps that version's opening, or
 /// its ending, as it is when nothing is labelled to learn it from, so that a round with nothing to learn one of them
@@ -65,7 +66,7 @@ public static class SegmentLearning
         ArgumentNullException.ThrowIfNull(active);
         ArgumentNullException.ThrowIfNull(search);
 
-        Learner[] learners = [.. recordings.OrderBy(recording => recording.StartedAt).ThenBy(recording => recording.Id.Value).Select(recording => new Learner(recording, catalog))];
+        Learner[] learners = [.. recordings.OrderBy(recording => recording.StartedAt).ThenBy(recording => recording.Id.Value).Select(recording => new Learner(recording, catalog, active))];
         int[] judged = [.. Enumerable.Range(0, learners.Length).Where(at => learners[at].Judged)];
         Judging judging = new(learners, LabelsUntil(recordings));
         SegmentThresholds[] settings = [.. judged.Length is 0 ? search.Settings.Take(1) : search.Settings];
@@ -120,7 +121,11 @@ public static class SegmentLearning
 
     private static DateTime? LabelsUntil(IReadOnlyList<LearningRecording> recordings)
     {
-        DateTime[] given = [.. recordings.SelectMany(recording => recording.Actions).Select(action => action.HappenedAt)];
+        DateTime[] given =
+        [
+            .. recordings.SelectMany(recording => recording.Actions).Select(action => action.HappenedAt),
+            .. recordings.SelectMany(recording => recording.Seeks).Select(seek => seek.HappenedAt),
+        ];
 
         return given.Length is 0 ? null : given.Max();
     }
@@ -253,13 +258,18 @@ public static class SegmentLearning
     {
         private readonly LearningCatalog catalog;
 
+        private readonly SegmentModelVersion active;
+
         private readonly IReadOnlyList<CatalogHeard> heard;
 
         private readonly IReadOnlyList<CatalogHeard> everything;
 
-        public Learner(LearningRecording recording, LearningCatalog catalog)
+        private ViewerSeeks? seeks;
+
+        public Learner(LearningRecording recording, LearningCatalog catalog, SegmentModelVersion active)
         {
             this.catalog = catalog;
+            this.active = active;
             Recording = recording;
             heard = catalog.HeardBy(recording.Id, recording.StartedAt);
             everything = catalog.HeardNow(recording.Id);
@@ -294,7 +304,7 @@ public static class SegmentLearning
         public Labelled Labelled(SegmentThresholds thresholds)
         {
             RecordingPieces read = SegmentDetector.Read(Recording.Evidence, Recording.Context.Hearing([.. heard.Select(Unsure)]), thresholds);
-            IReadOnlyList<SegmentLabel?> labels = SegmentLabels.OfJoined(read.Joined, Context(null), Recording.Actions);
+            IReadOnlyList<SegmentLabel?> labels = SegmentLabels.OfJoined(read.Joined, Context(null), Recording.Actions, Seeks);
             RecordingPieces kept = read with { Joined = [.. read.Joined.Where((_, at) => labels[at] is not null)] };
 
             return new Labelled(this, kept, Samples(kept));
@@ -306,7 +316,25 @@ public static class SegmentLearning
         /// <paramref name="without"/> included, still keeps the segments it lies over from being taken for the programme.
         /// </summary>
         public IReadOnlyList<SegmentSample> Samples(RecordingPieces pieces, IReadOnlySet<CatalogEntryId>? without = null)
-            => SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything);
+            => SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, Seeks);
+
+        /// <summary>
+        /// The seeks of this recording read against the boundary candidates and the detection of the version in use, as
+        /// it reads the recording hearing what it heard of the catalog when it was made; read once, when first asked for.
+        /// </summary>
+        private ViewerSeeks Seeks => seeks ??= ReadSeeks();
+
+        private ViewerSeeks ReadSeeks()
+        {
+            if (Recording.Seeks.Count is 0)
+            {
+                return ViewerSeeks.None;
+            }
+
+            RecordingPieces read = Read(active.Thresholds);
+
+            return ViewerSeeks.Read(Recording.Seeks, read.Candidates, SegmentDetector.Detect(read, active.Model), TimeSpan.FromSeconds(active.Thresholds.GridToleranceSec));
+        }
 
         /// <summary>
         /// <paramref name="stretch"/> with its confidence not known, which fixes nothing (<see cref="SegmentFeatures"/>).

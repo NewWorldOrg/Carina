@@ -414,13 +414,14 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentDetecting>());
     }
 
-    [Fact(DisplayName = "registers where the skip events are kept and what the catalog would give an evaluation to stand on")]
+    [Fact(DisplayName = "registers where the skip events and the seeks are kept and what the catalog would give an evaluation to stand on")]
     public void RegistersTheSkipEventsAndTheCatalogEvidence()
     {
         using ServiceProvider provider = Build(ValidSettings());
         using IServiceScope scope = provider.CreateScope();
 
         Assert.IsType<SkipEventRepository>(scope.ServiceProvider.GetRequiredService<ISkipEventRepository>());
+        Assert.IsType<SeekEventRepository>(scope.ServiceProvider.GetRequiredService<ISeekEventRepository>());
         Assert.IsType<CatalogEvidenceReader>(scope.ServiceProvider.GetRequiredService<ICatalogEvidenceReader>());
     }
 
