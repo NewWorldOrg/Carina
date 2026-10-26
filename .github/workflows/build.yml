@@ -30,7 +30,7 @@ jobs:
       CARINA_DRIVER_SOCKET: /run/carina/driver.sock
       CARINA_DATA_PROTECTION_KEYS: /var/lib/carina/keys
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -40,7 +40,7 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -50,7 +50,7 @@ jobs:
   image-tags:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: A change to one side of the image moves that side's tag and leaves the other where it was
@@ -61,7 +61,7 @@ jobs:
   every-test-is-selected-by-a-job:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -73,7 +73,7 @@ jobs:
   unit-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -101,7 +101,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -150,7 +150,7 @@ jobs:
     env:
       CARINA_DB_CONNECTION: Host=127.0.0.1;Port=5432;Database=carina;Username=carina;Password=ci-only-not-a-deployment
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -174,7 +174,7 @@ jobs:
   material-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - name: The develop image, which carries the ffmpeg the application itself runs
         uses: docker/build-push-action@v6
@@ -220,7 +220,7 @@ jobs:
     env:
       CARINA_DB_CONNECTION: Host=127.0.0.1;Port=5432;Database=carina;Username=carina;Password=ci-only-not-a-deployment
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'

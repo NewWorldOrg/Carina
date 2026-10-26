@@ -16,7 +16,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v6
         with:
@@ -38,7 +38,7 @@ jobs:
       group: ${{ github.workflow }}-publish
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: The two tags of this commit, each named for the last commit that touched its side
