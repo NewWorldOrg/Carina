@@ -97,6 +97,26 @@ public sealed class LiveHlsKeys(LiveHlsSettings settings, TimeProvider clock) : 
         return null;
     }
 
+    public void LetGo(string? offered)
+    {
+        if (!Unguessable.IsOne(offered))
+        {
+            return;
+        }
+
+        LiveHlsRendition? found;
+
+        lock (gate)
+        {
+            if (!held.Remove(DigestOf(offered!), out found))
+            {
+                return;
+            }
+        }
+
+        found.Close();
+    }
+
     public int RevokeEverythingOf(Subject watcher)
     {
         ArgumentNullException.ThrowIfNull(watcher);

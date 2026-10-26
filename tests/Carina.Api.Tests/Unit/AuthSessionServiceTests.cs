@@ -21,6 +21,8 @@ public sealed class AuthSessionServiceTests
 
     private readonly RecordedGrants grants = new();
 
+    private readonly RecordedPlaylists playlists = new();
+
     [Fact]
     public void TheListNamesTheDeviceThatIsAskingAsTheCurrentOne()
     {
@@ -125,6 +127,7 @@ public sealed class AuthSessionServiceTests
         Assert.Equal(SessionStatus.Revoked, theirs.StatusAt(Now(), SessionPolicy.Default));
         Assert.Equal(SessionStatus.Active, here.StatusAt(Now(), SessionPolicy.Default));
         Assert.Equal([Stranger], grants.RevokedFor);
+        Assert.Equal([Stranger], playlists.RevokedFor);
     }
 
     [Fact]
@@ -221,7 +224,17 @@ public sealed class AuthSessionServiceTests
         Assert.Equal(SessionStatus.Active, there.StatusAt(Now(), SessionPolicy.Default));
     }
 
-    private AuthSessionService Service() => new(sessions, grants, SessionPolicy.Default, clock);
+    [Fact(DisplayName = "BR-PV-005: signing out lets go of the playlists the one signing out had open")]
+    public async Task SigningOutLetsGoOfThePlaylistsTheOneSigningOutHadOpen()
+    {
+        AuthSession here = Started(Owner, "this device");
+
+        await Service().LogOutAsync(Owner, here.Handle, Cancel);
+
+        Assert.Equal([Owner], playlists.RevokedFor);
+    }
+
+    private AuthSessionService Service() => new(sessions, grants, playlists, SessionPolicy.Default, clock);
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
@@ -241,6 +254,18 @@ public sealed class AuthSessionServiceTests
 
     private IReadOnlyList<SessionView> List(AuthSession here)
         => Service().ListAsync(here.Handle, Cancel).GetAwaiter().GetResult().Data!;
+
+    private sealed class RecordedPlaylists : IHlsKeyRevocation
+    {
+        public List<Subject> RevokedFor { get; } = [];
+
+        public int RevokeEverythingOf(Subject watcher)
+        {
+            RevokedFor.Add(watcher);
+
+            return 0;
+        }
+    }
 
     private sealed class RecordedGrants : IPlaybackGrantStore
     {

@@ -2,7 +2,9 @@ using Carina.Api.Common;
 using Carina.Api.Services;
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Auth;
+using Carina.Domain.Streaming;
 using Carina.Infrastructure.Auth;
+using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
 namespace Carina.Api.Tests.Unit;
@@ -32,6 +34,8 @@ public sealed class LocalAccountServiceTests
         PlaybackGrantPolicy.Default);
 
     private readonly CountingPasswordHasher hasher = new(new QuickPasswordHasher());
+
+    private readonly LiveHlsKeys playlists = new(new LiveHlsSettings(), TimeProvider.System);
 
     private LocalAccountService? held;
 
@@ -313,6 +317,22 @@ public sealed class LocalAccountServiceTests
         Assert.Null(grants.Admit(Carrier, target));
     }
 
+    [Fact(DisplayName = "BR-PV-005: changing the password lets go of the playlists that were open")]
+    public async Task ChangingThePasswordLetsGoOfThePlaylistsThatWereOpen()
+    {
+        Seed();
+
+        AuthSession here = await StartedAsync("this device");
+        ILiveViewing seat = (await new LiveFanout(new LiveFanoutSettings()).JoinAsync(Cancel))!;
+        IssuedLiveHlsKey issued = playlists.Issue(seat, here.Subject, LiveProfile.Hd30)!;
+
+        Assert.NotNull(playlists.Find(issued.Key));
+
+        await ChangeAsync(here, Password, "a replacement long enough");
+
+        Assert.Null(playlists.Find(issued.Key));
+    }
+
     private LocalAccountService Held => held ??= Service();
 
     private LocalAccountService Service() => Service(accounts);
@@ -323,6 +343,7 @@ public sealed class LocalAccountServiceTests
         repository,
         sessions,
         grants,
+        playlists,
         checking,
         new LoginThrottle(LoginRatePolicy.Default, clock),
         PasswordHashPolicy.Default,

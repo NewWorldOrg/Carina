@@ -6,7 +6,7 @@ namespace Carina.Domain.Streaming;
 /// The keys a player opens a live channel's playlist, initialisation and segments with, each holding a viewer's seat
 /// on a live session until nothing has been asked with it for a while.
 /// </summary>
-public interface ILiveHlsKeys
+public interface ILiveHlsKeys : IHlsKeyRevocation
 {
     /// <summary>
     /// Issues a key holding <paramref name="seat"/>, or nothing when as many keys are held as may be, in which case the
@@ -19,7 +19,10 @@ public interface ILiveHlsKeys
     /// </summary>
     ILiveHlsRendition? Find(string? offered);
 
-    int RevokeEverythingOf(Subject watcher);
+    /// <summary>
+    /// Lets go of a key and the seat it holds at once, for a key whose playlist could not be answered.
+    /// </summary>
+    void LetGo(string? offered);
 }
 
 /// <summary>

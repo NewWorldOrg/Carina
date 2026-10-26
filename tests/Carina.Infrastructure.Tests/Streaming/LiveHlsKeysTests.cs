@@ -190,6 +190,21 @@ public sealed class LiveHlsKeysTests
     }
 
     [Fact]
+    public async Task AKeyLetGoOfOpensNothingAndItsSeatIsLetGoOfAtOnce()
+    {
+        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        HeldSeat seat = new();
+        IssuedLiveHlsKey issued = keys.Issue(seat, Watcher, LiveProfile.Hd30)!;
+
+        keys.LetGo(issued.Key);
+        keys.LetGo(issued.Key);
+        keys.LetGo("short");
+
+        Assert.Null(keys.Find(issued.Key));
+        await Eventually.Happens(() => seat.LetGo, "the seat of the key let go of was let go of");
+    }
+
+    [Fact]
     public async Task NoMoreKeysAreIssuedThanMayBeHeldAtOnceAndTheSeatIsLeftToTheCaller()
     {
         await using LiveHlsKeys keys = new(new LiveHlsSettings { MostHeldAtOnce = 2 }, clock);

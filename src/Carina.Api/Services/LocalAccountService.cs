@@ -7,6 +7,7 @@ public sealed class LocalAccountService(
     ILocalAccountRepository accounts,
     IAuthSessionRepository sessions,
     IPlaybackGrantStore grants,
+    IHlsKeyRevocation playlists,
     IPasswordHasher hasher,
     ILoginThrottle throttle,
     PasswordHashPolicy hashPolicy,
@@ -98,6 +99,7 @@ public sealed class LocalAccountService(
         int ended = await EndEveryOtherSessionAsync(change, at, cancellationToken);
 
         grants.RevokeEverythingOf(change.Subject);
+        playlists.RevokeEverythingOf(change.Subject);
 
         return ServiceResult<int, PasswordRefusal>.Success(ended);
     }
