@@ -77,6 +77,8 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
         "/Carina.Infrastructure/Scanning/TableHarvest.cs .CopyTo(",
         "/Carina.Infrastructure/Segments/LowestPriorityScheduler.cs DllImport",
+        "/Carina.Infrastructure/Streaming/Fmp4Fragment.cs .CopyTo(",
+        "/Carina.Infrastructure/Streaming/HlsSegmenter.cs .CopyTo(",
         "/Carina.Infrastructure/Streaming/LiveHandedOverReading.cs .CopyTo(",
         "/Carina.Infrastructure/Streaming/NutFrames.cs .CopyTo(",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Directory.CreateDirectory",

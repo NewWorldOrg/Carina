@@ -64,15 +64,7 @@ public static class LiveWire
             return;
         }
 
-        LiveSessionKey key;
-        LiveJoin join;
-
-        using (sessions.Reach(new LiveChannelKey(asked.Network, asked.Service)))
-        {
-            AnnouncedSound announced = await onAir.AnnouncedAsync(asked.Network, asked.Service, context.RequestAborted);
-            key = asked.Taking(SoundArrangement.Of(announced).Reaching(asked.Sound));
-            join = await sessions.JoinAsync(key, context.RequestAborted);
-        }
+        (LiveSessionKey key, LiveJoin join) = await LiveSeating.JoinAsync(sessions, onAir, asked, context.RequestAborted);
 
         if (join.Viewing is not { } viewing)
         {

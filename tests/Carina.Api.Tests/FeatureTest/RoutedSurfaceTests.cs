@@ -393,6 +393,9 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Contains(VideoDelivery.Path, patterns, StringComparer.Ordinal);
         Assert.Contains(VideoDelivery.WithTheTicketInThePath, patterns, StringComparer.Ordinal);
         Assert.Contains(LiveStreamDelivery.WithTheTicketInThePath, patterns, StringComparer.Ordinal);
+        Assert.Contains(LiveHlsDelivery.ThePlaylistOfAKey, patterns, StringComparer.Ordinal);
+        Assert.Contains(LiveHlsDelivery.TheInitialisationOfAKey, patterns, StringComparer.Ordinal);
+        Assert.Contains(LiveHlsDelivery.ASegmentOfAKey, patterns, StringComparer.Ordinal);
         Assert.Contains("/api/health", patterns, StringComparer.Ordinal);
         Assert.Contains(OidcHandshake.StartPath, patterns, StringComparer.Ordinal);
         Assert.Contains(OidcHandshake.CallbackPath, patterns, StringComparer.Ordinal);

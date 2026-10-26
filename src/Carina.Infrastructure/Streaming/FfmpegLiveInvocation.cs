@@ -287,6 +287,8 @@ public static class FfmpegLiveInvocation
                 "zerolatency",
                 "-g",
                 Keyframes(profile),
+                "-sc_threshold",
+                "0",
                 "-b:v",
                 Kilobits(profile.SoftwareRateControl.KilobitsPerSecond),
                 "-maxrate",

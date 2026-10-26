@@ -78,6 +78,78 @@ public sealed class LiveFragmentMaterialTests : IDisposable
             $"the pieces came {measured.SecondsApart:F4} s apart on average");
     }
 
+    [Theory(DisplayName = "BR-PD-022: what the live transcoder writes is cut into segments that each begin with a keyframe and last two seconds")]
+    [MemberData(nameof(EveryProfile))]
+    public async Task BrPd022WhatTheLiveTranscoderWritesIsCutIntoSegmentsOfTwoSeconds(string profile)
+    {
+        LiveProfile asked = LiveProfile.Find(profile)!;
+        string written = await (SyntheticBroadcast.AsMeasured() with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "segmented.m2ts"));
+        HlsSegmenter segmenter = new(new LiveHlsSettings { SegmentsHeld = 100 });
+        LiveFragmenter fragmenter = new(LiveTrack.Picture);
+        LiveFrames frames = new();
+
+        foreach (LiveFragment fragment in fragmenter.Read(await LiveAsync(written, asked)).Fragments)
+        {
+            segmenter.Take(frames.Of(fragment));
+        }
+
+        double keyframeFrames = Math.Round(asked.Rate.PerSecond * 2);
+        TimeSpan everyTwoSeconds = TimeSpan.FromSeconds(keyframeFrames * asked.Rate.Denominator / asked.Rate.Numerator);
+        IReadOnlyList<LiveHlsSegment> cut = segmenter.Window.Segments;
+
+        Assert.True(cut.Count >= 3, $"the transcoder's {PastTheProbe.TotalSeconds} s were cut into {cut.Count} segment(s)");
+        Assert.All(
+            cut,
+            segment => Assert.True(
+                (segment.Length - everyTwoSeconds).Duration() < TimeSpan.FromMilliseconds(1),
+                string.Create(CultureInfo.InvariantCulture, $"segment {segment.Number} lasted {segment.Length.TotalSeconds:F4} s")));
+        Assert.Equal(2, segmenter.Window.TargetSeconds);
+
+        foreach (LiveHlsSegment segment in cut)
+        {
+            string played = Path.Combine(room, string.Create(CultureInfo.InvariantCulture, $"segment-{segment.Number}.mp4"));
+
+            await File.WriteAllBytesAsync(played, [.. segmenter.Initialisation!.Value.ToArray(), .. segmenter.Segment(segment.Number)!.Value.ToArray()]);
+
+            IReadOnlyList<string> keyframes = await PictureKeyframesAsync(played);
+
+            Assert.Equal((int)keyframeFrames, keyframes.Count);
+            Assert.Equal("1", keyframes[0]);
+            Assert.DoesNotContain("1", keyframes.Skip(1));
+        }
+    }
+
+    /// <summary>
+    /// Whether each picture a file decodes to is a keyframe, in the order they are shown.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> PictureKeyframesAsync(string file)
+    {
+        var start = new ProcessStartInfo(Ffprobe)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        foreach (string argument in (string[])["-v", "error", "-select_streams", "v:0", "-show_entries", "frame=key_frame", "-of", "default=nw=1:nk=1", file])
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process probing = Process.Start(start)!;
+
+        Task<string> complaint = probing.StandardError.ReadToEndAsync();
+        string said = await probing.StandardOutput.ReadToEndAsync();
+
+        await probing.WaitForExitAsync();
+
+        Assert.True(probing.ExitCode is 0, await complaint);
+        Assert.Empty(await complaint);
+
+        return [.. said.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+    }
+
     [Fact(DisplayName = "BR-PD-006: a live start that joins the sound part way through a frame, whose leftover reads as the header of another, writes the picture and the sound together with the sound on the broadcast's clock")]
     public async Task BrPd006AStartPartWayThroughASoundFrameWritesTheSoundOnTheBroadcastsClock()
     {

@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 
 using Carina.Api.Authentication;
 using Carina.Api.Common;
+using Carina.Api.Live;
 using Carina.Api.Responder.Playback;
 using Carina.Domain.Streaming;
 
@@ -153,6 +154,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getHealth",
                 "getLiveDataBroadcastAit",
                 "getLiveDataBroadcastReceiverId",
+                "getLivePlaylist",
                 "getMe",
                 "getMigrationRecord",
                 "getOidcConfig",
@@ -262,6 +264,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Equal(
             [
+                "live",
                 "videos",
                 "services",
                 "version",
@@ -273,7 +276,6 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "recordings",
                 "quality",
                 "migration",
-                "live",
                 "health",
                 "epg",
                 "programs",
@@ -285,6 +287,26 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             tags);
         Assert.Equal(tags, declared);
         Assert.DoesNotContain(tags, tag => tag.EndsWith("Action", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "FR-017: a browser's live playlist is described by the profile and the sound it is asked in, and the surfaces a key opens are named in the description rather than described")]
+    public async Task ABrowsersLivePlaylistIsDescribedAndTheSurfacesAKeyOpensAreNamed()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/live/{networkId}-{serviceId}/hls.m3u8"]!["get"]!;
+        string described = document["info"]!["description"]!.GetValue<string>();
+
+        Assert.Equal(LiveHlsDelivery.ThePlaylistIsCalled, operation["operationId"]!.GetValue<string>());
+        Assert.Equal(
+            ["profile", "sound"],
+            operation["parameters"]!.AsArray()
+                .Where(parameter => parameter!["in"]!.GetValue<string>() == "query")
+                .Select(parameter => parameter!["name"]!.GetValue<string>())
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+        Assert.Contains("/api/hls/{key}/index.m3u8", described, StringComparison.Ordinal);
+        Assert.Contains("`.m3u8`", described, StringComparison.Ordinal);
+        Assert.Null(document["paths"]!["/api/hls/{key}/index.m3u8"]);
     }
 
     [Fact]

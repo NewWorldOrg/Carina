@@ -181,6 +181,8 @@ public sealed class FfmpegPlaybackInvocationTests
                 "zerolatency",
                 "-g",
                 "60",
+                "-sc_threshold",
+                "0",
                 "-b:v",
                 "3000k",
                 "-maxrate",

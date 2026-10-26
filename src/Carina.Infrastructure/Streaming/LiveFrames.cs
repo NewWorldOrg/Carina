@@ -53,19 +53,7 @@ public sealed class LiveFrames
     }
 
     private static ReadOnlySpan<byte> Inside(ReadOnlySpan<byte> boxes, ReadOnlySpan<byte> named)
-    {
-        var walk = new BoxWalk(boxes);
-
-        while (walk.Next())
-        {
-            if (walk.Named(named))
-            {
-                return walk.Body;
-            }
-        }
-
-        return [];
-    }
+        => IsoBoxWalk.Inside(boxes, named);
 
     private static uint? Number(ReadOnlySpan<byte> box, int dates)
     {
@@ -83,7 +71,7 @@ public sealed class LiveFrames
     {
         rates.Clear();
 
-        var walk = new BoxWalk(Inside(initialisation, "moov"u8));
+        var walk = new IsoBoxWalk(Inside(initialisation, "moov"u8));
 
         while (walk.Next())
         {
@@ -109,7 +97,7 @@ public sealed class LiveFrames
 
     private LivePts? Earliest(ReadOnlySpan<byte> media)
     {
-        var walk = new BoxWalk(Inside(media, "moof"u8));
+        var walk = new IsoBoxWalk(Inside(media, "moof"u8));
 
         LivePts? earliest = null;
 
@@ -150,56 +138,5 @@ public sealed class LiveFrames
         }
 
         return tfdt.Length < 12 ? null : LivePts.Rescaled(BinaryPrimitives.ReadUInt64BigEndian(tfdt[4..]), rate);
-    }
-
-    private ref struct BoxWalk(ReadOnlySpan<byte> boxes)
-    {
-        private const int HeaderLength = 8;
-
-        private const int WideHeaderLength = 16;
-
-        private readonly ReadOnlySpan<byte> boxes = boxes;
-
-        private int at;
-
-        public ReadOnlySpan<byte> Name { get; private set; }
-
-        public ReadOnlySpan<byte> Body { get; private set; }
-
-        public readonly bool Named(ReadOnlySpan<byte> named) => Name.SequenceEqual(named);
-
-        public bool Next()
-        {
-            if (at + HeaderLength > boxes.Length)
-            {
-                return false;
-            }
-
-            uint said = BinaryPrimitives.ReadUInt32BigEndian(boxes[at..]);
-            int header = said is 1 ? WideHeaderLength : HeaderLength;
-
-            if (said is 1 && at + WideHeaderLength > boxes.Length)
-            {
-                return false;
-            }
-
-            ulong length = said switch
-            {
-                0 => (ulong)(boxes.Length - at),
-                1 => BinaryPrimitives.ReadUInt64BigEndian(boxes[(at + HeaderLength)..]),
-                _ => said,
-            };
-
-            if (length < (ulong)header || length > (ulong)(boxes.Length - at))
-            {
-                return false;
-            }
-
-            Name = boxes.Slice(at + 4, 4);
-            Body = boxes.Slice(at + header, (int)length - header);
-            at += (int)length;
-
-            return true;
-        }
     }
 }

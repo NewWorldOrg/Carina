@@ -7,6 +7,7 @@ namespace Carina.Api.Services;
 public sealed class AuthSessionService(
     IAuthSessionRepository sessions,
     IPlaybackGrantStore grants,
+    IHlsKeyRevocation playlists,
     SessionPolicy policy,
     TimeProvider clock)
 {
@@ -50,6 +51,7 @@ public sealed class AuthSessionService(
         }
 
         grants.RevokeEverythingOf(held.Subject);
+        playlists.RevokeEverythingOf(held.Subject);
 
         return ServiceResult<EndedSessions>.Success(
             new EndedSessions(ended ? 1 : 0, held.Method, held.DeviceLabel));
@@ -66,6 +68,7 @@ public sealed class AuthSessionService(
         await sessions.DeleteAsync(current, cancellationToken);
 
         grants.RevokeEverythingOf(subject);
+        playlists.RevokeEverythingOf(subject);
 
         return ServiceResult.Success();
     }
