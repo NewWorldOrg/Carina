@@ -13,7 +13,7 @@ public sealed class LosesOpeningsOrEndingsMigrationTests
 {
     private const string ScratchDatabase = "carina_loses_openings_or_endings_test";
 
-    private const string BeforeTheVerdict = "20261026084821_RoundsOfLearningKeepTheFiguresOfTheirCandidate";
+    private const string BeforeTheVerdict = "20261026094813_SeeksAreKeptBesideTheSkipsWithoutAKeyIntoTheRecording";
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
