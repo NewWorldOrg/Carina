@@ -92,6 +92,26 @@ public sealed class SegmentLearningRoundTests
         Assert.Throws<ArgumentException>(() => SegmentLearningRound.Rehydrate(day, at, null, null, null, null, 1));
     }
 
+    [Fact(DisplayName = "BR-CS-003: a round that learned a candidate keeps the candidate's own figures and what they stand on, so that what it said reads once the candidate is let go")]
+    public void ARoundKeepsTheFiguresOfItsCandidate()
+    {
+        DateTime at = new(2026, 10, 19, 18, 30, 0, DateTimeKind.Utc);
+        DateOnly day = SegmentLearningRound.DayOf(at);
+        SegmentMetrics inUse = new(0.08, 0.05, [new KindMetrics(SegmentKind.Break, 0.4)], null, 0);
+        SegmentMetrics candidate = new(0.11, 0.07, [new KindMetrics(SegmentKind.Break, 0.42)], null, 0);
+        EvaluationEvidence evidence = new(12, 56, at.AddHours(-6));
+
+        SegmentLearningRound round = SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, inUse, 3, candidate, evidence);
+        SegmentLearningRound read = SegmentLearningRound.Rehydrate(day, at, 5, SegmentTrainingOutcome.Kept, AdoptionVerdict.TooLittleEvidence, inUse, 3, candidate, evidence);
+        SegmentLearningRound keptBefore = SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.Kept, 5, AdoptionVerdict.TooLittleEvidence, inUse, 3);
+
+        Assert.Equal((candidate, evidence), (round.CandidateMetrics, round.CandidateEvidence));
+        Assert.Equal((candidate, evidence), (read.CandidateMetrics, read.CandidateEvidence));
+        Assert.Equal(((SegmentMetrics?)null, (EvaluationEvidence?)null), (keptBefore.CandidateMetrics, keptBefore.CandidateEvidence));
+        Assert.Throws<ArgumentException>(() => SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.NothingNew, candidateMetrics: candidate));
+        Assert.Throws<ArgumentException>(() => SegmentLearningRound.Ended(day, at, SegmentTrainingOutcome.Failed, candidateEvidence: evidence));
+    }
+
     [Theory(DisplayName = "BR-CD-004: a round that learned nothing, or failed, is kept with what became of it and nothing of a candidate")]
     [InlineData(SegmentTrainingOutcome.NothingNew)]
     [InlineData(SegmentTrainingOutcome.NothingToLearnFrom)]

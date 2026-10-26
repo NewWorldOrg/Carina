@@ -5,8 +5,10 @@ namespace Carina.Domain.Segments;
 /// <summary>
 /// The day's round of learning, kept once it finishes: the day it is for, when it was taken, what became of it, and,
 /// when it learned a candidate, the candidate it kept, what judging it against the version in use said, the figures
-/// of the version in use on the same recordings and its number. A round kept before what became of rounds was kept
-/// says none of that but its candidate, and one kept before the number was kept may say the figures without it. A
+/// of the version in use on the same recordings and its number, and the candidate's own figures and what they stand
+/// on, so that what the round said still reads once the candidate is let go. A round kept before what became of
+/// rounds was kept says none of that but its candidate, one kept before the number was kept may say the figures
+/// without it, and one kept before the candidate's figures were kept says none of them. A
 /// day runs from <see cref="DueAt"/> in Japan to the same time the next day, so a round is due again only once the
 /// next day has begun, whenever the last one was taken (<see cref="NextNotBefore"/>). A round learns only when
 /// something learning reads has changed since the last round that kept a candidate was taken
@@ -42,6 +44,10 @@ public sealed class SegmentLearningRound
 
     public int? InUseVersion { get; private set; }
 
+    public SegmentMetrics? CandidateMetrics { get; private set; }
+
+    public EvaluationEvidence? CandidateEvidence { get; private set; }
+
     /// <summary>
     /// The round taken at <paramref name="at"/>, for the day <paramref name="at"/> falls in, that kept the candidate
     /// numbered <paramref name="candidate"/>, if any.
@@ -50,8 +56,8 @@ public sealed class SegmentLearningRound
 
     /// <summary>
     /// The round of <paramref name="day"/> taken at <paramref name="takenAt"/> that came to <paramref name="outcome"/>,
-    /// with the candidate it kept, the verdict on it and the figures of the version in use, with its number, when it
-    /// learned one.
+    /// with the candidate it kept, the verdict on it, the figures of the version in use, with its number, and the
+    /// candidate's own figures and what they stand on, when it learned one.
     /// </summary>
     public static SegmentLearningRound Ended(
         DateOnly day,
@@ -60,8 +66,10 @@ public sealed class SegmentLearningRound
         int? candidate = null,
         AdoptionVerdict? verdict = null,
         SegmentMetrics? inUseMetrics = null,
-        int? inUseVersion = null)
-        => Rehydrate(day, takenAt, candidate, outcome, verdict, inUseMetrics, inUseVersion);
+        int? inUseVersion = null,
+        SegmentMetrics? candidateMetrics = null,
+        EvaluationEvidence? candidateEvidence = null)
+        => Rehydrate(day, takenAt, candidate, outcome, verdict, inUseMetrics, inUseVersion, candidateMetrics, candidateEvidence);
 
     public static SegmentLearningRound Rehydrate(
         DateOnly day,
@@ -70,7 +78,9 @@ public sealed class SegmentLearningRound
         SegmentTrainingOutcome? outcome = null,
         AdoptionVerdict? verdict = null,
         SegmentMetrics? inUseMetrics = null,
-        int? inUseVersion = null)
+        int? inUseVersion = null,
+        SegmentMetrics? candidateMetrics = null,
+        EvaluationEvidence? candidateEvidence = null)
     {
         DateTime taken = UtcTimes.Required(takenAt, nameof(takenAt));
 
@@ -99,7 +109,7 @@ public sealed class SegmentLearningRound
             throw new ArgumentException("A round keeps a candidate, and the verdict on it, exactly when it learned one.", nameof(outcome));
         }
 
-        if (candidate is null && (verdict is not null || inUseMetrics is not null || inUseVersion is not null))
+        if (candidate is null && (verdict is not null || inUseMetrics is not null || inUseVersion is not null || candidateMetrics is not null || candidateEvidence is not null))
         {
             throw new ArgumentException("Only a round that kept a candidate says how it was judged.", nameof(candidate));
         }
@@ -113,6 +123,8 @@ public sealed class SegmentLearningRound
             Verdict = verdict,
             InUseMetrics = inUseMetrics,
             InUseVersion = inUseVersion,
+            CandidateMetrics = candidateMetrics,
+            CandidateEvidence = candidateEvidence,
         };
     }
 

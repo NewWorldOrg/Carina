@@ -60,7 +60,7 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal([(int?)SegmentModelVersion.FirstNumber], harness.Rounds.Taken.Select(round => round.InUseVersion));
     }
 
-    [Theory(DisplayName = "BR-CD-008: a candidate that finds no more boundaries, as many with fewer seconds of adverts, or stands on too little is kept as a candidate only, beside the candidates before it")]
+    [Theory(DisplayName = "BR-CD-008: a candidate that finds no more boundaries, as many with fewer seconds of adverts, or stands on too little is kept as a candidate only, and the candidate before it is let go")]
     [InlineData(0.80, 0.9, 12, AdoptionVerdict.NoBetterAtBoundaries)]
     [InlineData(0.85, 0.8, 12, AdoptionVerdict.NoBetterAtBoundaries)]
     [InlineData(0.93, 0.9, 9, AdoptionVerdict.TooLittleEvidence)]
@@ -74,10 +74,81 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal((SegmentTrainingOutcome.Kept, (AdoptionVerdict?)verdict), (look.Round?.Outcome, look.Round?.Verdict));
         Assert.Equal([3], harness.Versions.Added.Select(version => version.Number));
         Assert.Equal(
-            [(1, SegmentModelVersionState.Active), (2, SegmentModelVersionState.Candidate), (3, SegmentModelVersionState.Candidate)],
+            [(1, SegmentModelVersionState.Active), (3, SegmentModelVersionState.Candidate)],
             (await harness.Versions.ListAsync(Cancel)).OrderBy(version => version.Number).Select(version => (version.Number, version.State)));
+        Assert.Equal([2], look.Round?.LetGo);
         Assert.Empty(harness.Versions.Written);
         Assert.Equal([Kept(SegmentTrainingOutcome.Kept, 3, verdict, harness.Trainer.InUse.Metrics)], harness.Rounds.Taken.Select(KeptAs));
+    }
+
+    [Fact(DisplayName = "BR-CS-003: a round lets go of the candidates before its own that learning made and nobody used, and keeps one something still names, one built in and the version in use")]
+    public async Task ARoundLetsGoOfTheCandidatesNobodyUsed()
+    {
+        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, HandMadeModels.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), SegmentTrainingHarness.Start.AddDays(-4)));
+        harness.Versions.Others.Add(SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Candidate, false, HandMadeModels.First, SegmentTrainingHarness.Start.AddDays(-3), null, null, null, null, builtIn: true));
+        harness.Versions.Others.Add(SegmentModelVersion.Learned(4, HandMadeModels.First, SegmentTrainingHarness.Evaluated(0.6, 0.9), SegmentTrainingHarness.Start.AddDays(-2)));
+        harness.Versions.Others.Add(SegmentModelVersion.Learned(5, HandMadeModels.First, SegmentTrainingHarness.Evaluated(0.7, 0.9), SegmentTrainingHarness.Start.AddDays(-1)));
+        harness.Versions.Named.Add(4);
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
+
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal((SegmentTrainingOutcome.Kept, (int?)6), (look.Round?.Outcome, look.Round?.Candidate?.Number));
+        Assert.Equal([2, 5], look.Round?.LetGo);
+        Assert.Equal([1, 3, 4, 6], (await harness.Versions.ListAsync(Cancel)).Select(version => version.Number).Order());
+        Assert.Contains(harness.Log.Lines, line => line.Level is LogLevel.Information && line.Line.Contains("let go of candidates 2, 5", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "BR-CS-003: the round keeps its candidate's figures and what they stand on, so that what it said reads once the next round lets the candidate go")]
+    public async Task TheRoundKeepsTheFiguresOfItsCandidate()
+    {
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9, new EvaluationEvidence(12, 56, SegmentTrainingHarness.Start));
+        harness.Trainer.WhileLearning = () =>
+        {
+            harness.Changes.LastChanged = harness.Now.AddSeconds(1);
+
+            return Task.CompletedTask;
+        };
+        await harness.Job().LookAsync(Cancel);
+        harness.Clock.Turn(TimeSpan.FromDays(1));
+        SegmentEvaluation first = harness.Trainer.Candidate;
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.82, 0.9);
+
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal([2], look.Round?.LetGo);
+        Assert.Null(await harness.Versions.FindAsync(2, Cancel));
+        SegmentLearningRound kept = harness.Rounds.Taken[0];
+        Assert.Equal((2, first.Metrics, first.Evidence), (kept.Candidate, kept.CandidateMetrics, kept.CandidateEvidence));
+        Assert.Equal((3, harness.Trainer.Candidate.Metrics, harness.Trainer.Candidate.Evidence), (harness.Rounds.Taken[1].Candidate, harness.Rounds.Taken[1].CandidateMetrics, harness.Rounds.Taken[1].CandidateEvidence));
+    }
+
+    [Fact(DisplayName = "BR-CS-003: a number let go is never given again: each round's candidate goes on after the highest number given, those let go and one only remembered elsewhere included")]
+    public async Task ANumberLetGoIsNeverGivenAgain()
+    {
+        harness.Versions.Others.Add(SegmentModelVersion.Learned(2, HandMadeModels.First, SegmentTrainingHarness.Evaluated(0.5, 0.9), SegmentTrainingHarness.Start.AddDays(-2)));
+        harness.Versions.Others.Add(SegmentModelVersion.Learned(3, HandMadeModels.First, SegmentTrainingHarness.Evaluated(0.6, 0.9), SegmentTrainingHarness.Start.AddDays(-1)));
+        harness.Trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
+        harness.Trainer.WhileLearning = () =>
+        {
+            harness.Changes.LastChanged = harness.Now.AddSeconds(1);
+
+            return Task.CompletedTask;
+        };
+
+        SegmentTrainingLook first = await harness.Job().LookAsync(Cancel);
+        harness.Clock.Turn(TimeSpan.FromDays(1));
+        SegmentTrainingLook second = await harness.Job().LookAsync(Cancel);
+        harness.Versions.RememberedElsewhere = 9;
+        harness.Clock.Turn(TimeSpan.FromDays(1));
+        SegmentTrainingLook third = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal([4, 5, 10], new[] { first, second, third }.Select(look => look.Round?.Candidate?.Number ?? 0));
+        Assert.Equal([2, 3], first.Round?.LetGo);
+        Assert.Equal([4], second.Round?.LetGo);
+        Assert.Equal([5], third.Round?.LetGo);
+        Assert.Equal([1, 10], (await harness.Versions.ListAsync(Cancel)).Select(version => version.Number).Order());
+        Assert.Equal([4, 5, 10], harness.Rounds.Taken.Select(round => round.Candidate ?? 0));
     }
 
     [Fact(DisplayName = "BR-CD-008: while the version in use is chosen by hand, learning still keeps and evaluates a candidate but never puts it in use")]
