@@ -55,7 +55,13 @@ public sealed record SegmentMetrics
     /// <summary>
     /// The share of the seconds of adverts the catalog is sure of that were detected as breaks.
     /// </summary>
-    public double? BreakRecall => Kinds.FirstOrDefault(kind => kind.Kind is SegmentKind.Break)?.Recall;
+    public double? BreakRecall => Recall(SegmentKind.Break);
+
+    /// <summary>
+    /// The share of the seconds of <paramref name="kind"/> the catalog is sure of that were detected as it; not known
+    /// when it is sure of none, or the kind is not measured.
+    /// </summary>
+    public double? Recall(SegmentKind kind) => Kinds.FirstOrDefault(measured => measured.Kind == kind)?.Recall;
 
     /// <summary>
     /// These figures beside what viewers did with the version's buttons as <paramref name="returns"/> counts.

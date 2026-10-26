@@ -35,6 +35,33 @@ public sealed class SegmentAdoptionTests
         Assert.Equal(verdict, SegmentAdoption.Judge(InUse, Evaluated(0.85, 0.9, Enough), Evaluated(0.85, seconds, Enough)));
     }
 
+    [Theory(DisplayName = "BR-CD-008: a candidate better at boundaries is kept out when its recall of the openings or of the endings falls more than 0.02 below the version in use's, the openings and endings it is judged on heard in two recordings each")]
+    [InlineData(0.83, 0.82, 0.70, 0.69, AdoptionVerdict.Adopted)]
+    [InlineData(0.83, 0.90, 0.70, 0.75, AdoptionVerdict.Adopted)]
+    [InlineData(0.83, 0.80, 0.70, 0.70, AdoptionVerdict.LosesOpeningsOrEndings)]
+    [InlineData(0.83, 0.0, 0.70, 0.70, AdoptionVerdict.LosesOpeningsOrEndings)]
+    [InlineData(0.83, 0.83, 0.70, 0.67, AdoptionVerdict.LosesOpeningsOrEndings)]
+    [InlineData(0.83, null, 0.70, 0.70, AdoptionVerdict.LosesOpeningsOrEndings)]
+    public void ACandidateMustKeepTheOpeningsAndEndings(double openings, double? foundOpenings, double endings, double? foundEndings, AdoptionVerdict verdict)
+    {
+        EvaluationEvidence themes = new(12, 148, Made, openings: 2, endings: 3);
+
+        Assert.Equal(verdict, SegmentAdoption.Judge(InUse, Evaluated(0.85, 0.9, themes, openings, endings), Evaluated(0.90, 0.9, themes, foundOpenings, foundEndings)));
+    }
+
+    [Theory(DisplayName = "BR-CD-008: the openings or endings decide nothing when fewer than two recordings hold one the catalog is sure of, or the version in use finds none of their seconds known, and a candidate no better at boundaries stays out for that")]
+    [InlineData(1, 3, 0.85, 0.90, AdoptionVerdict.Adopted)]
+    [InlineData(2, 1, 0.85, 0.90, AdoptionVerdict.LosesOpeningsOrEndings)]
+    [InlineData(1, 1, 0.85, 0.90, AdoptionVerdict.Adopted)]
+    [InlineData(2, 3, 0.85, 0.80, AdoptionVerdict.NoBetterAtBoundaries)]
+    public void TheOpeningsAndEndingsDecideOnlyOnEnoughOfThem(int openings, int endings, double inUse, double found, AdoptionVerdict verdict)
+    {
+        EvaluationEvidence themes = new(12, 148, Made, openings, endings);
+
+        Assert.Equal(verdict, SegmentAdoption.Judge(InUse, Evaluated(inUse, 0.9, themes, 0.83, 0.70), Evaluated(found, 0.9, themes, 0.0, 0.70)));
+        Assert.Equal(AdoptionVerdict.Adopted, SegmentAdoption.Judge(InUse, Evaluated(0.85, 0.9, themes, null, null), Evaluated(0.90, 0.9, themes, 0.0, 0.0)));
+    }
+
     [Fact(DisplayName = "BR-CD-008: a figure not known is less than any")]
     public void AFigureNotKnownIsLessThanAny()
     {
@@ -174,6 +201,17 @@ public sealed class SegmentAdoptionTests
 
     private static SegmentEvaluation Evaluated(double recall, double seconds, EvaluationEvidence evidence)
         => new(new SegmentMetrics(recall, recall - 0.1, [new KindMetrics(SegmentKind.Break, seconds), new KindMetrics(SegmentKind.Opening, null)], null, 0), [], evidence);
+
+    private static SegmentEvaluation Evaluated(double recall, double seconds, EvaluationEvidence evidence, double? openings, double? endings)
+        => new(
+            new SegmentMetrics(
+                recall,
+                recall - 0.1,
+                [new KindMetrics(SegmentKind.Break, seconds), new KindMetrics(SegmentKind.Opening, openings), new KindMetrics(SegmentKind.Ending, endings)],
+                null,
+                0),
+            [],
+            evidence);
 
     private static SegmentModelVersion HeldFirst()
         => SegmentModelVersion.Rehydrate(SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active, false, HandMadeModels.First, Made, Made, null, null, null);

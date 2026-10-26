@@ -82,7 +82,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
                 SELECT concat_ws(' ',
                     metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": 0.83, "kinds": [{"kind": "Break", "recall": 0.9}], "returnedAfterSkipShare": null, "skips": 0}'::jsonb,
                     stations = '[]'::jsonb,
-                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-11-01T12:30:00Z"}'::jsonb,
+                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-11-01T12:30:00Z", "openings": 0, "endings": 0}'::jsonb,
                     adopted_at >= trained_at)
                 FROM segment_model_version WHERE number = 72
                 """));

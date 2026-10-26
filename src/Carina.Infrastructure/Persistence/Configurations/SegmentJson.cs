@@ -74,13 +74,13 @@ internal static class SegmentJson
         => [.. Deserialised<List<StationShape>>(stored).Select(shape => new StationMetrics(new NetworkId(shape.NetworkId), new ServiceId(shape.ServiceId), shape.Recordings, shape.Metrics.Read()))];
 
     public static string Written(EvaluationEvidence evidence)
-        => Serialised(new EvidenceShape(evidence.Recordings, evidence.Boundaries, evidence.LabelsUntil));
+        => Serialised(new EvidenceShape(evidence.Recordings, evidence.Boundaries, evidence.LabelsUntil, evidence.Openings, evidence.Endings));
 
     public static EvaluationEvidence Evidence(string stored)
     {
         EvidenceShape shape = Deserialised<EvidenceShape>(stored);
 
-        return new EvaluationEvidence(shape.Recordings, shape.Boundaries, shape.LabelsUntil);
+        return new EvaluationEvidence(shape.Recordings, shape.Boundaries, shape.LabelsUntil, shape.Openings, shape.Endings);
     }
 
     public static string Written(SegmentRollback rollback)
@@ -164,7 +164,10 @@ internal static class SegmentJson
 
     private sealed record StationShape(int NetworkId, int ServiceId, int Recordings, MetricsShape Metrics);
 
-    private sealed record EvidenceShape(int Recordings, int Boundaries, DateTime? LabelsUntil);
+    /// <summary>
+    /// What an evaluation stands on, as kept; one kept before the openings and endings were counted holds none.
+    /// </summary>
+    private sealed record EvidenceShape(int Recordings, int Boundaries, DateTime? LabelsUntil, int Openings = 0, int Endings = 0);
 
     private sealed record RollbackShape(double ReturnedAfterSkipShare, double PreviousShare, int Skips, int BackTo);
 
