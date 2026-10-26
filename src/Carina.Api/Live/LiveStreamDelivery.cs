@@ -2,6 +2,7 @@ using System.Buffers;
 
 using Carina.Api.Authentication;
 using Carina.Api.Services;
+using Carina.Domain.Auth;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
@@ -18,6 +19,8 @@ public static class LiveStreamDelivery
     public const string NoSeeking = "none";
 
     public const string NothingCameInTime = "Nothing came from this channel in time to start sending it.";
+
+    public const string PlaylistExtension = ".m3u8";
 
     private const int Mouthful = 64 * 1024;
 
@@ -49,6 +52,81 @@ public static class LiveStreamDelivery
                 context,
                 LiveService.TargetOf(channel.Network, channel.Service),
                 (_, _) => CarryAsync(context, channel, sessions));
+    }
+
+    /// <summary>
+    /// The channel opened by the ticket in the path. A name ending in .m3u8 is answered with a playlist, for a player
+    /// that cannot open an endless stream; any other name is handed the stream as it is.
+    /// </summary>
+    public static async Task InvokeWithTheTicketInThePath(
+        HttpContext context,
+        int networkId,
+        int serviceId,
+        string? name,
+        ILiveSessionManager sessions,
+        ISoundOnAir onAir,
+        ILiveEncoderSelector encoders,
+        ILiveHlsKeys keys)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(encoders);
+
+        if (!AsksForAPlaylist(name))
+        {
+            await Invoke(context, networkId, serviceId, sessions);
+
+            return;
+        }
+
+        context.Response.Headers.CacheControl = PlaybackTicketGate.NeverCached;
+
+        if (LiveHlsDelivery.Channel(networkId, serviceId) is not { } channel)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+
+            return;
+        }
+
+        if (context.User.Identity?.IsAuthenticated is true && SessionClaims.SubjectOf(context.User) is { } signedIn)
+        {
+            await PlaylistAsync(context, channel, signedIn, sessions, onAir, encoders, keys);
+
+            return;
+        }
+
+        await context.RequestServices
+            .GetRequiredService<PlaybackTicketGate>()
+            .AdmitForAsLongAsTheGrantLastsAsync(
+                context,
+                LiveService.TargetOf(channel.Network, channel.Service),
+                (watcher, _) => PlaylistAsync(context, channel, watcher, sessions, onAir, encoders, keys));
+    }
+
+    private static bool AsksForAPlaylist(string? name)
+        => name is not null && name.EndsWith(PlaylistExtension, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The playlist of the channel at the profile this machine opens at and with the main sound, which is what an
+    /// external player is handed.
+    /// </summary>
+    private static async Task PlaylistAsync(
+        HttpContext context,
+        LiveChannelKey channel,
+        Subject watcher,
+        ILiveSessionManager sessions,
+        ISoundOnAir onAir,
+        ILiveEncoderSelector encoders,
+        ILiveHlsKeys keys)
+    {
+        LiveEncoderChoice chosen = await encoders.ChooseAsync(context.RequestAborted);
+
+        await LiveHlsDelivery.OpenAsync(
+            context,
+            new LiveSessionKey(channel.Network, channel.Service, LiveProfile.Unasked(chosen.Encoder)),
+            watcher,
+            sessions,
+            onAir,
+            keys);
     }
 
     private static async Task CarryAsync(HttpContext context, LiveChannelKey channel, ILiveSessionManager sessions)

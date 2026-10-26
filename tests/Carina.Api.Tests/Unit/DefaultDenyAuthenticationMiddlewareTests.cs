@@ -102,6 +102,26 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
         Assert.False(context.Response.Headers.ContainsKey("Location"));
     }
 
+    [Fact(DisplayName = "BR-PV-005: a surface opened by its key is reached with something the shape of a key and nothing else, the surface judging the key")]
+    public async Task ASurfaceOpenedByItsKeyIsReachedWithSomethingTheShapeOfAKey()
+    {
+        DefaultHttpContext context = Keyed(Unguessable.Issue(), opened: true);
+
+        Assert.True(await RunAsync(context));
+    }
+
+    [Theory(DisplayName = "BR-PV-005: something that is not the shape of a key, or a key on a surface not opened by one, is refused")]
+    [InlineData("short", true)]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa~", true)]
+    [InlineData(null, false)]
+    public async Task SomethingThatIsNotAKeyOrAKeyWhereNoneOpensIsRefused(string? key, bool opened)
+    {
+        DefaultHttpContext context = Keyed(key ?? Unguessable.Issue(), opened);
+
+        Assert.False(await RunAsync(context));
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+    }
+
     [Theory(DisplayName = "BR-AU-020: an API request refused for carrying no session cookie is written down")]
     [InlineData("/api/tuners", "application/json")]
     [InlineData("/api/videos/1", "video/mp2t")]
@@ -201,6 +221,19 @@ public sealed class DefaultDenyAuthenticationMiddlewareTests
         context.Request.Method = method;
         context.Request.Path = path;
         context.Request.Headers.Accept = accept;
+
+        return context;
+    }
+
+    private static DefaultHttpContext Keyed(string key, bool opened)
+    {
+        DefaultHttpContext context = Asking("GET", $"/api/hls/{key}/index.m3u8", "*/*");
+
+        context.Request.RouteValues[KeyedSurfaces.InThePath] = key;
+        context.SetEndpoint(new Endpoint(
+            _ => Task.CompletedTask,
+            opened ? new EndpointMetadataCollection(new KeyedSurfaceAttribute()) : EndpointMetadataCollection.Empty,
+            "keyed"));
 
         return context;
     }

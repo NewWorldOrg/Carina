@@ -8,7 +8,7 @@ namespace Carina.Api.OpenApi;
 public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
 {
     private const string Description =
-        "The HTTP surface of the app process. Eight contract surfaces do not fit a "
+        "The HTTP surface of the app process. Nine contract surfaces do not fit a "
         + "request/response schema and are absent from this document: the transport stream "
         + "(`/sessions/{id}/stream` on the driver socket), the event hub (`GET /api/events`), "
         + "the bulk programme guide (`GET /api/programs/bulk`), the recording file served "
@@ -21,7 +21,12 @@ public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
         + "(`GET /api/live/{networkId}-{serviceId}/stream`), one endless `video/mp2t` body "
         + "carrying the multiplex the tuner receives, nothing transcoded and nothing seekable, "
         + "which is the surface an external player or an AirPlay receiver opens with a ticket "
-        + "from `POST /api/live/ticket` and is not the path a browser watches through, and the two a Hybridcast "
+        + "from `POST /api/live/ticket` and is not the path a browser watches through, and which, opened with the "
+        + "ticket in the path and a name ending in `.m3u8`, answers instead a playlist naming one playlist of a key "
+        + "made for that player, the picture in H.264 at the profile this machine opens at with the main sound, "
+        + "the playlist of a key, its initialisation and its segments "
+        + "(`GET /api/hls/{key}/index.m3u8`, `init.mp4` and `{number}.m4s`), opened by the key alone, "
+        + "which is let go of thirty seconds after nothing is asked with it, and the two a Hybridcast "
         + "application's frame opens with the ticket `POST /api/live/{networkId}-{serviceId}/data-broadcast/app/ticket` "
         + "issued: its documents and resources relayed from the broadcaster's server, and what it posts there "
         + "(`GET` and `POST /api/live/{networkId}-{serviceId}/data-broadcast/app/{ticket}`, the address in `uri`, "

@@ -10,6 +10,7 @@ using Carina.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.FeatureTest;
@@ -20,7 +21,7 @@ internal sealed class AuthProbe : IAsyncDisposable
 
     private readonly TestingWebApplicationFactory factory = new();
 
-    private AuthProbe(bool secure, Action<IServiceCollection>? alsoWired)
+    private AuthProbe(bool secure, Action<IServiceCollection>? alsoWired, RecordedStartup? heard = null)
     {
         Wired = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
@@ -30,8 +31,30 @@ internal sealed class AuthProbe : IAsyncDisposable
             services.AddSingleton<IProgrammeRepository>(Programmes);
             services.AddSingleton<ICollectionEpochRepository>(Epochs);
             services.AddSingleton<IBoundedRead>(new UnboundedReads());
+
+            if (heard is not null)
+            {
+                services.AddSingleton<ILoggerProvider>(heard);
+            }
+
             alsoWired?.Invoke(services);
         }));
+
+        if (heard is not null)
+        {
+            Wired = Wired.WithWebHostBuilder(builder => builder
+                .UseSetting("Logging:LogLevel:Default", nameof(LogLevel.Trace))
+                .UseSetting("Logging:LogLevel:Microsoft", nameof(LogLevel.Trace))
+                .UseSetting("Logging:LogLevel:Microsoft.AspNetCore", nameof(LogLevel.Trace))
+                .UseSetting("Logging:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics", nameof(LogLevel.Trace))
+                .UseSetting($"Logging:{typeof(RecordedStartup).FullName}:LogLevel:Default", nameof(LogLevel.Trace))
+                .UseSetting(
+                    $"Logging:{typeof(RecordedStartup).FullName}:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics",
+                    nameof(LogLevel.Trace))
+                .UseSetting(
+                    $"Logging:{typeof(RecordedStartup).FullName}:LogLevel:Microsoft.AspNetCore.Routing.Matching.DfaMatcher",
+                    nameof(LogLevel.Trace)));
+        }
 
         Client = Wired.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -63,6 +86,12 @@ internal sealed class AuthProbe : IAsyncDisposable
 
     public static AuthProbe OverHttp(Action<IServiceCollection>? alsoWired = null)
         => new(secure: false, alsoWired);
+
+    /// <summary>
+    /// A probe whose every log, the framework's included, is turned up to its finest and heard by <paramref name="heard"/>.
+    /// </summary>
+    public static AuthProbe OverHttpHeardBy(RecordedStartup heard, Action<IServiceCollection>? alsoWired = null)
+        => new(secure: false, alsoWired, heard);
 
     public static AuthProbe OverHttps() => new(secure: true, alsoWired: null);
 

@@ -83,6 +83,11 @@ public sealed class DefaultDenyAuthenticationMiddleware
             return true;
         }
 
+        if (context.GetEndpoint().IsOpenedByItsKey())
+        {
+            return KeyedSurfaces.OfferedBy(context.Request) is not null;
+        }
+
         return context.GetEndpoint().IsTicketed() && PlaybackTicketCarrier.OfferedBy(context.Request) is not null;
     }
 }
