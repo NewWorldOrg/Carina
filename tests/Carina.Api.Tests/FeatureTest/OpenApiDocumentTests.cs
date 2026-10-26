@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Responder.Playback;
+using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -358,6 +359,23 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "absent",
             ],
             shortfall["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent").ToArray());
+    }
+
+    [Fact(DisplayName = "a live profile names the formats this machine transcodes it in, each spelled the way the wire and the playing ask for it")]
+    public async Task ALiveProfileNamesTheFormatsThisMachineTranscodesItIn()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode profile = document["components"]!["schemas"]!["LiveProfileResponder"]!;
+        JsonNode codec = document["components"]!["schemas"]!["VideoCodec"]!;
+
+        Assert.Equal("array", profile["properties"]!["formats"]!["type"]!.GetValue<string>());
+        Assert.Equal(
+            "#/components/schemas/VideoCodec",
+            profile["properties"]!["formats"]!["items"]!["$ref"]!.GetValue<string>());
+        Assert.Contains("formats", profile["required"]!.AsArray().Select(value => value!.GetValue<string>()));
+        Assert.Equal(
+            VideoCodecs.Names,
+            codec["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
     [Fact]

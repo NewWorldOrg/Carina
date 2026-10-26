@@ -369,10 +369,10 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(["recording"], ExternalPlayerSources(read));
     }
 
-    [Theory(DisplayName = "a decoding that is not one of the two is refused, for the plan and for the picture alike")]
-    [InlineData("?decodes=av1")]
+    [Theory(DisplayName = "a decoding that is not one of the three is refused, for the plan and for the picture alike")]
+    [InlineData("?decodes=vp9")]
     [InlineData("?decodes=h265&decodes=H264")]
-    public async Task ADecodingThatIsNotOneOfTheTwoIsRefused(string query)
+    public async Task ADecodingThatIsNotOneOfTheThreeIsRefused(string query)
     {
         await using var feature = new PlayFeature();
         Recording recording = feature.Ended(RecordingOutcome.Complete);
@@ -384,6 +384,24 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(HttpStatusCode.BadRequest, plan.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, picture.StatusCode);
         Assert.Equal(PlayDelivery.TheDecodingsThereAre, (await PlayFeature.PlanOfAsync(plan)).GetProperty("message").GetString());
+    }
+
+    [Theory(DisplayName = "a browser saying it decodes AV1 is answered, and settles on the file one naming nothing more would")]
+    [InlineData("?decodes=av1", "?decodes=h264")]
+    [InlineData("?decodes=h265&decodes=av1", "?decodes=h265")]
+    public async Task ABrowserSayingItDecodesAv1IsAnswered(string withAv1, string without)
+    {
+        await using PlayFeature feature = new();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, EncodeCodec.H265, fileReadAs: EncodeCodec.H265, taggedAs: "hvc1");
+
+        using HttpResponseMessage asked = await feature.PlanAsync(recording, withAv1);
+        using HttpResponseMessage plain = await feature.PlanAsync(recording, without);
+
+        Assert.Equal(HttpStatusCode.OK, asked.StatusCode);
+        Assert.Equal(
+            (await PlayFeature.PlanOfAsync(plain)).GetProperty("data").GetProperty("transcodes").GetBoolean(),
+            (await PlayFeature.PlanOfAsync(asked)).GetProperty("data").GetProperty("transcodes").GetBoolean());
     }
 
     [Fact]

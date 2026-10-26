@@ -79,6 +79,50 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         Assert.Equal("aac", handed[Array.IndexOf(handed, "-c:a") + 1]);
     }
 
+    [Theory(DisplayName = "the command names the format the viewer asked for, encoded on the card")]
+    [InlineData(VideoCodec.H265, "hevc_vaapi")]
+    [InlineData(VideoCodec.Av1, "av1_vaapi")]
+    public async Task TheCommandNamesTheFormatTheViewerAskedFor(VideoCodec format, string encoder)
+    {
+        Recorded(40_000);
+        string said = standIns.Named("arguments");
+
+        await using IOnTheFlyViewing viewing = await Running(
+            Player($"printf '%s\\n' \"$@\" > {said}; echo ready", encoder: LiveEncoder.Vaapi, offered: VideoCodecs.InOrder),
+            TimeSpan.Zero,
+            LiveProfile.Hd30,
+            format: format);
+
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.Equal(encoder, handed[Array.IndexOf(handed, "-c:v") + 1]);
+        Assert.Single(handed, argument => argument == "-c:v");
+    }
+
+    [Theory(DisplayName = "a format this machine does not encode is refused before a place in the budget is taken")]
+    [InlineData(VideoCodec.H265)]
+    [InlineData(VideoCodec.Av1)]
+    public async Task AFormatThisMachineDoesNotEncodeIsRefusedBeforeAPlaceIsTaken(VideoCodec format)
+    {
+        Recorded(40_000);
+        string started = standIns.Named("started");
+
+        OnTheFlyStart start = await Player($"touch {started}; echo ready", encoder: LiveEncoder.Vaapi).StartAsync(
+            Found(),
+            Service,
+            TimeSpan.Zero,
+            LiveProfile.Hd30,
+            format,
+            TheWholeFirstStream,
+            CancellationToken.None);
+
+        Assert.False(start.Running);
+        Assert.Equal(OnTheFlyRefusal.TranscoderWouldNotStart, start.Refusal);
+        Assert.Contains(VideoCodecs.NameOf(format), start.Note, StringComparison.Ordinal);
+        Assert.Equal(0, budget.Running);
+        Assert.False(File.Exists(started));
+    }
+
     [Fact]
     public async Task TheSoundsARecordingCarriesAreTheOnesTheStreamWasReadFor()
     {
@@ -110,7 +154,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         OnTheFlyPlayer player = Player(TakesTheFileApart);
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(Found(), Service, TimeSpan.Zero, LiveProfile.Hd30, null!, CancellationToken.None));
+            () => player.StartAsync(Found(), Service, TimeSpan.Zero, LiveProfile.Hd30, VideoCodec.H264, null!, CancellationToken.None));
 
         Assert.Equal(0, budget.Running);
     }
@@ -246,6 +290,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             TheWholeFirstStream,
             CancellationToken.None);
 
@@ -269,6 +314,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             TheWholeFirstStream,
             CancellationToken.None);
 
@@ -317,6 +363,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             TheWholeFirstStream,
             CancellationToken.None);
 
@@ -335,6 +382,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             TheWholeFirstStream,
             CancellationToken.None);
 
@@ -354,6 +402,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             TheWholeFirstStream,
             CancellationToken.None);
 
@@ -372,6 +421,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             TheWholeFirstStream,
             CancellationToken.None);
 
@@ -390,6 +440,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             TheWholeFirstStream,
             CancellationToken.None);
 
@@ -407,6 +458,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             TheWholeFirstStream,
             CancellationToken.None);
 
@@ -429,6 +481,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             TheWholeFirstStream,
             CancellationToken.None);
 
@@ -450,12 +503,13 @@ public sealed class OnTheFlyPlayerTests : IDisposable
                 Service,
                 TimeSpan.FromSeconds(-1),
                 LiveProfile.Hd30,
+                VideoCodec.H264,
                 TheWholeFirstStream,
                 CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(null!, Service, TimeSpan.Zero, LiveProfile.Hd30, TheWholeFirstStream, CancellationToken.None));
+            () => player.StartAsync(null!, Service, TimeSpan.Zero, LiveProfile.Hd30, VideoCodec.H264, TheWholeFirstStream, CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(Found(), null!, TimeSpan.Zero, LiveProfile.Hd30, TheWholeFirstStream, CancellationToken.None));
+            () => player.StartAsync(Found(), null!, TimeSpan.Zero, LiveProfile.Hd30, VideoCodec.H264, TheWholeFirstStream, CancellationToken.None));
     }
 
     [Fact]
@@ -562,13 +616,15 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         OnTheFlyPlayer player,
         TimeSpan from,
         LiveProfile? profile,
-        SoundPlacement? sound = null)
+        SoundPlacement? sound = null,
+        VideoCodec format = VideoCodec.H264)
     {
         OnTheFlyStart start = await player.StartAsync(
             new PlaybackFile(Root, Named, 40_000),
             Service,
             from,
             profile,
+            format,
             sound ?? TheWholeFirstStream,
             CancellationToken.None);
 
@@ -611,15 +667,17 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         int atOnce = 2,
         TimeSpan? waiting = null,
         LiveEncoder encoder = LiveEncoder.Software,
-        TimeProvider? clock = null)
-        => PlayerRunning(standIns.Script(body), atOnce, waiting, encoder, clock);
+        TimeProvider? clock = null,
+        IReadOnlyList<VideoCodec>? offered = null)
+        => PlayerRunning(standIns.Script(body), atOnce, waiting, encoder, clock, offered);
 
     private OnTheFlyPlayer PlayerRunning(
         string programme,
         int atOnce = 2,
         TimeSpan? waiting = null,
         LiveEncoder encoder = LiveEncoder.Software,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        IReadOnlyList<VideoCodec>? offered = null)
     {
         budget = new TranscodeBudget(new TranscodeBudgetSettings { AtOnce = atOnce });
 
@@ -629,7 +687,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             budget,
             Store(),
             new Measured(),
-            new AlreadyChosen(encoder),
+            new AlreadyChosen(encoder, offered ?? [VideoCodec.H264]),
             new MachineSettings { RenderNode = RenderNode },
             clock ?? TimeProvider.System);
     }
@@ -646,9 +704,12 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             => Task.FromResult(CarriedSounds.Counted(2));
     }
 
-    private sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector
+    private sealed class AlreadyChosen(LiveEncoder encoder, IReadOnlyList<VideoCodec> offered) : ILiveEncoderSelector
     {
         public Task<LiveEncoderChoice> ChooseAsync(CancellationToken cancellationToken)
             => Task.FromResult(LiveEncoderChoice.Asked(encoder));
+
+        public Task<IReadOnlyList<VideoCodec>> FormatsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(offered);
     }
 }

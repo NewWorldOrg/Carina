@@ -63,6 +63,9 @@ public sealed class LiveService(
         return ServiceResult<LiveProfile>.Success(LiveProfile.Unasked(chosen.Encoder));
     }
 
+    public async Task<ServiceResult<IReadOnlyList<VideoCodec>>> FormatsAsync(CancellationToken cancellationToken)
+        => ServiceResult<IReadOnlyList<VideoCodec>>.Success(await encoders.FormatsAsync(cancellationToken));
+
     public async Task<ServiceResult<IReadOnlyList<LiveSessionView>>> ListSessionsAsync(CancellationToken cancellationToken)
         => ServiceResult<IReadOnlyList<LiveSessionView>>.Success(
         [

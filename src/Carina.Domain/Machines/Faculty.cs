@@ -15,6 +15,8 @@ public enum Faculty
     EncodeH265OnTheCard = 4,
 
     DecodeAribCaptions = 5,
+
+    EncodeAv1OnTheCard = 6,
 }
 
 public static class Faculties
@@ -23,6 +25,7 @@ public static class Faculties
     [
         Faculty.EncodeH264OnTheCard,
         Faculty.EncodeH265OnTheCard,
+        Faculty.EncodeAv1OnTheCard,
     ];
 
     public static Faculty Named(Faculty faculty)

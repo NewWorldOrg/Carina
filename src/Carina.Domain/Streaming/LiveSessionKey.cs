@@ -8,7 +8,8 @@ public sealed record LiveSessionKey
         NetworkId network,
         ServiceId service,
         LiveProfile profile,
-        SoundTrack sound = SoundTrack.Main)
+        SoundTrack sound = SoundTrack.Main,
+        VideoCodec format = VideoCodecs.Unasked)
     {
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(service);
@@ -26,6 +27,7 @@ public sealed record LiveSessionKey
         Service = service;
         Profile = profile;
         Sound = sound;
+        Format = VideoCodecs.Named(format);
         Placement = SoundPlacement.WholeStream(SoundTracks.Ordinal(sound));
     }
 
@@ -35,6 +37,7 @@ public sealed record LiveSessionKey
         Service = taken.Service;
         Profile = taken.Profile;
         Sound = taken.Sound;
+        Format = taken.Format;
         Placement = placement;
     }
 
@@ -46,10 +49,12 @@ public sealed record LiveSessionKey
 
     public SoundTrack Sound { get; }
 
+    public VideoCodec Format { get; }
+
     public SoundPlacement Placement { get; }
 
     /// <summary>
-    /// The same channel, profile and sound, with the sound taken from where the broadcast on air carries it.
+    /// The same channel, profile, format and sound, with the sound taken from where the broadcast on air carries it.
     /// </summary>
     public LiveSessionKey Taking(SoundPlacement placement)
     {
@@ -60,8 +65,8 @@ public sealed record LiveSessionKey
 
     public override string ToString()
         => Placement.Channel is { } channel
-            ? $"{Network.Value}:{Service.Value}:{Profile.Name}:{SoundTracks.NameOf(Sound)}:{Said(channel)}"
-            : $"{Network.Value}:{Service.Value}:{Profile.Name}:{SoundTracks.NameOf(Sound)}";
+            ? $"{Network.Value}:{Service.Value}:{Profile.Name}:{VideoCodecs.NameOf(Format)}:{SoundTracks.NameOf(Sound)}:{Said(channel)}"
+            : $"{Network.Value}:{Service.Value}:{Profile.Name}:{VideoCodecs.NameOf(Format)}:{SoundTracks.NameOf(Sound)}";
 
     private static string Said(SoundChannel channel) => channel is SoundChannel.Left ? "left" : "right";
 }

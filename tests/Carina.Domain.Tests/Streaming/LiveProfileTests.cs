@@ -95,10 +95,15 @@ public sealed class LiveProfileTests
         Assert.NotEqual(LiveProfile.Hd60.Rate, LiveProfile.Hd30.Rate);
     }
 
-    [Fact]
-    public void EveryProfileIsTheOneCodecABrowserCanBeGiven()
+    [Fact(DisplayName = "every profile hands the card something for each of the three formats")]
+    public void EveryProfileHandsTheCardSomethingForEachOfTheThreeFormats()
     {
-        Assert.All(LiveProfile.All, profile => Assert.Equal(VideoCodec.H264, profile.Codec));
+        Assert.All(LiveProfile.All, profile =>
+        {
+            Assert.NotNull(profile.VaapiRateControl.H264);
+            Assert.NotNull(profile.VaapiRateControl.H265);
+            Assert.NotNull(profile.VaapiRateControl.Av1);
+        });
     }
 
     [Fact]
@@ -149,16 +154,29 @@ public sealed class LiveProfileTests
         Assert.Equal(new VideoSize(width, height), profile.Size);
         Assert.Equal(frames, profile.Rate.Numerator);
         Assert.Equal(kilobitsPerSecond, profile.SoftwareRateControl.KilobitsPerSecond);
-        Assert.Equal(24, profile.VaapiRateControl.Quantiser);
+        Assert.Equal(24, profile.VaapiRateControl.H264.Quantiser);
+        Assert.Equal(24, profile.VaapiRateControl.H265.Quantiser);
+        Assert.Equal(80, profile.VaapiRateControl.Av1.Index);
     }
 
-    [Fact]
-    public void TheOnlyRateControlVaapiIsHandedIsAQuantiser()
+    [Fact(DisplayName = "the only rate control the card is handed is a quantiser for H.264 and H.265 and a quality index for AV1")]
+    public void TheOnlyRateControlVaapiIsHandedIsAQuantiserOrAQualityIndex()
     {
         PropertyInfo? rateControl = typeof(LiveProfile).GetProperty(nameof(LiveProfile.VaapiRateControl));
 
         Assert.NotNull(rateControl);
-        Assert.Equal(typeof(ConstantQuantiser), rateControl.PropertyType);
+        Assert.Equal(typeof(CardRateControl), rateControl.PropertyType);
+        Assert.Equal(
+            [typeof(ConstantQuantiser), typeof(ConstantQuantiser), typeof(QualityIndex)],
+            typeof(CardRateControl)
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Select(property => property.PropertyType));
+    }
+
+    [Fact]
+    public void AProfileNamesNoFormatOfItsOwnBecauseTheViewerAsksForOne()
+    {
+        Assert.Null(typeof(LiveProfile).GetProperty("Codec"));
     }
 
     [Fact]

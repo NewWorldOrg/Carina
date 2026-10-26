@@ -40,10 +40,8 @@ public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvid
         ProgrammeSaid decoders = await SayingAsync(FacultyInvocation.Decoders());
         CardAnswer card = await AskTheCardAsync();
         bool cardEncodesH264 = CardStandings.IsUsable(card.Standing);
-        ProgrammeSaid? h265 = cardEncodesH264
-            ? await SayingAsync(VaapiProbeInvocation.Arguments(settings.RenderNode, FfmpegFaculties.H265OnTheCard))
-            : null;
-        bool cardEncodesH265 = h265 is { Ran: true, ExitCode: 0 };
+        ProgrammeSaid? h265 = await OnTheCardAsync(cardEncodesH264, FfmpegFaculties.H265OnTheCard);
+        ProgrammeSaid? av1 = await OnTheCardAsync(cardEncodesH264, FfmpegFaculties.Av1OnTheCard);
 
         MachineCapabilities capabilities = MachineCapabilities.Of(
             card.Standing,
@@ -51,14 +49,23 @@ public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvid
                 FfmpegFaculties.Listed(encoders.Said),
                 FfmpegFaculties.Listed(decoders.Said),
                 cardEncodesH264,
-                cardEncodesH265),
+                Encoded(h265),
+                Encoded(av1)),
             Together(card.Note, encoders.Ran ? string.Empty : encoders.Complained));
 
         bool ranOutOfTime = card.Standing is CardStanding.ProbeTimedOut
-            || new[] { encoders, decoders, h265 }.Any(said => said?.Fault is ProgrammeFault.TimedOut);
+            || new[] { encoders, decoders, h265, av1 }.Any(said => said?.Fault is ProgrammeFault.TimedOut);
 
         return new Learned(capabilities, ranOutOfTime ? clock.GetUtcNow() + settings.AskAgainAfterATimeOut : null);
     }
+
+    /// <summary>
+    /// A frame encoded with <paramref name="encoder"/>, asked of a card that encoded an H.264 one and of no other.
+    /// </summary>
+    private async Task<ProgrammeSaid?> OnTheCardAsync(bool cardEncodesH264, string encoder)
+        => cardEncodesH264 ? await SayingAsync(VaapiProbeInvocation.Arguments(settings.RenderNode, encoder)) : null;
+
+    private static bool Encoded(ProgrammeSaid? said) => said is { Ran: true, ExitCode: 0 };
 
     private async Task<CardAnswer> AskTheCardAsync()
     {

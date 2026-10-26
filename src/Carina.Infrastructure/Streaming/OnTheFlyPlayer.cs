@@ -22,6 +22,7 @@ public sealed class OnTheFlyPlayer(
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
+        VideoCodec format,
         SoundPlacement sound,
         CancellationToken cancellationToken)
     {
@@ -37,6 +38,13 @@ public sealed class OnTheFlyPlayer(
                 "the recording holds no bytes to transcode.");
         }
 
+        if (!(await selector.FormatsAsync(cancellationToken)).Contains(VideoCodecs.Named(format)))
+        {
+            return OnTheFlyStart.Refused(
+                OnTheFlyRefusal.TranscoderWouldNotStart,
+                LiveTranscoderFactory.NotEncodedHere(format));
+        }
+
         TranscodeClaim claim = budget.Claim(TranscodePurpose.Playback);
 
         if (claim.Seat is not { } seat)
@@ -48,7 +56,11 @@ public sealed class OnTheFlyPlayer(
 
         try
         {
-            OnTheFlyStart start = await StartedAsync(source, service, from, profile, sound, seat, cancellationToken);
+            OnTheFlyStart start = await StartedAsync(
+                source,
+                new OnTheFlyAsking(service, from, profile, format, sound),
+                seat,
+                cancellationToken);
 
             handedOver = start.Running;
 
@@ -78,16 +90,13 @@ public sealed class OnTheFlyPlayer(
 
     private async Task<OnTheFlyStart> StartedAsync(
         StreamSource source,
-        ServiceId service,
-        TimeSpan from,
-        LiveProfile? profile,
-        SoundPlacement sound,
+        OnTheFlyAsking asked,
         ITranscodeSeat seat,
         CancellationToken cancellationToken)
     {
         StreamAttributeReading read = await attributes.ReadAsync(source, cancellationToken);
         LiveEncoderChoice chosen = await selector.ChooseAsync(cancellationToken);
-        LiveProfile opening = profile ?? LiveProfile.Unasked(chosen.Encoder);
+        LiveProfile opening = asked.Profile ?? LiveProfile.Unasked(chosen.Encoder);
 
         long began = clock.GetTimestamp();
 
@@ -95,14 +104,15 @@ public sealed class OnTheFlyPlayer(
             transcoding,
             [
                 .. FfmpegPlaybackInvocation.Arguments(
-                    service,
+                    asked.Service,
                     opening,
                     read.Attributes,
                     chosen.Encoder,
                     machine,
                     source,
-                    from,
-                    sound),
+                    asked.From,
+                    asked.Sound,
+                    asked.Format),
                 .. FfmpegLiveInvocation.DeliveryFromTheStart(),
             ],
             chosen,
@@ -116,7 +126,7 @@ public sealed class OnTheFlyPlayer(
 
         return await WhatCameOutAsync(
             transcoder,
-            new OnTheFlyBearing(began, from, opening, read.Measured, seat),
+            new OnTheFlyBearing(began, asked.From, opening, read.Measured, seat),
             cancellationToken);
     }
 
@@ -211,6 +221,13 @@ public sealed class OnTheFlyPlayer(
 
     private StreamSource? WhatIsStillThere(PlaybackFile file)
         => files.Find(file.Root, file.Name).Found is { HoldsAnything: true } still ? files.SourceOf(still) : null;
+
+    private readonly record struct OnTheFlyAsking(
+        ServiceId Service,
+        TimeSpan From,
+        LiveProfile? Profile,
+        VideoCodec Format,
+        SoundPlacement Sound);
 
     private readonly record struct OnTheFlyBearing(
         long Began,

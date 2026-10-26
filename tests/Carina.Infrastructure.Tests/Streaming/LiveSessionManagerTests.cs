@@ -42,6 +42,9 @@ public sealed class LiveSessionManagerTests
 
     private static readonly LiveSessionKey AnotherChannel = new(new NetworkId(32736), new ServiceId(1032), LiveProfile.Hd30);
 
+    private static readonly LiveSessionKey InH265 =
+        new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30, SoundTrack.Main, VideoCodec.H265);
+
     private readonly HandTurnedClock clock = new();
 
     private readonly PipedSupply supply = new();
@@ -100,6 +103,20 @@ public sealed class LiveSessionManagerTests
         Assert.Equal([LiveProfile.Hd30, LiveProfile.Hd60], transcoders.Raised.Select(raised => raised.Profile));
         Assert.Equal(1, manager.Viewers(EveryFrame));
         Assert.Equal(1, manager.Viewers(EveryField));
+    }
+
+    [Fact(DisplayName = "a key that differs only in format raises a transcoder of its own, told the format, and one tuner serves both")]
+    public async Task AKeyThatDiffersOnlyInFormatRaisesATranscoderOfItsOwn()
+    {
+        await using ILiveViewing h264 = await Joined(EveryFrame);
+        await using ILiveViewing h265 = await Joined(InH265);
+        await using ILiveViewing again = await Joined(InH265);
+
+        Assert.Equal(2, transcoders.Started);
+        Assert.Equal([VideoCodec.H264, VideoCodec.H265], transcoders.Raised.Select(raised => raised.Format));
+        Assert.Equal(1, manager.Viewers(EveryFrame));
+        Assert.Equal(2, manager.Viewers(InH265));
+        Assert.Single(supply.Opened);
     }
 
     [Fact]

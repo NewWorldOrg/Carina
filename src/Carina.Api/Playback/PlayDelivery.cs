@@ -31,6 +31,8 @@ public static class PlayDelivery
 
     public const string Decodes = "decodes";
 
+    public const string Format = "format";
+
     public const string Json = "application/json";
 
     public const string NoSeeking = "none";
@@ -52,7 +54,10 @@ public static class PlayDelivery
         + "nothing else.";
 
     public const string TheDecodingsThereAre =
-        "A browser says it decodes h264 or h265, by naming each, and names nothing else.";
+        "A browser says it decodes h264, h265 or av1, by naming each, and names nothing else.";
+
+    public const string TheFormatsThereAre =
+        "A picture transcoded as it plays is asked for in h264, h265 or av1, said once, or in h264 when none is named.";
 
     public const string NothingToChooseFrom =
         "A recording handed over as it is carries the one sound it was encoded with, so there is no sound "
@@ -72,11 +77,13 @@ public static class PlayDelivery
         IOnTheFlyPlayer player,
         PlaybackChapterService chapters,
         IPlaybackPositionRepository positions,
-        CaptionService captions)
+        CaptionService captions,
+        ILiveEncoderSelector encoders)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(playback);
         ArgumentNullException.ThrowIfNull(captions);
+        ArgumentNullException.ThrowIfNull(encoders);
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(chapters);
         ArgumentNullException.ThrowIfNull(positions);
@@ -105,6 +112,15 @@ public static class PlayDelivery
         if (profile.Answer is ProfileAnswer.NotOneOfThese)
         {
             await RefuseAsync(context, StatusCodes.Status400BadRequest, TheProfilesThereAre);
+
+            return;
+        }
+
+        AskedFormat format = AskedFormat.Read(context.Request.Query[Format]);
+
+        if (format.Answer is FormatAnswer.NotOneOfThese)
+        {
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, TheFormatsThereAre);
 
             return;
         }
@@ -173,6 +189,13 @@ public static class PlayDelivery
         ServiceId service = offered.Data!.Service;
         AnnouncedSound announced = offered.Data!.Announced;
 
+        if (plan.Transcodes && !(await encoders.FormatsAsync(context.RequestAborted)).Contains(format.Format))
+        {
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, AskedFormat.NotTranscodedHere(format.Format));
+
+            return;
+        }
+
         PlaybackHeaders.Say(context.Response, plan);
 
         if (AsksForThePlan(context.Request))
@@ -233,7 +256,7 @@ public static class PlayDelivery
             return;
         }
 
-        await TranscodedAsync(context, handover, service, from, profile.Named, placement, player);
+        await TranscodedAsync(context, handover, service, from, new PictureAsked(profile.Named, format.Format), placement, player);
     }
 
     private static async Task<SoundChoice> WhereTheSoundIsAsync(
@@ -414,7 +437,7 @@ public static class PlayDelivery
         PlaybackFile handover,
         ServiceId service,
         TimeSpan from,
-        LiveProfile? profile,
+        PictureAsked picture,
         SoundPlacement sound,
         IOnTheFlyPlayer player)
     {
@@ -424,7 +447,8 @@ public static class PlayDelivery
             handover,
             service,
             from,
-            profile,
+            picture.Profile,
+            picture.Format,
             sound,
             context.RequestAborted);
 
@@ -524,6 +548,8 @@ public static class PlayDelivery
 
         public static SoundChoice Unread(CarriedSounds read) => new(null, read);
     }
+
+    private readonly record struct PictureAsked(LiveProfile? Profile, VideoCodec Format);
 
     private readonly record struct SoundsOffered(IReadOnlyList<SoundTrack> Tracks, CarriedSounds? Unread);
 }

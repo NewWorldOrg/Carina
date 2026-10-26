@@ -18,6 +18,8 @@ public static partial class FfmpegFaculties
 
     public const string H265OnTheCard = "hevc_vaapi";
 
+    public const string Av1OnTheCard = "av1_vaapi";
+
     public const string AribCaptions = "libaribcaption";
 
     private const string BelowTheDashes = "------";
@@ -50,14 +52,15 @@ public static partial class FfmpegFaculties
     }
 
     /// <summary>
-    /// The faculties of this machine. Each of the card's two faculties is answered by a frame actually
+    /// The faculties of this machine. Each of the card's three faculties is answered by a frame actually
     /// encoded with that encoder, not by the build listing it.
     /// </summary>
     public static IReadOnlyList<Faculty> Of(
         IReadOnlyList<string> encoders,
         IReadOnlyList<string> decoders,
         bool cardEncodesH264,
-        bool cardEncodesH265)
+        bool cardEncodesH265,
+        bool cardEncodesAv1)
     {
         ArgumentNullException.ThrowIfNull(encoders);
         ArgumentNullException.ThrowIfNull(decoders);
@@ -69,6 +72,7 @@ public static partial class FfmpegFaculties
         Add(can, Faculty.EncodeH264OnTheCard, cardEncodesH264 && encoders.Contains(H264OnTheCard, StringComparer.Ordinal));
         Add(can, Faculty.EncodeH265OnTheCard, cardEncodesH265 && encoders.Contains(H265OnTheCard, StringComparer.Ordinal));
         Add(can, Faculty.DecodeAribCaptions, decoders.Contains(AribCaptions, StringComparer.Ordinal));
+        Add(can, Faculty.EncodeAv1OnTheCard, cardEncodesAv1 && encoders.Contains(Av1OnTheCard, StringComparer.Ordinal));
 
         return can;
     }

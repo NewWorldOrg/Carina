@@ -327,6 +327,62 @@ public sealed class FfmpegPlaybackInvocationTests
         Assert.Contains("h264_vaapi", arguments);
     }
 
+    [Theory(DisplayName = "a recording is encoded on the card in the format asked for, by the same words a live viewer's picture is")]
+    [InlineData(VideoCodec.H264)]
+    [InlineData(VideoCodec.H265)]
+    [InlineData(VideoCodec.Av1)]
+    public void ARecordingIsEncodedInTheFormatAskedForByTheSameWordsALiveViewersPictureIs(VideoCodec format)
+    {
+        IReadOnlyList<string> playing = FfmpegPlaybackInvocation.Arguments(
+            Service,
+            LiveProfile.Hd30,
+            Interlaced,
+            LiveEncoder.Vaapi,
+            Machine,
+            Recorded,
+            TimeSpan.FromMinutes(1),
+            TheWholeFirstStream,
+            format);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(
+            Service,
+            LiveProfile.Hd30,
+            Interlaced,
+            LiveEncoder.Vaapi,
+            Machine,
+            CaptionOutlet.None,
+            TheWholeFirstStream,
+            format);
+
+        Assert.Equal(
+            live.Skip(Where(live, "-c:v")).Take(Where(live, "-c:a") - Where(live, "-c:v")),
+            playing.Skip(Where(playing, "-c:v")).Take(Where(playing, "-c:a") - Where(playing, "-c:v")));
+    }
+
+    [Fact(DisplayName = "a recording played without naming a format is encoded in H.264, as it always was")]
+    public void ARecordingPlayedWithoutNamingAFormatIsEncodedInH264()
+    {
+        Assert.Equal(
+            FfmpegPlaybackInvocation.Arguments(
+                Service,
+                LiveProfile.Hd30,
+                Interlaced,
+                LiveEncoder.Vaapi,
+                Machine,
+                Recorded,
+                TimeSpan.Zero,
+                TheWholeFirstStream,
+                VideoCodec.H264),
+            FfmpegPlaybackInvocation.Arguments(
+                Service,
+                LiveProfile.Hd30,
+                Interlaced,
+                LiveEncoder.Vaapi,
+                Machine,
+                Recorded,
+                TimeSpan.Zero,
+                TheWholeFirstStream));
+    }
+
     [Fact]
     public void TheProcessorEncodingOpensNoCard()
         => Assert.DoesNotContain(

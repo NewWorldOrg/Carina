@@ -50,10 +50,13 @@ internal sealed class HeldDepartures : ILiveDepartureLedger
             ]);
 }
 
-internal sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector
+internal sealed class AlreadyChosen(LiveEncoder encoder, IReadOnlyList<VideoCodec>? formats = null) : ILiveEncoderSelector
 {
     public Task<LiveEncoderChoice> ChooseAsync(CancellationToken cancellationToken)
         => Task.FromResult(LiveEncoderChoice.Asked(encoder));
+
+    public Task<IReadOnlyList<VideoCodec>> FormatsAsync(CancellationToken cancellationToken)
+        => Task.FromResult(formats ?? [VideoCodec.H264]);
 }
 
 internal sealed class LiveFeature : IAsyncDisposable
@@ -62,7 +65,7 @@ internal sealed class LiveFeature : IAsyncDisposable
 
     private readonly TestingWebApplicationFactory factory = new();
 
-    public LiveFeature(LiveEncoder encoder = LiveEncoder.Software)
+    public LiveFeature(LiveEncoder encoder = LiveEncoder.Software, IReadOnlyList<VideoCodec>? formats = null)
     {
         WebApplicationFactory<Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -71,7 +74,7 @@ internal sealed class LiveFeature : IAsyncDisposable
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
                 services.AddSingleton<ILiveSessionLedger>(Ledger);
                 services.AddSingleton<IPlaybackTicketStore>(Tickets);
-                services.AddSingleton<ILiveEncoderSelector>(new AlreadyChosen(encoder));
+                services.AddSingleton<ILiveEncoderSelector>(new AlreadyChosen(encoder, formats));
                 services.AddSingleton<ILiveDepartureLedger>(Departures);
             }));
 
@@ -121,6 +124,16 @@ internal sealed class LiveFeature : IAsyncDisposable
 
         return service;
     }
+
+    public void Watching(int serviceId, LiveProfile profile, VideoCodec format, int viewers)
+        => Ledger.Sessions.Add(new LiveSessionView(
+            new LiveSessionKey(new NetworkId(32736), new ServiceId(serviceId), profile, SoundTrack.Main, format),
+            viewers,
+            LiveStartup.NotStarted,
+            0L,
+            0,
+            null,
+            null));
 
     public void Watching(int serviceId, LiveProfile profile, int viewers, long dropped = 0L)
         => Watching(
@@ -492,6 +505,52 @@ public sealed class LiveEndpointTests
         Assert.Equal(1001, hd30.GetProperty("frameRate").GetProperty("denominator").GetInt32());
         Assert.Equal(3000, hd30.GetProperty("softwareKilobitsPerSecond").GetInt32());
         Assert.Equal(24, hd30.GetProperty("vaapiQuantiser").GetInt32());
+    }
+
+    [Fact(DisplayName = "a machine that transcodes on its processor offers every profile in H.264 alone")]
+    public async Task AMachineThatTranscodesOnItsProcessorOffersEveryProfileInH264Alone()
+    {
+        await using LiveFeature feature = new(LiveEncoder.Software);
+
+        (HttpStatusCode status, JsonDocument body) = await feature.GetAsync("/api/live/profiles");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.All(
+            body.RootElement.GetProperty("data").EnumerateArray(),
+            profile => Assert.Equal(["h264"], profile.GetProperty("formats").EnumerateArray().Select(format => format.GetString())));
+    }
+
+    [Fact(DisplayName = "a machine whose card encodes H.265 and AV1 offers every profile in all three formats, H.264 first")]
+    public async Task AMachineWhoseCardEncodesH265AndAv1OffersEveryProfileInAllThreeFormats()
+    {
+        await using LiveFeature feature = new(LiveEncoder.Vaapi, [VideoCodec.H264, VideoCodec.H265, VideoCodec.Av1]);
+
+        (_, JsonDocument body) = await feature.GetAsync("/api/live/profiles");
+
+        JsonElement[] profiles = [.. body.RootElement.GetProperty("data").EnumerateArray()];
+
+        Assert.Equal(LiveProfile.All.Count, profiles.Length);
+        Assert.All(
+            profiles,
+            profile => Assert.Equal(
+                ["h264", "h265", "av1"],
+                profile.GetProperty("formats").EnumerateArray().Select(format => format.GetString())));
+        Assert.All(profiles, profile => Assert.Equal("h264", profile.GetProperty("codec").GetString()));
+    }
+
+    [Fact(DisplayName = "a session names the format its picture is transcoded in")]
+    public async Task ASessionNamesTheFormatItsPictureIsTranscodedIn()
+    {
+        await using LiveFeature feature = new();
+
+        feature.Watching(1024, LiveProfile.Hd30, VideoCodec.H265, 1);
+        feature.Watching(1024, LiveProfile.Hd30, 1);
+
+        (_, JsonDocument body) = await feature.GetAsync("/api/live/sessions");
+
+        Assert.Equal(
+            ["h264", "h265"],
+            body.RootElement.GetProperty("data").EnumerateArray().Select(session => session.GetProperty("format").GetString()));
     }
 
     [Fact]
