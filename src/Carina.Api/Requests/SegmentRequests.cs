@@ -21,3 +21,15 @@ public sealed record AddSkipEventRequest
 
     public int? ModelVersion { get; init; }
 }
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record AddSeekEventRequest
+{
+    public string? Event { get; init; }
+
+    public string? Means { get; init; }
+
+    public double? FromSec { get; init; }
+
+    public double? ToSec { get; init; }
+}

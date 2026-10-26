@@ -28,6 +28,7 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
             services.AddSingleton<ISegmentModelVersionRepository>(Versions);
             services.AddSingleton<IRecordingDetectionRepository>(Detections);
             services.AddSingleton<ISkipEventRepository>(Skips);
+            services.AddSingleton<ISeekEventRepository>(Seeks);
             services.AddSingleton<ISegmentSettingsRepository>(Settings);
             services.AddSingleton<TimeProvider>(Clock);
         }));
@@ -48,6 +49,8 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
 
     public HeldSkipEvents Skips { get; } = new();
 
+    public HeldSeekEvents Seeks { get; } = new();
+
     public HeldSegmentSettings Settings { get; } = new();
 
     public MovingClock Clock { get; } = new(RecordingFeature.Noon.AddHours(2));
@@ -55,6 +58,8 @@ internal sealed class RecordingSegmentsFeature : IAsyncDisposable
     public static string Path(RecordingId id) => $"/api/recordings/{id.Wire}/segments";
 
     public static string SkipsPath(RecordingId id) => $"/api/recordings/{id.Wire}/skips";
+
+    public static string SeeksPath(RecordingId id) => $"/api/recordings/{id.Wire}/seeks";
 
     public Recording Ended()
     {
