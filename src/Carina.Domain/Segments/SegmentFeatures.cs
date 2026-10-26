@@ -89,7 +89,9 @@ public static class SegmentFeatures
     /// <summary>
     /// The segments between neighbouring candidates, and the neighbouring segments read as one (<see cref="JoinedPiece"/>)
     /// where an advert, an opening or an ending may lie across them, none of them a segment the catalog fixes, since what
-    /// the catalog hears is decided by its own edges. Segments are joined as an advert, to be taken for a break only, when
+    /// the catalog hears is decided by its own edges; and, by those edges, the segments from one catalog edge to the next
+    /// that the catalog all fixes to a break, read as one advert fixed as the whole is: an advert cut by pauses of its own
+    /// is as long as its slot, while its parts, each fitted to the grid alone, fall short of it. Segments are joined as an advert, to be taken for a break only, when
     /// the whole runs from one cut between adverts (<see cref="EditedFor"/>) to the next and an advert lies beside it
     /// (<see cref="SegmentFeature.AdvertBeside"/>): inside a pod, what cuts an advert in two, such as the logo coming and
     /// going or a pause, says nothing against it. They are joined as an opening, or an ending, to be taken for that only,
@@ -133,7 +135,29 @@ public static class SegmentFeatures
             }
         }
 
+        joined.AddRange(HeardWhole(candidates, pieces, reading));
+
         return (pieces, joined);
+    }
+
+    private static IEnumerable<JoinedPiece> HeardWhole(IReadOnlyList<BoundaryCandidate> candidates, IReadOnlyList<SegmentPiece> pieces, Reading reading)
+    {
+        int[] edges = [.. Enumerable.Range(0, candidates.Count).Where(at => candidates[at].Cues.HasFlag(BoundaryCue.CatalogEdge))];
+
+        foreach ((int head, int tail) in edges.Zip(edges.Skip(1)))
+        {
+            if (tail - head < 2 || !pieces.Skip(head).Take(tail - head).All(piece => piece.Fixed is { Kind: SegmentKind.Break }))
+            {
+                continue;
+            }
+
+            SegmentPiece whole = reading.Piece(candidates[head], candidates[tail]) with { AfterASeam = pieces[head].AfterASeam };
+
+            if (whole.Fixed is { Kind: SegmentKind.Break })
+            {
+                yield return new JoinedPiece(head, tail - 1, whole, [SegmentKind.Break]);
+            }
+        }
     }
 
     private static SegmentPiece[] Pieces(IReadOnlyList<BoundaryCandidate> candidates, Reading reading)

@@ -5,8 +5,8 @@ namespace Carina.Domain.Segments;
 /// <summary>
 /// What putting a recording's matches into the catalog reads: the entries the matches name and every
 /// stretch they have, the copies of the programmes of the recordings involved, how series are linked, and
-/// the stretches heard in the recordings where an entry may carry on an opening or an ending
-/// (<see cref="CatalogKinds.CarryOn"/>), none when it is not said.
+/// the stretches heard in the recordings where they may settle an entry (<see cref="CatalogKinds.Settle"/>), none when
+/// it is not said.
 /// </summary>
 public sealed record CatalogKnowledge(
     IReadOnlyList<CatalogEntry> Entries,
@@ -53,7 +53,7 @@ public sealed record CatalogChange(
 /// other recordings, each kind the longest first. A stretch an entry already has in a recording is not added again, and a
 /// recording whose programme is not known adds none. An entry started is estimated from its first
 /// stretches, and one already kept is estimated again from all of them, each beside the stretches heard around
-/// it as the others started or estimated again now take theirs. The links between series change with an entry started as a kind
+/// it as the others started or estimated again are settled (<see cref="CatalogKinds.SettleTogether"/>). The links between series change with an entry started as a kind
 /// that links them, and with an entry estimated again that links them before or after, since its stretches grew.
 /// </summary>
 public static class Catalog
@@ -164,7 +164,10 @@ public static class Catalog
             ]);
             Dictionary<CatalogEntryId, List<PlacedOccurrence>> placed = lengths.Keys.ToDictionary(id => id, id => Placed(stretches[id]));
             Dictionary<CatalogEntryId, CatalogPattern> own = lengths.Keys.ToDictionary(id => id, id => CatalogKinds.Estimate(lengths[id], placed[id], known.Links));
-            CatalogSurroundings around = known.Around.Replacing(lengths.Keys, own.SelectMany(pair => CatalogKinds.Stretches(placed[pair.Key], pair.Value)));
+            IReadOnlyDictionary<CatalogEntryId, CatalogPattern> settled = CatalogKinds.SettleTogether(
+                [.. lengths.Keys.Select(id => new CatalogSound(id, lengths[id], placed[id]))],
+                own,
+                known.Around);
             List<CatalogEntry> begun = [];
             List<CatalogOccurrence> found = [];
 
@@ -202,7 +205,7 @@ public static class Catalog
 
             return new CatalogChange(begun, reestimated, found, overridden, relinking, recast);
 
-            CatalogPattern Carried(CatalogEntryId id) => CatalogKinds.CarryOn(lengths[id], placed[id], own[id], around);
+            CatalogPattern Carried(CatalogEntryId id) => settled[id];
         }
 
         private void TakeItself(SoundMatch match, SoundTrack sound)

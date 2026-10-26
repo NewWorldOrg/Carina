@@ -86,11 +86,13 @@ public sealed class CatalogRepository(CarinaDbContext context) : ICatalogReposit
 
         return new CatalogSurroundings(
         [
-            .. heard.Select(stretch => new ThemeStretch(
+            .. heard.Select(stretch => ThemeStretch.Of(
                 stretch.Entry,
                 stretch.Recording,
                 new SoundSpan(stretch.StartsAt, stretch.EndsAt),
-                CatalogKinds.PartOf(new CatalogEstimate(stretch.Kind, stretch.Confidence, stretch.DecidedBy), stretch.SeriesCount, stretch.KindOverride))),
+                new CatalogEstimate(stretch.Kind, stretch.Confidence, stretch.DecidedBy),
+                stretch.SeriesCount,
+                stretch.KindOverride)),
         ]);
     }
 
