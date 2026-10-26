@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    [Migration("20261026090116_SeeksAreKeptBesideTheSkipsWithoutAKeyIntoTheRecording")]
+    [Migration("20261026094813_SeeksAreKeptBesideTheSkipsWithoutAKeyIntoTheRecording")]
     partial class SeeksAreKeptBesideTheSkipsWithoutAKeyIntoTheRecording
     {
         /// <inheritdoc />
@@ -4076,6 +4076,14 @@ namespace Carina.Db.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("candidate");
 
+                    b.Property<string>("CandidateEvidence")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("candidate_evidence");
+
+                    b.Property<string>("CandidateMetrics")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("candidate_metrics");
+
                     b.Property<string>("InUseMetrics")
                         .HasColumnType("jsonb")
                         .HasColumnName("in_use_metrics");
@@ -4103,6 +4111,8 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("segment_learning_round", null, t =>
                         {
+                            t.HasCheckConstraint("ck_segment_learning_round_candidate_figures", "(candidate IS NOT NULL OR (candidate_metrics IS NULL AND candidate_evidence IS NULL))\nAND (candidate_metrics IS NULL OR jsonb_typeof(candidate_metrics) = 'object')\nAND (candidate_evidence IS NULL OR jsonb_typeof(candidate_evidence) = 'object')");
+
                             t.HasCheckConstraint("ck_segment_learning_round_in_use_version", "in_use_version >= 1");
 
                             t.HasCheckConstraint("ck_segment_learning_round_judged", "(candidate IS NOT NULL OR (verdict IS NULL AND in_use_metrics IS NULL AND in_use_version IS NULL)) AND (in_use_metrics IS NULL OR jsonb_typeof(in_use_metrics) = 'object')");

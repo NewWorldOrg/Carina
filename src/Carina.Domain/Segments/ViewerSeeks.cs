@@ -11,8 +11,8 @@ public sealed record SeekSpan(TimeSpan Starts, TimeSpan Ends, double Weight, Seg
 /// The seeks of one recording read to learn from. Nobody lands a seek on a cut, so each end of a forward seek is taken
 /// to lie within <see cref="Reach"/> of where it was sent, by how it was made, and is drawn to the likeliest boundary
 /// candidate within that reach: first one that faces a pod, as long as an advert from another candidate on the side of
-/// what was passed and not from one on the other side, then one that is only an advert's length from a candidate on the
-/// side of what was passed, then the stronger, then the nearer. An end with no candidate within reach is drawn in by the
+/// what was passed and not from one on the other side, then one as long as an advert from a candidate on the side of what
+/// was passed whatever lies on the other, then the stronger, then the nearer. An end with no candidate within reach is drawn in by the
 /// reach, so that nothing near it is labelled, and each such end lightens the seek from <see cref="MostWeight"/> to
 /// <see cref="OneEndLeftWeight"/> and <see cref="BothEndsLeftWeight"/>. A seek that keeps less than
 /// <see cref="ShortestSpan"/> is not used; a seek the viewer came back from, the latest earlier forward seek whose
