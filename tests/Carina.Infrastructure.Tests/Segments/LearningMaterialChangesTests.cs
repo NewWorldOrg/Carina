@@ -33,7 +33,7 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
 
     public Task DisposeAsync() => ClearAsync();
 
-    [Fact(DisplayName = "BR-CD-004: what learning reads last changed when an entry of the catalog or a stretch of one was kept, a skip event taken, or a recording's data read to its end")]
+    [Fact(DisplayName = "BR-CD-004: what learning reads last changed when an entry of the catalog or a stretch of one was kept, a skip event or a seek taken, or a recording's data read to its end")]
     public async Task EachKindOfChangeMovesTheLastChange()
     {
         DateTime? before = await LastChangedAsync();
@@ -50,6 +50,14 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
         }
 
         DateTime? skipped = await LastChangedAsync();
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new SeekEventRepository(writing).TakeAsync(
+                SeekEvent.Of(viewed, new ViewerSeek(Later.AddHours(6.5), SeekAction.Forward, SeekMeans.Step, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(150))),
+                Cancel);
+        }
+
+        DateTime? sought = await LastChangedAsync();
         await KeepRecordAsync(partway, Later.AddHours(8), done: false);
         DateTime? notToTheEnd = await LastChangedAsync();
         await KeepRecordAsync(read, Later.AddHours(7), done: true);
@@ -57,8 +65,8 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
 
         Assert.True(before is null || before < Later);
         Assert.Equal(
-            [Later.AddHours(4), Later.AddHours(5), Later.AddHours(6), Later.AddHours(6), Later.AddHours(7)],
-            new[] { estimated, matched, skipped, notToTheEnd, readToTheEnd });
+            [Later.AddHours(4), Later.AddHours(5), Later.AddHours(6), Later.AddHours(6.5), Later.AddHours(6.5), Later.AddHours(7)],
+            new[] { estimated, matched, skipped, sought, notToTheEnd, readToTheEnd });
     }
 
     private async Task<DateTime?> LastChangedAsync()
@@ -122,6 +130,7 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
 
         await using CarinaDbContext context = database.Open();
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_skip_event WHERE recording_id = ANY({recordings})", Cancel);
+        await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_seek_event WHERE recording_id = ANY({recordings})", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_catalog_occurrence WHERE entry_id = {id}", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_catalog_entry WHERE id = {id}", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_extraction WHERE recording_id = ANY({recordings})", Cancel);
