@@ -5,7 +5,9 @@ namespace Carina.TestSupport;
 /// <summary>
 /// The version of the model in use, as a test sets it: the first, put in use at <see cref="Installed"/>,
 /// until a test puts another in its place; and the versions used before it, as a test adds them. The built-in
-/// version is taken as kept already: asking for it is kept and writes nothing, or fails as a test sets it.
+/// version is taken as kept already: asking for it is kept and writes nothing, or fails as a test sets it. A
+/// candidate is numbered after every number held so far and <see cref="RememberedElsewhere"/>, and letting go of
+/// candidates leaves those a test says something still names (<see cref="Named"/>).
 /// </summary>
 public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
 {
@@ -25,7 +27,15 @@ public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
 
     public Exception? BuiltInFailure { get; set; }
 
+    public int RememberedElsewhere { get; set; }
+
+    public HashSet<int> Named { get; } = [];
+
+    public List<int> LetGo { get; } = [];
+
     private SegmentModelVersion[] Kept => [Active, .. Others];
+
+    private int HighestGiven => new[] { RememberedElsewhere, LetGo.DefaultIfEmpty().Max(), Kept.Max(version => version.Number) }.Max();
 
     public static SegmentModelVersion InUse(int number, DateTime adoptedAt)
         => SegmentModelVersion.Rehydrate(number, SegmentModelVersionState.Active, false, HandMadeModels.First, adoptedAt, adoptedAt, null, null, null);
@@ -56,12 +66,22 @@ public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
 
     public Task<SegmentModelVersion> AddCandidateAsync(SegmentModel model, SegmentEvaluation evaluation, DateTime trainedAt, CancellationToken cancellationToken)
     {
-        SegmentModelVersion candidate = SegmentModelVersion.Learned(Kept.Max(version => version.Number) + 1, model, evaluation, trainedAt);
+        SegmentModelVersion candidate = SegmentModelVersion.Learned(SegmentModelVersion.NumberAfter(HighestGiven), model, evaluation, trainedAt);
 
         Others.Add(candidate);
         Added.Add(candidate);
 
         return Task.FromResult(candidate);
+    }
+
+    public Task<IReadOnlyList<int>> LetGoOfCandidatesBeforeAsync(int latest, CancellationToken cancellationToken)
+    {
+        int[] letGo = [.. SegmentModelVersion.LetGoBefore(Kept, latest).Where(number => !Named.Contains(number))];
+
+        Others.RemoveAll(version => letGo.Contains(version.Number));
+        LetGo.AddRange(letGo);
+
+        return Task.FromResult<IReadOnlyList<int>>(letGo);
     }
 
     public Task<SegmentBuiltInKept?> KeepBuiltInAsync(SegmentModel builtIn, DateTime at, CancellationToken cancellationToken)

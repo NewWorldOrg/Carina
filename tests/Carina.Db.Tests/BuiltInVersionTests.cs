@@ -54,7 +54,7 @@ public sealed class BuiltInVersionTests : IAsyncLifetime
         Assert.Equal("1:Active:t", await StatesAsync());
     }
 
-    [Fact(DisplayName = "BR-CS-003: once the versions and what was detected with them are emptied, the built-in version is kept again as version 1 in use, whatever numbers were given before")]
+    [Fact(DisplayName = "BR-CS-003: once the versions and what was detected with them are emptied, with no round of learning or chapters of an encode remembering a number, the built-in version is kept again as version 1 in use")]
     public async Task OnceEmptiedTheBuiltInIsVersionOneAgain()
     {
         await KeepAsync(Installed);
