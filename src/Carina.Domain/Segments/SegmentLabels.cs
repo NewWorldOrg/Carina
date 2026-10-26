@@ -8,7 +8,9 @@ namespace Carina.Domain.Segments;
 /// <see cref="SkippedWeight"/>; coming back labels <see cref="ReturnedSpan"/> from where the viewer came
 /// back as programme at <see cref="ReturnedWeight"/>, and takes the skip it came back from, the latest
 /// earlier one of the same kind that landed past where they came back to; closing the button on a break
-/// and watching it labels it programme at <see cref="DismissedWeight"/>. A segment takes a label when its
+/// and watching it labels it programme at <see cref="DismissedWeight"/>. A forward seek labels what it passed as
+/// <see cref="ViewerSeeks"/> reads it, at a tenth or less, and coming back into it labels as coming back from a skip
+/// does; both are viewers' labels. A segment takes a label when its
 /// kind covers more than half of it. In a recording the catalog is sure of an advert in
 /// (<see cref="CatalogTruth.Sure"/>), a segment inside the guide's programme, reaching out of it by no more than
 /// <see cref="GuideTolerance"/>, that no stretch of the catalog touches, whatever its kind, and no viewer's action
@@ -66,14 +68,15 @@ public static class SegmentLabels
         IReadOnlyList<SegmentPiece> pieces,
         SegmentContext context,
         IReadOnlyList<ViewerAction> actions,
-        IReadOnlyList<CatalogHeard>? touching = null)
+        IReadOnlyList<CatalogHeard>? touching = null,
+        ViewerSeeks? seeks = null)
     {
         ArgumentNullException.ThrowIfNull(pieces);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(actions);
 
         Stretch[] heard = [.. context.Catalog.Select(Heard).OfType<Stretch>()];
-        Stretch[] viewed = Viewed(actions);
+        Stretch[] viewed = [.. Viewed(actions), .. Sought(seeks ?? ViewerSeeks.None, context.Catalog)];
         CatalogHeard[]? touched = context.Catalog.Any(stretch => CatalogTruth.Sure(stretch) is SegmentKind.Break)
             ? [.. touching ?? context.Catalog]
             : null;
@@ -95,14 +98,15 @@ public static class SegmentLabels
     public static IReadOnlyList<SegmentLabel?> OfJoined(
         IReadOnlyList<JoinedPiece> joined,
         SegmentContext context,
-        IReadOnlyList<ViewerAction> actions)
+        IReadOnlyList<ViewerAction> actions,
+        ViewerSeeks? seeks = null)
     {
         ArgumentNullException.ThrowIfNull(joined);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(actions);
 
         Stretch[] heard = [.. context.Catalog.Select(Heard).OfType<Stretch>()];
-        Stretch[] viewed = Viewed(actions);
+        Stretch[] viewed = [.. Viewed(actions), .. Sought(seeks ?? ViewerSeeks.None, context.Catalog)];
 
         return
         [
@@ -182,6 +186,21 @@ public static class SegmentLabels
 
         return [.. viewed];
     }
+
+    /// <summary>
+    /// What the seeks passed, each of the kind <see cref="ViewerSeeks.KindOf"/> gives it by <paramref name="catalog"/>
+    /// at its own weight, and <see cref="ReturnedSpan"/> from where a viewer came back as the programme at
+    /// <see cref="ReturnedWeight"/>.
+    /// </summary>
+    private static IEnumerable<Stretch> Sought(ViewerSeeks seeks, IReadOnlyList<CatalogHeard> catalog)
+        =>
+        [
+            .. seeks.Spans
+                .Select(span => (Span: span, Kind: ViewerSeeks.KindOf(span, catalog)))
+                .Where(read => read.Kind is not null)
+                .Select(read => new Stretch(read.Span.Starts, read.Span.Ends, read.Kind!.Value, read.Span.Weight)),
+            .. seeks.CameBackTo.Select(at => new Stretch(at, at + ReturnedSpan, SegmentKind.Programme, ReturnedWeight)),
+        ];
 
     private static SegmentLabel? Over(SegmentPiece piece, Stretch[] stretches, SegmentLabelSource source, Func<TimeSpan, TimeSpan, bool> enough)
     {

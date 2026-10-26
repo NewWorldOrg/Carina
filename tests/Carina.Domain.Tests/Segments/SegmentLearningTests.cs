@@ -296,6 +296,36 @@ public sealed class SegmentLearningTests
         Assert.Equal(AdoptionVerdict.TooLittleEvidence, learned.Verdict);
     }
 
+    [Fact(DisplayName = "BR-CV-004: seeks past a pod the catalog does not hear are read against the version in use and learned from, and the evidence counts labels up to the latest of them")]
+    public void SeeksPastAPodAreLearnedFrom()
+    {
+        (List<LearningRecording> recordings, List<CatalogSound> taught) = Taught(Weeks, breakAdverts: 3);
+        CatalogSound[] sounds =
+        [
+            .. taught.Where(sound => !sound.Occurrences.Any(placed => recordings.Any(recording => recording.Id.Equals(placed.Occurrence.RecordingId))
+                                                                     && placed.Occurrence.StartsAt >= TimeSpan.FromSeconds(379)
+                                                                     && placed.Occurrence.StartsAt <= TimeSpan.FromSeconds(411))),
+        ];
+        (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks);
+        DateTime sought = Now.AddDays(-1);
+        LearningRecording[] seeking =
+        [
+            .. recordings.Select(recording => new LearningRecording(
+                recording.Id,
+                recording.StartedAt,
+                recording.Evidence,
+                recording.Context,
+                recording.Actions,
+                [new ViewerSeek(sought, SeekAction.Forward, SeekMeans.Bar, TimeSpan.FromSeconds(375), TimeSpan.FromSeconds(431))])),
+        ];
+
+        SegmentLearned without = Learn([.. recordings, judged], [.. sounds, .. heard]);
+        SegmentLearned with = Learn([.. seeking, judged], [.. sounds, .. heard]);
+
+        Assert.NotEqual(without.Candidate, with.Candidate);
+        Assert.Equal(sought, with.Evaluation.Evidence.LabelsUntil);
+    }
+
     [Fact(DisplayName = "a version chosen by hand stays in use whatever a round of learning makes")]
     public void AVersionChosenByHandStaysWhateverIsLearned()
     {
