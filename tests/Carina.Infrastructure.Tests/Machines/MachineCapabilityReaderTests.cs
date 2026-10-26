@@ -9,7 +9,7 @@ namespace Carina.Infrastructure.Tests.Machines;
 public sealed class MachineCapabilityReaderTests : IDisposable
 {
     private const string Listing = """
-        printf 'Encoders:\n V..... = Video\n ------\n V....D libx264   x264\n V....D h264_vaapi  vaapi\n V....D hevc_vaapi  vaapi\n'
+        printf 'Encoders:\n V..... = Video\n ------\n V....D libx264   x264\n V....D h264_vaapi  vaapi\n V....D hevc_vaapi  vaapi\n V....D av1_vaapi  vaapi\n'
         """;
 
     private const string CaptionListing = """
@@ -37,7 +37,7 @@ public sealed class MachineCapabilityReaderTests : IDisposable
             Enumerable.Range(0, 8).Select(_ => reader.ReadAsync(CancellationToken.None)));
 
         Assert.All(answers, answer => Assert.True(answer.CardIsUsable));
-        Assert.Equal(4, File.ReadAllLines(counted).Length);
+        Assert.Equal(5, File.ReadAllLines(counted).Length);
     }
 
     [Fact(DisplayName = "a card that encodes an H.264 frame and refuses an H.265 one is a usable card with H.264 on it alone")]
@@ -57,11 +57,41 @@ public sealed class MachineCapabilityReaderTests : IDisposable
         Assert.Equal(CardStanding.Usable, can.Card);
         Assert.Equal(string.Empty, can.Note);
         Assert.Equal(
-            [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard, Faculty.DecodeAribCaptions],
+            [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard, Faculty.DecodeAribCaptions, Faculty.EncodeAv1OnTheCard],
             can.Faculties);
     }
 
-    [Fact(DisplayName = "a card that refuses H.264 is not asked about H.265 at all")]
+    [Fact(DisplayName = "a card that encodes H.264 and H.265 frames and refuses an AV1 one has no AV1 on it")]
+    public async Task ACardThatRefusesAnAv1FrameHasNoAv1OnIt()
+    {
+        string asked = standIns.Named("asked");
+
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                echo "$*" >> {asked}
+                case "$*" in
+                  *-encoders*) {Listing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *av1_vaapi*) printf 'No usable encoding entrypoint found for profile VAProfileAV1Profile0 (32).\n' >&2; exit 218 ;;
+                  *) exit 0 ;;
+                esac
+                """),
+            standIns.Node());
+
+        Assert.Equal(CardStanding.Usable, can.Card);
+        Assert.Equal(string.Empty, can.Note);
+        Assert.Equal(
+            [
+                Faculty.EncodeH264OnTheProcessor,
+                Faculty.EncodeH264OnTheCard,
+                Faculty.EncodeH265OnTheCard,
+                Faculty.DecodeAribCaptions,
+            ],
+            can.Faculties);
+        Assert.Contains(File.ReadAllLines(asked), line => line.Contains("av1_vaapi", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "a card that refuses H.264 is not asked about H.265 or AV1 at all")]
     public async Task ACardThatRefusesH264IsNotAskedAboutH265()
     {
         string asked = standIns.Named("asked");
@@ -80,6 +110,7 @@ public sealed class MachineCapabilityReaderTests : IDisposable
         Assert.Equal(CardStanding.DriverUnusable, can.Card);
         Assert.Equal(3, File.ReadAllLines(asked).Length);
         Assert.DoesNotContain(File.ReadAllLines(asked), line => line.Contains("hevc_vaapi", StringComparison.Ordinal));
+        Assert.DoesNotContain(File.ReadAllLines(asked), line => line.Contains("av1_vaapi", StringComparison.Ordinal));
     }
 
     [Fact(DisplayName = "a machine with a card that works says it can encode on it")]
@@ -94,6 +125,7 @@ public sealed class MachineCapabilityReaderTests : IDisposable
                 Faculty.EncodeH264OnTheCard,
                 Faculty.EncodeH265OnTheCard,
                 Faculty.DecodeAribCaptions,
+                Faculty.EncodeAv1OnTheCard,
             ],
             can.Faculties);
     }

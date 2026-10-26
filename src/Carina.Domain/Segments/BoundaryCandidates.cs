@@ -216,13 +216,6 @@ public static class BoundaryCandidates
 
     private readonly record struct Raw(TimeSpan At, BoundaryCue Cue, double Depth = 0, TimeSpan Lasting = default)
     {
-        public int Strength => Cue switch
-        {
-            BoundaryCue.RecordingEdge => 5,
-            _ when Cue.HasFlag(BoundaryCue.SilentCut) => 4,
-            BoundaryCue.CatalogEdge => 3,
-            BoundaryCue.Silence or BoundaryCue.Black => 2,
-            _ => 1,
-        };
+        public int Strength => BoundaryCandidate.StrengthOf(Cue);
     }
 }

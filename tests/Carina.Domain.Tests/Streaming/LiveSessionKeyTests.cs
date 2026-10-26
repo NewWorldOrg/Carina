@@ -65,12 +65,45 @@ public sealed class LiveSessionKeyTests
     }
 
     [Fact]
-    public void AKeyReadsAsNetworkServiceProfileAndSound()
+    public void AKeyReadsAsNetworkServiceProfileFormatAndSound()
     {
-        Assert.Equal("32736:1024:720p30:main", new LiveSessionKey(Network, Service, LiveProfile.Hd30).ToString());
+        Assert.Equal("32736:1024:720p30:h264:main", new LiveSessionKey(Network, Service, LiveProfile.Hd30).ToString());
         Assert.Equal(
-            "32736:1024:720p30:secondary",
+            "32736:1024:720p30:h264:secondary",
             new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Secondary).ToString());
+    }
+
+    [Fact(DisplayName = "the format alone makes another key, so H.264 and H.265 of one channel are two transcoders")]
+    public void TheFormatAloneMakesAnotherKey()
+    {
+        LiveSessionKey h264 = new(Network, Service, LiveProfile.Hd30);
+        LiveSessionKey h265 = new(Network, Service, LiveProfile.Hd30, SoundTrack.Main, VideoCodec.H265);
+        LiveSessionKey av1 = new(Network, Service, LiveProfile.Hd30, SoundTrack.Main, VideoCodec.Av1);
+
+        Assert.NotEqual(h264, h265);
+        Assert.NotEqual(h265, av1);
+        Assert.Equal(h265, new LiveSessionKey(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30, SoundTrack.Main, VideoCodec.H265));
+        Assert.Equal("32736:1024:720p30:h265:main", h265.ToString());
+        Assert.Equal("32736:1024:720p30:av1:main", av1.ToString());
+    }
+
+    [Fact(DisplayName = "a key that names no format is H.264, as every key was")]
+    public void AKeyThatNamesNoFormatIsH264()
+    {
+        Assert.Equal(VideoCodec.H264, new LiveSessionKey(Network, Service, LiveProfile.Hd30).Format);
+        Assert.Equal(
+            new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Main, VideoCodec.H264),
+            new LiveSessionKey(Network, Service, LiveProfile.Hd30));
+    }
+
+    [Fact]
+    public void TakingTheSoundFromElsewhereKeepsTheFormat()
+    {
+        LiveSessionKey left = new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Main, VideoCodec.Av1)
+            .Taking(SoundPlacement.OneChannelOf(0, SoundChannel.Left));
+
+        Assert.Equal(VideoCodec.Av1, left.Format);
+        Assert.Equal("32736:1024:720p30:av1:main:left", left.ToString());
     }
 
     [Fact(DisplayName = "a key that names no placement takes the whole stream of the sound it names")]
@@ -95,8 +128,8 @@ public sealed class LiveSessionKeyTests
         Assert.Equal(whole, left.Taking(SoundPlacement.WholeStream(0)));
         Assert.Equal(SoundTrack.Main, left.Sound);
         Assert.Equal(SoundPlacement.OneChannelOf(0, SoundChannel.Left), left.Placement);
-        Assert.Equal("32736:1024:720p30:main:left", left.ToString());
-        Assert.Equal("32736:1024:720p30:secondary:right", right.ToString());
+        Assert.Equal("32736:1024:720p30:h264:main:left", left.ToString());
+        Assert.Equal("32736:1024:720p30:h264:secondary:right", right.ToString());
         Assert.Throws<ArgumentNullException>(() => whole.Taking(null!));
     }
 
@@ -116,5 +149,7 @@ public sealed class LiveSessionKeyTests
         Assert.Throws<ArgumentNullException>(() => new LiveSessionKey(Network, Service, null!));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new LiveSessionKey(Network, Service, LiveProfile.Hd30, (SoundTrack)9));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Main, (VideoCodec)9));
     }
 }

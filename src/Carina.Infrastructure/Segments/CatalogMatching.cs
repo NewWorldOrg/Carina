@@ -12,9 +12,9 @@ public sealed record CatalogMatched(RecordingId Recording, int Matches, CatalogC
 /// Matches the learning data of one recording against every catalog entry, against the stretches of the
 /// recordings started within the window around it that no entry explains yet, and against itself, one
 /// recording's data read at a time; then works out what the matches change in the catalog. Estimates a kept
-/// entry again from the stretches it has. The stretches heard around an entry, for carrying on an opening or an
-/// ending (<see cref="CatalogKinds.CarryOn"/>), are read in the recordings of the entries of one series, those of
-/// the recordings matched and in the recording itself. The counting is done on the
+/// entry again from the stretches it has. The stretches heard around an entry, which may settle it as a sponsor's
+/// advert or as a piece of an opening or an ending (<see cref="CatalogKinds.Settle"/>), are read in the recordings of
+/// the entries of one series, those of the recordings matched and in the recording itself. The counting is done on the
 /// <see cref="LowestPriorityScheduler"/>, so that it gives way to everything else the machine does. Nothing
 /// is written here.
 /// </summary>

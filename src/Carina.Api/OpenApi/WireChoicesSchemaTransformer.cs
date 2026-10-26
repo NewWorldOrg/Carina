@@ -20,6 +20,8 @@ public sealed class WireChoicesSchemaTransformer : IOpenApiSchemaTransformer
     {
         [(typeof(AddSkipEventRequest), "event")] = [.. Enum.GetValues<ViewerActionKind>().Select(WireNameText.Spelled)],
         [(typeof(AddSkipEventRequest), "kind")] = [.. SkipEvent.KindsOffered.Select(WireNameText.Spelled)],
+        [(typeof(AddSeekEventRequest), "event")] = [.. Enum.GetValues<SeekAction>().Select(WireNameText.Spelled)],
+        [(typeof(AddSeekEventRequest), "means")] = [.. Enum.GetValues<SeekMeans>().Select(WireNameText.Spelled)],
     };
 
     public Task TransformAsync(

@@ -62,7 +62,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
 
     public void Dispose() => provider.Dispose();
 
-    [Fact(DisplayName = "BR-CD-008: the day's round keeps its candidate in the store with its figures, puts it in use through the one change, and keeps the day so that a job started again does not take it again")]
+    [Fact(DisplayName = "BR-CD-008: the day's round keeps its candidate in the store with its figures, lets go of the candidate before it, puts it in use through the one change, and keeps the day with the candidate's figures so that a job started again does not take it again")]
     public async Task TheDaysRoundKeepsItsCandidateAndPutsItInUse()
     {
         trainer.Candidate = SegmentTrainingHarness.Evaluated(0.93, 0.9);
@@ -73,7 +73,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
         Assert.Equal((SegmentTrainingOutcome.Adopted, (int?)72, 72), (look.Round?.Outcome, look.Round?.Candidate?.Number, look.Round?.Active.Number));
         Assert.Equal(new SegmentTrainingLook(null, null), again);
         Assert.Equal(
-            "1:Retired 71:Candidate 72:Active",
+            "1:Retired 72:Active",
             await ScalarAsync($"SELECT string_agg(number || ':' || state, ' ' ORDER BY number) FROM segment_model_version WHERE number = 1 OR {Ours}"));
         Assert.Equal(
             "t t t t",
@@ -82,13 +82,15 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
                 SELECT concat_ws(' ',
                     metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": 0.83, "kinds": [{"kind": "Break", "recall": 0.9}], "returnedAfterSkipShare": null, "skips": 0}'::jsonb,
                     stations = '[]'::jsonb,
-                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-11-01T12:30:00Z"}'::jsonb,
+                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-11-01T12:30:00Z", "openings": 0, "endings": 0}'::jsonb,
                     adopted_at >= trained_at)
                 FROM segment_model_version WHERE number = 72
                 """));
         Assert.Equal(
-            "2026-11-02 t",
-            await ScalarAsync("SELECT concat_ws(' ', day::text, taken_at = '2026-11-01T18:30:00Z'::timestamptz) FROM segment_learning_round"));
+            "2026-11-02 t 72 0.93 12",
+            await ScalarAsync(
+                "SELECT concat_ws(' ', day::text, taken_at = '2026-11-01T18:30:00Z'::timestamptz, candidate, candidate_metrics->>'boundaryRecallWithin2s', candidate_evidence->>'recordings') FROM segment_learning_round"));
+        Assert.Equal([71], look.Round?.LetGo);
     }
 
     [Fact(DisplayName = "BR-CD-004: two rounds on days apart with nothing learning reads changed between them keep one candidate, and the second round is still taken")]

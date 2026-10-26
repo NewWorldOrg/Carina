@@ -58,6 +58,20 @@ public sealed class ThisMachineTests
         Assert.Equal(tried.Ran && tried.ExitCode is 0, can.Has(Faculty.EncodeH265OnTheCard));
     }
 
+    [Fact(DisplayName = "AV1 on the card is claimed exactly when a frame is actually encoded with av1_vaapi on this machine")]
+    public async Task Av1OnTheCardIsClaimedExactlyWhenAFrameIsEncodedWithIt()
+    {
+        MachineCapabilities can = await Reading();
+        ProgrammeSaid tried = await AnotherProgramme.SayAsync(
+            new MachineSettings().Programme,
+            VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.Av1OnTheCard),
+            TimeSpan.FromSeconds(30),
+            TimeProvider.System,
+            CancellationToken.None);
+
+        Assert.Equal(can.CardIsUsable && tried.Ran && tried.ExitCode is 0, can.Has(Faculty.EncodeAv1OnTheCard));
+    }
+
     [Fact]
     public async Task WhatThisMachineSaysNamesNoPathOnIt()
         => Assert.DoesNotContain('/', (await Reading()).Note);

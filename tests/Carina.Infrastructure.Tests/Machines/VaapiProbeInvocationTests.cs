@@ -63,6 +63,19 @@ public sealed class VaapiProbeInvocationTests
         Assert.Throws<ArgumentException>(() => VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, string.Empty));
     }
 
+    [Fact(DisplayName = "asking about AV1 on the card is the same picture through av1_vaapi, no smaller than the card encodes AV1 at")]
+    public void AskingAboutAv1OnTheCardIsTheSamePictureThroughAv1Vaapi()
+    {
+        string[] h264 = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode)];
+        string[] av1 = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.Av1OnTheCard)];
+        string[] size = av1[av1.IndexOf("-i") + 1].Split(':')[1]["s=".Length..].Split('x');
+
+        Assert.Equal("av1_vaapi", av1[av1.IndexOf("-c:v") + 1]);
+        Assert.Equal(h264.Where(argument => argument is not "h264_vaapi"), av1.Where(argument => argument is not "av1_vaapi"));
+        Assert.True(int.Parse(size[0], System.Globalization.CultureInfo.InvariantCulture) >= 128);
+        Assert.True(int.Parse(size[1], System.Globalization.CultureInfo.InvariantCulture) >= 128);
+    }
+
     [Fact]
     public void NoPictureIsDecodedOnTheCardEvenToAskWhetherItWorks()
     {

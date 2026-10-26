@@ -17,11 +17,15 @@ public static class LiveWireRequest
 
     public const string Sound = "sound";
 
+    public const string Format = "format";
+
     public static readonly string TheKeyThereIs =
         $"A wire is asked for by `{Network}` and `{Service}` as whole numbers and `{Profile}` as one of "
         + $"{string.Join(", ", LiveProfile.All.Select(profile => profile.Name))}, each said once. "
         + $"`{Sound}` is left out for the main sound, or said once as one of "
-        + $"{string.Join(", ", SoundTracks.Names)}.";
+        + $"{string.Join(", ", SoundTracks.Names)}. "
+        + $"`{Format}` is left out for {VideoCodecs.H264IsCalled}, or said once as one of "
+        + $"{string.Join(", ", VideoCodecs.Names)}.";
 
     public static LiveSessionKey? KeyOf(IQueryCollection query)
     {
@@ -31,13 +35,22 @@ public static class LiveWireRequest
             || !Numbered(query[Service], ServiceId.MinValue, ServiceId.MaxValue, out int service)
             || query[Profile] is not { Count: 1 } named
             || LiveProfile.Find(named[0]) is not { } profile
-            || Carried(query[Sound]) is not { } sound)
+            || Carried(query[Sound]) is not { } sound
+            || Encoded(query[Format]) is not { } format)
         {
             return null;
         }
 
-        return new LiveSessionKey(new NetworkId(network), new ServiceId(service), profile, sound);
+        return new LiveSessionKey(new NetworkId(network), new ServiceId(service), profile, sound, format);
     }
+
+    private static VideoCodec? Encoded(StringValues said)
+        => said.Count switch
+        {
+            0 => VideoCodecs.Unasked,
+            1 => VideoCodecs.Find(said[0]),
+            _ => null,
+        };
 
     private static SoundTrack? Carried(StringValues said)
         => said.Count switch

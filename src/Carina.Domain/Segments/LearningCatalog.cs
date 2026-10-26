@@ -159,12 +159,15 @@ public sealed class LearningCatalog
 
     /// <summary>
     /// The sounds as they would have been estimated at one time, each worked out once: from their stretches of
-    /// recordings started no later than then, and, for one that may carry on an opening or an ending, beside the
-    /// sounds heard in its recordings.
+    /// recordings started no later than then, and, for one they may settle (<see cref="CatalogKinds.Settle"/>), beside
+    /// the sounds heard in its recordings as every sound heard by then is settled with the others
+    /// (<see cref="CatalogKinds.SettleTogether"/>).
     /// </summary>
     private sealed class Estimates(ILookup<RecordingId, CatalogSound> soundsIn, SeriesLinks links, DateTime startedAt)
     {
         private readonly Dictionary<CatalogEntryId, (PlacedOccurrence[] Kept, CatalogPattern Pattern)?> own = [];
+
+        private IReadOnlyDictionary<CatalogEntryId, CatalogPattern>? settled;
 
         public (PlacedOccurrence[] Kept, CatalogPattern Pattern)? Carried(CatalogSound sound)
         {
@@ -173,26 +176,33 @@ public sealed class LearningCatalog
                 return null;
             }
 
-            if (!CatalogKinds.MayCarryOn(pattern))
+            if (!CatalogKinds.MaySettle(pattern))
             {
                 return (kept, pattern);
             }
 
-            CatalogSurroundings around = new(
-            [
-                .. kept
-                    .Select(placed => placed.Occurrence.RecordingId)
-                    .Distinct()
-                    .SelectMany(recording => soundsIn[recording].SelectMany(heard => StretchesIn(heard, recording))),
-            ]);
+            settled ??= Settled();
 
-            return (kept, CatalogKinds.CarryOn(sound.Length, kept, pattern, around));
+            return (kept, settled[sound.Id]);
         }
 
-        private IEnumerable<ThemeStretch> StretchesIn(CatalogSound sound, RecordingId recording)
-            => Own(sound) is (PlacedOccurrence[] kept, CatalogPattern pattern)
-                ? CatalogKinds.Stretches(kept, pattern).Where(stretch => stretch.Recording.Equals(recording))
-                : [];
+        private IReadOnlyDictionary<CatalogEntryId, CatalogPattern> Settled()
+        {
+            (CatalogSound Sound, CatalogPattern Pattern)[] heard =
+            [
+                .. soundsIn
+                    .SelectMany(sounds => sounds)
+                    .DistinctBy(sound => sound.Id)
+                    .Select(sound => (sound, Own(sound)))
+                    .Where(pair => pair.Item2 is not null)
+                    .Select(pair => (new CatalogSound(pair.sound.Id, pair.sound.Length, pair.Item2!.Value.Kept), pair.Item2!.Value.Pattern)),
+            ];
+
+            return CatalogKinds.SettleTogether(
+                [.. heard.Select(pair => pair.Sound)],
+                heard.ToDictionary(pair => pair.Sound.Id, pair => pair.Pattern),
+                CatalogSurroundings.None);
+        }
 
         private (PlacedOccurrence[] Kept, CatalogPattern Pattern)? Own(CatalogSound sound)
         {

@@ -22,7 +22,8 @@ public static class FfmpegPlaybackInvocation
         MachineSettings machine,
         StreamSource source,
         TimeSpan from,
-        SoundPlacement sound)
+        SoundPlacement sound,
+        VideoCodec format = VideoCodecs.Unasked)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
@@ -57,7 +58,7 @@ public static class FfmpegPlaybackInvocation
             .. FfmpegLiveInvocation.Mapping(service, sound),
             "-vf",
             FfmpegLiveInvocation.Filter(profile, attributes, encoder),
-            .. FfmpegLiveInvocation.Encoding(profile, encoder),
+            .. FfmpegLiveInvocation.Encoding(profile, encoder, format),
             .. FfmpegLiveInvocation.Sound(),
             .. Panning(sound),
         ];

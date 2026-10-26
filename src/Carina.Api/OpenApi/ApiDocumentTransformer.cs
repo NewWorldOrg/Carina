@@ -30,7 +30,9 @@ public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
         + "or wss address in `uri`); the frame has no origin of its own, so these two answer any origin without "
         + "credentials. "
         + "The wire is asked for by `network`, `service` "
-        + "and `profile` in the query, the profile being one of those `GET /api/live/profiles` lists; "
+        + "and `profile` in the query, the profile being one of those `GET /api/live/profiles` lists, and "
+        + "by `format` (`h264`, `h265` or `av1`, `h264` when none is named), one of the formats the same list "
+        + "names, a format this machine does not transcode in being refused before the wire opens; "
         + "a viewer that is refused is told why on the control channel before the wire is closed.";
 
     public Task TransformAsync(

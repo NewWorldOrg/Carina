@@ -1,6 +1,7 @@
 using System.Net.WebSockets;
 
 using Carina.Api.Authentication;
+using Carina.Api.Playback;
 using Carina.Api.Responder;
 using Carina.Domain.Streaming;
 
@@ -17,10 +18,12 @@ public static class LiveWire
         ILiveDepartureLedger departures,
         LiveWireSettings settings,
         IHostApplicationLifetime running,
-        TimeProvider clock)
+        TimeProvider clock,
+        ILiveEncoderSelector encoders)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(encoders);
         ArgumentNullException.ThrowIfNull(onAir);
         ArgumentNullException.ThrowIfNull(departures);
         ArgumentNullException.ThrowIfNull(settings);
@@ -50,6 +53,13 @@ public static class LiveWire
         if (LiveWireRequest.KeyOf(context.Request.Query) is not { } asked)
         {
             await RefuseAsync(context, StatusCodes.Status400BadRequest, LiveWireRequest.TheKeyThereIs);
+
+            return;
+        }
+
+        if (!(await encoders.FormatsAsync(context.RequestAborted)).Contains(asked.Format))
+        {
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, AskedFormat.NotTranscodedHere(asked.Format));
 
             return;
         }

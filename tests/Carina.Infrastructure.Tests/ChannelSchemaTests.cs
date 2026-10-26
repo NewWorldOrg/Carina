@@ -310,6 +310,7 @@ public sealed class ChannelSchemaTests
                 "segment_learning_data",
                 "segment_learning_round",
                 "segment_model_version",
+                "segment_seek_event",
                 "segment_settings",
                 "segment_skip_event",
                 "service_reach_config",

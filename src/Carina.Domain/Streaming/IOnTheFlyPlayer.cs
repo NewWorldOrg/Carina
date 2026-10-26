@@ -10,6 +10,7 @@ public interface IOnTheFlyPlayer
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
+        VideoCodec format,
         SoundPlacement sound,
         CancellationToken cancellationToken);
 

@@ -63,6 +63,8 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
 
     public List<string?> AskedFor { get; } = [];
 
+    public List<VideoCodec> AskedIn { get; } = [];
+
     public List<ServiceId> AskedOf { get; } = [];
 
     public List<SoundPlacement> AskedWith { get; } = [];
@@ -82,11 +84,13 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
+        VideoCodec format,
         SoundPlacement sound,
         CancellationToken cancellationToken)
     {
         AskedFrom.Add(from);
         AskedFor.Add(profile?.Name);
+        AskedIn.Add(format);
         AskedOf.Add(service);
         AskedWith.Add(sound);
         Opened.Add(file);
@@ -133,11 +137,16 @@ internal sealed class PlayFeature : IAsyncDisposable
 
     private readonly DirectoryInfo shelved = Directory.CreateTempSubdirectory("carina-play-shelf-");
 
-    public PlayFeature()
+    public PlayFeature(IReadOnlyList<VideoCodec>? formats = null)
     {
         WebApplicationFactory<Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
+                if (formats is not null)
+                {
+                    services.AddSingleton<ILiveEncoderSelector>(new AlreadyChosen(LiveEncoder.Vaapi, formats));
+                }
+
                 services.RemoveAll<IHostedService>();
                 services.RemoveAll<IOnTheFlyPlayer>();
                 services.AddSingleton<IRecordingDirectory>(Recordings);
@@ -983,6 +992,84 @@ public sealed class PlayDeliveryTests
 
         Assert.Equal("720p30", Assert.Single(feature.Player.AskedFor));
         Assert.Equal("720p30", Header(answer, PlaybackHeaders.Profile));
+    }
+
+    [Theory(DisplayName = "a recording transcoded as it plays is encoded in the format asked for, where this machine encodes it")]
+    [InlineData("?format=h265", VideoCodec.H265)]
+    [InlineData("?format=av1", VideoCodec.Av1)]
+    [InlineData("?format=h264", VideoCodec.H264)]
+    public async Task ARecordingTranscodedAsItPlaysIsEncodedInTheFormatAskedFor(string query, VideoCodec format)
+    {
+        await using PlayFeature feature = new(VideoCodecs.InOrder);
+
+        using HttpResponseMessage answer = await feature.PictureAsync(feature.Ended(RecordingOutcome.Complete), query);
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal(format, Assert.Single(feature.Player.AskedIn));
+    }
+
+    [Fact(DisplayName = "a recording played without naming a format is transcoded in H.264, as it always was")]
+    public async Task ARecordingPlayedWithoutNamingAFormatIsTranscodedInH264()
+    {
+        await using PlayFeature feature = new(VideoCodecs.InOrder);
+
+        using HttpResponseMessage answer = await feature.PictureAsync(feature.Ended(RecordingOutcome.Complete));
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal(VideoCodec.H264, Assert.Single(feature.Player.AskedIn));
+    }
+
+    [Theory(DisplayName = "a format off the list is refused rather than passed on")]
+    [InlineData("?format=hevc")]
+    [InlineData("?format=AV1")]
+    [InlineData("?format=h264,h265")]
+    public async Task AFormatOffTheListIsRefusedRatherThanPassedOn(string query)
+    {
+        await using PlayFeature feature = new(VideoCodecs.InOrder);
+
+        using HttpResponseMessage answer = await feature.PictureAsync(feature.Ended(RecordingOutcome.Complete), query);
+
+        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Empty(feature.Player.AskedIn);
+        Assert.Equal(
+            PlayDelivery.TheFormatsThereAre,
+            (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
+    }
+
+    [Theory(DisplayName = "a format this machine does not encode is refused, picture and plan alike, rather than turned into H.264")]
+    [InlineData("h265")]
+    [InlineData("av1")]
+    public async Task AFormatThisMachineDoesNotEncodeIsRefusedRatherThanTurnedIntoH264(string format)
+    {
+        await using PlayFeature feature = new([VideoCodec.H264]);
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?format=" + format);
+        using HttpResponseMessage plan = await feature.PlanAsync(recording, "?format=" + format);
+
+        Assert.Equal(HttpStatusCode.BadRequest, picture.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, plan.StatusCode);
+        Assert.Empty(feature.Player.AskedIn);
+        Assert.Contains(format, (await PlayFeature.PlanOfAsync(picture)).GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "an artefact handed over as it is does not look at the format, even one this machine does not encode")]
+    [InlineData("?format=av1")]
+    [InlineData("?format=h265")]
+    public async Task AnArtefactHandedOverAsItIsDoesNotLookAtTheFormat(string query)
+    {
+        await using PlayFeature feature = new([VideoCodec.H264]);
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        byte[] made = feature.Encoded(recording);
+
+        using HttpResponseMessage plan = await feature.PlanAsync(recording, query);
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, query);
+
+        Assert.Equal(HttpStatusCode.OK, plan.StatusCode);
+        Assert.False((await PlayFeature.PlanOfAsync(plan)).GetProperty("data").GetProperty("transcodes").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+        Assert.Equal(made, await picture.Content.ReadAsByteArrayAsync());
+        Assert.Empty(feature.Player.AskedIn);
     }
 
     [Theory]

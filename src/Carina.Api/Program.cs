@@ -95,8 +95,9 @@ app.MapGet(
             ILiveDepartureLedger departures,
             LiveWireSettings settings,
             IHostApplicationLifetime running,
-            TimeProvider clock) =>
-            LiveWire.Invoke(context, sessions, onAir, departures, settings, running, clock))
+            TimeProvider clock,
+            ILiveEncoderSelector encoders) =>
+            LiveWire.Invoke(context, sessions, onAir, departures, settings, running, clock, encoders))
     .ExcludeFromDescription()
     .WithEffect(EndpointEffect.Reading);
 
@@ -149,8 +150,9 @@ app.MapGet(
                 IOnTheFlyPlayer player,
                 PlaybackChapterService chapters,
                 IPlaybackPositionRepository positions,
-                CaptionService captions) =>
-            PlayDelivery.Invoke(context, id, playback, player, chapters, positions, captions))
+                CaptionService captions,
+                ILiveEncoderSelector encoders) =>
+            PlayDelivery.Invoke(context, id, playback, player, chapters, positions, captions, encoders))
     .WithName(PlaybackSurfaces.PlayingIsCalled)
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.HowARecordingIsPlayedInABrowser)
@@ -158,6 +160,7 @@ app.MapGet(
     .Reads(
         PlaybackSurfaces.WhereThePlayingStarts,
         PlaybackSurfaces.WhichProfileThePictureIsEncodedIn,
+        PlaybackSurfaces.WhichFormatThePictureIsEncodedIn,
         PlaybackSurfaces.WhichSoundIsCarried,
         PlaybackSurfaces.WhichOfTheTwoFilesIsPlayed,
         PlaybackSurfaces.WhatThisBrowserDecodes)

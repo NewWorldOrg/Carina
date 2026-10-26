@@ -43,11 +43,13 @@ internal sealed class HeldCatalog : ICatalogRepository
         [
             .. Occurrences
                 .Where(occurrence => recordings.Contains(occurrence.RecordingId))
-                .Join(Entries, occurrence => occurrence.EntryId, entry => entry.Id, (occurrence, entry) => new ThemeStretch(
+                .Join(Entries, occurrence => occurrence.EntryId, entry => entry.Id, (occurrence, entry) => ThemeStretch.Of(
                     entry.Id,
                     occurrence.RecordingId,
                     occurrence.Span,
-                    CatalogKinds.PartOf(new CatalogEstimate(entry.Kind, entry.Confidence, entry.DecidedBy), entry.SeriesCount, occurrence.KindOverride))),
+                    new CatalogEstimate(entry.Kind, entry.Confidence, entry.DecidedBy),
+                    entry.SeriesCount,
+                    occurrence.KindOverride)),
         ]));
 
     public Task<IReadOnlyList<IReadOnlyList<RecordingId>>> SoundSharersAsync(CancellationToken cancellationToken)

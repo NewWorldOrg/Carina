@@ -2,6 +2,7 @@ using System.Globalization;
 
 using Carina.Domain.Channels;
 using Carina.Domain.Machines;
+using Carina.Domain.Playback;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -56,7 +57,8 @@ public static class FfmpegLiveInvocation
         LiveEncoder encoder,
         MachineSettings machine,
         CaptionOutlet captions,
-        SoundPlacement? sound = null)
+        SoundPlacement? sound = null,
+        VideoCodec format = VideoCodecs.Unasked)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
@@ -103,7 +105,7 @@ public static class FfmpegLiveInvocation
             Filter(profile, attributes, encoder),
             "-r",
             Pace(profile),
-            .. Encoding(profile, encoder),
+            .. Encoding(profile, encoder, format),
             .. Sound(),
             .. FfmpegPlaybackInvocation.Panning(taken),
         ];
@@ -248,18 +250,32 @@ public static class FfmpegLiveInvocation
         return string.Create(CultureInfo.InvariantCulture, $"{rate.Numerator}/{rate.Denominator}");
     }
 
-    internal static IReadOnlyList<string> Encoding(LiveProfile profile, LiveEncoder encoder)
-        => encoder is LiveEncoder.Vaapi
+    /// <summary>
+    /// The picture encoded in <paramref name="format"/>. The processor encodes H.264 alone, so another format is
+    /// asked of the card or of nothing.
+    /// </summary>
+    internal static IReadOnlyList<string> Encoding(LiveProfile profile, LiveEncoder encoder, VideoCodec format)
+    {
+        VideoCodec asked = VideoCodecs.Named(format);
+
+        if (encoder is not LiveEncoder.Vaapi && asked is not VideoCodecs.Unasked)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(format),
+                format,
+                "The processor encodes H.264 alone; another format is encoded on the card.");
+        }
+
+        return encoder is LiveEncoder.Vaapi
             ?
             [
                 "-c:v",
-                "h264_vaapi",
+                OnTheCard(asked),
                 "-g",
                 Keyframes(profile),
                 "-rc_mode",
                 "CQP",
-                "-qp",
-                profile.VaapiRateControl.Quantiser.ToString(CultureInfo.InvariantCulture),
+                .. Quality(profile.VaapiRateControl, asked),
             ]
             :
             [
@@ -278,6 +294,7 @@ public static class FfmpegLiveInvocation
                 "-bufsize",
                 Kilobits(profile.SoftwareRateControl.KilobitsPerSecond * BufferedSeconds),
             ];
+    }
 
     internal static IReadOnlyList<string> Sound()
         =>
@@ -287,6 +304,26 @@ public static class FfmpegLiveInvocation
             "-b:a",
             Kilobits(SoundKilobitsPerSecond),
         ];
+
+    private static string OnTheCard(VideoCodec format) => format switch
+    {
+        VideoCodec.H265 => "hevc_vaapi",
+        VideoCodec.Av1 => "av1_vaapi",
+        _ => "h264_vaapi",
+    };
+
+    /// <summary>
+    /// What the card is handed for the format: H.264 and H.265 a quantiser, AV1 the index it quantises by, which
+    /// is the only quality its encoder takes. H.265 is tagged hvc1, the tag Safari plays.
+    /// </summary>
+    private static IReadOnlyList<string> Quality(CardRateControl handed, VideoCodec format) => format switch
+    {
+        VideoCodec.H265 => ["-qp", Number(handed.H265.Quantiser), "-tag:v", ArtefactCodecReading.TagSafariPlays],
+        VideoCodec.Av1 => ["-global_quality", Number(handed.Av1.Index)],
+        _ => ["-qp", Number(handed.H264.Quantiser)],
+    };
+
+    private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     private static bool WantsEveryField(LiveProfile profile)
         => profile.Rate.PerSecond > FrameRate.BroadcastFrames.PerSecond;

@@ -52,7 +52,7 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
                 SELECT concat_ws(' ',
                     metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": null, "kinds": [{"kind": "Break", "recall": 0.95}, {"kind": "Opening", "recall": null}], "returnedAfterSkipShare": 0.03, "skips": 64}'::jsonb,
                     stations = '[{"networkId": 40001, "serviceId": 60001, "recordings": 5, "metrics": {"boundaryRecallWithin2s": 0.96, "boundaryRecallWithin1s": 0.9, "kinds": [], "returnedAfterSkipShare": null, "skips": 0}}]'::jsonb,
-                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-10-18T09:00:00Z"}'::jsonb,
+                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-10-18T09:00:00Z", "openings": 0, "endings": 0}'::jsonb,
                     rollback = '{"returnedAfterSkipShare": 0.09, "previousShare": 0.03, "skips": 25, "backTo": 1}'::jsonb)
                 FROM segment_model_version WHERE number = 61
                 """));
@@ -127,7 +127,7 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
                 SELECT concat_ws(' ', state,
                     metrics = '{"boundaryRecallWithin2s": 0.93, "boundaryRecallWithin1s": null, "kinds": [{"kind": "Break", "recall": 0.95}, {"kind": "Opening", "recall": null}], "returnedAfterSkipShare": 0.03, "skips": 64}'::jsonb,
                     stations = '[{"networkId": 40001, "serviceId": 60001, "recordings": 5, "metrics": {"boundaryRecallWithin2s": 0.96, "boundaryRecallWithin1s": 0.9, "kinds": [], "returnedAfterSkipShare": null, "skips": 0}}]'::jsonb,
-                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-10-18T09:00:00Z"}'::jsonb)
+                    evidence = '{"recordings": 12, "boundaries": 148, "labelsUntil": "2026-10-18T09:00:00Z", "openings": 0, "endings": 0}'::jsonb)
                 FROM segment_model_version WHERE number = 62
                 """));
         Assert.Equal(SegmentModelVersion.FirstNumber, (await ActiveAsync()).Number);

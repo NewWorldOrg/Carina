@@ -24,7 +24,9 @@ public enum SegmentModelVersionState
 /// never been put in use, and only a version used before has been taken out of use or rolled back from. Exactly
 /// one version is in use at a time, which the store holds. The built-in version of a release
 /// (<see cref="SegmentModel.BuiltIn"/>) is kept through <see cref="KeepBuiltIn"/>; the version in use changes
-/// only through <see cref="Change"/> and that.
+/// only through <see cref="Change"/> and that. A number is given once: a version keeps its number for good, and a
+/// new one is numbered after every number given before (<see cref="NumberAfter"/>), those of versions let go since
+/// included (<see cref="LetGoBefore"/>).
 /// </summary>
 public sealed class SegmentModelVersion
 {
@@ -77,6 +79,8 @@ public sealed class SegmentModelVersion
     public SegmentModel Model => model ??= new SegmentModel(Weights, StationOffsets, SeriesOffsets, Thresholds, Standardisation);
 
     public SegmentEvaluation? Evaluation => Evidence is null ? null : new SegmentEvaluation(Metrics, Stations ?? [], Evidence);
+
+    private bool NeverUsed => State is SegmentModelVersionState.Candidate && AdoptedAt is null && ChosenByHandAt is null;
 
     public static SegmentModelVersion Rehydrate(
         int number,
@@ -151,14 +155,46 @@ public sealed class SegmentModelVersion
     }
 
     /// <summary>
+    /// The number a new version is given when <paramref name="highestGiven"/> is the highest number given so far, to a
+    /// version kept or to one let go since, and 0 when none has been: the one after it.
+    /// </summary>
+    public static int NumberAfter(int highestGiven)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(highestGiven);
+
+        return Math.Max(highestGiven + 1, FirstNumber);
+    }
+
+    /// <summary>
+    /// The numbers of the versions among <paramref name="kept"/> learning lets go of once it has kept the candidate
+    /// numbered <paramref name="latest"/>: every candidate numbered before it that learning made and that was never
+    /// put in use nor chosen by hand. The latest candidate stays until the next one is kept, so that it can still be
+    /// chosen by hand; a version built in, the version in use and the versions used before always stay. Whether
+    /// anything else still names one of them is for the store to say.
+    /// </summary>
+    public static IReadOnlyList<int> LetGoBefore(IReadOnlyList<SegmentModelVersion> kept, int latest)
+    {
+        ArgumentNullException.ThrowIfNull(kept);
+
+        return
+        [
+            .. kept
+                .Where(version => version.Number < latest && version.NeverUsed && !version.BuiltIn)
+                .Select(version => version.Number)
+                .Order(),
+        ];
+    }
+
+    /// <summary>
     /// What keeping <paramref name="builtIn"/>, the built-in version of a release, at <paramref name="at"/> among the
     /// versions <paramref name="kept"/> writes; nothing when a built-in version already holds the same parameters,
-    /// whatever its state. Otherwise the version holding it is numbered after the highest and made at
+    /// whatever its state. Otherwise the version holding it is numbered after the highest number given, of the
+    /// versions kept and <paramref name="highestGiven"/>, which says what else has been given, and made at
     /// <paramref name="at"/>. With no version in use it is put in use. It takes the place of the version in use when
     /// that one is built in and not chosen by hand, which is taken out of use; beside a version chosen by hand or
     /// learned it is kept as a candidate, and the version in use stays.
     /// </summary>
-    public static SegmentBuiltInKept? KeepBuiltIn(IReadOnlyList<SegmentModelVersion> kept, SegmentModel builtIn, DateTime at)
+    public static SegmentBuiltInKept? KeepBuiltIn(IReadOnlyList<SegmentModelVersion> kept, SegmentModel builtIn, DateTime at, int highestGiven = 0)
     {
         ArgumentNullException.ThrowIfNull(kept);
         ArgumentNullException.ThrowIfNull(builtIn);
@@ -168,7 +204,7 @@ public sealed class SegmentModelVersion
             return null;
         }
 
-        int number = kept.Count is 0 ? FirstNumber : kept.Max(version => version.Number) + 1;
+        int number = NumberAfter(Math.Max(highestGiven, kept.Count is 0 ? 0 : kept.Max(version => version.Number)));
 
         if (kept.SingleOrDefault(version => version.State is SegmentModelVersionState.Active) is not { } inUse)
         {

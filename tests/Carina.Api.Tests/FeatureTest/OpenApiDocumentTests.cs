@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Responder.Playback;
+using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -121,6 +122,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             [
                 "addCandidateChannel",
+                "addSeekEvent",
                 "addSkipEvent",
                 "applyRuleNow",
                 "applyScan",
@@ -357,6 +359,23 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "absent",
             ],
             shortfall["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent").ToArray());
+    }
+
+    [Fact(DisplayName = "a live profile names the formats this machine transcodes it in, each spelled the way the wire and the playing ask for it")]
+    public async Task ALiveProfileNamesTheFormatsThisMachineTranscodesItIn()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode profile = document["components"]!["schemas"]!["LiveProfileResponder"]!;
+        JsonNode codec = document["components"]!["schemas"]!["VideoCodec"]!;
+
+        Assert.Equal("array", profile["properties"]!["formats"]!["type"]!.GetValue<string>());
+        Assert.Equal(
+            "#/components/schemas/VideoCodec",
+            profile["properties"]!["formats"]!["items"]!["$ref"]!.GetValue<string>());
+        Assert.Contains("formats", profile["required"]!.AsArray().Select(value => value!.GetValue<string>()));
+        Assert.Equal(
+            VideoCodecs.Names,
+            codec["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
     [Fact]
@@ -872,6 +891,29 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.All(
             [schemas["AddSkipEventRequest"]!["properties"]!["event"]!, schemas["AddSkipEventRequest"]!["properties"]!["kind"]!],
             property => Assert.Equal(["null", "string"], property["type"]!.AsArray().Select(value => value!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray()));
+
+        static string[] Choices(JsonNode property)
+            => [.. property["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent")];
+    }
+
+    [Fact(DisplayName = "BR-CV-004: a seek is taken under the recording beside the skip events, described by what it is sent and answers, whether it went forward or came back and how it was made read as text but listed with the values they take")]
+    public async Task TheSeeksAreDescribedBesideTheSkipEvents()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonObject paths = document["paths"]!.AsObject();
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.Equal(["post"], paths["/api/recordings/{id}/seeks"]!.AsObject().Select(entry => entry.Key).Where(key => key is not "parameters").ToArray());
+        Assert.Equal(
+            ["event", "means", "fromSec", "toSec"],
+            schemas["AddSeekEventRequest"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["happenedAt", "event", "means", "fromSec", "toSec"],
+            schemas["SeekEventResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(["forward", "returned", "absent"], Choices(schemas["AddSeekEventRequest"]!["properties"]!["event"]!));
+        Assert.Equal(["bar", "step", "chapter", "key", "absent"], Choices(schemas["AddSeekEventRequest"]!["properties"]!["means"]!));
+        Assert.Equal(["forward", "returned"], schemas["SeekAction"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(["bar", "step", "chapter", "key"], schemas["SeekMeans"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
 
         static string[] Choices(JsonNode property)
             => [.. property["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent")];

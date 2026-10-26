@@ -46,6 +46,7 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
     public async Task<LiveTranscoderStart> StartAsync(
         ServiceId service,
         LiveProfile profile,
+        VideoCodec format,
         SoundPlacement sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
@@ -74,7 +75,7 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
             return LiveTranscoderStart.Failed(fault, "held back for the test.");
         }
 
-        HeldTranscoder transcoder = new(service, profile, sound, attributes, captions, seat);
+        HeldTranscoder transcoder = new(service, profile, sound, attributes, captions, seat) { Format = format };
 
         if (WithoutACaptionStream && captions is CaptionOutlet.Drawn)
         {
@@ -133,6 +134,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
     public ServiceId Service { get; }
 
     public LiveProfile Profile { get; }
+
+    public VideoCodec Format { get; init; } = VideoCodecs.Unasked;
 
     public SoundPlacement Sound { get; }
 

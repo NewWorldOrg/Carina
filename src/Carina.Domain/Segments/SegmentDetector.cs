@@ -3,11 +3,14 @@ namespace Carina.Domain.Segments;
 /// <summary>
 /// The segments of one recording read with some thresholds, ready to be scored: the pieces between its
 /// boundary candidates with their features, the candidates' seconds, its length, the station and
-/// series its offsets are kept by, and the neighbouring pieces read as one (<see cref="JoinedPiece"/>).
+/// series its offsets are kept by, the neighbouring pieces read as one (<see cref="JoinedPiece"/>), and the
+/// candidates themselves.
 /// </summary>
 public sealed record RecordingPieces(IReadOnlyList<SegmentPiece> Pieces, IReadOnlyList<TimeSpan> Snaps, TimeSpan Length, string Station, string? Series)
 {
     public IReadOnlyList<JoinedPiece> Joined { get; init; } = [];
+
+    public IReadOnlyList<BoundaryCandidate> Candidates { get; init; } = [];
 }
 
 /// <summary>
@@ -41,6 +44,7 @@ public static class SegmentDetector
         return new RecordingPieces(pieces, BoundaryCandidates.Snaps(candidates), evidence.Length, context.Station, context.Series)
         {
             Joined = joined,
+            Candidates = candidates,
         };
     }
 

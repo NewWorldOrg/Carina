@@ -137,6 +137,135 @@ public sealed class FfmpegLiveInvocationTests
             FfmpegLiveInvocation.Arguments(Service, LiveProfile.FullHd60, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None));
     }
 
+    [Fact(DisplayName = "the H.265 arguments are exactly these, tagged hvc1 so that Safari plays them")]
+    public void TheH265ArgumentsAreExactlyThese()
+    {
+        Assert.Equal(
+            [
+                "-c:v",
+                "hevc_vaapi",
+                "-g",
+                "120",
+                "-rc_mode",
+                "CQP",
+                "-qp",
+                "24",
+                "-tag:v",
+                "hvc1",
+            ],
+            Encoder(FfmpegLiveInvocation.Arguments(
+                Service,
+                LiveProfile.FullHd60,
+                Interlaced,
+                LiveEncoder.Vaapi,
+                Machine,
+                CaptionOutlet.None,
+                format: VideoCodec.H265)));
+    }
+
+    [Fact(DisplayName = "the AV1 arguments are exactly these, the quality given as the index AV1 quantises by")]
+    public void TheAv1ArgumentsAreExactlyThese()
+    {
+        Assert.Equal(
+            [
+                "-c:v",
+                "av1_vaapi",
+                "-g",
+                "120",
+                "-rc_mode",
+                "CQP",
+                "-global_quality",
+                "80",
+            ],
+            Encoder(FfmpegLiveInvocation.Arguments(
+                Service,
+                LiveProfile.FullHd60,
+                Interlaced,
+                LiveEncoder.Vaapi,
+                Machine,
+                CaptionOutlet.None,
+                format: VideoCodec.Av1)));
+    }
+
+    [Theory(DisplayName = "a format changes nothing but the encoder and what it is handed")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void AFormatChangesNothingButTheEncoderAndWhatItIsHanded(LiveProfile profile, VideoCodec format)
+    {
+        string[] h264 = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.Drawn)];
+        string[] asked = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.Drawn, format: format)];
+
+        Assert.Equal(AllButTheEncoder(h264), AllButTheEncoder(asked));
+        Assert.Equal(h264[h264.IndexOf("-g") + 1], asked[asked.IndexOf("-g") + 1]);
+    }
+
+    [Theory(DisplayName = "what the card is handed for a format is what the profile sets for that format")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void WhatTheCardIsHandedForAFormatIsWhatTheProfileSetsForThatFormat(LiveProfile profile, VideoCodec format)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, format: format)];
+        (string Option, int Value) handed = format switch
+        {
+            VideoCodec.H265 => ("-qp", profile.VaapiRateControl.H265.Quantiser),
+            VideoCodec.Av1 => ("-global_quality", profile.VaapiRateControl.Av1.Index),
+            _ => ("-qp", profile.VaapiRateControl.H264.Quantiser),
+        };
+
+        Assert.Equal(
+            handed.Value.ToString(CultureInfo.InvariantCulture),
+            arguments[arguments.IndexOf(handed.Option) + 1]);
+        Assert.Single(arguments, argument => argument is "-qp" or "-global_quality");
+    }
+
+    [Theory(DisplayName = "only H.265 is tagged, and it is tagged hvc1 rather than hev1")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void OnlyH265IsTaggedAndItIsTaggedHvc1(LiveProfile profile, VideoCodec format)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, format: format)];
+
+        if (format is VideoCodec.H265)
+        {
+            Assert.Equal("hvc1", arguments[arguments.IndexOf("-tag:v") + 1]);
+
+            return;
+        }
+
+        Assert.DoesNotContain("-tag:v", arguments);
+    }
+
+    [Theory(DisplayName = "the processor encodes H.264 alone, so another format asked of it is refused")]
+    [InlineData(VideoCodec.H265)]
+    [InlineData(VideoCodec.Av1)]
+    public void TheProcessorEncodesH264Alone(VideoCodec format)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None, format: format));
+    }
+
+    [Fact]
+    public void AFormatNobodyNamedIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, format: (VideoCodec)9));
+    }
+
+    public static TheoryData<LiveProfile, VideoCodec> EveryProfileInEveryFormatOnTheCard
+    {
+        get
+        {
+            TheoryData<LiveProfile, VideoCodec> pairs = [];
+
+            foreach (LiveProfile profile in LiveProfile.All)
+            {
+                foreach (VideoCodec format in VideoCodecs.InOrder)
+                {
+                    pairs.Add(profile, format);
+                }
+            }
+
+            return pairs;
+        }
+    }
+
     public static TheoryData<StreamAttributes> EveryKindOfPicture
         =>
         [
@@ -503,7 +632,7 @@ public sealed class FfmpegLiveInvocationTests
         {
             Assert.Equal("CQP", arguments[arguments.IndexOf("-rc_mode") + 1]);
             Assert.Equal(
-                profile.VaapiRateControl.Quantiser.ToString(CultureInfo.InvariantCulture),
+                profile.VaapiRateControl.H264.Quantiser.ToString(CultureInfo.InvariantCulture),
                 arguments[arguments.IndexOf("-qp") + 1]);
             Assert.DoesNotContain("-b:v", arguments);
             Assert.DoesNotContain("-maxrate", arguments);
@@ -911,6 +1040,22 @@ public sealed class FfmpegLiveInvocationTests
         string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, attributes, encoder, Machine, CaptionOutlet.None)];
 
         return arguments[arguments.IndexOf("-vf") + 1];
+    }
+
+    private static string[] Encoder(IReadOnlyList<string> arguments)
+    {
+        int from = arguments.ToList().IndexOf("-c:v");
+        int to = arguments.ToList().IndexOf("-c:a");
+
+        return [.. arguments.Skip(from).Take(to - from)];
+    }
+
+    private static string[] AllButTheEncoder(IReadOnlyList<string> arguments)
+    {
+        int from = arguments.ToList().IndexOf("-c:v");
+        int to = arguments.ToList().IndexOf("-c:a");
+
+        return [.. arguments.Take(from), .. arguments.Skip(to)];
     }
 
     private static IEnumerable<string> Options(IEnumerable<string> arguments)

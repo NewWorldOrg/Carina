@@ -73,6 +73,7 @@ public sealed class ChildProcessEnvironmentTests : IDisposable
         LiveTranscoderStart start = await factory.StartAsync(
             new ServiceId(1040),
             LiveProfile.Hd30,
+            VideoCodec.H264,
             SoundPlacement.WholeStream(0),
             new StreamAttributes(new VideoSize(1440, 1080), ScanType.Interlaced, FrameRate.BroadcastFrames, AudioMode.Stereo),
             CaptionOutlet.None,
@@ -99,5 +100,8 @@ public sealed class ChildProcessEnvironmentTests : IDisposable
     {
         public Task<LiveEncoderChoice> ChooseAsync(CancellationToken cancellationToken)
             => Task.FromResult(LiveEncoderChoice.Asked(LiveEncoder.Software));
+
+        public Task<IReadOnlyList<VideoCodec>> FormatsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<VideoCodec>>([VideoCodec.H264]);
     }
 }

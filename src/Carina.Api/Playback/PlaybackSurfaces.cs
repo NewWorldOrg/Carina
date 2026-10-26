@@ -113,6 +113,16 @@ public static class PlaybackSurfaces
         [.. LiveProfile.All.Select(profile => profile.Name)],
         null);
 
+    public static readonly QueryInput WhichFormatThePictureIsEncodedIn = QueryInput.OneOfThese(
+        PlayDelivery.Format,
+        "The format the picture is encoded in while it is transcoded as it plays. Asking for none encodes it in "
+        + "h264, as it always was. GET /api/live/profiles names the formats this machine transcodes in, and one it "
+        + "does not is refused rather than handed over in another; the plan is refused the same way where the "
+        + "recording would be transcoded. One handed over as it is keeps the format it was encoded in, and the "
+        + "format asked for is not looked at.",
+        VideoCodecs.Names,
+        VideoCodecs.H264IsCalled);
+
     public static readonly QueryInput WhichSoundIsCarried = QueryInput.OneOfThese(
         PlayDelivery.Sound,
         "The sound carried with the picture while the recording is transcoded as it plays. Asking for none "
@@ -140,9 +150,11 @@ public static class PlaybackSurfaces
         PlayDelivery.Decodes,
         "The picture codings the browser asking says it decodes, each named once. H.264 is always taken to be "
         + "decoded. Naming h265 lets an artefact encoded in H.265 and tagged hvc1 be handed over as it is; one "
-        + "tagged hev1 is still transcoded while playing. Naming none decodes H.264 alone, as it always did, and "
+        + "tagged hev1 is still transcoded while playing. Naming av1 is taken and changes nothing, since nothing "
+        + "is encoded in AV1 to be handed over. Naming none decodes H.264 alone, as it always did, and "
         + "naming anything else is refused. The picture and the captions are asked for with what the plan was "
-        + "asked with, so that all three settle on the same file.",
+        + "asked with, so that all three settle on the same file. The format a picture transcoded as it plays is "
+        + "encoded in is asked for by format, not by this.",
         AskedDecoding.Names);
 
     public static readonly QueryInput WhatThisBrowserDecodesForItsCaptions = QueryInput.SomeOfThese(
