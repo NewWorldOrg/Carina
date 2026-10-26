@@ -364,6 +364,29 @@ public sealed class SegmentSequenceTests
         Assert.Equal([(300d, 315d), (330d, 345d)], Breaks(apart));
     }
 
+    [Fact(DisplayName = "BR-CD-007: an advert the catalog fixes, cut in three by its own pauses whose fits fall short of its slot, is taken whole through the piece read over it, so its pod stays on the grid and a long doubtful piece beside the pod stays the programme; without that piece the pod falls off the grid and swallows it")]
+    public void AFixedAdvertCutByItsPausesKeepsItsPodOnTheGrid()
+    {
+        SegmentPiece[] laid = Laid(300, 15, 5, 5, 5, 15, 301.2, 1200);
+        SegmentPiece[] pieces =
+        [
+            .. laid.Select((piece, at) => at is >= 2 and <= 4 ? piece with { Fitted = TimeSpan.FromSeconds(4.6), Fixed = new CatalogFix(SegmentKind.Break, 0.5) } : piece),
+        ];
+        SegmentChances advert = Four(2.5, -8, -8);
+        SegmentChances[] chances = [Plain, advert, Plain, Plain, Plain, advert, Four(-2.5, -8, -8), Plain];
+        JoinedPiece whole = new(
+            2,
+            4,
+            new SegmentPiece(TimeSpan.FromSeconds(315), TimeSpan.FromSeconds(330), TimeSpan.FromSeconds(15), SegmentFeatureValues.Of(new Dictionary<string, double?>()), new CatalogFix(SegmentKind.Break, 0.5)),
+            [SegmentKind.Break]);
+
+        IReadOnlyList<SegmentSpan> read = SegmentSequence.Decided(pieces, chances, [whole], [Plain], TimeSpan.FromSeconds(1846.2), SegmentThresholds.Initial);
+        IReadOnlyList<SegmentSpan> apart = SegmentSequence.Decided(pieces, chances, [], [], TimeSpan.FromSeconds(1846.2), SegmentThresholds.Initial);
+
+        Assert.Equal([(300d, 345d)], Breaks(read));
+        Assert.Equal([(300d, 646.2)], Breaks(apart));
+    }
+
     [Fact(DisplayName = "BR-CD-007: a joined opening counts as the segments it joins, each at the chance of the whole, so a song cut in three by the logo is one opening from its start where the whole is likelier than its parts, and the parts decide where it is not")]
     public void AJoinedOpeningIsTakenWhole()
     {

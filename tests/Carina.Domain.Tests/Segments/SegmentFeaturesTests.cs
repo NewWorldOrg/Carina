@@ -537,6 +537,44 @@ public sealed class SegmentFeaturesTests
         Assert.Equal([(60d, 150d, SegmentKind.Opening)], fixedOver.Select(piece => (piece.Piece.Starts.TotalSeconds, piece.Piece.Ends.TotalSeconds, piece.Kinds.Single())));
     }
 
+    [Fact(DisplayName = "BR-CD-007: an advert the catalog fixes, cut into segments by pauses of its own, is also read as one from catalog edge to catalog edge, fixed as they are and as long as its slot; a stretch fixed to the programme, or cut by another catalog edge, is not")]
+    public void AFixedAdvertCutByItsOwnPausesIsReadWhole()
+    {
+        BoundaryCandidate[] candidates =
+        [
+            Edge(0),
+            Cut(600, depth: 70, lasting: 1),
+            CatalogEdge(615, earliest: 614.6, latest: 615.4),
+            Cut(620.8),
+            Cut(624.4),
+            CatalogEdge(630, earliest: 629.6, latest: 630.4),
+            Cut(637.5),
+            CatalogEdge(645, earliest: 644.6, latest: 645.4),
+            CatalogEdge(660, earliest: 659.6, latest: 660.4),
+            CatalogEdge(667.5, earliest: 667.1, latest: 667.9),
+            CatalogEdge(675, earliest: 674.6, latest: 675.4),
+            Edge(Length),
+        ];
+        SegmentEvidence evidence = new SyntheticReadings(Length).Evidence();
+        CatalogHeard[] heard =
+        [
+            Heard(615, 629.6, SegmentKind.Break, 0.5),
+            Heard(630.4, 644.6, SegmentKind.Programme, 0.7),
+            Heard(660.4, 667.1, SegmentKind.Break, 0.9),
+            Heard(667.9, 674.6, SegmentKind.Break, 0.9),
+        ];
+
+        (IReadOnlyList<SegmentPiece> pieces, IReadOnlyList<JoinedPiece> joined) = SegmentFeatures.Read(candidates, evidence, Context(catalog: heard), null, SegmentThresholds.Initial);
+
+        JoinedPiece whole = Assert.Single(joined);
+        Assert.Equal((2, 4), (whole.First, whole.Last));
+        Assert.Equal([SegmentKind.Break], whole.Kinds);
+        Assert.Equal((615d, 630d), (whole.Piece.Starts.TotalSeconds, whole.Piece.Ends.TotalSeconds));
+        Assert.Equal(TimeSpan.FromSeconds(15), whole.Piece.Fitted);
+        Assert.Equal(new CatalogFix(SegmentKind.Break, 0.5), whole.Piece.Fixed);
+        Assert.True(pieces.Skip(2).Take(3).Sum(piece => piece.Fitted.TotalSeconds) < 15);
+    }
+
     [Fact(DisplayName = "BR-CD-007: a piece shorter than 12 seconds has its loudness range read over the 10 seconds around its middle, a few seconds saying little, and it is not known where no window fits in the recording")]
     public void AShortPieceIsReadAroundItsMiddle()
     {
@@ -573,6 +611,15 @@ public sealed class SegmentFeaturesTests
             BoundaryCue.Silence | BoundaryCue.SilentCut,
             depth,
             TimeSpan.FromSeconds(lasting));
+
+    private static BoundaryCandidate CatalogEdge(double at, double earliest, double latest)
+        => new(
+            TimeSpan.FromSeconds(at),
+            TimeSpan.FromSeconds(earliest),
+            TimeSpan.FromSeconds(latest),
+            BoundaryCue.Silence | BoundaryCue.SilentCut | BoundaryCue.CatalogEdge,
+            70,
+            TimeSpan.FromSeconds(0.8));
 
     private static BoundaryCandidate Plain(double at)
         => new(TimeSpan.FromSeconds(at), TimeSpan.FromSeconds(at), TimeSpan.FromSeconds(at), BoundaryCue.LogoChange, 0, TimeSpan.Zero);
