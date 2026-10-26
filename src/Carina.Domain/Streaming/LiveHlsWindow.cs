@@ -21,8 +21,7 @@ public sealed record LiveHlsSegment
 }
 
 /// <summary>
-/// The segments held at one moment, oldest first, the whole seconds no segment has run longer than, whether the
-/// session has ended, and the codecs the initialisation names when it names ones a playlist can say.
+/// The segments held, oldest first, with the target in whole seconds, whether the session has ended and the codecs.
 /// </summary>
 public sealed record LiveHlsWindow(IReadOnlyList<LiveHlsSegment> Segments, int TargetSeconds, bool Ended, string? Codecs)
 {

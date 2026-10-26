@@ -7,10 +7,8 @@ using Carina.Domain.Streaming;
 namespace Carina.Infrastructure.Streaming;
 
 /// <summary>
-/// Cuts what a live transcoder writes into the segments a playlist lists. A segment begins with a keyframe and closes
-/// at the first keyframe once it has run long enough, so that every segment can be started on. A keyframe part way
-/// through a fragment cuts the fragment in two there, the sound going with the picture it is decoded beside, so that
-/// what the transcoder writes for a browser need not be cut at keyframes for this.
+/// Cuts what a live transcoder writes into segments that each begin with a keyframe, cutting a fragment in two where
+/// a keyframe falls inside it.
 /// </summary>
 public sealed class HlsSegmenter(LiveHlsSettings settings)
 {

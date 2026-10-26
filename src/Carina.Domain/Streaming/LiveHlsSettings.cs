@@ -1,8 +1,7 @@
 namespace Carina.Domain.Streaming;
 
 /// <summary>
-/// How a live channel is handed to a player that opens a playlist: how long a key outlives the last request made with
-/// it, how many segments are held, where a segment may close, and how many keys are held at once.
+/// How live channels are handed to players that open playlists.
 /// </summary>
 public sealed record LiveHlsSettings
 {

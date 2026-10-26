@@ -7,9 +7,8 @@ using Carina.Domain.Streaming;
 namespace Carina.Api.Live;
 
 /// <summary>
-/// A live channel handed to a player that opens a playlist. The first playlist is opened by the session or by a ticket
-/// and names a playlist of a key made for that player; that playlist, the initialisation and the segments are opened
-/// by the key alone.
+/// A live channel handed to a player through playlists: the first opened by the session or a ticket, the rest by the
+/// key it names.
 /// </summary>
 public static class LiveHlsDelivery
 {
@@ -106,9 +105,8 @@ public static class LiveHlsDelivery
     }
 
     /// <summary>
-    /// Seats the watcher on the session asked for, issues a key holding the seat, and answers, once the first segment
-    /// has been cut, the playlist naming the key's own playlist. The picture is in H.264 whatever else this machine
-    /// encodes, because a player opening a playlist is not asked what it decodes.
+    /// Seats the watcher, issues a key holding the seat and, once the first segment is cut, answers the playlist
+    /// naming the key's own. The picture is in H.264, since a player opening a playlist says nothing of what it decodes.
     /// </summary>
     public static async Task OpenAsync(
         HttpContext context,
