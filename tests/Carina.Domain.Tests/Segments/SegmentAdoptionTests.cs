@@ -62,6 +62,36 @@ public sealed class SegmentAdoptionTests
         Assert.Equal(AdoptionVerdict.Adopted, SegmentAdoption.Judge(InUse, Evaluated(0.85, 0.9, themes, null, null), Evaluated(0.90, 0.9, themes, 0.0, 0.0)));
     }
 
+    [Fact(DisplayName = "BR-CD-008: the search takes a setting that keeps the openings and endings over one that finds more boundaries but loses them, and among those that keep them, or when none does, the one better at boundaries")]
+    public void TheSearchTakesASettingThatKeepsTheOpeningsAndEndings()
+    {
+        EvaluationEvidence themes = new(12, 148, Made, openings: 2, endings: 3);
+        SegmentEvaluation inUse = Evaluated(0.85, 0.9, themes, 0.83, 0.70);
+        SegmentMetrics losesMore = Evaluated(0.90, 0.9, themes, 0.0, 0.70).Metrics!;
+        SegmentMetrics losesLess = Evaluated(0.70, 0.9, themes, 0.0, 0.70).Metrics!;
+        SegmentMetrics keeps = Evaluated(0.86, 0.9, themes, 0.82, 0.69).Metrics!;
+        SegmentMetrics keepsMore = Evaluated(0.88, 0.9, themes, 0.83, 0.70).Metrics!;
+
+        Assert.True(SegmentAdoption.Prefers(keeps, losesMore, inUse));
+        Assert.False(SegmentAdoption.Prefers(losesMore, keeps, inUse));
+        Assert.True(SegmentAdoption.Prefers(keepsMore, keeps, inUse));
+        Assert.False(SegmentAdoption.Prefers(keeps, keepsMore, inUse));
+        Assert.True(SegmentAdoption.Prefers(losesMore, losesLess, inUse));
+        Assert.True(SegmentAdoption.Prefers(keeps, null, inUse));
+        Assert.False(SegmentAdoption.Prefers(null, keeps, inUse));
+    }
+
+    [Fact(DisplayName = "BR-CD-008: the search goes by boundaries alone where the openings and endings decide nothing: fewer than two recordings hold one, or nothing of the version in use is known")]
+    public void TheSearchGoesByBoundariesWhereTheOpeningsAndEndingsDecideNothing()
+    {
+        EvaluationEvidence few = new(12, 148, Made, openings: 1, endings: 1);
+        SegmentMetrics loses = Evaluated(0.90, 0.9, few, 0.0, 0.0).Metrics!;
+        SegmentMetrics keeps = Evaluated(0.86, 0.9, few, 0.83, 0.70).Metrics!;
+
+        Assert.True(SegmentAdoption.Prefers(loses, keeps, Evaluated(0.85, 0.9, few, 0.83, 0.70)));
+        Assert.True(SegmentAdoption.Prefers(loses, keeps, new SegmentEvaluation(null, [], Enough)));
+    }
+
     [Fact(DisplayName = "BR-CD-008: a figure not known is less than any")]
     public void AFigureNotKnownIsLessThanAny()
     {

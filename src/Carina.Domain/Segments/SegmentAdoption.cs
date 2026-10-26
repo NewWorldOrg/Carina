@@ -61,9 +61,42 @@ public static class SegmentAdoption
             return AdoptionVerdict.NoBetterAtBoundaries;
         }
 
-        return Loses(found, used, candidate.Evidence, SegmentKind.Opening) || Loses(found, used, candidate.Evidence, SegmentKind.Ending)
-            ? AdoptionVerdict.LosesOpeningsOrEndings
-            : AdoptionVerdict.Adopted;
+        return Keeps(found, inUse) ? AdoptionVerdict.Adopted : AdoptionVerdict.LosesOpeningsOrEndings;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="found"/> keeps the openings and the endings <paramref name="inUse"/> finds on the same
+    /// recordings: neither share falls more than <see cref="ThemeRecallAllowance"/> below the version in use's where its
+    /// evidence judges that kind; anything is kept when nothing of the version in use is known.
+    /// </summary>
+    public static bool Keeps(SegmentMetrics found, SegmentEvaluation inUse)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+        ArgumentNullException.ThrowIfNull(inUse);
+
+        return inUse.Metrics is not SegmentMetrics used
+            || !(Loses(found, used, inUse.Evidence, SegmentKind.Opening) || Loses(found, used, inUse.Evidence, SegmentKind.Ending));
+    }
+
+    /// <summary>
+    /// Whether the search takes the setting that found <paramref name="tried"/> over the one kept so far, which found
+    /// <paramref name="best"/>, both judged on the recordings <paramref name="inUse"/> was judged on, as a candidate is
+    /// judged: one that keeps the openings and the endings (<see cref="Keeps"/>) over one that does not, then the one
+    /// better at boundaries (<see cref="Better"/>), so that a setting that loses them is kept only when every one does;
+    /// figures not known are taken over nothing only.
+    /// </summary>
+    public static bool Prefers(SegmentMetrics? tried, SegmentMetrics? best, SegmentEvaluation inUse)
+    {
+        ArgumentNullException.ThrowIfNull(inUse);
+
+        if (tried is null || best is null)
+        {
+            return tried is not null;
+        }
+
+        bool keeps = Keeps(tried, inUse);
+
+        return keeps != Keeps(best, inUse) ? keeps : Better(tried, best);
     }
 
     /// <summary>

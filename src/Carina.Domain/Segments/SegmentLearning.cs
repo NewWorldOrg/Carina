@@ -22,8 +22,10 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// (<see cref="LearningCatalog.SetAsideFor"/>) heard nowhere in it, which leaves it hearing nothing of the catalog,
 /// and its earlier episodes remembered without the part of what they were taken to hold that lies over a stretch of
 /// one of them (<see cref="LearningCatalog.Forgetting"/>), with a model fitted to every other recording's labels, none of them
-/// standing on an entry set aside for it, and compared with what the catalog is sure of in it. The setting chosen finds the most boundaries within two seconds,
-/// then the most seconds of adverts (<see cref="SegmentAdoption.Better"/>); a tie keeps the setting tried first. With
+/// standing on an entry set aside for it, and compared with what the catalog is sure of in it. The setting chosen keeps the
+/// openings and the endings the version in use finds, as a candidate must to be put in use, then finds the most boundaries
+/// within two seconds, then the most seconds of adverts (<see cref="SegmentAdoption.Prefers"/>); when no setting keeps them,
+/// the one best at boundaries is chosen all the same, and the round says it loses them. A tie keeps the setting tried first. With
 /// nothing judged, the first setting is the only one tried. The candidate is fitted to every label with the chosen
 /// setting, and its figures are those of its leave-one-out. The version in use is judged on the same recordings, each
 /// detected as it stands without the entries set aside for it, beside what viewers did with its buttons over the last
@@ -109,16 +111,6 @@ public static class SegmentLearning
         return new Trial(full.Model, compared, SegmentMetrics.Of(compared, SkipReturns.None));
     }
 
-    private static bool Better(SegmentMetrics? tried, SegmentMetrics? best)
-    {
-        if (tried is null || best is null)
-        {
-            return tried is not null;
-        }
-
-        return SegmentAdoption.Better(tried, best);
-    }
-
     private static DateTime? LabelsUntil(IReadOnlyList<LearningRecording> recordings)
     {
         DateTime[] given =
@@ -196,7 +188,7 @@ public static class SegmentLearning
 
             Trial trial = Tried(ready, judged, reading.ElementAt(settingAt), active.Model, cancellationToken);
 
-            if (best is null || Better(trial.Metrics, best.Metrics))
+            if (best is null || SegmentAdoption.Prefers(trial.Metrics, best.Metrics, inUse))
             {
                 best = trial;
             }
