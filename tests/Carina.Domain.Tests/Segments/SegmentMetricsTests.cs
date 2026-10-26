@@ -179,7 +179,7 @@ public sealed class SegmentMetricsTests
             [Boundary(600, SegmentKind.Break, true), Boundary(645, SegmentKind.Break, false), Boundary(1200, SegmentKind.Ending, true), Boundary(1290, SegmentKind.Ending, false)],
             truth.Boundaries);
         Assert.Equal(2, truth.BreakBoundaries);
-        Assert.Equal(new EvaluationEvidence(1, 2, null), EvaluationEvidence.Of([truth]));
+        Assert.Equal(new EvaluationEvidence(1, 2, null, endings: 1), EvaluationEvidence.Of([truth]));
     }
 
     [Fact(DisplayName = "BR-CD-008: a detection that takes a pod whole finds both of its boundaries, one that cuts it at the joins between its adverts finds no more for them, and one that finds only the joins finds none")]
@@ -233,7 +233,7 @@ public sealed class SegmentMetricsTests
             ],
             truth.Boundaries);
         Assert.Equal(2, truth.BreakBoundaries);
-        Assert.Equal(new EvaluationEvidence(1, 2, null), EvaluationEvidence.Of([truth]));
+        Assert.Equal(new EvaluationEvidence(1, 2, null, openings: 1, endings: 1), EvaluationEvidence.Of([truth]));
     }
 
     [Fact(DisplayName = "BR-CD-008: a detection that takes a whole pod, unheard adverts of fifteen and thirty seconds on either side of what the catalog is sure of included, finds every boundary, and one that cuts the pod where the catalog stops hearing finds no more")]
@@ -299,10 +299,26 @@ public sealed class SegmentMetricsTests
         Assert.Equal(recordings * adverts * 2, evidence.Boundaries);
         Assert.Equal(Evening, evidence.LabelsUntil);
         Assert.Equal(enough, evidence.Enough);
-        Assert.Equal(new EvaluationEvidence(recordings, recordings * adverts * 2, null), EvaluationEvidence.Of([.. compared.Select(comparison => comparison.Truth)]));
+        Assert.Equal(new EvaluationEvidence(recordings, recordings * adverts * 2, null, openings: 1), EvaluationEvidence.Of([.. compared.Select(comparison => comparison.Truth)]));
         Assert.False(new EvaluationEvidence(9, 30, null).Enough);
         Assert.False(new EvaluationEvidence(10, 29, null).Enough);
         Assert.True(new EvaluationEvidence(10, 30, null).Enough);
+    }
+
+    [Fact(DisplayName = "BR-CD-008: an evaluation counts the recordings it judges that hold an opening, and an ending, the catalog is sure of, whether or not it is sure of an advert in them, and judges the openings or the endings on two such recordings")]
+    public void TheOpeningsAndEndingsAreCountedByTheRecordingsThatHoldThem()
+    {
+        CatalogTruth both = Truth((60, 150, SegmentKind.Opening), (600, 615, SegmentKind.Break), (1700, 1790, SegmentKind.Ending));
+        CatalogTruth twice = Truth((60, 100, SegmentKind.Opening), (102, 150, SegmentKind.Opening));
+        CatalogTruth advert = Truth((600, 615, SegmentKind.Break));
+
+        EvaluationEvidence evidence = EvaluationEvidence.Of([both, twice, advert]);
+
+        Assert.Equal(new EvaluationEvidence(2, 4, null, openings: 2, endings: 1), evidence);
+        Assert.True(evidence.Judges(SegmentKind.Opening));
+        Assert.False(evidence.Judges(SegmentKind.Ending));
+        Assert.False(evidence.Judges(SegmentKind.Break));
+        Assert.Equal(2, EvaluationEvidence.ThemeRecordingsNeeded);
     }
 
     [Fact(DisplayName = "skips and returns are counted on one version's buttons within the days asked for")]

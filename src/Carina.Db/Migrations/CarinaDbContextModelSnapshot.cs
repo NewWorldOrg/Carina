@@ -4116,7 +4116,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_segment_learning_round_outcome", "outcome IN ('NothingToLearnFrom', 'Kept', 'Adopted', 'Stopped', 'InUseChangedMeanwhile', 'NothingNew', 'HeldAfterRollback', 'Failed') AND outcome <> 'Stopped'");
 
-                            t.HasCheckConstraint("ck_segment_learning_round_verdict", "verdict IN ('Adopted', 'ChosenByHand', 'TooLittleEvidence', 'NoBetterAtBoundaries', 'HeldAfterRollback')");
+                            t.HasCheckConstraint("ck_segment_learning_round_verdict", "verdict IN ('Adopted', 'ChosenByHand', 'TooLittleEvidence', 'NoBetterAtBoundaries', 'HeldAfterRollback', 'LosesOpeningsOrEndings')");
                         });
                 });
 

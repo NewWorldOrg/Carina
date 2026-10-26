@@ -81,6 +81,21 @@ public sealed class SegmentTrainingJobTests : IDisposable
         Assert.Equal([Kept(SegmentTrainingOutcome.Kept, 3, verdict, harness.Trainer.InUse.Metrics)], harness.Rounds.Taken.Select(KeptAs));
     }
 
+    [Fact(DisplayName = "BR-CD-008: a candidate that finds more boundaries but loses the openings the version in use finds is kept as a candidate only, and the round says so")]
+    public async Task ACandidateThatLosesTheOpeningsIsKeptOnly()
+    {
+        EvaluationEvidence themes = new(12, 148, SegmentTrainingHarness.Start, openings: 3, endings: 3);
+        harness.Trainer.InUse = Themed(0.85, themes, 0.83);
+        harness.Trainer.Candidate = Themed(0.90, themes, 0.0);
+
+        SegmentTrainingLook look = await harness.Job().LookAsync(Cancel);
+
+        Assert.Equal((SegmentTrainingOutcome.Kept, (AdoptionVerdict?)AdoptionVerdict.LosesOpeningsOrEndings), (look.Round?.Outcome, look.Round?.Verdict));
+        Assert.Equal((SegmentModelVersion.FirstNumber, SegmentModelVersionState.Active), (harness.Versions.Active.Number, harness.Versions.Active.State));
+        Assert.Empty(harness.Versions.Written);
+        Assert.Equal([Kept(SegmentTrainingOutcome.Kept, 2, AdoptionVerdict.LosesOpeningsOrEndings, harness.Trainer.InUse.Metrics)], harness.Rounds.Taken.Select(KeptAs));
+    }
+
     [Fact(DisplayName = "BR-CS-003: a round lets go of the candidates before its own that learning made and nobody used, and keeps one something still names, one built in and the version in use")]
     public async Task ARoundLetsGoOfTheCandidatesNobodyUsed()
     {
@@ -454,4 +469,10 @@ public sealed class SegmentTrainingJobTests : IDisposable
 
     private static (SegmentTrainingOutcome? Outcome, int? Candidate, AdoptionVerdict? Verdict, SegmentMetrics? InUse) KeptAs(SegmentLearningRound round)
         => (round.Outcome, round.Candidate, round.Verdict, round.InUseMetrics);
+
+    private static SegmentEvaluation Themed(double recall, EvaluationEvidence evidence, double openings)
+        => new(
+            new SegmentMetrics(recall, Math.Round(recall - 0.1, 2), [new KindMetrics(SegmentKind.Break, 0.9), new KindMetrics(SegmentKind.Opening, openings)], null, 0),
+            [],
+            evidence);
 }

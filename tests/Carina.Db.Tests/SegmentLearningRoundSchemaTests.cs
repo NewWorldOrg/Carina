@@ -165,17 +165,17 @@ public sealed class SegmentLearningRoundSchemaTests(MigratedScratchDatabase data
         }
     }
 
-    [Fact(DisplayName = "BR-CS-003: a round is kept with its candidate's own figures and what they stand on, in the shapes the status answers, and read back as they were")]
+    [Fact(DisplayName = "BR-CS-003: a round is kept with its candidate's own figures and what they stand on, the recordings holding openings and endings included, in the shapes the status answers, and read back as they were; what was kept before those were counted reads back as none")]
     public async Task ARoundIsKeptWithTheFiguresOfItsCandidate()
     {
         DateTime at = new(2028, 7, 1, 18, 6, 0, DateTimeKind.Utc);
         SegmentMetrics inUse = new(0.08, 0.05, [new KindMetrics(SegmentKind.Break, 0.38)], null, 0);
         SegmentMetrics candidate = new(0.11, 0.07, [new KindMetrics(SegmentKind.Break, 0.42)], null, 0);
-        EvaluationEvidence evidence = new(12, 56, at.AddHours(-6));
+        EvaluationEvidence evidence = new(12, 56, at.AddHours(-6), openings: 3, endings: 2);
 
         try
         {
-            await TakeAsync(SegmentLearningRound.Ended(SegmentLearningRound.DayOf(at), at, SegmentTrainingOutcome.Kept, 14, AdoptionVerdict.TooLittleEvidence, inUse, 10, candidate, evidence));
+            await TakeAsync(SegmentLearningRound.Ended(SegmentLearningRound.DayOf(at), at, SegmentTrainingOutcome.Kept, 14, AdoptionVerdict.LosesOpeningsOrEndings, inUse, 10, candidate, evidence));
 
             SegmentLearningRound? latest = await LatestAsync();
 
@@ -187,9 +187,14 @@ public sealed class SegmentLearningRoundSchemaTests(MigratedScratchDatabase data
                     """
                     SELECT concat_ws(' ',
                         candidate_metrics = '{"boundaryRecallWithin2s": 0.11, "boundaryRecallWithin1s": 0.07, "kinds": [{"kind": "Break", "recall": 0.42}], "returnedAfterSkipShare": null, "skips": 0}'::jsonb,
-                        candidate_evidence = '{"recordings": 12, "boundaries": 56, "labelsUntil": "2028-07-01T12:06:00Z"}'::jsonb)
+                        candidate_evidence = '{"recordings": 12, "boundaries": 56, "labelsUntil": "2028-07-01T12:06:00Z", "openings": 3, "endings": 2}'::jsonb)
                     FROM segment_learning_round WHERE day = '2028-07-02'
                     """));
+            Assert.Equal(AdoptionVerdict.LosesOpeningsOrEndings, latest?.Verdict);
+
+            await ScalarAsync("""UPDATE segment_learning_round SET candidate_evidence = '{"recordings": 12, "boundaries": 56, "labelsUntil": "2028-07-01T12:06:00Z"}'::jsonb WHERE day = '2028-07-02'""");
+
+            Assert.Equal(new EvaluationEvidence(12, 56, at.AddHours(-6)), (await LatestAsync())?.CandidateEvidence);
         }
         finally
         {
