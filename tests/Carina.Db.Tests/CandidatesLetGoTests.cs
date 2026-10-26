@@ -144,11 +144,12 @@ public sealed class CandidatesLetGoTests : IAsyncLifetime
         Assert.Equal((8, 8), (kept?.Added.Number, kept?.Active.Number));
     }
 
-    [Fact(DisplayName = "BR-CS-003: the built-in version of a new release kept beside a learned version in use is numbered after the candidates learning let go, and the next candidate after it lets go of the one before")]
-    public async Task TheBuiltInBesideALearnedVersionGoesOnAfterThoseLetGo()
+    [Fact(DisplayName = "BR-CS-003: the built-in version kept as a candidate beside a learned version in use is numbered after every number given, and the next candidate never lets it go, while it lets go of the learned candidate before it")]
+    public async Task TheBuiltInCandidateIsNeverLetGo()
     {
         await AddAsync(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Retired, false, HandMadeModels.First, Installed, Installed, Installed.AddDays(2), null, null, builtIn: true));
         await AddAsync(SegmentModelVersion.Rehydrate(3, SegmentModelVersionState.Active, false, HandMadeModels.First, Installed.AddDays(1), Installed.AddDays(2), null, null, null, Evaluated));
+        await AddAsync(SegmentModelVersion.Learned(4, HandMadeModels.First, Evaluated, Installed.AddDays(5)));
         await ExecuteAsync(Round("2026-10-04", candidate: 2, inUseVersion: 1));
         await ExecuteAsync(Round("2026-10-05", candidate: 3, inUseVersion: 1));
         await ExecuteAsync(Round("2026-10-06", candidate: 4, inUseVersion: 3));
@@ -158,7 +159,7 @@ public sealed class CandidatesLetGoTests : IAsyncLifetime
 
         Assert.Equal((5, SegmentModelVersionState.Candidate, 3), (kept?.Added.Number, kept?.Added.State, kept?.Active.Number));
         Assert.Equal(6, candidate.Number);
-        Assert.Empty(await LetGoBeforeAsync(candidate.Number));
+        Assert.Equal([4], await LetGoBeforeAsync(candidate.Number));
         Assert.Equal("1:Retired 3:Active 5:Candidate 6:Candidate", await StatesAsync());
     }
 
