@@ -74,14 +74,15 @@ public static class Fmp4Media
         SampleDurationsCarried durations = SampleDurationsCarried.EveryInTheRun,
         bool withSound = true,
         int keyframeAt = 0,
-        int soundSamples = 2)
+        int soundSamples = 2,
+        long soundAhead = 0)
     {
         ArgumentNullException.ThrowIfNull(pictureDurations);
 
         int sounds = withSound ? soundSamples : 0;
         byte[] Moof(int offset) => Box("moof", Fmp4.Joined(
             Box("mfhd", new byte[8]),
-            withSound ? SoundTraf(decodeTime * 48 / 30, offset, sounds) : [],
+            withSound ? SoundTraf((ulong)((long)(decodeTime * 48 / 30) - soundAhead), offset, sounds) : [],
             PictureTraf(decodeTime, pictureDurations, startsWithAKeyframe, flags, durations, offset + (sounds * SampleLength), keyframeAt)));
         int length = Moof(0).Length;
 

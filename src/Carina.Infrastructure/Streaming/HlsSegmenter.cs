@@ -257,37 +257,28 @@ public sealed class HlsSegmenter(LiveHlsSettings settings)
     }
 
     /// <summary>
-    /// Begins a segment at the keyframe, closing the one open with what came before the keyframe when
-    /// <paramref name="closes"/>, and dropping what came before it when no segment was open.
+    /// Begins a segment at the keyframe, closing the one open with what was decoded before it when
+    /// <paramref name="closes"/>, and dropping that when no segment was open.
     /// </summary>
     private void Begin(ReadOnlyMemory<byte> fragment, Fmp4Fragment read, uint track, int keyframe, bool closes)
     {
         Fmp4Run pictures = read.Of(track)!;
-
-        if (keyframe is 0)
-        {
-            if (closes)
-            {
-                Close(track);
-            }
-
-            Append(fragment, pictures.Ticks);
-
-            return;
-        }
-
         (Fmp4Fragment before, Fmp4Fragment from) = read.CutAt(track, keyframe, tracks);
         ulong ticksBefore = pictures.TicksBefore(keyframe);
 
         if (closes)
         {
-            Append(before.Written(), ticksBefore);
+            if (before.Runs.Count > 0)
+            {
+                Append(before.Written(), ticksBefore);
+            }
+
             Close(track);
         }
 
         open.Clear();
         openTicks = 0;
-        Append(from.Written(), pictures.Ticks - ticksBefore);
+        Append(before.Runs.Count is 0 ? fragment : from.Written(), pictures.Ticks - ticksBefore);
     }
 
     private void Append(ReadOnlyMemory<byte> fragment, ulong ticks)

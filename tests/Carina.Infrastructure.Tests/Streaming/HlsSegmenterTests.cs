@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
@@ -99,6 +101,41 @@ public sealed class HlsSegmenterTests
         Assert.Equal(
             15UL * OneFrame,
             Fmp4Fragment.Read(segmenter.Segment(0)!.Value, Tracks)!.Of(Fmp4Media.PictureTrack)!.DecodeTime);
+    }
+
+    [Fact(DisplayName = "BR-PD-022: the sound decoded before the first keyframe is left out, so that the first segment begins with its picture")]
+    public void TheSoundDecodedBeforeTheFirstKeyframeIsLeftOut()
+    {
+        HlsSegmenter segmenter = Initialised();
+
+        segmenter.Take(Picture(Fmp4Media.Fragment(Start(3), TwentyFrames, true, soundSamples: 31, soundAhead: 3 * 1024)));
+        segmenter.Take(Picture(Gop(4, keyframe: false)));
+        segmenter.Take(Picture(Gop(5, keyframe: false)));
+        segmenter.Take(Picture(Gop(6, keyframe: true)));
+
+        Fmp4Run sounds = Fmp4Fragment.Read(segmenter.Segment(0)!.Value, Tracks)!.Of(Fmp4Media.SoundTrack)!;
+
+        Assert.Equal(Start(3) * 48 / 30, sounds.DecodeTime);
+        Assert.Equal(28, sounds.Samples.Count);
+    }
+
+    [Fact(DisplayName = "BR-PD-022: the sound decoded before a keyframe that begins a fragment stays with the segment it closes")]
+    public void TheSoundDecodedBeforeAKeyframeBeginningAFragmentStaysWithTheSegmentItCloses()
+    {
+        HlsSegmenter segmenter = Initialised();
+
+        Whole(segmenter, 0);
+        segmenter.Take(Picture(Fmp4Media.Fragment(Start(3), TwentyFrames, true, soundSamples: 31, soundAhead: 2 * 1024)));
+        segmenter.Take(Picture(Gop(4, keyframe: false)));
+        segmenter.Take(Picture(Gop(5, keyframe: false)));
+        Whole(segmenter, 2);
+
+        Assert.Equal([Frames(60), Frames(60)], segmenter.Window.Segments.Select(segment => segment.Length).ToArray());
+        Assert.Equal(8, SoundSamplesIn(segmenter.Segment(0)!.Value));
+        Assert.Equal(29 + 4, SoundSamplesIn(segmenter.Segment(1)!.Value));
+        Assert.Equal(
+            Start(3) * 48 / 30,
+            Fmp4Fragment.Read(segmenter.Segment(1)!.Value, Tracks)!.Of(Fmp4Media.SoundTrack)!.DecodeTime);
     }
 
     [Fact(DisplayName = "BR-PD-022: a keyframe that comes before the segment has run long enough does not close it")]
@@ -351,6 +388,23 @@ public sealed class HlsSegmenterTests
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale)));
 
         return segmenter;
+    }
+
+    private static int SoundSamplesIn(ReadOnlyMemory<byte> segment)
+    {
+        int counted = 0;
+        int at = 0;
+
+        while (at < segment.Length)
+        {
+            int moof = (int)BinaryPrimitives.ReadUInt32BigEndian(segment.Span[at..]);
+            int mdat = (int)BinaryPrimitives.ReadUInt32BigEndian(segment.Span[(at + moof)..]);
+
+            counted += Fmp4Fragment.Read(segment.Slice(at, moof + mdat), Tracks)!.Of(Fmp4Media.SoundTrack)?.Samples.Count ?? 0;
+            at += moof + mdat;
+        }
+
+        return counted;
     }
 
     private static void Whole(HlsSegmenter segmenter, int gop)
