@@ -33,10 +33,13 @@ public sealed class HlsSegmenterTests
         segmenter.Take(Picture(third));
 
         Assert.Empty(segmenter.Window.Segments);
+        Assert.False(segmenter.HoldsASegment);
 
         segmenter.Take(Picture(Gop(3, keyframe: true)));
 
         LiveHlsSegment closed = Assert.Single(segmenter.Window.Segments);
+
+        Assert.True(segmenter.HoldsASegment);
 
         Assert.Equal(0, closed.Number);
         Assert.Equal(Frames(60), closed.Length);

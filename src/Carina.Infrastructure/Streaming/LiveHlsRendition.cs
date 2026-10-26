@@ -124,7 +124,10 @@ internal sealed class LiveHlsRendition : ILiveHlsRendition
             return false;
         }
 
-        return Window.Segments.Count > 0;
+        lock (gate)
+        {
+            return segmenter.HoldsASegment;
+        }
     }
 
     internal void Start() => Life = ReadAsync();
@@ -218,7 +221,7 @@ internal sealed class LiveHlsRendition : ILiveHlsRendition
                 segmenter.Take(frame);
             }
 
-            cut = segmenter.Window.Segments.Count > 0;
+            cut = segmenter.HoldsASegment;
         }
 
         if (cut)

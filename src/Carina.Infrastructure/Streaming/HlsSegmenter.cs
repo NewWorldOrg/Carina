@@ -44,6 +44,8 @@ public sealed class HlsSegmenter(LiveHlsSettings settings)
 
     public LiveHlsWindow Window => new([.. held.Select(segment => segment.Segment)], target, ended, codecs);
 
+    public bool HoldsASegment => held.Count > 0;
+
     public ReadOnlyMemory<byte>? Segment(long number)
         => held.FirstOrDefault(segment => segment.Segment.Number == number)?.Bytes;
 
