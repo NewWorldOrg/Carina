@@ -90,6 +90,36 @@ public sealed class LearningCatalogTests
             Assert.Single(catalog.HeardNow(judged)));
     }
 
+    [Fact(DisplayName = "BR-CD-005: of two sponsor's adverts heard one after the other right after an advert, the second is heard as a break too, beside the first as the catalog takes it")]
+    public void TheSecondOfTwoSponsorsAdvertsIsHeardAsABreak()
+    {
+        CatalogEntryId advert = CatalogEntryId.New();
+        CatalogEntryId first = CatalogEntryId.New();
+        CatalogEntryId second = CatalogEntryId.New();
+        RecordingId earlier = RecordingId.New();
+        RecordingId judged = RecordingId.New();
+        LearningCatalog catalog = new(
+        [
+            new CatalogSound(advert, TimeSpan.FromSeconds(14), [
+                CatalogSeries.At(advert, Story.Episode(0), 825, 14, recording: earlier),
+                CatalogSeries.At(advert, Elsewhere.Episode(0), 600, 14),
+            ]),
+            new CatalogSound(first, TimeSpan.FromSeconds(14), [
+                CatalogSeries.At(first, Story.Episode(0), 840, 14, recording: earlier),
+                CatalogSeries.At(first, Story.Episode(1), 845, 14, recording: judged),
+            ]),
+            new CatalogSound(second, TimeSpan.FromSeconds(14), [
+                CatalogSeries.At(second, Story.Episode(0), 855, 14, recording: earlier),
+                CatalogSeries.At(second, Story.Episode(1), 860, 14, recording: judged),
+            ]),
+        ],
+        SeriesLinks.None);
+
+        Assert.Equal(
+            [(first, (SegmentKind?)SegmentKind.Break, (double?)0.5), (second, SegmentKind.Break, 0.5)],
+            catalog.HeardNow(judged).OrderBy(heard => heard.Starts).Select(heard => (heard.Entry!, heard.Kind, heard.Confidence)));
+    }
+
     [Fact(DisplayName = "an entry heard only once by the time a recording started is not heard by it at all")]
     public void AnEntryNotYetStartedIsNotHeard()
     {

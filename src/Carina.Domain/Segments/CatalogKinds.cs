@@ -192,6 +192,45 @@ public static class CatalogKinds
     }
 
     /// <summary>
+    /// The patterns of <paramref name="sounds"/> settled together (<see cref="Settle"/>), each from what its own stretches
+    /// give it in <paramref name="own"/>: every one is settled beside <paramref name="around"/> with the stretches of all of
+    /// them as they are settled so far, again while one of them changes, at most once more than there are sounds. Two
+    /// sponsor's adverts heard one after the other are settled so, the second beside the first taken for an advert once the
+    /// first leans on the advert before it. Only a fixed part of the programme turns into an advert by what lies beside it,
+    /// and nothing turns back, so the settling ends.
+    /// </summary>
+    public static IReadOnlyDictionary<CatalogEntryId, CatalogPattern> SettleTogether(
+        IReadOnlyList<CatalogSound> sounds,
+        IReadOnlyDictionary<CatalogEntryId, CatalogPattern> own,
+        CatalogSurroundings around)
+    {
+        ArgumentNullException.ThrowIfNull(sounds);
+        ArgumentNullException.ThrowIfNull(own);
+        ArgumentNullException.ThrowIfNull(around);
+
+        Dictionary<CatalogEntryId, CatalogPattern> settled = sounds.ToDictionary(sound => sound.Id, sound => own[sound.Id]);
+        CatalogEntryId[] settling = [.. settled.Keys];
+
+        for (int pass = 0; pass <= sounds.Count; pass++)
+        {
+            CatalogSurroundings beside = around.Replacing(settling, sounds.SelectMany(sound => Stretches(sound.Occurrences, settled[sound.Id])));
+            CatalogPattern[] next = [.. sounds.Select(sound => Settle(sound.Length, sound.Occurrences, own[sound.Id], beside))];
+
+            if (sounds.Select((sound, at) => Same(next[at], settled[sound.Id])).All(same => same))
+            {
+                break;
+            }
+
+            for (int at = 0; at < sounds.Count; at++)
+            {
+                settled[sounds[at].Id] = next[at];
+            }
+        }
+
+        return settled;
+    }
+
+    /// <summary>
     /// <paramref name="own"/>, what the stretches of an entry give it on their own, carried on as an opening or
     /// an ending when the entry is a piece of one heard in <paramref name="around"/>, which holds the entry's
     /// own stretches as <paramref name="own"/> takes them (<see cref="Estimate(TimeSpan, IReadOnlyList{PlacedOccurrence}, SeriesLinks, CatalogSurroundings)"/>).
@@ -345,7 +384,14 @@ public static class CatalogKinds
     }
 
     private static bool BesideAnAdvert(CatalogOccurrence occurrence, CatalogSurroundings around)
-        => around.In(occurrence.RecordingId).Any(stretch => stretch.CountsAs is SegmentKind.Break && Apart(occurrence.Span, stretch.Span) <= AdvertsWithin);
+        => around.In(occurrence.RecordingId).Any(stretch =>
+            !stretch.Entry.Equals(occurrence.EntryId) && stretch.CountsAs is SegmentKind.Break && Apart(occurrence.Span, stretch.Span) <= AdvertsWithin);
+
+    private static bool Same(CatalogPattern one, CatalogPattern other)
+        => one.Estimate == other.Estimate
+           && one.SeriesCount == other.SeriesCount
+           && one.StationCount == other.StationCount
+           && one.Overrides.SequenceEqual(other.Overrides);
 
     /// <summary>
     /// How far apart two stretches lie: from the end of the earlier to the start of the later, less than nothing when

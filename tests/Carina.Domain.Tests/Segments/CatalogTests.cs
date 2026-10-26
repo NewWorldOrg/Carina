@@ -385,6 +385,38 @@ public sealed class CatalogTests
         Assert.Empty(change.Overridden);
     }
 
+    [Fact(DisplayName = "BR-CD-005: two sponsor's adverts heard one after the other right after an advert, all three grown by one recording, are both adverts of one series, the second settled beside the first as it is settled")]
+    public void TwoSponsorsAdvertsGrownTogetherAreBothAdverts()
+    {
+        RecordingId[] weeks = [RecordingId.New(), RecordingId.New()];
+        (CatalogEntry advert, CatalogOccurrence[] adverts) = KeptAt(CatalogKind.Cm, 0.5, 14, weeks, (0, 300), (1, 1200));
+        (CatalogEntry first, CatalogOccurrence[] firsts) = KeptAt(CatalogKind.ProgrammeFixture, 0.7, 14, weeks, (0, 840), (1, 840));
+        (CatalogEntry second, CatalogOccurrence[] seconds) = KeptAt(CatalogKind.ProgrammeFixture, 0.7, 14, weeks, (0, 855), (1, 855));
+        Dictionary<RecordingId, ProgrammeCopy> programmes = new(Programmes)
+        {
+            [weeks[0]] = Drama.Episode(0),
+            [weeks[1]] = Drama.Episode(1),
+        };
+        SoundMatch[] heard =
+        [
+            new(Span(885, 899), new EntrySound(advert.Id), Span(0, 14), 0.04),
+            new(Span(900, 914), new EntrySound(first.Id), Span(0, 14), 0.04),
+            new(Span(915, 929), new EntrySound(second.Id), Span(0, 14), 0.04),
+        ];
+
+        CatalogChange change = Catalog.Absorb(
+            Heard,
+            Sound,
+            heard,
+            Knowing([advert, first, second], [.. adverts, .. firsts, .. seconds], programmes, Around((advert, adverts), (first, firsts), (second, seconds))),
+            Now.AddDays(1));
+
+        Assert.Equal((CatalogKind.Cm, 0.5), (advert.Kind, advert.Confidence));
+        Assert.Equal((CatalogKind.Cm, 0.5, CatalogDecision.Pattern), (first.Kind, first.Confidence, first.DecidedBy));
+        Assert.Equal((CatalogKind.Cm, 0.5, CatalogDecision.Pattern), (second.Kind, second.Confidence, second.DecidedBy));
+        Assert.True(change.Recast.ToHashSet().SetEquals([first.Id, second.Id]));
+    }
+
     [Fact(DisplayName = "a match naming an entry that was not handed over is refused")]
     public void AMatchNamingAnUnknownEntryIsRefused()
     {
