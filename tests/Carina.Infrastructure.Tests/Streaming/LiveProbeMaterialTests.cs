@@ -55,6 +55,7 @@ public sealed class LiveProbeMaterialTests : IDisposable
         LiveTranscoderStart start = await Factory().StartAsync(
             Service,
             LiveProfile.Hd30,
+            VideoCodec.H264,
             SoundPlacement.WholeStream(0),
             StreamAttributes.SafeSide,
             CaptionOutlet.Drawn,
@@ -174,5 +175,8 @@ public sealed class LiveProbeMaterialTests : IDisposable
     {
         public Task<LiveEncoderChoice> ChooseAsync(CancellationToken cancellationToken)
             => Task.FromResult(LiveEncoderChoice.Asked(LiveEncoder.Software));
+
+        public Task<IReadOnlyList<VideoCodec>> FormatsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<VideoCodec>>([VideoCodec.H264]);
     }
 }

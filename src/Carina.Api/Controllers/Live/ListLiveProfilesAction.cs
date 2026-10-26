@@ -20,8 +20,9 @@ public sealed class ListLiveProfilesAction(LiveService live) : ControllerBase
     {
         ServiceResult<IReadOnlyList<LiveProfile>> listed = live.ListProfiles();
         ServiceResult<LiveProfile> unasked = await live.ProfileUnaskedAsync(cancellationToken);
+        ServiceResult<IReadOnlyList<VideoCodec>> formats = await live.FormatsAsync(cancellationToken);
 
         return Ok(BaseResponder<IReadOnlyList<LiveProfileResponder>>.Success(
-            [.. listed.Data!.Select(profile => LiveProfileResponder.Of(profile, unasked.Data!))]));
+            [.. listed.Data!.Select(profile => LiveProfileResponder.Of(profile, unasked.Data!, formats.Data!))]));
     }
 }

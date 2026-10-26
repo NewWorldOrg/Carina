@@ -7,6 +7,7 @@ public interface ILiveTranscoderFactory
     Task<LiveTranscoderStart> StartAsync(
         ServiceId service,
         LiveProfile profile,
+        VideoCodec format,
         SoundPlacement sound,
         StreamAttributes attributes,
         CaptionOutlet captions,

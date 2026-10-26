@@ -96,6 +96,8 @@ public sealed class LiveWireTests
     [InlineData("?network=32736&service=1024&profile=hls")]
     [InlineData("?network=32736&service=1024&profile=720P30")]
     [InlineData("?network=thirty&service=1024&profile=720p30")]
+    [InlineData("?network=32736&service=1024&profile=720p30&format=hevc")]
+    [InlineData("?network=32736&service=1024&profile=720p30&format=h264&format=h265")]
     public async Task AHandshakeNamingNoKeyOrAProfileOffTheListIsRefusedBeforeItBecomesAWebSocket(string query)
     {
         HeldLiveSource held = new();
@@ -107,6 +109,56 @@ public sealed class LiveWireTests
 
         Assert.Contains("400", refused.Message, StringComparison.Ordinal);
         Assert.Empty(Seating(probe).Asked);
+    }
+
+    [Theory(DisplayName = "a handshake asking for a format this machine does not transcode in is refused before it becomes a WebSocket, and no tuner is asked for")]
+    [InlineData("h265")]
+    [InlineData("av1")]
+    public async Task AHandshakeAskingForAFormatThisMachineDoesNotTranscodeInIsRefused(string format)
+    {
+        HeldLiveSource held = new();
+        await using AuthProbe probe = Wiring(held, formats: [VideoCodec.H264]);
+        string cookie = await probe.SignedInCookieAsync();
+
+        InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Carrying(probe, cookie).ConnectAsync(
+                new Uri("ws://localhost" + LiveWire.Path + "?network=32736&service=1024&profile=720p30&format=" + format),
+                Patiently()));
+
+        Assert.Contains("400", refused.Message, StringComparison.Ordinal);
+        Assert.Empty(Seating(probe).Asked);
+        Assert.Empty(Seating(probe).Reached);
+    }
+
+    [Theory(DisplayName = "a handshake asking for a format this machine transcodes in is seated on a key in that format")]
+    [InlineData("h265", VideoCodec.H265)]
+    [InlineData("av1", VideoCodec.Av1)]
+    public async Task AHandshakeAskingForAFormatThisMachineTranscodesInIsSeatedOnAKeyInThatFormat(string named, VideoCodec format)
+    {
+        HeldLiveSource held = new();
+        await using AuthProbe probe = Wiring(held, formats: VideoCodecs.InOrder);
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(
+            new Uri("ws://localhost" + LiveWire.Path + "?network=32736&service=1024&profile=720p30&format=" + named),
+            Patiently());
+
+        LiveSessionKey asked = Assert.Single(Seating(probe).Asked);
+
+        Assert.Equal(format, asked.Format);
+        Assert.Equal(LiveProfile.Hd30, asked.Profile);
+    }
+
+    [Fact(DisplayName = "a handshake naming no format is seated on a key in H.264, as every wire was")]
+    public async Task AHandshakeNamingNoFormatIsSeatedOnAKeyInH264()
+    {
+        HeldLiveSource held = new();
+        await using AuthProbe probe = Wiring(held);
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        Assert.Equal(VideoCodec.H264, Assert.Single(Seating(probe).Asked).Format);
     }
 
     [Fact]
@@ -447,7 +499,10 @@ public sealed class LiveWireTests
 
     private static CancellationToken Patiently() => new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token;
 
-    private static AuthProbe Wiring(ILiveWireSource source, LiveWireSettings? settings = null)
+    private static AuthProbe Wiring(
+        ILiveWireSource source,
+        LiveWireSettings? settings = null,
+        IReadOnlyList<VideoCodec>? formats = null)
         => AuthProbe.OverHttp(services =>
         {
             services.AddSingleton<ILiveSessionManager>(new SeatingAt(source));
@@ -455,6 +510,11 @@ public sealed class LiveWireTests
             if (settings is not null)
             {
                 services.AddSingleton(settings);
+            }
+
+            if (formats is not null)
+            {
+                services.AddSingleton<ILiveEncoderSelector>(new AlreadyChosen(LiveEncoder.Vaapi, formats));
             }
         });
 

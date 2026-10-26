@@ -43,12 +43,42 @@ public sealed class AskedDecodingTests
         Assert.Same(PlaybackAudience.BrowserSayingNothing, asked.Audience);
     }
 
-    [Theory(DisplayName = "a decoding outside the two, or spelled otherwise, is not one of these")]
+    [Theory(DisplayName = "a browser naming av1 among what it decodes is taken at its word, and that alone hands it no artefact it did not have")]
     [InlineData("av1")]
+    [InlineData("h264", "av1")]
+    public void ABrowserNamingAv1IsTakenAtItsWord(params string[] named)
+    {
+        AskedDecoding asked = AskedDecoding.Read(new StringValues(named));
+
+        Assert.Equal(DecodingAnswer.Named, asked.Answer);
+        Assert.Same(PlaybackAudience.BrowserSayingNothing, asked.Audience);
+    }
+
+    [Theory(DisplayName = "a browser naming h265 and av1 is one that decodes H.265")]
+    [InlineData("h265", "av1")]
+    [InlineData("av1", "h265")]
+    [InlineData("h264", "h265", "av1")]
+    public void ABrowserNamingH265AndAv1IsOneThatDecodesH265(params string[] named)
+    {
+        AskedDecoding asked = AskedDecoding.Read(new StringValues(named));
+
+        Assert.Equal(DecodingAnswer.Named, asked.Answer);
+        Assert.Same(PlaybackAudience.BrowserDecodingH265, asked.Audience);
+    }
+
+    [Fact]
+    public void TheDecodingsThereAreAreTheFormatsThereAre()
+    {
+        Assert.Equal(["h264", "h265", "av1"], AskedDecoding.Names);
+    }
+
+    [Theory(DisplayName = "a decoding outside the three, or spelled otherwise, is not one of these")]
+    [InlineData("vp9")]
+    [InlineData("AV1")]
     [InlineData("H265")]
     [InlineData("h265", "hevc")]
     [InlineData("h264,h265")]
-    public void ADecodingOutsideTheTwoIsNotOneOfThese(params string[] named)
+    public void ADecodingOutsideTheThreeIsNotOneOfThese(params string[] named)
     {
         Assert.Equal(DecodingAnswer.NotOneOfThese, AskedDecoding.Read(new StringValues(named)).Answer);
     }

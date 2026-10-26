@@ -14,6 +14,7 @@ public sealed class LiveTranscoderFactory(
     public async Task<LiveTranscoderStart> StartAsync(
         ServiceId service,
         LiveProfile profile,
+        VideoCodec format,
         SoundPlacement sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
@@ -22,6 +23,11 @@ public sealed class LiveTranscoderFactory(
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(attributes);
+
+        if (!(await selector.FormatsAsync(cancellationToken)).Contains(VideoCodecs.Named(format)))
+        {
+            return LiveTranscoderStart.Failed(TranscoderFault.Refused, NotEncodedHere(format));
+        }
 
         TranscodeClaim claim = budget.Claim(TranscodePurpose.Live);
 
@@ -35,7 +41,7 @@ public sealed class LiveTranscoderFactory(
         try
         {
             LiveTranscoderStart started =
-                await StartedAsync(service, profile, sound, attributes, captions, seat, cancellationToken);
+                await StartedAsync(service, profile, format, sound, attributes, captions, seat, cancellationToken);
 
             handedOver = started.Running;
 
@@ -50,9 +56,16 @@ public sealed class LiveTranscoderFactory(
         }
     }
 
+    /// <summary>
+    /// Why a picture asked for in <paramref name="format"/> is not transcoded on this machine.
+    /// </summary>
+    public static string NotEncodedHere(VideoCodec format)
+        => $"this machine does not encode a picture in {VideoCodecs.NameOf(format)}.";
+
     private async Task<LiveTranscoderStart> StartedAsync(
         ServiceId service,
         LiveProfile profile,
+        VideoCodec format,
         SoundPlacement sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
@@ -65,7 +78,7 @@ public sealed class LiveTranscoderFactory(
         LiveTranscoderStart started = TranscoderProcess.Start(
             settings,
             [
-                .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder, machine, captions, sound),
+                .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder, machine, captions, sound, format),
                 .. FfmpegLiveInvocation.Delivery(),
                 .. drawn is null ? [] : FfmpegLiveInvocation.CaptionDelivery(service, drawn.Descriptor),
             ],

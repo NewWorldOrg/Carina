@@ -117,6 +117,21 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
             StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "the playing says which formats a picture transcoded as it plays can be asked in, and that naming none is h264")]
+    public async Task ThePlayingSaysWhichFormatsAPictureCanBeAskedIn()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode format = Parameter(document, PlayDelivery.Path, PlayDelivery.Format);
+
+        Assert.Equal("query", format["in"]!.GetValue<string>());
+        Assert.Equal("string", format["schema"]!["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["h264", "h265", "av1"],
+            format["schema"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal("h264", format["schema"]!["default"]!.GetValue<string>());
+        Assert.Contains("/api/live/profiles", format["description"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
     [Theory(DisplayName = "the playing and its captions say which picture codings a browser can name, each as a repeat of the name")]
     [InlineData(PlayDelivery.Path, PlayDelivery.Decodes)]
     [InlineData(CaptionDelivery.Path, CaptionDelivery.Decodes)]
@@ -131,7 +146,7 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
         Assert.True(decodes["explode"]?.GetValue<bool>() ?? true);
         Assert.Equal("array", decodes["schema"]!["type"]!.GetValue<string>());
         Assert.Equal(
-            ["h264", "h265"],
+            ["h264", "h265", "av1"],
             decodes["schema"]!["items"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
         Assert.Contains("hvc1", decodes["description"]!.GetValue<string>(), StringComparison.Ordinal);
     }

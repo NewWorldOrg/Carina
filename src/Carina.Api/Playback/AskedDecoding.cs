@@ -1,4 +1,5 @@
 using Carina.Domain.Playback;
+using Carina.Domain.Streaming;
 
 using Microsoft.Extensions.Primitives;
 
@@ -14,15 +15,18 @@ public enum DecodingAnswer
 }
 
 /// <summary>
-/// The picture codings a browser says it decodes, read from the query it asked with.
+/// The picture codings a browser says it decodes, read from the query it asked with. Naming AV1 is taken at its
+/// word and changes nothing, because nothing is encoded in AV1 to be handed over as it is.
 /// </summary>
 public sealed record AskedDecoding
 {
-    public const string H264IsCalled = "h264";
+    public const string H264IsCalled = VideoCodecs.H264IsCalled;
 
-    public const string H265IsCalled = "h265";
+    public const string H265IsCalled = VideoCodecs.H265IsCalled;
 
-    public static readonly IReadOnlyList<string> Names = [H264IsCalled, H265IsCalled];
+    public const string Av1IsCalled = VideoCodecs.Av1IsCalled;
+
+    public static readonly IReadOnlyList<string> Names = VideoCodecs.Names;
 
     private AskedDecoding(DecodingAnswer answer, PlaybackAudience audience)
     {

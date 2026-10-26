@@ -102,6 +102,57 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         Assert.Equal(RenderNode, handed[Array.IndexOf(handed, "-vaapi_device") + 1]);
     }
 
+    [Theory(DisplayName = "the command names the format the viewer asked for, encoded on the card")]
+    [InlineData(VideoCodec.H265, "hevc_vaapi")]
+    [InlineData(VideoCodec.Av1, "av1_vaapi")]
+    public async Task TheCommandNamesTheFormatTheViewerAskedFor(VideoCodec format, string encoder)
+    {
+        string said = standIns.Named("arguments");
+
+        LiveTranscoderStart start = await Starting(
+            standIns.Script($"printf '%s\\n' \"$@\" > {said}; cat > /dev/null"),
+            LiveEncoder.Vaapi,
+            format: format,
+            offered: VideoCodecs.InOrder);
+
+        Assert.True(start.Running, start.Note);
+
+        await using ILiveTranscoder running = start.Transcoder!;
+
+        await running.Input.DisposeAsync();
+        await running.Completion;
+
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.Equal(
+            [
+                .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, SoundPlacement.WholeStream(0), format),
+                .. FfmpegLiveInvocation.Delivery(),
+            ],
+            handed);
+        Assert.Contains(encoder, handed);
+    }
+
+    [Theory(DisplayName = "a format this machine does not encode is refused before a place in the budget is taken or a programme started")]
+    [InlineData(VideoCodec.H265)]
+    [InlineData(VideoCodec.Av1)]
+    public async Task AFormatThisMachineDoesNotEncodeIsRefused(VideoCodec format)
+    {
+        string started = standIns.Named("started");
+
+        LiveTranscoderStart start = await Starting(
+            standIns.Script($"touch {started}; cat > /dev/null"),
+            LiveEncoder.Vaapi,
+            format: format,
+            offered: [VideoCodec.H264]);
+
+        Assert.False(start.Running);
+        Assert.Equal(TranscoderFault.Refused, start.Fault);
+        Assert.Contains(VideoCodecs.NameOf(format), start.Note, StringComparison.Ordinal);
+        Assert.Equal(0, budget.Running);
+        Assert.False(File.Exists(started));
+    }
+
     [Fact]
     public async Task WhatIsWrittenInComesOutAgain()
     {
@@ -612,7 +663,9 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         CaptionOutlet captions = CaptionOutlet.None,
         StreamAttributes? attributes = null,
         SoundPlacement? sound = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        VideoCodec format = VideoCodec.H264,
+        IReadOnlyList<VideoCodec>? offered = null)
     {
         var settings = new LiveTranscodeSettings
         {
@@ -623,22 +676,26 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         var factory = new LiveTranscoderFactory(
             settings,
             budget,
-            new AlreadyChosen(encoder),
+            new AlreadyChosen(encoder, offered ?? [VideoCodec.H264]),
             Machine,
             clock ?? TimeProvider.System);
 
         return factory.StartAsync(
             Service,
             LiveProfile.Hd30,
+            format,
             sound ?? SoundPlacement.WholeStream(0),
             attributes ?? Interlaced,
             captions,
             cancellationToken);
     }
 
-    private sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector
+    private sealed class AlreadyChosen(LiveEncoder encoder, IReadOnlyList<VideoCodec> offered) : ILiveEncoderSelector
     {
         public Task<LiveEncoderChoice> ChooseAsync(CancellationToken cancellationToken)
             => Task.FromResult(LiveEncoderChoice.Asked(encoder));
+
+        public Task<IReadOnlyList<VideoCodec>> FormatsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(offered);
     }
 }
