@@ -113,6 +113,59 @@ public sealed class ViewerSeeksTests
         Assert.Single(cameBack.Spans);
     }
 
+    [Fact(DisplayName = "BR-CV-004: steps run past a pod and brought back by one step land within the reach of where the steps landed, so the seek stays and nothing is the programme; two steps back come back into it")]
+    public void OneStepBackFromStepsPastAPodIsNoComingBack()
+    {
+        ViewerSeek steps = Forward(SeekMeans.Step, 621, 684);
+        ViewerSeek oneBack = new(Evening.AddSeconds(5), SeekAction.Returned, SeekMeans.Key, Seconds(684), Seconds(674));
+        ViewerSeek twoBack = new(Evening.AddSeconds(5), SeekAction.Returned, SeekMeans.Key, Seconds(684), Seconds(664));
+
+        ViewerSeeks corrected = ViewerSeeks.Read([steps, oneBack], AroundThePod, null, Tolerance);
+        ViewerSeeks cameBack = ViewerSeeks.Read([steps, twoBack], AroundThePod, null, Tolerance);
+
+        Assert.Equal((Seconds(615), Seconds(675)), (Assert.Single(corrected.Spans).Starts, corrected.Spans[0].Ends));
+        Assert.Empty(corrected.CameBackTo);
+        Assert.Empty(cameBack.Spans);
+        Assert.Equal([Seconds(664)], cameBack.CameBackTo);
+    }
+
+    [Fact(DisplayName = "BR-CV-004: a seek brought back within the reach of a bar's landing stays, and one brought back past it comes back")]
+    public void TheReachOfTheLandingIsTheMeansOfTheSeekForward()
+    {
+        ViewerSeek bar = Forward(SeekMeans.Bar, 595, 681);
+
+        ViewerSeeks within = ViewerSeeks.Read([bar, new ViewerSeek(Evening.AddSeconds(5), SeekAction.Returned, SeekMeans.Key, Seconds(681), Seconds(673))], AroundThePod, null, Tolerance);
+        ViewerSeeks past = ViewerSeeks.Read([bar, new ViewerSeek(Evening.AddSeconds(5), SeekAction.Returned, SeekMeans.Key, Seconds(681), Seconds(672.9))], AroundThePod, null, Tolerance);
+
+        Assert.Equal((1, 0), (within.Spans.Count, within.CameBackTo.Count));
+        Assert.Equal((0, 1), (past.Spans.Count, past.CameBackTo.Count));
+    }
+
+    [Theory(DisplayName = "BR-CV-004: a seek over cuts in the programme thirty seconds apart, two adverts long, labels a break at a tenth, and one over cuts thirty-one and a half seconds apart labels nothing, the version in use finding the programme in both")]
+    [InlineData(1030, SegmentKind.Break)]
+    [InlineData(1031.5, null)]
+    public void ASeekOverCutsInTheProgrammeLabelsABreakOnlyInAdvertsLengths(double second, SegmentKind? kind)
+    {
+        BoundaryCandidate[] candidates =
+        [
+            Cut(0, BoundaryCue.RecordingEdge),
+            Cut(940, BoundaryCue.Silence | BoundaryCue.SilentCut),
+            Cut(1000, BoundaryCue.Silence | BoundaryCue.SilentCut),
+            Cut(second, BoundaryCue.Silence | BoundaryCue.SilentCut),
+            Cut(1100, BoundaryCue.Silence | BoundaryCue.SilentCut),
+            Cut(1800, BoundaryCue.RecordingEdge),
+        ];
+        SegmentDetection inUse = SegmentDetection.Judged([Span(0, 1800, SegmentKind.Programme)], TimeSpan.FromMinutes(30), []);
+        SegmentPiece[] pieces = [Piece(940, 1000), Piece(1000, second), Piece(second, 1100)];
+
+        ViewerSeeks seeks = ViewerSeeks.Read([Forward(SeekMeans.Bar, 996, second + 4)], candidates, inUse, Tolerance);
+        IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces, Context(), [], seeks: seeks);
+
+        SeekSpan span = Assert.Single(seeks.Spans);
+        Assert.Equal((Seconds(1000), Seconds(second), (SegmentKind?)null, kind is not null), (span.Starts, span.Ends, span.Detected, span.InAdvertSteps));
+        Assert.Equal([null, kind is SegmentKind given ? Viewer(given, ViewerSeeks.MostWeight) : null, null], labels);
+    }
+
     [Fact(DisplayName = "BR-CV-004: what was passed takes the catalog's kind first, then the version in use's, then a break when it runs from cut to cut in adverts' lengths, and nothing otherwise; the catalog saying programme leaves it unused")]
     public void TheKindComesFromTheCatalogThenTheVersionThenTheGrid()
     {

@@ -16,8 +16,9 @@ public sealed record SeekSpan(TimeSpan Starts, TimeSpan Ends, double Weight, Seg
 /// reach, so that nothing near it is labelled, and each such end lightens the seek from <see cref="MostWeight"/> to
 /// <see cref="OneEndLeftWeight"/> and <see cref="BothEndsLeftWeight"/>. A seek that keeps less than
 /// <see cref="ShortestSpan"/> is not used; a seek the viewer came back from, the latest earlier forward seek whose
-/// stretch holds where they came back to, is not used either, and where they came back to is kept. The same stretch
-/// passed more than once is one.
+/// stretch holds where they came back to, is not used either, and where they came back to is kept. Coming back to within
+/// the reach of where that seek landed is putting right a seek that went a little too far, which leaves the seek as it
+/// is and keeps nothing. The same stretch passed more than once is one.
 /// </summary>
 public sealed class ViewerSeeks
 {
@@ -73,6 +74,7 @@ public sealed class ViewerSeeks
         ViewerSeek[] ordered = [.. seeks.OrderBy(seek => seek.HappenedAt)];
         ViewerSeek[] returned = [.. ordered.Where(seek => seek.Action is SeekAction.Returned)];
         HashSet<ViewerSeek> cameBackFrom = new(ReferenceEqualityComparer.Instance);
+        List<TimeSpan> cameBackTo = [];
 
         foreach (ViewerSeek back in returned)
         {
@@ -82,10 +84,17 @@ public sealed class ViewerSeeks
                                                                && back.To < seek.To
                                                                && !cameBackFrom.Contains(seek));
 
+            if (passed is not null && back.To >= passed.To - Reach(passed.Means))
+            {
+                continue;
+            }
+
             if (passed is not null)
             {
                 cameBackFrom.Add(passed);
             }
+
+            cameBackTo.Add(back.To);
         }
 
         Reading reading = new([.. candidates.OrderBy(candidate => candidate.At)], inUse, tolerance);
@@ -99,7 +108,7 @@ public sealed class ViewerSeeks
                 .Select(same => same.MaxBy(span => span.Weight)!),
         ];
 
-        return new ViewerSeeks(spans, [.. returned.Select(back => back.To)]);
+        return new ViewerSeeks(spans, cameBackTo);
     }
 
     /// <summary>
