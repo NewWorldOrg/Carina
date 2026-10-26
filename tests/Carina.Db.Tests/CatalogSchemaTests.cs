@@ -93,7 +93,7 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         Assert.Empty(await new CatalogRepository(context).EntriesAsync([], CancellationToken.None));
     }
 
-    [Fact(DisplayName = "BR-CD-005: the stretches heard in the recordings named are read with what each is to an opening or an ending as its entry is now taken")]
+    [Fact(DisplayName = "BR-CD-005: the stretches heard in the recordings named are read with the kind each counts as and what each is to an opening or an ending, as its entry is now taken")]
     public async Task TheStretchesAroundAreReadWithTheirParts()
     {
         RecordingId first = RecordingId.New();
@@ -109,9 +109,10 @@ public sealed class CatalogSchemaTests(MigratedScratchDatabase database)
         CatalogSurroundings around = await new CatalogRepository(context).SurroundingsAsync([first], CancellationToken.None);
 
         Assert.Equal(CatalogKind.Opening, head.Kind);
+        Assert.Equal(CatalogKind.Cm, advert.Kind);
         Assert.Equal(
-            [(opening, ThemePart.Opening, Span(60, 149)), (advert.Id, ThemePart.None, Span(600, 615))],
-            around.In(first).Select(stretch => (stretch.Entry, stretch.Part, stretch.Span)));
+            [(opening, (SegmentKind?)SegmentKind.Opening, ThemePart.Opening, Span(60, 149)), (advert.Id, SegmentKind.Break, ThemePart.None, Span(600, 615))],
+            around.In(first).Select(stretch => (stretch.Entry, stretch.CountsAs, stretch.Part, stretch.Span)));
         Assert.Empty(around.In(second));
     }
 

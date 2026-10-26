@@ -25,7 +25,9 @@ public sealed record CatalogPattern(CatalogEstimate Estimate, int SeriesCount, i
 /// part of the programme, 0.7; a piece shorter than 15 seconds heard within 15 seconds of the start or end
 /// of programmes of two series is a fixed part of the station's output, 0.6; a length on the grid of up to
 /// a minute heard in one series is an advert, 0.5, since an opening or ending is often a whole slot of a
-/// minute and a half; anything else is not known. Only the stretches that cover the entry whole
+/// minute and a half; anything else is not known. A fixed part of the programme of a length on the grid heard right
+/// beside an advert is a sponsor's advert, put in the same break every week, and so an advert of one series, 0.5
+/// (<see cref="Settle"/>). Only the stretches that cover the entry whole
 /// (<see cref="WholeWithin"/>) count; a shorter one is taken on its own. Two recordings on one station of a
 /// programme the guide starts at the same time are one episode (<see cref="SeriesMember.Episode"/>), so that a
 /// broadcast recorded twice does not make a sound heard once in it a sound heard in two episodes.
@@ -62,7 +64,7 @@ public static class CatalogKinds
     /// <summary>
     /// The version of these rows: an entry estimated with an earlier one is estimated again.
     /// </summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     public static readonly TimeSpan Grid = TimeSpan.FromSeconds(15);
 
@@ -96,6 +98,12 @@ public static class CatalogKinds
     /// </summary>
     public static readonly TimeSpan PiecesWithin = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// How far a sponsor's advert lies from an advert beside it at the most: the silence between two slots falls outside
+    /// both matches, about a second as heard.
+    /// </summary>
+    public static readonly TimeSpan AdvertsWithin = TimeSpan.FromSeconds(2);
+
     private const int FewestOnTheGrid = 1;
 
     private const int MostOnTheGrid = 8;
@@ -119,8 +127,7 @@ public static class CatalogKinds
         ArgumentNullException.ThrowIfNull(occurrences);
         ArgumentNullException.ThrowIfNull(links);
 
-        PlacedOccurrence[] whole = [.. occurrences.Where(placed => IsWhole(placed.Occurrence.Length, length))];
-        PlacedOccurrence[] counted = whole.Length > 0 ? whole : [.. occurrences];
+        PlacedOccurrence[] counted = Counted(length, occurrences);
         IReadOnlyList<IReadOnlyList<PlacedOccurrence>> linked = links.Group(counted, placed => placed.Member);
         Theme? theme = ThemeOf(length, linked);
         IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series = theme?.Series ?? linked;
@@ -136,9 +143,10 @@ public static class CatalogKinds
     }
 
     /// <summary>
-    /// The pattern its own stretches give an entry of <paramref name="length"/>, carried on as an opening or an
+    /// The pattern its own stretches give an entry of <paramref name="length"/>, settled by the stretches heard around
+    /// them (<see cref="Settle"/>): taken for an advert when it is a sponsor's, and carried on as an opening or an
     /// ending when the entry is a piece of one (BR-CD-005). An entry that may carry one on
-    /// (<see cref="MayCarryOn"/>), whose whole stretches in two episodes lie at the same distance, give or take
+    /// (<see cref="MaySettle"/>), whose whole stretches in two episodes lie at the same distance, give or take
     /// <see cref="PiecesWithin"/>, from the start of a stretch of one opening or ending, in the run of pieces that
     /// follows or leads up to that stretch, is that opening or ending, 0.8. In a run each piece lies no more than
     /// <see cref="PiecesWithin"/> from the next, the whole is no longer than <see cref="ThemeLongest"/>, and the
@@ -153,14 +161,34 @@ public static class CatalogKinds
 
         CatalogPattern own = Estimate(length, occurrences, links);
 
-        if (!MayCarryOn(own))
+        if (!MaySettle(own))
         {
             return own;
         }
 
         CatalogEntryId[] itself = [.. occurrences.Select(placed => placed.Occurrence.EntryId).Distinct()];
 
-        return CarryOn(length, occurrences, own, around.Replacing(itself, Stretches(occurrences, own)));
+        return Settle(length, occurrences, own, around.Replacing(itself, Stretches(occurrences, own)));
+    }
+
+    /// <summary>
+    /// <paramref name="own"/>, what the stretches of an entry give it on their own, settled by <paramref name="around"/>, which
+    /// holds the entry's own stretches as <paramref name="own"/> takes them: taken for an advert of one series when it is a
+    /// sponsor's, then carried on as an opening or an ending (<see cref="CarryOn"/>). A sponsor's advert is put in the same
+    /// break every week, so that it is heard at the same place in two episodes as a fixed part of the programme is: an entry
+    /// taken for a fixed part of the programme, of a length on the grid, with a whole stretch no more than
+    /// <see cref="AdvertsWithin"/> from a stretch that counts as a break in its recording, or over one, is an advert of one
+    /// series, 0.5. A fixed part of another length, such as a jingle or the sponsors read out, and one heard beside no
+    /// advert, stays as it is. One stretch beside an advert is enough, since the catalog knows only the adverts it has heard
+    /// twice and many a stretch of a break has none of them beside it.
+    /// </summary>
+    public static CatalogPattern Settle(TimeSpan length, IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern own, CatalogSurroundings around)
+    {
+        ArgumentNullException.ThrowIfNull(occurrences);
+        ArgumentNullException.ThrowIfNull(own);
+        ArgumentNullException.ThrowIfNull(around);
+
+        return CarryOn(length, occurrences, Sponsored(length, occurrences, own, around), around);
     }
 
     /// <summary>
@@ -174,7 +202,7 @@ public static class CatalogKinds
         ArgumentNullException.ThrowIfNull(own);
         ArgumentNullException.ThrowIfNull(around);
 
-        if (!MayCarryOn(own))
+        if (!CarriesOn(own.Estimate, own.SeriesCount))
         {
             return own;
         }
@@ -203,10 +231,11 @@ public static class CatalogKinds
     }
 
     /// <summary>
-    /// Whether an entry its own stretches take as <paramref name="own"/> may carry on an opening or an ending: it is of
-    /// one series, and taken for a programme fixture, for an advert of one series or for nothing known.
+    /// Whether the stretches heard around an entry its own stretches take as <paramref name="own"/> may settle it
+    /// (<see cref="Settle"/>): it is of one series, and taken for a programme fixture, which may be a sponsor's advert,
+    /// for an advert of one series or for nothing known, which may carry on an opening or an ending.
     /// </summary>
-    public static bool MayCarryOn(CatalogPattern own)
+    public static bool MaySettle(CatalogPattern own)
     {
         ArgumentNullException.ThrowIfNull(own);
 
@@ -215,18 +244,20 @@ public static class CatalogKinds
 
     /// <summary>
     /// The stretches of an entry taken as <paramref name="pattern"/>, each with what it is to an opening or an ending
-    /// (<see cref="PartOf"/>).
+    /// and the kind it counts as (<see cref="ThemeStretch.Of"/>).
     /// </summary>
     public static IEnumerable<ThemeStretch> Stretches(IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern pattern)
     {
         ArgumentNullException.ThrowIfNull(occurrences);
         ArgumentNullException.ThrowIfNull(pattern);
 
-        return occurrences.Select((placed, at) => new ThemeStretch(
+        return occurrences.Select((placed, at) => ThemeStretch.Of(
             placed.Occurrence.EntryId,
             placed.Occurrence.RecordingId,
             placed.Occurrence.Span,
-            PartOf(pattern.Estimate, pattern.SeriesCount, pattern.Overrides[at])));
+            pattern.Estimate,
+            pattern.SeriesCount,
+            pattern.Overrides[at]));
     }
 
     /// <summary>
@@ -293,6 +324,35 @@ public static class CatalogKinds
     }
 
     private static bool IsWhole(TimeSpan stretch, TimeSpan length) => stretch >= length - WholeWithin;
+
+    private static PlacedOccurrence[] Counted(TimeSpan length, IReadOnlyList<PlacedOccurrence> occurrences)
+    {
+        PlacedOccurrence[] whole = [.. occurrences.Where(placed => IsWhole(placed.Occurrence.Length, length))];
+
+        return whole.Length > 0 ? whole : [.. occurrences];
+    }
+
+    private static CatalogPattern Sponsored(TimeSpan length, IReadOnlyList<PlacedOccurrence> occurrences, CatalogPattern own, CatalogSurroundings around)
+    {
+        if (own.Estimate != new CatalogEstimate(CatalogKind.ProgrammeFixture, SamePlace, CatalogDecision.Pattern)
+            || !OnTheGrid(length, MostInOneSeries)
+            || !Counted(length, occurrences).Any(placed => BesideAnAdvert(placed.Occurrence, around)))
+        {
+            return own;
+        }
+
+        return own with { Estimate = new CatalogEstimate(CatalogKind.Cm, OneSeries, CatalogDecision.Pattern) };
+    }
+
+    private static bool BesideAnAdvert(CatalogOccurrence occurrence, CatalogSurroundings around)
+        => around.In(occurrence.RecordingId).Any(stretch => stretch.CountsAs is SegmentKind.Break && Apart(occurrence.Span, stretch.Span) <= AdvertsWithin);
+
+    /// <summary>
+    /// How far apart two stretches lie: from the end of the earlier to the start of the later, less than nothing when
+    /// they overlap.
+    /// </summary>
+    private static TimeSpan Apart(SoundSpan one, SoundSpan other)
+        => (one.Starts > other.Starts ? one.Starts : other.Starts) - (one.Ends < other.Ends ? one.Ends : other.Ends);
 
     private static CatalogEstimate Spread(TimeSpan length, IReadOnlyList<IReadOnlyList<PlacedOccurrence>> series, int stations, Theme? theme)
     {

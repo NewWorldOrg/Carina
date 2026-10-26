@@ -30,7 +30,7 @@ public interface ICatalogRepository
 
     /// <summary>
     /// Every stretch heard in the recordings named, whichever entry it is of, with what it is to an opening or an
-    /// ending as its entry is now taken (<see cref="CatalogKinds.PartOf"/>).
+    /// ending and the kind it counts as, as its entry is now taken (<see cref="ThemeStretch.Of"/>).
     /// </summary>
     Task<CatalogSurroundings> SurroundingsAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken);
 

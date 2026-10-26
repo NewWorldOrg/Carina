@@ -301,6 +301,36 @@ public sealed class CatalogMatchingJobTests
         Assert.Equal((CatalogKind.Opening, CatalogDecision.Pattern), (head.Kind, head.DecidedBy));
     }
 
+    [Fact(DisplayName = "BR-CD-005: a sponsor's advert kept as a programme fixture by an earlier version is estimated again in spare time beside the advert of its break, as an advert of one series, and every recording that hears it is detected again")]
+    public async Task ASponsorsAdvertIsEstimatedAgainAsAnAdvert()
+    {
+        using CatalogMatchingHarness harness = new();
+        RecordingId[] weeks = [await harness.ReadAsync(Sound(12), 14, "架空の深夜番組"), await harness.ReadAsync(Sound(11), 7, "架空の深夜番組")];
+        RecordingId quiz = await harness.ReadAsync(Sound(13), 3, "架空のクイズ");
+
+        foreach (RecordingId recording in weeks.Append(quiz))
+        {
+            LearningExtraction record = harness.Records.Row(recording)!;
+            record.Matched(Now.AddHours(-1));
+            harness.Records.Hold(record);
+        }
+
+        Dictionary<RecordingId, RecordingDetection> detected = weeks.ToDictionary(week => week, Detected);
+        TimeSpan slot = TimeSpan.FromSeconds(14);
+        Kept(harness, [weeks[0], quiz], CatalogKind.Cm, 0.9, Into + TimeSpan.FromSeconds(15), slot, CatalogKinds.Version);
+        CatalogEntry sponsor = Kept(harness, weeks, CatalogKind.ProgrammeFixture, 0.7, Into, slot, CatalogKinds.Version - 1);
+        bool awaitedBefore = weeks.Any(week => RecordingDetection.IsAwaited(harness.Records.Row(week)!, detected[week]));
+
+        CatalogMatchingLook look = await harness.Job().LookAsync(CancellationToken.None);
+
+        Assert.Same(sponsor, look.Reestimated);
+        Assert.Equal((CatalogKind.Cm, 0.5, CatalogDecision.Pattern), (sponsor.Kind, sponsor.Confidence, sponsor.DecidedBy));
+        Assert.False(awaitedBefore);
+        Assert.All(weeks, week => Assert.Equal(
+            ((DateTime?)Now, true),
+            (harness.Records.Row(week)!.MatchedAt, RecordingDetection.IsAwaited(harness.Records.Row(week)!, detected[week]))));
+    }
+
     [Theory(DisplayName = "BR-CD-004: an entry estimated again as another kind has every recording that hears it taken as matched again, so that it is detected again, and one estimated again as the kind and confidence it had has none")]
     [InlineData(false)]
     [InlineData(true)]

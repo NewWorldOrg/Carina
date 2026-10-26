@@ -65,6 +65,31 @@ public sealed class LearningCatalogTests
         Assert.All(now.Where(heard => heard.Entry == phrase), heard => Assert.Equal(0.8, heard.Confidence));
     }
 
+    [Fact(DisplayName = "BR-CD-005: a sponsor's advert, put at the same place of two episodes right after an advert, is heard as a break of one series, not as the programme")]
+    public void ASponsorsAdvertIsHeardAsABreak()
+    {
+        CatalogEntryId advert = CatalogEntryId.New();
+        CatalogEntryId sponsor = CatalogEntryId.New();
+        RecordingId first = RecordingId.New();
+        RecordingId judged = RecordingId.New();
+        LearningCatalog catalog = new(
+        [
+            new CatalogSound(advert, TimeSpan.FromSeconds(14), [
+                CatalogSeries.At(advert, Story.Episode(0), 825, 14, recording: first),
+                CatalogSeries.At(advert, Elsewhere.Episode(0), 600, 14),
+            ]),
+            new CatalogSound(sponsor, TimeSpan.FromSeconds(14), [
+                CatalogSeries.At(sponsor, Story.Episode(0), 840, 14, recording: first),
+                CatalogSeries.At(sponsor, Story.Episode(1), 845, 14, recording: judged),
+            ]),
+        ],
+        SeriesLinks.None);
+
+        Assert.Equal(
+            new CatalogHeard(CatalogSeries.Lead + TimeSpan.FromSeconds(845), CatalogSeries.Lead + TimeSpan.FromSeconds(859), SegmentKind.Break, 2, 1, 1, 0.5, sponsor),
+            Assert.Single(catalog.HeardNow(judged)));
+    }
+
     [Fact(DisplayName = "an entry heard only once by the time a recording started is not heard by it at all")]
     public void AnEntryNotYetStartedIsNotHeard()
     {

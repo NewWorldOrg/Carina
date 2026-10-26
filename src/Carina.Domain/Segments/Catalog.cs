@@ -5,8 +5,8 @@ namespace Carina.Domain.Segments;
 /// <summary>
 /// What putting a recording's matches into the catalog reads: the entries the matches name and every
 /// stretch they have, the copies of the programmes of the recordings involved, how series are linked, and
-/// the stretches heard in the recordings where an entry may carry on an opening or an ending
-/// (<see cref="CatalogKinds.CarryOn"/>), none when it is not said.
+/// the stretches heard in the recordings where they may settle an entry (<see cref="CatalogKinds.Settle"/>), none when
+/// it is not said.
 /// </summary>
 public sealed record CatalogKnowledge(
     IReadOnlyList<CatalogEntry> Entries,
@@ -202,7 +202,7 @@ public static class Catalog
 
             return new CatalogChange(begun, reestimated, found, overridden, relinking, recast);
 
-            CatalogPattern Carried(CatalogEntryId id) => CatalogKinds.CarryOn(lengths[id], placed[id], own[id], around);
+            CatalogPattern Carried(CatalogEntryId id) => CatalogKinds.Settle(lengths[id], placed[id], own[id], around);
         }
 
         private void TakeItself(SoundMatch match, SoundTrack sound)

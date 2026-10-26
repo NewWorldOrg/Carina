@@ -364,6 +364,27 @@ public sealed class CatalogTests
         Assert.Null(there.KindOverride);
     }
 
+    [Fact(DisplayName = "BR-CD-005: a programme fixture on the grid estimated again beside an advert in one of its recordings is a sponsor's advert, recast, and stops linking series")]
+    public void AFixtureOnTheGridBesideAnAdvertIsRecastAsASponsorsAdvert()
+    {
+        RecordingId[] weeks = [RecordingId.New(), RecordingId.New()];
+        (CatalogEntry advert, CatalogOccurrence[] adverts) = KeptAt(CatalogKind.Cm, 0.9, 14, weeks, (0, 855), (1, 300));
+        (CatalogEntry sponsor, CatalogOccurrence[] sponsors) = KeptAt(CatalogKind.ProgrammeFixture, 0.7, 14, weeks, (0, 840), (1, 840));
+        Dictionary<RecordingId, ProgrammeCopy> programmes = new()
+        {
+            [weeks[0]] = Drama.Episode(0),
+            [weeks[1]] = Drama.Episode(1),
+        };
+
+        CatalogChange change = Catalog.Reestimate(sponsor, Knowing(sponsor, sponsors, programmes, Around((advert, adverts), (sponsor, sponsors))), Now.AddDays(1));
+
+        Assert.Equal((CatalogKind.Cm, 0.5, CatalogDecision.Pattern), (sponsor.Kind, sponsor.Confidence, sponsor.DecidedBy));
+        Assert.Equal(CatalogKinds.Version, sponsor.KindsVersion);
+        Assert.Equal([sponsor.Id], change.Relinking);
+        Assert.Equal([sponsor.Id], change.Recast);
+        Assert.Empty(change.Overridden);
+    }
+
     [Fact(DisplayName = "a match naming an entry that was not handed over is refused")]
     public void AMatchNamingAnUnknownEntryIsRefused()
     {
@@ -391,11 +412,13 @@ public sealed class CatalogTests
     private static CatalogSurroundings Around(params (CatalogEntry Entry, CatalogOccurrence[] Stretches)[] kept)
         => new(
         [
-            .. kept.SelectMany(each => each.Stretches.Select(stretch => new ThemeStretch(
+            .. kept.SelectMany(each => each.Stretches.Select(stretch => ThemeStretch.Of(
                 each.Entry.Id,
                 stretch.RecordingId,
                 stretch.Span,
-                CatalogKinds.PartOf(new CatalogEstimate(each.Entry.Kind, each.Entry.Confidence, each.Entry.DecidedBy), each.Entry.SeriesCount, stretch.KindOverride)))),
+                new CatalogEstimate(each.Entry.Kind, each.Entry.Confidence, each.Entry.DecidedBy),
+                each.Entry.SeriesCount,
+                stretch.KindOverride))),
         ]);
 
     /// <summary>

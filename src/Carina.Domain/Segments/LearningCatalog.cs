@@ -159,8 +159,8 @@ public sealed class LearningCatalog
 
     /// <summary>
     /// The sounds as they would have been estimated at one time, each worked out once: from their stretches of
-    /// recordings started no later than then, and, for one that may carry on an opening or an ending, beside the
-    /// sounds heard in its recordings.
+    /// recordings started no later than then, and, for one they may settle (<see cref="CatalogKinds.Settle"/>), beside
+    /// the sounds heard in its recordings as their own stretches take them.
     /// </summary>
     private sealed class Estimates(ILookup<RecordingId, CatalogSound> soundsIn, SeriesLinks links, DateTime startedAt)
     {
@@ -173,7 +173,7 @@ public sealed class LearningCatalog
                 return null;
             }
 
-            if (!CatalogKinds.MayCarryOn(pattern))
+            if (!CatalogKinds.MaySettle(pattern))
             {
                 return (kept, pattern);
             }
@@ -186,7 +186,7 @@ public sealed class LearningCatalog
                     .SelectMany(recording => soundsIn[recording].SelectMany(heard => StretchesIn(heard, recording))),
             ]);
 
-            return (kept, CatalogKinds.CarryOn(sound.Length, kept, pattern, around));
+            return (kept, CatalogKinds.Settle(sound.Length, kept, pattern, around));
         }
 
         private IEnumerable<ThemeStretch> StretchesIn(CatalogSound sound, RecordingId recording)

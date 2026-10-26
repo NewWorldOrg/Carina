@@ -18,14 +18,38 @@ public enum ThemePart
 }
 
 /// <summary>
-/// A stretch of a catalog entry heard in a recording, and what it is to an opening or an ending there.
+/// A stretch of a catalog entry heard in a recording, what it is to an opening or an ending there, and the kind it
+/// counts as there (<see cref="CatalogHeard.KindOf"/>), none when it counts as nothing.
 /// </summary>
-public sealed record ThemeStretch(CatalogEntryId Entry, RecordingId Recording, SoundSpan Span, ThemePart Part);
+public sealed record ThemeStretch(CatalogEntryId Entry, RecordingId Recording, SoundSpan Span, ThemePart Part, SegmentKind? CountsAs)
+{
+    /// <summary>
+    /// A stretch of an entry taken for <paramref name="estimate"/> in <paramref name="seriesCount"/> series, which alone
+    /// is taken for <paramref name="kindOverride"/>.
+    /// </summary>
+    public static ThemeStretch Of(
+        CatalogEntryId entry,
+        RecordingId recording,
+        SoundSpan span,
+        CatalogEstimate estimate,
+        int seriesCount,
+        SegmentKind? kindOverride)
+    {
+        ArgumentNullException.ThrowIfNull(estimate);
+
+        return new ThemeStretch(
+            entry,
+            recording,
+            span,
+            CatalogKinds.PartOf(estimate, seriesCount, kindOverride),
+            CatalogHeard.KindOf(kindOverride, estimate.Kind));
+    }
+}
 
 /// <summary>
-/// The stretches heard in some recordings, whichever entries they are of, and what each is to an opening or an
-/// ending: what an entry is estimated beside when it may carry one on. A recording not handed over hears nothing
-/// beside the entry.
+/// The stretches heard in some recordings, whichever entries they are of, what each is to an opening or an ending,
+/// and the kind each counts as: what an entry is estimated beside when they may settle it
+/// (<see cref="CatalogKinds.Settle"/>). A recording not handed over hears nothing beside the entry.
 /// </summary>
 public sealed class CatalogSurroundings
 {
