@@ -80,6 +80,8 @@ public sealed class FfmpegLiveInvocationTests
                 "zerolatency",
                 "-g",
                 "60",
+                "-sc_threshold",
+                "0",
                 "-b:v",
                 "3000k",
                 "-maxrate",
@@ -247,6 +249,8 @@ public sealed class FfmpegLiveInvocationTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, format: (VideoCodec)9));
     }
+
+    public static TheoryData<LiveProfile> EveryProfile => [.. LiveProfile.All];
 
     public static TheoryData<LiveProfile, VideoCodec> EveryProfileInEveryFormatOnTheCard
     {
@@ -784,6 +788,38 @@ public sealed class FfmpegLiveInvocationTests
                 "pipe:1",
             ],
             FfmpegLiveInvocation.Delivery());
+    }
+
+    [Fact(DisplayName = "BR-PD-006, BR-PD-022: the fragments are cut by time alone, a keyframe cutting none, so that no fragment carries the picture without the sound")]
+    public void TheFragmentsAreCutByTimeAlone()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.DoesNotContain("frag_keyframe", delivery[delivery.IndexOf("-movflags") + 1].Split('+'));
+        Assert.Equal("50000", delivery[delivery.IndexOf("-frag_duration") + 1]);
+    }
+
+    [Theory(DisplayName = "BR-PD-022: the processor puts a keyframe every two seconds and nowhere else, so that the segments cut at them last two seconds")]
+    [MemberData(nameof(EveryProfile))]
+    public void TheProcessorPutsAKeyframeEveryTwoSecondsAndNowhereElse(LiveProfile profile)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None)];
+
+        Assert.Equal(
+            Math.Round(profile.Rate.PerSecond * 2).ToString(CultureInfo.InvariantCulture),
+            arguments[arguments.IndexOf("-g") + 1]);
+        Assert.Equal("0", arguments[arguments.IndexOf("-sc_threshold") + 1]);
+    }
+
+    [Theory(DisplayName = "BR-PD-022: the card puts a keyframe every two seconds in every format")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void TheCardPutsAKeyframeEveryTwoSeconds(LiveProfile profile, VideoCodec format)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, null, format)];
+
+        Assert.Equal(
+            Math.Round(profile.Rate.PerSecond * 2).ToString(CultureInfo.InvariantCulture),
+            arguments[arguments.IndexOf("-g") + 1]);
     }
 
     [Fact]
