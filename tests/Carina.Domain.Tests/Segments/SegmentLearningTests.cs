@@ -208,7 +208,7 @@ public sealed class SegmentLearningTests
         Assert.True(remembering!.Kinds.Single(kind => kind.Kind is SegmentKind.Opening).Recall > forgetting!.Kinds.Single(kind => kind.Kind is SegmentKind.Opening).Recall);
     }
 
-    [Fact(DisplayName = "BR-CD-008: in a fold, another recording read again without the entries set aside is labelled against the version in use's detection of it read without them too, so an opening it took only through the recording judged keeps no programme from being learned")]
+    [Fact(DisplayName = "BR-CD-008: in a fold, another recording read again without the entries set aside is labelled against the version in use's detection of it read without them too, so an opening it took only through the recording judged keeps no programme from being learned, whichever setting is tried first")]
     public void AFoldLabelsAgainstTheVersionInUseReadWithoutWhatIsSetAside()
     {
         RecordingId earlierId = RecordingId.New();
@@ -238,6 +238,14 @@ public sealed class SegmentLearningTests
 
         Assert.Equal(forgetting, Figures(learned.Evaluation.Metrics));
         Assert.NotEqual(remembering, forgetting);
+
+        SegmentLearned looseFirst = Learn([judged, later], sounds, new SegmentSearch([SegmentThresholds.Initial], [0.1, 1e6], [10]), inUse);
+        SegmentLearned tightFirst = Learn([judged, later], sounds, new SegmentSearch([SegmentThresholds.Initial], [1e6, 0.1], [10]), inUse);
+        SegmentLearned tight = Learn([judged, later], sounds, new SegmentSearch([SegmentThresholds.Initial], [1e6], [10]), inUse);
+
+        Assert.NotEqual(Figures(learned.Evaluation.Metrics), Figures(tight.Evaluation.Metrics));
+        Assert.Equal(looseFirst.Candidate, tightFirst.Candidate);
+        Assert.Equal(Figures(looseFirst.Evaluation.Metrics), Figures(tightFirst.Evaluation.Metrics));
     }
 
     [Fact(DisplayName = "BR-CD-008: the earliest recording judged, every other entry first heard after it, is detected by a model with nothing to learn from, and the round still comes to a result")]

@@ -258,6 +258,8 @@ public static class SegmentLearning
 
         private readonly IReadOnlyList<CatalogHeard> everything;
 
+        private readonly Dictionary<IReadOnlySet<CatalogEntryId>, (SegmentDetection Detection, ViewerSeeks Seeks)> inUseWithout = new(ReferenceEqualityComparer.Instance);
+
         private ViewerSeeks? seeks;
 
         private (RecordingPieces Read, SegmentDetection Detection)? inUse;
@@ -308,7 +310,8 @@ public static class SegmentLearning
 
         /// <summary>
         /// The samples <paramref name="pieces"/> of this recording are learned from, labelled as if the catalog did
-        /// not hear <paramref name="without"/>, against the seeks and the version in use's detection read without it too; every stretch the catalog has in the recording, those of
+        /// not hear <paramref name="without"/>, against the seeks and the version in use's detection read without it too,
+        /// read once for each set of entries whatever setting is tried; every stretch the catalog has in the recording, those of
         /// <paramref name="without"/> included, still keeps the segments it lies over from being taken for the programme.
         /// </summary>
         public IReadOnlyList<SegmentSample> Samples(RecordingPieces pieces, IReadOnlySet<CatalogEntryId>? without = null)
@@ -318,9 +321,15 @@ public static class SegmentLearning
                 return SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, Seeks, InUse.Detection);
             }
 
-            (RecordingPieces Read, SegmentDetection Detection) apart = ReadInUse(without);
+            if (!inUseWithout.TryGetValue(without, out (SegmentDetection Detection, ViewerSeeks Seeks) apart))
+            {
+                (RecordingPieces Read, SegmentDetection Detection) read = ReadInUse(without);
 
-            return SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, SeeksAgainst(apart), apart.Detection);
+                apart = (read.Detection, SeeksAgainst(read));
+                inUseWithout[without] = apart;
+            }
+
+            return SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, apart.Seeks, apart.Detection);
         }
 
         /// <summary>
