@@ -328,8 +328,9 @@ public sealed class SegmentLearningTests
         LearningRecording[] seeking = [.. recordings.Select(recording => Seeking(recording, Seek(sought, 375, 431)))];
         LearningCatalog catalog = new([.. sounds, .. heard], SeriesLinks.None);
 
-        SegmentLearned without = Learn([.. recordings, judged], [.. sounds, .. heard]);
-        SegmentLearned with = Learn([.. seeking, judged], [.. sounds, .. heard]);
+        SegmentSearch pulled = new([SegmentThresholds.Initial], [SegmentSearch.Default.Lambdas[0]], [10]);
+        SegmentLearned without = Learn([.. recordings, judged], [.. sounds, .. heard], pulled);
+        SegmentLearned with = Learn([.. seeking, judged], [.. sounds, .. heard], pulled);
         (RecordingPieces read, SegmentContext context, ViewerSeeks seeks) = AsTheRoundReads(seeking[2], catalog);
         IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(read.Pieces, context, [], seeks: seeks);
         SegmentPiece[] pod = [.. read.Pieces.Where(piece => piece.Starts >= TimeSpan.FromSeconds(380) && piece.Ends <= TimeSpan.FromSeconds(425))];
@@ -432,7 +433,7 @@ public sealed class SegmentLearningTests
 
         SegmentLearned learned = Learn(recordings, sounds, SegmentSearch.Default);
 
-        Assert.Equal(SegmentThresholds.Initial, learned.Candidate.Thresholds);
+        Assert.Equal(SegmentSearch.Default.Settings[0], learned.Candidate.Thresholds);
         Assert.Null(learned.Evaluation.Metrics);
         Assert.Null(learned.InUse.Metrics);
         Assert.Empty(learned.Evaluation.Stations);
@@ -440,11 +441,15 @@ public sealed class SegmentLearningTests
         Assert.Equal(AdoptionVerdict.TooLittleEvidence, learned.Verdict);
     }
 
-    [Fact(DisplayName = "the default search tries nine readings with nine pulls each, the initial setting first")]
+    [Fact(DisplayName = "the default search tries nine readings with nine pulls each, the initial reading first")]
     public void TheDefaultSearchStartsFromTheInitialSetting()
     {
+        SegmentThresholds initial = SegmentThresholds.Initial;
+
         Assert.Equal(81, SegmentSearch.Default.Settings.Count);
-        Assert.Equal(SegmentThresholds.Initial, SegmentSearch.Default.Settings[0]);
+        Assert.Equal(
+            new SegmentThresholds(initial.SilenceDbfs, initial.BlackLevel, initial.SceneChange, initial.GridToleranceSec, initial.GridPenalty, SegmentSearch.Default.Lambdas[0], initial.LambdaStation, initial.LambdaSeries),
+            SegmentSearch.Default.Settings[0]);
         Assert.Equal(9, SegmentSearch.Default.Settings.Select(setting => (setting.SilenceDbfs, setting.BlackLevel, setting.SceneChange, setting.GridToleranceSec)).Distinct().Count());
     }
 

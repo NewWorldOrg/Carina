@@ -53,7 +53,7 @@ public sealed class SegmentRegressionTests
         Assert.True(weights.Features[SegmentFeature.Length] < 0);
         Assert.All(chances.Take(5), chance => Assert.True(chance > 0.5));
         Assert.All(chances.Skip(5), chance => Assert.True(chance < 0.5));
-        Assert.Equal(2 * thresholds.Lambda * weights.Features[SegmentFeature.Length], slope, 4);
+        Assert.Equal(2 * thresholds.Lambda * Pull(5) * weights.Features[SegmentFeature.Length], slope, 4);
         Assert.Equal(0, samples.Sum(sample => sample.Weight * (Label(sample) - Chance(fit, sample))), 4);
     }
 
@@ -149,7 +149,7 @@ public sealed class SegmentRegressionTests
         Assert.Equal(0.6 / 5.5, chances.Of(SegmentKind.Opening), 5);
     }
 
-    [Fact(DisplayName = "a four-kind fit comes to a standstill of the penalised likelihood: for every kind the weighted residuals sum to nothing, and the slope along each feature is its pull")]
+    [Fact(DisplayName = "a four-kind fit comes to a standstill of the penalised likelihood: for every kind the weighted residuals sum to nothing, and the slope along each feature is its pull, the harder the less the kind is labelled")]
     public void AFourKindFitComesToAStandstill()
     {
         SegmentSample[] samples =
@@ -176,7 +176,7 @@ public sealed class SegmentRegressionTests
                 FeatureScale scale = fit.Model.Standardisation[feature];
                 double slope = samples.Select((sample, at) => residuals[at] * (sample.Features[feature] is double value ? scale.Standardised(value) : 0)).Sum();
 
-                Assert.Equal(2 * thresholds.Lambda * weights.Features[feature], slope, 4);
+                Assert.Equal(2 * thresholds.Lambda * Pull(samples.Where(sample => sample.Kind == kind).Sum(sample => sample.Weight)) * weights.Features[feature], slope, 4);
             }
 
             Assert.Equal(0, residuals.Sum(), 4);
@@ -258,26 +258,27 @@ public sealed class SegmentRegressionTests
         Assert.Throws<ArgumentException>(() => SegmentRegression.Fit(samples, SegmentThresholds.Initial, kept: HandMadeModels.First));
     }
 
-    [Fact(DisplayName = "pulled towards a version that weighs no feature and offsets nothing, the fit is the one pulled towards zero, whatever its intercepts")]
+    [Fact(DisplayName = "pulled towards a version that weighs no feature, offsets nothing and has the intercepts the samples give, the fit is the one pulled towards zero")]
     public void TowardsAVersionWeighingNothingIsTowardsZero()
     {
         SegmentSample[] samples = Mixed();
+        SegmentModel zero = SegmentRegression.Fit(samples, Pulled(1, 1, 1)).Model;
         SegmentModel nothing = Toward(
-            new Dictionary<SegmentKind, SegmentClassWeights>
-            {
-                [SegmentKind.Break] = new(3.0, new Dictionary<string, double>()),
-                [SegmentKind.Opening] = new(-9.0, new Dictionary<string, double>()),
-                [SegmentKind.Ending] = new(4.0, new Dictionary<string, double>()),
-            },
+            zero.Weights.Classes.ToDictionary(pair => pair.Key, pair => new SegmentClassWeights(pair.Value.Bias, new Dictionary<string, double>())),
             new Dictionary<string, FeatureScale>());
 
-        SegmentModel zero = SegmentRegression.Fit(samples, Pulled(1, 1, 1)).Model;
         SegmentModel pulled = SegmentRegression.Fit(samples, Pulled(1, 1, 1), toward: nothing).Model;
 
-        Assert.Equal(zero, pulled);
+        foreach ((SegmentKind kind, SegmentClassWeights weights) in zero.Weights.Classes)
+        {
+            Assert.Equal(weights.Bias, pulled.Weights.Classes[kind].Bias, 6);
+            Assert.All(weights.Features, pair => Assert.Equal(pair.Value, pulled.Weights.Classes[kind].Features[pair.Key], 6));
+        }
+
+        Assert.All(zero.StationOffsets, pair => Assert.Equal(pair.Value, pulled.StationOffsets[pair.Key], 6));
     }
 
-    [Fact(DisplayName = "pulled far harder than the samples pull, every weight and offset comes to the version in use's as it scores the features, a weight or an offset it does not have to zero, and the intercepts follow the samples")]
+    [Fact(DisplayName = "pulled far harder than the samples pull, every intercept, weight and offset comes to the version in use's as it scores the features, and a weight or an offset it does not have to zero")]
     public void AHardPullComesToTheVersionInUse()
     {
         SegmentSample[] samples = Mixed();
@@ -301,7 +302,7 @@ public sealed class SegmentRegressionTests
         Assert.Equal(0.7, pulled.StationOffsets[Station], 4);
         Assert.Equal(0, pulled.StationOffsets[OtherStation], 4);
         Assert.Equal(-0.4, pulled.SeriesOffsets["架空の物語"], 4);
-        Assert.NotEqual(inUse.Weights.Classes[SegmentKind.Break].Bias, pulled.Weights.Classes[SegmentKind.Break].Bias, 1);
+        Assert.Equal(-1.0 + (-1.5 * (pulled.Standardisation[SegmentFeature.Length].Mean - 60) / 30) + (-3.0 * pulled.Standardisation[SegmentFeature.LogoShare].Mean), pulled.Weights.Classes[SegmentKind.Break].Bias, 4);
         Assert.Equal(0, zero.Weights.Classes[SegmentKind.Break].Features[SegmentFeature.LogoShare], 4);
     }
 
@@ -347,7 +348,7 @@ public sealed class SegmentRegressionTests
             {
                 [SegmentKind.Break] = new(0, new Dictionary<string, double> { [SegmentFeature.IsShortMultipleOf15s] = -4.0 }),
                 [SegmentKind.Opening] = new(0, new Dictionary<string, double> { [SegmentFeature.OpeningWindow] = -4.0, [SegmentFeature.IsThemeLength] = -4.0 }),
-                [SegmentKind.Ending] = new(0, new Dictionary<string, double>()),
+                [SegmentKind.Ending] = new(-10, new Dictionary<string, double>()),
             },
             new Dictionary<string, FeatureScale>
             {
@@ -440,15 +441,16 @@ public sealed class SegmentRegressionTests
         ];
 
     /// <summary>
-    /// Hundreds of each kind, drawn from the same rule in a different order for each <paramref name="draw"/>: an
-    /// opening mostly in the window and as long as a theme, an advert mostly on the grid, the programme mostly neither.
+    /// Hundreds of label weight of each kind, as a break is labelled over a round, drawn from the same rule in a different
+    /// order for each <paramref name="draw"/>: an opening mostly in the window and as long as a theme, an advert mostly on
+    /// the grid, the programme mostly neither.
     /// </summary>
     private static SegmentSample[] ManyOpenings(int draw)
         =>
         [
-            .. Enumerable.Range(0, 200).Select(at => (at * 7) + draw).Select(at => Themed(SegmentKind.Programme, 0.5, at % 9 is 0 ? 1 : 0, at % 11 is 0 ? 1 : 0, at % 13 is 0 ? 1 : 0)),
-            .. Enumerable.Range(0, 100).Select(at => (at * 7) + draw).Select(at => Themed(SegmentKind.Break, 0.9, at % 10 is 0 ? 1 : 0, 0, at % 6 is 0 ? 0 : 1)),
-            .. Enumerable.Range(0, 100).Select(at => (at * 7) + draw).Select(at => Themed(SegmentKind.Opening, 0.8, at % 5 is 0 ? 0 : 1, at % 4 is 0 ? 0 : 1, 0)),
+            .. Enumerable.Range(0, 200).Select(at => (at * 7) + draw).Select(at => Themed(SegmentKind.Programme, 3.0, at % 9 is 0 ? 1 : 0, at % 11 is 0 ? 1 : 0, at % 13 is 0 ? 1 : 0)),
+            .. Enumerable.Range(0, 100).Select(at => (at * 7) + draw).Select(at => Themed(SegmentKind.Break, 5.0, at % 10 is 0 ? 1 : 0, 0, at % 6 is 0 ? 0 : 1)),
+            .. Enumerable.Range(0, 100).Select(at => (at * 7) + draw).Select(at => Themed(SegmentKind.Opening, 5.0, at % 5 is 0 ? 0 : 1, at % 4 is 0 ? 0 : 1, 0)),
         ];
 
     private static SegmentSample Themed(SegmentKind kind, double weight, double window, double theme, double grid)
@@ -467,6 +469,8 @@ public sealed class SegmentRegressionTests
     /// </summary>
     private static double Slope(SegmentModel model, SegmentKind kind, string feature)
         => model.Weights.Classes[kind].Features[feature] / model.Standardisation[feature].Sd;
+
+    private static double Pull(double labelled) => SegmentRegression.InUseCountsAs / (SegmentRegression.InUseCountsAs + labelled);
 
     private static double Likelihood(SegmentModel model, IEnumerable<SegmentSample> samples)
         => samples.Sum(sample => sample.Weight * model.Chances(sample.Features, sample.Station, sample.Series).LogOf(sample.Kind));

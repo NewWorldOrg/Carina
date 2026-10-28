@@ -2,12 +2,14 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// The settings learning tries: each set of thresholds the segments are read with, and with each, every
-/// pull on the weights towards the version in use (<see cref="Lambdas"/>) beside every pull on the station and
-/// series offsets alike (<see cref="OffsetLambdas"/>), in that order, so that the search chooses how near that
+/// pull towards the version in use on a kind no sample labels (<see cref="Lambdas"/>) beside every pull on the station
+/// and series offsets alike (<see cref="OffsetLambdas"/>), in that order, so that the search chooses how near that
 /// version the candidate stays. <see cref="Default"/> reads with the
 /// initial thresholds and with each of silence, black, a change of scene and the tolerance of the grid
-/// moved one step either way, the others kept; it tries the weights' pulls 1, 0.1 and 10 and the offsets'
-/// 10, 1 and 100, so that its first setting is the initial one.
+/// moved one step either way, the others kept; it tries the pulls 3000, 1000 and 10000, a few times the weight of the
+/// labels a round learns from, so that a kind labelled a few times stays near the version in use and the break, labelled
+/// hundreds of times, is pulled about as hard as a pull of 10 or less, and the offsets' 10, 1 and 100. Its first reading
+/// is the initial one.
 /// </summary>
 public sealed class SegmentSearch
 {
@@ -51,7 +53,7 @@ public sealed class SegmentSearch
             Moved(gridToleranceSec: 0.5),
             Moved(gridToleranceSec: 1.5),
         ],
-        [1, 0.1, 10],
+        [3000, 1000, 10000],
         [10, 1, 100]);
 
     public IReadOnlyList<SegmentThresholds> Readings { get; }
