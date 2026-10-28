@@ -85,7 +85,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         LiveProfile asked = LiveProfile.Find(profile)!;
         string written = await (SyntheticBroadcast.AsMeasured() with { Length = PastTheProbe })
             .WriteAsync(Path.Combine(room, "segmented.m2ts"));
-        HlsSegmenter segmenter = new(new LiveHlsSettings { SegmentsHeld = 100 });
+        HlsSegmenter segmenter = new(new HlsSettings { SegmentsHeld = 100 });
         LiveFragmenter fragmenter = new(LiveTrack.Picture);
         LiveFrames frames = new();
 
@@ -96,7 +96,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
 
         double keyframeFrames = Math.Round(asked.Rate.PerSecond * 2);
         TimeSpan everyTwoSeconds = TimeSpan.FromSeconds(keyframeFrames * asked.Rate.Denominator / asked.Rate.Numerator);
-        IReadOnlyList<LiveHlsSegment> cut = segmenter.Window.Segments;
+        IReadOnlyList<HlsSegment> cut = segmenter.Window.Segments;
 
         Assert.True(cut.Count >= 3, $"the transcoder's {PastTheProbe.TotalSeconds} s were cut into {cut.Count} segment(s)");
         Assert.All(
@@ -106,7 +106,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
                 string.Create(CultureInfo.InvariantCulture, $"segment {segment.Number} lasted {segment.Length.TotalSeconds:F4} s")));
         Assert.Equal(2, segmenter.Window.TargetSeconds);
 
-        foreach (LiveHlsSegment segment in cut)
+        foreach (HlsSegment segment in cut)
         {
             string played = Path.Combine(room, string.Create(CultureInfo.InvariantCulture, $"segment-{segment.Number}.mp4"));
 

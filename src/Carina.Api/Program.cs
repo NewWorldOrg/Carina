@@ -118,7 +118,7 @@ app.MapGet(
                 ILiveSessionManager sessions,
                 ISoundOnAir onAir,
                 ILiveEncoderSelector encoders,
-                ILiveHlsKeys keys) =>
+                IHlsKeys keys) =>
             LiveStreamDelivery.InvokeWithTheTicketInThePath(context, networkId, serviceId, name, sessions, onAir, encoders, keys))
     .ExcludeFromDescription()
     .WithEffect(EndpointEffect.Reading)
@@ -132,7 +132,7 @@ app.MapGet(
                 ILiveSessionManager sessions,
                 ISoundOnAir onAir,
                 ILiveEncoderSelector encoders,
-                ILiveHlsKeys keys) =>
+                IHlsKeys keys) =>
             LiveHlsDelivery.Invoke(context, networkId, serviceId, sessions, onAir, encoders, keys))
     .WithName(LiveHlsDelivery.ThePlaylistIsCalled)
     .WithTags(LiveSurfaces.Tag)
@@ -141,13 +141,13 @@ app.MapGet(
     .Reads(LiveSurfaces.WhichProfileThePlaylistIsEncodedIn, LiveSurfaces.WhichSoundThePlaylistCarries)
     .WithEffect(EndpointEffect.Reading);
 
-app.MapGet(LiveHlsDelivery.ThePlaylistOfAKey, (HttpContext context, string key, ILiveHlsKeys keys) =>
+app.MapGet(LiveHlsDelivery.ThePlaylistOfAKey, (HttpContext context, string key, IHlsKeys keys) =>
     LiveHlsDelivery.ThePlaylist(context, key, keys)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading).OpenedByItsKey();
 
-app.MapGet(LiveHlsDelivery.TheInitialisationOfAKey, (HttpContext context, string key, ILiveHlsKeys keys) =>
+app.MapGet(LiveHlsDelivery.TheInitialisationOfAKey, (HttpContext context, string key, IHlsKeys keys) =>
     LiveHlsDelivery.TheInitialisation(context, key, keys)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading).OpenedByItsKey();
 
-app.MapGet(LiveHlsDelivery.ASegmentOfAKey, (HttpContext context, string key, long number, ILiveHlsKeys keys) =>
+app.MapGet(LiveHlsDelivery.ASegmentOfAKey, (HttpContext context, string key, long number, IHlsKeys keys) =>
     LiveHlsDelivery.ASegment(context, key, number, keys)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading).OpenedByItsKey();
 
 app.MapMethods(

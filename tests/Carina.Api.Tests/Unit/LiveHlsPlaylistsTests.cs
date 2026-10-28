@@ -13,7 +13,7 @@ public sealed class LiveHlsPlaylistsTests
     [Fact(DisplayName = "BR-PV-005: the first answer is a playlist naming the key's own playlist once, with what a player chooses it by")]
     public void TheFirstAnswerNamesTheKeysOwnPlaylistOnce()
     {
-        LiveHlsWindow window = new([new LiveHlsSegment(0, TwoSeconds, 500_500)], 2, false, "avc1.64002a,mp4a.40.2");
+        HlsWindow window = new([new HlsSegment(0, TwoSeconds, 500_500)], 2, false, "avc1.64002a,mp4a.40.2");
 
         Assert.Equal(
             "#EXTM3U\n"
@@ -27,7 +27,7 @@ public sealed class LiveHlsPlaylistsTests
     [Fact]
     public void CodecsTheInitialisationDoesNotNameAreLeftUnsaid()
     {
-        LiveHlsWindow window = new([new LiveHlsSegment(0, TwoSeconds, 1_000)], 2, false, null);
+        HlsWindow window = new([new HlsSegment(0, TwoSeconds, 1_000)], 2, false, null);
 
         Assert.DoesNotContain("CODECS", LiveHlsPlaylists.Multivariant(Key, LiveProfile.Hd30, window), StringComparison.Ordinal);
         Assert.Contains("RESOLUTION=1280x720,FRAME-RATE=29.970", LiveHlsPlaylists.Multivariant(Key, LiveProfile.Hd30, window), StringComparison.Ordinal);
@@ -36,8 +36,8 @@ public sealed class LiveHlsPlaylistsTests
     [Fact]
     public void TheBandwidthIsThatOfTheSegmentCarryingTheMostAndNoLess()
     {
-        LiveHlsWindow window = new(
-            [new LiveHlsSegment(3, TwoSeconds, 1_000_000), new LiveHlsSegment(4, TwoSeconds, 1_500_001)],
+        HlsWindow window = new(
+            [new HlsSegment(3, TwoSeconds, 1_000_000), new HlsSegment(4, TwoSeconds, 1_500_001)],
             2,
             false,
             null);
@@ -48,8 +48,8 @@ public sealed class LiveHlsPlaylistsTests
     [Fact(DisplayName = "BR-PD-022: the playlist of a key maps the initialisation and lists the segments held, numbered from the oldest")]
     public void ThePlaylistOfAKeyMapsTheInitialisationAndListsTheSegmentsHeld()
     {
-        LiveHlsWindow window = new(
-            [new LiveHlsSegment(12, TwoSeconds, 10), new LiveHlsSegment(13, TimeSpan.FromSeconds(1.5), 10)],
+        HlsWindow window = new(
+            [new HlsSegment(12, TwoSeconds, 10), new HlsSegment(13, TimeSpan.FromSeconds(1.5), 10)],
             2,
             false,
             null);
@@ -71,7 +71,7 @@ public sealed class LiveHlsPlaylistsTests
     [Fact]
     public void ThePlaylistOfASessionThatHasEndedSaysNoMoreIsComing()
     {
-        LiveHlsWindow window = new([new LiveHlsSegment(0, TwoSeconds, 10)], 2, true, null);
+        HlsWindow window = new([new HlsSegment(0, TwoSeconds, 10)], 2, true, null);
 
         Assert.EndsWith("0.m4s\n#EXT-X-ENDLIST\n", LiveHlsPlaylists.Media(window), StringComparison.Ordinal);
     }
@@ -79,6 +79,6 @@ public sealed class LiveHlsPlaylistsTests
     [Fact]
     public void ATargetNotYetLearntIsOneSecond()
     {
-        Assert.Contains("#EXT-X-TARGETDURATION:1\n", LiveHlsPlaylists.Media(LiveHlsWindow.Empty), StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-TARGETDURATION:1\n", LiveHlsPlaylists.Media(HlsWindow.Empty), StringComparison.Ordinal);
     }
 }

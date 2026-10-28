@@ -17,7 +17,7 @@ public static class LiveHlsPlaylists
 
     private const int Version = 7;
 
-    public static string Multivariant(string key, LiveProfile profile, LiveHlsWindow window)
+    public static string Multivariant(string key, LiveProfile profile, HlsWindow window)
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
         ArgumentNullException.ThrowIfNull(profile);
@@ -41,7 +41,7 @@ public static class LiveHlsPlaylists
         return written.ToString();
     }
 
-    public static string Media(LiveHlsWindow window)
+    public static string Media(HlsWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
 
@@ -52,7 +52,7 @@ public static class LiveHlsPlaylists
         written.Append("#EXT-X-INDEPENDENT-SEGMENTS\n");
         written.Append(CultureInfo.InvariantCulture, $"#EXT-X-MAP:URI=\"{Initialisation}\"\n");
 
-        foreach (LiveHlsSegment segment in window.Segments)
+        foreach (HlsSegment segment in window.Segments)
         {
             written.Append(CultureInfo.InvariantCulture, $"#EXTINF:{segment.Length.TotalSeconds:0.000},\n");
             written.Append(CultureInfo.InvariantCulture, $"{segment.Number}.m4s\n");
@@ -72,7 +72,7 @@ public static class LiveHlsPlaylists
     /// <summary>
     /// The bits a second of the segment carrying the most, or what the profile is capped at when no segment is held.
     /// </summary>
-    private static long Bandwidth(LiveHlsWindow window, LiveProfile profile)
+    private static long Bandwidth(HlsWindow window, LiveProfile profile)
         => window.Segments
             .Select(segment => (long?)Math.Ceiling((decimal)segment.Bytes * 8 * TimeSpan.TicksPerSecond / segment.Length.Ticks))
             .Max() ?? (profile.SoftwareRateControl.KilobitsPerSecond * 1000L);

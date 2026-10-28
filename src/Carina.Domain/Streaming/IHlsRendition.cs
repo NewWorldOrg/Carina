@@ -3,11 +3,11 @@ namespace Carina.Domain.Streaming;
 /// <summary>
 /// One live session's pictures and sound cut into segments for one player.
 /// </summary>
-public interface ILiveHlsRendition
+public interface IHlsRendition
 {
     LiveProfile Profile { get; }
 
-    LiveHlsWindow Window { get; }
+    HlsWindow Window { get; }
 
     ReadOnlyMemory<byte>? Initialisation { get; }
 

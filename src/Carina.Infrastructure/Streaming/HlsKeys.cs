@@ -10,7 +10,7 @@ namespace Carina.Infrastructure.Streaming;
 /// Holds the keys players open a live channel's segments with, by a digest of each so that the key itself is held
 /// nowhere, and lets go of a key and the seat it holds once nothing has been asked with it for a while.
 /// </summary>
-public sealed class LiveHlsKeys(LiveHlsSettings settings, TimeProvider clock) : ILiveHlsKeys, IAsyncDisposable
+public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys, IAsyncDisposable
 {
     private readonly Lock gate = new();
 
@@ -29,7 +29,7 @@ public sealed class LiveHlsKeys(LiveHlsSettings settings, TimeProvider clock) : 
         }
     }
 
-    public IssuedLiveHlsKey? Issue(ILiveViewing seat, Subject watcher, LiveProfile profile)
+    public IssuedHlsKey? Issue(ILiveViewing seat, Subject watcher, LiveProfile profile)
     {
         ArgumentNullException.ThrowIfNull(seat);
         ArgumentNullException.ThrowIfNull(watcher);
@@ -61,10 +61,10 @@ public sealed class LiveHlsKeys(LiveHlsSettings settings, TimeProvider clock) : 
         displaced?.Close();
         made.Start();
 
-        return new IssuedLiveHlsKey(key, made);
+        return new IssuedHlsKey(key, made);
     }
 
-    public ILiveHlsRendition? Find(string? offered)
+    public IHlsRendition? Find(string? offered)
     {
         if (!Unguessable.IsOne(offered))
         {

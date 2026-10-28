@@ -209,7 +209,7 @@ public sealed partial class LiveHlsTests
     public async Task AKeyNothingIsAskedWithForThirtySecondsIsRefusedAndItsSeatLetGoOf()
     {
         HandTurnedClock clock = new();
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
         await using AuthProbe probe = Wiring(keys);
         using HttpClient player = Player(probe);
         string key = KeyIn(await (await OpenedAsync(player, WithTicket(await IssuedAsync(probe), "a.m3u8"))).Content.ReadAsStringAsync());
@@ -344,7 +344,7 @@ public sealed partial class LiveHlsTests
         return await opening;
     }
 
-    private AuthProbe Wiring(LiveHlsKeys? keys = null, RecordedStartup? heard = null)
+    private AuthProbe Wiring(HlsKeys? keys = null, RecordedStartup? heard = null)
     {
         HeldServices services = new();
         HeldCandidates candidates = new();
@@ -371,7 +371,7 @@ public sealed partial class LiveHlsTests
 
             if (keys is not null)
             {
-                wired.AddSingleton<ILiveHlsKeys>(keys);
+                wired.AddSingleton<IHlsKeys>(keys);
             }
         }
 

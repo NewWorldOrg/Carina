@@ -35,7 +35,7 @@ public sealed class LocalAccountServiceTests
 
     private readonly CountingPasswordHasher hasher = new(new QuickPasswordHasher());
 
-    private readonly LiveHlsKeys playlists = new(new LiveHlsSettings(), TimeProvider.System);
+    private readonly HlsKeys playlists = new(new HlsSettings(), TimeProvider.System);
 
     private LocalAccountService? held;
 
@@ -324,7 +324,7 @@ public sealed class LocalAccountServiceTests
 
         AuthSession here = await StartedAsync("this device");
         ILiveViewing seat = (await new LiveFanout(new LiveFanoutSettings()).JoinAsync(Cancel))!;
-        IssuedLiveHlsKey issued = playlists.Issue(seat, here.Subject, LiveProfile.Hd30)!;
+        IssuedHlsKey issued = playlists.Issue(seat, here.Subject, LiveProfile.Hd30)!;
 
         Assert.NotNull(playlists.Find(issued.Key));
 

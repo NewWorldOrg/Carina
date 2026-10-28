@@ -9,7 +9,7 @@ namespace Carina.Infrastructure.Streaming;
 /// One viewer's seat on a live session, read as it comes and cut into segments, held for as long as a player goes on
 /// asking for it.
 /// </summary>
-internal sealed class LiveHlsRendition : ILiveHlsRendition
+internal sealed class LiveHlsRendition : IHlsRendition
 {
     private readonly Lock gate = new();
 
@@ -17,7 +17,7 @@ internal sealed class LiveHlsRendition : ILiveHlsRendition
 
     private readonly HlsSegmenter segmenter;
 
-    private readonly LiveHlsSettings settings;
+    private readonly HlsSettings settings;
 
     private readonly TimeProvider clock;
 
@@ -38,7 +38,7 @@ internal sealed class LiveHlsRendition : ILiveHlsRendition
         ILiveViewing seat,
         Subject watcher,
         LiveProfile profile,
-        LiveHlsSettings settings,
+        HlsSettings settings,
         TimeProvider clock,
         Action<LiveHlsRendition> lapsed)
     {
@@ -56,7 +56,7 @@ internal sealed class LiveHlsRendition : ILiveHlsRendition
 
     public LiveProfile Profile { get; }
 
-    public LiveHlsWindow Window
+    public HlsWindow Window
     {
         get
         {

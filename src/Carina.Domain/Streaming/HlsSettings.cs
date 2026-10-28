@@ -3,7 +3,7 @@ namespace Carina.Domain.Streaming;
 /// <summary>
 /// How live channels are handed to players that open playlists.
 /// </summary>
-public sealed record LiveHlsSettings
+public sealed record HlsSettings
 {
     private readonly TimeSpan idle = TimeSpan.FromSeconds(30);
 

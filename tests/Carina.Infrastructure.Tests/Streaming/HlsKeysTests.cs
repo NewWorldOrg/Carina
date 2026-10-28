@@ -7,7 +7,7 @@ using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 
-public sealed class LiveHlsKeysTests
+public sealed class HlsKeysTests
 {
     private const uint OneFrame = 1001;
 
@@ -20,9 +20,9 @@ public sealed class LiveHlsKeysTests
     [Fact(DisplayName = "BR-PV-005: a key is an unguessable value that opens what it was issued for")]
     public async Task AKeyIsAnUnguessableValueThatOpensWhatItWasIssuedFor()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
 
-        IssuedLiveHlsKey issued = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey issued = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
 
         Assert.True(Unguessable.IsOne(issued.Key));
         Assert.Same(issued.Rendition, keys.Find(issued.Key));
@@ -32,10 +32,10 @@ public sealed class LiveHlsKeysTests
     [Fact]
     public async Task EveryKeyIssuedIsADifferentOne()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
 
-        IssuedLiveHlsKey first = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
-        IssuedLiveHlsKey second = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey first = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey second = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
 
         Assert.NotEqual(first.Key, second.Key);
         Assert.NotSame(keys.Find(first.Key), keys.Find(second.Key));
@@ -48,7 +48,7 @@ public sealed class LiveHlsKeysTests
     [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
     public async Task AKeyNeverIssuedOpensNothing(string? offered)
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
 
         keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30);
 
@@ -60,15 +60,15 @@ public sealed class LiveHlsKeysTests
     {
         string key = Unguessable.Issue();
 
-        Assert.DoesNotContain(key, new IssuedLiveHlsKey(key, new NoRendition()).ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(key, new IssuedHlsKey(key, new NoRendition()).ToString(), StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "BR-PV-005: a key nothing has been asked with for thirty seconds is let go of, and the seat it held with it")]
     public async Task AKeyNothingHasBeenAskedWithForThirtySecondsIsLetGoOf()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldSeat seat = new();
-        IssuedLiveHlsKey issued = keys.Issue(seat, Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey issued = keys.Issue(seat, Watcher, LiveProfile.Hd30)!;
 
         clock.Turn(TimeSpan.FromSeconds(29));
 
@@ -84,9 +84,9 @@ public sealed class LiveHlsKeysTests
     [Fact(DisplayName = "BR-PV-005: a key goes on being held for as long as something keeps asking with it")]
     public async Task AKeyGoesOnBeingHeldForAsLongAsSomethingKeepsAskingWithIt()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldSeat seat = new();
-        IssuedLiveHlsKey issued = keys.Issue(seat, Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey issued = keys.Issue(seat, Watcher, LiveProfile.Hd30)!;
 
         for (int asked = 0; asked < 10; asked++)
         {
@@ -102,7 +102,7 @@ public sealed class LiveHlsKeysTests
     [Fact]
     public async Task AKeyLetGoOfWithoutBeingAskedForIsLetGoOfAtItsTimeAllTheSame()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldSeat seat = new();
 
         keys.Issue(seat, Watcher, LiveProfile.Hd30);
@@ -115,9 +115,9 @@ public sealed class LiveHlsKeysTests
     [Fact(DisplayName = "BR-PD-022: the first segment is waited for, and its coming is said")]
     public async Task TheFirstSegmentIsWaitedFor()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldSeat seat = new();
-        ILiveHlsRendition rendition = keys.Issue(seat, Watcher, LiveProfile.Hd30)!.Rendition;
+        IHlsRendition rendition = keys.Issue(seat, Watcher, LiveProfile.Hd30)!.Rendition;
         Task<bool> waiting = rendition.ReadyAsync(CancellationToken.None);
 
         seat.Send(new LiveFrame(LiveChannel.PictureHeader, LivePts.Start, Fmp4Media.Initialisation()));
@@ -136,9 +136,9 @@ public sealed class LiveHlsKeysTests
     [Fact]
     public async Task ASessionThatEndsBeforeTheFirstSegmentSaysThereIsNone()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldSeat seat = new();
-        ILiveHlsRendition rendition = keys.Issue(seat, Watcher, LiveProfile.Hd30)!.Rendition;
+        IHlsRendition rendition = keys.Issue(seat, Watcher, LiveProfile.Hd30)!.Rendition;
 
         seat.NoMore();
 
@@ -150,9 +150,9 @@ public sealed class LiveHlsKeysTests
     [Fact]
     public async Task ASessionThatBreaksIsReadAsHavingEnded()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldSeat seat = new();
-        ILiveHlsRendition rendition = keys.Issue(seat, Watcher, LiveProfile.Hd30)!.Rendition;
+        IHlsRendition rendition = keys.Issue(seat, Watcher, LiveProfile.Hd30)!.Rendition;
 
         seat.Breaks();
 
@@ -163,8 +163,8 @@ public sealed class LiveHlsKeysTests
     [Fact]
     public async Task TheFirstSegmentIsWaitedForNoLongerThanTheWaitAllows()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings { LongestWait = TimeSpan.FromSeconds(10) }, clock);
-        ILiveHlsRendition rendition = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!.Rendition;
+        await using HlsKeys keys = new(new HlsSettings { LongestWait = TimeSpan.FromSeconds(10) }, clock);
+        IHlsRendition rendition = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!.Rendition;
         Task<bool> waiting = rendition.ReadyAsync(CancellationToken.None);
 
         clock.Turn(TimeSpan.FromSeconds(10));
@@ -175,11 +175,11 @@ public sealed class LiveHlsKeysTests
     [Fact(DisplayName = "BR-PV-005: revoking what a watcher was let in with lets go of their keys and nobody else's")]
     public async Task RevokingWhatAWatcherWasLetInWithLetsGoOfTheirKeysAndNobodyElses()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldSeat mine = new();
         HeldSeat theirs = new();
-        IssuedLiveHlsKey revoked = keys.Issue(mine, Watcher, LiveProfile.Hd30)!;
-        IssuedLiveHlsKey kept = keys.Issue(theirs, Another, LiveProfile.Hd30)!;
+        IssuedHlsKey revoked = keys.Issue(mine, Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey kept = keys.Issue(theirs, Another, LiveProfile.Hd30)!;
 
         Assert.Equal(1, keys.RevokeEverythingOf(Watcher));
 
@@ -192,9 +192,9 @@ public sealed class LiveHlsKeysTests
     [Fact]
     public async Task AKeyLetGoOfOpensNothingAndItsSeatIsLetGoOfAtOnce()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldSeat seat = new();
-        IssuedLiveHlsKey issued = keys.Issue(seat, Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey issued = keys.Issue(seat, Watcher, LiveProfile.Hd30)!;
 
         keys.LetGo(issued.Key);
         keys.LetGo(issued.Key);
@@ -207,7 +207,7 @@ public sealed class LiveHlsKeysTests
     [Fact]
     public async Task NoMoreKeysAreIssuedThanMayBeHeldAtOnceAndTheSeatIsLeftToTheCaller()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings { MostHeldAtOnce = 2 }, clock);
+        await using HlsKeys keys = new(new HlsSettings { MostHeldAtOnce = 2 }, clock);
         HeldSeat refused = new();
 
         keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30);
@@ -221,18 +221,18 @@ public sealed class LiveHlsKeysTests
     [Fact]
     public async Task AWatcherHoldingAsManyKeysAsTheyMayGivesUpTheOneAskedWithLongestAgo()
     {
-        await using LiveHlsKeys keys = new(new LiveHlsSettings { MostHeldPerWatcher = 2 }, clock);
+        await using HlsKeys keys = new(new HlsSettings { MostHeldPerWatcher = 2 }, clock);
         HeldSeat oldest = new();
-        IssuedLiveHlsKey first = keys.Issue(oldest, Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey first = keys.Issue(oldest, Watcher, LiveProfile.Hd30)!;
 
         clock.Turn(TimeSpan.FromSeconds(1));
 
-        IssuedLiveHlsKey second = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey second = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
 
         clock.Turn(TimeSpan.FromSeconds(1));
         keys.Find(first.Key);
 
-        IssuedLiveHlsKey third = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
+        IssuedHlsKey third = keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30)!;
 
         Assert.NotNull(keys.Find(first.Key));
         Assert.Null(keys.Find(second.Key));
@@ -245,7 +245,7 @@ public sealed class LiveHlsKeysTests
     {
         HeldSeat first = new();
         HeldSeat second = new();
-        LiveHlsKeys keys = new(new LiveHlsSettings(), clock);
+        HlsKeys keys = new(new HlsSettings(), clock);
 
         keys.Issue(first, Watcher, LiveProfile.Hd30);
         keys.Issue(second, Another, LiveProfile.Hd30);
@@ -294,11 +294,11 @@ public sealed class LiveHlsKeysTests
         }
     }
 
-    private sealed class NoRendition : ILiveHlsRendition
+    private sealed class NoRendition : IHlsRendition
     {
         public LiveProfile Profile => LiveProfile.Hd30;
 
-        public LiveHlsWindow Window => LiveHlsWindow.Empty;
+        public HlsWindow Window => HlsWindow.Empty;
 
         public ReadOnlyMemory<byte>? Initialisation => null;
 

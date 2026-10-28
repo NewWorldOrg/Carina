@@ -54,7 +54,7 @@ public static class LiveHlsDelivery
         ILiveSessionManager sessions,
         ISoundOnAir onAir,
         ILiveEncoderSelector encoders,
-        ILiveHlsKeys keys)
+        IHlsKeys keys)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(encoders);
@@ -114,7 +114,7 @@ public static class LiveHlsDelivery
         Subject watcher,
         ILiveSessionManager sessions,
         ISoundOnAir onAir,
-        ILiveHlsKeys keys)
+        IHlsKeys keys)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(asked);
@@ -157,7 +157,7 @@ public static class LiveHlsDelivery
             LiveHlsPlaylists.Multivariant(issued.Key, issued.Rendition.Profile, issued.Rendition.Window));
     }
 
-    public static Task ThePlaylist(HttpContext context, string key, ILiveHlsKeys keys)
+    public static Task ThePlaylist(HttpContext context, string key, IHlsKeys keys)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(keys);
@@ -169,7 +169,7 @@ public static class LiveHlsDelivery
             : RefuseAsync(context, StatusCodes.Status403Forbidden, NotHeld);
     }
 
-    public static Task TheInitialisation(HttpContext context, string key, ILiveHlsKeys keys)
+    public static Task TheInitialisation(HttpContext context, string key, IHlsKeys keys)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(keys);
@@ -184,7 +184,7 @@ public static class LiveHlsDelivery
         return HandAsync(context, rendition.Initialisation);
     }
 
-    public static Task ASegment(HttpContext context, string key, long number, ILiveHlsKeys keys)
+    public static Task ASegment(HttpContext context, string key, long number, IHlsKeys keys)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(keys);

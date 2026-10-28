@@ -39,7 +39,7 @@ public sealed class HlsSegmenterTests
 
         segmenter.Take(Picture(Gop(3, keyframe: true)));
 
-        LiveHlsSegment closed = Assert.Single(segmenter.Window.Segments);
+        HlsSegment closed = Assert.Single(segmenter.Window.Segments);
 
         Assert.True(segmenter.HoldsASegment);
 
@@ -196,7 +196,7 @@ public sealed class HlsSegmenterTests
     [InlineData(Fmp4Media.NotASyncSample, 0)]
     public void AFragmentSayingNothingOfItsSamplesIsReadByTheDefaultOfItsTrack(uint byDefault, int closed)
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale, trackDefaultFlags: byDefault)));
 
@@ -214,7 +214,7 @@ public sealed class HlsSegmenterTests
     [InlineData(SampleDurationsCarried.DefaultOfTheTrack)]
     public void HowLongThePicturesLastIsReadWhereverItIsSaid(SampleDurationsCarried carried)
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale, trackDefaultDuration: OneFrame)));
 
@@ -247,7 +247,7 @@ public sealed class HlsSegmenterTests
     [Fact]
     public void NothingIsCutBeforeTheInitialisationHasSaidWhichTrackIsThePicture()
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         for (int gop = 0; gop < 6; gop++)
         {
@@ -262,7 +262,7 @@ public sealed class HlsSegmenterTests
     public void TheInitialisationIsHandedBackAsItCame()
     {
         byte[] initialisation = Fmp4Media.Initialisation(Timescale);
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(initialisation));
 
@@ -275,7 +275,7 @@ public sealed class HlsSegmenterTests
     [InlineData((byte)0x64, (byte)0x00, (byte)0x28, false, "avc1.640028")]
     public void TheCodecsAreNamedFromTheInitialisation(byte profile, byte compatibility, byte level, bool withSound, string named)
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale, profile, compatibility, level, withSound)));
 
@@ -285,7 +285,7 @@ public sealed class HlsSegmenterTests
     [Fact]
     public void APictureInACodecAPlaylistCannotNameLeavesTheCodecsUnsaid()
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale, pictureEntry: "hvc1")));
 
@@ -333,7 +333,7 @@ public sealed class HlsSegmenterTests
     public void TheSameInitialisationHandedAgainChangesNothing()
     {
         byte[] initialisation = Fmp4Media.Initialisation(Timescale);
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(initialisation));
         segmenter.Take(Header(initialisation));
@@ -383,7 +383,7 @@ public sealed class HlsSegmenterTests
 
     private static HlsSegmenter Initialised()
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings { ShortestSegment = Shortest });
+        HlsSegmenter segmenter = new(new HlsSettings { ShortestSegment = Shortest });
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale)));
 

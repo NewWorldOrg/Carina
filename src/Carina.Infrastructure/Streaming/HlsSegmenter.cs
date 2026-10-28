@@ -10,13 +10,13 @@ namespace Carina.Infrastructure.Streaming;
 /// Cuts what a live transcoder writes into segments that each begin with a keyframe, cutting a fragment in two where
 /// a keyframe falls inside it.
 /// </summary>
-public sealed class HlsSegmenter(LiveHlsSettings settings)
+public sealed class HlsSegmenter(HlsSettings settings)
 {
     private const int AVisualEntryBeforeItsBoxes = 78;
 
     private const string Aac = "mp4a.40.2";
 
-    private readonly LiveHlsSettings settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    private readonly HlsSettings settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
     private readonly Queue<HeldSegment> held = new();
 
@@ -40,7 +40,7 @@ public sealed class HlsSegmenter(LiveHlsSettings settings)
 
     public ReadOnlyMemory<byte>? Initialisation => initialisation;
 
-    public LiveHlsWindow Window => new([.. held.Select(segment => segment.Segment)], target, ended, codecs);
+    public HlsWindow Window => new([.. held.Select(segment => segment.Segment)], target, ended, codecs);
 
     public bool HoldsASegment => held.Count > 0;
 
@@ -310,7 +310,7 @@ public sealed class HlsSegmenter(LiveHlsSettings settings)
             return;
         }
 
-        held.Enqueue(new HeldSegment(new LiveHlsSegment(next++, length, joined.Length), joined));
+        held.Enqueue(new HeldSegment(new HlsSegment(next++, length, joined.Length), joined));
         target = Math.Max(target, Rounded(length));
 
         while (held.Count > settings.SegmentsHeld)
@@ -319,5 +319,5 @@ public sealed class HlsSegmenter(LiveHlsSettings settings)
         }
     }
 
-    private sealed record HeldSegment(LiveHlsSegment Segment, ReadOnlyMemory<byte> Bytes);
+    private sealed record HeldSegment(HlsSegment Segment, ReadOnlyMemory<byte> Bytes);
 }

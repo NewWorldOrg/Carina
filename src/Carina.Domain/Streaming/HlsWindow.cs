@@ -1,8 +1,8 @@
 namespace Carina.Domain.Streaming;
 
-public sealed record LiveHlsSegment
+public sealed record HlsSegment
 {
-    public LiveHlsSegment(long number, TimeSpan length, int bytes)
+    public HlsSegment(long number, TimeSpan length, int bytes)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(number);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(length, TimeSpan.Zero);
@@ -23,9 +23,9 @@ public sealed record LiveHlsSegment
 /// <summary>
 /// The segments held, oldest first, with the target in whole seconds, whether the session has ended and the codecs.
 /// </summary>
-public sealed record LiveHlsWindow(IReadOnlyList<LiveHlsSegment> Segments, int TargetSeconds, bool Ended, string? Codecs)
+public sealed record HlsWindow(IReadOnlyList<HlsSegment> Segments, int TargetSeconds, bool Ended, string? Codecs)
 {
-    public static LiveHlsWindow Empty { get; } = new([], 0, false, null);
+    public static HlsWindow Empty { get; } = new([], 0, false, null);
 
     public long FirstNumber => Segments.Count is 0 ? 0 : Segments[0].Number;
 }
