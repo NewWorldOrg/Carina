@@ -76,6 +76,36 @@ public sealed class LiveHlsPlaylistsTests
         Assert.EndsWith("0.m4s\n#EXT-X-ENDLIST\n", LiveHlsPlaylists.Media(window), StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "BR-PD-022: the playlist of a recording says it is an event, listed from its first segment, and says when the end has come")]
+    public void ThePlaylistOfARecordingSaysItIsAnEvent()
+    {
+        HlsWindow window = new(
+            [new HlsSegment(0, TwoSeconds, 10), new HlsSegment(1, TimeSpan.FromSeconds(0.8), 10)],
+            2,
+            true,
+            null,
+            HlsPlaylistType.Event);
+
+        Assert.Equal(
+            "#EXTM3U\n"
+            + "#EXT-X-VERSION:7\n"
+            + "#EXT-X-TARGETDURATION:2\n"
+            + "#EXT-X-MEDIA-SEQUENCE:0\n"
+            + "#EXT-X-PLAYLIST-TYPE:EVENT\n"
+            + "#EXT-X-INDEPENDENT-SEGMENTS\n"
+            + "#EXT-X-MAP:URI=\"init.mp4\"\n"
+            + "#EXTINF:2.002,\n"
+            + "0.m4s\n"
+            + "#EXTINF:0.800,\n"
+            + "1.m4s\n"
+            + "#EXT-X-ENDLIST\n",
+            LiveHlsPlaylists.Media(window));
+    }
+
+    [Fact]
+    public void ThePlaylistOfALiveChannelSaysNoType()
+        => Assert.DoesNotContain("PLAYLIST-TYPE", LiveHlsPlaylists.Media(HlsWindow.Empty), StringComparison.Ordinal);
+
     [Fact]
     public void ATargetNotYetLearntIsOneSecond()
     {

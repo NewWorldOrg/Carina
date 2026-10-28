@@ -6,8 +6,8 @@ using Carina.Domain.Streaming;
 namespace Carina.Api.Live;
 
 /// <summary>
-/// The two playlists a player reads a live channel through: the first, naming the key's own playlist once, and the
-/// key's own, listing the segments held.
+/// The two playlists a player reads a live channel or a recording through: the first, naming the key's own playlist
+/// once, and the key's own, listing the segments.
 /// </summary>
 public static class LiveHlsPlaylists
 {
@@ -49,6 +49,12 @@ public static class LiveHlsPlaylists
 
         written.Append(CultureInfo.InvariantCulture, $"#EXT-X-TARGETDURATION:{Math.Max(1, window.TargetSeconds)}\n");
         written.Append(CultureInfo.InvariantCulture, $"#EXT-X-MEDIA-SEQUENCE:{window.FirstNumber}\n");
+
+        if (window.Type is HlsPlaylistType.Event)
+        {
+            written.Append("#EXT-X-PLAYLIST-TYPE:EVENT\n");
+        }
+
         written.Append("#EXT-X-INDEPENDENT-SEGMENTS\n");
         written.Append(CultureInfo.InvariantCulture, $"#EXT-X-MAP:URI=\"{Initialisation}\"\n");
 

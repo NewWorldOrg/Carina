@@ -200,6 +200,25 @@ app.MapGet(
     .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(
+        RecordingHlsDelivery.Path,
+        (HttpContext context,
+                string id,
+                PlaybackService playback,
+                IOnTheFlyPlayer player,
+                IPlaybackPositionRepository positions,
+                IHlsKeys keys) =>
+            RecordingHlsDelivery.Invoke(context, id, playback, player, positions, keys))
+    .WithName(RecordingHlsDelivery.ThePlaylistIsCalled)
+    .WithTags(PlaybackSurfaces.Tag)
+    .WithSummary(PlaybackSurfaces.HowARecordingIsWatchedThroughAPlaylist)
+    .Produces(StatusCodes.Status200OK, contentType: LiveHlsPlaylists.MediaType)
+    .Reads(
+        PlaybackSurfaces.WhereThePlayingStarts,
+        PlaybackSurfaces.WhichProfileThePictureIsEncodedIn,
+        PlaybackSurfaces.WhichSoundIsCarried)
+    .WithEffect(EndpointEffect.Reading);
+
+app.MapGet(
         CaptionDelivery.Path,
         (HttpContext context, string id, PlaybackService playback, CaptionService captions) =>
             CaptionDelivery.Invoke(context, id, playback, captions))

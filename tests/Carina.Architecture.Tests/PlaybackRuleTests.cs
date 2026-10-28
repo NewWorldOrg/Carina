@@ -10,6 +10,8 @@ public sealed class PlaybackRuleTests
 
     private const string Picture = "/Carina.Api/Playback/ThumbnailDelivery.cs";
 
+    private const string Playlist = "/Carina.Api/Playback/RecordingHlsDelivery.cs";
+
     private const string Captions = "/Carina.Api/Playback/CaptionDelivery.cs";
 
     private const string DataBroadcast = "/Carina.Api/Playback/DataBroadcastDelivery.cs";
@@ -24,7 +26,7 @@ public sealed class PlaybackRuleTests
     public void TheOnlyPlacesThatSpellTheDeliveryPathAreWhereItIsDeclaredAndWhereTheDocumentDisownsIt()
     {
         Assert.Equal(
-            [WhereTheDocumentSaysItExists, Captions, DataBroadcast, Play, Scrub, Picture, Delivery],
+            [WhereTheDocumentSaysItExists, Captions, DataBroadcast, Play, Playlist, Scrub, Picture, Delivery],
             PlaybackRules.FilesSpellingTheDeliveryPath(RepositoryLayout.SourceDirectory));
     }
 
@@ -95,13 +97,24 @@ public sealed class PlaybackRuleTests
     }
 
     [Fact]
-    public void TheOnlySurfaceUnderThisPrefixThatTranscodesWhileItPlaysIsTheOneABrowserPlaysThrough()
+    public void TheOnlySurfacesUnderThisPrefixThatTranscodeWhileTheyPlayAreTheOnesABrowserPlaysThrough()
     {
         Assert.Equal(
-            [Play],
+            [Play, Playlist],
             PlaybackRules.WhatTheDeliveryTranscodes(RepositoryLayout.SourceDirectory));
 
         Assert.Empty(PlaybackRules.WhatTranscodesIn(RepositoryLayout.SourceDirectory, Delivery));
+    }
+
+    [Fact(DisplayName = "FR-017: the playlist under the same prefix is opened with the session, and not a second way to the bytes")]
+    public void ThePlaylistUnderTheSamePrefixIsNotASecondWayToTheBytes()
+    {
+        string playlist = File.ReadAllText(Path.Combine(RepositoryLayout.SourceDirectory, Playlist.TrimStart('/')));
+
+        Assert.Contains("\"/api/videos/{id}/hls.m3u8\"", playlist, StringComparison.Ordinal);
+        Assert.Contains("SessionClaims.SubjectOf(context.User)", playlist, StringComparison.Ordinal);
+        Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, playlist, StringComparison.Ordinal);
+        Assert.DoesNotContain("Accept-Ranges", playlist, StringComparison.Ordinal);
     }
 
     [Fact]

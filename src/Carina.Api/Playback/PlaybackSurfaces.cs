@@ -95,6 +95,16 @@ public static class PlaybackSurfaces
         PlaybackSources.Names,
         PlaybackSources.ArtefactIsCalled);
 
+    public const string HowARecordingIsWatchedThroughAPlaylist =
+        "Watches a recording transcoded as it plays through a playlist, for a browser that has no media source to "
+        + "append the picture to. Once the first segment is ready it answers a playlist naming one playlist, that of a "
+        + "key made for this browser under /api/hls/{key}/, which opens that playlist, its initialisation and its "
+        + "segments by the key alone. That playlist is an event listing every segment from the second asked for, and "
+        + "ends once the recording is transcoded to its end; seeking opens a new playlist from another second. The "
+        + "picture is in H.264, transcoded under the same limit as playing the recording. A key nothing is asked with "
+        + "for thirty seconds is let go of, and the transcoder with it. Opened with the reader's own session only, "
+        + "never with a ticket.";
+
     public static readonly QueryInput WhereThePlayingStarts = QueryInput.SecondsWithNoFixedDefault(
         PlayDelivery.Position,
         "The second of the recording playing starts at, counted from where the recording begins. "

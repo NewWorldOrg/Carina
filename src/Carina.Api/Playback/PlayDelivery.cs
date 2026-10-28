@@ -98,7 +98,7 @@ public static class PlayDelivery
             return;
         }
 
-        AskedPosition asked = Read(context.Request.Query[Position]);
+        AskedPosition asked = AskedPosition.Read(context.Request.Query[Position]);
 
         if (!asked.Understood)
         {
@@ -259,7 +259,7 @@ public static class PlayDelivery
         await TranscodedAsync(context, handover, service, from, new PictureAsked(profile.Named, format.Format), placement, player);
     }
 
-    private static async Task<SoundChoice> WhereTheSoundIsAsync(
+    internal static async Task<SoundChoice> WhereTheSoundIsAsync(
         SoundTrack track,
         AnnouncedSound announced,
         PlaybackFile handover,
@@ -344,7 +344,7 @@ public static class PlayDelivery
             context.RequestAborted);
     }
 
-    private static async Task<TimeSpan?> WhereTheWatchingGotToAsync(
+    internal static async Task<TimeSpan?> WhereTheWatchingGotToAsync(
         HttpContext context,
         RecordingId recording,
         IPlaybackPositionRepository positions)
@@ -489,23 +489,6 @@ public static class PlayDelivery
     private static string MediaTypeOf(PlaybackPlan plan, PlaybackFile handover)
         => plan.Transcodes ? PlaybackMediaType.Mp4 : PlaybackMediaType.Of(handover.Name);
 
-    private static AskedPosition Read(string? position)
-    {
-        if (string.IsNullOrWhiteSpace(position))
-        {
-            return AskedPosition.Unasked;
-        }
-
-        if (!double.TryParse(position, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds))
-        {
-            return AskedPosition.NotOneOfThese;
-        }
-
-        return double.IsFinite(seconds) && seconds >= 0 && seconds <= TimeSpan.MaxValue.TotalSeconds
-            ? AskedPosition.At(TimeSpan.FromSeconds(seconds))
-            : AskedPosition.NotOneOfThese;
-    }
-
     private static Task RefuseAsync(HttpContext context, int status, string said)
     {
         context.Response.StatusCode = status;
@@ -515,13 +498,13 @@ public static class PlayDelivery
             context.RequestAborted);
     }
 
-    private static int Of(OnTheFlyRefusal refusal) => refusal switch
+    internal static int Of(OnTheFlyRefusal refusal) => refusal switch
     {
         OnTheFlyRefusal.NothingToPlay => StatusCodes.Status404NotFound,
         _ => StatusCodes.Status503ServiceUnavailable,
     };
 
-    private static string Said(OnTheFlyRefusal refusal) => refusal switch
+    internal static string Said(OnTheFlyRefusal refusal) => refusal switch
     {
         OnTheFlyRefusal.NothingToPlay => "The recording holds no bytes to play.",
         OnTheFlyRefusal.TooManyAlready =>
@@ -531,16 +514,33 @@ public static class PlayDelivery
         _ => "The transcoder produced nothing in the time it is given to start.",
     };
 
-    private readonly record struct AskedPosition(bool Understood, TimeSpan? Named)
+    internal readonly record struct AskedPosition(bool Understood, TimeSpan? Named)
     {
         public static readonly AskedPosition NotOneOfThese = new(false, null);
 
         public static readonly AskedPosition Unasked = new(true, null);
 
         public static AskedPosition At(TimeSpan position) => new(true, position);
+
+        public static AskedPosition Read(string? position)
+        {
+            if (string.IsNullOrWhiteSpace(position))
+            {
+                return Unasked;
+            }
+
+            if (!double.TryParse(position, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds))
+            {
+                return NotOneOfThese;
+            }
+
+            return double.IsFinite(seconds) && seconds >= 0 && seconds <= TimeSpan.MaxValue.TotalSeconds
+                ? At(TimeSpan.FromSeconds(seconds))
+                : NotOneOfThese;
+        }
     }
 
-    private readonly record struct SoundChoice(SoundPlacement? Placement, CarriedSounds? Unreadable)
+    internal readonly record struct SoundChoice(SoundPlacement? Placement, CarriedSounds? Unreadable)
     {
         public static readonly SoundChoice NotCarried = new(null, null);
 
