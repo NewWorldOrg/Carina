@@ -15,7 +15,8 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// (<see cref="SegmentSamples"/>), its seeks read once against its boundary candidates and the version in use's detection
 /// of it (<see cref="ViewerSeeks"/>); labels of the programme, of breaks, of
 /// openings and of endings are learned from, and with an opening or an ending among them the candidate tells four
-/// kinds apart. Beside a version in use that tells four kinds apart, the candidate keeps that version's opening, or
+/// kinds apart. Its weights and offsets are pulled towards the version in use's (<see cref="SegmentRegression"/>), so
+/// that a kind with few labels stays near what that version finds. Beside a version in use that tells four kinds apart, the candidate keeps that version's opening, or
 /// its ending, as it is when nothing is labelled to learn it from, so that a round with nothing to learn one of them
 /// from never takes it away; the same holds in every fold of the leave-one-out. Every setting of the search is judged
 /// by leave-one-out in time: each recording judged is detected again with the entries set aside for it
@@ -95,7 +96,7 @@ public static class SegmentLearning
         Labelled[] labelled = prepared.Labelled;
         IReadOnlyList<SegmentSample>[] each = [.. labelled.Select(learned => learned.Samples)];
         SegmentModel? kept = inUse.Kinds is 4 ? inUse : null;
-        SegmentFit full = SegmentRegression.Fit([.. each.SelectMany(samples => samples)], setting, kept: kept);
+        SegmentFit full = SegmentRegression.Fit([.. each.SelectMany(samples => samples)], setting, kept: kept, toward: inUse);
         List<SegmentComparison> compared = [];
 
         for (int fold = 0; fold < judged.Length; fold++)
@@ -103,7 +104,7 @@ public static class SegmentLearning
             cancellationToken.ThrowIfCancellationRequested();
 
             int left = judged[fold];
-            SegmentModel apart = SegmentRegression.Fit(LeaveOneOut.Samples(each, left, Relabelled(labelled, left)), setting, full.Model, kept).Model;
+            SegmentModel apart = SegmentRegression.Fit(LeaveOneOut.Samples(each, left, Relabelled(labelled, left)), setting, full.Model, kept, inUse).Model;
 
             compared.Add(labelled[left].Learner.Compared(SegmentDetector.Detect(prepared.Judged[fold], apart)));
         }

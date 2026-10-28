@@ -18,8 +18,13 @@ public sealed record SegmentFit(SegmentModel Model, int Iterations, bool Converg
 /// per station and one per series named by the samples, which weigh the break alone. Each step solves
 /// <c>(XᵀWX + Λ) Δθ = Xᵀ(c ⊙ (y − p)) − Λθ</c> by a Cholesky decomposition, where <c>W</c> holds
 /// <c>c (p_k δ_kl − p_k p_l)</c> between the kinds weighed, which is <c>c p (1 − p)</c> with two, and <c>Λ</c>
-/// carries twice each pull of the thresholds, since the loss pulls by <c>λ‖w‖² + λ_u Σ u² + λ_v Σ v²</c>; the
-/// intercepts are not pulled. With two kinds every step is the one the two-kind fit took, to the last bit. A step that would lower
+/// carries twice each pull of the thresholds, since the loss pulls by <c>λ‖w − w₀‖² + λ_u Σ (u − u₀)² + λ_v Σ (v − v₀)²</c>.
+/// The parameters are pulled towards a version handed over, the version in use, its weights moved onto the scales the
+/// samples standardise by so that they score each feature as it does; towards zero where it has no weight or offset
+/// of that name, or when none is handed over. A kind with few labels so stays near that version, and the more labels
+/// there are the further the samples move it. The intercepts are not pulled: how often each kind comes among the
+/// samples is told by the samples even when they label it seldom. With two kinds every step is the one the two-kind
+/// fit took, to the last bit. A step that would lower
 /// the penalised log-likelihood is halved until it does not. The fit stops once a step changes the
 /// penalised log-likelihood by less than <see cref="SmallestChange"/>, after <see cref="MostIterations"/>
 /// steps, or when the system cannot be solved, as with no samples. Each feature is standardised by the
@@ -39,7 +44,12 @@ public static class SegmentRegression
 
     private const double SingularPivot = 1e-12;
 
-    public static SegmentFit Fit(IReadOnlyList<SegmentSample> samples, SegmentThresholds thresholds, SegmentModel? start = null, SegmentModel? kept = null)
+    public static SegmentFit Fit(
+        IReadOnlyList<SegmentSample> samples,
+        SegmentThresholds thresholds,
+        SegmentModel? start = null,
+        SegmentModel? kept = null,
+        SegmentModel? toward = null)
     {
         ArgumentNullException.ThrowIfNull(samples);
         ArgumentNullException.ThrowIfNull(thresholds);
@@ -54,7 +64,7 @@ public static class SegmentRegression
             throw new ArgumentException("The opening and the ending are kept from a version that weighs them.", nameof(kept));
         }
 
-        Design design = Design.Of(samples, kept);
+        Design design = Design.Of(samples, kept, toward);
         double[] pull = design.Pull(thresholds);
         double[] theta = start is null ? new double[design.Width] : design.From(start);
         double objective = design.Objective(theta, pull);
@@ -233,6 +243,8 @@ public static class SegmentRegression
 
         private double[] weights = [];
 
+        private double[] target = [];
+
         public int Width => Offsets + stations.Length + series.Length;
 
         private int Count => labels.Length;
@@ -243,7 +255,7 @@ public static class SegmentRegression
 
         private int Offsets => classes.Length * Block;
 
-        public static Design Of(IReadOnlyList<SegmentSample> samples, SegmentModel? keeping)
+        public static Design Of(IReadOnlyList<SegmentSample> samples, SegmentModel? keeping, SegmentModel? toward)
         {
             SegmentKind[] classes = Fitted(samples, keeping);
             KeyValuePair<SegmentKind, SegmentClassWeights>[] kept =
@@ -270,6 +282,8 @@ public static class SegmentRegression
             {
                 design.Standardise(sample, samples[sample].Features);
             }
+
+            design.target = toward is null ? new double[design.Width] : design.Target(toward);
 
             return design;
         }
@@ -339,7 +353,9 @@ public static class SegmentRegression
 
             for (int at = 0; at < theta.Length; at++)
             {
-                penalty += pull[at] * theta[at] * theta[at];
+                double apart = theta[at] - target[at];
+
+                penalty += pull[at] * apart * apart;
             }
 
             return likelihood - (penalty / 2);
@@ -390,7 +406,7 @@ public static class SegmentRegression
 
             for (int at = 0; at < width; at++)
             {
-                gradient[at] -= pull[at] * theta[at];
+                gradient[at] -= pull[at] * (theta[at] - target[at]);
                 hessian[(at * width) + at] += pull[at];
             }
 
@@ -414,6 +430,45 @@ public static class SegmentRegression
                 series.Select((named, at) => (named, at)).ToDictionary(pair => pair.named, pair => theta[Offsets + stations.Length + pair.at]),
                 thresholds,
                 names.Select((name, feature) => (name, feature)).ToDictionary(pair => pair.name, pair => scales[pair.feature]));
+
+        /// <summary>
+        /// Where each parameter is pulled to: each weight of <paramref name="toward"/> on a kind fitted, moved onto the
+        /// scale the samples standardise its feature by so that it scores the feature as <paramref name="toward"/> does,
+        /// and its offset of each station and series; zero for a weight or an offset it does not have. The intercepts are
+        /// not pulled.
+        /// </summary>
+        private double[] Target(SegmentModel toward)
+        {
+            double[] pulledTo = new double[Width];
+
+            for (int weighed = 0; weighed < classes.Length; weighed++)
+            {
+                if (!toward.Weights.Classes.TryGetValue(classes[weighed], out SegmentClassWeights? given))
+                {
+                    continue;
+                }
+
+                for (int feature = 0; feature < Features; feature++)
+                {
+                    if (given.Features.TryGetValue(names[feature], out double weight))
+                    {
+                        pulledTo[(weighed * Block) + 1 + feature] = weight * scales[feature].Sd / toward.Standardisation[names[feature]].Sd;
+                    }
+                }
+            }
+
+            for (int station = 0; station < stations.Length; station++)
+            {
+                pulledTo[Offsets + station] = toward.StationOffsets.GetValueOrDefault(stations[station]);
+            }
+
+            for (int named = 0; named < series.Length; named++)
+            {
+                pulledTo[Offsets + stations.Length + named] = toward.SeriesOffsets.GetValueOrDefault(series[named]);
+            }
+
+            return pulledTo;
+        }
 
         /// <summary>
         /// The kinds fitted: the break alone when no sample labels an opening or an ending; otherwise the break, the

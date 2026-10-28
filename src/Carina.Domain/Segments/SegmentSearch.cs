@@ -2,8 +2,9 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// The settings learning tries: each set of thresholds the segments are read with, and with each, every
-/// pull towards zero on the weights (<see cref="Lambdas"/>) beside every pull on the station and series
-/// offsets alike (<see cref="OffsetLambdas"/>), in that order. <see cref="Default"/> reads with the
+/// pull on the weights towards the version in use (<see cref="Lambdas"/>) beside every pull on the station and
+/// series offsets alike (<see cref="OffsetLambdas"/>), in that order, so that the search chooses how near that
+/// version the candidate stays. <see cref="Default"/> reads with the
 /// initial thresholds and with each of silence, black, a change of scene and the tolerance of the grid
 /// moved one step either way, the others kept; it tries the weights' pulls 1, 0.1 and 10 and the offsets'
 /// 10, 1 and 100, so that its first setting is the initial one.

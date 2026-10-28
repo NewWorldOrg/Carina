@@ -176,7 +176,7 @@ public sealed class SegmentLearningTests
 
         Assert.DoesNotContain(then, stretch => advert.Equals(stretch.Entry));
         Assert.Contains(catalog.HeardNow(first.Id), stretch => advert.Equals(stretch.Entry));
-        Assert.Equal(SegmentRegression.Fit(touchedNow, setting).Model, learned);
+        Assert.Equal(SegmentRegression.Fit(touchedNow, setting, toward: InUse.Model).Model, learned);
         Assert.True(touchedThen.Count(sample => sample.Kind is SegmentKind.Programme) > touchedNow.Count(sample => sample.Kind is SegmentKind.Programme));
     }
 
@@ -270,6 +270,28 @@ public sealed class SegmentLearningTests
         Assert.NotEqual(FourKindsInUse.Model.Weights.Classes[SegmentKind.Opening], learned.Candidate.Weights.Classes[SegmentKind.Opening]);
         Assert.Equal(FourKindsInUse.Model.Weights.Classes[SegmentKind.Ending], learned.Candidate.Weights.Classes[SegmentKind.Ending]);
         Assert.Equal(FourKindsInUse.Model.Standardisation[SegmentFeature.PastEndingShare], learned.Candidate.Standardisation[SegmentFeature.PastEndingShare]);
+    }
+
+    [Fact(DisplayName = "the candidate is pulled towards the version in use: pulled far harder than its labels pull, each of its weights scores its feature as the version in use does, and a weight that version does not have is nothing")]
+    public void TheCandidateIsPulledTowardsTheVersionInUse()
+    {
+        (List<LearningRecording> taught, List<CatalogSound> sounds) = Taught(Weeks, openings: true);
+        (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks, opening: true);
+        SegmentModel inUse = FourKindsInUse.Model;
+
+        SegmentModel candidate = Learn([.. taught, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [1e7], [1e7]), FourKindsInUse).Candidate;
+
+        Assert.Equal(4, candidate.Kinds);
+
+        foreach ((SegmentKind kind, SegmentClassWeights weights) in candidate.Weights.Classes)
+        {
+            foreach ((string name, double weight) in weights.Features)
+            {
+                double expected = inUse.Weights.Classes[kind].Features.TryGetValue(name, out double given) ? given / inUse.Standardisation[name].Sd : 0;
+
+                Assert.Equal(expected, weight / candidate.Standardisation[name].Sd, 4);
+            }
+        }
     }
 
     [Fact(DisplayName = "the version in use is judged on the same recordings beside the skips viewers made with its buttons in the last seven days, a candidate has offered none, and the evidence counts the recordings the catalog is sure of an advert in")]
@@ -394,9 +416,9 @@ public sealed class SegmentLearningTests
         (List<LearningRecording> recordings, List<CatalogSound> sounds) = Taught(Weeks);
         (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks);
 
-        SegmentLearned learned = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [first, second], [10]));
-        SegmentLearned pulledFlat = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [1e6], [10]));
-        SegmentLearned free = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [0.1], [10]));
+        SegmentLearned learned = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [first, second], [10]), WeighingNothingInUse);
+        SegmentLearned pulledFlat = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [1e6], [10]), WeighingNothingInUse);
+        SegmentLearned free = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [0.1], [10]), WeighingNothingInUse);
 
         Assert.Equal(0.1, learned.Candidate.Thresholds.Lambda);
         Assert.Equal(Figures(free.Evaluation.Metrics), Figures(learned.Evaluation.Metrics));
