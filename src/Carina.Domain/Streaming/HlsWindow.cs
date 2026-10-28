@@ -21,9 +21,26 @@ public sealed record HlsSegment
 }
 
 /// <summary>
-/// The segments held, oldest first, with the target in whole seconds, whether the session has ended and the codecs.
+/// Whether a playlist lists the newest segments alone, as a live channel's does, or every segment from the first, as
+/// a recording's does.
 /// </summary>
-public sealed record HlsWindow(IReadOnlyList<HlsSegment> Segments, int TargetSeconds, bool Ended, string? Codecs)
+public enum HlsPlaylistType
+{
+    Sliding = 1,
+
+    Event = 2,
+}
+
+/// <summary>
+/// The segments listed, oldest first, with the target in whole seconds, whether the end has come, the codecs and
+/// whether the playlist slides or lists every segment from the first.
+/// </summary>
+public sealed record HlsWindow(
+    IReadOnlyList<HlsSegment> Segments,
+    int TargetSeconds,
+    bool Ended,
+    string? Codecs,
+    HlsPlaylistType Type = HlsPlaylistType.Sliding)
 {
     public static HlsWindow Empty { get; } = new([], 0, false, null);
 

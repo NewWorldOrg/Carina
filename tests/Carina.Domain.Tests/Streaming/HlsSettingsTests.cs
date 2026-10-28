@@ -19,6 +19,20 @@ public sealed class HlsSettingsTests
         Assert.Equal(TimeSpan.FromSeconds(1.5), settings.ShortestSegment);
     }
 
+    [Fact(DisplayName = "BR-PD-022: by default a recording is transcoded no more than fifteen segments ahead of the furthest a player has asked for")]
+    public void ByDefaultARecordingIsTranscodedNoMoreThanFifteenSegmentsAhead()
+    {
+        Assert.Equal(15, new HlsSettings().SegmentsAhead);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ARecordingTranscodedNoSegmentAheadIsRefused(int ahead)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new HlsSettings { SegmentsAhead = ahead });
+    }
+
     [Fact]
     public void ByDefaultTheFirstSegmentIsWaitedForAsLongAsASessionIsWaitedForToBeRaised()
     {

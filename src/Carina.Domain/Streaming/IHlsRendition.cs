@@ -1,7 +1,7 @@
 namespace Carina.Domain.Streaming;
 
 /// <summary>
-/// One live session's pictures and sound cut into segments for one player.
+/// A live session's or a recording's pictures and sound cut into segments for one player.
 /// </summary>
 public interface IHlsRendition
 {

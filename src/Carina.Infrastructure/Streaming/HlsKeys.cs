@@ -7,14 +7,14 @@ using Carina.Domain.Streaming;
 namespace Carina.Infrastructure.Streaming;
 
 /// <summary>
-/// Holds the keys players open a live channel's segments with, by a digest of each so that the key itself is held
-/// nowhere, and lets go of a key and the seat it holds once nothing has been asked with it for a while.
+/// Holds the keys players open the segments of a live channel or a recording with, by a digest of each so that the key
+/// itself is held nowhere, and lets go of a key and what it holds once nothing has been asked with it for a while.
 /// </summary>
 public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys, IAsyncDisposable
 {
     private readonly Lock gate = new();
 
-    private readonly Dictionary<string, LiveHlsRendition> held = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, HlsRendition> held = new(StringComparer.Ordinal);
 
     private bool disposed;
 
@@ -35,33 +35,15 @@ public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys
         ArgumentNullException.ThrowIfNull(watcher);
         ArgumentNullException.ThrowIfNull(profile);
 
-        string key = Unguessable.Issue();
-        LiveHlsRendition made;
-        LiveHlsRendition? displaced = null;
+        return Issue(watcher, holding => new LiveHlsRendition(holding, seat, profile, settings, clock, Forget));
+    }
 
-        lock (gate)
-        {
-            if (disposed || held.Count >= settings.MostHeldAtOnce)
-            {
-                return null;
-            }
+    public IssuedHlsKey? Issue(IOnTheFlyViewing transcode, Subject watcher)
+    {
+        ArgumentNullException.ThrowIfNull(transcode);
+        ArgumentNullException.ThrowIfNull(watcher);
 
-            if (held.Values.Count(rendition => rendition.Watcher.Equals(watcher)) >= settings.MostHeldPerWatcher)
-            {
-                displaced = held.Values
-                    .Where(rendition => rendition.Watcher.Equals(watcher))
-                    .MinBy(rendition => rendition.AskedAt);
-                held.Remove(displaced!.Digest);
-            }
-
-            made = new LiveHlsRendition(DigestOf(key), seat, watcher, profile, settings, clock, Forget);
-            held[made.Digest] = made;
-        }
-
-        displaced?.Close();
-        made.Start();
-
-        return new IssuedHlsKey(key, made);
+        return Issue(watcher, holding => new RecordingHlsRendition(holding, transcode, settings, clock, Forget));
     }
 
     public IHlsRendition? Find(string? offered)
@@ -71,7 +53,7 @@ public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys
             return null;
         }
 
-        LiveHlsRendition? found;
+        HlsRendition? found;
 
         lock (gate)
         {
@@ -104,7 +86,7 @@ public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys
             return;
         }
 
-        LiveHlsRendition? found;
+        HlsRendition? found;
 
         lock (gate)
         {
@@ -121,19 +103,19 @@ public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys
     {
         ArgumentNullException.ThrowIfNull(watcher);
 
-        List<LiveHlsRendition> revoked;
+        List<HlsRendition> revoked;
 
         lock (gate)
         {
             revoked = [.. held.Values.Where(rendition => rendition.Watcher.Equals(watcher))];
 
-            foreach (LiveHlsRendition rendition in revoked)
+            foreach (HlsRendition rendition in revoked)
             {
                 held.Remove(rendition.Digest);
             }
         }
 
-        foreach (LiveHlsRendition rendition in revoked)
+        foreach (HlsRendition rendition in revoked)
         {
             rendition.Close();
         }
@@ -143,7 +125,7 @@ public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys
 
     public async ValueTask DisposeAsync()
     {
-        List<LiveHlsRendition> closing;
+        List<HlsRendition> closing;
 
         lock (gate)
         {
@@ -152,7 +134,7 @@ public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys
             held.Clear();
         }
 
-        foreach (LiveHlsRendition rendition in closing)
+        foreach (HlsRendition rendition in closing)
         {
             rendition.Close();
         }
@@ -160,13 +142,44 @@ public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys
         await Task.WhenAll(closing.Select(rendition => rendition.Life));
     }
 
+    private IssuedHlsKey? Issue(Subject watcher, Func<HlsHolding, HlsRendition> making)
+    {
+        string key = Unguessable.Issue();
+        HlsRendition made;
+        HlsRendition? displaced = null;
+
+        lock (gate)
+        {
+            if (disposed || held.Count >= settings.MostHeldAtOnce)
+            {
+                return null;
+            }
+
+            if (held.Values.Count(rendition => rendition.Watcher.Equals(watcher)) >= settings.MostHeldPerWatcher)
+            {
+                displaced = held.Values
+                    .Where(rendition => rendition.Watcher.Equals(watcher))
+                    .MinBy(rendition => rendition.AskedAt);
+                held.Remove(displaced!.Digest);
+            }
+
+            made = making(new HlsHolding(DigestOf(key), watcher));
+            held[made.Digest] = made;
+        }
+
+        displaced?.Close();
+        made.Start();
+
+        return new IssuedHlsKey(key, made);
+    }
+
     private static string DigestOf(string key) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
 
-    private void Forget(LiveHlsRendition lapsed)
+    private void Forget(HlsRendition lapsed)
     {
         lock (gate)
         {
-            if (held.TryGetValue(lapsed.Digest, out LiveHlsRendition? kept) && ReferenceEquals(kept, lapsed))
+            if (held.TryGetValue(lapsed.Digest, out HlsRendition? kept) && ReferenceEquals(kept, lapsed))
             {
                 held.Remove(lapsed.Digest);
             }

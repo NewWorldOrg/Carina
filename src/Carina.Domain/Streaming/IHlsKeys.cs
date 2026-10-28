@@ -3,8 +3,8 @@ using Carina.Domain.Auth;
 namespace Carina.Domain.Streaming;
 
 /// <summary>
-/// The keys a player opens a live channel's playlist, initialisation and segments with, each holding a viewer's seat
-/// on a live session until nothing has been asked with it for a while.
+/// The keys a player opens a playlist, its initialisation and its segments with, each holding a viewer's seat on a live
+/// session or a recording's transcoder until nothing has been asked with it for a while.
 /// </summary>
 public interface IHlsKeys : IHlsKeyRevocation
 {
@@ -15,12 +15,18 @@ public interface IHlsKeys : IHlsKeyRevocation
     IssuedHlsKey? Issue(ILiveViewing seat, Subject watcher, LiveProfile profile);
 
     /// <summary>
+    /// Issues a key holding a recording's <paramref name="transcode"/>, or nothing when as many keys are held as may
+    /// be, in which case the transcode is the caller's to let go of.
+    /// </summary>
+    IssuedHlsKey? Issue(IOnTheFlyViewing transcode, Subject watcher);
+
+    /// <summary>
     /// What a key opens, counting the asking as a request made with it, or nothing for a key never issued or let go of.
     /// </summary>
     IHlsRendition? Find(string? offered);
 
     /// <summary>
-    /// Lets go of a key and the seat it holds at once, for a key whose playlist could not be answered.
+    /// Lets go of a key and what it holds at once, for a key whose playlist could not be answered.
     /// </summary>
     void LetGo(string? offered);
 }
