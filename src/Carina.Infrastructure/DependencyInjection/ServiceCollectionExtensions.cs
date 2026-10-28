@@ -388,10 +388,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ILiveSessionManager>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<ILiveSessionLedger>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<ILiveDepartureLedger, LiveDepartureLedger>();
-        services.TryAddSingleton(new LiveHlsSettings());
-        services.TryAddSingleton<LiveHlsKeys>();
-        services.TryAddSingleton<ILiveHlsKeys>(provider => provider.GetRequiredService<LiveHlsKeys>());
-        services.TryAddSingleton<IHlsKeyRevocation>(provider => provider.GetRequiredService<ILiveHlsKeys>());
+        services.TryAddSingleton(new HlsSettings());
+        services.TryAddSingleton<HlsKeys>();
+        services.TryAddSingleton<IHlsKeys>(provider => provider.GetRequiredService<HlsKeys>());
+        services.TryAddSingleton<IHlsKeyRevocation>(provider => provider.GetRequiredService<IHlsKeys>());
         services.TryAddScoped<ISoundOnAir, SoundOnAir>();
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton<MachineSettings>(provider =>

@@ -66,7 +66,7 @@ public static class LiveStreamDelivery
         ILiveSessionManager sessions,
         ISoundOnAir onAir,
         ILiveEncoderSelector encoders,
-        ILiveHlsKeys keys)
+        IHlsKeys keys)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(encoders);
@@ -116,7 +116,7 @@ public static class LiveStreamDelivery
         ILiveSessionManager sessions,
         ISoundOnAir onAir,
         ILiveEncoderSelector encoders,
-        ILiveHlsKeys keys)
+        IHlsKeys keys)
     {
         LiveEncoderChoice chosen = await encoders.ChooseAsync(context.RequestAborted);
 

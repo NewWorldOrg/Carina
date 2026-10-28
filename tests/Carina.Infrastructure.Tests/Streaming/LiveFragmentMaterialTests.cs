@@ -85,7 +85,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
         LiveProfile asked = LiveProfile.Find(profile)!;
         string written = await (SyntheticBroadcast.AsMeasured() with { Length = PastTheProbe })
             .WriteAsync(Path.Combine(room, "segmented.m2ts"));
-        HlsSegmenter segmenter = new(new LiveHlsSettings { SegmentsHeld = 100 });
+        HlsSegmenter segmenter = new(new HlsSettings { SegmentsHeld = 100 });
         LiveFragmenter fragmenter = new(LiveTrack.Picture);
         LiveFrames frames = new();
 
@@ -96,7 +96,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
 
         double keyframeFrames = Math.Round(asked.Rate.PerSecond * 2);
         TimeSpan everyTwoSeconds = TimeSpan.FromSeconds(keyframeFrames * asked.Rate.Denominator / asked.Rate.Numerator);
-        IReadOnlyList<LiveHlsSegment> cut = segmenter.Window.Segments;
+        IReadOnlyList<HlsSegment> cut = segmenter.Window.Segments;
 
         Assert.True(cut.Count >= 3, $"the transcoder's {PastTheProbe.TotalSeconds} s were cut into {cut.Count} segment(s)");
         Assert.All(
@@ -106,7 +106,7 @@ public sealed class LiveFragmentMaterialTests : IDisposable
                 string.Create(CultureInfo.InvariantCulture, $"segment {segment.Number} lasted {segment.Length.TotalSeconds:F4} s")));
         Assert.Equal(2, segmenter.Window.TargetSeconds);
 
-        foreach (LiveHlsSegment segment in cut)
+        foreach (HlsSegment segment in cut)
         {
             string played = Path.Combine(room, string.Create(CultureInfo.InvariantCulture, $"segment-{segment.Number}.mp4"));
 
@@ -118,6 +118,86 @@ public sealed class LiveFragmentMaterialTests : IDisposable
             Assert.Equal("1", keyframes[0]);
             Assert.DoesNotContain("1", keyframes.Skip(1));
         }
+    }
+
+    [Fact(DisplayName = "BR-PD-022: a recording transcoded from a second into it is cut into an event's segments that each begin with a keyframe, its last seconds closed into the last of them")]
+    public async Task BrPd022ARecordingTranscodedFromASecondIntoItIsCutIntoAnEventsSegments()
+    {
+        string written = await (SyntheticBroadcast.AsMeasured() with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "recorded.m2ts"));
+        TimeSpan from = TimeSpan.FromSeconds(3);
+        HlsSegmenter segmenter = new(new HlsSettings(), HlsPlaylistType.Event);
+        LiveFragmenter fragmenter = new(LiveTrack.Picture);
+        LiveFrames frames = new();
+
+        foreach (LiveFragment fragment in fragmenter.Read(await PlayedAsync(written, from)).Fragments)
+        {
+            segmenter.Take(frames.Of(fragment));
+        }
+
+        Assert.False(fragmenter.Ended().Broke);
+
+        segmenter.Finish();
+
+        IReadOnlyList<HlsSegment> cut = segmenter.Window.Segments;
+        TimeSpan whole = TimeSpan.FromTicks(cut.Sum(segment => segment.Length.Ticks));
+
+        Assert.True(segmenter.Window.Ended);
+        Assert.Equal(0, segmenter.Window.FirstNumber);
+        Assert.True(cut.Count >= 4, $"the recording's {(PastTheProbe - from).TotalSeconds} s were cut into {cut.Count} segment(s)");
+        Assert.True(
+            (whole - (PastTheProbe - from)).Duration() < TimeSpan.FromSeconds(0.5),
+            string.Create(CultureInfo.InvariantCulture, $"the segments lasted {whole.TotalSeconds:F3} s in all"));
+
+        foreach (HlsSegment segment in cut)
+        {
+            string played = Path.Combine(room, string.Create(CultureInfo.InvariantCulture, $"recorded-{segment.Number}.mp4"));
+
+            await File.WriteAllBytesAsync(played, [.. segmenter.Initialisation!.Value.ToArray(), .. segmenter.Segment(segment.Number)!.Value.ToArray()]);
+
+            Assert.Equal("1", (await PictureKeyframesAsync(played))[0]);
+        }
+    }
+
+    private static async Task<byte[]> PlayedAsync(string written, TimeSpan from)
+    {
+        ProcessStartInfo start = new(FfmpegProgramme.Default)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        foreach (string argument in (string[])
+                 [
+                     .. FfmpegPlaybackInvocation.Arguments(
+                         Service,
+                         LiveProfile.Hd30,
+                         Interlaced,
+                         LiveEncoder.Software,
+                         Machine,
+                         new StreamSource(written),
+                         from,
+                         SoundPlacement.WholeStream(0),
+                         VideoCodec.H264),
+                     .. FfmpegLiveInvocation.DeliveryFromTheStart(),
+                 ])
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process running = Process.Start(start)!;
+
+        Task<string> complaint = running.StandardError.ReadToEndAsync();
+
+        using MemoryStream delivered = new();
+
+        await running.StandardOutput.BaseStream.CopyToAsync(delivered);
+        await running.WaitForExitAsync();
+
+        Assert.True(running.ExitCode is 0, await complaint);
+
+        return delivered.ToArray();
     }
 
     /// <summary>

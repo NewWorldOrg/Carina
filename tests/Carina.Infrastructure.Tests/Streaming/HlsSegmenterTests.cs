@@ -39,7 +39,7 @@ public sealed class HlsSegmenterTests
 
         segmenter.Take(Picture(Gop(3, keyframe: true)));
 
-        LiveHlsSegment closed = Assert.Single(segmenter.Window.Segments);
+        HlsSegment closed = Assert.Single(segmenter.Window.Segments);
 
         Assert.True(segmenter.HoldsASegment);
 
@@ -171,6 +171,92 @@ public sealed class HlsSegmenterTests
         Assert.Null(segmenter.Segment(8));
     }
 
+    [Fact(DisplayName = "BR-PD-022: a recording's playlist is an event that lists every segment from the first, however many are cut")]
+    public void ARecordingsPlaylistListsEverySegmentFromTheFirst()
+    {
+        HlsSegmenter segmenter = Initialised(HlsPlaylistType.Event);
+
+        for (int gop = 0; gop <= 8; gop++)
+        {
+            Whole(segmenter, gop);
+        }
+
+        Assert.Equal(HlsPlaylistType.Event, segmenter.Window.Type);
+        Assert.Equal([0L, 1L, 2L, 3L, 4L, 5L, 6L, 7L], segmenter.Window.Segments.Select(segment => segment.Number).ToArray());
+        Assert.Equal(0, segmenter.Window.FirstNumber);
+        Assert.NotNull(segmenter.Segment(0));
+        Assert.Equal(8, segmenter.Cut);
+    }
+
+    [Fact(DisplayName = "BR-PD-022: a recording's segments a player has gone past are let go of, and its playlist goes on listing them")]
+    public void ARecordingsSegmentsAPlayerHasGonePastAreLetGoOfAndStillListed()
+    {
+        HlsSegmenter segmenter = Initialised(HlsPlaylistType.Event);
+
+        for (int gop = 0; gop <= 4; gop++)
+        {
+            Whole(segmenter, gop);
+        }
+
+        segmenter.ForgetBefore(2);
+
+        Assert.Null(segmenter.Segment(0));
+        Assert.Null(segmenter.Segment(1));
+        Assert.NotNull(segmenter.Segment(2));
+        Assert.NotNull(segmenter.Segment(3));
+        Assert.Equal([0L, 1L, 2L, 3L], segmenter.Window.Segments.Select(segment => segment.Number).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-PD-022: a recording transcoded to its end closes the segment left open, so that its last seconds are played")]
+    public void ARecordingTranscodedToItsEndClosesTheSegmentLeftOpen()
+    {
+        HlsSegmenter segmenter = Initialised(HlsPlaylistType.Event);
+        byte[] last = Gop(6, keyframe: true);
+
+        Whole(segmenter, 0);
+        Whole(segmenter, 1);
+        segmenter.Take(Picture(last));
+        segmenter.Finish();
+
+        Assert.True(segmenter.Window.Ended);
+        Assert.Equal([Frames(60), Frames(60), Frames(20)], segmenter.Window.Segments.Select(segment => segment.Length).ToArray());
+        Assert.Equal(last, segmenter.Segment(2)!.Value.ToArray());
+        Assert.Equal(3, segmenter.Cut);
+    }
+
+    [Fact]
+    public void FinishingWithNothingLeftOpenOnlySaysTheEndCame()
+    {
+        HlsSegmenter segmenter = Initialised(HlsPlaylistType.Event);
+
+        segmenter.Finish();
+
+        Assert.True(segmenter.Window.Ended);
+        Assert.Empty(segmenter.Window.Segments);
+        Assert.False(segmenter.HoldsASegment);
+    }
+
+    [Fact]
+    public void NothingTakenAfterTheEndIsCut()
+    {
+        HlsSegmenter segmenter = Initialised(HlsPlaylistType.Event);
+
+        Whole(segmenter, 0);
+        segmenter.Finish();
+        Whole(segmenter, 1);
+        Whole(segmenter, 2);
+
+        Assert.Single(segmenter.Window.Segments);
+    }
+
+    [Fact]
+    public void ALiveChannelsPlaylistSlides()
+        => Assert.Equal(HlsPlaylistType.Sliding, Initialised().Window.Type);
+
+    [Fact]
+    public void APlaylistIsOneOfTheTypesNamedHere()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => new HlsSegmenter(new HlsSettings(), (HlsPlaylistType)9));
+
     [Theory(DisplayName = "BR-PD-022: whether a fragment begins with a keyframe is read wherever the fragment or the track says it")]
     [InlineData(SampleFlagsCarried.FirstInTheRun)]
     [InlineData(SampleFlagsCarried.EveryInTheRun)]
@@ -196,7 +282,7 @@ public sealed class HlsSegmenterTests
     [InlineData(Fmp4Media.NotASyncSample, 0)]
     public void AFragmentSayingNothingOfItsSamplesIsReadByTheDefaultOfItsTrack(uint byDefault, int closed)
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale, trackDefaultFlags: byDefault)));
 
@@ -214,7 +300,7 @@ public sealed class HlsSegmenterTests
     [InlineData(SampleDurationsCarried.DefaultOfTheTrack)]
     public void HowLongThePicturesLastIsReadWhereverItIsSaid(SampleDurationsCarried carried)
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale, trackDefaultDuration: OneFrame)));
 
@@ -247,7 +333,7 @@ public sealed class HlsSegmenterTests
     [Fact]
     public void NothingIsCutBeforeTheInitialisationHasSaidWhichTrackIsThePicture()
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         for (int gop = 0; gop < 6; gop++)
         {
@@ -262,7 +348,7 @@ public sealed class HlsSegmenterTests
     public void TheInitialisationIsHandedBackAsItCame()
     {
         byte[] initialisation = Fmp4Media.Initialisation(Timescale);
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(initialisation));
 
@@ -275,7 +361,7 @@ public sealed class HlsSegmenterTests
     [InlineData((byte)0x64, (byte)0x00, (byte)0x28, false, "avc1.640028")]
     public void TheCodecsAreNamedFromTheInitialisation(byte profile, byte compatibility, byte level, bool withSound, string named)
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale, profile, compatibility, level, withSound)));
 
@@ -285,7 +371,7 @@ public sealed class HlsSegmenterTests
     [Fact]
     public void APictureInACodecAPlaylistCannotNameLeavesTheCodecsUnsaid()
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale, pictureEntry: "hvc1")));
 
@@ -333,7 +419,7 @@ public sealed class HlsSegmenterTests
     public void TheSameInitialisationHandedAgainChangesNothing()
     {
         byte[] initialisation = Fmp4Media.Initialisation(Timescale);
-        HlsSegmenter segmenter = new(new LiveHlsSettings());
+        HlsSegmenter segmenter = new(new HlsSettings());
 
         segmenter.Take(Header(initialisation));
         segmenter.Take(Header(initialisation));
@@ -381,9 +467,9 @@ public sealed class HlsSegmenterTests
         Assert.Equal(Frames(60), Assert.Single(segmenter.Window.Segments).Length);
     }
 
-    private static HlsSegmenter Initialised()
+    private static HlsSegmenter Initialised(HlsPlaylistType type = HlsPlaylistType.Sliding)
     {
-        HlsSegmenter segmenter = new(new LiveHlsSettings { ShortestSegment = Shortest });
+        HlsSegmenter segmenter = new(new HlsSettings { ShortestSegment = Shortest }, type);
 
         segmenter.Take(Header(Fmp4Media.Initialisation(Timescale)));
 

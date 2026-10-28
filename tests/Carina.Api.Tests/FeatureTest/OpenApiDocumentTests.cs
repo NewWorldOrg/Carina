@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Live;
+using Carina.Api.Playback;
 using Carina.Api.Responder.Playback;
 using Carina.Domain.Streaming;
 
@@ -183,6 +184,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getVideoCaptions",
                 "getVideoDataBroadcast",
                 "getVideoDataBroadcastModule",
+                "getVideoPlaylist",
                 "getVideoScrubFrame",
                 "getVideoThumbnail",
                 "impactOfRules",
@@ -307,6 +309,22 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Contains("/api/hls/{key}/index.m3u8", described, StringComparison.Ordinal);
         Assert.Contains("`.m3u8`", described, StringComparison.Ordinal);
         Assert.Null(document["paths"]!["/api/hls/{key}/index.m3u8"]);
+    }
+
+    [Fact(DisplayName = "FR-017: a recording's playlist is described by the second it starts at, the profile and the sound it is asked in")]
+    public async Task ARecordingsPlaylistIsDescribed()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode operation = document["paths"]!["/api/videos/{id}/hls.m3u8"]!["get"]!;
+
+        Assert.Equal(RecordingHlsDelivery.ThePlaylistIsCalled, operation["operationId"]!.GetValue<string>());
+        Assert.Equal(
+            ["from", "profile", "sound"],
+            operation["parameters"]!.AsArray()
+                .Where(parameter => parameter!["in"]!.GetValue<string>() == "query")
+                .Select(parameter => parameter!["name"]!.GetValue<string>())
+                .Order(StringComparer.Ordinal)
+                .ToArray());
     }
 
     [Fact]

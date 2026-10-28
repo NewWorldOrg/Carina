@@ -1,13 +1,15 @@
 namespace Carina.Domain.Streaming;
 
 /// <summary>
-/// How live channels are handed to players that open playlists.
+/// How live channels and recordings are handed to players that open playlists.
 /// </summary>
-public sealed record LiveHlsSettings
+public sealed record HlsSettings
 {
     private readonly TimeSpan idle = TimeSpan.FromSeconds(30);
 
     private readonly int segmentsHeld = 6;
+
+    private readonly int segmentsAhead = 15;
 
     private readonly TimeSpan shortestSegment = TimeSpan.FromSeconds(1.5);
 
@@ -29,6 +31,10 @@ public sealed record LiveHlsSettings
                 "A key outlives the last request made with it by some time, not none, or no second request finds it.");
     }
 
+    /// <summary>
+    /// How many segments a live channel's playlist holds, and how many of a recording's are kept behind the furthest a
+    /// player has asked for.
+    /// </summary>
     public int SegmentsHeld
     {
         get => segmentsHeld;
@@ -39,6 +45,22 @@ public sealed record LiveHlsSettings
                 nameof(value),
                 value,
                 "A playlist lists some segment, not none, or a player has nothing to fetch.");
+    }
+
+    /// <summary>
+    /// How many segments a recording is cut ahead of the furthest a player has asked for before its transcoder is left
+    /// to wait.
+    /// </summary>
+    public int SegmentsAhead
+    {
+        get => segmentsAhead;
+
+        init => segmentsAhead = value > 0
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                nameof(value),
+                value,
+                "A recording is cut some segment ahead of the player, not none, or the player waits on every segment.");
     }
 
     /// <summary>

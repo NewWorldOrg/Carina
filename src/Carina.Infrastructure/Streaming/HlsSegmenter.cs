@@ -7,16 +7,20 @@ using Carina.Domain.Streaming;
 namespace Carina.Infrastructure.Streaming;
 
 /// <summary>
-/// Cuts what a live transcoder writes into segments that each begin with a keyframe, cutting a fragment in two where
-/// a keyframe falls inside it.
+/// Cuts what a transcoder writes into segments that each begin with a keyframe, cutting a fragment in two where a
+/// keyframe falls inside it.
 /// </summary>
-public sealed class HlsSegmenter(LiveHlsSettings settings)
+public sealed class HlsSegmenter
 {
     private const int AVisualEntryBeforeItsBoxes = 78;
 
     private const string Aac = "mp4a.40.2";
 
-    private readonly LiveHlsSettings settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    private readonly HlsSettings settings;
+
+    private readonly HlsPlaylistType type;
+
+    private readonly List<HlsSegment> listed = [];
 
     private readonly Queue<HeldSegment> held = new();
 
@@ -38,14 +42,44 @@ public sealed class HlsSegmenter(LiveHlsSettings settings)
 
     private bool ended;
 
+    public HlsSegmenter(HlsSettings settings, HlsPlaylistType type = HlsPlaylistType.Sliding)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (!Enum.IsDefined(type))
+        {
+            throw new ArgumentOutOfRangeException(nameof(type), type, "A playlist slides or lists every segment from the first.");
+        }
+
+        this.settings = settings;
+        this.type = type;
+    }
+
     public ReadOnlyMemory<byte>? Initialisation => initialisation;
 
-    public LiveHlsWindow Window => new([.. held.Select(segment => segment.Segment)], target, ended, codecs);
+    public HlsWindow Window => new([.. listed], target, ended, codecs, type);
 
-    public bool HoldsASegment => held.Count > 0;
+    public bool HoldsASegment => listed.Count > 0;
+
+    /// <summary>
+    /// How many segments have been cut since the first.
+    /// </summary>
+    public long Cut => next;
 
     public ReadOnlyMemory<byte>? Segment(long number)
         => held.FirstOrDefault(segment => segment.Segment.Number == number)?.Bytes;
+
+    /// <summary>
+    /// Lets go of the bytes of the segments numbered before <paramref name="number"/>, which an event's playlist goes on
+    /// listing.
+    /// </summary>
+    public void ForgetBefore(long number)
+    {
+        while (held.Count > 0 && held.Peek().Segment.Number < number)
+        {
+            held.Dequeue();
+        }
+    }
 
     public void Take(LiveFrame frame)
     {
@@ -62,6 +96,19 @@ public sealed class HlsSegmenter(LiveHlsSettings settings)
             default:
                 break;
         }
+    }
+
+    /// <summary>
+    /// Says the transcoder wrote to its end, and closes the segment left open with the last of what it wrote.
+    /// </summary>
+    public void Finish()
+    {
+        if (!ended && open.Count > 0 && picture is { } track)
+        {
+            Close(track);
+        }
+
+        End();
     }
 
     /// <summary>
@@ -310,14 +357,18 @@ public sealed class HlsSegmenter(LiveHlsSettings settings)
             return;
         }
 
-        held.Enqueue(new HeldSegment(new LiveHlsSegment(next++, length, joined.Length), joined));
+        HlsSegment segment = new(next++, length, joined.Length);
+
+        listed.Add(segment);
+        held.Enqueue(new HeldSegment(segment, joined));
         target = Math.Max(target, Rounded(length));
 
-        while (held.Count > settings.SegmentsHeld)
+        while (type is HlsPlaylistType.Sliding && held.Count > settings.SegmentsHeld)
         {
             held.Dequeue();
+            listed.RemoveAt(0);
         }
     }
 
-    private sealed record HeldSegment(LiveHlsSegment Segment, ReadOnlyMemory<byte> Bytes);
+    private sealed record HeldSegment(HlsSegment Segment, ReadOnlyMemory<byte> Bytes);
 }
