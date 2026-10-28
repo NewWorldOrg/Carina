@@ -53,7 +53,7 @@ public sealed class SegmentRegressionTests
         Assert.True(weights.Features[SegmentFeature.Length] < 0);
         Assert.All(chances.Take(5), chance => Assert.True(chance > 0.5));
         Assert.All(chances.Skip(5), chance => Assert.True(chance < 0.5));
-        Assert.Equal(2 * thresholds.Lambda * weights.Features[SegmentFeature.Length], slope, 4);
+        Assert.Equal(2 * thresholds.Lambda * Pull(5) * weights.Features[SegmentFeature.Length], slope, 4);
         Assert.Equal(0, samples.Sum(sample => sample.Weight * (Label(sample) - Chance(fit, sample))), 4);
     }
 
@@ -149,7 +149,7 @@ public sealed class SegmentRegressionTests
         Assert.Equal(0.6 / 5.5, chances.Of(SegmentKind.Opening), 5);
     }
 
-    [Fact(DisplayName = "a four-kind fit comes to a standstill of the penalised likelihood: for every kind the weighted residuals sum to nothing, and the slope along each feature is its pull")]
+    [Fact(DisplayName = "a four-kind fit comes to a standstill of the penalised likelihood: for every kind the weighted residuals sum to nothing, and the slope along each feature is its pull, the harder the less the kind is labelled")]
     public void AFourKindFitComesToAStandstill()
     {
         SegmentSample[] samples =
@@ -176,7 +176,7 @@ public sealed class SegmentRegressionTests
                 FeatureScale scale = fit.Model.Standardisation[feature];
                 double slope = samples.Select((sample, at) => residuals[at] * (sample.Features[feature] is double value ? scale.Standardised(value) : 0)).Sum();
 
-                Assert.Equal(2 * thresholds.Lambda * weights.Features[feature], slope, 4);
+                Assert.Equal(2 * thresholds.Lambda * Pull(samples.Where(sample => sample.Kind == kind).Sum(sample => sample.Weight)) * weights.Features[feature], slope, 4);
             }
 
             Assert.Equal(0, residuals.Sum(), 4);
@@ -258,6 +258,111 @@ public sealed class SegmentRegressionTests
         Assert.Throws<ArgumentException>(() => SegmentRegression.Fit(samples, SegmentThresholds.Initial, kept: HandMadeModels.First));
     }
 
+    [Fact(DisplayName = "pulled towards a version that weighs no feature, offsets nothing and has the intercepts the samples give, the fit is the one pulled towards zero")]
+    public void TowardsAVersionWeighingNothingIsTowardsZero()
+    {
+        SegmentSample[] samples = Mixed();
+        SegmentModel zero = SegmentRegression.Fit(samples, Pulled(1, 1, 1)).Model;
+        SegmentModel nothing = Toward(
+            zero.Weights.Classes.ToDictionary(pair => pair.Key, pair => new SegmentClassWeights(pair.Value.Bias, new Dictionary<string, double>())),
+            new Dictionary<string, FeatureScale>());
+
+        SegmentModel pulled = SegmentRegression.Fit(samples, Pulled(1, 1, 1), toward: nothing).Model;
+
+        foreach ((SegmentKind kind, SegmentClassWeights weights) in zero.Weights.Classes)
+        {
+            Assert.Equal(weights.Bias, pulled.Weights.Classes[kind].Bias, 6);
+            Assert.All(weights.Features, pair => Assert.Equal(pair.Value, pulled.Weights.Classes[kind].Features[pair.Key], 6));
+        }
+
+        Assert.All(zero.StationOffsets, pair => Assert.Equal(pair.Value, pulled.StationOffsets[pair.Key], 6));
+    }
+
+    [Fact(DisplayName = "pulled far harder than the samples pull, every intercept, weight and offset comes to the version in use's as it scores the features, and a weight or an offset it does not have to zero")]
+    public void AHardPullComesToTheVersionInUse()
+    {
+        SegmentSample[] samples = Mixed();
+        SegmentModel inUse = new(
+            new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights>
+            {
+                [SegmentKind.Break] = new(-1.0, new Dictionary<string, double> { [SegmentFeature.Length] = -1.5, [SegmentFeature.LogoShare] = -3.0 }),
+            }),
+            new Dictionary<string, double> { [Station] = 0.7 },
+            new Dictionary<string, double> { ["架空の物語"] = -0.4 },
+            SegmentThresholds.Initial,
+            new Dictionary<string, FeatureScale> { [SegmentFeature.Length] = new(60, 30), [SegmentFeature.LogoShare] = FeatureScale.Identity });
+
+        SegmentModel pulled = SegmentRegression.Fit(samples, Pulled(1e7, 1e7, 1e7), toward: inUse).Model;
+        SegmentModel zero = SegmentRegression.Fit(samples, Pulled(1e7, 1e7, 1e7)).Model;
+
+        Assert.Equal(-1.5 / 30, Slope(pulled, SegmentKind.Break, SegmentFeature.Length), 4);
+        Assert.Equal(-3.0, Slope(pulled, SegmentKind.Break, SegmentFeature.LogoShare), 4);
+        Assert.Equal(0, pulled.Weights.Classes[SegmentKind.Opening].Features[SegmentFeature.Length], 4);
+        Assert.Equal(0, pulled.Weights.Classes[SegmentKind.Break].Features[SegmentFeature.CaptionShare], 4);
+        Assert.Equal(0.7, pulled.StationOffsets[Station], 4);
+        Assert.Equal(0, pulled.StationOffsets[OtherStation], 4);
+        Assert.Equal(-0.4, pulled.SeriesOffsets["架空の物語"], 4);
+        Assert.Equal(-1.0 + (-1.5 * (pulled.Standardisation[SegmentFeature.Length].Mean - 60) / 30) + (-3.0 * pulled.Standardisation[SegmentFeature.LogoShare].Mean), pulled.Weights.Classes[SegmentKind.Break].Bias, 4);
+        Assert.Equal(0, zero.Weights.Classes[SegmentKind.Break].Features[SegmentFeature.LogoShare], 4);
+    }
+
+    [Fact(DisplayName = "a station or a series no sample is on keeps the offset the version in use gives it, as the pull leaves it there")]
+    public void AnOffsetNoSampleIsOnIsTheVersionInUses()
+    {
+        SegmentModel inUse = new(
+            new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights> { [SegmentKind.Break] = new(-1.0, new Dictionary<string, double>()) }),
+            new Dictionary<string, double> { [Station] = 0.7, ["9:9"] = 1.2 },
+            new Dictionary<string, double> { ["別の架空の話"] = -0.6 },
+            SegmentThresholds.Initial,
+            new Dictionary<string, FeatureScale>());
+
+        SegmentModel pulled = SegmentRegression.Fit(Mixed(), Pulled(1, 1, 1), toward: inUse).Model;
+
+        Assert.Equal(1.2, pulled.StationOffsets["9:9"]);
+        Assert.Equal(-0.6, pulled.SeriesOffsets["別の架空の話"]);
+        Assert.Equal([Station, OtherStation, "9:9"], pulled.StationOffsets.Keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact(DisplayName = "with four openings labelled, the pull of the search's strongest setting keeps the opening the version in use finds, where pulled towards zero it is lost")]
+    public void FewOpeningsStayNearTheVersionInUse()
+    {
+        SegmentSample[] samples = FewOpenings();
+        SegmentFeatureValues opening = Themed(1, 1, 0);
+        SegmentThresholds strongest = Pulled(SegmentSearch.Default.Lambdas.Max(), 10, 10);
+
+        double inUse = OpeningsInUse.Chances(opening, Station, null).Of(SegmentKind.Opening);
+        double pulled = SegmentRegression.Fit(samples, strongest, toward: OpeningsInUse).Model.Chances(opening, Station, null).Of(SegmentKind.Opening);
+        double zero = SegmentRegression.Fit(samples, strongest).Model.Chances(opening, Station, null).Of(SegmentKind.Opening);
+
+        Assert.True(inUse > 0.5);
+        Assert.True(pulled > 0.5 && zero < 0.5, $"pulled towards the version in use: {pulled}, towards zero: {zero}, in use: {inUse}");
+    }
+
+    [Fact(DisplayName = "with every kind labelled many times over, the best of the search's pulls towards a version far from the samples fits samples it never saw as well as the best pulled towards zero")]
+    public void ManyLabelsOutweighTheVersionInUse()
+    {
+        SegmentSample[] taught = ManyOpenings(0);
+        SegmentSample[] unseen = ManyOpenings(1);
+        SegmentModel wrong = Toward(
+            new Dictionary<SegmentKind, SegmentClassWeights>
+            {
+                [SegmentKind.Break] = new(0, new Dictionary<string, double> { [SegmentFeature.IsShortMultipleOf15s] = -4.0 }),
+                [SegmentKind.Opening] = new(0, new Dictionary<string, double> { [SegmentFeature.OpeningWindow] = -4.0, [SegmentFeature.IsThemeLength] = -4.0 }),
+                [SegmentKind.Ending] = new(-10, new Dictionary<string, double>()),
+            },
+            new Dictionary<string, FeatureScale>
+            {
+                [SegmentFeature.IsShortMultipleOf15s] = FeatureScale.Identity,
+                [SegmentFeature.OpeningWindow] = FeatureScale.Identity,
+                [SegmentFeature.IsThemeLength] = FeatureScale.Identity,
+            });
+
+        double zero = SegmentSearch.Default.Lambdas.Max(lambda => Likelihood(SegmentRegression.Fit(taught, Pulled(lambda, 10, 10)).Model, unseen));
+        double pulled = SegmentSearch.Default.Lambdas.Max(lambda => Likelihood(SegmentRegression.Fit(taught, Pulled(lambda, 10, 10), toward: wrong).Model, unseen));
+
+        Assert.True(pulled > zero * 1.01, $"towards the version: {pulled}, towards zero: {zero}");
+    }
+
     [Fact(DisplayName = "the same four-kind samples give an identical model every time, and starting from the first version of four kinds or of two reaches the same one")]
     public void TheSameFourKindSamplesGiveTheSameModel()
     {
@@ -302,6 +407,73 @@ public sealed class SegmentRegressionTests
         Assert.Throws<ArgumentException>(() => new SegmentSample(none, Station, string.Empty, SegmentKind.Break, 1));
         Assert.Throws<ArgumentOutOfRangeException>(() => new SegmentSample(none, Station, null, (SegmentKind)9, 1));
     }
+
+    private static readonly SegmentModel OpeningsInUse = Toward(
+        new Dictionary<SegmentKind, SegmentClassWeights>
+        {
+            [SegmentKind.Break] = new(-2.5, new Dictionary<string, double> { [SegmentFeature.IsShortMultipleOf15s] = 3.0 }),
+            [SegmentKind.Opening] = new(-6.0, new Dictionary<string, double> { [SegmentFeature.OpeningWindow] = 4.8, [SegmentFeature.IsThemeLength] = 2.5, [SegmentFeature.IsShortMultipleOf15s] = -2.8 }),
+            [SegmentKind.Ending] = new(-6.0, new Dictionary<string, double>()),
+        },
+        new Dictionary<string, FeatureScale>
+        {
+            [SegmentFeature.IsShortMultipleOf15s] = FeatureScale.Identity,
+            [SegmentFeature.OpeningWindow] = FeatureScale.Identity,
+            [SegmentFeature.IsThemeLength] = FeatureScale.Identity,
+        });
+
+    private static SegmentModel Toward(IReadOnlyDictionary<SegmentKind, SegmentClassWeights> classes, IReadOnlyDictionary<string, FeatureScale> scales)
+        => new(new SegmentWeights(classes), new Dictionary<string, double>(), new Dictionary<string, double>(), SegmentThresholds.Initial, scales);
+
+    private static SegmentSample[] Mixed()
+        => [.. Enumerable.Range(0, 40).Select(at => Sample((SegmentKind)(1 + (at % 4)), 0.2 + (at % 4 * 0.2), 5 + (at * 7 % 90), at % 7 / 7.0, at % 2 is 0 ? Station : OtherStation, at % 3 is 1 ? "架空の物語" : null))];
+
+    /// <summary>
+    /// The programme, now and then in the window an opening starts in or as long as a theme, adverts on the grid,
+    /// and four openings in the window and as long as a theme.
+    /// </summary>
+    private static SegmentSample[] FewOpenings()
+        =>
+        [
+            .. Enumerable.Range(0, 300).Select(at => Themed(SegmentKind.Programme, 0.3, at % 6 is 0 ? 1 : 0, at % 10 is 5 ? 1 : 0, 0)),
+            .. Enumerable.Range(0, 80).Select(at => Themed(SegmentKind.Break, 0.9, at % 8 is 0 ? 1 : 0, 0, 1)),
+            .. Enumerable.Range(0, 4).Select(_ => Themed(SegmentKind.Opening, 0.8, 1, 1, 0)),
+        ];
+
+    /// <summary>
+    /// Hundreds of label weight of each kind, as a break is labelled over a round, drawn from the same rule in a different
+    /// order for each <paramref name="draw"/>: an opening mostly in the window and as long as a theme, an advert mostly on
+    /// the grid, the programme mostly neither.
+    /// </summary>
+    private static SegmentSample[] ManyOpenings(int draw)
+        =>
+        [
+            .. Enumerable.Range(0, 200).Select(at => (at * 7) + draw).Select(at => Themed(SegmentKind.Programme, 3.0, at % 9 is 0 ? 1 : 0, at % 11 is 0 ? 1 : 0, at % 13 is 0 ? 1 : 0)),
+            .. Enumerable.Range(0, 100).Select(at => (at * 7) + draw).Select(at => Themed(SegmentKind.Break, 5.0, at % 10 is 0 ? 1 : 0, 0, at % 6 is 0 ? 0 : 1)),
+            .. Enumerable.Range(0, 100).Select(at => (at * 7) + draw).Select(at => Themed(SegmentKind.Opening, 5.0, at % 5 is 0 ? 0 : 1, at % 4 is 0 ? 0 : 1, 0)),
+        ];
+
+    private static SegmentSample Themed(SegmentKind kind, double weight, double window, double theme, double grid)
+        => new(Themed(window, theme, grid), Station, null, kind, weight);
+
+    private static SegmentFeatureValues Themed(double window, double theme, double grid)
+        => SegmentFeatureValues.Of(new Dictionary<string, double?>
+        {
+            [SegmentFeature.OpeningWindow] = window,
+            [SegmentFeature.IsThemeLength] = theme,
+            [SegmentFeature.IsShortMultipleOf15s] = grid,
+        });
+
+    /// <summary>
+    /// How much the score of <paramref name="kind"/> moves for a feature moved by one, as it stands before it is standardised.
+    /// </summary>
+    private static double Slope(SegmentModel model, SegmentKind kind, string feature)
+        => model.Weights.Classes[kind].Features[feature] / model.Standardisation[feature].Sd;
+
+    private static double Pull(double labelled) => SegmentRegression.InUseCountsAs / (SegmentRegression.InUseCountsAs + labelled);
+
+    private static double Likelihood(SegmentModel model, IEnumerable<SegmentSample> samples)
+        => samples.Sum(sample => sample.Weight * model.Chances(sample.Features, sample.Station, sample.Series).LogOf(sample.Kind));
 
     private static SegmentModel Kept(IReadOnlyDictionary<string, double> opening, IReadOnlyDictionary<string, FeatureScale> scales)
         => new(

@@ -222,6 +222,30 @@ public sealed class SegmentLabelsTests
         Assert.All(noneLeft, Assert.Null);
     }
 
+    [Fact(DisplayName = "BR-CD-006: a segment the version in use takes surely for an opening or an ending is no programme by elimination, while one it takes for one less surely, or with its detection thrown away, still is")]
+    public void ASegmentTheVersionInUseTakesSurelyForAThemeIsNoProgrammeByElimination()
+    {
+        SegmentPiece[] pieces = [Piece(0, 100), Piece(100, 115), Piece(115, 200), Piece(200, 290), Piece(290, 400)];
+        SegmentSpan[] spans =
+        [
+            new(Seconds(0), Seconds(100), SegmentKind.Programme, 0.9),
+            new(Seconds(100), Seconds(115), SegmentKind.Break, 0.9),
+            new(Seconds(115), Seconds(190), SegmentKind.Opening, SegmentLabels.ThemeTakenSurely),
+            new(Seconds(190), Seconds(200), SegmentKind.Programme, 0.9),
+            new(Seconds(200), Seconds(290), SegmentKind.Ending, 0.7),
+            new(Seconds(290), Seconds(400), SegmentKind.Programme, 0.9),
+        ];
+        SegmentDetection inUse = SegmentDetection.Judged(spans, Seconds(400), []);
+        SegmentDetection thrownAway = SegmentDetection.Judged([new(Seconds(0), Seconds(115), SegmentKind.Break, 0.9), .. spans[2..5], new(Seconds(290), Seconds(400), SegmentKind.Break, 0.9)], Seconds(400), []);
+
+        IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(pieces, Context([SureAdvert(100, 115)]), [], inUse: inUse);
+        IReadOnlyList<SegmentLabel?> discarded = SegmentLabels.Of(pieces, Context([SureAdvert(100, 115)]), [], inUse: thrownAway);
+
+        Assert.Equal([Uncovered(0.3), Break(0.9, SegmentLabelSource.Catalog), null, Uncovered(0.3), Uncovered(0.3)], labels);
+        Assert.Equal(SegmentDetectionState.Discarded, thrownAway.State);
+        Assert.Equal([Uncovered(0.3), Break(0.9, SegmentLabelSource.Catalog), Uncovered(0.3), Uncovered(0.3), Uncovered(0.3)], discarded);
+    }
+
     [Fact(DisplayName = "a viewer's action is on a break, an opening or an ending, at no time before the recording's zero")]
     public void AViewersActionIsOnWhatAButtonOffers()
     {

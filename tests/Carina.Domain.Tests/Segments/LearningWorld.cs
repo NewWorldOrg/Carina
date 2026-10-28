@@ -46,6 +46,26 @@ internal static class LearningWorld
         null);
 
     /// <summary>
+    /// <see cref="InUse"/> as a version that weighs no feature and offsets nothing would stand in its place, which
+    /// learning pulls towards as it would towards zero.
+    /// </summary>
+    public static readonly SegmentModelVersion WeighingNothingInUse = SegmentModelVersion.Rehydrate(
+        SegmentModelVersion.FirstNumber,
+        SegmentModelVersionState.Active,
+        false,
+        new SegmentModel(
+            new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights> { [SegmentKind.Break] = new(0, new Dictionary<string, double>()) }),
+            new Dictionary<string, double>(),
+            new Dictionary<string, double>(),
+            SegmentThresholds.Initial,
+            new Dictionary<string, FeatureScale>()),
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+        null,
+        null,
+        null);
+
+    /// <summary>
     /// <see cref="InUse"/> as the first version of four kinds would stand in its place.
     /// </summary>
     public static readonly SegmentModelVersion FourKindsInUse = SegmentModelVersion.Rehydrate(

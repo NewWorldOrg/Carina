@@ -176,7 +176,7 @@ public sealed class SegmentLearningTests
 
         Assert.DoesNotContain(then, stretch => advert.Equals(stretch.Entry));
         Assert.Contains(catalog.HeardNow(first.Id), stretch => advert.Equals(stretch.Entry));
-        Assert.Equal(SegmentRegression.Fit(touchedNow, setting).Model, learned);
+        Assert.Equal(SegmentRegression.Fit(touchedNow, setting, toward: InUse.Model).Model, learned);
         Assert.True(touchedThen.Count(sample => sample.Kind is SegmentKind.Programme) > touchedNow.Count(sample => sample.Kind is SegmentKind.Programme));
     }
 
@@ -206,6 +206,46 @@ public sealed class SegmentLearningTests
         Assert.Contains(opening, setAside);
         Assert.Equal(Figures(forgetting), Figures(learned.InUse.Metrics));
         Assert.True(remembering!.Kinds.Single(kind => kind.Kind is SegmentKind.Opening).Recall > forgetting!.Kinds.Single(kind => kind.Kind is SegmentKind.Opening).Recall);
+    }
+
+    [Fact(DisplayName = "BR-CD-008: in a fold, another recording read again without the entries set aside is labelled against the version in use's detection of it read without them too, so an opening it took only through the recording judged keeps no programme from being learned, whichever setting is tried first")]
+    public void AFoldLabelsAgainstTheVersionInUseReadWithoutWhatIsSetAside()
+    {
+        RecordingId earlierId = RecordingId.New();
+        RecordingId judgedId = RecordingId.New();
+        RecordingId laterId = RecordingId.New();
+        SegmentSpan[] opened = [Span(0, 150, SegmentKind.Programme), Span(150, 250, SegmentKind.Opening), Span(250, Length, SegmentKind.Programme)];
+        (LearningRecording judged, List<CatalogSound> heard) = Judged(judgedId, Weeks, past: [new PastEpisode(earlierId, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(Length - 30), opened)]);
+        ViewerAction skipped = new(Story.Episode(Weeks + 1).RecordingStartedAt.AddDays(1), ViewerActionKind.Skipped, SegmentKind.Opening, TimeSpan.FromSeconds(365), TimeSpan.FromSeconds(450), 2);
+        (LearningRecording later, List<CatalogSound> heardLater) = Judged(laterId, Weeks + 1, [skipped], [new PastEpisode(judgedId, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(Length - 30), opened)]);
+        CatalogEntryId theme = CatalogEntryId.New();
+        CatalogEntryId shared = CatalogEntryId.New();
+        CatalogEntryId knownBefore = CatalogEntryId.New();
+        CatalogSound[] sounds =
+        [
+            .. heard,
+            .. heardLater,
+            new(knownBefore, TimeSpan.FromSeconds(15), [Heard(knownBefore, Story, Weeks + 1, 135, 15, laterId), Heard(knownBefore, Across, Weeks - 2, 300, 15)]),
+            new(theme, TimeSpan.FromSeconds(100), [Heard(theme, Story, Weeks, 150, 100, judgedId), Heard(theme, StoryEarlier, Weeks, 150, 100)]),
+            new(shared, TimeSpan.FromSeconds(15), [Heard(shared, Story, Weeks, 120, 15, judgedId), Heard(shared, Story, Weeks + 1, 120, 15, laterId), Heard(shared, Across, Weeks, 260, 15)]),
+        ];
+        LearningCatalog catalog = new(sounds, SeriesLinks.None);
+        SegmentModelVersion inUse = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, false, RemembersOpenings(), InUse.TrainedAt, InUse.AdoptedAt, null, null, null);
+
+        SegmentLearned learned = Learn([judged, later], sounds, active: inUse);
+        string forgetting = Figures(Folds([judged, later], catalog, inUse, forgetting: true));
+        string remembering = Figures(Folds([judged, later], catalog, inUse, forgetting: false));
+
+        Assert.Equal(forgetting, Figures(learned.Evaluation.Metrics));
+        Assert.NotEqual(remembering, forgetting);
+
+        SegmentLearned looseFirst = Learn([judged, later], sounds, new SegmentSearch([SegmentThresholds.Initial], [0.1, 1e6], [10]), inUse);
+        SegmentLearned tightFirst = Learn([judged, later], sounds, new SegmentSearch([SegmentThresholds.Initial], [1e6, 0.1], [10]), inUse);
+        SegmentLearned tight = Learn([judged, later], sounds, new SegmentSearch([SegmentThresholds.Initial], [1e6], [10]), inUse);
+
+        Assert.NotEqual(Figures(learned.Evaluation.Metrics), Figures(tight.Evaluation.Metrics));
+        Assert.Equal(looseFirst.Candidate, tightFirst.Candidate);
+        Assert.Equal(Figures(looseFirst.Evaluation.Metrics), Figures(tightFirst.Evaluation.Metrics));
     }
 
     [Fact(DisplayName = "BR-CD-008: the earliest recording judged, every other entry first heard after it, is detected by a model with nothing to learn from, and the round still comes to a result")]
@@ -272,6 +312,28 @@ public sealed class SegmentLearningTests
         Assert.Equal(FourKindsInUse.Model.Standardisation[SegmentFeature.PastEndingShare], learned.Candidate.Standardisation[SegmentFeature.PastEndingShare]);
     }
 
+    [Fact(DisplayName = "the candidate is pulled towards the version in use: pulled far harder than its labels pull, each of its weights scores its feature as the version in use does, and a weight that version does not have is nothing")]
+    public void TheCandidateIsPulledTowardsTheVersionInUse()
+    {
+        (List<LearningRecording> taught, List<CatalogSound> sounds) = Taught(Weeks, openings: true);
+        (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks, opening: true);
+        SegmentModel inUse = FourKindsInUse.Model;
+
+        SegmentModel candidate = Learn([.. taught, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [1e7], [1e7]), FourKindsInUse).Candidate;
+
+        Assert.Equal(4, candidate.Kinds);
+
+        foreach ((SegmentKind kind, SegmentClassWeights weights) in candidate.Weights.Classes)
+        {
+            foreach ((string name, double weight) in weights.Features)
+            {
+                double expected = inUse.Weights.Classes[kind].Features.TryGetValue(name, out double given) ? given / inUse.Standardisation[name].Sd : 0;
+
+                Assert.Equal(expected, weight / candidate.Standardisation[name].Sd, 4);
+            }
+        }
+    }
+
     [Fact(DisplayName = "the version in use is judged on the same recordings beside the skips viewers made with its buttons in the last seven days, a candidate has offered none, and the evidence counts the recordings the catalog is sure of an advert in")]
     public void TheVersionInUseIsJudgedOnTheSameRecordings()
     {
@@ -306,8 +368,9 @@ public sealed class SegmentLearningTests
         LearningRecording[] seeking = [.. recordings.Select(recording => Seeking(recording, Seek(sought, 375, 431)))];
         LearningCatalog catalog = new([.. sounds, .. heard], SeriesLinks.None);
 
-        SegmentLearned without = Learn([.. recordings, judged], [.. sounds, .. heard]);
-        SegmentLearned with = Learn([.. seeking, judged], [.. sounds, .. heard]);
+        SegmentSearch pulled = new([SegmentThresholds.Initial], [SegmentSearch.Default.Lambdas[0]], [10]);
+        SegmentLearned without = Learn([.. recordings, judged], [.. sounds, .. heard], pulled);
+        SegmentLearned with = Learn([.. seeking, judged], [.. sounds, .. heard], pulled);
         (RecordingPieces read, SegmentContext context, ViewerSeeks seeks) = AsTheRoundReads(seeking[2], catalog);
         IReadOnlyList<SegmentLabel?> labels = SegmentLabels.Of(read.Pieces, context, [], seeks: seeks);
         SegmentPiece[] pod = [.. read.Pieces.Where(piece => piece.Starts >= TimeSpan.FromSeconds(380) && piece.Ends <= TimeSpan.FromSeconds(425))];
@@ -394,9 +457,9 @@ public sealed class SegmentLearningTests
         (List<LearningRecording> recordings, List<CatalogSound> sounds) = Taught(Weeks);
         (LearningRecording judged, List<CatalogSound> heard) = Judged(RecordingId.New(), Weeks);
 
-        SegmentLearned learned = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [first, second], [10]));
-        SegmentLearned pulledFlat = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [1e6], [10]));
-        SegmentLearned free = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [0.1], [10]));
+        SegmentLearned learned = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [first, second], [10]), WeighingNothingInUse);
+        SegmentLearned pulledFlat = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [1e6], [10]), WeighingNothingInUse);
+        SegmentLearned free = Learn([.. recordings, judged], [.. sounds, .. heard], new SegmentSearch([SegmentThresholds.Initial], [0.1], [10]), WeighingNothingInUse);
 
         Assert.Equal(0.1, learned.Candidate.Thresholds.Lambda);
         Assert.Equal(Figures(free.Evaluation.Metrics), Figures(learned.Evaluation.Metrics));
@@ -410,7 +473,7 @@ public sealed class SegmentLearningTests
 
         SegmentLearned learned = Learn(recordings, sounds, SegmentSearch.Default);
 
-        Assert.Equal(SegmentThresholds.Initial, learned.Candidate.Thresholds);
+        Assert.Equal(SegmentSearch.Default.Settings[0], learned.Candidate.Thresholds);
         Assert.Null(learned.Evaluation.Metrics);
         Assert.Null(learned.InUse.Metrics);
         Assert.Empty(learned.Evaluation.Stations);
@@ -418,11 +481,15 @@ public sealed class SegmentLearningTests
         Assert.Equal(AdoptionVerdict.TooLittleEvidence, learned.Verdict);
     }
 
-    [Fact(DisplayName = "the default search tries nine readings with nine pulls each, the initial setting first")]
+    [Fact(DisplayName = "the default search tries nine readings with nine pulls each, the initial reading first")]
     public void TheDefaultSearchStartsFromTheInitialSetting()
     {
+        SegmentThresholds initial = SegmentThresholds.Initial;
+
         Assert.Equal(81, SegmentSearch.Default.Settings.Count);
-        Assert.Equal(SegmentThresholds.Initial, SegmentSearch.Default.Settings[0]);
+        Assert.Equal(
+            new SegmentThresholds(initial.SilenceDbfs, initial.BlackLevel, initial.SceneChange, initial.GridToleranceSec, initial.GridPenalty, SegmentSearch.Default.Lambdas[0], initial.LambdaStation, initial.LambdaSeries),
+            SegmentSearch.Default.Settings[0]);
         Assert.Equal(9, SegmentSearch.Default.Settings.Select(setting => (setting.SilenceDbfs, setting.BlackLevel, setting.SceneChange, setting.GridToleranceSec)).Distinct().Count());
     }
 
@@ -489,6 +556,43 @@ public sealed class SegmentLearningTests
             judged.Context.ServiceId,
             CatalogTruth.Of(catalog.HeardNow(judged.Id), judged.Evidence),
             detection));
+    }
+
+    /// <summary>
+    /// The figures of the folds of a round with the one setting, each recording judged by a model fitted to the others,
+    /// each read again without the entries set aside for the one judged when it hears one of them and labelled against the
+    /// version in use's detection of it, read without those entries when <paramref name="forgetting"/>.
+    /// </summary>
+    private static SegmentMetrics? Folds(IReadOnlyList<LearningRecording> recordings, LearningCatalog catalog, SegmentModelVersion inUse, bool forgetting)
+    {
+        SegmentThresholds setting = OneSetting.Settings[0];
+        List<SegmentComparison> compared = [];
+
+        foreach (LearningRecording judged in recordings)
+        {
+            IReadOnlySet<CatalogEntryId> setAside = catalog.SetAsideFor(judged.Id, judged.StartedAt);
+            SegmentSample[] samples =
+            [
+                .. recordings.Where(other => other != judged).SelectMany(other =>
+                {
+                    IReadOnlyList<CatalogHeard> heard = catalog.HeardBy(other.Id, other.StartedAt);
+                    bool readAgain = heard.Any(stretch => stretch.Entry is CatalogEntryId entry && setAside.Contains(entry));
+                    IReadOnlySet<CatalogEntryId> without = readAgain ? setAside : new HashSet<CatalogEntryId>();
+                    SegmentContext context = other.Context.Hearing([.. heard.Where(stretch => stretch.Entry is not CatalogEntryId entry || !without.Contains(entry))]);
+                    SegmentContext unsure = other.Context.Hearing([.. heard.Select(stretch => new CatalogHeard(stretch.Starts, stretch.Ends, stretch.Kind, stretch.Occurrences, stretch.Series, stretch.Stations, entry: stretch.Entry))]);
+                    SegmentContext seen = forgetting && readAgain ? catalog.Forgetting(context, without) : other.Context.Hearing(heard);
+                    SegmentDetection detected = SegmentDetector.Detect(SegmentDetector.Read(other.Evidence, seen, inUse.Thresholds), inUse.Model);
+
+                    return SegmentSamples.Of(SegmentDetector.Read(other.Evidence, unsure, setting), context, other.Actions, catalog.HeardNow(other.Id), inUse: detected);
+                }),
+            ];
+            SegmentModel model = SegmentRegression.Fit(samples, setting, kept: inUse.Model, toward: inUse.Model).Model;
+            SegmentContext apart = catalog.Forgetting(judged.Context.Hearing([.. catalog.HeardBy(judged.Id, judged.StartedAt).Where(stretch => stretch.Entry is not CatalogEntryId entry || !setAside.Contains(entry))]), setAside);
+
+            compared.Add(new SegmentComparison(judged.Context.NetworkId, judged.Context.ServiceId, CatalogTruth.Of(catalog.HeardNow(judged.Id), judged.Evidence), SegmentDetector.Detect(SegmentDetector.Read(judged.Evidence, apart, setting), model)));
+        }
+
+        return SegmentMetrics.Of(compared, SkipReturns.None);
     }
 
     /// <summary>

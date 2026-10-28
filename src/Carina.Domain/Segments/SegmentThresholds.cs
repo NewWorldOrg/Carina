@@ -7,7 +7,7 @@ namespace Carina.Domain.Segments;
 /// how dark a frame is to count as black and how far it moves from the frame before to count as a change
 /// of scene, both as shares of full scale; how far off the 15-second grid a run of breaks may end, in
 /// seconds, and what leaving a break off it costs; and how strongly learning pulls the weights, the
-/// station offsets and the series offsets towards zero.
+/// station offsets and the series offsets towards the version in use.
 /// </summary>
 public sealed record SegmentThresholds
 {
@@ -31,9 +31,9 @@ public sealed record SegmentThresholds
             value => value >= 0 && value < CatalogKinds.Grid.TotalSeconds / 2,
             "How far off the grid a break may end is no less than nothing and less than half the grid.");
         GridPenalty = Within(gridPenalty, value => value <= 0, "Leaving a break off the grid costs something or nothing.");
-        Lambda = Within(lambda, IsNoLessThanNothing, "A pull towards zero is no less than nothing.");
-        LambdaStation = Within(lambdaStation, IsNoLessThanNothing, "A pull towards zero is no less than nothing.");
-        LambdaSeries = Within(lambdaSeries, IsNoLessThanNothing, "A pull towards zero is no less than nothing.");
+        Lambda = Within(lambda, IsNoLessThanNothing, "A pull is no less than nothing.");
+        LambdaStation = Within(lambdaStation, IsNoLessThanNothing, "A pull is no less than nothing.");
+        LambdaSeries = Within(lambdaSeries, IsNoLessThanNothing, "A pull is no less than nothing.");
     }
 
     public static SegmentThresholds Initial { get; } = new(-50, 0.10, 0.30, 1.0, -3.0, 1, 10, 10);
