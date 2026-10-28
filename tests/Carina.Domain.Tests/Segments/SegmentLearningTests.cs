@@ -208,6 +208,38 @@ public sealed class SegmentLearningTests
         Assert.True(remembering!.Kinds.Single(kind => kind.Kind is SegmentKind.Opening).Recall > forgetting!.Kinds.Single(kind => kind.Kind is SegmentKind.Opening).Recall);
     }
 
+    [Fact(DisplayName = "BR-CD-008: in a fold, another recording read again without the entries set aside is labelled against the version in use's detection of it read without them too, so an opening it took only through the recording judged keeps no programme from being learned")]
+    public void AFoldLabelsAgainstTheVersionInUseReadWithoutWhatIsSetAside()
+    {
+        RecordingId earlierId = RecordingId.New();
+        RecordingId judgedId = RecordingId.New();
+        RecordingId laterId = RecordingId.New();
+        SegmentSpan[] opened = [Span(0, 150, SegmentKind.Programme), Span(150, 250, SegmentKind.Opening), Span(250, Length, SegmentKind.Programme)];
+        (LearningRecording judged, List<CatalogSound> heard) = Judged(judgedId, Weeks, past: [new PastEpisode(earlierId, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(Length - 30), opened)]);
+        ViewerAction skipped = new(Story.Episode(Weeks + 1).RecordingStartedAt.AddDays(1), ViewerActionKind.Skipped, SegmentKind.Opening, TimeSpan.FromSeconds(365), TimeSpan.FromSeconds(450), 2);
+        (LearningRecording later, List<CatalogSound> heardLater) = Judged(laterId, Weeks + 1, [skipped], [new PastEpisode(judgedId, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(Length - 30), opened)]);
+        CatalogEntryId theme = CatalogEntryId.New();
+        CatalogEntryId shared = CatalogEntryId.New();
+        CatalogEntryId knownBefore = CatalogEntryId.New();
+        CatalogSound[] sounds =
+        [
+            .. heard,
+            .. heardLater,
+            new(knownBefore, TimeSpan.FromSeconds(15), [Heard(knownBefore, Story, Weeks + 1, 135, 15, laterId), Heard(knownBefore, Across, Weeks - 2, 300, 15)]),
+            new(theme, TimeSpan.FromSeconds(100), [Heard(theme, Story, Weeks, 150, 100, judgedId), Heard(theme, StoryEarlier, Weeks, 150, 100)]),
+            new(shared, TimeSpan.FromSeconds(15), [Heard(shared, Story, Weeks, 120, 15, judgedId), Heard(shared, Story, Weeks + 1, 120, 15, laterId), Heard(shared, Across, Weeks, 260, 15)]),
+        ];
+        LearningCatalog catalog = new(sounds, SeriesLinks.None);
+        SegmentModelVersion inUse = SegmentModelVersion.Rehydrate(2, SegmentModelVersionState.Active, false, RemembersOpenings(), InUse.TrainedAt, InUse.AdoptedAt, null, null, null);
+
+        SegmentLearned learned = Learn([judged, later], sounds, active: inUse);
+        string forgetting = Figures(Folds([judged, later], catalog, inUse, forgetting: true));
+        string remembering = Figures(Folds([judged, later], catalog, inUse, forgetting: false));
+
+        Assert.Equal(forgetting, Figures(learned.Evaluation.Metrics));
+        Assert.NotEqual(remembering, forgetting);
+    }
+
     [Fact(DisplayName = "BR-CD-008: the earliest recording judged, every other entry first heard after it, is detected by a model with nothing to learn from, and the round still comes to a result")]
     public void AFoldWithNothingToLearnFromStillJudges()
     {
@@ -516,6 +548,43 @@ public sealed class SegmentLearningTests
             judged.Context.ServiceId,
             CatalogTruth.Of(catalog.HeardNow(judged.Id), judged.Evidence),
             detection));
+    }
+
+    /// <summary>
+    /// The figures of the folds of a round with the one setting, each recording judged by a model fitted to the others,
+    /// each read again without the entries set aside for the one judged when it hears one of them and labelled against the
+    /// version in use's detection of it, read without those entries when <paramref name="forgetting"/>.
+    /// </summary>
+    private static SegmentMetrics? Folds(IReadOnlyList<LearningRecording> recordings, LearningCatalog catalog, SegmentModelVersion inUse, bool forgetting)
+    {
+        SegmentThresholds setting = OneSetting.Settings[0];
+        List<SegmentComparison> compared = [];
+
+        foreach (LearningRecording judged in recordings)
+        {
+            IReadOnlySet<CatalogEntryId> setAside = catalog.SetAsideFor(judged.Id, judged.StartedAt);
+            SegmentSample[] samples =
+            [
+                .. recordings.Where(other => other != judged).SelectMany(other =>
+                {
+                    IReadOnlyList<CatalogHeard> heard = catalog.HeardBy(other.Id, other.StartedAt);
+                    bool readAgain = heard.Any(stretch => stretch.Entry is CatalogEntryId entry && setAside.Contains(entry));
+                    IReadOnlySet<CatalogEntryId> without = readAgain ? setAside : new HashSet<CatalogEntryId>();
+                    SegmentContext context = other.Context.Hearing([.. heard.Where(stretch => stretch.Entry is not CatalogEntryId entry || !without.Contains(entry))]);
+                    SegmentContext unsure = other.Context.Hearing([.. heard.Select(stretch => new CatalogHeard(stretch.Starts, stretch.Ends, stretch.Kind, stretch.Occurrences, stretch.Series, stretch.Stations, entry: stretch.Entry))]);
+                    SegmentContext seen = forgetting && readAgain ? catalog.Forgetting(context, without) : other.Context.Hearing(heard);
+                    SegmentDetection detected = SegmentDetector.Detect(SegmentDetector.Read(other.Evidence, seen, inUse.Thresholds), inUse.Model);
+
+                    return SegmentSamples.Of(SegmentDetector.Read(other.Evidence, unsure, setting), context, other.Actions, catalog.HeardNow(other.Id), inUse: detected);
+                }),
+            ];
+            SegmentModel model = SegmentRegression.Fit(samples, setting, kept: inUse.Model, toward: inUse.Model).Model;
+            SegmentContext apart = catalog.Forgetting(judged.Context.Hearing([.. catalog.HeardBy(judged.Id, judged.StartedAt).Where(stretch => stretch.Entry is not CatalogEntryId entry || !setAside.Contains(entry))]), setAside);
+
+            compared.Add(new SegmentComparison(judged.Context.NetworkId, judged.Context.ServiceId, CatalogTruth.Of(catalog.HeardNow(judged.Id), judged.Evidence), SegmentDetector.Detect(SegmentDetector.Read(judged.Evidence, apart, setting), model)));
+        }
+
+        return SegmentMetrics.Of(compared, SkipReturns.None);
     }
 
     /// <summary>

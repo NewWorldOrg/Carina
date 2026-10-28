@@ -308,11 +308,20 @@ public static class SegmentLearning
 
         /// <summary>
         /// The samples <paramref name="pieces"/> of this recording are learned from, labelled as if the catalog did
-        /// not hear <paramref name="without"/>; every stretch the catalog has in the recording, those of
+        /// not hear <paramref name="without"/>, against the seeks and the version in use's detection read without it too; every stretch the catalog has in the recording, those of
         /// <paramref name="without"/> included, still keeps the segments it lies over from being taken for the programme.
         /// </summary>
         public IReadOnlyList<SegmentSample> Samples(RecordingPieces pieces, IReadOnlySet<CatalogEntryId>? without = null)
-            => SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, Seeks, InUse.Detection);
+        {
+            if (without is null || without.Count is 0)
+            {
+                return SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, Seeks, InUse.Detection);
+            }
+
+            (RecordingPieces Read, SegmentDetection Detection) apart = ReadInUse(without);
+
+            return SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, SeeksAgainst(apart), apart.Detection);
+        }
 
         /// <summary>
         /// The seeks of this recording read against the boundary candidates and the detection of the version in use, as
@@ -326,17 +335,23 @@ public static class SegmentLearning
         /// </summary>
         private (RecordingPieces Read, SegmentDetection Detection) InUse => inUse ??= ReadInUse();
 
-        private (RecordingPieces Read, SegmentDetection Detection) ReadInUse()
+        /// <summary>
+        /// The recording read as the version in use reads it without <paramref name="without"/>, its earlier episodes
+        /// forgetting what they were taken to hold over a stretch of one of them, and that version's detection of it.
+        /// </summary>
+        private (RecordingPieces Read, SegmentDetection Detection) ReadInUse(IReadOnlySet<CatalogEntryId>? without = null)
         {
-            RecordingPieces read = Read(active.Thresholds);
+            RecordingPieces read = Read(active.Thresholds, without);
 
             return (read, SegmentDetector.Detect(read, active.Model));
         }
 
-        private ViewerSeeks ReadSeeks()
+        private ViewerSeeks ReadSeeks() => SeeksAgainst(InUse);
+
+        private ViewerSeeks SeeksAgainst((RecordingPieces Read, SegmentDetection Detection) reading)
             => Recording.Seeks.Count is 0
                 ? ViewerSeeks.None
-                : ViewerSeeks.Read(Recording.Seeks, InUse.Read.Candidates, InUse.Detection, TimeSpan.FromSeconds(active.Thresholds.GridToleranceSec));
+                : ViewerSeeks.Read(Recording.Seeks, reading.Read.Candidates, reading.Detection, TimeSpan.FromSeconds(active.Thresholds.GridToleranceSec));
 
         /// <summary>
         /// <paramref name="stretch"/> with its confidence not known, which fixes nothing (<see cref="SegmentFeatures"/>).
