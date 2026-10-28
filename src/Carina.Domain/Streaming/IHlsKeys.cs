@@ -1,4 +1,5 @@
 using Carina.Domain.Auth;
+using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Streaming;
 
@@ -18,7 +19,13 @@ public interface IHlsKeys : IHlsKeyRevocation
     /// Issues a key holding a recording's <paramref name="transcode"/>, or nothing when as many keys are held as may
     /// be, in which case the transcode is the caller's to let go of.
     /// </summary>
-    IssuedHlsKey? Issue(IOnTheFlyViewing transcode, Subject watcher);
+    IssuedHlsKey? Issue(IOnTheFlyViewing transcode, Subject watcher, RecordingId recording);
+
+    /// <summary>
+    /// Lets go of the keys <paramref name="watcher"/> holds to <paramref name="recording"/>, and returns once their
+    /// transcoders have been let go of, so that a seek does not wait on the seats of the playlists it leaves behind.
+    /// </summary>
+    Task<int> LetGoOfAsync(Subject watcher, RecordingId recording);
 
     /// <summary>
     /// What a key opens, counting the asking as a request made with it, or nothing for a key never issued or let go of.

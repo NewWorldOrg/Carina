@@ -4,6 +4,7 @@ using Carina.Api.Live;
 using Carina.Api.Services;
 using Carina.Domain.Auth;
 using Carina.Domain.Playback;
+using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 using Carina.Domain.Viewing;
 
@@ -125,6 +126,8 @@ public static class RecordingHlsDelivery
             return;
         }
 
+        await keys.LetGoOfAsync(watcher, recording);
+
         OnTheFlyStart start = await StartAsync(context, player, offer, from, profile.Named, placement);
 
         if (start.Viewing is not { } transcode)
@@ -134,7 +137,7 @@ public static class RecordingHlsDelivery
             return;
         }
 
-        await OpenAsync(context, transcode, watcher, keys);
+        await OpenAsync(context, transcode, watcher, recording, keys);
     }
 
     /// <summary>
@@ -154,9 +157,14 @@ public static class RecordingHlsDelivery
         return await player.StartAsync(offer.Handover, offer.Service, from, profile, VideoCodec.H264, placement, starting.Token);
     }
 
-    private static async Task OpenAsync(HttpContext context, IOnTheFlyViewing transcode, Subject watcher, IHlsKeys keys)
+    private static async Task OpenAsync(
+        HttpContext context,
+        IOnTheFlyViewing transcode,
+        Subject watcher,
+        RecordingId recording,
+        IHlsKeys keys)
     {
-        if (keys.Issue(transcode, watcher) is not { } issued)
+        if (keys.Issue(transcode, watcher, recording) is not { } issued)
         {
             await transcode.DisposeAsync();
             await RefuseAsync(context, StatusCodes.Status503ServiceUnavailable, LiveHlsDelivery.AsManyAsAreHeld);

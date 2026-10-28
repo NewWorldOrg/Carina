@@ -1,3 +1,4 @@
+using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -10,6 +11,7 @@ namespace Carina.Infrastructure.Streaming;
 internal sealed class RecordingHlsRendition(
     HlsHolding holding,
     IOnTheFlyViewing transcode,
+    RecordingId recording,
     HlsSettings settings,
     TimeProvider clock,
     Action<HlsRendition> lapsed)
@@ -26,6 +28,8 @@ internal sealed class RecordingHlsRendition(
     private readonly SemaphoreSlim asked = new(0);
 
     private long furthestAsked = -1;
+
+    internal RecordingId Recording { get; } = recording;
 
     /// <summary>
     /// The segment numbered <paramref name="number"/>; asking for one further than any asked for before lets the
@@ -58,60 +62,82 @@ internal sealed class RecordingHlsRendition(
 
     protected override async Task ReadAsync()
     {
-        LiveFragmenter fragmenter = new(LiveTrack.Picture);
-        LiveFrames frames = new();
-        byte[] mouthful = new byte[Mouthful];
-        bool wroteToItsEnd = false;
+        HlsEnding ending = HlsEnding.CalledOff;
 
         try
         {
-            while (true)
-            {
-                int read = await transcode.Output.ReadAsync(mouthful, Stopping);
-
-                if (read is 0)
-                {
-                    wroteToItsEnd = !fragmenter.Ended().Broke;
-
-                    break;
-                }
-
-                LiveFragmenting cut = fragmenter.Read(mouthful.AsSpan(0, read));
-
-                foreach (LiveFragment fragment in cut.Fragments)
-                {
-                    await RoomAsync();
-                    Take(frames.Of(fragment));
-                }
-
-                if (cut.Broke)
-                {
-                    break;
-                }
-            }
+            ending = await CutToTheEndAsync();
         }
         catch (OperationCanceledException) when (Stopping.IsCancellationRequested)
         {
         }
         catch (Exception gone) when (gone is IOException or ObjectDisposedException)
         {
+            ending = HlsEnding.Broke;
         }
         finally
         {
-            lock (Gate)
-            {
-                if (wroteToItsEnd)
-                {
-                    Segmenter.Finish();
-                }
-                else
-                {
-                    Segmenter.End();
-                }
-            }
-
+            Settle(ending);
             SayTheEndCame();
             await transcode.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    /// Cuts what the transcoder writes until it stops, and says whether it wrote the whole of the recording: an mp4
+    /// that ends where a box ends from a transcoder that ran to its end.
+    /// </summary>
+    private async Task<HlsEnding> CutToTheEndAsync()
+    {
+        LiveFragmenter fragmenter = new(LiveTrack.Picture);
+        LiveFrames frames = new();
+        byte[] mouthful = new byte[Mouthful];
+
+        while (true)
+        {
+            int read = await transcode.Output.ReadAsync(mouthful, Stopping);
+
+            if (read is 0)
+            {
+                bool whole = !fragmenter.Ended().Broke && (await transcode.Completion.WaitAsync(Stopping)).RanToTheEnd;
+
+                return whole ? HlsEnding.Whole : HlsEnding.Broke;
+            }
+
+            LiveFragmenting cut = fragmenter.Read(mouthful.AsSpan(0, read));
+
+            foreach (LiveFragment fragment in cut.Fragments)
+            {
+                await RoomAsync();
+                Take(frames.Of(fragment));
+            }
+
+            if (cut.Broke)
+            {
+                return HlsEnding.Broke;
+            }
+        }
+    }
+
+    private void Settle(HlsEnding ending)
+    {
+        if (ending is HlsEnding.Broke)
+        {
+            SayItBroke();
+
+            return;
+        }
+
+        lock (Gate)
+        {
+            if (ending is HlsEnding.Whole)
+            {
+                Segmenter.Finish();
+            }
+            else
+            {
+                Segmenter.End();
+            }
         }
     }
 
@@ -140,4 +166,16 @@ internal sealed class RecordingHlsRendition(
 
         SayWhetherASegmentIsCut();
     }
+}
+
+/// <summary>
+/// How a recording's transcoder stopped: having written the whole recording, part way through, or called off.
+/// </summary>
+internal enum HlsEnding
+{
+    CalledOff = 1,
+
+    Whole = 2,
+
+    Broke = 3,
 }

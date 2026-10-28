@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 
 using Carina.Domain.Auth;
+using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -38,12 +39,45 @@ public sealed class HlsKeys(HlsSettings settings, TimeProvider clock) : IHlsKeys
         return Issue(watcher, holding => new LiveHlsRendition(holding, seat, profile, settings, clock, Forget));
     }
 
-    public IssuedHlsKey? Issue(IOnTheFlyViewing transcode, Subject watcher)
+    public IssuedHlsKey? Issue(IOnTheFlyViewing transcode, Subject watcher, RecordingId recording)
     {
         ArgumentNullException.ThrowIfNull(transcode);
         ArgumentNullException.ThrowIfNull(watcher);
+        ArgumentNullException.ThrowIfNull(recording);
 
-        return Issue(watcher, holding => new RecordingHlsRendition(holding, transcode, settings, clock, Forget));
+        return Issue(watcher, holding => new RecordingHlsRendition(holding, transcode, recording, settings, clock, Forget));
+    }
+
+    public async Task<int> LetGoOfAsync(Subject watcher, RecordingId recording)
+    {
+        ArgumentNullException.ThrowIfNull(watcher);
+        ArgumentNullException.ThrowIfNull(recording);
+
+        List<RecordingHlsRendition> leaving;
+
+        lock (gate)
+        {
+            leaving =
+            [
+                .. held.Values
+                    .OfType<RecordingHlsRendition>()
+                    .Where(rendition => rendition.Watcher.Equals(watcher) && rendition.Recording.Equals(recording)),
+            ];
+
+            foreach (RecordingHlsRendition rendition in leaving)
+            {
+                held.Remove(rendition.Digest);
+            }
+        }
+
+        foreach (RecordingHlsRendition rendition in leaving)
+        {
+            rendition.Close();
+        }
+
+        await Task.WhenAll(leaving.Select(rendition => rendition.Life));
+
+        return leaving.Count;
     }
 
     public IHlsRendition? Find(string? offered)

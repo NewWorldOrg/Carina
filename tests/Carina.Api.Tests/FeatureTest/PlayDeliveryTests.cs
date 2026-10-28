@@ -1,3 +1,4 @@
+using System.IO.Pipelines;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -26,20 +27,46 @@ using ISegmentSettingsRepository = Carina.Domain.Segments.ISegmentSettingsReposi
 
 namespace Carina.Api.Tests.FeatureTest;
 
-internal sealed class HeldViewing(OnTheFlyStanding standing, byte[] picture) : IOnTheFlyViewing
+internal sealed class HeldViewing : IOnTheFlyViewing
 {
-    public OnTheFlyStanding Standing { get; } = standing;
+    private readonly Pipe? endless;
 
-    public Stream Output { get; } = new MemoryStream(picture);
+    private int letGo;
 
-    public Task<TranscoderExit> Completion { get; } = Task.FromResult(TranscoderExit.Finished());
+    public HeldViewing(OnTheFlyStanding standing, byte[] picture, TranscoderExit? exit = null, bool writesOn = false)
+    {
+        Standing = standing;
+        Completion = Task.FromResult(exit ?? TranscoderExit.Finished());
 
-    public bool WasLetGo { get; private set; }
+        if (!writesOn)
+        {
+            Output = new MemoryStream(picture);
+
+            return;
+        }
+
+        endless = new Pipe();
+        endless.Writer.WriteAsync(picture).AsTask().GetAwaiter().GetResult();
+        Output = endless.Reader.AsStream();
+    }
+
+    public OnTheFlyStanding Standing { get; }
+
+    public Stream Output { get; }
+
+    public Task<TranscoderExit> Completion { get; }
+
+    public bool WasLetGo => Volatile.Read(ref letGo) is 1;
 
     public ValueTask DisposeAsync()
     {
-        WasLetGo = true;
-        Output.Dispose();
+        Volatile.Write(ref letGo, 1);
+        endless?.Writer.Complete();
+
+        if (endless is null)
+        {
+            Output.Dispose();
+        }
 
         return ValueTask.CompletedTask;
     }
@@ -79,6 +106,14 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
 
     public HeldViewing? Handed { get; private set; }
 
+    public List<HeldViewing> EveryHanded { get; } = [];
+
+    public TranscoderExit Exit { get; set; } = TranscoderExit.Finished();
+
+    public bool WritesOn { get; set; }
+
+    public int? Seats { get; set; }
+
     public Task<OnTheFlyStart> StartAsync(
         PlaybackFile file,
         ServiceId service,
@@ -100,6 +135,11 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
             return Task.FromResult(OnTheFlyStart.Refused(refusal, "the held player was told to refuse."));
         }
 
+        if (Seats is { } seats && EveryHanded.Count(viewing => !viewing.WasLetGo) >= seats)
+        {
+            return Task.FromResult(OnTheFlyStart.Refused(OnTheFlyRefusal.TooManyAlready, "every seat the held player has is taken."));
+        }
+
         Handed = new HeldViewing(
             new OnTheFlyStanding(
                 from,
@@ -109,7 +149,10 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
                 attributesWereMeasured: true,
                 Running,
                 AtOnce),
-            Picture);
+            Picture,
+            Exit,
+            WritesOn);
+        EveryHanded.Add(Handed);
 
         return Task.FromResult(OnTheFlyStart.Started(Handed));
     }

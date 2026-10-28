@@ -161,6 +161,65 @@ public sealed partial class RecordingHlsTests
         await Eventually.Happens(() => feature.Player.Handed?.WasLetGo is true, "the transcoder was let go of");
     }
 
+    [Fact(DisplayName = "BR-PD-022: seeking lets go of the transcoder of the reader's playlist of the same recording before another starts, so five seeks in a row are not refused")]
+    public async Task FiveSeeksInARowAreNotRefused()
+    {
+        await using PlayFeature feature = Transcoding();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.WritesOn = true;
+        feature.Player.Seats = 4;
+
+        for (int seek = 0; seek < 5; seek++)
+        {
+            using HttpResponseMessage answer = await PlaylistAsync(feature.Client, recording, $"?from={seek * 60}");
+
+            Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        }
+
+        Assert.Equal(5, feature.Player.EveryHanded.Count);
+        Assert.All(feature.Player.EveryHanded.SkipLast(1), viewing => Assert.True(viewing.WasLetGo));
+        Assert.False(feature.Player.EveryHanded[^1].WasLetGo);
+    }
+
+    [Fact(DisplayName = "BR-PD-022: seeking in one recording keeps the reader's playlist of another")]
+    public async Task SeekingInOneRecordingKeepsThePlaylistOfAnother()
+    {
+        await using PlayFeature feature = Transcoding();
+        Recording seeking = feature.Ended(RecordingOutcome.Complete);
+        Recording other = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.WritesOn = true;
+        string kept = KeyIn(await (await PlaylistAsync(feature.Client, other)).Content.ReadAsStringAsync());
+        HeldViewing otherTranscoder = feature.Player.Handed!;
+
+        using HttpResponseMessage first = await PlaylistAsync(feature.Client, seeking);
+        using HttpResponseMessage seeked = await PlaylistAsync(feature.Client, seeking, "?from=120");
+        using HttpResponseMessage listed = await feature.Client.GetAsync(new Uri($"/api/hls/{kept}/index.m3u8", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, seeked.StatusCode);
+        Assert.False(otherTranscoder.WasLetGo);
+        Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
+    }
+
+    [Fact(DisplayName = "BR-PD-022: a recording whose transcoder stopped part way is not said to have ended, and the next playlist asked for is refused as unavailable")]
+    public async Task ARecordingWhoseTranscoderStoppedPartWayIsRefusedRatherThanEnded()
+    {
+        await using PlayFeature feature = Transcoding();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.Exit = TranscoderExit.Refused(1, "the transcoder fell over.");
+        string key = KeyIn(await (await PlaylistAsync(feature.Client, recording)).Content.ReadAsStringAsync());
+
+        await Eventually.Happens(() => feature.Player.Handed?.WasLetGo is true, "the transcoder was let go of");
+
+        using HttpResponseMessage listed = await feature.Client.GetAsync(new Uri($"/api/hls/{key}/index.m3u8", UriKind.Relative));
+        using HttpResponseMessage segment = await feature.Client.GetAsync(new Uri($"/api/hls/{key}/0.m4s", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, listed.StatusCode);
+        Assert.Equal(LiveHlsDelivery.RefusalMediaType, listed.Content.Headers.ContentType?.ToString());
+        Assert.Equal(LiveHlsDelivery.TheTranscoderStopped, await listed.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("#EXT-X-ENDLIST", await listed.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, segment.StatusCode);
+    }
+
     private static PlayFeature Transcoding()
     {
         PlayFeature feature = new();

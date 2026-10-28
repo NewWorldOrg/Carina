@@ -2,6 +2,7 @@ using System.IO.Pipelines;
 using System.Threading.Channels;
 
 using Carina.Domain.Auth;
+using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
@@ -15,6 +16,10 @@ public sealed class HlsKeysTests
     private static readonly Subject Watcher = new("a-watcher");
 
     private static readonly Subject Another = new("another-watcher");
+
+    private static readonly RecordingId Recorded = RecordingId.New();
+
+    private static readonly RecordingId AnotherRecorded = RecordingId.New();
 
     private readonly HandTurnedClock clock = new();
 
@@ -263,7 +268,7 @@ public sealed class HlsKeysTests
     {
         await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldTranscode transcode = new(LiveProfile.FullHd30);
-        IssuedHlsKey issued = keys.Issue(transcode, Watcher)!;
+        IssuedHlsKey issued = keys.Issue(transcode, Watcher, Recorded)!;
         Task<bool> waiting = issued.Rendition.ReadyAsync(CancellationToken.None);
 
         await transcode.WriteAsync(Fmp4Media.Initialisation(), RecordedGop(0));
@@ -285,7 +290,7 @@ public sealed class HlsKeysTests
     {
         await using HlsKeys keys = new(new HlsSettings { SegmentsAhead = 2 }, clock);
         HeldTranscode transcode = new(LiveProfile.Hd30);
-        IHlsRendition rendition = keys.Issue(transcode, Watcher)!.Rendition;
+        IHlsRendition rendition = keys.Issue(transcode, Watcher, Recorded)!.Rendition;
 
         await transcode.WriteAsync([Fmp4Media.Initialisation(), .. Enumerable.Range(0, 10).Select(RecordedGop)]);
 
@@ -311,7 +316,7 @@ public sealed class HlsKeysTests
     {
         await using HlsKeys keys = new(new HlsSettings { SegmentsHeld = 2, SegmentsAhead = 20 }, clock);
         HeldTranscode transcode = new(LiveProfile.Hd30);
-        IHlsRendition rendition = keys.Issue(transcode, Watcher)!.Rendition;
+        IHlsRendition rendition = keys.Issue(transcode, Watcher, Recorded)!.Rendition;
 
         await transcode.WriteAsync([Fmp4Media.Initialisation(), .. Enumerable.Range(0, 8).Select(RecordedGop)]);
         await Eventually.Happens(() => rendition.Window.Segments.Count is 7, "seven segments were cut");
@@ -329,7 +334,7 @@ public sealed class HlsKeysTests
     {
         await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldTranscode transcode = new(LiveProfile.Hd30);
-        IssuedHlsKey issued = keys.Issue(transcode, Watcher)!;
+        IssuedHlsKey issued = keys.Issue(transcode, Watcher, Recorded)!;
         byte[] tail = Fmp4Media.Fragment(120 * OneFrame, [.. Enumerable.Repeat(OneFrame, 25)], true);
 
         await transcode.WriteAsync(Fmp4Media.Initialisation(), RecordedGop(0), RecordedGop(1), tail);
@@ -340,7 +345,55 @@ public sealed class HlsKeysTests
 
         Assert.Equal(3, issued.Rendition.Window.Segments.Count);
         Assert.Equal(tail, issued.Rendition.Segment(2)!.Value.ToArray());
+        Assert.False(issued.Rendition.Broke);
         Assert.NotNull(keys.Find(issued.Key));
+    }
+
+    [Fact(DisplayName = "BR-PD-022: a recording whose transcoder stops part way does not end its playlist, says it broke and lets go of the transcoder")]
+    public async Task ARecordingWhoseTranscoderStopsPartWayDoesNotEndItsPlaylist()
+    {
+        await using HlsKeys keys = new(new HlsSettings(), clock);
+        HeldTranscode transcode = new(LiveProfile.Hd30, TranscoderExit.Refused(1, "the transcoder fell over."));
+        IssuedHlsKey issued = keys.Issue(transcode, Watcher, Recorded)!;
+
+        await transcode.WriteAsync(Fmp4Media.Initialisation(), RecordedGop(0), RecordedGop(1), RecordedGop(2));
+        transcode.Ends();
+
+        await Eventually.Happens(() => issued.Rendition.Broke, "the playlist said it broke");
+        await Eventually.Happens(() => transcode.LetGo, "the transcoder was let go of");
+
+        Assert.False(issued.Rendition.Window.Ended);
+        Assert.Equal(2, issued.Rendition.Window.Segments.Count);
+        Assert.NotNull(issued.Rendition.Segment(1));
+    }
+
+    [Fact(DisplayName = "BR-PD-022: letting go of a watcher's keys to one recording lets go of their transcoders before it returns, and of no live channel's key, other recording's key or other watcher's key")]
+    public async Task LettingGoOfAWatchersKeysToOneRecordingLetsGoOfThoseAlone()
+    {
+        await using HlsKeys keys = new(new HlsSettings(), clock);
+        HeldTranscode first = new(LiveProfile.Hd30);
+        HeldTranscode second = new(LiveProfile.Hd30);
+        HeldTranscode otherRecording = new(LiveProfile.Hd30);
+        HeldTranscode otherWatcher = new(LiveProfile.Hd30);
+        HeldSeat live = new();
+        IssuedHlsKey firstKey = keys.Issue(first, Watcher, Recorded)!;
+        IssuedHlsKey secondKey = keys.Issue(second, Watcher, Recorded)!;
+        IssuedHlsKey otherRecordingKey = keys.Issue(otherRecording, Watcher, AnotherRecorded)!;
+        IssuedHlsKey otherWatcherKey = keys.Issue(otherWatcher, Another, Recorded)!;
+        IssuedHlsKey liveKey = keys.Issue(live, Watcher, LiveProfile.Hd30)!;
+
+        Assert.Equal(2, await keys.LetGoOfAsync(Watcher, Recorded));
+
+        Assert.True(first.LetGo);
+        Assert.True(second.LetGo);
+        Assert.Null(keys.Find(firstKey.Key));
+        Assert.Null(keys.Find(secondKey.Key));
+        Assert.NotNull(keys.Find(otherRecordingKey.Key));
+        Assert.NotNull(keys.Find(otherWatcherKey.Key));
+        Assert.NotNull(keys.Find(liveKey.Key));
+        Assert.False(otherRecording.LetGo);
+        Assert.False(otherWatcher.LetGo);
+        Assert.False(live.LetGo);
     }
 
     [Fact(DisplayName = "BR-PV-005: a recording's key nothing has been asked with for thirty seconds lets go of the transcoder, even one waiting for the player to catch up")]
@@ -348,7 +401,7 @@ public sealed class HlsKeysTests
     {
         await using HlsKeys keys = new(new HlsSettings { SegmentsAhead = 1 }, clock);
         HeldTranscode transcode = new(LiveProfile.Hd30);
-        IssuedHlsKey issued = keys.Issue(transcode, Watcher)!;
+        IssuedHlsKey issued = keys.Issue(transcode, Watcher, Recorded)!;
 
         await transcode.WriteAsync([Fmp4Media.Initialisation(), .. Enumerable.Range(0, 6).Select(RecordedGop)]);
         await Eventually.Happens(() => issued.Rendition.Window.Segments.Count is 1, "a segment was cut");
@@ -361,18 +414,19 @@ public sealed class HlsKeysTests
     }
 
     [Fact]
-    public async Task ATranscoderThatWritesSomethingOtherThanAnMp4EndsThePlaylistWithNothingInIt()
+    public async Task ATranscoderThatWritesSomethingOtherThanAnMp4BreaksThePlaylistWithNothingInIt()
     {
         await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldTranscode transcode = new(LiveProfile.Hd30);
-        IHlsRendition rendition = keys.Issue(transcode, Watcher)!.Rendition;
+        IHlsRendition rendition = keys.Issue(transcode, Watcher, Recorded)!.Rendition;
 
         byte[] junk = [0, 0, 0, 16, .. "junk"u8.ToArray(), 1, 2, 3, 4, 5, 6, 7, 8];
 
         await transcode.WriteAsync(junk);
 
         Assert.False(await rendition.ReadyAsync(CancellationToken.None));
-        Assert.True(rendition.Window.Ended);
+        Assert.True(rendition.Broke);
+        Assert.False(rendition.Window.Ended);
         await Eventually.Happens(() => transcode.LetGo, "the transcoder was let go of");
     }
 
@@ -383,9 +437,9 @@ public sealed class HlsKeysTests
         HeldTranscode refused = new(LiveProfile.Hd30);
 
         keys.Issue(new HeldSeat(), Watcher, LiveProfile.Hd30);
-        keys.Issue(new HeldTranscode(LiveProfile.Hd30), Another);
+        keys.Issue(new HeldTranscode(LiveProfile.Hd30), Another, Recorded);
 
-        Assert.Null(keys.Issue(refused, Watcher));
+        Assert.Null(keys.Issue(refused, Watcher, Recorded));
         Assert.False(refused.LetGo);
         Assert.Equal(2, keys.Count);
     }
@@ -395,7 +449,7 @@ public sealed class HlsKeysTests
     {
         await using HlsKeys keys = new(new HlsSettings(), clock);
         HeldTranscode transcode = new(LiveProfile.Hd30);
-        IssuedHlsKey issued = keys.Issue(transcode, Watcher)!;
+        IssuedHlsKey issued = keys.Issue(transcode, Watcher, Recorded)!;
 
         Assert.Equal(1, keys.RevokeEverythingOf(Watcher));
 
@@ -443,7 +497,7 @@ public sealed class HlsKeysTests
         }
     }
 
-    private sealed class HeldTranscode(LiveProfile profile) : IOnTheFlyViewing
+    private sealed class HeldTranscode(LiveProfile profile, TranscoderExit? exit = null) : IOnTheFlyViewing
     {
         private readonly Pipe written = new();
 
@@ -460,7 +514,7 @@ public sealed class HlsKeysTests
 
         public Stream Output => written.Reader.AsStream();
 
-        public Task<TranscoderExit> Completion { get; } = Task.FromResult(TranscoderExit.Finished());
+        public Task<TranscoderExit> Completion { get; } = Task.FromResult(exit ?? TranscoderExit.Finished());
 
         public bool LetGo => Volatile.Read(ref letGo) is 1;
 
@@ -494,5 +548,7 @@ public sealed class HlsKeysTests
         public ReadOnlyMemory<byte>? Segment(long number) => null;
 
         public Task<bool> ReadyAsync(CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public bool Broke => false;
     }
 }

@@ -45,6 +45,8 @@ public static class LiveHlsDelivery
 
     public const string NothingCameInTime = "Nothing came from this channel in time to start a playlist.";
 
+    public const string TheTranscoderStopped = "The transcoder stopped before the end of what this playlist lists.";
+
     public const string AsManyAsAreHeld = "As many playlists are open as this application holds at once.";
 
     public static async Task Invoke(
@@ -164,9 +166,14 @@ public static class LiveHlsDelivery
 
         context.Response.Headers.CacheControl = NeverCached;
 
-        return keys.Find(key) is { } rendition
-            ? AnswerAsync(context, LiveHlsPlaylists.MediaType, LiveHlsPlaylists.Media(rendition.Window))
-            : RefuseAsync(context, StatusCodes.Status403Forbidden, NotHeld);
+        if (keys.Find(key) is not { } rendition)
+        {
+            return RefuseAsync(context, StatusCodes.Status403Forbidden, NotHeld);
+        }
+
+        return rendition.Broke
+            ? RefuseAsync(context, StatusCodes.Status503ServiceUnavailable, TheTranscoderStopped)
+            : AnswerAsync(context, LiveHlsPlaylists.MediaType, LiveHlsPlaylists.Media(rendition.Window));
     }
 
     public static Task TheInitialisation(HttpContext context, string key, IHlsKeys keys)

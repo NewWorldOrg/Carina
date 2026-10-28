@@ -23,6 +23,8 @@ internal abstract class HlsRendition : IHlsRendition
 
     private bool closed;
 
+    private bool broke;
+
     protected HlsRendition(
         HlsHolding holding,
         LiveProfile profile,
@@ -62,6 +64,17 @@ internal abstract class HlsRendition : IHlsRendition
             lock (Gate)
             {
                 return Segmenter.Initialisation;
+            }
+        }
+    }
+
+    public bool Broke
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return broke;
             }
         }
     }
@@ -163,6 +176,14 @@ internal abstract class HlsRendition : IHlsRendition
     protected abstract Task ReadAsync();
 
     protected void SayTheEndCame() => ready.TrySetResult();
+
+    protected void SayItBroke()
+    {
+        lock (Gate)
+        {
+            broke = true;
+        }
+    }
 
     protected void SayWhetherASegmentIsCut()
     {
