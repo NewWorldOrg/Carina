@@ -13,7 +13,8 @@ public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Ev
 /// as one (<see cref="JoinedPiece"/>) across its stretches as across what it does not know, and labelled by
 /// <see cref="SegmentLabels"/>, its segments and those runs alike, each learned with the features detection scores it by
 /// (<see cref="SegmentSamples"/>), its seeks read once against its boundary candidates and the version in use's detection
-/// of it (<see cref="ViewerSeeks"/>); labels of the programme, of breaks, of
+/// of it (<see cref="ViewerSeeks"/>), the same detection keeping the programme by elimination off what it surely takes for
+/// an opening or an ending; labels of the programme, of breaks, of
 /// openings and of endings are learned from, and with an opening or an ending among them the candidate tells four
 /// kinds apart. Its weights and offsets are pulled towards the version in use's (<see cref="SegmentRegression"/>), so
 /// that a kind with few labels stays near what that version finds. Beside a version in use that tells four kinds apart, the candidate keeps that version's opening, or
@@ -259,6 +260,8 @@ public static class SegmentLearning
 
         private ViewerSeeks? seeks;
 
+        private (RecordingPieces Read, SegmentDetection Detection)? inUse;
+
         public Learner(LearningRecording recording, LearningCatalog catalog, SegmentModelVersion active)
         {
             this.catalog = catalog;
@@ -309,7 +312,7 @@ public static class SegmentLearning
         /// <paramref name="without"/> included, still keeps the segments it lies over from being taken for the programme.
         /// </summary>
         public IReadOnlyList<SegmentSample> Samples(RecordingPieces pieces, IReadOnlySet<CatalogEntryId>? without = null)
-            => SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, Seeks);
+            => SegmentSamples.Of(pieces, Context(without), Recording.Actions, everything, Seeks, InUse.Detection);
 
         /// <summary>
         /// The seeks of this recording read against the boundary candidates and the detection of the version in use, as
@@ -317,17 +320,23 @@ public static class SegmentLearning
         /// </summary>
         private ViewerSeeks Seeks => seeks ??= ReadSeeks();
 
-        private ViewerSeeks ReadSeeks()
-        {
-            if (Recording.Seeks.Count is 0)
-            {
-                return ViewerSeeks.None;
-            }
+        /// <summary>
+        /// The recording read as the version in use reads it, hearing what it heard of the catalog when it was made, and
+        /// that version's detection of it; read once, when first asked for.
+        /// </summary>
+        private (RecordingPieces Read, SegmentDetection Detection) InUse => inUse ??= ReadInUse();
 
+        private (RecordingPieces Read, SegmentDetection Detection) ReadInUse()
+        {
             RecordingPieces read = Read(active.Thresholds);
 
-            return ViewerSeeks.Read(Recording.Seeks, read.Candidates, SegmentDetector.Detect(read, active.Model), TimeSpan.FromSeconds(active.Thresholds.GridToleranceSec));
+            return (read, SegmentDetector.Detect(read, active.Model));
         }
+
+        private ViewerSeeks ReadSeeks()
+            => Recording.Seeks.Count is 0
+                ? ViewerSeeks.None
+                : ViewerSeeks.Read(Recording.Seeks, InUse.Read.Candidates, InUse.Detection, TimeSpan.FromSeconds(active.Thresholds.GridToleranceSec));
 
         /// <summary>
         /// <paramref name="stretch"/> with its confidence not known, which fixes nothing (<see cref="SegmentFeatures"/>).

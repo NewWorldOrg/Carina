@@ -17,7 +17,9 @@ namespace Carina.Domain.Segments;
 /// lies over, and that is not a multiple of the grid between two silent cuts, which is likelier an advert the catalog
 /// has not heard yet, is the programme at <see cref="UncoveredWeight"/>, or at <see cref="UncoveredWithLogoWeight"/>
 /// where the station's logo shows through at least <see cref="LogoSeenThrough"/> of it; with no logo known for
-/// the station it stays at the lower weight. The catalog wins over viewers and viewers over a segment no stretch touches; within one source
+/// the station it stays at the lower weight. Nor is a segment the version in use takes for an opening or an ending at
+/// <see cref="ThemeTakenSurely"/> or more over more than half of it the programme by elimination, since that is likelier
+/// an opening or an ending the catalog has not heard yet. The catalog wins over viewers and viewers over a segment no stretch touches; within one source
 /// the heavier label wins, a tie going to the programme. A segment more than half outside the guide's programme
 /// is never a label. Neighbouring segments read as one (<see cref="JoinedPiece"/>) take the catalog's kind only when its
 /// stretches of that kind cover all of them but <see cref="MostUncoveredOfJoined"/>, since a run reaching past a sound
@@ -42,6 +44,12 @@ public static class SegmentLabels
     public const double UncoveredWithLogoWeight = 0.5;
 
     public const double LogoSeenThrough = 0.8;
+
+    /// <summary>
+    /// How likely the version in use takes an opening or an ending to be for a segment it covers to be no programme by
+    /// elimination.
+    /// </summary>
+    public const double ThemeTakenSurely = 0.8;
 
     public static readonly TimeSpan ReturnedSpan = TimeSpan.FromSeconds(10);
 
@@ -69,7 +77,8 @@ public static class SegmentLabels
         SegmentContext context,
         IReadOnlyList<ViewerAction> actions,
         IReadOnlyList<CatalogHeard>? touching = null,
-        ViewerSeeks? seeks = null)
+        ViewerSeeks? seeks = null,
+        SegmentDetection? inUse = null)
     {
         ArgumentNullException.ThrowIfNull(pieces);
         ArgumentNullException.ThrowIfNull(context);
@@ -80,12 +89,13 @@ public static class SegmentLabels
         CatalogHeard[]? touched = context.Catalog.Any(stretch => CatalogTruth.Sure(stretch) is SegmentKind.Break)
             ? [.. touching ?? context.Catalog]
             : null;
+        Stretch[] themes = [.. SurelyThemes(inUse)];
 
         return
         [
             .. pieces.Select(piece => IsOutsideTheGuide(piece)
                 ? null
-                : Over(piece, heard, SegmentLabelSource.Catalog, MoreThanHalf) ?? Over(piece, viewed, SegmentLabelSource.Viewer, MoreThanHalf) ?? Uncovered(piece, touched, viewed)),
+                : Over(piece, heard, SegmentLabelSource.Catalog, MoreThanHalf) ?? Over(piece, viewed, SegmentLabelSource.Viewer, MoreThanHalf) ?? Uncovered(piece, touched, viewed, themes)),
         ];
     }
 
@@ -128,10 +138,11 @@ public static class SegmentLabels
     /// programme but for <see cref="GuideTolerance"/>, off the grid or with an edge that is no silent cut; none when
     /// <paramref name="touched"/> is none, which is when the recording holds no such advert.
     /// </summary>
-    private static SegmentLabel? Uncovered(SegmentPiece piece, CatalogHeard[]? touched, Stretch[] viewed)
+    private static SegmentLabel? Uncovered(SegmentPiece piece, CatalogHeard[]? touched, Stretch[] viewed, Stretch[] themes)
     {
         if (touched is null
             || !InsideTheGuide(piece)
+            || Over(piece, themes, SegmentLabelSource.Uncovered, MoreThanHalf) is not null
             || IsShapedLikeAnAdvert(piece)
             || touched.Any(stretch => stretch.Starts < piece.Ends && stretch.Ends > piece.Starts)
             || viewed.Any(stretch => stretch.Starts < piece.Ends && stretch.Ends > piece.Starts))
@@ -143,6 +154,17 @@ public static class SegmentLabels
 
         return new SegmentLabel(SegmentKind.Programme, weight, SegmentLabelSource.Uncovered);
     }
+
+    /// <summary>
+    /// The openings and the endings <paramref name="inUse"/> finds at <see cref="ThemeTakenSurely"/> or more; none when
+    /// it is thrown away.
+    /// </summary>
+    private static IEnumerable<Stretch> SurelyThemes(SegmentDetection? inUse)
+        => inUse is null || inUse.State is SegmentDetectionState.Discarded
+            ? []
+            : inUse.Segments
+                .Where(span => span.Kind is SegmentKind.Opening or SegmentKind.Ending && span.Probability >= ThemeTakenSurely)
+                .Select(span => new Stretch(span.Starts, span.Ends, span.Kind, 1));
 
     private static bool IsShapedLikeAnAdvert(SegmentPiece piece)
         => piece.Features[SegmentFeature.EdgeSilence] is 1.0 && piece.Features[SegmentFeature.IsMultipleOf15s] is 1.0;

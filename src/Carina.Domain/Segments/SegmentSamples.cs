@@ -11,19 +11,20 @@ public static class SegmentSamples
     /// <summary>
     /// The samples of <paramref name="read"/> by what <paramref name="context"/> hears of the catalog and what viewers
     /// did with the buttons and by seeking; a segment is touched by the catalog as <see cref="SegmentLabels.Of"/> says, by <paramref name="touching"/>
-    /// when it is given.
+    /// when it is given, and is no programme by elimination where <paramref name="inUse"/> surely finds an opening or an ending.
     /// </summary>
     public static IReadOnlyList<SegmentSample> Of(
         RecordingPieces read,
         SegmentContext context,
         IReadOnlyList<ViewerAction> actions,
         IReadOnlyList<CatalogHeard>? touching = null,
-        ViewerSeeks? seeks = null)
+        ViewerSeeks? seeks = null,
+        SegmentDetection? inUse = null)
     {
         ArgumentNullException.ThrowIfNull(read);
 
         string? series = read.Series is string named && SegmentModel.IsASeries(named) ? named : null;
-        IReadOnlyList<SegmentLabel?> pieces = SegmentLabels.Of(read.Pieces, context, actions, touching, seeks);
+        IReadOnlyList<SegmentLabel?> pieces = SegmentLabels.Of(read.Pieces, context, actions, touching, seeks, inUse);
         IReadOnlyList<SegmentLabel?> joined = SegmentLabels.OfJoined(read.Joined, context, actions, seeks);
 
         return
