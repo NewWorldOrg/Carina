@@ -21,7 +21,7 @@ public sealed record SegmentFit(SegmentModel Model, int Iterations, bool Converg
 /// carries twice each pull of the thresholds, since the loss pulls by <c>λ‖w − w₀‖² + λ_u Σ (u − u₀)² + λ_v Σ (v − v₀)²</c>.
 /// The parameters are pulled towards a version handed over, the version in use, its weights moved onto the scales the
 /// samples standardise by so that they score each feature as it does; towards zero where it has no weight or offset
-/// of that name, or when none is handed over. A kind with few labels so stays near that version, and the more labels
+/// of that name, or when none is handed over. Its offset of a station or a series no sample is on is handed on as it is. A kind with few labels so stays near that version, and the more labels
 /// there are the further the samples move it. The intercepts are not pulled: how often each kind comes among the
 /// samples is told by the samples even when they label it seldom. With two kinds every step is the one the two-kind
 /// fit took, to the last bit. A step that would lower
@@ -245,6 +245,10 @@ public static class SegmentRegression
 
         private double[] target = [];
 
+        private KeyValuePair<string, double>[] stationsUnseen = [];
+
+        private KeyValuePair<string, double>[] seriesUnseen = [];
+
         public int Width => Offsets + stations.Length + series.Length;
 
         private int Count => labels.Length;
@@ -284,6 +288,8 @@ public static class SegmentRegression
             }
 
             design.target = toward is null ? new double[design.Width] : design.Target(toward);
+            design.stationsUnseen = [.. toward?.StationOffsets.Where(pair => !design.stations.Contains(pair.Key)) ?? []];
+            design.seriesUnseen = [.. toward?.SeriesOffsets.Where(pair => !design.series.Contains(pair.Key)) ?? []];
 
             return design;
         }
@@ -426,8 +432,8 @@ public static class SegmentRegression
                             names.Select((name, feature) => (name, feature)).ToDictionary(named => named.name, named => theta[(pair.weighed * Block) + 1 + named.feature])))
                     .Concat(kept)
                     .ToDictionary()),
-                stations.Select((station, at) => (station, at)).ToDictionary(pair => pair.station, pair => theta[Offsets + pair.at]),
-                series.Select((named, at) => (named, at)).ToDictionary(pair => pair.named, pair => theta[Offsets + stations.Length + pair.at]),
+                stations.Select((station, at) => KeyValuePair.Create(station, theta[Offsets + at])).Concat(stationsUnseen).ToDictionary(),
+                series.Select((named, at) => KeyValuePair.Create(named, theta[Offsets + stations.Length + at])).Concat(seriesUnseen).ToDictionary(),
                 thresholds,
                 names.Select((name, feature) => (name, feature)).ToDictionary(pair => pair.name, pair => scales[pair.feature]));
 

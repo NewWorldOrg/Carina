@@ -305,6 +305,23 @@ public sealed class SegmentRegressionTests
         Assert.Equal(0, zero.Weights.Classes[SegmentKind.Break].Features[SegmentFeature.LogoShare], 4);
     }
 
+    [Fact(DisplayName = "a station or a series no sample is on keeps the offset the version in use gives it, as the pull leaves it there")]
+    public void AnOffsetNoSampleIsOnIsTheVersionInUses()
+    {
+        SegmentModel inUse = new(
+            new SegmentWeights(new Dictionary<SegmentKind, SegmentClassWeights> { [SegmentKind.Break] = new(-1.0, new Dictionary<string, double>()) }),
+            new Dictionary<string, double> { [Station] = 0.7, ["9:9"] = 1.2 },
+            new Dictionary<string, double> { ["別の架空の話"] = -0.6 },
+            SegmentThresholds.Initial,
+            new Dictionary<string, FeatureScale>());
+
+        SegmentModel pulled = SegmentRegression.Fit(Mixed(), Pulled(1, 1, 1), toward: inUse).Model;
+
+        Assert.Equal(1.2, pulled.StationOffsets["9:9"]);
+        Assert.Equal(-0.6, pulled.SeriesOffsets["別の架空の話"]);
+        Assert.Equal([Station, OtherStation, "9:9"], pulled.StationOffsets.Keys.Order(StringComparer.Ordinal));
+    }
+
     [Fact(DisplayName = "with four openings labelled, the pull of the search's strongest setting keeps the opening the version in use finds, where pulled towards zero it is lost")]
     public void FewOpeningsStayNearTheVersionInUse()
     {
