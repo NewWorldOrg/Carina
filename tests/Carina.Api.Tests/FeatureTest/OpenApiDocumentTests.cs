@@ -7,6 +7,7 @@ using Carina.Api.Common;
 using Carina.Api.Live;
 using Carina.Api.Playback;
 using Carina.Api.Responder.Playback;
+using Carina.Api.Responder.Recordings;
 using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.FeatureTest;
@@ -489,9 +490,20 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "id", "reservationId", "programme", "standing", "outcome", "outcomeDetail", "startedAt", "stoppedAt",
                 "abortedAt", "expectedWindow", "promisedWindowEnd", "writtenDurationMs", "resumeCount", "fileSizeBytes",
                 "observedAt", "outputRoot", "fileName", "tunerDeviceId", "drops", "thumbnail", "broadcastGroup", "encode",
-                "unfinishedDeletion", "leftScrambled", "descrambledAt", "gaps", "missedMs",
+                "unfinishedDeletion", "leftScrambled", "descrambledAt", "gaps", "missedMs", "watchedPositionSec",
             ],
             properties.AsObject().Select(entry => entry.Key).ToArray());
+        string[] watchedTypes = [.. properties["watchedPositionSec"]!["type"]!.AsArray().Select(type => type!.GetValue<string>())];
+
+        Assert.Contains("number", watchedTypes, StringComparer.Ordinal);
+        Assert.Contains("null", watchedTypes, StringComparer.Ordinal);
+        Assert.Equal(
+            RecordingResponder.HowFarTheViewerWatched,
+            properties["watchedPositionSec"]!["description"]!.GetValue<string>());
+        Assert.Contains(
+            "watchedPositionSec",
+            document["components"]!["schemas"]!["RecordingResponder"]!["required"]!.AsArray().Select(name => name!.GetValue<string>()),
+            StringComparer.Ordinal);
 
         foreach (string time in new[] { "promisedWindowEnd", "observedAt" })
         {

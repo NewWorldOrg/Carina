@@ -59,7 +59,8 @@ public sealed class ListRecordingsAction(RecordingService recordings) : Controll
             return BadRequest(BaseResponder<RecordingListResponder>.Error(Refusal));
         }
 
-        ServiceResult<RecordingPage> found = await recordings.ListAsync(asked, cancellationToken);
+        ServiceResult<RecordingPage> found =
+            await recordings.ListAsync(asked, SessionClaims.SubjectOf(User), cancellationToken);
 
         return Ok(BaseResponder<RecordingListResponder>.Success(RecordingListResponder.Of(found.Data!)));
     }

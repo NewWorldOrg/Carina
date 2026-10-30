@@ -22,6 +22,15 @@ public interface IPlaybackPositionRepository
         Subject viewer,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The places this viewer holds in the recordings named, in one read. A recording the viewer has
+    /// not watched has no entry.
+    /// </summary>
+    Task<IReadOnlyDictionary<RecordingId, PlaybackPosition>> FindEachAsync(
+        IReadOnlyCollection<RecordingId> recordingIds,
+        Subject viewer,
+        CancellationToken cancellationToken);
+
     Task<PlaybackPositionKeep> KeepAsync(PlaybackPosition reached, CancellationToken cancellationToken);
 
     Task ForgetAsync(RecordingId recordingId, CancellationToken cancellationToken);

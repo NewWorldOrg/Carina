@@ -23,6 +23,27 @@ public sealed class PlaybackPositionRepository(CarinaDbContext context) : IPlayb
                 cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<RecordingId, PlaybackPosition>> FindEachAsync(
+        IReadOnlyCollection<RecordingId> recordingIds,
+        Subject viewer,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recordingIds);
+        ArgumentNullException.ThrowIfNull(viewer);
+
+        if (recordingIds.Count == 0)
+        {
+            return new Dictionary<RecordingId, PlaybackPosition>();
+        }
+
+        List<PlaybackPosition> found = await context.Set<PlaybackPosition>()
+            .AsNoTracking()
+            .Where(position => position.Viewer == viewer && recordingIds.Contains(position.RecordingId))
+            .ToListAsync(cancellationToken);
+
+        return found.ToDictionary(position => position.RecordingId);
+    }
+
     /// <remarks>
     /// Written in one statement, which keeps nothing for a recording that no longer exists.
     /// </remarks>

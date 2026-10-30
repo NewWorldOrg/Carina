@@ -107,6 +107,37 @@ public sealed class PlaybackPositionSchemaTests(MigratedScratchDatabase database
         Assert.Equal(1, await KeptForAsync(connection, left));
     }
 
+    [Fact(DisplayName = "the places of one viewer in several recordings come back in one read, and no one else's with them")]
+    public async Task ThePlacesOfOneViewerInSeveralRecordingsComeBackInOneRead()
+    {
+        RecordingId first = await RecordedAsync(50_007);
+        RecordingId second = await RecordedAsync(50_008);
+        RecordingId unwatched = await RecordedAsync(50_009);
+        RecordingId notAsked = await RecordedAsync(50_010);
+
+        await KeepAsync(first, "someone", 60);
+        await KeepAsync(second, "someone", 120.5);
+        await KeepAsync(second, "someone else", 900);
+        await KeepAsync(notAsked, "someone", 30);
+
+        await using CarinaDbContext context = Context();
+        IReadOnlyDictionary<RecordingId, PlaybackPosition> found = await new PlaybackPositionRepository(context)
+            .FindEachAsync([first, second, unwatched], new Subject("someone"), CancellationToken.None);
+
+        Assert.Equal(2, found.Count);
+        Assert.Equal(TimeSpan.FromSeconds(60), found[first].Position);
+        Assert.Equal(TimeSpan.FromSeconds(120.5), found[second].Position);
+    }
+
+    [Fact(DisplayName = "asking for the places in no recordings finds none")]
+    public async Task AskingForThePlacesInNoRecordingsFindsNone()
+    {
+        await using CarinaDbContext context = Context();
+
+        Assert.Empty(await new PlaybackPositionRepository(context)
+            .FindEachAsync([], new Subject("someone"), CancellationToken.None));
+    }
+
     private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
 
     private async Task<PlaybackPositionKeep> KeepAsync(RecordingId recording, string viewer, double seconds)

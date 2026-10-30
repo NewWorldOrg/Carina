@@ -1,5 +1,6 @@
 using Carina.Api.Common;
 using Carina.Contracts;
+using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
@@ -42,13 +43,18 @@ public enum RecordingFailure
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
 
-public sealed record RecordingSeen(Recording Recording, EncodeStanding Encode, QualityBands Quality);
+public sealed record RecordingSeen(
+    Recording Recording,
+    EncodeStanding Encode,
+    QualityBands Quality,
+    PlaybackPosition? Watched = null);
 
 public sealed record RecordingPage(
     PaginatedList<Recording> Found,
     EncodeStandingBoard Encoding,
     QualityBands Quality,
-    RecordingCursor? Next = null);
+    RecordingCursor? Next = null,
+    IReadOnlyDictionary<RecordingId, PlaybackPosition>? Watched = null);
 
 public sealed record RecordingStopAsked(RecordingSeen Seen, RecordingStopReason Reason, DateTime AskedAt);
 
@@ -69,27 +75,33 @@ public sealed class RecordingService(
 {
     public async Task<ServiceResult<RecordingPage>> ListAsync(
         RecordingQuery query,
+        Subject? viewer,
         CancellationToken cancellationToken)
     {
         QualityBands bands = await BandsAsync(cancellationToken);
         RecordingListing listed = await recordings.ListAsync(query, bands, cancellationToken);
-        EncodeStandingBoard standings = await encoding.ReadAsync(
-            [.. listed.Found.Items.Select(recording => recording.Id)],
-            cancellationToken);
+        IReadOnlyCollection<RecordingId> ids = [.. listed.Found.Items.Select(recording => recording.Id)];
+        EncodeStandingBoard standings = await encoding.ReadAsync(ids, cancellationToken);
+        IReadOnlyDictionary<RecordingId, PlaybackPosition> watched = viewer is null || ids.Count == 0
+            ? new Dictionary<RecordingId, PlaybackPosition>()
+            : await positions.FindEachAsync(ids, viewer, cancellationToken);
 
-        return ServiceResult<RecordingPage>.Success(new RecordingPage(listed.Found, standings, bands, listed.Next));
+        return ServiceResult<RecordingPage>.Success(
+            new RecordingPage(listed.Found, standings, bands, listed.Next, watched));
     }
 
     public async Task<ServiceResult<RecordingSeen, RecordingFailure>> DetailAsync(
         RecordingId id,
+        Subject? viewer,
         CancellationToken cancellationToken)
         => await recordings.FindAsync(id, cancellationToken) is { } recording
-            ? ServiceResult<RecordingSeen, RecordingFailure>.Success(await SeenAsync(recording, cancellationToken))
+            ? ServiceResult<RecordingSeen, RecordingFailure>.Success(await SeenAsync(recording, viewer, cancellationToken))
             : Missing<RecordingSeen>(id);
 
     public async Task<ServiceResult<RecordingStopAsked, RecordingFailure>> StopAsync(
         RecordingId id,
         RecordingStopReason reason,
+        Subject? viewer,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -153,7 +165,7 @@ public sealed class RecordingService(
 
         return await recordings.FindAsync(id, cancellationToken) is { } asking
             ? ServiceResult<RecordingStopAsked, RecordingFailure>.Success(
-                new RecordingStopAsked(await SeenAsync(asking, cancellationToken), reason, asked))
+                new RecordingStopAsked(await SeenAsync(asking, viewer, cancellationToken), reason, asked))
             : Missing<RecordingStopAsked>(id);
     }
 
@@ -316,11 +328,21 @@ public sealed class RecordingService(
     private static bool GaveUp(CancellationTokenSource limit, CancellationToken asked)
         => limit.IsCancellationRequested && !asked.IsCancellationRequested;
 
-    private async Task<RecordingSeen> SeenAsync(Recording recording, CancellationToken cancellationToken)
+    private async Task<RecordingSeen> SeenAsync(
+        Recording recording,
+        Subject? viewer,
+        CancellationToken cancellationToken)
     {
         EncodeStandingBoard standings = await encoding.ReadAsync([recording.Id], cancellationToken);
+        PlaybackPosition? watched = viewer is null
+            ? null
+            : await positions.FindAsync(recording.Id, viewer, cancellationToken);
 
-        return new RecordingSeen(recording, standings.For(recording.Id), await BandsAsync(cancellationToken));
+        return new RecordingSeen(
+            recording,
+            standings.For(recording.Id),
+            await BandsAsync(cancellationToken),
+            watched);
     }
 
     private async Task<QualityBands> BandsAsync(CancellationToken cancellationToken)
