@@ -54,7 +54,7 @@ public sealed record LendSettings(
     int Port = CardLendingSettings.DefaultPort,
     IReadOnlyList<string>? HostNames = null,
     int HopLimit = CardLendingSettings.DefaultHopLimit,
-    int? RoundTripMilliseconds = null,
+    int RoundTripMilliseconds = CardLendingSettings.DefaultRoundTripMilliseconds,
     int Leases = CardLendingSettings.DefaultLeases,
     string? KeyFile = null
 );
@@ -77,6 +77,8 @@ public sealed record CardLendingSettings(LendSettings? Lend = null, BorrowSettin
     public const int DefaultHopLimit = 3;
 
     public const int DefaultLeases = 4;
+
+    public const int DefaultRoundTripMilliseconds = 15;
 }
 
 public sealed record DriverConfiguration(

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 
+using Carina.Driver.Configuration;
 using Carina.Driver.Descrambling;
 
 using Microsoft.Extensions.Logging;
@@ -11,7 +12,12 @@ namespace Carina.Driver.CardLending;
 /// <summary>
 /// How many borrowers may hold the card at once, and how long a borrower may take to answer the challenge.
 /// </summary>
-public sealed record CardLendingLimits(int Leases, TimeSpan? RoundTrip);
+public sealed record CardLendingLimits(int Leases, TimeSpan RoundTrip)
+{
+    public static readonly TimeSpan DefaultRoundTrip = TimeSpan.FromMilliseconds(
+        CardLendingSettings.DefaultRoundTripMilliseconds
+    );
+}
 
 /// <summary>
 /// The status and the body of one answer on the lending port. A refusal's body is one short word saying why.
@@ -96,13 +102,29 @@ public sealed class CardLender : IDisposable
         }
     }
 
-    public byte[] Challenge(string connection)
+    /// <summary>
+    /// Hands the connection a new nonce. A challenge that echoes the nonce handed out last on this connection is one
+    /// round trip, and the time it took is kept for the lease; one that echoes nothing starts the count again.
+    /// </summary>
+    public byte[] Challenge(string connection, ReadOnlySpan<byte> echo = default)
     {
         byte[] nonce = LendingProtocol.Nonce();
+        DateTimeOffset now = time.GetUtcNow();
 
         lock (gate)
         {
-            challenges[connection] = new IssuedChallenge(nonce, time.GetUtcNow());
+            TimeSpan[] samples = [];
+            if (
+                !echo.IsEmpty
+                && challenges.TryGetValue(connection, out IssuedChallenge? previous)
+                && now - previous.At <= ChallengeLife
+                && CryptographicOperations.FixedTimeEquals(previous.Nonce, echo)
+            )
+            {
+                samples = [.. previous.Samples.TakeLast(LendingProtocol.RoundTripProbes - 1), now - previous.At];
+            }
+
+            challenges[connection] = new IssuedChallenge(nonce, now, samples);
         }
 
         return nonce;
@@ -140,17 +162,39 @@ public sealed class CardLender : IDisposable
             return LendingReply.Refused(LendingReply.Forbidden, "proof");
         }
 
-        if (limits.RoundTrip is TimeSpan most && took > most)
+        TimeSpan[] samples = [.. issued.Samples, took];
+        if (samples.Length < LendingProtocol.RoundTripProbes)
         {
             logger?.LogWarning(
-                "A borrower at {Peer} took {Took:F1} ms to answer the challenge, longer than the {Most:F0} ms a household round trip is allowed, so the card was not lent.",
+                "A borrower at {Peer} asked for the card after {Probes} round trips rather than {Asked}, so the card was not lent.",
                 peer,
-                took.TotalMilliseconds,
-                most.TotalMilliseconds
+                samples.Length,
+                LendingProtocol.RoundTripProbes
+            );
+
+            return LendingReply.Refused(LendingReply.Forbidden, "probes");
+        }
+
+        TimeSpan quickest = samples.Min();
+        if (quickest > limits.RoundTrip)
+        {
+            logger?.LogWarning(
+                "A borrower at {Peer} took {Quickest:F1} ms at the quickest of {Probes} round trips, longer than the {Most:F0} ms a household round trip is allowed, so the card was not lent.",
+                peer,
+                quickest.TotalMilliseconds,
+                samples.Length,
+                limits.RoundTrip.TotalMilliseconds
             );
 
             return LendingReply.Refused(LendingReply.Forbidden, "round-trip");
         }
+
+        logger?.LogDebug(
+            "A borrower at {Peer} took {Quickest:F2} ms at the quickest of its round trips and {Slowest:F2} ms at the slowest.",
+            peer,
+            quickest.TotalMilliseconds,
+            samples.Max().TotalMilliseconds
+        );
 
         return Lend(connection, host, issued.Nonce, borrowerNonce, peer);
     }
@@ -178,23 +222,30 @@ public sealed class CardLender : IDisposable
             opening++;
         }
 
-        IConditionalAccess card;
+        IConditionalAccess? opened = null;
 
         try
         {
-            card = openCard();
+            opened = openCard();
         }
         catch (DescramblingException error)
         {
-            lock (gate)
-            {
-                opening--;
-            }
-
             logger?.LogWarning("The card could not be lent to {Peer}: {Why}", peer, error.Message);
 
             return LendingReply.Refused(LendingReply.NoCard, "card");
         }
+        finally
+        {
+            if (opened is null)
+            {
+                lock (gate)
+                {
+                    opening--;
+                }
+            }
+        }
+
+        IConditionalAccess card = opened;
 
         LendingSession session = LendingSession.ForLender(key, host, lenderNonce, borrowerNonce, card.CaSystemId);
         Loan lease = new(card, session, peer, time.GetUtcNow());
@@ -334,7 +385,7 @@ public sealed class CardLender : IDisposable
         }
     }
 
-    private sealed record IssuedChallenge(byte[] Nonce, DateTimeOffset At);
+    private sealed record IssuedChallenge(byte[] Nonce, DateTimeOffset At, TimeSpan[] Samples);
 
     private sealed class Loan(IConditionalAccess card, LendingSession session, string? peer, DateTimeOffset since)
     {

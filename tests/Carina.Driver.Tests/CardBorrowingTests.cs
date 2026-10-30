@@ -22,7 +22,7 @@ internal sealed class InMemoryLending(CardLender lender) : HttpMessageHandler
 
         LendingReply reply = path switch
         {
-            LendingProtocol.ChallengePath => new LendingReply(LendingReply.Ok, lender.Challenge(Connection)),
+            LendingProtocol.ChallengePath => new LendingReply(LendingReply.Ok, lender.Challenge(Connection, body.ToArray())),
             LendingProtocol.LeasePath => lender.Lease(Connection, request.Headers.Host ?? string.Empty, body.ToArray()),
             LendingProtocol.EcmPath => lender.Answer(Connection, body.ToArray()),
             _ => new LendingReply(404, []),
@@ -50,7 +50,7 @@ public sealed class BorrowedCardTests
     private readonly CardsOnHand cards = new();
 
     private CardLender Lender(int leases = 2) =>
-        new(Key, cards.Open, new CardLendingLimits(leases, null), TimeProvider.System);
+        new(Key, cards.Open, new CardLendingLimits(leases, CardLendingLimits.DefaultRoundTrip), TimeProvider.System);
 
     [Fact]
     public void ABorrowedCardAnswersWithTheKeysOfTheLendersCard()
@@ -89,7 +89,7 @@ public sealed class BorrowedCardTests
     {
         FakeSmartCardService refusing = FakeSmartCardService.WithOneCard(out FakeCardConnection lent);
         lent.EcmReturnCode = _ => 0x8901;
-        using CardLender lender = new(Key, () => ConditionalAccessCard.Open(refusing), new CardLendingLimits(1, null), TimeProvider.System);
+        using CardLender lender = new(Key, () => ConditionalAccessCard.Open(refusing), new CardLendingLimits(1, CardLendingLimits.DefaultRoundTrip), TimeProvider.System);
         using BorrowedCard card = BorrowedCard.Open(Loan, new InMemoryLending(lender));
 
         EcmAnswer answer = card.Answer(Ecm);
@@ -181,7 +181,7 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        LendingPlan plan = new(new IPEndPoint(IPAddress.Loopback, 0), [Host], HopLimit: 2, RoundTrip: null, Leases: 2, Key);
+        LendingPlan plan = new(new IPEndPoint(IPAddress.Loopback, 0), [Host], HopLimit: 2, RoundTrip: CardLendingLimits.DefaultRoundTrip, Leases: 2, Key);
         server = new CardLendingServer(plan, cards.Open, TimeProvider.System, logger: null);
         await server.StartAsync(CancellationToken.None);
     }
@@ -288,6 +288,81 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
         Assert.Throws<DescramblingException>(() => BorrowedCard.Open(nowhere));
     }
 
+    [Fact]
+    public async Task AConnectionThatDoesNotBorrowIsClosedOnceItsTimeIsUp()
+    {
+        await using LendingServerUnderTest quick = await LendingServerUnderTest.Start(cards, unborrowedLife: TimeSpan.FromMilliseconds(300));
+        using TcpClient client = new();
+        await client.ConnectAsync(quick.Server.Bound!);
+        NetworkStream stream = client.GetStream();
+        await stream.WriteAsync(Encoding.ASCII.GetBytes($"POST {LendingProtocol.ChallengePath} HTTP/1.1\r\nHost: {Host}\r\nContent-Length: 0\r\n\r\n"));
+        byte[] buffer = new byte[4096];
+        Assert.True(await stream.ReadAsync(buffer) > 0);
+
+        int afterTheDeadline = await ReadOrClosed(stream, buffer, TimeSpan.FromSeconds(5));
+
+        Assert.Equal(0, afterTheDeadline);
+    }
+
+    [Fact]
+    public async Task AConnectionThatBorrowedIsKeptPastTheDeadline()
+    {
+        await using LendingServerUnderTest quick = await LendingServerUnderTest.Start(cards, unborrowedLife: TimeSpan.FromMilliseconds(300));
+        using BorrowedCard card = BorrowedCard.Open(new CardLoan(quick.Server.Bound!, Host, 2, Key));
+
+        await Task.Delay(TimeSpan.FromMilliseconds(900));
+
+        Assert.Equal(1, quick.Server.Lender.LeasesOut);
+        Assert.True(card.Answer(Ecm).Granted);
+    }
+
+    [Fact]
+    public async Task OneAddressCannotFillTheDoorWithConnectionsThatDoNotBorrow()
+    {
+        List<TcpClient> held = [];
+
+        try
+        {
+            for (int connection = 0; connection < LendingDoor.PerAddress; connection++)
+            {
+                TcpClient client = new();
+                held.Add(client);
+                await client.ConnectAsync(server.Bound!);
+                await AskForAChallenge(client.GetStream());
+            }
+
+            using TcpClient oneTooMany = new();
+            await oneTooMany.ConnectAsync(server.Bound!);
+            await oneTooMany.GetStream().WriteAsync(Encoding.ASCII.GetBytes($"POST {LendingProtocol.ChallengePath} HTTP/1.1\r\nHost: {Host}\r\nContent-Length: 0\r\n\r\n"));
+
+            Assert.Equal(0, await ReadOrClosed(oneTooMany.GetStream(), new byte[4096], TimeSpan.FromSeconds(5)));
+        }
+        finally
+        {
+            held.ForEach(client => client.Dispose());
+        }
+    }
+
+    private static async Task AskForAChallenge(NetworkStream stream)
+    {
+        await stream.WriteAsync(Encoding.ASCII.GetBytes($"POST {LendingProtocol.ChallengePath} HTTP/1.1\r\nHost: {Host}\r\nContent-Length: 0\r\n\r\n"));
+        Assert.True(await stream.ReadAsync(new byte[4096]) > 0);
+    }
+
+    private static async Task<int> ReadOrClosed(NetworkStream stream, byte[] buffer, TimeSpan patience)
+    {
+        using CancellationTokenSource timeout = new(patience);
+
+        try
+        {
+            return await stream.ReadAsync(buffer, timeout.Token);
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+    }
+
     private async Task<HttpResponseMessage> Ask(
         string host,
         (string Name, string Value)? extra = null,
@@ -303,5 +378,34 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
         }
 
         return await client.SendAsync(request);
+    }
+}
+
+internal sealed class LendingServerUnderTest : IAsyncDisposable
+{
+    private LendingServerUnderTest(CardLendingServer server) => Server = server;
+
+    public CardLendingServer Server { get; }
+
+    public static async Task<LendingServerUnderTest> Start(CardsOnHand cards, TimeSpan unborrowedLife)
+    {
+        LendingPlan plan = new(
+            new IPEndPoint(IPAddress.Loopback, 0),
+            ["lender.example"],
+            HopLimit: 2,
+            RoundTrip: CardLendingLimits.DefaultRoundTrip,
+            Leases: 2,
+            LendingKey.FromText("a household key long enough to be a key 0123")
+        );
+        CardLendingServer server = new(plan, cards.Open, TimeProvider.System, logger: null, unborrowedLife: unborrowedLife);
+        await server.StartAsync(CancellationToken.None);
+
+        return new LendingServerUnderTest(server);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await Server.StopAsync(CancellationToken.None);
+        Server.Dispose();
     }
 }

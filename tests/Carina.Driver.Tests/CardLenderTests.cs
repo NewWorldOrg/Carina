@@ -22,11 +22,26 @@ public sealed class CardLenderTests
     private readonly CardsOnHand cards = new();
 
     private CardLender Lender(int leases = 2, TimeSpan? roundTrip = null) =>
-        new(Key, cards.Open, new CardLendingLimits(leases, roundTrip), time);
+        new(Key, cards.Open, new CardLendingLimits(leases, roundTrip ?? CardLendingLimits.DefaultRoundTrip), time);
+
+    internal static byte[] Probed(CardLender lender, string connection, ManualTimeProvider? clock = null, params int[] milliseconds)
+    {
+        byte[] nonce = lender.Challenge(connection);
+
+        for (int probe = 1; probe < LendingProtocol.RoundTripProbes; probe++)
+        {
+            clock?.Advance(TimeSpan.FromMilliseconds(milliseconds.Length >= probe ? milliseconds[probe - 1] : 0));
+            nonce = lender.Challenge(connection, nonce);
+        }
+
+        clock?.Advance(TimeSpan.FromMilliseconds(milliseconds.Length >= LendingProtocol.RoundTripProbes ? milliseconds[^1] : 0));
+
+        return nonce;
+    }
 
     private static LendingSession Leased(CardLender lender, string connection = Connection)
     {
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, lender.Challenge(connection));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, Probed(lender, connection));
         LendingReply reply = lender.Lease(connection, Host, handshake.Request);
 
         Assert.Equal(LendingReply.Ok, reply.Status);
@@ -67,7 +82,7 @@ public sealed class CardLenderTests
     public void ABorrowerWithAnotherKeyIsRefusedBeforeTheCardIsOpened()
     {
         using CardLender lender = Lender();
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(AnotherKey, Host, lender.Challenge(Connection));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(AnotherKey, Host, Probed(lender, Connection));
 
         LendingReply reply = lender.Lease(Connection, Host, handshake.Request);
 
@@ -79,7 +94,7 @@ public sealed class CardLenderTests
     public void AProofMadeForAnotherHostIsRefused()
     {
         using CardLender lender = Lender();
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, "elsewhere.example", lender.Challenge(Connection));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, "elsewhere.example", Probed(lender, Connection));
 
         Assert.Equal(LendingReply.Forbidden, lender.Lease(Connection, Host, handshake.Request).Status);
     }
@@ -88,7 +103,7 @@ public sealed class CardLenderTests
     public void TheHostIsComparedWithoutRegardToCase()
     {
         using CardLender lender = Lender();
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, "Lender.Example", lender.Challenge(Connection));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, "Lender.Example", Probed(lender, Connection));
 
         Assert.Equal(LendingReply.Ok, lender.Lease(Connection, Host, handshake.Request).Status);
     }
@@ -97,7 +112,7 @@ public sealed class CardLenderTests
     public void AChallengeIsAnsweredOnce()
     {
         using CardLender lender = Lender();
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, lender.Challenge(Connection));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, Probed(lender, Connection));
         lender.Lease(Connection, Host, handshake.Request);
 
         Assert.Equal(LendingReply.Forbidden, lender.Lease(Connection, Host, handshake.Request).Status);
@@ -107,7 +122,7 @@ public sealed class CardLenderTests
     public void AChallengeIssuedOnAnotherConnectionDoesNotCount()
     {
         using CardLender lender = Lender();
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, lender.Challenge(Connection));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, Probed(lender, Connection));
 
         Assert.Equal(LendingReply.Forbidden, lender.Lease("connection-2", Host, handshake.Request).Status);
     }
@@ -116,18 +131,18 @@ public sealed class CardLenderTests
     public void AChallengeLeftTooLongIsNoLongerAnswered()
     {
         using CardLender lender = Lender();
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, lender.Challenge(Connection));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, Probed(lender, Connection));
         time.Advance(CardLender.ChallengeLife + TimeSpan.FromMilliseconds(1));
 
         Assert.Equal(LendingReply.Forbidden, lender.Lease(Connection, Host, handshake.Request).Status);
     }
 
     [Fact]
-    public void ABorrowerSlowerThanTheRoundTripAllowedIsRefused()
+    public void ABorrowerWhoseEveryProbeIsSlowerThanAllowedIsRefused()
     {
-        using CardLender lender = Lender(roundTrip: TimeSpan.FromMilliseconds(5));
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, lender.Challenge(Connection));
-        time.Advance(TimeSpan.FromMilliseconds(6));
+        using CardLender lender = Lender(roundTrip: TimeSpan.FromMilliseconds(15));
+        byte[] nonce = Probed(lender, Connection, time, 16, 17, 16);
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, nonce);
 
         LendingReply reply = lender.Lease(Connection, Host, handshake.Request);
 
@@ -136,14 +151,65 @@ public sealed class CardLenderTests
         Assert.Empty(cards.Connections);
     }
 
-    [Fact]
-    public void ABorrowerWithinTheRoundTripAllowedIsLent()
+    [Theory]
+    [InlineData(40, 2, 40)]
+    [InlineData(2, 40, 40)]
+    [InlineData(40, 40, 2)]
+    public void TheQuickestProbeDecidesSoJitterOnTheWayIsNotARefusal(int first, int second, int third)
     {
-        using CardLender lender = Lender(roundTrip: TimeSpan.FromMilliseconds(5));
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, lender.Challenge(Connection));
-        time.Advance(TimeSpan.FromMilliseconds(4));
+        using CardLender lender = Lender(roundTrip: TimeSpan.FromMilliseconds(15));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, Probed(lender, Connection, time, first, second, third));
 
         Assert.Equal(LendingReply.Ok, lender.Lease(Connection, Host, handshake.Request).Status);
+    }
+
+    [Fact]
+    public void ABorrowerThatProbedFewerTimesThanAskedIsRefused()
+    {
+        using CardLender lender = Lender();
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, lender.Challenge(Connection));
+
+        LendingReply reply = lender.Lease(Connection, Host, handshake.Request);
+
+        Assert.Equal(LendingReply.Forbidden, reply.Status);
+        Assert.Equal("probes", Encoding.ASCII.GetString(reply.Body));
+    }
+
+    [Fact]
+    public void AProbeThatEchoesANonceThatWasNotIssuedIsNotCounted()
+    {
+        using CardLender lender = Lender();
+        lender.Challenge(Connection);
+        byte[] nonce = lender.Challenge(Connection, new byte[LendingProtocol.NonceLength]);
+        nonce = lender.Challenge(Connection, nonce);
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, nonce);
+
+        Assert.Equal("probes", Encoding.ASCII.GetString(lender.Lease(Connection, Host, handshake.Request).Body));
+    }
+
+    [Fact]
+    public void TheRoundTripIsCappedByDefault()
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(15), CardLendingLimits.DefaultRoundTrip);
+    }
+
+    [Fact]
+    public void ACardThatCannotBeOpenedForAnyReasonDoesNotKeepItsSlot()
+    {
+        bool broken = true;
+        using CardLender lender = new(
+            Key,
+            () => broken ? throw new InvalidOperationException("synthetic") : cards.Open(),
+            new CardLendingLimits(1, CardLendingLimits.DefaultRoundTrip),
+            time
+        );
+        BorrowerHandshake first = BorrowerHandshake.Begin(Key, Host, Probed(lender, Connection));
+
+        Assert.Throws<InvalidOperationException>(() => lender.Lease(Connection, Host, first.Request));
+
+        broken = false;
+        Leased(lender);
+        Assert.Equal(1, lender.LeasesOut);
     }
 
     [Fact]
@@ -160,7 +226,7 @@ public sealed class CardLenderTests
     {
         using CardLender lender = Lender(leases: 1);
         Leased(lender, "connection-1");
-        BorrowerHandshake second = BorrowerHandshake.Begin(Key, Host, lender.Challenge("connection-2"));
+        BorrowerHandshake second = BorrowerHandshake.Begin(Key, Host, Probed(lender, "connection-2"));
 
         Assert.Equal(LendingReply.Busy, lender.Lease("connection-2", Host, second.Request).Status);
 
@@ -198,7 +264,7 @@ public sealed class CardLenderTests
     {
         FakeSmartCardService refusing = FakeSmartCardService.WithOneCard(out FakeCardConnection card);
         card.EcmReturnCode = _ => 0x8901;
-        using CardLender lender = new(Key, () => ConditionalAccessCard.Open(refusing), new CardLendingLimits(2, null), time);
+        using CardLender lender = new(Key, () => ConditionalAccessCard.Open(refusing), new CardLendingLimits(2, CardLendingLimits.DefaultRoundTrip), time);
         LendingSession session = Leased(lender);
 
         EcmAnswer answer = session.Open(lender.Answer(Connection, Ecm).Body);
@@ -235,7 +301,7 @@ public sealed class CardLenderTests
     public void ALenderThatCannotProveTheKeyIsNotBelieved()
     {
         using CardLender lender = Lender();
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, lender.Challenge(Connection));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, Probed(lender, Connection));
         byte[] forged = new byte[LendingProtocol.LeaseReplyLength];
 
         Assert.Throws<DescramblingException>(() => handshake.Accept(forged));
@@ -262,7 +328,7 @@ public sealed class CardLenderTests
     public void ACardThatStopsAnsweringEndsTheLease()
     {
         FakeSmartCardService failing = FakeSmartCardService.WithOneCard(out FakeCardConnection card);
-        using CardLender lender = new(Key, () => ConditionalAccessCard.Open(failing), new CardLendingLimits(2, null), time);
+        using CardLender lender = new(Key, () => ConditionalAccessCard.Open(failing), new CardLendingLimits(2, CardLendingLimits.DefaultRoundTrip), time);
         Leased(lender);
         card.Failures.Enqueue(SmartCardCodes.NoService);
 
@@ -278,10 +344,10 @@ public sealed class CardLenderTests
         using CardLender lender = new(
             Key,
             () => throw new DescramblingException("No smart-card reader is attached."),
-            new CardLendingLimits(2, null),
+            new CardLendingLimits(2, CardLendingLimits.DefaultRoundTrip),
             time
         );
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, lender.Challenge(Connection));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, Probed(lender, Connection));
 
         Assert.Equal(LendingReply.NoCard, lender.Lease(Connection, Host, handshake.Request).Status);
         Assert.Equal(0, lender.LeasesOut);
@@ -302,7 +368,7 @@ public sealed class CardLenderTests
     public void ALeaseRequestOfTheWrongLengthIsRefused()
     {
         using CardLender lender = Lender();
-        lender.Challenge(Connection);
+        Probed(lender, Connection);
 
         Assert.Equal(LendingReply.Malformed, lender.Lease(Connection, Host, new byte[3]).Status);
     }
@@ -339,10 +405,10 @@ public sealed class LendingKeyTests
         using CardLender lender = new(
             LendingKey.FromText($"  {text}\n"),
             () => ConditionalAccessCard.Open(service),
-            new CardLendingLimits(1, null),
+            new CardLendingLimits(1, CardLendingLimits.DefaultRoundTrip),
             TimeProvider.System
         );
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(LendingKey.FromText(text), "h", lender.Challenge("c"));
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(LendingKey.FromText(text), "h", CardLenderTests.Probed(lender, "c"));
 
         Assert.Equal(LendingReply.Ok, lender.Lease("c", "h", handshake.Request).Status);
     }

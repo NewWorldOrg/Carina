@@ -52,7 +52,8 @@ public sealed class CardLendingConfigurationTests
         Assert.Equal(CardLendingSettings.DefaultPort, lend.Port);
         Assert.Equal(CardLendingSettings.DefaultHopLimit, lend.HopLimit);
         Assert.Equal(CardLendingSettings.DefaultLeases, lend.Leases);
-        Assert.Null(lend.RoundTripMilliseconds);
+        Assert.Equal(CardLendingSettings.DefaultRoundTripMilliseconds, lend.RoundTripMilliseconds);
+        Assert.Equal(15, CardLendingSettings.DefaultRoundTripMilliseconds);
         Assert.Equal(["lender.example"], lend.HostNames);
     }
 
@@ -105,7 +106,7 @@ public sealed class CardLendingConfigurationTests
     [InlineData("\"leases\": 0", "cardLending.lend.leases:")]
     [InlineData("\"leases\": 17", "cardLending.lend.leases:")]
     [InlineData("\"roundTripMilliseconds\": 0", "cardLending.lend.roundTripMilliseconds:")]
-    [InlineData("\"roundTripMilliseconds\": 1001", "cardLending.lend.roundTripMilliseconds:")]
+    [InlineData("\"roundTripMilliseconds\": 31", "cardLending.lend.roundTripMilliseconds:")]
     [InlineData("\"addres\": \"0.0.0.0\"", "cardLending.lend.addres:")]
     public void ALendingSettingOutsideItsShapeNamesItself(string extra, string expected)
     {

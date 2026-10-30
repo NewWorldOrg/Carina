@@ -29,6 +29,13 @@ public static class LendingProtocol
 
     public const int LongestBody = 512;
 
+    /// <summary>
+    /// How many round trips a borrower makes before it asks for a lease: the lease request and the challenges before
+    /// it, each echoing the nonce the one before was handed. The quickest of them is what the lender holds against
+    /// its limit, since nothing on the way can make a round trip quicker than the path it takes.
+    /// </summary>
+    public const int RoundTripProbes = 3;
+
     internal const string BorrowerPurpose = "carina card lending v1: borrower";
 
     internal const string LenderPurpose = "carina card lending v1: lender";

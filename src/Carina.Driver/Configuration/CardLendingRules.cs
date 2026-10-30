@@ -18,7 +18,7 @@ public static class CardLendingRules
 
     public const int MostLeases = 16;
 
-    public const int MostRoundTripMilliseconds = 1000;
+    public const int MostRoundTripMilliseconds = 30;
 
     public const int MostHostNames = 8;
 
@@ -116,7 +116,7 @@ public static class CardLendingRules
             new IPEndPoint(IPAddress.Parse(lend.Address!), lend.Port),
             lend.HostNames ?? [],
             lend.HopLimit,
-            lend.RoundTripMilliseconds is int most ? TimeSpan.FromMilliseconds(most) : null,
+            TimeSpan.FromMilliseconds(lend.RoundTripMilliseconds),
             lend.Leases,
             key
         );
@@ -164,9 +164,11 @@ public static class CardLendingRules
             problems.Add($"{at}.leases: expected 1 to {MostLeases}, got {lend.Leases}.");
         }
 
-        if (lend.RoundTripMilliseconds is int most && most is < 1 or > MostRoundTripMilliseconds)
+        if (lend.RoundTripMilliseconds is < 1 or > MostRoundTripMilliseconds)
         {
-            problems.Add($"{at}.roundTripMilliseconds: expected 1 to {MostRoundTripMilliseconds}, or no setting at all, got {most}.");
+            problems.Add(
+                $"{at}.roundTripMilliseconds: expected 1 to {MostRoundTripMilliseconds}, got {lend.RoundTripMilliseconds}."
+            );
         }
 
         IReadOnlyList<string> names = lend.HostNames ?? [];

@@ -25,7 +25,7 @@ public sealed record LendingPlan(
     IPEndPoint Listen,
     IReadOnlyList<string> HostNames,
     int HopLimit,
-    TimeSpan? RoundTrip,
+    TimeSpan RoundTrip,
     int Leases,
     LendingKey Key
 );
@@ -37,7 +37,10 @@ public sealed record LendingPlan(
 /// </summary>
 public sealed class CardLendingServer : IHostedService, IDisposable
 {
-    public const int SpareConnections = 4;
+    /// <summary>
+    /// How long a connection may stay without borrowing before it is closed.
+    /// </summary>
+    public static readonly TimeSpan UnborrowedLife = TimeSpan.FromSeconds(10);
 
     private static readonly string[] HeadersNotAnswered =
     [
@@ -57,19 +60,25 @@ public sealed class CardLendingServer : IHostedService, IDisposable
 
     private readonly ILogger? logger;
 
+    private readonly LendingDoor door = new();
+
+    private readonly TimeSpan unborrowedLife;
+
     private WebApplication? app;
 
     public CardLendingServer(
         LendingPlan plan,
         Func<IConditionalAccess> openCard,
         TimeProvider time,
-        ILogger? logger
+        ILogger? logger,
+        TimeSpan? unborrowedLife = null
     )
     {
         ArgumentNullException.ThrowIfNull(plan);
 
         this.plan = plan;
         this.logger = logger;
+        this.unborrowedLife = unborrowedLife ?? UnborrowedLife;
         Lender = new CardLender(plan.Key, openCard, new CardLendingLimits(plan.Leases, plan.RoundTrip), time, logger);
     }
 
@@ -118,7 +127,7 @@ public sealed class CardLendingServer : IHostedService, IDisposable
             options.Limits.MaxRequestLineSize = 1024;
             options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(5);
             options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
-            options.Limits.MaxConcurrentConnections = plan.Leases + SpareConnections;
+            options.Limits.MaxConcurrentConnections = plan.Leases + LendingDoor.MostUnborrowed;
             options.Listen(
                 plan.Listen,
                 listen =>
@@ -168,10 +177,23 @@ public sealed class CardLendingServer : IHostedService, IDisposable
             return;
         }
 
+        if (!door.TryAdmit(connection.ConnectionId, peer.Address))
+        {
+            logger?.LogWarning(
+                "A connection to the lending port from {Peer} was closed unread: too many connections are waiting there without having borrowed.",
+                peer
+            );
+
+            return;
+        }
+
         if (connection.Features.Get<IConnectionSocketFeature>()?.Socket is Socket socket)
         {
             HopLimit.Apply(socket, plan.HopLimit);
         }
+
+        using CancellationTokenSource served = new();
+        Task deadline = CloseUnlessBorrowedAsync(connection, served.Token);
 
         try
         {
@@ -179,8 +201,35 @@ public sealed class CardLendingServer : IHostedService, IDisposable
         }
         finally
         {
+            await served.CancelAsync();
+            await deadline;
+            door.Left(connection.ConnectionId);
             Lender.Release(connection.ConnectionId);
         }
+    }
+
+    private async Task CloseUnlessBorrowedAsync(ConnectionContext connection, CancellationToken served)
+    {
+        try
+        {
+            await Task.Delay(unborrowedLife, served);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (door.HasBorrowed(connection.ConnectionId))
+        {
+            return;
+        }
+
+        logger?.LogInformation(
+            "A connection to the lending port from {Peer} had not borrowed within {Seconds:F0} s, so it was closed.",
+            connection.RemoteEndPoint,
+            unborrowedLife.TotalSeconds
+        );
+        connection.Abort();
     }
 
     private Task Gate(HttpContext context, RequestDelegate next)
@@ -212,24 +261,36 @@ public sealed class CardLendingServer : IHostedService, IDisposable
         return Task.CompletedTask;
     }
 
-    private Task ChallengeAsync(HttpContext context) =>
-        WriteAsync(context, new LendingReply(LendingReply.Ok, Lender.Challenge(context.Connection.Id)));
+    private async Task ChallengeAsync(HttpContext context)
+    {
+        byte[]? echo = await ReadAsync(context.Request, context.RequestAborted);
+
+        await WriteAsync(
+            context,
+            echo is null
+                ? LendingReply.Refused(LendingReply.Malformed, "malformed")
+                : new LendingReply(LendingReply.Ok, Lender.Challenge(context.Connection.Id, echo))
+        );
+    }
 
     private async Task LeaseAsync(HttpContext context)
     {
         byte[]? body = await ReadAsync(context.Request, context.RequestAborted);
+        LendingReply reply = body is null
+            ? LendingReply.Refused(LendingReply.Malformed, "malformed")
+            : Lender.Lease(
+                context.Connection.Id,
+                context.Request.Host.Host.Trim('[', ']'),
+                body,
+                context.Connection.RemoteIpAddress?.ToString()
+            );
 
-        await WriteAsync(
-            context,
-            body is null
-                ? LendingReply.Refused(LendingReply.Malformed, "malformed")
-                : Lender.Lease(
-                    context.Connection.Id,
-                    context.Request.Host.Host.Trim('[', ']'),
-                    body,
-                    context.Connection.RemoteIpAddress?.ToString()
-                )
-        );
+        if (reply.Status is LendingReply.Ok)
+        {
+            door.Borrowed(context.Connection.Id);
+        }
+
+        await WriteAsync(context, reply);
     }
 
     private async Task EcmAsync(HttpContext context)
