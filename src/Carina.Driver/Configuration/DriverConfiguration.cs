@@ -11,6 +11,8 @@ public enum TunerBackend
     Dvb = 1,
 
     Fake = 2,
+
+    Usb = 3,
 }
 
 [JsonConverter(typeof(DeviceKindConverter))]

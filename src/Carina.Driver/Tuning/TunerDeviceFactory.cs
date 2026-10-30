@@ -2,6 +2,8 @@ using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Descrambling;
 using Carina.Driver.Tuning.Dvb;
+using Carina.Driver.Tuning.Usb;
+using Carina.Driver.Tuning.Usb.CechZd1;
 
 using Microsoft.Extensions.Logging;
 
@@ -31,6 +33,8 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
     private readonly TunerBackend backend;
     private readonly TimeProvider time;
     private readonly Lazy<IDvbSystemCalls> systemCalls;
+    private readonly Lazy<IUsbHost> usbHost;
+    private readonly DevicePacing pacing;
     private readonly IDescramblerFactory descramblers;
     private readonly ILogger? logger;
     private readonly DvbTunerSettings settings;
@@ -45,6 +49,8 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
             configuration,
             time,
             new Lazy<IDvbSystemCalls>(() => new LinuxDvbSystemCalls()),
+            new Lazy<IUsbHost>(() => new LinuxUsbHost()),
+            DevicePacing.RealTime(time),
             descramblers,
             logger
         )
@@ -57,10 +63,14 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
         DriverConfiguration configuration,
         TimeProvider time,
         Lazy<IDvbSystemCalls> systemCalls,
+        Lazy<IUsbHost> usbHost,
+        DevicePacing pacing,
         IDescramblerFactory descramblers,
         ILogger? logger = null
     )
     {
+        this.usbHost = usbHost;
+        this.pacing = pacing;
         this.logger = logger;
         backend = configuration.Tuner?.Backend ?? TunerBackend.Unspecified;
         this.time = time;
@@ -83,7 +93,19 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
             configuration,
             time,
             new Lazy<IDvbSystemCalls>(() => systemCalls),
+            new Lazy<IUsbHost>(() => new LinuxUsbHost()),
+            DevicePacing.RealTime(time),
             descramblers ?? NoDescrambling.Instance
+        );
+
+    public static TunerDeviceFactory Using(DriverConfiguration configuration, IUsbHost usbHost, DevicePacing pacing) =>
+        new(
+            configuration,
+            TimeProvider.System,
+            new Lazy<IDvbSystemCalls>(() => new LinuxDvbSystemCalls()),
+            new Lazy<IUsbHost>(() => usbHost),
+            pacing,
+            NoDescrambling.Instance
         );
 
     public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold) =>
@@ -91,6 +113,7 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
         {
             TunerBackend.Fake => Synthetic(tune?.ToLegacyRequest() ?? tuning),
             TunerBackend.Dvb => OpenDvb(device, tuning, tune, hold),
+            TunerBackend.Usb => OpenUsb(device, tuning, tune),
             _ => throw BackendNeverEstablished(),
         };
 
@@ -102,6 +125,10 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
                 return;
             case TunerBackend.Dvb:
                 DvbTunerDevice.OpenAndClose(systemCalls.Value, PathsOf(device));
+
+                return;
+            case TunerBackend.Usb:
+                CechZd1TunerDevice.OpenAndClose(usbHost.Value, UsbPathOf(device));
 
                 return;
             default:
@@ -118,6 +145,29 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
         DvbDevicePaths.TryDerive(device.DevicePath, out DvbDevicePaths? paths, out string? problem)
             ? paths
             : throw DvbFailure.Refused($"devices['{device.Id}']: {problem}");
+
+    private string UsbPathOf(DeviceSettings device) =>
+        UsbTunerDetector.NodeFor(usbHost.Value, device.Id, device.DevicePath)
+        ?? throw DvbFailure.Refused($"devices['{device.Id}']: a usb device needs a devicePath.");
+
+    private ITunerDevice OpenUsb(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+    {
+        if (DvbTuneRequest.Resolve(tune, tuning) is not TerrestrialChannel channel)
+        {
+            throw DvbFailure.Refused(
+                $"devices['{device.Id}']: the usb tuner receives terrestrial broadcasting only, and this tune asks for a satellite."
+            );
+        }
+
+        return CechZd1TunerDevice.Open(
+            usbHost.Value,
+            UsbPathOf(device),
+            DvbFrequency.TerrestrialHertz(channel.PhysicalChannel),
+            pacing,
+            settings.BytePatience,
+            logger
+        );
+    }
 
     private static ITunerDevice Synthetic(TuningRequest tuning) =>
         new FakeTunerDevice(tuning.PhysicalChannel, tuning.ServiceId);

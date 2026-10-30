@@ -83,12 +83,12 @@ health は状態を表示するだけで、unhealthy になっても何も再起
 | `socketPath` | `app` とつなぐ Unix ドメインソケット。`/run/` の下に置く。既定は `/run/carina/driver.sock` |
 | `socketGroupId` | ソケットの所有グループの id。既定は 10001。`app` を動かすグループと同じ値にする |
 | `outputRoots` | 録画の保存先。`name` と絶対パスの `path` の組を 1 つ以上書く |
-| `tuner.backend` | `dvb`(実機のチューナー)か `fake`(合成のチューナー)。既定値は無い |
+| `tuner.backend` | `dvb`(Linux DVB のチューナー)、`usb`(USB のチューナー)か `fake`(合成のチューナー)。既定値は無い |
 | `devices` | チューナーの一覧。1 つ以上書き、うち 1 つ以上を `enabled` にする |
 | `shutdownGraceHours` | 録画中に止められたとき、録画が終わるのを待つ上限の時間。1 から 168 で、既定は 6 |
 
 `devices` の各要素には、`id`、`kind`(`terrestrial` か `satellite`)、`enabled`(既定は `true`)を書く。
-`tuner.backend` が `dvb` なら、装置のパス `devicePath`(`/dev/` の下)も要る。
+`tuner.backend` が `dvb` か `usb` なら、装置のパス `devicePath`(`/dev/` の下)も要る。
 衛星のチューナーで LNB に給電するなら、`lnbPower` を `true` にする。
 セッションの上限時間や demux のバッファなど、ほかのキーは既定のままで動く。
 `liveSessionMinutes` は、最後に要求されてからセッションを保つ時間であり、視聴できる長さではない。
@@ -98,6 +98,13 @@ health は状態を表示するだけで、unhealthy になっても何も再起
 `driver` のコンテナには、ホストの `/run/pcscd` をディレクトリごと渡す。
 pcscd は起動し直すたびにソケットを作り直すので、ソケットのファイルだけを渡すと古いソケットを指したままになる。
 カードが応答しないときはスクランブルされたまま録画し、その量を品質の数値として記録する。
+
+`tuner.backend` が `usb` のとき、`driver` は USB の地上デジタルチューナー CECH-ZD1(054C:04B2)を usbdevfs で直に動かす。
+`devicePath` は `/dev/bus/usb/` の下のノードで、`driver` を動かすユーザーが読み書きできるようにしておく。
+チューナーの id はつないだポートから付き、`driver` は開くたびにそのポートの今のノードを探すので、同じポートに挿し直しても設定はそのままでよい。
+`devicePath` は、id がどのポートにも当たらないときにだけ使う。
+電源が入ってから一度もほかの機器に動かされていない状態からしか動かさないので、そうでないと言われたら挿し直す。
+このチューナーの出力はスクランブルを解かずに録画する。
 
 ### app
 

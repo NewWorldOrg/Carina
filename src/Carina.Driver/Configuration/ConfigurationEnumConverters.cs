@@ -9,6 +9,7 @@ internal sealed class TunerBackendConverter : TolerantEnumConverter<TunerBackend
         {
             TunerBackend.Dvb => "dvb",
             TunerBackend.Fake => "fake",
+            TunerBackend.Usb => "usb",
             _ => "unspecified",
         };
 
@@ -17,6 +18,7 @@ internal sealed class TunerBackendConverter : TolerantEnumConverter<TunerBackend
         {
             "dvb" => TunerBackend.Dvb,
             "fake" => TunerBackend.Fake,
+            "usb" => TunerBackend.Usb,
             _ => null,
         };
 }

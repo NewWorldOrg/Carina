@@ -25,6 +25,7 @@ public static partial class MeasurementRules
         "Carina.Driver/Transport/ContinuityCounterTracker.cs",
         "Carina.Driver/Transport/TsPacketReader.cs",
         "Carina.Driver/Tuning/FakeTunerDevice.cs",
+        "Carina.Driver/Tuning/Usb/CechZd1/CaptureUnpacker.cs",
     ];
 
     public static IReadOnlyList<Regex> Marks =>
