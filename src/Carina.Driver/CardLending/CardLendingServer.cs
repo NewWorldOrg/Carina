@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 
@@ -40,7 +41,7 @@ public sealed class CardLendingServer : IHostedService, IDisposable
     /// <summary>
     /// How long a connection may stay without borrowing before it is closed.
     /// </summary>
-    public static readonly TimeSpan UnborrowedLife = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan UnborrowedLife = TimeSpan.FromSeconds(2);
 
     private static readonly string[] HeadersNotAnswered =
     [
@@ -61,6 +62,8 @@ public sealed class CardLendingServer : IHostedService, IDisposable
     private readonly ILogger? logger;
 
     private readonly LendingDoor door = new();
+
+    private readonly ConcurrentDictionary<string, ConnectionContext> open = [];
 
     private readonly TimeSpan unborrowedLife;
 
@@ -177,15 +180,27 @@ public sealed class CardLendingServer : IHostedService, IDisposable
             return;
         }
 
-        if (!door.TryAdmit(connection.ConnectionId, peer.Address))
+        if (!door.TryAdmit(connection.ConnectionId, peer.Address, out string? evicted))
         {
             logger?.LogWarning(
-                "A connection to the lending port from {Peer} was closed unread: too many connections are waiting there without having borrowed.",
+                "A connection to the lending port from {Peer} was closed unread: that address already has as many connections waiting without having borrowed as it may.",
                 peer
             );
 
             return;
         }
+
+        if (evicted is not null && open.TryGetValue(evicted, out ConnectionContext? turnedAway))
+        {
+            logger?.LogWarning(
+                "The connection from {Peer} that had waited longest without borrowing was closed to make room for one from {Newcomer}.",
+                turnedAway.RemoteEndPoint,
+                peer
+            );
+            turnedAway.Abort();
+        }
+
+        open[connection.ConnectionId] = connection;
 
         if (connection.Features.Get<IConnectionSocketFeature>()?.Socket is Socket socket)
         {
@@ -203,6 +218,7 @@ public sealed class CardLendingServer : IHostedService, IDisposable
         {
             await served.CancelAsync();
             await deadline;
+            open.TryRemove(connection.ConnectionId, out _);
             door.Left(connection.ConnectionId);
             Lender.Release(connection.ConnectionId);
         }
@@ -263,14 +279,17 @@ public sealed class CardLendingServer : IHostedService, IDisposable
 
     private async Task ChallengeAsync(HttpContext context)
     {
-        byte[]? echo = await ReadAsync(context.Request, context.RequestAborted);
+        byte[]? answer = await ReadAsync(context.Request, context.RequestAborted);
 
-        await WriteAsync(
-            context,
-            echo is null
-                ? LendingReply.Refused(LendingReply.Malformed, "malformed")
-                : new LendingReply(LendingReply.Ok, Lender.Challenge(context.Connection.Id, echo))
-        );
+        await WriteAsync(context, answer switch
+        {
+            null => LendingReply.Refused(LendingReply.Malformed, "malformed"),
+            [] => new LendingReply(LendingReply.Ok, Lender.Challenge(context.Connection.Id)),
+            _ => new LendingReply(
+                LendingReply.Ok,
+                Lender.Challenge(context.Connection.Id, context.Request.Host.Host.Trim('[', ']'), answer)
+            ),
+        });
     }
 
     private async Task LeaseAsync(HttpContext context)
