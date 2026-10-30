@@ -22,12 +22,25 @@ public sealed class UsbTunerDetector : ITunerDetector
 
     public static UsbTunerDetector Using(IUsbHost host) => new(new Lazy<IUsbHost>(() => host));
 
+    public static string IdOf(UsbDeviceNode node) => $"usb{node.Port}";
+
+    /// <summary>
+    /// Finds the node the tuner with this id hangs on now. The node number changes whenever the device is plugged in
+    /// again, so the recorded path is only used for an id no port answers to.
+    /// </summary>
+    public static string? NodeFor(IUsbHost host, string? deviceId, string? recordedPath) =>
+        host.List()
+            .FirstOrDefault(node =>
+                node.Model == CechZd1TunerDevice.Model && string.Equals(IdOf(node), deviceId, StringComparison.Ordinal))
+            ?.Path
+        ?? recordedPath;
+
     public IReadOnlyList<TunerDetection> Detect() =>
     [
         .. host.Value.List()
             .Where(node => node.Model == CechZd1TunerDevice.Model)
             .Select(node => new TunerDetection(
-                $"usb{node.Port}",
+                IdOf(node),
                 [DeviceKind.Terrestrial],
                 DeviceDetection.Detected,
                 null,

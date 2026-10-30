@@ -261,15 +261,18 @@ public sealed class FakeUsbHost(FakeBridge bridge) : IUsbHost
 
     public UsbModel Model { get; set; } = CechZd1TunerDevice.Model;
 
-    public int Opened { get; private set; }
+    public int Opened => OpenedPaths.Count;
+
+    public List<string> OpenedPaths { get; } = [];
 
     public IReadOnlyList<UsbDeviceNode> List() => Nodes;
 
-    public UsbModel ModelAt(string path) => Model;
+    public UsbModel ModelAt(string path) =>
+        Nodes.FirstOrDefault(node => node.Path == path)?.Model ?? Model;
 
     public IUsbConnection Open(string path, byte interfaceNumber)
     {
-        Opened++;
+        OpenedPaths.Add(path);
 
         return bridge;
     }

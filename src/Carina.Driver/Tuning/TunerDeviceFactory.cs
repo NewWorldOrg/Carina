@@ -146,8 +146,9 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
             ? paths
             : throw DvbFailure.Refused($"devices['{device.Id}']: {problem}");
 
-    private static string UsbPathOf(DeviceSettings device) =>
-        device.DevicePath ?? throw DvbFailure.Refused($"devices['{device.Id}']: a usb device needs a devicePath.");
+    private string UsbPathOf(DeviceSettings device) =>
+        UsbTunerDetector.NodeFor(usbHost.Value, device.Id, device.DevicePath)
+        ?? throw DvbFailure.Refused($"devices['{device.Id}']: a usb device needs a devicePath.");
 
     private ITunerDevice OpenUsb(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
     {

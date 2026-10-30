@@ -1,5 +1,6 @@
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Tuning;
 using Carina.Driver.Tuning.Dvb;
 using Carina.Driver.Tuning.Usb;
@@ -572,5 +573,95 @@ public sealed class UsbBackendConfigurationTests
         DriverConfiguration configuration = DriverConfigurationReader.Read(Configuration("terrestrial")).Configuration!;
 
         Assert.IsType<UsbTunerDetector>(TunerDetectors.For(configuration));
+    }
+}
+
+public sealed class UsbDevicePathTests
+{
+    private const string Recorded = "/dev/bus/usb/001/002";
+    private const string Replugged = "/dev/bus/usb/001/005";
+
+    private static readonly DeviceSettings Tuner = new("usb1-1", DeviceKind.Terrestrial, Recorded);
+
+    private static readonly UsbModel Stranger = new(0x1234, 0x5678);
+
+    private static DriverConfiguration Configuration() =>
+        new(
+            OutputRoots: [new OutputRootSettings("primary", "/srv/recordings")],
+            Tuner: new TunerSettings(TunerBackend.Usb),
+            Devices: [Tuner]
+        );
+
+    private static (TunerDeviceFactory Factory, FakeUsbHost Host) Factory(params UsbDeviceNode[] nodes)
+    {
+        (FakeChip demodulator, FakeChip tuner) = UsbTestSupport.LockingChips();
+        var host = new FakeUsbHost(UsbTestSupport.BridgeWith(demodulator, tuner));
+        host.Nodes.AddRange(nodes);
+        (DevicePacing pacing, _, _) = UsbTestSupport.Pacing();
+
+        return (TunerDeviceFactory.Using(Configuration(), host, pacing), host);
+    }
+
+    [Fact]
+    public void AReplugIntoTheSamePortIsOpenedUnderTheSameId()
+    {
+        (TunerDeviceFactory factory, FakeUsbHost host) = Factory(
+            new UsbDeviceNode(Replugged, CechZd1TunerDevice.Model, "1-1")
+        );
+
+        using ITunerDevice device = factory.Create(
+            Tuner,
+            new TuningRequest(TunerKind.Terrestrial, 22),
+            null,
+            HeadHold.EveryProgramme
+        );
+
+        Assert.Equal([Replugged], host.OpenedPaths);
+    }
+
+    [Fact]
+    public void ADeviceThatTookTheOldNodeIsNotMistakenForTheTuner()
+    {
+        (TunerDeviceFactory factory, FakeUsbHost host) = Factory(
+            new UsbDeviceNode(Recorded, Stranger, "1-2"),
+            new UsbDeviceNode(Replugged, CechZd1TunerDevice.Model, "1-1")
+        );
+
+        factory.Check(Tuner);
+
+        Assert.Equal([Replugged], host.OpenedPaths);
+    }
+
+    [Fact]
+    public void ATunerOnAnotherPortIsNotTakenForThisOne()
+    {
+        (TunerDeviceFactory factory, FakeUsbHost host) = Factory(
+            new UsbDeviceNode(Recorded, CechZd1TunerDevice.Model, "1-1"),
+            new UsbDeviceNode(Replugged, CechZd1TunerDevice.Model, "1-2")
+        );
+
+        factory.Check(Tuner with { Id = "usb1-2", DevicePath = Recorded });
+
+        Assert.Equal([Replugged], host.OpenedPaths);
+    }
+
+    [Fact]
+    public void AnIdNoPortAnswersToFallsBackToTheRecordedNode()
+    {
+        (TunerDeviceFactory factory, FakeUsbHost host) = Factory();
+
+        factory.Check(Tuner with { Id = "torne" });
+
+        Assert.Equal([Recorded], host.OpenedPaths);
+    }
+
+    [Fact]
+    public void ADeviceThatIsNotTheTunerOnTheRecordedNodeIsStillRefused()
+    {
+        (TunerDeviceFactory factory, FakeUsbHost host) = Factory(new UsbDeviceNode(Recorded, Stranger, "1-2"));
+
+        UsbTestSupport.Refusal(() => factory.Check(Tuner));
+
+        Assert.Empty(host.OpenedPaths);
     }
 }
