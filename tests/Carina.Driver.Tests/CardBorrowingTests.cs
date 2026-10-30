@@ -307,10 +307,10 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
     [Fact]
     public async Task AConnectionThatBorrowedIsKeptPastTheDeadline()
     {
-        await using LendingServerUnderTest quick = await LendingServerUnderTest.Start(cards, unborrowedLife: TimeSpan.FromMilliseconds(300));
+        await using LendingServerUnderTest quick = await LendingServerUnderTest.Start(cards, unborrowedLife: CardLendingServer.UnborrowedLife);
         using BorrowedCard card = BorrowedCard.Open(new CardLoan(quick.Server.Bound!, Host, 2, Key));
 
-        await Task.Delay(TimeSpan.FromMilliseconds(900));
+        await Task.Delay(CardLendingServer.UnborrowedLife + TimeSpan.FromSeconds(1));
 
         Assert.Equal(1, quick.Server.Lender.LeasesOut);
         Assert.True(card.Answer(Ecm).Granted);
