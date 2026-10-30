@@ -83,6 +83,56 @@ public sealed class RecordingWatchedPositionTests
         Assert.Equal(0, feature.Positions.ReadsOfMany);
     }
 
+    [Fact(DisplayName = "one recording's detail says how far this viewer watched it, in one lookup")]
+    public async Task OneRecordingsDetailSaysHowFarThisViewerWatchedIt()
+    {
+        await using var feature = new RecordingFeature();
+        Recording watched = Ended(feature, eventId: 30);
+        Recording unwatched = Ended(feature, eventId: 31);
+        Recording sharedWithSomeoneElse = Ended(feature, eventId: 32);
+
+        feature.Positions.Positions.Add(Reached(watched, TestAuthenticationHandler.Tester, 612.5));
+        feature.Positions.Positions.Add(Reached(sharedWithSomeoneElse, "someone else", 900));
+
+        JsonElement seen = await DetailOfAsync(feature, watched);
+
+        Assert.Equal(612.5, seen.GetProperty("watchedPositionSec").GetDouble());
+        Assert.Equal(1, feature.Positions.ReadsOfOne);
+        Assert.Equal(0, feature.Positions.ReadsOfMany);
+        Assert.Equal(JsonValueKind.Null, (await DetailOfAsync(feature, unwatched)).GetProperty("watchedPositionSec").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            (await DetailOfAsync(feature, sharedWithSomeoneElse)).GetProperty("watchedPositionSec").ValueKind);
+    }
+
+    [Fact(DisplayName = "the answer to a stop says how far this viewer watched the recording, as the detail does")]
+    public async Task TheAnswerToAStopSaysHowFarThisViewerWatchedTheRecording()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+        feature.Driver.Writing(Carina.Contracts.SessionId.Parse("session-a"), recording.Id.Wire);
+        feature.Positions.Positions.Add(Reached(recording, TestAuthenticationHandler.Tester, 42));
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/{recording.Id.Wire}/stop",
+            new { reason = "the wrong programme" });
+
+        Assert.Equal(HttpStatusCode.Accepted, status);
+        Assert.Equal(
+            42,
+            body.GetProperty("data").GetProperty("recording").GetProperty("recording")
+                .GetProperty("watchedPositionSec").GetDouble());
+    }
+
+    private static async Task<JsonElement> DetailOfAsync(RecordingFeature feature, Recording recording)
+    {
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        return body.GetProperty("data").GetProperty("recording");
+    }
+
     private static PlaybackPosition Reached(Recording recording, string viewer, double seconds)
         => PlaybackPosition.Reached(
             recording.Id,

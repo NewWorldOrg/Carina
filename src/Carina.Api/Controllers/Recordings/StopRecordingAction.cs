@@ -40,7 +40,7 @@ public sealed class StopRecordingAction(RecordingService recordings) : Controlle
         }
 
         ServiceResult<RecordingStopAsked, RecordingFailure> stopped =
-            await recordings.StopAsync(recordingId, reason, cancellationToken);
+            await recordings.StopAsync(recordingId, reason, SessionClaims.SubjectOf(User), cancellationToken);
 
         return stopped.IsSuccess
             ? Accepted(BaseResponder<RecordingStopResponder>.Success(

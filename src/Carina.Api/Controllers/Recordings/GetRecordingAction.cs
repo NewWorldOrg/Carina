@@ -25,7 +25,7 @@ public sealed class GetRecordingAction(RecordingService recordings) : Controller
         }
 
         ServiceResult<RecordingSeen, RecordingFailure> found =
-            await recordings.DetailAsync(recordingId, cancellationToken);
+            await recordings.DetailAsync(recordingId, SessionClaims.SubjectOf(User), cancellationToken);
 
         return found.IsSuccess
             ? Ok(BaseResponder<RecordingDetailResponder>.Success(RecordingDetailResponder.Of(found.Data!)))

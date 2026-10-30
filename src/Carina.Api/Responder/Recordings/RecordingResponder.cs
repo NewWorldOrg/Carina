@@ -120,8 +120,7 @@ public sealed record RecordingResponder(
 {
     public const string HowFarTheViewerWatched =
         "How many seconds into the recording the signed-in viewer got to, as the position a player reports keeps it "
-        + "and as the playback plan's resumeAtSec gives it back. Null for a recording this viewer has not watched. "
-        + "Only the library list reads it: the detail and the answer to a stop leave it null.";
+        + "and as the playback plan's resumeAtSec gives it back. Null for a recording this viewer has not watched.";
 
     public static RecordingResponder Of(RecordingSeen seen)
     {
