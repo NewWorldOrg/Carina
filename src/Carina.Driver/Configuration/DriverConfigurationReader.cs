@@ -388,7 +388,7 @@ public static class DriverConfigurationReader
         TunerBackend backend = configuration.Tuner?.Backend ?? TunerBackend.Unspecified;
         if (backend is TunerBackend.Unspecified)
         {
-            problems.Add("tuner.backend: expected 'dvb' or 'fake'.");
+            problems.Add("tuner.backend: expected 'dvb', 'usb' or 'fake'.");
         }
 
         problems.AddRange(TunerProblems(configuration.Tuner));
@@ -541,7 +541,7 @@ public static class DriverConfigurationReader
             if (!IsUnderRoot(device.DevicePath, DeviceRoot))
             {
                 problems.Add(
-                    $"devices[{index}].devicePath: expected a path under {DeviceRoot} when the backend is 'dvb', got '{device.DevicePath}'."
+                    $"devices[{index}].devicePath: expected a path under {DeviceRoot} when the backend is 'dvb' or 'usb', got '{device.DevicePath}'."
                 );
             }
             else if (!paths.Add(device.DevicePath!))
@@ -550,6 +550,13 @@ public static class DriverConfigurationReader
                     $"devices[{index}].devicePath: '{device.DevicePath}' is used by more than one device."
                 );
             }
+        }
+
+        if (backend is TunerBackend.Usb && device.Kind is DeviceKind.Satellite)
+        {
+            problems.Add(
+                $"devices[{index}].kind: the usb backend drives a terrestrial tuner only, and this device is declared satellite."
+            );
         }
 
         if (device.LnbPower && device.Kind is not DeviceKind.Satellite)

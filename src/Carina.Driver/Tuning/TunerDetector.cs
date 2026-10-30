@@ -1,6 +1,7 @@
 using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Tuning.Dvb;
+using Carina.Driver.Tuning.Usb;
 
 namespace Carina.Driver.Tuning;
 
@@ -50,6 +51,7 @@ public static class TunerDetectors
         {
             TunerBackend.Fake => new FakeTunerDetector(configuration),
             TunerBackend.Dvb => new DvbTunerDetector(),
+            TunerBackend.Usb => new UsbTunerDetector(),
             _ => throw new InvalidOperationException(
                 "The tuner backend was never established; the configuration should have been rejected."
             ),
