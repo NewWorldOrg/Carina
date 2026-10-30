@@ -143,7 +143,7 @@ public sealed class CardLender : IDisposable
         if (limits.RoundTrip is TimeSpan most && took > most)
         {
             logger?.LogWarning(
-                "A borrower at {Peer} took {Took} ms to answer the challenge, longer than the {Most} ms a household round trip is allowed, so the card was not lent.",
+                "A borrower at {Peer} took {Took:F1} ms to answer the challenge, longer than the {Most:F0} ms a household round trip is allowed, so the card was not lent.",
                 peer,
                 took.TotalMilliseconds,
                 most.TotalMilliseconds
