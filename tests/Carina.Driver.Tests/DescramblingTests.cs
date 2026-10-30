@@ -119,10 +119,10 @@ public sealed class DescramblingTests
     }
 
     [Fact]
-    public void ACardThatAnswersAgainUnscramblesTheRestOfTheStreamWithNothingRestarted()
+    public async Task ACardThatAnswersAgainUnscramblesTheRestOfTheStreamWithNothingRestarted()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
-        var source = new ChunkByChunkTunerDevice([[1], [2]]);
+        var source = new ChunkByChunkTunerDevice([[1], [2], [3]]);
         var dying = new ScriptedDescrambler(
             _ => throw new DescramblingException("the card went away"));
         var cards = new CardsOnRequest(() =>
@@ -135,15 +135,17 @@ public sealed class DescramblingTests
 
         clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
 
-        Assert.Equal([12], device.Read(1, CancellationToken.None));
+        Assert.Equal([2], device.Read(1, CancellationToken.None));
+        await device.AskedForTheCard;
+        Assert.Equal([13], device.Read(1, CancellationToken.None));
         Assert.True(dying.Disposed);
     }
 
     [Fact]
-    public void ATunerOpenedWhileTheCardIsAwayIsReadAsItComesAndTakesTheCardWhenItAnswers()
+    public async Task ATunerOpenedWhileTheCardIsAwayIsReadAsItComesAndTakesTheCardWhenItAnswers()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
-        var source = new ChunkByChunkTunerDevice([[1], [2]]);
+        var source = new ChunkByChunkTunerDevice([[1], [2], [3]]);
         bool answering = false;
         var cards = new CardsOnRequest(() =>
             answering
@@ -158,11 +160,13 @@ public sealed class DescramblingTests
         answering = true;
         clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
 
-        Assert.Equal([12], device.Read(1, CancellationToken.None));
+        Assert.Equal([2], device.Read(1, CancellationToken.None));
+        await device.AskedForTheCard;
+        Assert.Equal([13], device.Read(1, CancellationToken.None));
     }
 
     [Fact]
-    public void ACardAskedForAgainIsAskedToHoldTheHeadAsTheTunerWasOpenedTo()
+    public async Task ACardAskedForAgainIsAskedToHoldTheHeadAsTheTunerWasOpenedTo()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var source = new ChunkByChunkTunerDevice([[1]]);
@@ -177,12 +181,13 @@ public sealed class DescramblingTests
 
         clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
         device.Read(1, CancellationToken.None);
+        await device.AskedForTheCard;
 
         Assert.Equal([HeadHold.WhatIsHeld], cards.Holds);
     }
 
     [Fact]
-    public void TheCardIsNotAskedForOnEveryPacketWhileItIsAway()
+    public async Task TheCardIsNotAskedForOnEveryPacketWhileItIsAway()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var source = new ChunkByChunkTunerDevice([[1], [2], [3], [4]]);
@@ -198,8 +203,63 @@ public sealed class DescramblingTests
 
         clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
         device.Read(1, CancellationToken.None);
+        await device.AskedForTheCard;
 
         Assert.Equal(1, cards.Asked);
+    }
+
+    [Fact]
+    public async Task AReadDoesNotWaitWhileTheCardIsBeingAskedFor()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var source = new ChunkByChunkTunerDevice([[1], [2], [3]]);
+        using ManualResetEventSlim answer = new();
+        var cards = new CardsOnRequest(() =>
+        {
+            answer.Wait(TimeSpan.FromSeconds(30));
+
+            return new ScriptedDescrambler(scrambled => [.. scrambled.ToArray().Select(b => (byte)(b + 10))]);
+        });
+        using var device = new DescramblingTunerDevice(source, descrambler: null, cards, clock);
+        clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
+
+        Task<byte[]> first = Task.Run(() => device.Read(1, CancellationToken.None));
+        Task<byte[]> second = first.ContinueWith(_ => device.Read(1, CancellationToken.None), TaskScheduler.Default);
+
+        byte[] secondRead = await second.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal([1], await first);
+        Assert.Equal([2], secondRead);
+
+        answer.Set();
+        await device.AskedForTheCard;
+        Assert.Equal([13], device.Read(1, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ClosingTheTunerDoesNotWaitForTheCardBeingAskedForAndLetsGoOfItWhenItAnswers()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var source = new ChunkByChunkTunerDevice([[1]]);
+        using ManualResetEventSlim answer = new();
+        ScriptedDescrambler late = new(scrambled => scrambled.ToArray());
+        var cards = new CardsOnRequest(() =>
+        {
+            answer.Wait(TimeSpan.FromSeconds(30));
+
+            return late;
+        });
+        var device = new DescramblingTunerDevice(source, descrambler: null, cards, clock);
+        clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
+        device.Read(1, CancellationToken.None);
+        Task asked = device.AskedForTheCard;
+
+        await Task.Run(device.Dispose).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(source.Disposed);
+
+        answer.Set();
+        await asked;
+        SpinWait.SpinUntil(() => late.Disposed, TimeSpan.FromSeconds(10));
+        Assert.True(late.Disposed);
     }
 
     [Fact]
@@ -375,7 +435,7 @@ public sealed class DescramblingWiringTests
     }
 
     [Fact]
-    public void ATunerOpenedWhileNoCardAnswersAsksAgainWithTheSameHold()
+    public async Task ATunerOpenedWhileNoCardAnswersAsksAgainWithTheSameHold()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var calls = new ScriptedDvbSystemCalls(clock);
@@ -385,6 +445,7 @@ public sealed class DescramblingWiringTests
         calls.Deliver([0x47]);
         clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
         opened.Read(188, CancellationToken.None);
+        await ((DescramblingTunerDevice)opened).AskedForTheCard;
 
         Assert.Equal([HeadHold.WhatIsHeld, HeadHold.WhatIsHeld], descramblers.Holds);
     }
