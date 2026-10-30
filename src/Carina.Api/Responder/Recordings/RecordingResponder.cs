@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 using Carina.Api.Responder.Epg;
 using Carina.Api.Services;
 using Carina.Domain.Base;
@@ -6,6 +8,7 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Domain.Viewing;
 
 namespace Carina.Api.Responder.Recordings;
 
@@ -112,8 +115,14 @@ public sealed record RecordingResponder(
     bool LeftScrambled,
     DateTime? DescrambledAt,
     IReadOnlyList<RecordingGapResponder> Gaps,
-    long MissedMs)
+    long MissedMs,
+    [property: Description(RecordingResponder.HowFarTheViewerWatched)] double? WatchedPositionSec)
 {
+    public const string HowFarTheViewerWatched =
+        "How many seconds into the recording the signed-in viewer got to, as the position a player reports keeps it "
+        + "and as the playback plan's resumeAtSec gives it back. Null for a recording this viewer has not watched. "
+        + "Only the library list reads it: the detail and the answer to a stop leave it null.";
+
     public static RecordingResponder Of(RecordingSeen seen)
     {
         ArgumentNullException.ThrowIfNull(seen);
@@ -176,7 +185,8 @@ public sealed record RecordingResponder(
             recording.LeftScrambled,
             recording.DescrambledAt,
             RecordingGapResponder.Of(recording),
-            recording.MissedMs);
+            recording.MissedMs,
+            seen.Watched?.Position.TotalSeconds);
     }
 
     internal static RecordingWindowResponder Window(Recording recording)
@@ -203,7 +213,13 @@ public sealed record RecordingListResponder(
         return new RecordingListResponder(
             [
                 .. found.Items.Select(recording => RecordingResponder.Of(
-                    new RecordingSeen(recording, page.Encoding.For(recording.Id), page.Quality))),
+                    new RecordingSeen(
+                        recording,
+                        page.Encoding.For(recording.Id),
+                        page.Quality,
+                        page.Watched is not null && page.Watched.TryGetValue(recording.Id, out PlaybackPosition? watched)
+                            ? watched
+                            : null))),
             ],
             found.Total,
             found.CurrentPage,

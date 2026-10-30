@@ -8,6 +8,10 @@ public sealed class HeldPlaybackPositions : IPlaybackPositionRepository
 {
     public List<PlaybackPosition> Positions { get; } = [];
 
+    public int ReadsOfOne { get; private set; }
+
+    public int ReadsOfMany { get; private set; }
+
     public Task<PlaybackPosition?> FindAsync(
         RecordingId recordingId,
         Subject viewer,
@@ -16,8 +20,25 @@ public sealed class HeldPlaybackPositions : IPlaybackPositionRepository
         ArgumentNullException.ThrowIfNull(recordingId);
         ArgumentNullException.ThrowIfNull(viewer);
 
+        ReadsOfOne++;
+
         return Task.FromResult(Positions.FirstOrDefault(position =>
             position.RecordingId.Equals(recordingId) && position.Viewer.Equals(viewer)));
+    }
+
+    public Task<IReadOnlyDictionary<RecordingId, PlaybackPosition>> FindEachAsync(
+        IReadOnlyCollection<RecordingId> recordingIds,
+        Subject viewer,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recordingIds);
+        ArgumentNullException.ThrowIfNull(viewer);
+
+        ReadsOfMany++;
+
+        return Task.FromResult<IReadOnlyDictionary<RecordingId, PlaybackPosition>>(Positions
+            .Where(position => position.Viewer.Equals(viewer) && recordingIds.Contains(position.RecordingId))
+            .ToDictionary(position => position.RecordingId));
     }
 
     public Task<PlaybackPositionKeep> KeepAsync(PlaybackPosition reached, CancellationToken cancellationToken)
