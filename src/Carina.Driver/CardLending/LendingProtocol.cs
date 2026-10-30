@@ -31,10 +31,15 @@ public static class LendingProtocol
 
     /// <summary>
     /// How many round trips a borrower makes before it asks for a lease: the lease request and the challenges before
-    /// it, each echoing the nonce the one before was handed. The quickest of them is what the lender holds against
-    /// its limit, since nothing on the way can make a round trip quicker than the path it takes.
+    /// it, each answering the nonce the one before was handed with a proof only the holder of the key can make. The
+    /// quickest of them is what the lender holds against its limit, since nothing on the way can make a keyed round
+    /// trip quicker than the path to the key.
     /// </summary>
     public const int RoundTripProbes = 3;
+
+    public const int AnswerLength = NonceLength + ProofLength;
+
+    internal static string RoundTripPurpose(int roundTrip) => $"carina card lending v1: borrower round trip {roundTrip}";
 
     internal const string BorrowerPurpose = "carina card lending v1: borrower";
 
@@ -50,7 +55,8 @@ public static class LendingProtocol
 }
 
 /// <summary>
-/// The borrower's half of starting a lease.
+/// The borrower's half of starting a lease: every nonce the lender handed out on the way is part of the transcript,
+/// and every answer is keyed to it, so only the holder of the key can make a round trip the lender times.
 /// </summary>
 public sealed class BorrowerHandshake
 {
@@ -58,7 +64,7 @@ public sealed class BorrowerHandshake
 
     private readonly string host;
 
-    private readonly byte[] lenderNonce;
+    private readonly List<byte[]> lenderNonces;
 
     private readonly byte[] borrowerNonce;
 
@@ -66,7 +72,7 @@ public sealed class BorrowerHandshake
     {
         this.key = key;
         this.host = host;
-        this.lenderNonce = lenderNonce;
+        lenderNonces = [lenderNonce];
         this.borrowerNonce = borrowerNonce;
     }
 
@@ -75,21 +81,26 @@ public sealed class BorrowerHandshake
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(host);
 
-        if (lenderNonce.Length is not LendingProtocol.NonceLength)
-        {
-            throw new DescramblingException(
-                $"The lender's challenge was {lenderNonce.Length} bytes rather than {LendingProtocol.NonceLength}."
-            );
-        }
-
-        return new BorrowerHandshake(key, host, lenderNonce.ToArray(), LendingProtocol.Nonce());
+        return new BorrowerHandshake(key, host, Checked(lenderNonce), LendingProtocol.Nonce());
     }
 
     /// <summary>
-    /// The borrower's nonce followed by its proof.
+    /// The answer to the nonce heard last: the borrower's nonce and a proof over the transcript, bound to which round
+    /// trip this is.
+    /// </summary>
+    public byte[] Answer() =>
+        [
+            .. borrowerNonce,
+            .. key.Derive(LendingProtocol.RoundTripPurpose(lenderNonces.Count), host, Transcript, borrowerNonce),
+        ];
+
+    public void Heard(ReadOnlySpan<byte> lenderNonce) => lenderNonces.Add(Checked(lenderNonce));
+
+    /// <summary>
+    /// The borrower's nonce followed by its proof over the whole transcript.
     /// </summary>
     public byte[] Request =>
-        [.. borrowerNonce, .. key.Derive(LendingProtocol.BorrowerPurpose, host, lenderNonce, borrowerNonce)];
+        [.. borrowerNonce, .. key.Derive(LendingProtocol.BorrowerPurpose, host, Transcript, borrowerNonce)];
 
     /// <summary>
     /// Takes the lender's answer to <see cref="Request"/> and starts the lease, once the lender has shown it holds the key.
@@ -103,7 +114,8 @@ public sealed class BorrowerHandshake
             );
         }
 
-        byte[] expected = key.Derive(LendingProtocol.LenderPurpose, host, lenderNonce, borrowerNonce);
+        byte[] transcript = Transcript;
+        byte[] expected = key.Derive(LendingProtocol.LenderPurpose, host, transcript, borrowerNonce);
         if (!CryptographicOperations.FixedTimeEquals(expected, reply[sizeof(ushort)..]))
         {
             throw new DescramblingException(
@@ -112,10 +124,19 @@ public sealed class BorrowerHandshake
         }
 
         return new LendingSession(
-            key.Derive(LendingProtocol.SessionPurpose, host, lenderNonce, borrowerNonce),
+            key.Derive(LendingProtocol.SessionPurpose, host, transcript, borrowerNonce),
             BinaryPrimitives.ReadUInt16BigEndian(reply)
         );
     }
+
+    private byte[] Transcript => [.. lenderNonces.SelectMany(nonce => nonce)];
+
+    private static byte[] Checked(ReadOnlySpan<byte> lenderNonce) =>
+        lenderNonce.Length is LendingProtocol.NonceLength
+            ? lenderNonce.ToArray()
+            : throw new DescramblingException(
+                $"The lender's challenge was {lenderNonce.Length} bytes rather than {LendingProtocol.NonceLength}."
+            );
 }
 
 /// <summary>

@@ -78,7 +78,7 @@ public sealed record CardLendingSettings(LendSettings? Lend = null, BorrowSettin
 
     public const int DefaultLeases = 4;
 
-    public const int DefaultRoundTripMilliseconds = 15;
+    public const int DefaultRoundTripMilliseconds = 5;
 }
 
 public sealed record DriverConfiguration(

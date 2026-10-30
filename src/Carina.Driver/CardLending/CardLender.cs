@@ -49,6 +49,8 @@ public sealed class CardLender : IDisposable
 
     public static readonly TimeSpan ChallengeLife = TimeSpan.FromSeconds(10);
 
+    private const int MostNonces = 2 * LendingProtocol.RoundTripProbes;
+
     private static readonly TimeSpan Second = TimeSpan.FromSeconds(1);
 
     private readonly LendingKey key;
@@ -103,31 +105,66 @@ public sealed class CardLender : IDisposable
     }
 
     /// <summary>
-    /// Hands the connection a new nonce. A challenge that echoes the nonce handed out last on this connection is one
-    /// round trip, and the time it took is kept for the lease; one that echoes nothing starts the count again.
+    /// Starts a lease on the connection again and hands it the first nonce.
     /// </summary>
-    public byte[] Challenge(string connection, ReadOnlySpan<byte> echo = default)
+    public byte[] Challenge(string connection)
+    {
+        byte[] nonce = LendingProtocol.Nonce();
+
+        lock (gate)
+        {
+            challenges[connection] = IssuedChallenge.First(nonce, time.GetUtcNow());
+        }
+
+        return nonce;
+    }
+
+    /// <summary>
+    /// Hands the connection a new nonce. An answer to the nonce handed out last, keyed to the transcript and to which
+    /// round trip it is, is one round trip and its time is kept for the lease; any other answer starts again.
+    /// </summary>
+    public byte[] Challenge(string connection, string host, ReadOnlySpan<byte> answer)
     {
         byte[] nonce = LendingProtocol.Nonce();
         DateTimeOffset now = time.GetUtcNow();
 
         lock (gate)
         {
-            TimeSpan[] samples = [];
-            if (
-                !echo.IsEmpty
-                && challenges.TryGetValue(connection, out IssuedChallenge? previous)
-                && now - previous.At <= ChallengeLife
-                && CryptographicOperations.FixedTimeEquals(previous.Nonce, echo)
-            )
-            {
-                samples = [.. previous.Samples.TakeLast(LendingProtocol.RoundTripProbes - 1), now - previous.At];
-            }
-
-            challenges[connection] = new IssuedChallenge(nonce, now, samples);
+            challenges.TryGetValue(connection, out IssuedChallenge? previous);
+            challenges[connection] =
+                previous is not null && IsKeyedAnswer(previous, host, answer, now)
+                    ? previous.Then(nonce, now, answer[..LendingProtocol.NonceLength].ToArray())
+                    : IssuedChallenge.First(nonce, now);
         }
 
         return nonce;
+    }
+
+    private bool IsKeyedAnswer(IssuedChallenge previous, string host, ReadOnlySpan<byte> answer, DateTimeOffset now)
+    {
+        if (
+            answer.Length is not LendingProtocol.AnswerLength
+            || now - previous.At > ChallengeLife
+            || previous.Nonces.Length >= MostNonces
+        )
+        {
+            return false;
+        }
+
+        ReadOnlySpan<byte> borrowerNonce = answer[..LendingProtocol.NonceLength];
+        if (previous.BorrowerNonce is byte[] named && !borrowerNonce.SequenceEqual(named))
+        {
+            return false;
+        }
+
+        byte[] expected = key.Derive(
+            LendingProtocol.RoundTripPurpose(previous.Nonces.Length),
+            host,
+            previous.Transcript,
+            borrowerNonce
+        );
+
+        return CryptographicOperations.FixedTimeEquals(expected, answer[LendingProtocol.NonceLength..]);
     }
 
     public LendingReply Lease(string connection, string host, ReadOnlySpan<byte> request, string? peer = null)
@@ -151,8 +188,10 @@ public sealed class CardLender : IDisposable
         }
 
         ReadOnlySpan<byte> borrowerNonce = request[..LendingProtocol.NonceLength];
-        byte[] expected = key.Derive(LendingProtocol.BorrowerPurpose, host, issued.Nonce, borrowerNonce);
-        if (!CryptographicOperations.FixedTimeEquals(expected, request[LendingProtocol.NonceLength..]))
+        byte[] transcript = issued.Transcript;
+        byte[] expected = key.Derive(LendingProtocol.BorrowerPurpose, host, transcript, borrowerNonce);
+        bool sameBorrower = issued.BorrowerNonce is not byte[] named || borrowerNonce.SequenceEqual(named);
+        if (!sameBorrower || !CryptographicOperations.FixedTimeEquals(expected, request[LendingProtocol.NonceLength..]))
         {
             logger?.LogWarning(
                 "A borrower at {Peer} could not prove it holds the card-lending key, so the card was not lent.",
@@ -196,7 +235,7 @@ public sealed class CardLender : IDisposable
             samples.Max().TotalMilliseconds
         );
 
-        return Lend(connection, host, issued.Nonce, borrowerNonce, peer);
+        return Lend(connection, host, transcript, borrowerNonce, peer);
     }
 
     private LendingReply Lend(
@@ -385,7 +424,19 @@ public sealed class CardLender : IDisposable
         }
     }
 
-    private sealed record IssuedChallenge(byte[] Nonce, DateTimeOffset At, TimeSpan[] Samples);
+    /// <summary>
+    /// The nonces handed out on one connection so far, when the last one was, who answered them, and how long each
+    /// keyed answer took.
+    /// </summary>
+    private sealed record IssuedChallenge(byte[][] Nonces, DateTimeOffset At, byte[]? BorrowerNonce, TimeSpan[] Samples)
+    {
+        public byte[] Transcript => [.. Nonces.SelectMany(nonce => nonce)];
+
+        public static IssuedChallenge First(byte[] nonce, DateTimeOffset at) => new([nonce], at, null, []);
+
+        public IssuedChallenge Then(byte[] nonce, DateTimeOffset at, byte[] borrowerNonce) =>
+            new([.. Nonces, nonce], at, borrowerNonce, [.. Samples, at - At]);
+    }
 
     private sealed class Loan(IConditionalAccess card, LendingSession session, string? peer, DateTimeOffset since)
     {

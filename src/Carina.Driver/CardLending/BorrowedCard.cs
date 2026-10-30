@@ -140,13 +140,13 @@ public sealed class BorrowedCard : IConditionalAccess
     private static LendingSession Lease(HttpClient client, CardLoan loan)
     {
         byte[] challenge = Expect(client, loan, LendingProtocol.ChallengePath, [], "the challenge");
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(loan.Key, loan.HostName, challenge);
 
         for (int probe = 1; probe < LendingProtocol.RoundTripProbes; probe++)
         {
-            challenge = Expect(client, loan, LendingProtocol.ChallengePath, challenge, "the challenge");
+            handshake.Heard(Expect(client, loan, LendingProtocol.ChallengePath, handshake.Answer(), "a round trip"));
         }
 
-        BorrowerHandshake handshake = BorrowerHandshake.Begin(loan.Key, loan.HostName, challenge);
 
         return handshake.Accept(Expect(client, loan, LendingProtocol.LeasePath, handshake.Request, "the lease"));
     }

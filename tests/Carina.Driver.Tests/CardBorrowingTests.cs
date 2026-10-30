@@ -22,7 +22,7 @@ internal sealed class InMemoryLending(CardLender lender) : HttpMessageHandler
 
         LendingReply reply = path switch
         {
-            LendingProtocol.ChallengePath => new LendingReply(LendingReply.Ok, lender.Challenge(Connection, body.ToArray())),
+            LendingProtocol.ChallengePath => new LendingReply(LendingReply.Ok, body.Length is 0 ? lender.Challenge(Connection) : lender.Challenge(Connection, request.Headers.Host ?? string.Empty, body.ToArray())),
             LendingProtocol.LeasePath => lender.Lease(Connection, request.Headers.Host ?? string.Empty, body.ToArray()),
             LendingProtocol.EcmPath => lender.Answer(Connection, body.ToArray()),
             _ => new LendingReply(404, []),
@@ -341,6 +341,38 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
         {
             held.ForEach(client => client.Dispose());
         }
+    }
+
+    [Fact]
+    public async Task ANewcomerToAFullDoorClosesTheConnectionThatWaitedLongest()
+    {
+        List<TcpClient> held = [];
+
+        try
+        {
+            for (int connection = 0; connection < LendingDoor.MostUnborrowed; connection++)
+            {
+                held.Add(await ConnectFrom(IPAddress.Parse($"127.0.0.{10 + connection}")));
+                await AskForAChallenge(held[^1].GetStream());
+            }
+
+            using TcpClient newcomer = await ConnectFrom(IPAddress.Parse("127.0.0.100"));
+            await AskForAChallenge(newcomer.GetStream());
+
+            Assert.Equal(0, await ReadOrClosed(held[0].GetStream(), new byte[4096], TimeSpan.FromSeconds(5)));
+        }
+        finally
+        {
+            held.ForEach(client => client.Dispose());
+        }
+    }
+
+    private async Task<TcpClient> ConnectFrom(IPAddress source)
+    {
+        TcpClient client = new(new IPEndPoint(source, 0));
+        await client.ConnectAsync(server.Bound!);
+
+        return client;
     }
 
     private static async Task AskForAChallenge(NetworkStream stream)

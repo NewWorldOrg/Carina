@@ -53,7 +53,7 @@ public sealed class CardLendingConfigurationTests
         Assert.Equal(CardLendingSettings.DefaultHopLimit, lend.HopLimit);
         Assert.Equal(CardLendingSettings.DefaultLeases, lend.Leases);
         Assert.Equal(CardLendingSettings.DefaultRoundTripMilliseconds, lend.RoundTripMilliseconds);
-        Assert.Equal(15, CardLendingSettings.DefaultRoundTripMilliseconds);
+        Assert.Equal(5, CardLendingSettings.DefaultRoundTripMilliseconds);
         Assert.Equal(["lender.example"], lend.HostNames);
     }
 

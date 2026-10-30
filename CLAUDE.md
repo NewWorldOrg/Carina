@@ -152,12 +152,15 @@ walks past it.
   it (the carriers' shared range is outside), does not answer a host it is not
   named, a request bearing a proxy's forwarding headers or a browser's `Origin`,
   and sends with a small TTL set on the listening socket so the handshake is
-  limited too. Before lending it times three round trips with the borrower and
-  refuses when the quickest exceeds a cap that is always on (15 ms by default, 30
-  at most), because a relay inside the house can hide where a borrower is but
-  cannot make the path shorter. Connections that have not borrowed get seats of
-  their own, few in all and fewer per address, and are closed ten seconds after
-  they open, so nothing without the key can crowd out the leases. A lease is a
+  limited too. Before lending it times three round trips with the borrower, each
+  answered with a proof keyed to the transcript and to which round trip it is,
+  and refuses when the quickest exceeds a cap that is always on (5 ms by default,
+  30 at most): a relay inside the house can hide where a borrower is, but without
+  the key it cannot answer for it, and it cannot make the path to the key shorter.
+  Connections that have not borrowed get seats of their own, few in all and fewer
+  per address (an IPv6 /64 counting as one), a newcomer to a full door closes the
+  one that has waited longest, and each is closed two seconds after it opens
+  unless it has borrowed, so nothing without the key can crowd out the leases. A lease is a
   challenge answered with a proof derived from the key,
   both nonces and the host, bound to one connection and given back when it
   closes; answers go back sealed with AES-GCM under a key derived per lease. No
