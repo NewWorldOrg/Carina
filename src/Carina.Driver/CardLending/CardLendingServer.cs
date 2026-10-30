@@ -43,6 +43,17 @@ public sealed class CardLendingServer : IHostedService, IDisposable
     /// </summary>
     public static readonly TimeSpan UnborrowedLife = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// A ceiling on open connections far above what the door seats, so that connections it has just turned away and
+    /// that are still closing never keep out the one it let in.
+    /// </summary>
+    public const int MostConnections = 256;
+
+    /// <summary>
+    /// How often the connections that waited too long are looked for.
+    /// </summary>
+    public static readonly TimeSpan BetweenSweeps = TimeSpan.FromMilliseconds(250);
+
     private static readonly string[] HeadersNotAnswered =
     [
         "Forwarded",
@@ -65,23 +76,25 @@ public sealed class CardLendingServer : IHostedService, IDisposable
 
     private readonly ConcurrentDictionary<string, ConnectionContext> open = [];
 
-    private readonly TimeSpan unborrowedLife;
+    private readonly TimeProvider time;
 
     private WebApplication? app;
+
+    private ITimer? sweeps;
 
     public CardLendingServer(
         LendingPlan plan,
         Func<IConditionalAccess> openCard,
         TimeProvider time,
-        ILogger? logger,
-        TimeSpan? unborrowedLife = null
+        ILogger? logger
     )
     {
         ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(time);
 
         this.plan = plan;
         this.logger = logger;
-        this.unborrowedLife = unborrowedLife ?? UnborrowedLife;
+        this.time = time;
         Lender = new CardLender(plan.Key, openCard, new CardLendingLimits(plan.Leases, plan.RoundTrip), time, logger);
     }
 
@@ -130,7 +143,7 @@ public sealed class CardLendingServer : IHostedService, IDisposable
             options.Limits.MaxRequestLineSize = 1024;
             options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(5);
             options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
-            options.Limits.MaxConcurrentConnections = plan.Leases + LendingDoor.MostUnborrowed;
+            options.Limits.MaxConcurrentConnections = MostConnections;
             options.Listen(
                 plan.Listen,
                 listen =>
@@ -150,6 +163,7 @@ public sealed class CardLendingServer : IHostedService, IDisposable
         await built.StartAsync(cancellationToken);
         app = built;
         Bound = BoundEndPoint(built);
+        sweeps = time.CreateTimer(_ => CloseOverdue(), null, BetweenSweeps, BetweenSweeps);
 
         logger?.LogInformation(
             "This driver lends its card on {Address} to borrowers inside the household that hold the key, under the names {Names}.",
@@ -160,6 +174,8 @@ public sealed class CardLendingServer : IHostedService, IDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        sweeps?.Dispose();
+
         if (app is not null)
         {
             await app.StopAsync(cancellationToken);
@@ -180,10 +196,10 @@ public sealed class CardLendingServer : IHostedService, IDisposable
             return;
         }
 
-        if (!door.TryAdmit(connection.ConnectionId, peer.Address, out string? evicted))
+        if (!door.TryAdmit(connection.ConnectionId, peer.Address, time.GetUtcNow(), out string? evicted))
         {
             logger?.LogWarning(
-                "A connection to the lending port from {Peer} was closed unread: that address already has as many connections waiting without having borrowed as it may.",
+                "A connection to the lending port from {Peer} was closed unread: every connection it could take the place of has answered with the key.",
                 peer
             );
 
@@ -207,45 +223,45 @@ public sealed class CardLendingServer : IHostedService, IDisposable
             HopLimit.Apply(socket, plan.HopLimit);
         }
 
-        using CancellationTokenSource served = new();
-        Task deadline = CloseUnlessBorrowedAsync(connection, served.Token);
-
         try
         {
             await next(connection);
         }
         finally
         {
-            await served.CancelAsync();
-            await deadline;
             open.TryRemove(connection.ConnectionId, out _);
             door.Left(connection.ConnectionId);
             Lender.Release(connection.ConnectionId);
         }
     }
 
-    private async Task CloseUnlessBorrowedAsync(ConnectionContext connection, CancellationToken served)
+    /// <summary>
+    /// Closes every connection that has waited longer than <see cref="UnborrowedLife"/> without borrowing, by this
+    /// server's clock, and says how many it closed.
+    /// </summary>
+    public int CloseOverdue()
     {
-        try
+        int closed = 0;
+
+        foreach (string overdue in door.Overdue(time.GetUtcNow(), UnborrowedLife))
         {
-            await Task.Delay(unborrowedLife, served);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
+            door.Left(overdue);
+
+            if (!open.TryGetValue(overdue, out ConnectionContext? connection))
+            {
+                continue;
+            }
+
+            logger?.LogInformation(
+                "A connection to the lending port from {Peer} had not borrowed within {Seconds:F0} s, so it was closed.",
+                connection.RemoteEndPoint,
+                UnborrowedLife.TotalSeconds
+            );
+            connection.Abort();
+            closed++;
         }
 
-        if (door.HasBorrowed(connection.ConnectionId))
-        {
-            return;
-        }
-
-        logger?.LogInformation(
-            "A connection to the lending port from {Peer} had not borrowed within {Seconds:F0} s, so it was closed.",
-            connection.RemoteEndPoint,
-            unborrowedLife.TotalSeconds
-        );
-        connection.Abort();
+        return closed;
     }
 
     private Task Gate(HttpContext context, RequestDelegate next)
@@ -285,11 +301,25 @@ public sealed class CardLendingServer : IHostedService, IDisposable
         {
             null => LendingReply.Refused(LendingReply.Malformed, "malformed"),
             [] => new LendingReply(LendingReply.Ok, Lender.Challenge(context.Connection.Id)),
-            _ => new LendingReply(
-                LendingReply.Ok,
-                Lender.Challenge(context.Connection.Id, context.Request.Host.Host.Trim('[', ']'), answer)
-            ),
+            _ => new LendingReply(LendingReply.Ok, KeyedChallenge(context, answer)),
         });
+    }
+
+    private byte[] KeyedChallenge(HttpContext context, byte[] answer)
+    {
+        byte[] nonce = Lender.Challenge(
+            context.Connection.Id,
+            context.Request.Host.Host.Trim('[', ']'),
+            answer,
+            out bool keyed
+        );
+
+        if (keyed)
+        {
+            door.Proven(context.Connection.Id);
+        }
+
+        return nonce;
     }
 
     private async Task LeaseAsync(HttpContext context)
@@ -370,6 +400,7 @@ public sealed class CardLendingServer : IHostedService, IDisposable
 
     public void Dispose()
     {
+        sweeps?.Dispose();
         Lender.Dispose();
         (app as IDisposable)?.Dispose();
     }

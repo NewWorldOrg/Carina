@@ -11,7 +11,11 @@ namespace Carina.Driver.CardLending;
 /// <summary>
 /// Which lender to borrow a card from, by the address it is reached at and the host name it answers to.
 /// </summary>
-public sealed record CardLoan(IPEndPoint Lender, string HostName, int HopLimit, LendingKey Key);
+/// <param name="Patience">How long a request to the lender may take; <see cref="BorrowedCard.Patience"/> where not given.</param>
+public sealed record CardLoan(IPEndPoint Lender, string HostName, int HopLimit, LendingKey Key, TimeSpan? Patience = null)
+{
+    public TimeSpan Waits => Patience ?? BorrowedCard.Patience;
+}
 
 /// <summary>
 /// A card lent by another driver in the household: each ECM goes to the lender over one connection of its own, and the
@@ -59,7 +63,7 @@ public sealed class BorrowedCard : IConditionalAccess
         HttpClient client = new(handler, disposeHandler: true)
         {
             BaseAddress = new Uri($"http://{loan.Lender}"),
-            Timeout = Patience,
+            Timeout = loan.Waits,
         };
 
         try
@@ -116,7 +120,7 @@ public sealed class BorrowedCard : IConditionalAccess
             AllowAutoRedirect = false,
             MaxConnectionsPerServer = 1,
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1),
-            ConnectTimeout = Patience,
+            ConnectTimeout = loan.Waits,
             ConnectCallback = async (_, cancellationToken) =>
             {
                 Socket socket = new(loan.Lender.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
@@ -178,7 +182,7 @@ public sealed class BorrowedCard : IConditionalAccess
         catch (TaskCanceledException)
         {
             throw new DescramblingException(
-                $"The lender at {loan.Lender} did not answer within {Patience.TotalSeconds:F0} seconds."
+                $"The lender at {loan.Lender} did not answer within {loan.Waits.TotalSeconds:F0} seconds."
             );
         }
         catch (IOException error)

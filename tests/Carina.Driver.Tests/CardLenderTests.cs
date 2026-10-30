@@ -233,6 +233,20 @@ public sealed class CardLenderTests
     }
 
     [Fact]
+    public void TheLenderSaysWhetherARoundTripWasAnsweredWithTheKey()
+    {
+        using CardLender lender = Lender();
+        BorrowerHandshake keyed = BorrowerHandshake.Begin(Key, Host, lender.Challenge(Connection));
+        BorrowerHandshake keyless = BorrowerHandshake.Begin(AnotherKey, Host, lender.Challenge("connection-2"));
+
+        lender.Challenge(Connection, Host, keyed.Answer(), out bool answeredWithTheKey);
+        lender.Challenge("connection-2", Host, keyless.Answer(), out bool answeredWithoutIt);
+
+        Assert.True(answeredWithTheKey);
+        Assert.False(answeredWithoutIt);
+    }
+
+    [Fact]
     public void TheRoundTripIsCappedByDefault()
     {
         Assert.Equal(TimeSpan.FromMilliseconds(5), CardLendingLimits.DefaultRoundTrip);

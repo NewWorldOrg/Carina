@@ -158,9 +158,10 @@ walks past it.
   30 at most): a relay inside the house can hide where a borrower is, but without
   the key it cannot answer for it, and it cannot make the path to the key shorter.
   Connections that have not borrowed get seats of their own, few in all and fewer
-  per address (an IPv6 /64 counting as one), a newcomer to a full door closes the
-  one that has waited longest, and each is closed two seconds after it opens
-  unless it has borrowed, so nothing without the key can crowd out the leases. A lease is a
+  per address (an IPv6 /64 counting as one); a newcomer to a full address or a
+  full door closes the one there that has waited longest, never one that has
+  answered with the key, and each is closed two seconds after it opens unless it
+  has borrowed, so nothing without the key can crowd out the leases. A lease is a
   challenge answered with a proof derived from the key,
   both nonces and the host, bound to one connection and given back when it
   closes; answers go back sealed with AES-GCM under a key derived per lease. No

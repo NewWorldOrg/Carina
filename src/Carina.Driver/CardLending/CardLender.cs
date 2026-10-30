@@ -123,7 +123,13 @@ public sealed class CardLender : IDisposable
     /// Hands the connection a new nonce. An answer to the nonce handed out last, keyed to the transcript and to which
     /// round trip it is, is one round trip and its time is kept for the lease; any other answer starts again.
     /// </summary>
-    public byte[] Challenge(string connection, string host, ReadOnlySpan<byte> answer)
+    public byte[] Challenge(string connection, string host, ReadOnlySpan<byte> answer) =>
+        Challenge(connection, host, answer, out _);
+
+    /// <summary>
+    /// As <see cref="Challenge(string, string, ReadOnlySpan{byte})"/>, saying whether the answer was keyed.
+    /// </summary>
+    public byte[] Challenge(string connection, string host, ReadOnlySpan<byte> answer, out bool keyed)
     {
         byte[] nonce = LendingProtocol.Nonce();
         DateTimeOffset now = time.GetUtcNow();
@@ -131,10 +137,10 @@ public sealed class CardLender : IDisposable
         lock (gate)
         {
             challenges.TryGetValue(connection, out IssuedChallenge? previous);
-            challenges[connection] =
-                previous is not null && IsKeyedAnswer(previous, host, answer, now)
-                    ? previous.Then(nonce, now, answer[..LendingProtocol.NonceLength].ToArray())
-                    : IssuedChallenge.First(nonce, now);
+            keyed = previous is not null && IsKeyedAnswer(previous, host, answer, now);
+            challenges[connection] = keyed
+                ? previous!.Then(nonce, now, answer[..LendingProtocol.NonceLength].ToArray())
+                : IssuedChallenge.First(nonce, now);
         }
 
         return nonce;

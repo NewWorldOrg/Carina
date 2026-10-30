@@ -170,11 +170,16 @@ public sealed class BorrowedCardTests
     }
 }
 
+/// <summary>
+/// The lending port over real loopback sockets. The lender's clock stands still unless a test moves it, the deadline
+/// to borrow is checked when a test asks, and every wait is for something that happens, given time to spare on a busy
+/// machine.
+/// </summary>
 public sealed class CardLendingOverTheWireTests : IAsyncLifetime
 {
-    internal static readonly TimeSpan OnABusyMachine = TimeSpan.FromMilliseconds(CardLendingRules.MostRoundTripMilliseconds);
-
     private const string Host = "lender.example";
+
+    private static readonly TimeSpan Ample = TimeSpan.FromSeconds(60);
 
     private static readonly LendingKey Key = LendingKey.FromText("a household key long enough to be a key 0123");
 
@@ -182,12 +187,21 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
 
     private readonly CardsOnHand cards = new();
 
+    private readonly ManualTimeProvider clock = new(new DateTimeOffset(2026, 10, 31, 0, 0, 0, TimeSpan.Zero));
+
     private CardLendingServer server = null!;
 
     public async Task InitializeAsync()
     {
-        LendingPlan plan = new(new IPEndPoint(IPAddress.Loopback, 0), [Host], HopLimit: 2, RoundTrip: OnABusyMachine, Leases: 2, Key);
-        server = new CardLendingServer(plan, cards.Open, TimeProvider.System, logger: null);
+        LendingPlan plan = new(
+            new IPEndPoint(IPAddress.Loopback, 0),
+            [Host],
+            HopLimit: 2,
+            RoundTrip: CardLendingLimits.DefaultRoundTrip,
+            Leases: 2,
+            Key
+        );
+        server = new CardLendingServer(plan, cards.Open, clock, logger: null);
         await server.StartAsync(CancellationToken.None);
     }
 
@@ -197,10 +211,10 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
         server.Dispose();
     }
 
-    private CardLoan Loan => new(server.Bound!, Host, 2, Key);
+    private CardLoan Loan => new(server.Bound!, Host, 2, Key, Ample);
 
     [Fact]
-    public void AStreamIsUnscrambledWithKeysBorrowedOverTheWire()
+    public async Task AStreamIsUnscrambledWithKeysBorrowedOverTheWire()
     {
         SyntheticScrambledStream stream = new SyntheticScrambledStream()
             .Pat((1, 0x0101))
@@ -210,27 +224,29 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
             .Scrambled(0x0111, Ecm, odd: true, seed: 2)
             .Scrambled(0x0112, Ecm, odd: false, seed: 3);
 
-        using TransportStreamDescrambler descrambler = new(BorrowedCard.Open(Loan));
+        byte[] descrambled = await OnItsOwnThread(() =>
+        {
+            using TransportStreamDescrambler descrambler = new(BorrowedCard.Open(Loan));
 
-        Assert.Equal(stream.Output, descrambler.Descramble(stream.Input));
+            return descrambler.Descramble(stream.Input);
+        });
+
+        Assert.Equal(stream.Output, descrambled);
     }
 
     [Fact]
     public async Task ABorrowerThatGoesAwayGivesItsLeaseBack()
     {
-        using (BorrowedCard card = BorrowedCard.Open(Loan))
+        int lent = await OnItsOwnThread(() =>
         {
+            using BorrowedCard card = BorrowedCard.Open(Loan);
             card.Answer(Ecm);
-            Assert.Equal(1, server.Lender.LeasesOut);
-        }
 
-        DateTimeOffset giveUp = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
-        while (server.Lender.LeasesOut > 0 && DateTimeOffset.UtcNow < giveUp)
-        {
-            await Task.Delay(20);
-        }
+            return server.Lender.LeasesOut;
+        });
 
-        Assert.Equal(0, server.Lender.LeasesOut);
+        Assert.Equal(1, lent);
+        Assert.True(await Eventually(() => server.Lender.LeasesOut is 0));
         Assert.True(cards.Connections.Single().Disposed);
     }
 
@@ -275,54 +291,53 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
     }
 
     [Fact]
-    public void ABorrowerWithAnotherKeyCannotOpenTheCard()
+    public async Task ABorrowerWithAnotherKeyCannotOpenTheCard()
     {
         CardLoan wrong = Loan with { Key = LendingKey.FromText("another household key that is not the same one") };
 
-        Assert.Throws<DescramblingException>(() => BorrowedCard.Open(wrong));
+        await Assert.ThrowsAsync<DescramblingException>(() => OnItsOwnThread(() => BorrowedCard.Open(wrong)));
         Assert.Empty(cards.Connections);
     }
 
     [Fact]
-    public void ALenderThatIsNotThereIsTheCardNotAnswering()
+    public async Task ALenderThatIsNotThereIsTheCardNotAnswering()
     {
         using Socket unused = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         unused.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         CardLoan nowhere = Loan with { Lender = (IPEndPoint)unused.LocalEndPoint! };
 
-        Assert.Throws<DescramblingException>(() => BorrowedCard.Open(nowhere));
+        await Assert.ThrowsAsync<DescramblingException>(() => OnItsOwnThread(() => BorrowedCard.Open(nowhere)));
     }
 
     [Fact]
     public async Task AConnectionThatDoesNotBorrowIsClosedOnceItsTimeIsUp()
     {
-        await using LendingServerUnderTest quick = await LendingServerUnderTest.Start(cards, unborrowedLife: TimeSpan.FromMilliseconds(300));
-        using TcpClient client = new();
-        await client.ConnectAsync(quick.Server.Bound!);
-        NetworkStream stream = client.GetStream();
-        await stream.WriteAsync(Encoding.ASCII.GetBytes($"POST {LendingProtocol.ChallengePath} HTTP/1.1\r\nHost: {Host}\r\nContent-Length: 0\r\n\r\n"));
-        byte[] buffer = new byte[4096];
-        Assert.True(await stream.ReadAsync(buffer) > 0);
+        using TcpClient client = await ConnectFrom(IPAddress.Loopback);
+        await AskForAChallenge(client.GetStream());
 
-        int afterTheDeadline = await ReadOrClosed(stream, buffer, TimeSpan.FromSeconds(5));
+        clock.Advance(CardLendingServer.UnborrowedLife - TimeSpan.FromMilliseconds(1));
+        Assert.Equal(0, server.CloseOverdue());
 
-        Assert.Equal(0, afterTheDeadline);
+        clock.Advance(TimeSpan.FromMilliseconds(2));
+        server.CloseOverdue();
+        Assert.Equal(0, await ReadOrClosed(client.GetStream()));
     }
 
     [Fact]
     public async Task AConnectionThatBorrowedIsKeptPastTheDeadline()
     {
-        await using LendingServerUnderTest quick = await LendingServerUnderTest.Start(cards, unborrowedLife: CardLendingServer.UnborrowedLife);
-        using BorrowedCard card = BorrowedCard.Open(new CardLoan(quick.Server.Bound!, Host, 2, Key));
+        using BorrowedCard card = await OnItsOwnThread(() => BorrowedCard.Open(Loan));
 
-        await Task.Delay(CardLendingServer.UnborrowedLife + TimeSpan.FromSeconds(1));
+        clock.Advance(CardLendingServer.UnborrowedLife + TimeSpan.FromSeconds(1));
 
-        Assert.Equal(1, quick.Server.Lender.LeasesOut);
-        Assert.True(card.Answer(Ecm).Granted);
+        Assert.Equal(0, server.CloseOverdue());
+        Assert.Equal(1, server.Lender.LeasesOut);
+        Assert.True((await OnItsOwnThread(() => card.Answer(Ecm))).Granted);
+        Assert.Equal(1, server.Lender.LeasesOut);
     }
 
     [Fact]
-    public async Task OneAddressCannotFillTheDoorWithConnectionsThatDoNotBorrow()
+    public async Task ANewcomerFromAFullAddressClosesThatAddresssLongestWaiter()
     {
         List<TcpClient> held = [];
 
@@ -330,17 +345,14 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
         {
             for (int connection = 0; connection < LendingDoor.PerAddress; connection++)
             {
-                TcpClient client = new();
-                held.Add(client);
-                await client.ConnectAsync(server.Bound!);
-                await AskForAChallenge(client.GetStream());
+                held.Add(await ConnectFrom(IPAddress.Loopback));
+                await AskForAChallenge(held[^1].GetStream());
             }
 
-            using TcpClient oneTooMany = new();
-            await oneTooMany.ConnectAsync(server.Bound!);
-            await oneTooMany.GetStream().WriteAsync(Encoding.ASCII.GetBytes($"POST {LendingProtocol.ChallengePath} HTTP/1.1\r\nHost: {Host}\r\nContent-Length: 0\r\n\r\n"));
+            using TcpClient newcomer = await ConnectFrom(IPAddress.Loopback);
+            await AskForAChallenge(newcomer.GetStream());
 
-            Assert.Equal(0, await ReadOrClosed(oneTooMany.GetStream(), new byte[4096], TimeSpan.FromSeconds(5)));
+            Assert.Equal(0, await ReadOrClosed(held[0].GetStream()));
         }
         finally
         {
@@ -364,12 +376,57 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
             using TcpClient newcomer = await ConnectFrom(IPAddress.Parse("127.0.0.100"));
             await AskForAChallenge(newcomer.GetStream());
 
-            Assert.Equal(0, await ReadOrClosed(held[0].GetStream(), new byte[4096], TimeSpan.FromSeconds(5)));
+            Assert.Equal(0, await ReadOrClosed(held[0].GetStream()));
         }
         finally
         {
             held.ForEach(client => client.Dispose());
         }
+    }
+
+    [Fact]
+    public async Task ABorrowerHalfwayThroughItsRoundTripsIsNotTurnedAwayByAFlood()
+    {
+        using HttpClient client = new(new SocketsHttpHandler { UseProxy = false, MaxConnectionsPerServer = 1 }) { Timeout = Ample };
+        BorrowerHandshake handshake = BorrowerHandshake.Begin(Key, Host, await Post(client, []));
+        handshake.Heard(await Post(client, handshake.Answer()));
+        List<TcpClient> flood = [];
+
+        try
+        {
+            for (int connection = 0; connection < 2 * LendingDoor.MostUnborrowed; connection++)
+            {
+                flood.Add(await ConnectFrom(IPAddress.Parse($"127.0.1.{10 + connection}")));
+                await AskForAChallenge(flood[^1].GetStream());
+            }
+
+            handshake.Heard(await Post(client, handshake.Answer()));
+            using HttpRequestMessage lease = new(HttpMethod.Post, $"http://{server.Bound}{LendingProtocol.LeasePath}")
+            {
+                Content = new ByteArrayContent(handshake.Request),
+            };
+            lease.Headers.Host = Host;
+            using HttpResponseMessage leased = await client.SendAsync(lease);
+
+            Assert.Equal(HttpStatusCode.OK, leased.StatusCode);
+        }
+        finally
+        {
+            flood.ForEach(connection => connection.Dispose());
+        }
+    }
+
+    private async Task<byte[]> Post(HttpClient client, byte[] answer)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, $"http://{server.Bound}{LendingProtocol.ChallengePath}")
+        {
+            Content = new ByteArrayContent(answer),
+        };
+        request.Headers.Host = Host;
+        using HttpResponseMessage response = await client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadAsByteArrayAsync();
     }
 
     private async Task<TcpClient> ConnectFrom(IPAddress source)
@@ -383,21 +440,42 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
     private static async Task AskForAChallenge(NetworkStream stream)
     {
         await stream.WriteAsync(Encoding.ASCII.GetBytes($"POST {LendingProtocol.ChallengePath} HTTP/1.1\r\nHost: {Host}\r\nContent-Length: 0\r\n\r\n"));
-        Assert.True(await stream.ReadAsync(new byte[4096]) > 0);
+        using CancellationTokenSource patience = new(Ample);
+        Assert.True(await stream.ReadAsync(new byte[4096], patience.Token) > 0);
     }
 
-    private static async Task<int> ReadOrClosed(NetworkStream stream, byte[] buffer, TimeSpan patience)
+    private static async Task<int> ReadOrClosed(NetworkStream stream)
     {
-        using CancellationTokenSource timeout = new(patience);
+        using CancellationTokenSource patience = new(Ample);
 
         try
         {
-            return await stream.ReadAsync(buffer, timeout.Token);
+            return await stream.ReadAsync(new byte[4096], patience.Token);
         }
         catch (IOException)
         {
             return 0;
         }
+    }
+
+    private static Task<T> OnItsOwnThread<T>(Func<T> work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    private static async Task<bool> Eventually(Func<bool> condition)
+    {
+        using CancellationTokenSource patience = new(Ample);
+
+        while (!condition())
+        {
+            if (patience.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20), CancellationToken.None);
+        }
+
+        return true;
     }
 
     private async Task<HttpResponseMessage> Ask(
@@ -406,7 +484,7 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
         string path = LendingProtocol.ChallengePath
     )
     {
-        using HttpClient client = new(new SocketsHttpHandler { UseProxy = false });
+        using HttpClient client = new(new SocketsHttpHandler { UseProxy = false }) { Timeout = Ample };
         using HttpRequestMessage request = new(HttpMethod.Post, $"http://{server.Bound}{path}");
         request.Headers.Host = host;
         if (extra is (string name, string value))
@@ -415,34 +493,5 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
         }
 
         return await client.SendAsync(request);
-    }
-}
-
-internal sealed class LendingServerUnderTest : IAsyncDisposable
-{
-    private LendingServerUnderTest(CardLendingServer server) => Server = server;
-
-    public CardLendingServer Server { get; }
-
-    public static async Task<LendingServerUnderTest> Start(CardsOnHand cards, TimeSpan unborrowedLife)
-    {
-        LendingPlan plan = new(
-            new IPEndPoint(IPAddress.Loopback, 0),
-            ["lender.example"],
-            HopLimit: 2,
-            RoundTrip: CardLendingOverTheWireTests.OnABusyMachine,
-            Leases: 2,
-            LendingKey.FromText("a household key long enough to be a key 0123")
-        );
-        CardLendingServer server = new(plan, cards.Open, TimeProvider.System, logger: null, unborrowedLife: unborrowedLife);
-        await server.StartAsync(CancellationToken.None);
-
-        return new LendingServerUnderTest(server);
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await Server.StopAsync(CancellationToken.None);
-        Server.Dispose();
     }
 }
