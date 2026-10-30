@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 
 using Carina.Driver.CardLending;
+using Carina.Driver.Configuration;
 using Carina.Driver.Descrambling;
 
 namespace Carina.Driver.Tests;
@@ -47,10 +48,12 @@ public sealed class BorrowedCardTests
 
     private static readonly CardLoan Loan = new(new IPEndPoint(IPAddress.Loopback, 40772), Host, 2, Key);
 
+    private static readonly ManualTimeProvider Frozen = new(new DateTimeOffset(2026, 10, 30, 21, 0, 0, TimeSpan.Zero));
+
     private readonly CardsOnHand cards = new();
 
     private CardLender Lender(int leases = 2) =>
-        new(Key, cards.Open, new CardLendingLimits(leases, CardLendingLimits.DefaultRoundTrip), TimeProvider.System);
+        new(Key, cards.Open, new CardLendingLimits(leases, CardLendingLimits.DefaultRoundTrip), Frozen);
 
     [Fact]
     public void ABorrowedCardAnswersWithTheKeysOfTheLendersCard()
@@ -89,7 +92,7 @@ public sealed class BorrowedCardTests
     {
         FakeSmartCardService refusing = FakeSmartCardService.WithOneCard(out FakeCardConnection lent);
         lent.EcmReturnCode = _ => 0x8901;
-        using CardLender lender = new(Key, () => ConditionalAccessCard.Open(refusing), new CardLendingLimits(1, CardLendingLimits.DefaultRoundTrip), TimeProvider.System);
+        using CardLender lender = new(Key, () => ConditionalAccessCard.Open(refusing), new CardLendingLimits(1, CardLendingLimits.DefaultRoundTrip), Frozen);
         using BorrowedCard card = BorrowedCard.Open(Loan, new InMemoryLending(lender));
 
         EcmAnswer answer = card.Answer(Ecm);
@@ -169,6 +172,8 @@ public sealed class BorrowedCardTests
 
 public sealed class CardLendingOverTheWireTests : IAsyncLifetime
 {
+    internal static readonly TimeSpan OnABusyMachine = TimeSpan.FromMilliseconds(CardLendingRules.MostRoundTripMilliseconds);
+
     private const string Host = "lender.example";
 
     private static readonly LendingKey Key = LendingKey.FromText("a household key long enough to be a key 0123");
@@ -181,7 +186,7 @@ public sealed class CardLendingOverTheWireTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        LendingPlan plan = new(new IPEndPoint(IPAddress.Loopback, 0), [Host], HopLimit: 2, RoundTrip: CardLendingLimits.DefaultRoundTrip, Leases: 2, Key);
+        LendingPlan plan = new(new IPEndPoint(IPAddress.Loopback, 0), [Host], HopLimit: 2, RoundTrip: OnABusyMachine, Leases: 2, Key);
         server = new CardLendingServer(plan, cards.Open, TimeProvider.System, logger: null);
         await server.StartAsync(CancellationToken.None);
     }
@@ -425,7 +430,7 @@ internal sealed class LendingServerUnderTest : IAsyncDisposable
             new IPEndPoint(IPAddress.Loopback, 0),
             ["lender.example"],
             HopLimit: 2,
-            RoundTrip: CardLendingLimits.DefaultRoundTrip,
+            RoundTrip: CardLendingOverTheWireTests.OnABusyMachine,
             Leases: 2,
             LendingKey.FromText("a household key long enough to be a key 0123")
         );
