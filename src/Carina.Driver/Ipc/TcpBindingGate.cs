@@ -26,7 +26,7 @@ public static class TcpBindingGate
     private static readonly string[] PortSettings = ["http_ports", "https_ports"];
 
     private const string Reason =
-        "The driver answers on a Unix socket only and never binds a TCP port.";
+        "The driver answers the app on a Unix socket only and binds no TCP port for it.";
 
     public static IReadOnlyList<string> Inspect(
         IConfiguration configuration,

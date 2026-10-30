@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 
 using Carina.Contracts;
+using Carina.Driver.CardLending;
 using Carina.Driver.Configuration;
 using Carina.Driver.Descrambling;
 using Carina.Driver.Diagnostics;
@@ -81,6 +82,14 @@ public static class DriverHost
             return DriverHostResult.Refused(DriverHostRefusal.Configuration, wouldBindTcp);
         }
 
+        List<string> lendingProblems = [];
+        LendingPlan? lending = CardLendingRules.Plan(configuration.CardLending?.Lend, lendingProblems);
+        CardLoan? loan = CardLendingRules.Loan(configuration.CardLending?.Borrow, lendingProblems);
+        if (lendingProblems.Count > 0)
+        {
+            return DriverHostResult.Refused(DriverHostRefusal.Configuration, lendingProblems);
+        }
+
         string socketPath = configuration.SocketPath!;
 
         try
@@ -116,9 +125,26 @@ public static class DriverHost
         builder.Services.AddSingleton(provider =>
             Descramblers.For(
                 provider.GetRequiredService<DriverConfiguration>(),
+                loan,
                 provider.GetRequiredService<ILogger<Descramblers>>()
             )
         );
+
+        if (lending is not null)
+        {
+            builder.Services.AddSingleton(provider =>
+            {
+                ILogger<CardLendingServer> logger = provider.GetRequiredService<ILogger<CardLendingServer>>();
+
+                return new CardLendingServer(
+                    lending,
+                    Descramblers.CardsToLend(logger),
+                    provider.GetRequiredService<TimeProvider>(),
+                    logger
+                );
+            });
+            builder.Services.AddHostedService(provider => provider.GetRequiredService<CardLendingServer>());
+        }
         builder.Services.AddSingleton(provider =>
             DriverGreeting.ForThisProcess(
                 provider.GetRequiredService<IDescramblerFactory>().Unscrambles

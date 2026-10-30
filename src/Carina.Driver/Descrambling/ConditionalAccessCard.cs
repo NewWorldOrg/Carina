@@ -7,11 +7,47 @@ namespace Carina.Driver.Descrambling;
 /// </summary>
 public sealed class EcmAnswer(ushort returnCode, ScrambleKeys? keys)
 {
+    /// <summary>
+    /// The system key, the initial value and the key pair, one after another: what the keys were made from.
+    /// </summary>
+    public const int KeyMaterialLength = Multi2.SystemKeyLength + ScrambleKeys.InitialValueLength + ScrambleKeys.PairLength;
+
+    private readonly byte[] keyMaterial = [];
+
     public ushort ReturnCode { get; } = returnCode;
 
     public ScrambleKeys? Keys { get; } = keys;
 
     public bool Granted => Keys is not null;
+
+    /// <summary>
+    /// What <see cref="Keys"/> were made from, kept so they can be lent; empty where the keys were not granted.
+    /// </summary>
+    public ReadOnlyMemory<byte> KeyMaterial => keyMaterial;
+
+    /// <summary>
+    /// The answer to an ECM that unlocked its keys, made from <paramref name="material"/> as
+    /// <see cref="KeyMaterial"/> lays it out.
+    /// </summary>
+    public static EcmAnswer Granting(ushort returnCode, ReadOnlySpan<byte> material)
+    {
+        if (material.Length is not KeyMaterialLength)
+        {
+            throw new ArgumentException(
+                $"Key material is {KeyMaterialLength} bytes, not {material.Length}.",
+                nameof(material)
+            );
+        }
+
+        ReadOnlySpan<byte> systemKey = material[..Multi2.SystemKeyLength];
+        ReadOnlySpan<byte> initialValue = material.Slice(Multi2.SystemKeyLength, ScrambleKeys.InitialValueLength);
+        ReadOnlySpan<byte> pair = material[(Multi2.SystemKeyLength + ScrambleKeys.InitialValueLength)..];
+
+        return new EcmAnswer(returnCode, ScrambleKeys.Of(systemKey, initialValue, pair), material.ToArray());
+    }
+
+    private EcmAnswer(ushort returnCode, ScrambleKeys keys, byte[] keyMaterial)
+        : this(returnCode, keys) => this.keyMaterial = keyMaterial;
 }
 
 /// <summary>
@@ -49,7 +85,7 @@ public sealed class CardIdentity
 /// <summary>
 /// The conditional-access card of ARIB STD-B25, spoken to over PC/SC with the two commands descrambling needs.
 /// </summary>
-public sealed class ConditionalAccessCard : IDisposable
+public sealed class ConditionalAccessCard : IConditionalAccess
 {
     public const int LongestEcmBody = 255;
 
@@ -228,9 +264,9 @@ public sealed class ConditionalAccessCard : IDisposable
 
             payload = Payload(answer, EcmAnswerLength, "an ECM that unlocked its keys");
 
-            return new EcmAnswer(
+            return EcmAnswer.Granting(
                 returnCode,
-                ScrambleKeys.Of(systemKey, initialValue, payload.Slice(KeyPairOffset, ScrambleKeys.PairLength))
+                [.. systemKey, .. initialValue, .. payload.Slice(KeyPairOffset, ScrambleKeys.PairLength)]
             );
         }
     }

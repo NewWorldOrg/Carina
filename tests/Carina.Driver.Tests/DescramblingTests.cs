@@ -248,7 +248,7 @@ public sealed class DescramblingTests
     {
         Assert.Same(
             NoDescrambling.Instance,
-            Descramblers.For(Backed(TunerBackend.Fake), logger: null));
+            Descramblers.For(Backed(TunerBackend.Fake), loan: null, logger: null));
     }
 
     [Fact]
@@ -256,7 +256,7 @@ public sealed class DescramblingTests
     {
         Assert.Same(
             NoDescrambling.Instance,
-            Descramblers.For(Backed(TunerBackend.Unspecified), logger: null));
+            Descramblers.For(Backed(TunerBackend.Unspecified), loan: null, logger: null));
     }
 
     private static DriverConfiguration Backed(TunerBackend backend) =>

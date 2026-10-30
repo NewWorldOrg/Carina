@@ -98,14 +98,19 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
             descramblers ?? NoDescrambling.Instance
         );
 
-    public static TunerDeviceFactory Using(DriverConfiguration configuration, IUsbHost usbHost, DevicePacing pacing) =>
+    public static TunerDeviceFactory Using(
+        DriverConfiguration configuration,
+        IUsbHost usbHost,
+        DevicePacing pacing,
+        IDescramblerFactory? descramblers = null
+    ) =>
         new(
             configuration,
             TimeProvider.System,
             new Lazy<IDvbSystemCalls>(() => new LinuxDvbSystemCalls()),
             new Lazy<IUsbHost>(() => usbHost),
             pacing,
-            NoDescrambling.Instance
+            descramblers ?? NoDescrambling.Instance
         );
 
     public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold) =>
@@ -113,7 +118,7 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
         {
             TunerBackend.Fake => Synthetic(tune?.ToLegacyRequest() ?? tuning),
             TunerBackend.Dvb => OpenDvb(device, tuning, tune, hold),
-            TunerBackend.Usb => OpenUsb(device, tuning, tune),
+            TunerBackend.Usb => OpenUsb(device, tuning, tune, hold),
             _ => throw BackendNeverEstablished(),
         };
 
@@ -150,7 +155,7 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
         UsbTunerDetector.NodeFor(usbHost.Value, device.Id, device.DevicePath)
         ?? throw DvbFailure.Refused($"devices['{device.Id}']: a usb device needs a devicePath.");
 
-    private ITunerDevice OpenUsb(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+    private ITunerDevice OpenUsb(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
     {
         if (DvbTuneRequest.Resolve(tune, tuning) is not TerrestrialChannel channel)
         {
@@ -159,40 +164,56 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
             );
         }
 
-        return CechZd1TunerDevice.Open(
-            usbHost.Value,
-            UsbPathOf(device),
-            DvbFrequency.TerrestrialHertz(channel.PhysicalChannel),
-            pacing,
-            settings.BytePatience,
-            logger
+        string path = UsbPathOf(device);
+
+        return ThroughTheCard(
+            () =>
+                CechZd1TunerDevice.Open(
+                    usbHost.Value,
+                    path,
+                    DvbFrequency.TerrestrialHertz(channel.PhysicalChannel),
+                    pacing,
+                    settings.BytePatience,
+                    logger
+                ),
+            hold
         );
     }
 
     private static ITunerDevice Synthetic(TuningRequest tuning) =>
         new FakeTunerDevice(tuning.PhysicalChannel, tuning.ServiceId);
 
+    private ITunerDevice OpenDvb(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
+    {
+        DvbDevicePaths paths = PathsOf(device);
+
+        return ThroughTheCard(
+            () =>
+                DvbTunerDevice.Open(
+                    systemCalls.Value,
+                    time,
+                    paths,
+                    DvbTuneRequest.Resolve(tune, tuning),
+                    LnbPower.For(device.Kind, device.LnbPower),
+                    settings with { ReadsFromTheLock = HeadHolds.ReadsFromTheLock(hold) },
+                    CancellationToken.None
+                ),
+            hold
+        );
+    }
+
     /// <summary>
     /// Tunes the device while the card is asked for, so that the card's answer to the initial setting is not added to
     /// the time the frontend takes to lock. A card that answers after the tuning has failed is let go of.
     /// </summary>
-    private ITunerDevice OpenDvb(DeviceSettings device, TuningRequest tuning, TuneParams? tune, HeadHold hold)
+    private ITunerDevice ThroughTheCard(Func<ITunerDevice> open, HeadHold hold)
     {
-        DvbDevicePaths paths = PathsOf(device);
         Task<IDescrambler?>? asking = descramblers.Unscrambles ? Task.Run(() => descramblers.Open(hold)) : null;
         ITunerDevice opened;
 
         try
         {
-            opened = DvbTunerDevice.Open(
-                systemCalls.Value,
-                time,
-                paths,
-                DvbTuneRequest.Resolve(tune, tuning),
-                LnbPower.For(device.Kind, device.LnbPower),
-                settings with { ReadsFromTheLock = HeadHolds.ReadsFromTheLock(hold) },
-                CancellationToken.None
-            );
+            opened = open();
         }
         catch
         {

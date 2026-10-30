@@ -58,7 +58,7 @@ public sealed class SocketPermissionGuard(
         DriverSocket.TryUnlink(path);
 
         throw new DriverSocketException(
-            $"The server is answering on {string.Join(", ", strangers.Select(address => $"'{address}'"))} besides the socket. The driver answers on a Unix socket only and never binds a TCP port."
+            $"The server is answering on {string.Join(", ", strangers.Select(address => $"'{address}'"))} besides the socket. The driver answers the app on a Unix socket only and binds no TCP port for it."
         );
     }
 

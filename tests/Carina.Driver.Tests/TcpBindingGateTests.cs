@@ -166,7 +166,7 @@ public sealed class TcpBindingGateTests
         Assert.NotEmpty(findings);
         Assert.All(
             findings,
-            finding => Assert.Contains("never binds a TCP port", finding, StringComparison.Ordinal)
+            finding => Assert.Contains("binds no TCP port for it", finding, StringComparison.Ordinal)
         );
     }
 

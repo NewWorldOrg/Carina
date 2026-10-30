@@ -665,3 +665,65 @@ public sealed class UsbDevicePathTests
         Assert.Empty(host.OpenedPaths);
     }
 }
+
+public sealed class UsbDescramblingTests
+{
+    private static readonly DeviceSettings Tuner = new("usb1-1", DeviceKind.Terrestrial, "/dev/bus/usb/001/002");
+
+    private static ITunerDevice Open(IDescramblerFactory descramblers)
+    {
+        (FakeChip demodulator, FakeChip tuner) = UsbTestSupport.LockingChips();
+        FakeUsbHost host = new(UsbTestSupport.BridgeWith(demodulator, tuner));
+        (DevicePacing pacing, _, _) = UsbTestSupport.Pacing();
+        TunerDeviceFactory factory = TunerDeviceFactory.Using(
+            new DriverConfiguration(
+                OutputRoots: [new OutputRootSettings("primary", "/srv/recordings")],
+                Tuner: new TunerSettings(TunerBackend.Usb),
+                Devices: [Tuner]
+            ),
+            host,
+            pacing,
+            descramblers
+        );
+
+        return factory.Create(Tuner, new TuningRequest(TunerKind.Terrestrial, 22), null, HeadHold.EveryProgramme);
+    }
+
+    [Fact]
+    public void AUsbTunerIsReadThroughACardWhenThereIsOneToAsk()
+    {
+        CountingDescramblers descramblers = new(unscrambles: true);
+
+        using ITunerDevice device = Open(descramblers);
+
+        Assert.IsType<DescramblingTunerDevice>(device);
+        Assert.Equal(1, descramblers.Opened);
+    }
+
+    [Fact]
+    public void AUsbTunerIsReadAsItComesWhenThereIsNoCardToAsk()
+    {
+        CountingDescramblers descramblers = new(unscrambles: false);
+
+        using ITunerDevice device = Open(descramblers);
+
+        Assert.IsNotType<DescramblingTunerDevice>(device);
+        Assert.Equal(0, descramblers.Opened);
+    }
+
+    private sealed class CountingDescramblers(bool unscrambles) : IDescramblerFactory
+    {
+        public int Opened { get; private set; }
+
+        public bool Unscrambles => unscrambles;
+
+        public CardIdentity? CardInHand => null;
+
+        public IDescrambler? Open(HeadHold hold)
+        {
+            Opened++;
+
+            return new ScriptedDescrambler(stream => stream.ToArray());
+        }
+    }
+}
