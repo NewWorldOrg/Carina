@@ -1,3 +1,4 @@
+using Carina.Driver.CardLending;
 using Carina.Driver.Configuration;
 
 using Microsoft.Extensions.Logging;
@@ -28,16 +29,43 @@ public sealed class Descramblers : IDescramblerFactory
         return new Descramblers(openService, logger);
     }
 
-    public static IDescramblerFactory For(DriverConfiguration configuration, ILogger? logger)
+    /// <summary>
+    /// What a tuner of this driver is read through: a card borrowed from <paramref name="loan"/> where there is one,
+    /// otherwise the card in this machine's reader for a DVB tuner, and nothing for a synthetic one.
+    /// </summary>
+    public static IDescramblerFactory For(DriverConfiguration configuration, CardLoan? loan, ILogger? logger)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        if (configuration.Tuner?.Backend is not TunerBackend.Dvb)
+        TunerBackend backend = configuration.Tuner?.Backend ?? TunerBackend.Unspecified;
+        if (backend is not (TunerBackend.Dvb or TunerBackend.Usb))
         {
             return NoDescrambling.Instance;
         }
 
-        return Probe(logger);
+        if (loan is not null)
+        {
+            return BorrowedCards.From(loan, logger);
+        }
+
+        return backend is TunerBackend.Dvb ? Probe(logger) : NoDescrambling.Instance;
+    }
+
+    /// <summary>
+    /// Opens the card in this machine's reader each time it is called, for lending; where the smart-card service cannot
+    /// be loaded, every call says so.
+    /// </summary>
+    public static Func<IConditionalAccess> CardsToLend(ILogger? logger)
+    {
+        PcscLibrary? library = PcscLibrary.Load(out string whyNot);
+        if (library is null)
+        {
+            logger?.LogWarning("This driver has no card to lend: {Why}", whyNot);
+
+            return () => throw new DescramblingException(whyNot);
+        }
+
+        return () => OpenCard(library.Open, settled: null);
     }
 
     public static IDescramblerFactory Probe(ILogger? logger)
@@ -95,7 +123,10 @@ public sealed class Descramblers : IDescramblerFactory
         }
     }
 
-    private ConditionalAccessCard TheCard()
+    private ConditionalAccessCard TheCard() =>
+        OpenCard(openService, identity => Volatile.Write(ref cardInHand, identity));
+
+    private static ConditionalAccessCard OpenCard(Func<ISmartCardService> openService, Action<CardIdentity>? settled)
     {
         ISmartCardService service;
 
@@ -108,6 +139,6 @@ public sealed class Descramblers : IDescramblerFactory
             throw new DescramblingException(refused.Message);
         }
 
-        return ConditionalAccessCard.Open(service, identity => Volatile.Write(ref cardInHand, identity));
+        return ConditionalAccessCard.Open(service, settled);
     }
 }

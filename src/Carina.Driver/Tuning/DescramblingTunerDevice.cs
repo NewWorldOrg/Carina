@@ -24,6 +24,8 @@ public sealed class DescramblingTunerDevice : ITunerDevice
 
     private DateTimeOffset asksAgainAt;
 
+    private Task<IDescrambler?>? asking;
+
     private bool closed;
 
     public DescramblingTunerDevice(
@@ -57,6 +59,20 @@ public sealed class DescramblingTunerDevice : ITunerDevice
     public long Overflows => source.Overflows;
 
     public ISignalQualitySource? Quality => source.Quality;
+
+    /// <summary>
+    /// The card being asked for while the tuner is read as it comes, or a finished task when nothing is being asked.
+    /// </summary>
+    public Task AskedForTheCard
+    {
+        get
+        {
+            lock (gate)
+            {
+                return asking ?? Task.CompletedTask;
+            }
+        }
+    }
 
     public byte[] Read(int count, CancellationToken cancellationToken)
     {
@@ -94,6 +110,10 @@ public sealed class DescramblingTunerDevice : ITunerDevice
         }
     }
 
+    /// <summary>
+    /// The descrambler in hand, or null while there is none. Asking for one happens away from the read, so a card that
+    /// is slow to answer, or a lender across the network, never holds the tuner's bytes back.
+    /// </summary>
     private IDescrambler? TheCard()
     {
         lock (gate)
@@ -103,6 +123,27 @@ public sealed class DescramblingTunerDevice : ITunerDevice
                 return descrambler;
             }
 
+            if (asking is not null)
+            {
+                if (!asking.IsCompleted)
+                {
+                    return null;
+                }
+
+                IDescrambler? answered = asking.Result;
+                asking = null;
+
+                if (answered is not null)
+                {
+                    descrambler = answered;
+                    logger?.LogInformation(
+                        "A card answered the reader again, so what this tuner carries is unscrambled from here on."
+                    );
+
+                    return answered;
+                }
+            }
+
             DateTimeOffset now = time.GetUtcNow();
             if (now < asksAgainAt)
             {
@@ -110,20 +151,23 @@ public sealed class DescramblingTunerDevice : ITunerDevice
             }
 
             asksAgainAt = now + BetweenAsksForTheCard;
+            asking = Task.Run(Ask);
 
-            IDescrambler? answered = cards.Open(hold);
-            if (answered is null)
-            {
-                return null;
-            }
+            return null;
+        }
+    }
 
-            descrambler = answered;
+    private IDescrambler? Ask()
+    {
+        try
+        {
+            return cards!.Open(hold);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            logger?.LogWarning(error, "Asking for the card failed, so it is asked for again later.");
 
-            logger?.LogInformation(
-                "A card answered the reader again, so what this tuner carries is unscrambled from here on."
-            );
-
-            return answered;
+            return null;
         }
     }
 
@@ -173,13 +217,23 @@ public sealed class DescramblingTunerDevice : ITunerDevice
     public void Dispose()
     {
         IDescrambler? card;
+        Task<IDescrambler?>? unanswered;
 
         lock (gate)
         {
             closed = true;
             card = descrambler;
             descrambler = null;
+            unanswered = asking;
+            asking = null;
         }
+
+        unanswered?.ContinueWith(
+            static answered => answered.Result?.Dispose(),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default
+        );
 
         try
         {

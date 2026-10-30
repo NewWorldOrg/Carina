@@ -49,6 +49,38 @@ public sealed record DeviceSettings(
 
 public sealed record OutputRootSettings(string? Name, string? Path);
 
+public sealed record LendSettings(
+    string? Address,
+    int Port = CardLendingSettings.DefaultPort,
+    IReadOnlyList<string>? HostNames = null,
+    int HopLimit = CardLendingSettings.DefaultHopLimit,
+    int RoundTripMilliseconds = CardLendingSettings.DefaultRoundTripMilliseconds,
+    int Leases = CardLendingSettings.DefaultLeases,
+    string? KeyFile = null
+);
+
+public sealed record BorrowSettings(
+    string? Address,
+    int Port = CardLendingSettings.DefaultPort,
+    string? HostName = null,
+    int HopLimit = CardLendingSettings.DefaultHopLimit,
+    string? KeyFile = null
+);
+
+/// <summary>
+/// Lending this driver's card to other drivers in the household, or borrowing one; absent, the driver does neither.
+/// </summary>
+public sealed record CardLendingSettings(LendSettings? Lend = null, BorrowSettings? Borrow = null)
+{
+    public const int DefaultPort = 40772;
+
+    public const int DefaultHopLimit = 3;
+
+    public const int DefaultLeases = 4;
+
+    public const int DefaultRoundTripMilliseconds = 5;
+}
+
 public sealed record DriverConfiguration(
     string? SocketPath = DriverConfiguration.DefaultSocketPath,
     IReadOnlyList<OutputRootSettings>? OutputRoots = null,
@@ -57,7 +89,8 @@ public sealed record DriverConfiguration(
     IReadOnlyList<DeviceSettings>? Devices = null,
     int SocketGroupId = DriverConfiguration.DefaultSocketGroupId,
     int LiveSessionMinutes = DriverConfiguration.DefaultLiveSessionMinutes,
-    int WalkSessionMinutes = DriverConfiguration.DefaultWalkSessionMinutes
+    int WalkSessionMinutes = DriverConfiguration.DefaultWalkSessionMinutes,
+    CardLendingSettings? CardLending = null
 )
 {
     public const string SocketGroupName = "carina";

@@ -23,7 +23,7 @@ public sealed class TransportStreamDescrambler : IDescrambler
 
     private const int OddKey = 3;
 
-    private readonly ConditionalAccessCard card;
+    private readonly IConditionalAccess card;
 
     private readonly ILogger? logger;
 
@@ -52,7 +52,7 @@ public sealed class TransportStreamDescrambler : IDescrambler
     private bool disposed;
 
     public TransportStreamDescrambler(
-        ConditionalAccessCard card,
+        IConditionalAccess card,
         ILogger? logger = null,
         int holdLimit = LongestHold,
         HeadHold? hold = null

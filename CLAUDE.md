@@ -23,7 +23,8 @@ operation. This file is for changing it, and does not repeat what is there.
   entry point, never by the app on startup.
 - The driver reaches the tuner through the Linux DVB API with P/Invoke and the
   card reader through `libpcsclite`, loaded at run time, and answers the app over
-  HTTP/1.1 on a Unix domain socket. It binds no TCP port.
+  HTTP/1.1 on a Unix domain socket. It binds no TCP port for the app; the one
+  TCP port it can open is card lending's, and only when the configuration asks.
 - Build settings are central in `Directory.Build.props`, package versions in
   `Directory.Packages.props`. Neither is repeated per project.
 
@@ -138,10 +139,33 @@ walks past it.
 - **The version is declared once, in `Directory.Build.props`.** Every assembly
   carries it, the application answers with what it was built as, and a test holds
   the two together.
-- **The driver asks nobody who they are.** The gate is the socket's permissions
-  and owning group; authentication would mean putting a secret in the privileged
-  process. The driver holds no secrets, and the entrypoint strips database
-  settings out of the driver role rather than trusting it to ignore them.
+- **The driver asks nobody on its socket who they are.** The gate is the socket's
+  permissions and owning group; authentication would mean putting a secret in the
+  privileged process. The only secret the driver may hold is the card-lending key,
+  read from a file only its owner and group may read, and only when
+  `cardLending` is configured; the entrypoint strips database settings out of the
+  driver role rather than trusting it to ignore them.
+- **The card is lent only inside the household, and only as keys.** A driver that
+  lends opens a port of its own, served by a server apart from the one on the
+  socket, carrying the three lending requests and nothing else. It closes a
+  connection from outside loopback, RFC 1918, ULA and link-local before reading
+  it (the carriers' shared range is outside), does not answer a host it is not
+  named, a request bearing a proxy's forwarding headers or a browser's `Origin`,
+  and sends with a small TTL set on the listening socket so the handshake is
+  limited too. Before lending it times three round trips with the borrower, each
+  answered with a proof keyed to the transcript and to which round trip it is,
+  and refuses when the quickest exceeds a cap that is always on (5 ms by default,
+  30 at most): a relay inside the house can hide where a borrower is, but without
+  the key it cannot answer for it, and it cannot make the path to the key shorter.
+  Connections that have not borrowed get seats of their own, few in all and fewer
+  per address (an IPv6 /64 counting as one); a newcomer to a full address or a
+  full door closes the one there that has waited longest, never one that has
+  answered with the key, and each is closed two seconds after it opens unless it
+  has borrowed, so nothing without the key can crowd out the leases. A lease is a
+  challenge answered with a proof derived from the key,
+  both nonces and the host, bound to one connection and given back when it
+  closes; answers go back sealed with AES-GCM under a key derived per lease. No
+  card command crosses the network, and no ECM or key reaches a log.
 - **No endpoint exempts itself from the default denial,** and no production
   source reads an identity handed to it by an edge. Authentication is decided by
   the session the request carries, not by a header a proxy could be talked into

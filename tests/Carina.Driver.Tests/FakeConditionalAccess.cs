@@ -175,3 +175,17 @@ internal sealed class FakeSmartCardService : ISmartCardService
 
     public void Dispose() => Disposed = true;
 }
+
+internal sealed class CardsOnHand(Action<FakeCardConnection>? shape = null)
+{
+    public List<FakeCardConnection> Connections { get; } = [];
+
+    public IConditionalAccess Open()
+    {
+        FakeSmartCardService service = FakeSmartCardService.WithOneCard(out FakeCardConnection card);
+        shape?.Invoke(card);
+        Connections.Add(card);
+
+        return ConditionalAccessCard.Open(service);
+    }
+}

@@ -137,6 +137,8 @@ public static class DriverConfigurationReader
             );
         }
 
+        problems.AddRange(CardLendingRules.FilesystemProblems(configuration.CardLending));
+
         return problems.Count is 0
             ? DriverConfigurationResult.Usable(configuration)
             : DriverConfigurationResult.Unusable(problems);
@@ -224,6 +226,7 @@ public static class DriverConfigurationReader
         "walkSessionMinutes",
         "tuner",
         "devices",
+        CardLendingRules.Section,
     ];
 
     private static readonly string[] KnownTunerKeys =
@@ -285,6 +288,7 @@ public static class DriverConfigurationReader
         }
 
         CheckArrayKeys(document.RootElement, "devices", KnownDeviceKeys, problems);
+        CardLendingRules.FindUnknownKeys(document.RootElement, problems);
         CheckArrayKeys(document.RootElement, "outputRoots", KnownOutputRootKeys, problems);
 
         return problems;
@@ -394,6 +398,8 @@ public static class DriverConfigurationReader
         problems.AddRange(TunerProblems(configuration.Tuner));
 
         problems.AddRange(DeviceProblems(configuration.Devices, backend));
+
+        problems.AddRange(CardLendingRules.Problems(configuration.CardLending));
 
         return problems;
     }
