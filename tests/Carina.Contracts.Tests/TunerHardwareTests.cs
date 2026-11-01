@@ -83,7 +83,7 @@ public sealed class TunerHardwareTests
     public void TheHardwareKeepsExactlyTheseFields()
     {
         Assert.Equal(
-            """{"name":null,"kernelDriver":null,"bus":"usb","devicePath":null,"usbPort":"1-2"}""",
+            """{"name":null,"kernelDriver":null,"bus":"usb","devicePath":null,"usbPort":"1-2","present":null,"lastSeenAt":null}""",
             DriverJson.Serialize(new TunerHardwareDto { Bus = TunerBus.Usb, UsbPort = "1-2" })
         );
     }
