@@ -113,13 +113,34 @@ public static class SessionViews
                         : null,
                     CurrentSession = Held(snapshot, busy, deviceId),
                     Health = HealthOf(device, deviceId, manager, snapshot.State),
-                    Hardware = hardware?.For(device),
+                    Hardware = Seen(hardware?.For(device), busy, deviceId),
                 }
             );
         }
 
         return snapshots;
     }
+
+    private static TunerHardwareDto? Seen(
+        TunerHardwareDto? hardware,
+        Dictionary<string, TunerSession> busy,
+        string deviceId
+    )
+    {
+        if (hardware is null || !busy.TryGetValue(deviceId, out TunerSession? session))
+        {
+            return hardware;
+        }
+
+        return hardware with
+        {
+            Present = true,
+            LastSeenAt = Later(hardware.LastSeenAt, session.Quality?.MeasuredAt),
+        };
+    }
+
+    private static DateTimeOffset? Later(DateTimeOffset? one, DateTimeOffset? other) =>
+        one is null || other > one ? other ?? one : one;
 
     private static CurrentSessionDto? Held(
         TunerSnapshot snapshot,

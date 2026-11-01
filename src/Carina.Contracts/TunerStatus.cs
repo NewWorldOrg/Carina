@@ -89,6 +89,16 @@ public sealed record TunerHardwareDto
     public string? DevicePath { get; init; }
 
     public string? UsbPort { get; init; }
+
+    /// <summary>
+    /// Whether the device was in its place when the driver last looked, or <see langword="null"/> before it has looked.
+    /// </summary>
+    public bool? Present { get; init; }
+
+    /// <summary>
+    /// When the driver last found the device in its place: detected, read from, or looked for while idle.
+    /// </summary>
+    public DateTimeOffset? LastSeenAt { get; init; }
 }
 
 public sealed record TunerHealthDto

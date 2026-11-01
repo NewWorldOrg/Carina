@@ -156,7 +156,7 @@ public sealed class TunerHardwareBookTests
     [Fact]
     public void ANameReadOnceIsKeptWhenTheFrontendIsLaterHeldByAnotherProcess()
     {
-        var book = new TunerHardwareBook(Dvb);
+        var book = new TunerHardwareBook(Dvb, TimeProvider.System);
 
         book.Remember([Found("Example ISDB-T frontend", DeviceDetection.Detected)]);
         book.Remember([Found(null, DeviceDetection.Busy)]);
@@ -167,7 +167,7 @@ public sealed class TunerHardwareBookTests
     [Fact]
     public void ATunerNeverDetectedIsDescribedFromTheConfiguration()
     {
-        TunerHardwareDto hardware = new TunerHardwareBook(Dvb).For(Dvb.Devices![0]);
+        TunerHardwareDto hardware = new TunerHardwareBook(Dvb, TimeProvider.System).For(Dvb.Devices![0]);
 
         Assert.Null(hardware.Name);
         Assert.Equal("/dev/dvb/adapter0/frontend0", hardware.DevicePath);

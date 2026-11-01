@@ -163,7 +163,9 @@ public static class DriverHost
             provider.GetRequiredService<TunerDeviceFactory>()
         );
         builder.Services.AddSingleton(_ => TunerDetectors.For(configuration));
-        builder.Services.AddSingleton(_ => new TunerHardwareBook(configuration));
+        builder.Services.AddSingleton(provider =>
+            new TunerHardwareBook(configuration, provider.GetRequiredService<TimeProvider>())
+        );
         builder.Services.AddSingleton(_ => new TunerLedgerStore(configuration, configurationPath));
         builder.Services.AddSingleton<IRecordingWriterFactory, RecordingWriterFactory>();
         builder.Services.AddSingleton<DriverEventHub>();
@@ -193,6 +195,19 @@ public static class DriverHost
             provider.GetRequiredService<TunerSessionManager>()
         );
         builder.Services.AddHostedService<TunerLedgerReconciler>();
+        builder.Services.AddHostedService(provider =>
+        {
+            TunerSessionManager manager = provider.GetRequiredService<TunerSessionManager>();
+
+            return new TunerPatrol(
+                configuration,
+                provider.GetRequiredService<TunerHardwareBook>(),
+                TunerPresences.For(configuration),
+                () => manager.Sessions.Select(session => session.DeviceId),
+                provider.GetRequiredService<TimeProvider>(),
+                provider.GetRequiredService<ILogger<TunerPatrol>>()
+            );
+        });
         builder.Services.AddHostedService<SocketPermissionGuard>();
 
         reshapeServices?.Invoke(builder.Services);
