@@ -67,7 +67,8 @@ public static class SessionViews
 
     public static IReadOnlyList<TunerSnapshot> Tuners(
         DriverConfiguration configuration,
-        TunerSessionManager manager
+        TunerSessionManager manager,
+        TunerHardwareBook? hardware = null
     )
     {
         var busy = new Dictionary<string, TunerSession>(StringComparer.Ordinal);
@@ -112,6 +113,7 @@ public static class SessionViews
                         : null,
                     CurrentSession = Held(snapshot, busy, deviceId),
                     Health = HealthOf(device, deviceId, manager, snapshot.State),
+                    Hardware = hardware?.For(device),
                 }
             );
         }

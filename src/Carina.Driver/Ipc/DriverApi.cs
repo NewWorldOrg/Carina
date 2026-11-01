@@ -28,6 +28,7 @@ public static class DriverApi
         DriverEventHub hub = app.Services.GetRequiredService<DriverEventHub>();
         DiagnosticsStore diagnosticsStore = app.Services.GetRequiredService<DiagnosticsStore>();
         ITunerDetector detector = app.Services.GetRequiredService<ITunerDetector>();
+        TunerHardwareBook hardware = app.Services.GetRequiredService<TunerHardwareBook>();
 
         RequestDelegate health = context =>
             Write(
@@ -41,17 +42,22 @@ public static class DriverApi
             Write(
                 context,
                 StatusCodes.Status200OK,
-                SessionViews.Tuners(configuration, manager),
+                SessionViews.Tuners(configuration, manager, hardware),
                 DriverJson.Context.IReadOnlyListTunerSnapshot
             );
 
         RequestDelegate detected = context =>
-            Write(
+        {
+            IReadOnlyList<TunerDetection> found = detector.Detect();
+            hardware.Remember(found);
+
+            return Write(
                 context,
                 StatusCodes.Status200OK,
-                DeviceViews.Detected(detector.Detect()),
+                DeviceViews.Detected(found, hardware),
                 DriverJson.Context.IReadOnlyListDetectedDeviceDto
             );
+        };
 
         TunerLedgerStore ledger = app.Services.GetRequiredService<TunerLedgerStore>();
 
@@ -66,7 +72,7 @@ public static class DriverApi
         RequestDelegate saveLedger = context => SaveLedgerAsync(context, ledger, detector);
 
         RequestDelegate toggleTuner = context =>
-            ToggleTunerAsync(context, configuration, manager);
+            ToggleTunerAsync(context, configuration, manager, hardware);
 
         RequestDelegate switchLnbPower = context => SwitchLnbPowerAsync(context, ledger);
 
@@ -415,7 +421,8 @@ public static class DriverApi
     private static async Task ToggleTunerAsync(
         HttpContext context,
         DriverConfiguration configuration,
-        TunerSessionManager manager
+        TunerSessionManager manager,
+        TunerHardwareBook hardware
     )
     {
         string deviceId = context.Request.RouteValues["id"] as string ?? string.Empty;
@@ -479,7 +486,7 @@ public static class DriverApi
             return;
         }
 
-        IReadOnlyList<TunerSnapshot> tuners = SessionViews.Tuners(configuration, manager);
+        IReadOnlyList<TunerSnapshot> tuners = SessionViews.Tuners(configuration, manager, hardware);
 
         await Write(
             context,

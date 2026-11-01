@@ -10,8 +10,14 @@ public sealed record TunerDetection(
     IReadOnlyList<DeviceKind> Receives,
     DeviceDetection Detection,
     string? Detail,
-    string? DevicePath = null
+    string? DevicePath = null,
+    DeviceHardware? Hardware = null
 );
+
+/// <param name="Name">The name the hardware gives itself, or <see langword="null"/> when it could not be asked.</param>
+/// <param name="KernelDriver">The kernel driver the device is bound to, when one is.</param>
+/// <param name="UsbPort">Where a USB device hangs on the bus.</param>
+public sealed record DeviceHardware(string? Name, string? KernelDriver, TunerBus Bus, string? UsbPort);
 
 public interface ITunerDetector
 {
@@ -39,7 +45,8 @@ public sealed class FakeTunerDetector(DriverConfiguration configuration) : ITune
             receives.Count is 0
                 ? "The configuration does not say what this synthetic tuner receives."
                 : null,
-            device.DevicePath
+            device.DevicePath,
+            new DeviceHardware(null, null, TunerBus.Synthetic, null)
         );
     }
 }

@@ -4,22 +4,26 @@ public sealed class DvbTunerDetector : ITunerDetector
 {
     private readonly Lazy<IDvbSystemCalls> calls;
     private readonly string root;
+    private readonly DvbSysfs? sysfs;
 
     public DvbTunerDetector()
         : this(
             new Lazy<IDvbSystemCalls>(() => new LinuxDvbSystemCalls()),
-            DvbDevicePaths.DeviceRoot
+            DvbDevicePaths.DeviceRoot,
+            new DvbSysfs(DvbSysfs.ClassRoot)
         )
     { }
 
-    private DvbTunerDetector(Lazy<IDvbSystemCalls> calls, string root)
+    private DvbTunerDetector(Lazy<IDvbSystemCalls> calls, string root, DvbSysfs? sysfs)
     {
         this.calls = calls;
         this.root = root;
+        this.sysfs = sysfs;
     }
 
-    public static DvbTunerDetector Using(IDvbSystemCalls calls, string root) =>
-        new(new Lazy<IDvbSystemCalls>(() => calls), root);
+    /// <param name="sysfsRoot">Where the kernel files its DVB devices, or <see langword="null"/> to read nothing there.</param>
+    public static DvbTunerDetector Using(IDvbSystemCalls calls, string root, string? sysfsRoot = null) =>
+        new(new Lazy<IDvbSystemCalls>(() => calls), root, sysfsRoot is null ? null : new DvbSysfs(sysfsRoot));
 
     public IReadOnlyList<TunerDetection> Detect()
     {
@@ -33,16 +37,23 @@ public sealed class DvbTunerDetector : ITunerDetector
         return [.. new DvbDeviceProbe(calls.Value).Inspect(frontends).Select(Describe)];
     }
 
-    private static TunerDetection Describe(DetectedTuner tuner)
+    private TunerDetection Describe(DetectedTuner tuner)
     {
         string deviceId = DeviceIdFor(tuner.FrontendPath);
+        DvbSysfsEntry filed = sysfs?.Read(tuner.FrontendPath) ?? DvbSysfsEntry.Unfiled;
 
         return new TunerDetection(
             deviceId,
             tuner.Receives,
             tuner.Detection,
             tuner.Problem?.Replace(tuner.FrontendPath, deviceId, StringComparison.Ordinal),
-            tuner.FrontendPath
+            tuner.FrontendPath,
+            new DeviceHardware(
+                string.IsNullOrWhiteSpace(tuner.Name) ? null : tuner.Name,
+                filed.KernelDriver,
+                filed.Bus,
+                null
+            )
         );
     }
 
