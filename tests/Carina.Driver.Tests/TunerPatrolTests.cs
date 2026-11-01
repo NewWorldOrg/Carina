@@ -171,6 +171,20 @@ public sealed class TunerPatrolTests
     }
 
     [Fact]
+    public void ATunerThatCannotBeLookedForDoesNotStopThePatrolOrTheDriver()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var book = new TunerHardwareBook(Configuration, clock);
+        var presence = new ScriptedPresence();
+        presence.Throwing.Add("adapter0.frontend0");
+
+        Patrol(book, presence, clock, busy: []).Walk();
+
+        Assert.Null(book.For(Configuration.Devices![0]).Present);
+        Assert.True(book.For(Configuration.Devices![1]).Present);
+    }
+
+    [Fact]
     public void ThePatrolGoesRoundOnceAMinute()
     {
         Assert.Equal(TimeSpan.FromSeconds(60), TunerPatrol.Interval);
@@ -190,9 +204,16 @@ public sealed class TunerPatrolTests
 
         public List<string> Asked { get; } = [];
 
+        public HashSet<string> Throwing { get; } = new(StringComparer.Ordinal);
+
         public bool IsPresent(DeviceSettings device, TunerHardwareDto hardware)
         {
             Asked.Add(device.Id!);
+
+            if (Throwing.Contains(device.Id!))
+            {
+                throw new ArgumentException("synthetic: a path that cannot be built");
+            }
 
             return !Missing.Contains(device.Id!);
         }
