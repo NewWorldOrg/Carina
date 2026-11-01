@@ -44,6 +44,8 @@ public static class DriverCapabilities
 
     public const string DeviceHardware = "deviceHardware";
 
+    public const string CardReaderStatus = "cardReaderStatus";
+
     public const string SignalQualityMetricPrefix = "signalQuality.";
 
     public const string SessionPurposePrefix = "sessionPurpose.";

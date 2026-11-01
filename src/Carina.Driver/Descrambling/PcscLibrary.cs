@@ -12,6 +12,27 @@ internal struct PcscIoRequest
 }
 
 /// <summary>
+/// pcsc-lite's SCARD_READERSTATE. The answer to reset the service copies in is never read.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct PcscReaderState
+{
+    public const int AnswerToResetCapacity = 33;
+
+    public byte* Reader;
+
+    public void* UserData;
+
+    public nuint CurrentState;
+
+    public nuint EventState;
+
+    public nuint AnswerToResetLength;
+
+    public fixed byte AnswerToReset[AnswerToResetCapacity];
+}
+
+/// <summary>
 /// The PC/SC functions of pcsc-lite, where a DWORD and a LONG are as wide as a pointer.
 /// </summary>
 public sealed unsafe class PcscLibrary
@@ -28,6 +49,14 @@ public sealed unsafe class PcscLibrary
 
     private const int AnswerCapacity = 258;
 
+    private const nuint StateUnaware = 0x0000;
+
+    private const nuint StateEmpty = 0x0010;
+
+    private const nuint StatePresent = 0x0020;
+
+    private const nuint StateMute = 0x0200;
+
     private readonly delegate* unmanaged<nuint, void*, void*, nint*, nint> establishContext;
 
     private readonly delegate* unmanaged<nint, nint> releaseContext;
@@ -42,6 +71,8 @@ public sealed unsafe class PcscLibrary
 
     private readonly delegate* unmanaged<nint, PcscIoRequest*, byte*, nuint, PcscIoRequest*, byte*, nuint*, nint> transmit;
 
+    private readonly delegate* unmanaged<nint, nuint, PcscReaderState*, nuint, nint> getStatusChange;
+
     private PcscLibrary(IReadOnlyDictionary<string, nint> exports)
     {
         establishContext = (delegate* unmanaged<nuint, void*, void*, nint*, nint>)exports["SCardEstablishContext"];
@@ -51,6 +82,7 @@ public sealed unsafe class PcscLibrary
         reconnect = (delegate* unmanaged<nint, nuint, nuint, nuint, nuint*, nint>)exports["SCardReconnect"];
         disconnect = (delegate* unmanaged<nint, nuint, nint>)exports["SCardDisconnect"];
         transmit = (delegate* unmanaged<nint, PcscIoRequest*, byte*, nuint, PcscIoRequest*, byte*, nuint*, nint>)exports["SCardTransmit"];
+        getStatusChange = (delegate* unmanaged<nint, nuint, PcscReaderState*, nuint, nint>)exports["SCardGetStatusChange"];
     }
 
     private static readonly string[] EntryPoints =
@@ -62,6 +94,7 @@ public sealed unsafe class PcscLibrary
         "SCardReconnect",
         "SCardDisconnect",
         "SCardTransmit",
+        "SCardGetStatusChange",
     ];
 
     public static PcscLibrary? Load(out string whyNot)
@@ -122,6 +155,24 @@ public sealed unsafe class PcscLibrary
         return names;
     }
 
+    /// <summary>
+    /// Reads a slot from the event state the service answers with: a mute card is there but would not answer reset.
+    /// </summary>
+    public static CardSlot SlotOf(nuint eventState)
+    {
+        if ((eventState & StateMute) is not 0)
+        {
+            return CardSlot.Mute;
+        }
+
+        if ((eventState & StatePresent) is not 0)
+        {
+            return CardSlot.Present;
+        }
+
+        return (eventState & StateEmpty) is not 0 ? CardSlot.Empty : CardSlot.Unknown;
+    }
+
     private static void Insist(nint result, string what)
     {
         uint code = (uint)result;
@@ -162,6 +213,47 @@ public sealed unsafe class PcscLibrary
             }
 
             return ReaderNames(list.AsSpan(0, Math.Min(list.Length, (int)length)));
+        }
+
+        public IReadOnlyList<CardSlot> Slots(IReadOnlyList<string> readers)
+        {
+            ArgumentNullException.ThrowIfNull(readers);
+
+            if (readers.Count is 0)
+            {
+                return [];
+            }
+
+            byte[][] names = [.. readers.Select(reader => (byte[])[.. Encoding.UTF8.GetBytes(reader), 0])];
+            PcscReaderState[] states = new PcscReaderState[readers.Count];
+            GCHandle[] pinned = [.. names.Select(name => GCHandle.Alloc(name, GCHandleType.Pinned))];
+
+            try
+            {
+                for (int index = 0; index < states.Length; index++)
+                {
+                    states[index].Reader = (byte*)pinned[index].AddrOfPinnedObject();
+                    states[index].CurrentState = StateUnaware;
+                }
+
+                fixed (PcscReaderState* asked = states)
+                {
+                    uint code = (uint)library.getStatusChange(Alive(), 0, asked, (nuint)states.Length);
+                    if (code is not SmartCardCodes.Timeout)
+                    {
+                        Insist((nint)code, "reading what the readers hold");
+                    }
+                }
+            }
+            finally
+            {
+                foreach (GCHandle handle in pinned)
+                {
+                    handle.Free();
+                }
+            }
+
+            return [.. states.Select(state => SlotOf(state.EventState))];
         }
 
         public ISmartCardConnection Connect(string reader)

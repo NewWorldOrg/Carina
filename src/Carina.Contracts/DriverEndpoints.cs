@@ -30,6 +30,8 @@ public static class DriverEndpoints
 
     public const string ConditionalAccessCard = "/conditional-access-card";
 
+    public const string CardReader = "/card-reader";
+
     public const string SubscriberQuery = "as";
 
     public const string OutputRootQuery = "root";
@@ -83,5 +85,6 @@ public static class DriverEndpoints
         Recordings,
         StrayFiles,
         ConditionalAccessCard,
+        CardReader,
     ];
 }

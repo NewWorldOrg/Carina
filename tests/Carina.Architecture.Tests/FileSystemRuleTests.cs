@@ -31,6 +31,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Configuration/AtomicFile.cs newFileStream",
         "/Carina.Driver/Configuration/DriverConfigurationReader.cs File.Create",
         "/Carina.Driver/Configuration/DriverConfigurationReader.cs File.Delete",
+        "/Carina.Driver/Descrambling/CardReaders.cs .Replace(",
         "/Carina.Driver/Descrambling/PcscLibrary.cs NativeLibrary",
         "/Carina.Driver/Descrambling/SectionCollector.cs .CopyTo(",
         "/Carina.Driver/Descrambling/TransportStreamDescrambler.cs .CopyTo(",

@@ -278,6 +278,82 @@ public sealed class TunerBusConverter : TolerantEnumConverter<TunerBus>
         };
 }
 
+public sealed class CardReaderUseConverter : TolerantEnumConverter<CardReaderUse>
+{
+    protected override string NameOf(CardReaderUse value) =>
+        value switch
+        {
+            CardReaderUse.Local => "local",
+            CardReaderUse.Borrowed => "borrowed",
+            CardReaderUse.None => "none",
+            _ => "unspecified",
+        };
+
+    protected override CardReaderUse? ValueOf(string name) =>
+        name switch
+        {
+            "local" => CardReaderUse.Local,
+            "borrowed" => CardReaderUse.Borrowed,
+            "none" => CardReaderUse.None,
+            "unspecified" => CardReaderUse.Unspecified,
+            _ => null,
+        };
+}
+
+public sealed class CardStateConverter : TolerantEnumConverter<CardState>
+{
+    protected override string NameOf(CardState value) =>
+        value switch
+        {
+            CardState.Inserted => "inserted",
+            CardState.Empty => "empty",
+            CardState.Unresponsive => "unresponsive",
+            CardState.Borrowed => "borrowed",
+            CardState.NoReader => "noReader",
+            CardState.NotUsed => "notUsed",
+            _ => "unspecified",
+        };
+
+    protected override CardState? ValueOf(string name) =>
+        name switch
+        {
+            "inserted" => CardState.Inserted,
+            "empty" => CardState.Empty,
+            "unresponsive" => CardState.Unresponsive,
+            "borrowed" => CardState.Borrowed,
+            "noReader" => CardState.NoReader,
+            "notUsed" => CardState.NotUsed,
+            "unspecified" => CardState.Unspecified,
+            _ => null,
+        };
+}
+
+public sealed class CardProblemConverter : TolerantEnumConverter<CardProblem>
+{
+    protected override string NameOf(CardProblem value) =>
+        value switch
+        {
+            CardProblem.ServiceDown => "serviceDown",
+            CardProblem.LibraryMissing => "libraryMissing",
+            CardProblem.CardSilent => "cardSilent",
+            CardProblem.LenderUnreachable => "lenderUnreachable",
+            CardProblem.LenderRefused => "lenderRefused",
+            _ => "unspecified",
+        };
+
+    protected override CardProblem? ValueOf(string name) =>
+        name switch
+        {
+            "serviceDown" => CardProblem.ServiceDown,
+            "libraryMissing" => CardProblem.LibraryMissing,
+            "cardSilent" => CardProblem.CardSilent,
+            "lenderUnreachable" => CardProblem.LenderUnreachable,
+            "lenderRefused" => CardProblem.LenderRefused,
+            "unspecified" => CardProblem.Unspecified,
+            _ => null,
+        };
+}
+
 public sealed class SessionStateConverter : TolerantEnumConverter<SessionState>
 {
     protected override string NameOf(SessionState value) =>

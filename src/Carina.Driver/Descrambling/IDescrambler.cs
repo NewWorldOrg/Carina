@@ -1,6 +1,24 @@
 namespace Carina.Driver.Descrambling;
 
-public sealed class DescramblingException(string message) : IOException(message);
+/// <summary>
+/// Which way a card failed to answer, where the failure says.
+/// </summary>
+public enum DescramblingFailure
+{
+    Unspecified = 0,
+
+    CardSilent = 1,
+
+    LenderUnreachable = 2,
+
+    LenderRefused = 3,
+}
+
+public sealed class DescramblingException(string message, DescramblingFailure failure = DescramblingFailure.Unspecified)
+    : IOException(message)
+{
+    public DescramblingFailure Failure { get; } = failure;
+}
 
 public interface IDescrambler : IDisposable
 {

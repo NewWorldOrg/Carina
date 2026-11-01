@@ -126,7 +126,8 @@ public static class DriverHost
             Descramblers.For(
                 provider.GetRequiredService<DriverConfiguration>(),
                 loan,
-                provider.GetRequiredService<ILogger<Descramblers>>()
+                provider.GetRequiredService<ILogger<Descramblers>>(),
+                provider.GetRequiredService<TimeProvider>()
             )
         );
 

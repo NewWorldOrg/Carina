@@ -140,6 +140,8 @@ internal sealed class FakeSmartCardService : ISmartCardService
 
     public uint? ListingFailure { get; set; }
 
+    public Dictionary<string, CardSlot> Slots { get; } = [];
+
     public static FakeSmartCardService WithOneCard(out FakeCardConnection card)
     {
         FakeSmartCardService service = new();
@@ -152,6 +154,7 @@ internal sealed class FakeSmartCardService : ISmartCardService
     {
         FakeCardConnection card = new();
         order.Add(reader);
+        Slots[reader] = CardSlot.Present;
         readers[reader] = () =>
         {
             Connections.Add(card);
@@ -165,11 +168,15 @@ internal sealed class FakeSmartCardService : ISmartCardService
     public void Refusing(string reader, uint code)
     {
         order.Add(reader);
+        Slots[reader] = code is SmartCardCodes.NoSmartCard ? CardSlot.Empty : CardSlot.Present;
         readers[reader] = () => throw new SmartCardException("synthetic refusal", code);
     }
 
     public IReadOnlyList<string> Readers() =>
         ListingFailure is uint failure ? throw new SmartCardException("synthetic failure", failure) : order;
+
+    IReadOnlyList<CardSlot> ISmartCardService.Slots(IReadOnlyList<string> asked) =>
+        [.. asked.Select(reader => Slots.GetValueOrDefault(reader, CardSlot.Unknown))];
 
     public ISmartCardConnection Connect(string reader) => readers[reader]();
 
