@@ -302,3 +302,17 @@ public sealed class CardReaderApiTests
         Assert.Contains(DriverCapabilities.CardReaderStatus, DriverGreeting.Capabilities);
     }
 }
+
+public sealed class ReaderSlotTests
+{
+    [Theory]
+    [InlineData(0x0010u, CardSlot.Empty)]
+    [InlineData(0x0022u, CardSlot.Present)]
+    [InlineData(0x0122u, CardSlot.Present)]
+    [InlineData(0x0222u, CardSlot.Mute)]
+    [InlineData(0x0008u, CardSlot.Unknown)]
+    public void TheSlotIsReadFromTheEventStateTheServiceAnswersWith(uint eventState, CardSlot slot)
+    {
+        Assert.Equal(slot, PcscLibrary.SlotOf(eventState));
+    }
+}
