@@ -5,6 +5,8 @@ using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Api.Services;
 
 public sealed class TunerLedgerService(
@@ -12,7 +14,8 @@ public sealed class TunerLedgerService(
     ICandidateChannelRepository candidates,
     IRecalculationNotice notices,
     IRecordingTitles titles,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<TunerLedgerService> logger)
 {
     public const string CapabilityMissingTitle = "capabilityMissing";
 
@@ -163,9 +166,23 @@ public sealed class TunerLedgerService(
     {
         bool recording = snapshots.Any(tuner => tuner.CurrentSession?.Purpose is SessionPurpose.Recording);
 
-        return recording
-            ? await titles.TitlesAsync(cancellationToken)
-            : new Dictionary<SessionId, string>();
+        if (!recording)
+        {
+            return new Dictionary<SessionId, string>();
+        }
+
+        try
+        {
+            return await titles.TitlesAsync(cancellationToken);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                error,
+                "The recordings being written could not be read, so the tuners are answered without their programme names");
+
+            return new Dictionary<SessionId, string>();
+        }
     }
 
     private static DetectedTunersView Compare(

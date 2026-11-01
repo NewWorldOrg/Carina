@@ -100,6 +100,29 @@ public sealed class HardwareInfoEndpointTests
     }
 
     [Fact]
+    public async Task TheTunersAreStillAnsweredWhenTheRecordingsCannotBeRead()
+    {
+        SessionId session = SessionId.Parse("rec-0123456789abcdef0123456789abcdef");
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), driver =>
+        {
+            Stocked(driver);
+            driver.Tuners =
+            [
+                new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Busy, session)
+                {
+                    CurrentSession = new CurrentSessionDto { SessionId = session, Purpose = SessionPurpose.Recording },
+                },
+            ];
+        });
+        feature.Titles.Failure = new InvalidOperationException("synthetic: the database went away");
+
+        JsonElement tuner = await ObservedAsync(feature, "adapter0");
+
+        Assert.Equal(JsonValueKind.Null, tuner.GetProperty("sessionTitle").ValueKind);
+        Assert.Equal("recording", tuner.GetProperty("sessionPurpose").GetString());
+    }
+
+    [Fact]
     public async Task NoRecordingIsLookedUpWhileNoTunerRecords()
     {
         await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
