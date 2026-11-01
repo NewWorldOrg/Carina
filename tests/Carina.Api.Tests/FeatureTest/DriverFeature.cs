@@ -4,6 +4,7 @@ using System.Text.Json;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Driver;
 using Carina.TestSupport;
@@ -43,6 +44,7 @@ internal sealed class DriverFeature : IAsyncDisposable
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
                 services.AddSingleton<IServiceReachSettingsRepository>(ReachSettings);
                 services.AddSingleton<IRecalculationNotice>(Notices);
+                services.AddSingleton<IRecordingTitles>(Titles);
             }))
             .CreateAuthenticatedClient();
     }
@@ -56,6 +58,8 @@ internal sealed class DriverFeature : IAsyncDisposable
     public HeldReachSettings ReachSettings { get; } = new();
 
     public CountedNotices Notices { get; } = new();
+
+    public HeldRecordingTitles Titles { get; } = new();
 
     public FakeDriver Driver => driver
         ?? throw new InvalidOperationException("No driver double is running.");

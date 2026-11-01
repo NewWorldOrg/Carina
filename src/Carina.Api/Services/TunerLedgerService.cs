@@ -2,6 +2,7 @@ using Carina.Api.Common;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
 namespace Carina.Api.Services;
@@ -10,6 +11,7 @@ public sealed class TunerLedgerService(
     IDriverClient driver,
     ICandidateChannelRepository candidates,
     IRecalculationNotice notices,
+    IRecordingTitles titles,
     TimeProvider clock)
 {
     public const string CapabilityMissingTitle = "capabilityMissing";
@@ -31,7 +33,7 @@ public sealed class TunerLedgerService(
         DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
         return ServiceResult<TunerLedgerView, TunerLedgerFailure>.Success(
-            Merge(document, tuners));
+            await MergeAsync(document, tuners, cancellationToken));
     }
 
     public async Task<ServiceResult<DetectedTunersView, TunerLedgerFailure>> DetectAsync(
@@ -94,7 +96,8 @@ public sealed class TunerLedgerService(
 
         DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
-        return ServiceResult<TunerLedgerView, TunerLedgerFailure>.Success(Merge(document, tuners));
+        return ServiceResult<TunerLedgerView, TunerLedgerFailure>.Success(
+            await MergeAsync(document, tuners, cancellationToken));
     }
 
     /// <summary>
@@ -115,7 +118,8 @@ public sealed class TunerLedgerService(
 
         DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
-        return ServiceResult<TunerLedgerView, TunerLedgerFailure>.Success(Merge(document, tuners));
+        return ServiceResult<TunerLedgerView, TunerLedgerFailure>.Success(
+            await MergeAsync(document, tuners, cancellationToken));
     }
 
     public async Task<ServiceResult<TunerSnapshot, TunerLedgerFailure>> ToggleAsync(
@@ -135,10 +139,13 @@ public sealed class TunerLedgerService(
         return ServiceResult<TunerSnapshot, TunerLedgerFailure>.Success(snapshot);
     }
 
-    private TunerLedgerView Merge(TunerLedgerDto document, DriverCall<IReadOnlyList<TunerSnapshot>> tuners)
+    private async Task<TunerLedgerView> MergeAsync(
+        TunerLedgerDto document,
+        DriverCall<IReadOnlyList<TunerSnapshot>> tuners,
+        CancellationToken cancellationToken)
     {
         TunerObservations? observed = tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots)
-            ? new TunerObservations(snapshots, clock.GetUtcNow())
+            ? new TunerObservations(snapshots, clock.GetUtcNow(), await TitlesAsync(snapshots, cancellationToken))
             : null;
 
         return new TunerLedgerView(
@@ -148,6 +155,17 @@ public sealed class TunerLedgerService(
             document.HasDrifted(),
             observed,
             observed is null ? Describe(tuners) : null);
+    }
+
+    private async Task<IReadOnlyDictionary<SessionId, string>> TitlesAsync(
+        IReadOnlyList<TunerSnapshot> snapshots,
+        CancellationToken cancellationToken)
+    {
+        bool recording = snapshots.Any(tuner => tuner.CurrentSession?.Purpose is SessionPurpose.Recording);
+
+        return recording
+            ? await titles.TitlesAsync(cancellationToken)
+            : new Dictionary<SessionId, string>();
     }
 
     private static DetectedTunersView Compare(

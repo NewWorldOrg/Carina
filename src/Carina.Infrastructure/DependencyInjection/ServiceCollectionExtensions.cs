@@ -316,6 +316,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<DriverIpcClient>();
         services.AddSingleton<IDriverClient>(provider => provider.GetRequiredService<DriverIpcClient>());
         services.AddSingleton<IConditionalAccessCardReader>(provider => provider.GetRequiredService<DriverIpcClient>());
+        services.AddSingleton<ICardReaderStatusReader>(provider => provider.GetRequiredService<DriverIpcClient>());
         services.AddSingleton<DriverConnectionMonitor>();
         services.AddSingleton<ScanRunner>();
         services.AddSingleton<DriverSignalRelay>();
