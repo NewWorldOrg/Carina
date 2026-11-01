@@ -353,3 +353,26 @@ public sealed class RecordingAppEvents : IAppEventPublisher
         }
     }
 }
+
+public sealed class HeldRecordingTitles : Carina.Domain.Recordings.IRecordingTitles
+{
+    public Dictionary<Carina.Contracts.SessionId, string> Titles { get; } = [];
+
+    public int Asked { get; private set; }
+
+    public Exception? Failure { get; set; }
+
+    public Task<IReadOnlyDictionary<Carina.Contracts.SessionId, string>> TitlesAsync(
+        CancellationToken cancellationToken)
+    {
+        Asked++;
+
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        return Task.FromResult<IReadOnlyDictionary<Carina.Contracts.SessionId, string>>(
+            new Dictionary<Carina.Contracts.SessionId, string>(Titles));
+    }
+}

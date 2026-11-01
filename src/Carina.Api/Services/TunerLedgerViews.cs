@@ -19,7 +19,11 @@ public enum TunerLedgerFailure
     LedgerChanged = 7,
 }
 
-public sealed record TunerObservations(IReadOnlyList<TunerSnapshot> Tuners, DateTimeOffset ObservedAt);
+/// <param name="SessionTitles">The programme name of each recording a tuner is writing, by its session.</param>
+public sealed record TunerObservations(
+    IReadOnlyList<TunerSnapshot> Tuners,
+    DateTimeOffset ObservedAt,
+    IReadOnlyDictionary<SessionId, string> SessionTitles);
 
 public sealed record TunerLedgerView(
     IReadOnlyList<TunerConfigEntry> Desired,

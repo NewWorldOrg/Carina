@@ -7,13 +7,21 @@ public sealed record DetectedDeviceResponder(
     string DeviceId,
     DeviceDetection Detection,
     IReadOnlyList<TunerKind> Kinds,
-    string? Detail)
+    string? Detail,
+    string? Machine,
+    TunerHardwareResponder? Hardware)
 {
     public static DetectedDeviceResponder Of(DetectedDeviceDto device)
     {
         ArgumentNullException.ThrowIfNull(device);
 
-        return new DetectedDeviceResponder(device.DeviceId, device.Detection, device.Kinds, device.Detail);
+        return new DetectedDeviceResponder(
+            device.DeviceId,
+            device.Detection,
+            device.Kinds,
+            device.Detail,
+            device.Machine,
+            TunerHardwareResponder.Of(device.Hardware));
     }
 }
 

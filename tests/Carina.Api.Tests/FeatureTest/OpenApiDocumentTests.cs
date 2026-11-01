@@ -149,6 +149,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getCollectionStatus",
                 "getDataBroadcastSettings",
                 "getDetectedTuners",
+                "getDriverCardReader",
                 "getDriverStatus",
                 "getEncodeDurations",
                 "getEncodeProfileDefaults",

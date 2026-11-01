@@ -19,7 +19,10 @@ public sealed record DriverStatusResponder(
                 seen.ProtocolVersion,
                 seen.InstanceId,
                 seen.Capabilities,
-                seen.Draining)
+                seen.Draining,
+                seen.Version,
+                seen.StartedAt,
+                seen.Name)
             : null;
 
         return new DriverStatusResponder(
