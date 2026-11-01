@@ -13,6 +13,18 @@ public sealed record DriverHello(
 
     public bool Draining { get; init; }
 
+    /// <summary>
+    /// The version the driver was built as, which follows a release stream of its own beside the app's.
+    /// </summary>
+    public string? Version { get; init; }
+
+    public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// The name the driver's configuration gives the machine it runs on, or <see langword="null"/> where it gives none.
+    /// </summary>
+    public string? Name { get; init; }
+
     public bool Supports(string capability) =>
         Capabilities.Contains(capability, StringComparer.Ordinal);
 

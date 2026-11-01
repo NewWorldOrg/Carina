@@ -1,3 +1,5 @@
+using System.Reflection;
+
 using Carina.Contracts;
 
 namespace Carina.Driver.Ipc;
@@ -34,10 +36,22 @@ public static class DriverGreeting
     public static IReadOnlyList<string> Unscrambling(bool descrambling) =>
         descrambling ? [.. Capabilities, DriverCapabilities.Descrambling] : Capabilities;
 
-    public static DriverHello ForThisProcess(bool descrambling) =>
+    /// <summary>
+    /// The version this driver was built as, without the source revision the build appends.
+    /// </summary>
+    public static readonly string Version =
+        (typeof(DriverGreeting).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? string.Empty).Split('+')[0].Trim();
+
+    public static DriverHello ForThisProcess(bool descrambling, string? name = null, DateTimeOffset? startedAt = null) =>
         new(
             DriverProtocol.Version,
             Guid.NewGuid().ToString("N"),
             Unscrambling(descrambling)
-        );
+        )
+        {
+            Version = Version.Length is 0 ? null : Version,
+            StartedAt = startedAt,
+            Name = name,
+        };
 }

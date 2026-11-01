@@ -218,6 +218,7 @@ public static class DriverConfigurationReader
 
     private static readonly string[] KnownRootKeys =
     [
+        "name",
         "socketPath",
         "socketGroupId",
         "outputRoots",
@@ -401,7 +402,28 @@ public static class DriverConfigurationReader
 
         problems.AddRange(CardLendingRules.Problems(configuration.CardLending));
 
+        problems.AddRange(NameProblems(configuration.Name));
+
         return problems;
+    }
+
+    private static IReadOnlyList<string> NameProblems(string? name)
+    {
+        if (name is null)
+        {
+            return [];
+        }
+
+        bool shown = name.Length is > 0 and <= DriverConfiguration.LongestName
+            && name == name.Trim()
+            && !name.Any(char.IsControl);
+
+        return shown
+            ? []
+            :
+            [
+                $"name: expected the machine's name as it is shown, 1 to {DriverConfiguration.LongestName} characters with no space at either end and no control character.",
+            ];
     }
 
     private static IReadOnlyList<string> TunerProblems(TunerSettings? tuner)
