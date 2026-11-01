@@ -125,7 +125,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"kind":"satellite","state":"faulted","sessionId":null,"detail":"kind mismatch","deviceId":"adapter2","health":null,"signalQuality":null,"currentSession":null,"toggled":false}""",
+            """{"kind":"satellite","state":"faulted","sessionId":null,"detail":"kind mismatch","deviceId":"adapter2","health":null,"signalQuality":null,"currentSession":null,"toggled":false,"machine":null,"hardware":null}""",
             json
         );
     }
@@ -164,7 +164,7 @@ public sealed class DriverJsonTests
     public void TunerListIsABareArray()
     {
         Assert.Equal(
-            """[{"kind":"terrestrial","state":"idle","sessionId":null,"detail":null,"deviceId":"adapter0","health":null,"signalQuality":null,"currentSession":null,"toggled":false}]""",
+            """[{"kind":"terrestrial","state":"idle","sessionId":null,"detail":null,"deviceId":"adapter0","health":null,"signalQuality":null,"currentSession":null,"toggled":false,"machine":null,"hardware":null}]""",
             DriverJson.Serialize<IReadOnlyList<TunerSnapshot>>(
                 [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)]
             )
@@ -277,7 +277,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"kind":"satellite","state":"busy","sessionId":"scan-1","detail":null,"deviceId":"adapter0","health":{"level":"healthy","disablePending":true,"lnbPowered":true,"detail":null,"changedAt":"2026-08-08T21:04:00+09:00","faultTitle":null,"faultKind":"unspecified","faultDeclaredKind":null,"faultReceivableKinds":[],"degradedKind":"unspecified"},"signalQuality":{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[],"metricsOnAnotherScale":[]},"currentSession":{"sessionId":"scan-1","purpose":"scan","startedAt":"2026-08-08T21:04:00+09:00","tune":{"system":"isdbSCs110","isdbT":null,"isdbSBs":null,"isdbSCs110":{"csChannel":24}},"endsAt":null},"toggled":false}""",
+            """{"kind":"satellite","state":"busy","sessionId":"scan-1","detail":null,"deviceId":"adapter0","health":{"level":"healthy","disablePending":true,"lnbPowered":true,"detail":null,"changedAt":"2026-08-08T21:04:00+09:00","faultTitle":null,"faultKind":"unspecified","faultDeclaredKind":null,"faultReceivableKinds":[],"degradedKind":"unspecified"},"signalQuality":{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[],"metricsOnAnotherScale":[]},"currentSession":{"sessionId":"scan-1","purpose":"scan","startedAt":"2026-08-08T21:04:00+09:00","tune":{"system":"isdbSCs110","isdbT":null,"isdbSBs":null,"isdbSCs110":{"csChannel":24}},"endsAt":null},"toggled":false,"machine":null,"hardware":null}""",
             json
         );
     }
@@ -286,7 +286,7 @@ public sealed class DriverJsonTests
     public void ADetectedDeviceListIsABareArray()
     {
         Assert.Equal(
-            """[{"deviceId":"adapter0","detection":"detected","kinds":["terrestrial"],"detail":null}]""",
+            """[{"deviceId":"adapter0","detection":"detected","kinds":["terrestrial"],"detail":null,"machine":null,"hardware":null}]""",
             DriverJson.Serialize<IReadOnlyList<DetectedDeviceDto>>(
                 [
                     new DetectedDeviceDto

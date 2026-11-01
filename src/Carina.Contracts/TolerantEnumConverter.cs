@@ -254,6 +254,30 @@ public sealed class DeviceDetectionConverter : TolerantEnumConverter<DeviceDetec
         };
 }
 
+public sealed class TunerBusConverter : TolerantEnumConverter<TunerBus>
+{
+    protected override string NameOf(TunerBus value) =>
+        value switch
+        {
+            TunerBus.Pci => "pci",
+            TunerBus.Usb => "usb",
+            TunerBus.Synthetic => "synthetic",
+            TunerBus.Lent => "lent",
+            _ => "unspecified",
+        };
+
+    protected override TunerBus? ValueOf(string name) =>
+        name switch
+        {
+            "pci" => TunerBus.Pci,
+            "usb" => TunerBus.Usb,
+            "synthetic" => TunerBus.Synthetic,
+            "lent" => TunerBus.Lent,
+            "unspecified" => TunerBus.Unspecified,
+            _ => null,
+        };
+}
+
 public sealed class SessionStateConverter : TolerantEnumConverter<SessionState>
 {
     protected override string NameOf(SessionState value) =>

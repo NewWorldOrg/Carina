@@ -200,7 +200,7 @@ public sealed class WireStabilityTests
 
         Assert.Equal(TunerSnapshotFields, fields.Take(TunerSnapshotFields.Length));
         Assert.Equal(
-            ["health", "signalQuality", "currentSession", "toggled"],
+            ["health", "signalQuality", "currentSession", "toggled", "machine", "hardware"],
             fields.Skip(TunerSnapshotFields.Length)
         );
     }
@@ -525,10 +525,10 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
-    public void ADetectedDeviceKeepsExactlyTheFieldsItWasGiven()
+    public void ADetectedDeviceKeepsTheFieldsItWasGivenAndTakesTheNewOnesAtTheEnd()
     {
         Assert.Equal(
-            ["deviceId", "detection", "kinds", "detail"],
+            ["deviceId", "detection", "kinds", "detail", "machine", "hardware"],
             FieldsOf(DriverJson.Serialize(new DetectedDeviceDto { DeviceId = "adapter0" }))
         );
     }

@@ -118,7 +118,7 @@ public sealed class TunerLedgerTests
         );
 
         Assert.Equal(
-            """{"deviceId":"adapter0","detection":"detected","kinds":["terrestrial","satellite"],"detail":null}""",
+            """{"deviceId":"adapter0","detection":"detected","kinds":["terrestrial","satellite"],"detail":null,"machine":null,"hardware":null}""",
             json
         );
     }

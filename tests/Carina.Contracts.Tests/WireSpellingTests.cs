@@ -29,6 +29,7 @@ public sealed class WireSpellingTests
         AssertEveryValueIsSpelled(DriverJson.Context.SessionState);
         AssertEveryValueIsSpelled(DriverJson.Context.SessionStopReason);
         AssertEveryValueIsSpelled(DriverJson.Context.DiagnosticReason);
+        AssertEveryValueIsSpelled(DriverJson.Context.TunerBus);
     }
 
     [Theory]

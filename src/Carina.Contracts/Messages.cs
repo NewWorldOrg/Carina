@@ -385,6 +385,13 @@ public sealed record TunerSnapshot(
     public CurrentSessionDto? CurrentSession { get; init; }
 
     public bool Toggled { get; init; }
+
+    /// <summary>
+    /// The machine the tuner belongs to when it is not this driver's own, or <see langword="null"/> for this one.
+    /// </summary>
+    public string? Machine { get; init; }
+
+    public TunerHardwareDto? Hardware { get; init; }
 }
 
 public sealed record DiagnosticSnapshot(
