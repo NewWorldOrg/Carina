@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
 using Carina.Contracts;
+using Carina.Driver.CardLending;
 using Carina.Driver.Configuration;
 using Carina.Driver.Descrambling;
 using Carina.Driver.Diagnostics;
@@ -130,6 +131,20 @@ public static class DriverApi
 
         RequestDelegate card = context => ShowCardAsync(context, cards);
 
+        CardLender? lender = app.Services.GetService<CardLendingServer>()?.Lender;
+
+        RequestDelegate cardReader = context =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+
+            return Write(
+                context,
+                StatusCodes.Status200OK,
+                CardReaders.Inspect(cards, configuration, lender, clock),
+                DriverJson.Context.CardReaderDto
+            );
+        };
+
         RequestDelegate diagnostics = context =>
             Write(
                 context,
@@ -158,6 +173,7 @@ public static class DriverApi
         app.MapPost(DriverEndpoints.StrayFiles, eraseStrayFile);
         app.MapPost(DriverEndpoints.Restart, restart);
         app.MapGet(DriverEndpoints.ConditionalAccessCard, card);
+        app.MapGet(DriverEndpoints.CardReader, cardReader);
     }
 
     public const string NoCardTitle = "No card has answered";

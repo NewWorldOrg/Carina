@@ -26,6 +26,7 @@ public static class DriverGreeting
         DriverCapabilities.LnbPowerSwitch,
         DriverCapabilities.CardIdentification,
         DriverCapabilities.DeviceHardware,
+        DriverCapabilities.CardReaderStatus,
         .. SignalQualityMetrics.All.Select(DriverCapabilities.SignalQualityMetric),
         .. SessionPurposes.Capabilities,
     ];

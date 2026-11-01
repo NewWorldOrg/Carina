@@ -136,13 +136,20 @@ public sealed class ConditionalAccessCard : IConditionalAccess
     private ConditionalAccessCard(
         ISmartCardService service,
         ISmartCardConnection connection,
+        string reader,
         Action<CardIdentity>? settled
     )
     {
         this.service = service;
         this.connection = connection;
         this.settled = settled;
+        Reader = reader;
     }
+
+    /// <summary>
+    /// The reader the card answered in, as the service lists it.
+    /// </summary>
+    public string Reader { get; }
 
     public int CaSystemId => Identity?.CaSystemId ?? 0;
 
@@ -183,9 +190,10 @@ public sealed class ConditionalAccessCard : IConditionalAccess
         }
 
         List<string> refusals = [];
+        bool silent = false;
         foreach (string reader in readers)
         {
-            ConditionalAccessCard? card = TryReader(service, reader, refusals, settled);
+            ConditionalAccessCard? card = TryReader(service, reader, refusals, settled, ref silent);
             if (card is not null)
             {
                 return card;
@@ -193,7 +201,8 @@ public sealed class ConditionalAccessCard : IConditionalAccess
         }
 
         throw new DescramblingException(
-            $"None of the {readers.Count} reader(s) held a card that answered the initial setting: {string.Join("; ", refusals)}."
+            $"None of the {readers.Count} reader(s) held a card that answered the initial setting: {string.Join("; ", refusals)}.",
+            silent ? DescramblingFailure.CardSilent : DescramblingFailure.Unspecified
         );
     }
 
@@ -201,7 +210,8 @@ public sealed class ConditionalAccessCard : IConditionalAccess
         ISmartCardService service,
         string reader,
         List<string> refusals,
-        Action<CardIdentity>? settled
+        Action<CardIdentity>? settled,
+        ref bool silent
     )
     {
         ISmartCardConnection connection;
@@ -217,7 +227,7 @@ public sealed class ConditionalAccessCard : IConditionalAccess
             return null;
         }
 
-        ConditionalAccessCard card = new(service, connection, settled);
+        ConditionalAccessCard card = new(service, connection, reader, settled);
 
         try
         {
@@ -229,6 +239,7 @@ public sealed class ConditionalAccessCard : IConditionalAccess
         {
             connection.Dispose();
             refusals.Add(refused.Message);
+            silent = true;
 
             return null;
         }

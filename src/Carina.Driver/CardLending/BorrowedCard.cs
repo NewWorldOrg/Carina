@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
+using Carina.Contracts;
 using Carina.Driver.Descrambling;
 
 using Microsoft.Extensions.Logging;
@@ -177,17 +178,24 @@ public sealed class BorrowedCard : IConditionalAccess
         }
         catch (HttpRequestException error)
         {
-            throw new DescramblingException($"The lender at {loan.Lender} could not be reached: {error.Message}");
+            throw new DescramblingException(
+                $"The lender at {loan.Lender} could not be reached: {error.Message}",
+                DescramblingFailure.LenderUnreachable
+            );
         }
         catch (TaskCanceledException)
         {
             throw new DescramblingException(
-                $"The lender at {loan.Lender} did not answer within {loan.Waits.TotalSeconds:F0} seconds."
+                $"The lender at {loan.Lender} did not answer within {loan.Waits.TotalSeconds:F0} seconds.",
+                DescramblingFailure.LenderUnreachable
             );
         }
         catch (IOException error)
         {
-            throw new DescramblingException($"The connection to the lender at {loan.Lender} broke: {error.Message}");
+            throw new DescramblingException(
+                $"The connection to the lender at {loan.Lender} broke: {error.Message}",
+                DescramblingFailure.LenderUnreachable
+            );
         }
     }
 
@@ -198,7 +206,8 @@ public sealed class BorrowedCard : IConditionalAccess
         );
 
         return new DescramblingException(
-            $"The lender refused {what} ({status}{(reason.Length is 0 ? string.Empty : $", {reason}")})."
+            $"The lender refused {what} ({status}{(reason.Length is 0 ? string.Empty : $", {reason}")}).",
+            DescramblingFailure.LenderRefused
         );
     }
 
@@ -227,31 +236,65 @@ public sealed class BorrowedCard : IConditionalAccess
 /// <summary>
 /// Opens a descrambler per tuner over a card borrowed for it alone.
 /// </summary>
-public sealed class BorrowedCards : IDescramblerFactory
+public sealed class BorrowedCards : IDescramblerFactory, ICardReaderReport
 {
     private readonly Func<IConditionalAccess> borrow;
 
     private readonly ILogger? logger;
 
-    private BorrowedCards(Func<IConditionalAccess> borrow, ILogger? logger)
+    private readonly string? lenderHostName;
+
+    private readonly TimeProvider clock;
+
+    private readonly AnswerTimes times;
+
+    private int lastFailure;
+
+    private BorrowedCards(Func<IConditionalAccess> borrow, ILogger? logger, string? lenderHostName, TimeProvider? clock)
     {
         this.borrow = borrow;
         this.logger = logger;
+        this.lenderHostName = lenderHostName;
+        this.clock = clock ?? TimeProvider.System;
+        times = new AnswerTimes(this.clock);
     }
 
-    public static BorrowedCards Over(Func<IConditionalAccess> borrow, ILogger? logger)
+    /// <param name="lenderHostName">The name the lender answers to, which is all the reader report says of it.</param>
+    public static BorrowedCards Over(
+        Func<IConditionalAccess> borrow,
+        ILogger? logger,
+        string? lenderHostName = null,
+        TimeProvider? clock = null
+    )
     {
         ArgumentNullException.ThrowIfNull(borrow);
 
-        return new BorrowedCards(borrow, logger);
+        return new BorrowedCards(borrow, logger, lenderHostName, clock);
     }
 
-    public static BorrowedCards From(CardLoan loan, ILogger? logger)
+    public static BorrowedCards From(CardLoan loan, ILogger? logger, TimeProvider? clock = null)
     {
         ArgumentNullException.ThrowIfNull(loan);
 
-        return new BorrowedCards(() => BorrowedCard.Open(loan, logger), logger);
+        return new BorrowedCards(() => BorrowedCard.Open(loan, logger), logger, loan.HostName, clock);
     }
+
+    /// <summary>
+    /// Says the card is borrowed and whether the last attempt to borrow it failed, without asking the lender.
+    /// </summary>
+    public CardReaderDto Inspect() =>
+        new()
+        {
+            Use = CardReaderUse.Borrowed,
+            State = CardState.Borrowed,
+            Problem = times.FailedSinceItAnswered ? ProblemOf((DescramblingFailure)Volatile.Read(ref lastFailure)) : null,
+            LenderHostName = lenderHostName,
+            LastAnsweredAt = times.LastAnswered,
+            CheckedAt = clock.GetUtcNow(),
+        };
+
+    private static CardProblem ProblemOf(DescramblingFailure failure) =>
+        failure is DescramblingFailure.LenderUnreachable ? CardProblem.LenderUnreachable : CardProblem.LenderRefused;
 
     public bool Unscrambles => true;
 
@@ -264,9 +307,12 @@ public sealed class BorrowedCards : IDescramblerFactory
         try
         {
             card = borrow();
+            times.Answered();
         }
         catch (DescramblingException error)
         {
+            Volatile.Write(ref lastFailure, (int)error.Failure);
+            times.Failed();
             logger?.LogWarning("The lender's card could not be borrowed, so it is asked for again: {Why}", error.Message);
 
             return null;
@@ -274,7 +320,7 @@ public sealed class BorrowedCards : IDescramblerFactory
 
         try
         {
-            return new TransportStreamDescrambler(card, logger, hold: hold);
+            return new TransportStreamDescrambler(new NoticedCard(card, times.Answered), logger, hold: hold);
         }
         catch
         {

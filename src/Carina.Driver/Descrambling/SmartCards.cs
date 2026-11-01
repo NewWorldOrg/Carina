@@ -21,6 +21,8 @@ public static class SmartCardCodes
 
     public const uint SharingViolation = 0x8010000B;
 
+    public const uint Timeout = 0x8010000A;
+
     public const uint NoSmartCard = 0x8010000C;
 
     public const uint NoService = 0x8010001D;
@@ -57,11 +59,30 @@ public interface ISmartCardConnection : IDisposable
 }
 
 /// <summary>
+/// What a reader says its slot holds, read without speaking to the card.
+/// </summary>
+public enum CardSlot
+{
+    Unknown = 0,
+
+    Empty = 1,
+
+    Present = 2,
+
+    Mute = 3,
+}
+
+/// <summary>
 /// A context with the smart-card service: the readers it sees and a way to connect to one.
 /// </summary>
 public interface ISmartCardService : IDisposable
 {
     IReadOnlyList<string> Readers();
+
+    /// <summary>
+    /// What each of <paramref name="readers"/> holds, in the same order, as the service knows it now.
+    /// </summary>
+    IReadOnlyList<CardSlot> Slots(IReadOnlyList<string> readers);
 
     ISmartCardConnection Connect(string reader);
 }

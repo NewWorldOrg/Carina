@@ -603,8 +603,14 @@ public sealed class WireStabilityTests
     [Fact]
     public void AskingWhichCardAnsweredTakesItsPlaceAfterEverythingThatCameBefore()
     {
-        Assert.Equal("/conditional-access-card", DriverEndpoints.All[^1]);
-        Assert.Equal(EndpointsTheFrontendReaches.Length + 7, DriverEndpoints.All.Count);
+        Assert.Equal("/conditional-access-card", DriverEndpoints.All[^2]);
+        Assert.Equal(EndpointsTheFrontendReaches.Length + 8, DriverEndpoints.All.Count);
+    }
+
+    [Fact]
+    public void AskingAfterTheReaderTakesItsPlaceAfterAskingWhichCardAnswered()
+    {
+        Assert.Equal("/card-reader", DriverEndpoints.All[^1]);
     }
 
     [Fact]
