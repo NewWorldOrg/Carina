@@ -163,6 +163,7 @@ public static class DriverHost
             provider.GetRequiredService<TunerDeviceFactory>()
         );
         builder.Services.AddSingleton(_ => TunerDetectors.For(configuration));
+        builder.Services.AddSingleton(_ => new TunerHardwareBook(configuration));
         builder.Services.AddSingleton(_ => new TunerLedgerStore(configuration, configurationPath));
         builder.Services.AddSingleton<IRecordingWriterFactory, RecordingWriterFactory>();
         builder.Services.AddSingleton<DriverEventHub>();

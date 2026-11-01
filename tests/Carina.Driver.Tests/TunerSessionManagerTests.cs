@@ -1394,6 +1394,7 @@ public sealed class TunerSessionManagerTests : IDisposable
                 DriverCapabilities.StrayFileErasure,
                 DriverCapabilities.LnbPowerSwitch,
                 DriverCapabilities.CardIdentification,
+                DriverCapabilities.DeviceHardware,
                 "signalQuality.cnr",
                 "signalQuality.postViterbiBitError",
                 "sessionPurpose.surveyNow",

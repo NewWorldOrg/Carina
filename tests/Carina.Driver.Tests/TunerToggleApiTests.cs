@@ -263,7 +263,7 @@ public sealed class TunerToggleApiTests
     }
 
     [Fact]
-    public async Task NoDeviceNodeCrossesTheSocketWhenATunerIsToggled()
+    public async Task NoDeviceNodeTheConfigurationDoesNotNameCrossesTheSocketWhenATunerIsToggled()
     {
         await using DriverUnderTest driver = await DriverUnderTest.Start();
         using HttpClient client = driver.Client();
@@ -285,7 +285,6 @@ public sealed class TunerToggleApiTests
             string body = await response.Content.ReadAsStringAsync(Soon());
 
             Assert.DoesNotContain("/dev", body, StringComparison.Ordinal);
-            Assert.DoesNotContain("devicePath", body, StringComparison.Ordinal);
         }
     }
 

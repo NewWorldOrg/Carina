@@ -12,6 +12,8 @@ public sealed class CechZd1TunerDevice : ITunerDevice, ISignalQualitySource
 {
     public static readonly UsbModel Model = new(0x054C, 0x04B2);
 
+    public const string ProductName = "Sony CECH-ZD1";
+
     public const byte Interface = 0;
 
     public static readonly TimeSpan TransferPatience = TimeSpan.FromMilliseconds(300);

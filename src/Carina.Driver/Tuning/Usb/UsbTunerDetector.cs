@@ -44,7 +44,8 @@ public sealed class UsbTunerDetector : ITunerDetector
                 [DeviceKind.Terrestrial],
                 DeviceDetection.Detected,
                 null,
-                node.Path
+                node.Path,
+                new DeviceHardware(CechZd1TunerDevice.ProductName, null, TunerBus.Usb, node.Port)
             )),
     ];
 }

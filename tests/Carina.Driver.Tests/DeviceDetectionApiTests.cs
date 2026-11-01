@@ -69,7 +69,7 @@ public sealed class DeviceDetectionApiTests
     }
 
     [Fact]
-    public async Task NoDeviceNodeCrossesTheSocketWhenTheDriverReportsWhatItDetected()
+    public async Task ADeviceNodeCrossesTheSocketOnlyAsTheHardwarePathNeverInsideAReason()
     {
         var scripted = new ScriptedTunerDetector(
             new TunerDetection(
@@ -82,7 +82,8 @@ public sealed class DeviceDetectionApiTests
                 "adapter1.frontend0",
                 [],
                 DeviceDetection.Busy,
-                "adapter1.frontend0: opening the frontend failed."
+                "adapter1.frontend0: opening the frontend failed.",
+                "/dev/dvb/adapter1/frontend0"
             )
         );
 
@@ -91,11 +92,12 @@ public sealed class DeviceDetectionApiTests
         );
         using HttpClient client = driver.Client();
 
-        string body = await client.GetStringAsync(DriverEndpoints.DevicesDetected, Soon());
+        IReadOnlyList<DetectedDeviceDto> detected = await Ask(client);
 
-        Assert.Contains("adapter0.frontend0", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("/dev", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("devicePath", body, StringComparison.Ordinal);
+        Assert.Null(Assert.Single(detected, device => device.DeviceId is "adapter0.frontend0").Hardware?.DevicePath);
+        DetectedDeviceDto held = Assert.Single(detected, device => device.DeviceId is "adapter1.frontend0");
+        Assert.Equal("/dev/dvb/adapter1/frontend0", held.Hardware?.DevicePath);
+        Assert.DoesNotContain("/dev", held.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

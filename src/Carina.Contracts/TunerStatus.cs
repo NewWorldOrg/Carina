@@ -56,6 +56,41 @@ public enum DeviceDetection
     Unreadable = 4,
 }
 
+/// <summary>
+/// How a tuner reaches the machine: a card in a slot, a device on a USB port, one the driver makes up, or one another
+/// machine lends.
+/// </summary>
+[JsonConverter(typeof(TunerBusConverter))]
+public enum TunerBus
+{
+    Unspecified = 0,
+
+    Pci = 1,
+
+    Usb = 2,
+
+    Synthetic = 3,
+
+    Lent = 4,
+}
+
+/// <summary>
+/// What a tuner is and where it sits: the name the hardware gives itself, the kernel driver it is bound to, and its
+/// place inside this machine. None of it names one particular unit.
+/// </summary>
+public sealed record TunerHardwareDto
+{
+    public string? Name { get; init; }
+
+    public string? KernelDriver { get; init; }
+
+    public TunerBus Bus { get; init; }
+
+    public string? DevicePath { get; init; }
+
+    public string? UsbPort { get; init; }
+}
+
 public sealed record TunerHealthDto
 {
     private readonly IReadOnlyList<TunerKind> faultReceivableKinds = [];
@@ -132,4 +167,11 @@ public sealed record DetectedDeviceDto
     }
 
     public string? Detail { get; init; }
+
+    /// <summary>
+    /// The machine the device belongs to when it is not this driver's own, or <see langword="null"/> for this one.
+    /// </summary>
+    public string? Machine { get; init; }
+
+    public TunerHardwareDto? Hardware { get; init; }
 }

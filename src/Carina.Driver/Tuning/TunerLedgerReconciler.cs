@@ -11,6 +11,7 @@ namespace Carina.Driver.Tuning;
 public sealed class TunerLedgerReconciler(
     DriverConfiguration configuration,
     ITunerDetector detector,
+    TunerHardwareBook hardware,
     TunerSessionManager sessions,
     DiagnosticsStore diagnostics,
     ILogger<TunerLedgerReconciler> logger
@@ -18,9 +19,12 @@ public sealed class TunerLedgerReconciler(
 {
     public Task StartingAsync(CancellationToken cancellationToken)
     {
+        IReadOnlyList<TunerDetection> detections = detector.Detect();
+        hardware.Remember(detections);
+
         IReadOnlyList<TunerContradiction> contradictions = TunerLedgerCheck.Contradictions(
             configuration.Devices,
-            detector.Detect()
+            detections
         );
 
         foreach (TunerContradiction contradiction in contradictions)

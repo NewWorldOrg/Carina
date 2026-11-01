@@ -7,7 +7,8 @@ namespace Carina.Driver.Ipc;
 public static class DeviceViews
 {
     public static IReadOnlyList<DetectedDeviceDto> Detected(
-        IReadOnlyList<TunerDetection> detections
+        IReadOnlyList<TunerDetection> detections,
+        TunerHardwareBook? hardware = null
     ) =>
         [
             .. detections.Select(detection => new DetectedDeviceDto
@@ -16,6 +17,7 @@ public static class DeviceViews
                 Detection = detection.Detection,
                 Kinds = [.. detection.Receives.Select(Wire)],
                 Detail = detection.Detail,
+                Hardware = hardware?.Known(detection.DeviceId),
             }),
         ];
 
