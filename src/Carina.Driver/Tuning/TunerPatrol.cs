@@ -34,8 +34,31 @@ public sealed class TunerPatrol(
                 continue;
             }
 
-            book.Looked(device, presence.IsPresent(device, book.For(device)));
+            Look(device);
         }
+    }
+
+    private void Look(DeviceSettings device)
+    {
+        bool present;
+
+        try
+        {
+            present = presence.IsPresent(device, book.For(device));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            (logger ?? NullLogger<TunerPatrol>.Instance).LogWarning(
+                error,
+                "The tuner {DeviceId} could not be looked for, and is looked for again in {Interval}",
+                device.Id,
+                Interval
+            );
+
+            return;
+        }
+
+        book.Looked(device, present);
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -60,9 +83,9 @@ public sealed class TunerPatrol(
         {
             Walk();
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        catch (Exception error)
         {
-            (logger ?? NullLogger<TunerPatrol>.Instance).LogWarning(
+            (logger ?? NullLogger<TunerPatrol>.Instance).LogError(
                 error,
                 "Looking for the idle tuners failed, and the next look is in {Interval}",
                 Interval
