@@ -98,13 +98,14 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
     public static async Task<DriverUnderTest> Start(
         string[]? args = null,
-        Action<IServiceCollection>? reshapeServices = null
+        Action<IServiceCollection>? reshapeServices = null,
+        Func<DriverConfiguration, DriverConfiguration>? reshape = null
     )
     {
         ClearTheInheritedUrls();
 
         string root = NewRoot();
-        DriverConfiguration configuration = ConfigurationIn(root);
+        DriverConfiguration configuration = (reshape ?? (given => given))(ConfigurationIn(root));
         string configurationPath = LedgerIn(root, configuration);
         DriverHostResult built = DriverHost.Create(
             args ?? [],

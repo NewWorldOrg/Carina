@@ -128,12 +128,26 @@ public sealed class WireStabilityTests
     ];
 
     [Fact]
-    public void TheHelloKeepsExactlyTheFieldsItHad()
+    public void TheHelloKeepsItsFieldsAndTakesTheNewOnesAtTheEnd()
     {
-        Assert.Equal(
-            HelloFields,
-            FieldsOf(DriverJson.Serialize(new DriverHello(1, "b7f2c9", ["recording"])))
+        IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(new DriverHello(1, "b7f2c9", ["recording"])));
+
+        Assert.Equal(HelloFields, fields.Take(HelloFields.Length));
+        Assert.Equal(["version", "startedAt", "name"], fields.Skip(HelloFields.Length));
+    }
+
+    [Fact]
+    public void AHelloFromADriverThatGivesNoVersionStillReads()
+    {
+        DriverHello? hello = DriverJson.Deserialize(
+            """{"protocolVersion":1,"instanceId":"b7f2c9","capabilities":["recording"],"draining":false}""",
+            DriverJson.Context.DriverHello
         );
+
+        Assert.NotNull(hello);
+        Assert.Null(hello.Version);
+        Assert.Null(hello.StartedAt);
+        Assert.Null(hello.Name);
     }
 
     [Fact]

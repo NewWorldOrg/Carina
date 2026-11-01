@@ -90,10 +90,13 @@ public sealed record DriverConfiguration(
     int SocketGroupId = DriverConfiguration.DefaultSocketGroupId,
     int LiveSessionMinutes = DriverConfiguration.DefaultLiveSessionMinutes,
     int WalkSessionMinutes = DriverConfiguration.DefaultWalkSessionMinutes,
-    CardLendingSettings? CardLending = null
+    CardLendingSettings? CardLending = null,
+    string? Name = null
 )
 {
     public const string SocketGroupName = "carina";
+
+    public const int LongestName = 32;
 
     public const string DefaultSocketPath = "/run/carina/driver.sock";
 

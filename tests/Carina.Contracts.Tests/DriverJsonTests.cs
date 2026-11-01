@@ -15,7 +15,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"protocolVersion":1,"instanceId":"b7f2c9","capabilities":["recording","live"],"draining":false}""",
+            """{"protocolVersion":1,"instanceId":"b7f2c9","capabilities":["recording","live"],"draining":false,"version":null,"startedAt":null,"name":null}""",
             json
         );
     }

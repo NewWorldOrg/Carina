@@ -86,6 +86,7 @@ health は状態を表示するだけで、unhealthy になっても何も再起
 | `tuner.backend` | `dvb`(Linux DVB のチューナー)、`usb`(USB のチューナー)か `fake`(合成のチューナー)。既定値は無い |
 | `devices` | チューナーの一覧。1 つ以上書き、うち 1 つ以上を `enabled` にする |
 | `shutdownGraceHours` | 録画中に止められたとき、録画が終わるのを待つ上限の時間。1 から 168 で、既定は 6 |
+| `name` | 画面でこの機械を呼ぶ名前。1 から 32 文字で、前後に空白を置かない。書かなければ画面は「この機械」と出す。ホスト名は自動では取らない |
 
 `devices` の各要素には、`id`、`kind`(`terrestrial` か `satellite`)、`enabled`(既定は `true`)を書く。
 `tuner.backend` が `dvb` か `usb` なら、装置のパス `devicePath`(`/dev/` の下)も要る。

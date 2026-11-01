@@ -148,7 +148,9 @@ public static class DriverHost
         }
         builder.Services.AddSingleton(provider =>
             DriverGreeting.ForThisProcess(
-                provider.GetRequiredService<IDescramblerFactory>().Unscrambles
+                provider.GetRequiredService<IDescramblerFactory>().Unscrambles,
+                configuration.Name,
+                provider.GetRequiredService<TimeProvider>().GetUtcNow()
             )
         );
         builder.Services.AddSingleton(provider => new TunerDeviceFactory(
