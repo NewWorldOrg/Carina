@@ -58,7 +58,7 @@ public sealed partial class EntrypointRolesTests
         [
             .. lines
                 .Skip(opened + 1)
-                .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal))
+                .TakeWhile(line => !line.StartsWith("#", StringComparison.Ordinal))
                 .Select(line => Row().Match(line))
                 .Where(match => match.Success)
                 .Select(match => match.Groups["role"].Value),
@@ -67,7 +67,7 @@ public sealed partial class EntrypointRolesTests
 
     private static string Entrypoint => Path.Combine(RepositoryFiles.Root(), "docker", "entrypoint.sh");
 
-    private const string Heading = "## イメージの役割";
+    private const string Heading = "### イメージの役割";
 
     [GeneratedRegex(@"^\s+(?<role>[a-z]+)\)")]
     private static partial Regex Arm();
