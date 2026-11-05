@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
@@ -8,6 +7,8 @@ using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Tests.Thumbnails;
 using Carina.TestSupport;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Encodings;
 

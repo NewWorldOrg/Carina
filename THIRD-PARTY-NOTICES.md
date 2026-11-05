@@ -54,15 +54,15 @@ patches applied to it, and the configure options.
 The .NET runtime and ASP.NET Core are MIT licensed. `app` and `migrate` run on
 the shared framework of the base image `mcr.microsoft.com/dotnet/aspnet`, whose
 license and notices are `/usr/share/dotnet/LICENSE.txt` and
-`/usr/share/dotnet/ThirdPartyNotices.txt`. The driver is compiled by native AOT,
-which links the runtime packs into its binary; their license and notices are
-under `/usr/share/doc/carina/dotnet/<pack>/<version>/`.
+`/usr/share/dotnet/ThirdPartyNotices.txt`.
 
 ## NuGet packages
 
 The license and notices of each package are under
 `/usr/share/doc/carina/nuget/<package>/<version>/`, and the versions each program
-carries are in `/usr/share/doc/carina/nuget/<role>.tsv`.
+carries are in `/usr/share/doc/carina/nuget/<role>.tsv`. `Puppis.Contracts` is the
+contract between `app` and the driver, published from
+<https://github.com/NewWorldOrg/Puppis> under the same license as Carina.
 
 | Package | License | Carried by |
 | --- | --- | --- |
@@ -110,6 +110,7 @@ carries are in `/usr/share/doc/carina/nuget/<role>.tsv`.
 | `Newtonsoft.Json` | MIT | migrate |
 | `Npgsql` | PostgreSQL | app, migrate |
 | `Npgsql.EntityFrameworkCore.PostgreSQL` | PostgreSQL | app, migrate |
+| `Puppis.Contracts` | AGPL-3.0-only | app, migrate |
 | `System.CodeDom` | MIT | migrate |
 | `System.Composition` | MIT | migrate |
 | `System.Composition.AttributedModel` | MIT | migrate |
@@ -139,7 +140,6 @@ The license of each package is `/usr/share/doc/<package>/copyright`.
 | `libfontconfig1` | `fontconfig` | HPND-sell-variant |
 | `libfreetype6` | `freetype` | FTL |
 | `libigdgmm12` | `intel-gmmlib` | MIT |
-| `libpcsclite1` | `pcsc-lite` | BSD-3-Clause |
 | `libpng16-16t64` | `libpng1.6` | libpng-2.0 |
 | `libva-drm2` | `libva` | MIT |
 | `libva2` | `libva` | MIT |

@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
 
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Collection;
 

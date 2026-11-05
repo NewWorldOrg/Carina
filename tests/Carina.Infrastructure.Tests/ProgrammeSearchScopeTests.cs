@@ -1,8 +1,9 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Programmes;
 using Carina.TestSupport;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests;
 

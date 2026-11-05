@@ -1,32 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly driver_entry=/opt/carina/driver/Carina.Driver
 readonly app_entry=/opt/carina/app/Carina.Api.dll
 readonly migrate_entry=/opt/carina/db/Carina.Db.dll
 readonly render_nodes=/dev/dri
 readonly carina_uid=10001
 readonly carina_gid=10001
-
-drop_web_server_variables() {
-    local name
-    for name in ASPNETCORE_URLS ASPNETCORE_HTTP_PORTS ASPNETCORE_HTTPS_PORTS; do
-        if [ -n "${!name:-}" ]; then
-            echo "role=driver ignores ${name}=${!name}; the driver answers on a Unix socket only." >&2
-        fi
-        unset "${name}"
-    done
-}
-
-drop_database_variables() {
-    local name
-    for name in ConnectionStrings__Carina CARINA_DB_CONNECTION; do
-        if [ -n "${!name:-}" ]; then
-            echo "role=driver ignores ${name}; the driver holds no secrets." >&2
-        fi
-        unset "${name}"
-    done
-}
 
 adopt_shared_connection_string() {
     if [ -z "${CARINA_DB_CONNECTION:-}" ] && [ -n "${ConnectionStrings__Carina:-}" ]; then
@@ -91,43 +70,17 @@ run_app() {
     exec dotnet "${app_entry}"
 }
 
-run_all() {
-    ( drop_web_server_variables; drop_database_variables; exec "${driver_entry}" ) &
-    local driver_pid=$!
-
-    ( run_app ) &
-    local app_pid=$!
-
-    trap 'kill -TERM "${driver_pid}" "${app_pid}" 2>/dev/null || true' TERM INT
-
-    set +e
-    wait -n "${driver_pid}" "${app_pid}"
-    local status=$?
-    set -e
-
-    kill -TERM "${driver_pid}" "${app_pid}" 2>/dev/null || true
-    wait "${driver_pid}" "${app_pid}" 2>/dev/null || true
-
-    exit "${status}"
-}
-
 main() {
     local role="${1:-${CARINA_ROLE:-app}}"
 
     case "${role}" in
-        driver)
-            drop_web_server_variables
-            drop_database_variables
-            exec "${driver_entry}"
-            ;;
         app) run_app ;;
         migrate)
             adopt_shared_connection_string
             run_as_carina dotnet "${migrate_entry}" --migrate
             ;;
-        all) run_all ;;
         *)
-            echo "unknown role '${role}': expected driver, app, migrate or all." >&2
+            echo "unknown role '${role}': expected app or migrate." >&2
             exit 64
             ;;
     esac

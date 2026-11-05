@@ -1,7 +1,8 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Recordings;
+
+using Puppis.Contracts;
 
 using static Carina.Infrastructure.Tests.Recordings.RecordingStreamFixture;
 

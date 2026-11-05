@@ -1,7 +1,8 @@
 using Carina.Api.Services;
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Responder.Scans;
 

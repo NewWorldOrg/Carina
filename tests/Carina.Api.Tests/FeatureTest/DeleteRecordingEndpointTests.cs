@@ -2,7 +2,6 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
-using Carina.Contracts;
 using Carina.Domain.Captions;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
@@ -16,6 +15,8 @@ using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Net.Http.Headers;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

@@ -56,25 +56,9 @@ RUN curl -fsSLO "https://github.com/NewWorldOrg/denpa-font/releases/download/${D
     && mkdir -p /out/fonts/denpa-font \
     && cp denpa-font.ttf /out/fonts/denpa-font/
 
-FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS driver-build
-ARG RID=linux-x64
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends clang zlib1g-dev \
-    && rm -rf /var/lib/apt/lists/*
-WORKDIR /src
-COPY Directory.Build.props Directory.Packages.props ./
-COPY src/Carina.Contracts/Carina.Contracts.csproj src/Carina.Contracts/
-COPY src/Carina.Driver/Carina.Driver.csproj src/Carina.Driver/
-RUN dotnet restore src/Carina.Driver/Carina.Driver.csproj -r ${RID} -p:PublishAot=true
-COPY src/Carina.Contracts/ src/Carina.Contracts/
-COPY src/Carina.Driver/ src/Carina.Driver/
-RUN dotnet publish src/Carina.Driver/Carina.Driver.csproj -c Release -r ${RID} -p:PublishAot=true -o /out/driver \
-    && rm -f /out/driver/*.dbg /out/driver/*.pdb
-
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS app-build
 WORKDIR /src
 COPY Directory.Build.props Directory.Packages.props ./
-COPY src/Carina.Contracts/Carina.Contracts.csproj src/Carina.Contracts/
 COPY src/Carina.Domain/Carina.Domain.csproj src/Carina.Domain/
 COPY src/Carina.Broadcast/Carina.Broadcast.csproj src/Carina.Broadcast/
 COPY src/Carina.Infrastructure/Carina.Infrastructure.csproj src/Carina.Infrastructure/
@@ -85,13 +69,6 @@ RUN dotnet restore src/Carina.Api/Carina.Api.csproj \
 COPY src/ src/
 RUN dotnet publish src/Carina.Api/Carina.Api.csproj -c Release --no-restore -o /out/app \
     && dotnet publish src/Carina.Db/Carina.Db.csproj -c Release --no-restore -o /out/db
-
-FROM driver-build AS driver-notices
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends jq \
-    && rm -rf /var/lib/apt/lists/*
-COPY docker/notices/ /notices/
-RUN /notices/nuget.sh /out/notices driver src/Carina.Driver/obj/project.assets.json
 
 FROM app-build AS app-notices
 RUN apt-get update \
@@ -112,11 +89,6 @@ COPY --from=ffmpeg-build /out/ffmpeg/bin/ /usr/local/bin/
 COPY --from=ffmpeg-build /out/ffmpeg/lib/ /usr/local/lib/
 RUN ldconfig
 
-FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS driver-develop
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpcsclite1 \
-    && rm -rf /var/lib/apt/lists/*
-
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime-base
 
 FROM runtime-base AS runtime
@@ -124,7 +96,7 @@ FROM runtime-base AS runtime
 COPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/
 RUN sed 's/^Types: deb$/Types: deb-src/' /etc/apt/sources.list.d/ubuntu.sources > /etc/apt/sources.list.d/ubuntu-src.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 libpcsclite1 \
+    && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 \
     && mkdir -p /usr/share/doc/carina/x264/source \
     && cd /usr/share/doc/carina/x264/source \
     && apt-get source --download-only "x264=$(dpkg-query -W -f '${source:Version}' libx264-164)" \
@@ -142,7 +114,6 @@ RUN groupadd --gid 10001 carina \
     && install -d -o 10001 -g 10001 -m 0770 /var/lib/carina/keys
 
 WORKDIR /opt/carina
-COPY --from=driver-build /out/driver ./driver
 COPY --from=app-build /out/app ./app
 COPY --from=app-build /out/db ./db
 COPY docker/entrypoint.sh /usr/local/bin/carina
@@ -150,7 +121,6 @@ COPY docker/entrypoint.sh /usr/local/bin/carina
 RUN chmod 0755 /usr/local/bin/carina
 
 COPY --from=ffmpeg-build /out/notices/ /usr/share/doc/carina/
-COPY --from=driver-notices /out/notices/ /usr/share/doc/carina/
 COPY --from=app-notices /out/notices/ /usr/share/doc/carina/
 COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/doc/carina/
 RUN --mount=type=bind,from=app-notices,source=/notices,target=/run/notices \

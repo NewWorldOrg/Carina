@@ -26,8 +26,7 @@ public sealed class TestProjectRuleTests
     {
         Assert.Empty(Graph.ForbiddenReferencesOf(
             "Carina.TestSupport",
-            "Carina.Domain",
-            "Carina.Contracts"));
+            "Carina.Domain"));
     }
 
     [Fact]

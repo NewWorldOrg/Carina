@@ -152,8 +152,8 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         ReservationId airing = await Plan(51301, ReservationState.Scheduled);
         var driver = new RecordingDriver
         {
-            RefusesToStart = Carina.Domain.Driver.DriverCall<Carina.Contracts.SessionSnapshot>.Refused(
-                new Carina.Contracts.DriverProblem("noDeviceFree", [])),
+            RefusesToStart = Carina.Domain.Driver.DriverCall<Puppis.Contracts.SessionSnapshot>.Refused(
+                new Puppis.Contracts.DriverProblem("noDeviceFree", [])),
         };
 
         await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
@@ -174,8 +174,8 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         ReservationId airing = await Plan(51501, ReservationState.Scheduled);
         var driver = new RecordingDriver
         {
-            RefusesToStart = Carina.Domain.Driver.DriverCall<Carina.Contracts.SessionSnapshot>.Refused(
-                new Carina.Contracts.DriverProblem("noLock", [])),
+            RefusesToStart = Carina.Domain.Driver.DriverCall<Puppis.Contracts.SessionSnapshot>.Refused(
+                new Puppis.Contracts.DriverProblem("noLock", [])),
         };
 
         await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);

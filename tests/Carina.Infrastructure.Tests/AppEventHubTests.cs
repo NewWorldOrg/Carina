@@ -1,5 +1,6 @@
-using Carina.Contracts;
 using Carina.Infrastructure.Events;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests;
 

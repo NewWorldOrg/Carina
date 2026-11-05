@@ -1,6 +1,7 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Channels;
 

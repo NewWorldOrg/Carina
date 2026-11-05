@@ -1,7 +1,6 @@
 using System.Net.WebSockets;
 
 using Carina.Api.Live;
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Streaming;
@@ -13,6 +12,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Net.Http.Headers;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

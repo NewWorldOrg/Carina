@@ -1,11 +1,12 @@
 using Carina.Broadcast.Descriptors;
 using Carina.Broadcast.Tables;
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Collection;
 

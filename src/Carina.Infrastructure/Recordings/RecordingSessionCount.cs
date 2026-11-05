@@ -1,6 +1,7 @@
-using Carina.Contracts;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Recordings;
 

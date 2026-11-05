@@ -3,7 +3,6 @@ using System.Net.WebSockets;
 
 using Carina.Api.Events;
 using Carina.Api.Live;
-using Carina.Contracts;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
@@ -11,6 +10,8 @@ using Carina.TestSupport;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Net.Http.Headers;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

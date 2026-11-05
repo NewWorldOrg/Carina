@@ -1,10 +1,11 @@
 using Carina.Broadcast.Descriptors;
 using Carina.BroadcastTestSupport;
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Scanning;
 using Carina.TestSupport;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Scanning;
 

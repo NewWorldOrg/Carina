@@ -2,10 +2,11 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
-using Carina.Contracts;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Http;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

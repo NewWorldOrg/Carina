@@ -3,10 +3,10 @@
   <ItemGroup>
     <ProjectReference Include="../Carina.Domain/Carina.Domain.csproj" />
     <ProjectReference Include="../Carina.Broadcast/Carina.Broadcast.csproj" />
-    <ProjectReference Include="../Carina.Contracts/Carina.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Puppis.Contracts" />
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" />

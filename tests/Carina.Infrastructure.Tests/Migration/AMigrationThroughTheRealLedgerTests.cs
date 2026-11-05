@@ -96,7 +96,7 @@ public sealed class AMigrationThroughTheRealLedgerTests : IDisposable
         Assert.All(
             held,
             recording => Assert.EndsWith(
-                Carina.Contracts.RecordingFile.Extension,
+                Puppis.Contracts.RecordingFile.Extension,
                 recording.FileName.Value,
                 StringComparison.Ordinal));
         Assert.All(held, recording => Assert.True(recording.FileSizeObserved > 0));

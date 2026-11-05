@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
@@ -14,6 +13,8 @@ using Carina.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Quality;
 

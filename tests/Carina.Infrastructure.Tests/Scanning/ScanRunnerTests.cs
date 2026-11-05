@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Scanning;
@@ -6,6 +5,8 @@ using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Scanning;
 

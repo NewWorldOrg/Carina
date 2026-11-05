@@ -1,9 +1,10 @@
 using Carina.Api.Common;
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Events;
 using Carina.Domain.Reservations;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Services;
 

@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
@@ -6,6 +5,8 @@ using Carina.Domain.Recordings;
 using Carina.Infrastructure.Recordings;
 
 using Microsoft.EntityFrameworkCore;
+
+using Puppis.Contracts;
 
 using static Carina.Infrastructure.Tests.Recordings.RecordingStreamFixture;
 

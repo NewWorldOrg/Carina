@@ -19,13 +19,14 @@ API でできること。
 
 | | 役割 |
 | --- | --- |
-| `driver` | 特権で動く。チューナーを占有し、スクランブルを解いて TS を録画ファイルに書く |
-| `app` | 特権なしで動く。番組表・予約・ライブ・エンコード・ライブラリの HTTP API を提供する |
+| `driver` | 特権で動く。チューナーを占有し、スクランブルを解いて TS を録画ファイルに書く。[Puppis](https://github.com/NewWorldOrg/Puppis) のイメージ |
+| `app` | 特権なしで動く。番組表・予約・ライブ・エンコード・ライブラリの HTTP API を提供する。このリポジトリのイメージ |
 | PostgreSQL | データベース |
 
 `driver` と `app` は Unix ドメインソケットで通信し、`driver` は `app` のための TCP ポートを開かない。\
 別のプロセスなので、`app` を入れ替えても進行中の録画は止まらない。\
-録画ファイルを書くのは `driver` だけで、`app` は読み取り専用で参照する。
+録画ファイルを書くのは `driver` だけで、`app` は読み取り専用で参照する。\
+2 つが交わすメッセージの形と口の名前は Puppis が nuget.org の package `Puppis.Contracts` として出し、`app` はその版を `Directory.Packages.props` で固定して参照する。
 
 API 文書は、開発環境(`ASPNETCORE_ENVIRONMENT=Development`)の `app` が `GET /openapi/v1.json` で返す。\
 実行時に組み立てる文書なので、このリポジトリには置いていない。
@@ -38,15 +39,14 @@ compose と Helm チャートがあり、前段のプロキシも入っている
 
 ### イメージの役割
 
-`Dockerfile` が作るイメージは 1 つで、`docker/entrypoint.sh` が `CARINA_ROLE` か第 1 引数で役割を選ぶ。\
+`Dockerfile` が作るイメージは `app` のもので、`driver` は Puppis のイメージで動かす。\
+`docker/entrypoint.sh` が `CARINA_ROLE` か第 1 引数で役割を選ぶ。\
 どちらも無ければ `app` になる。
 
 | 役割 | 起動するもの |
 | --- | --- |
-| `driver` | 特権プロセス |
 | `app` | HTTP プロセス |
 | `migrate` | スキーマを適用して終了 |
-| `all` | 両プロセスを 1 コンテナで起動(開発用) |
 
 画面はこのイメージに入っておらず、別のイメージで動かす。\
 前段にリバースプロキシを置き、`/api/*` を `app` に、それ以外を画面に振り分ける。\
@@ -72,146 +72,28 @@ Denpa Font に無い字は Noto Sans CJK JP(`fonts-noto-cjk`)で描く。
 
 ### イメージのタグ
 
-`master` にマージされるたびに、CI が同じ 1 つのイメージを `ghcr.io/newworldorg/carina` に 2 つのタグで公開する。\
+`master` にマージされるたびに、CI がイメージを `ghcr.io/newworldorg/carina` に公開する。\
 対応する CPU は amd64 だけである。
 
-| タグ | `<commit>` が指すもの | 使う役割 |
-| --- | --- | --- |
-| `driver-sha-<commit>` | driver 側を最後に変えたコミット | `driver` |
-| `app-sha-<commit>` | app 側を最後に変えたコミット | `app`、`migrate` |
+| タグ | 指すもの |
+| --- | --- |
+| `sha-<commit>` | そのコミットのイメージ。マージのたびに出る |
+| `vX.Y.Z` | その版のコミットの `sha-<commit>` と同じイメージ |
+| `latest` | prerelease(`v0.2.0-rc.1` のように `-` を含むもの)を除いた最も新しい版 |
 
-更新で driver を入れ替える必要があるのは、`driver-sha-*` が前と変わったときだけ。\
-app だけの変更では `app-sha-*` だけが変わる。\
-そのときは `driver` を前のタグのまま動かし続ければよく、録画は止まらない。
-
-- driver 側は、`Carina.Driver` とそれが参照するプロジェクトを指す
-- app 側は、`Carina.Api`・`Carina.Db` とそれらが参照するプロジェクトを指す
-- `Carina.Contracts`・`Dockerfile`・`Directory.Build.props`・`Directory.Packages.props`・`docker/entrypoint.sh` を変えると、両方のタグが変わる
-- `LICENSE`・`THIRD-PARTY-NOTICES.md`・`patches/`・`docker/fonts.conf` のように `src/` の外でイメージに入るものを変えると、app のタグだけが変わる
-- 試験・イメージに入らない文書・CI の定義・開発用の compose を変えても、どちらのタグも変わらない
-- 一度公開したタグは上書きしない(`*-latest` を除く)
-
-どちらの側に何が入るかは、`.github/image-tags.sh inputs driver`(または `app`)で確かめられる。
-
-`v0.1.0` のようなバージョンのタグを push すると、CI はイメージを作り直さず、そのコミットの `driver-sha-*` と `app-sha-*` に `driver-v0.1.0` と `app-v0.1.0` のタグを足す。\
+一度公開したタグは上書きしない(`latest` を除く)。\
+`vX.Y.Z` のタグを push すると、CI はイメージを作り直さずにそのコミットの `sha-<commit>` へ版のタグを足す。\
 タグは `Directory.Build.props` の版と同じでなければならず、違うと CI が止まる。\
-`driver-latest` と `app-latest` は、prerelease(`v0.2.0-rc.1` のように `-` を含むもの)を除いた最も新しいバージョンのタグと同じイメージを指す。\
-prerelease のタグを push したときは、`driver-v0.2.0-rc.1` のようなそのバージョンのタグだけが足される。
+prerelease のタグを push したときは、その版のタグだけが足される。
 
-### driver の止め方
+### driver の止め方と設定
 
-録画中に再起動を指示すると、`driver` はその録画が終わってから再起動する。\
-待つのは `shutdownGraceHours` までで、それを過ぎると録画を打ち切る。
-
-実行環境では、次の 2 点を守る。
-
-- `stop_grace_period` を、driver が申告する秒数より長くする(短いと後処理の途中で SIGKILL される)
-- 再起動ポリシーに `on-failure` を使わない(要求による停止は終了コード 0、それ以外は 70 で終わる)
-
-`driver` は呼び出し元を認証しない。\
-アクセスを制限するのは Unix ドメインソケットのパーミッションと所有グループだけで、`app` のための TCP ポートは開かない。\
-TCP のポートを開くのは、`cardLending.lend` を書いたときのカードの貸し借りの口だけ。
+`driver` の設定のキー・B-CAS カードの貸し借り・止め方は、[Puppis の README](https://github.com/NewWorldOrg/Puppis#readme) にある。\
+`app` 側で合わせるのは 2 つで、`CARINA_DRIVER_SOCKET` を `driver` の `socketPath` に、`Integrity__OutputRoots` を `driver` の `outputRoots` に合わせる。\
+`driver` は呼び出し元を認証せず、アクセスを制限するのは Unix ドメインソケットのパーミッションと所有グループだけなので、`socketGroupId` は `app` を動かすグループにする。\
+`driver` は録画が終わるまで止まらないので、実行環境の `stop_grace_period` を `driver` が申告する秒数より長くし、再起動ポリシーに `on-failure` を使わない。
 
 ## 設定
-
-### driver
-
-`driver` は、`CARINA_DRIVER_CONFIG` が指す JSON ファイルを 1 つだけ読む。\
-既定のパスは無い。\
-読めない項目や知らないキーがあると、問題のある項目を表示して起動を止める。
-
-| キー | 用途 |
-| --- | --- |
-| `socketPath` | `app` とつなぐ Unix ドメインソケット。`/run/` の下に置く。既定は `/run/carina/driver.sock` |
-| `socketGroupId` | ソケットの所有グループの id。既定は 10001。`app` を動かすグループと同じ値にする |
-| `outputRoots` | 録画の保存先。`name` と絶対パスの `path` の組を 1 つ以上書く |
-| `tuner.backend` | `dvb`(Linux DVB のチューナー)、`usb`(USB のチューナー)か `fake`(合成のチューナー)。既定値は無い |
-| `devices` | チューナーの一覧。1 つ以上書き、うち 1 つ以上を `enabled` にする |
-| `shutdownGraceHours` | 録画中に止められたとき、録画が終わるのを待つ上限の時間。1 から 168 で、既定は 6 |
-| `name` | 画面でこの機械を呼ぶ名前。1 から 32 文字で、前後に空白を置かない。書かなければ「この機械」と出て、ホスト名は自動では取らない |
-
-`devices` の各要素には `id`・`kind`・`enabled` を書く。\
-`kind` は `terrestrial` か `satellite`、`enabled` の既定は `true`。\
-`tuner.backend` が `dvb` か `usb` なら、装置のパス `devicePath`(`/dev/` の下)も要る。\
-衛星のチューナーで LNB に給電するなら、`lnbPower` を `true` にする。\
-ほかのキーは既定のままで動く。
-
-| キー | 用途 |
-| --- | --- |
-| `liveSessionMinutes` | ライブのセッションを、最後に要求されてから保つ分数。1 から 4320 で、既定は 240 |
-| `walkSessionMinutes` | 番組表の収集や局ロゴの巡回のように受信を丸ごと読むセッションの上限の分数。1 から 240 で、既定は 30 |
-| `tuner.signalQualitySeconds` | 受信の状態を測る間隔の秒数。1 から 3600 で、既定は 10 |
-| `tuner.demuxBufferBytes` | demux のバッファの大きさ。1 から 64 MiB で、既定は 16 MiB |
-
-`liveSessionMinutes` は視聴できる長さではない。\
-視聴中は `app` がその都度延長するので、視聴が途中で切れることはない。
-
-`tuner.backend` が `dvb` のとき、`driver` はホストの pcscd 経由で B-CAS カードを使い、スクランブルを解いて録画する。\
-`driver` のコンテナには、ホストの `/run/pcscd` をディレクトリごと渡す。\
-pcscd は起動し直すたびにソケットを作り直すので、ソケットのファイルだけを渡すと古いソケットを指したままになる。\
-カードが応答しないときはスクランブルされたまま録画し、その量を品質の数値として記録する。
-
-`tuner.backend` が `usb` のとき、`driver` は USB の地上デジタルチューナー CECH-ZD1(054C:04B2)を usbdevfs で直に動かす。\
-`devicePath` は `/dev/bus/usb/` の下のノードで、`driver` を動かすユーザーが読み書きできるようにしておく。\
-チューナーの id はつないだポートから付き、`driver` は開くたびにそのポートの今のノードを探すので、同じポートに挿し直しても設定はそのままでよい。\
-`devicePath` は、id がどのポートにも当たらないときにだけ使う。\
-電源が入ってから一度もほかの機器に動かされていない状態からしか動かさないので、そうでないと言われたら挿し直す。\
-このチューナーの出力は、`cardLending.borrow` を書かなければスクランブルを解かずに録画する。
-
-#### カードの貸し借り
-
-B-CAS カードが 1 枚しかない家で、カードの無い機械の `driver` も放送を解けるようにする。\
-カードを挿した機械の `driver` が貸し手になり、ECM を受けてスクランブル鍵を返す口を専用の TCP ポートに開く。\
-借り手の `driver` は、チューナーを開くたびに貸し手へつなぎ、その接続の上で鍵を借りて自分で解く。\
-カードへの生のコマンドは網に出さない。\
-貸し手の口は既定では開かず、`cardLending.lend` を書いたときだけ開く。
-
-| キー | 用途 |
-| --- | --- |
-| `cardLending.lend.address` | 口を開くアドレス。`0.0.0.0`・`::` か家の中のアドレス(ループバック、10/8、172.16/12、192.168/16、169.254/16、fc00::/7、fe80::/10) |
-| `cardLending.lend.port` | 口のポート。1024 から 65535 で、既定は 40772 |
-| `cardLending.lend.hostNames` | 借り手が名乗る貸し手の名前。1 から 8 個 |
-| `cardLending.lend.hopLimit` | 返すパケットの TTL(IPv6 はホップ数)。1 から 8 で、既定は 3 |
-| `cardLending.lend.roundTripMilliseconds` | 往復時間の上限。1 から 30 で、既定は 5 |
-| `cardLending.lend.leases` | 同時に貸す数。1 から 16 で、既定は 4 |
-| `cardLending.lend.keyFile` | 貸し手と借り手で同じ鍵を置くファイル |
-| `cardLending.borrow.address` | 貸し手のアドレス。家の中のアドレスだけ |
-| `cardLending.borrow.port` | 貸し手のポート。既定は 40772 |
-| `cardLending.borrow.hostName` | 貸し手の名前。貸し手の `hostNames` のどれか |
-| `cardLending.borrow.hopLimit` | 送るパケットの TTL。既定は 3 |
-| `cardLending.borrow.keyFile` | 鍵のファイル |
-
-1 つの `driver` は貸すか借りるかのどちらかで、両方は書けない。\
-鍵は 32 文字以上の文字列で、`openssl rand -base64 48` などで作る。\
-鍵のファイルを所有者とグループ以外が読めると、`driver` は起動しない。
-
-鍵そのものは網に流さない。\
-貸し手の nonce・借り手の nonce・名乗った名前から両方が同じ値を導き、互いに鍵を持つことを確かめる。\
-貸した鍵は貸し出しごとに導いた鍵の AES-GCM で封をして返し、借り手は封の合わないものと一度受け取ったものを捨てる。\
-貸し出しは接続 1 本に結び付き、接続が閉じるとカードの接続も返す。\
-ECM と鍵の中身はログに書かない。
-
-貸す前に、借り手との往復時間を 3 回測り、最も速い回が上限を超えたら貸さない。\
-3 回とも、貸し手が出した nonce に、それまでのやり取りと何回目かに結び付けた鍵の証明で答えたものだけを測る。\
-家の外からルーターの VPN・`ssh -R`・socat・ポートの公開・リバースプロキシのような中継を通っても、遠い借り手は通らない。\
-鍵を持たない中継は代わりに答えられず、鍵を持つ側までの往復は経路より短くならないため。\
-最も速い回で比べるので、LAN の揺れで断ることは少ない。
-
-まだ借りていない接続は全部で 8 本まで、1 つのアドレスから 3 本までとし、2 秒のうちに借りなければ閉じる。\
-IPv6 は /64 を 1 つのアドレスと数える。\
-同じアドレスの 3 本か全体の 8 本がふさがっているときに新しい接続が来たら、そこでいちばん長く待っている接続を閉じて入れる。\
-鍵の証明で 1 度でも答えた接続は閉じない。\
-借りている接続はこの数に入らないので、鍵を持たない機器が接続を開き続けても貸し出しは止まらない。
-
-貸し手は、次のものに答えない。
-
-- 家の中のアドレス以外からの接続。CGNAT の 100.64/10 も外とみなし、読まずに閉じる
-- `hostNames` に無い名前の要求
-- `Forwarded`・`X-Forwarded-For`・`X-Real-IP`・`Via`・`CF-Connecting-IP` などプロキシを通った印のある要求と、`Origin` のあるブラウザからの要求
-
-この口を Cloudflare や Traefik の ingress などの公開の入口に載せない。\
-TTL の既定の 3 は、Pod や docker の bridge の中の貸し手から WSL の NAT の内側の借り手まで、両向きとも届く最小の値。\
-どちらもホストのネットワークで同じ LAN にいるなら 1 で足りる。
 
 ### app
 
@@ -390,7 +272,7 @@ CLI では `Before carrying, ...` で始まる行、記録では `migration_stan
 ```
 src/        アプリケーション本体。プロジェクトごとの役割は CLAUDE.md にある
 tests/      テスト。src の各プロジェクトに対応する
-docker/     entrypoint、driver の開発用設定、/dev/dri の検出
+docker/     entrypoint、/dev/dri の検出、イメージに同梱するライセンスの検査
 patches/    イメージの中でソースからビルドする ffmpeg へのパッチ
 ```
 
@@ -408,6 +290,9 @@ docker compose exec app dotnet run --project src/Carina.Db -- --migrate
 docker compose exec app dotnet run --project src/Carina.Api
 ```
 
+開発用の `driver` は Puppis のイメージで動き、`compose.yml` に版を書いてある。\
+Puppis の `v0.1.0` が出るまでは `sha-<commit>` のタグを書き、出たらそのタグに替える。\
+設定は `compose.yml` の `configs` にある合成のチューナーのもので、`CARINA_DRIVER_CONFIG` で `driver` に渡す。\
 API はコンテナの 8080 番で待ち受け、ホストの 8081 番に公開する(`API_PORT` で変えられる)。\
 `app` は起動時にスキーマを適用しないので、先に `task migrate` を実行する。\
 開発用の `app` コンテナは、API を自動では起動しない。\
@@ -434,8 +319,18 @@ health は状態を表示するだけで、unhealthy になっても何も再起
 ```bash
 task probe:driver     # ヘルスチェック
 task logs:driver
-task restart:driver   # コード変更の反映
+task restart:driver
 ```
+
+`driver` のコードはこのリポジトリに無い。\
+変えるときは Puppis で変え、`compose.yml` のイメージの版を替えて `docker compose up -d driver` で入れ替える。
+
+### 取り決めの版
+
+`app` と `driver` の取り決めは `Puppis.Contracts` の package で、版は `Directory.Packages.props` に 1 か所だけ書く。\
+取り決めの変更は足すだけで、口やイベントを消さず名前を変えないので、古い `driver` と新しい `app` の組も新しい `driver` と古い `app` の組も正常な組である。\
+新しい口を使うときは、`driver` が挨拶で返すできることの一覧にその名前があるかを見てから頼む。\
+Puppis が新しい版を出したら `Directory.Packages.props` の版を上げ、使う口を足す変更と同じ PR で入れる。
 
 ## ライセンス
 

@@ -1,10 +1,10 @@
-using Carina.Contracts;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
-
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 

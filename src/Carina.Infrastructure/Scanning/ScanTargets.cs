@@ -1,6 +1,7 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Scanning;
 

@@ -3,10 +3,11 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

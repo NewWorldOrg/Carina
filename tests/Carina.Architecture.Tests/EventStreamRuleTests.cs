@@ -2,21 +2,18 @@ namespace Carina.Architecture.Tests;
 
 public sealed class EventStreamRuleTests
 {
-    private const string DriverProject = "Carina.Driver";
-
-    private static readonly string[] AppSideProjects =
+    private static readonly string[] Projects =
     [
         .. Directory
             .EnumerateDirectories(RepositoryLayout.SourceDirectory)
             .Select(directory => Path.GetFileName(directory))
-            .Where(name => !string.Equals(name, DriverProject, StringComparison.Ordinal))
             .Order(StringComparer.Ordinal),
     ];
 
     [Fact]
-    public void NoAppSideEventStreamWritesAPayloadField()
+    public void NoEventStreamWritesAPayloadField()
     {
-        Assert.Empty(AppSideProjects.SelectMany(project =>
+        Assert.Empty(Projects.SelectMany(project =>
             SourceScan.FilesMentioningAll(
                 Path.Combine(RepositoryLayout.SourceDirectory, project),
                 EventStreamContracts.ContentType,
@@ -28,7 +25,7 @@ public sealed class EventStreamRuleTests
     {
         Assert.Equal(
             ["Carina.Api/Events/AppEventStream.cs"],
-            AppSideProjects
+            Projects
                 .SelectMany(project => SourceScan
                     .FilesMentioning(Path.Combine(RepositoryLayout.SourceDirectory, project), EventStreamContracts.ContentType)
                     .Select(file => $"{project}/{file}"))
@@ -37,20 +34,11 @@ public sealed class EventStreamRuleTests
     }
 
     [Fact]
-    public void TheDriverHasAnEventStreamOfItsOwnWhichIsWhyTheRuleAboveStopsAtTheApp()
+    public void EveryProjectIsScanned()
     {
-        Assert.NotEmpty(SourceScan.FilesMentioning(
-            Path.Combine(RepositoryLayout.SourceDirectory, DriverProject),
-            EventStreamContracts.ContentType));
-    }
-
-    [Fact]
-    public void EveryProjectButTheDriverIsScanned()
-    {
-        Assert.Contains("Carina.Api", AppSideProjects);
-        Assert.DoesNotContain(DriverProject, AppSideProjects);
+        Assert.Contains("Carina.Api", Projects);
         Assert.Equal(
-            Directory.EnumerateDirectories(RepositoryLayout.SourceDirectory).Count() - 1,
-            AppSideProjects.Length);
+            Directory.EnumerateDirectories(RepositoryLayout.SourceDirectory).Count(),
+            Projects.Length);
     }
 }

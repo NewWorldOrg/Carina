@@ -1,9 +1,10 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Tests.Recordings;
+
+using Puppis.Contracts;
 
 using SilentEvents = Carina.TestSupport.SilentEvents;
 

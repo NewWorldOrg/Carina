@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Captions;
 using Carina.Domain.Channels;
@@ -23,6 +22,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

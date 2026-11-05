@@ -1,8 +1,9 @@
 using System.IO.Pipelines;
 
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
+
+using Puppis.Contracts;
 
 namespace Carina.TestSupport;
 

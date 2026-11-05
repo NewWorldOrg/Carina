@@ -1,9 +1,10 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 
 using Microsoft.Extensions.Logging;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Collection;
 

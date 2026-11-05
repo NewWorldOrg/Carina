@@ -8,7 +8,6 @@ using System.Text.Json;
 
 using Carina.Api.Authentication;
 using Carina.Api.Live;
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;
 using Carina.Domain.Driver;
@@ -21,6 +20,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Net.Http.Headers;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
@@ -6,6 +5,8 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Collection;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Recordings;
 

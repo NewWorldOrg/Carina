@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
 
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
@@ -12,6 +11,8 @@ using Carina.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

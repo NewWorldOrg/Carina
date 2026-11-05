@@ -130,11 +130,11 @@ public sealed class StreamingRuleSelfCheckTests
     }
 
     [Fact]
-    public void LeavesTheDriversOwnCounterAlone()
+    public void LeavesAFileOutsideTheFeatureAlone()
     {
         using SourceTree tree = new();
         tree.Write(
-            "Carina.Driver/Sessions/TunerSession.cs",
+            "Carina.Infrastructure/Collection/StreamHarvest.cs",
             "TsPacketReader reader = new(); ContinuityCounterTracker counting = new(); if (b != 0x47) skip(188);");
 
         Assert.Empty(StreamingRules.WhatTakesTheStreamApartInsideTheFeature(tree.Root));

@@ -30,18 +30,4 @@ public sealed class FileErasureRuleTests
                 .Select(reach => $"{relative} {reach}"))
             .Order(StringComparer.Ordinal));
     }
-
-    [Fact]
-    public void TheProcessThatRemovesAFileNobodyOwnsIsTheOneThatOwnsTheRoot()
-    {
-        Assert.Equal(
-            [
-                "/Carina.Driver/Recording/RecordingEraser.cs File.Delete",
-                "/Carina.Driver/Recording/StrayFileEraser.cs File.Delete",
-            ],
-            FileSystemRules.WhatCouldChangeWhatIsOnDisk(RepositoryLayout.SourceDirectory)
-                .Where(entry => entry.StartsWith("/Carina.Driver/Recording/", StringComparison.Ordinal))
-                .Where(entry => entry.EndsWith("File.Delete", StringComparison.Ordinal))
-                .ToArray());
-    }
 }

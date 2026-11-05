@@ -1,5 +1,6 @@
-using Carina.Contracts;
 using Carina.Domain.Encodings;
+
+using Puppis.Contracts;
 
 namespace Carina.Domain.Tests.Encodings;
 

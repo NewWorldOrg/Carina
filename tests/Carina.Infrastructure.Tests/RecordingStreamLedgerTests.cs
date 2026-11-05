@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
@@ -16,6 +15,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Npgsql;
+
+using Puppis.Contracts;
 
 using static Carina.Infrastructure.Tests.Recordings.RecordingStreamFixture;
 

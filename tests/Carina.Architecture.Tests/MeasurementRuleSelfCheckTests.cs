@@ -31,11 +31,11 @@ public sealed class MeasurementRuleSelfCheckTests
 
         try
         {
-            Write(directory, $"Carina.Driver/Recording/{mark}.cs", Parser(writes, beside));
-            Write(directory, $"Carina.Driver/Recording/only-{mark}.cs", Parser(beside));
+            Write(directory, $"Carina.Infrastructure/Streaming/{mark}.cs", Parser(writes, beside));
+            Write(directory, $"Carina.Infrastructure/Streaming/only-{mark}.cs", Parser(beside));
 
             Assert.Equal(
-                [$"Carina.Driver/Recording/{mark}.cs"],
+                [$"Carina.Infrastructure/Streaming/{mark}.cs"],
                 MeasurementRules.PlacesThatShowTheMarksOfAParser(directory.FullName));
         }
         finally
@@ -52,10 +52,10 @@ public sealed class MeasurementRuleSelfCheckTests
         try
         {
             Write(directory, "Carina.Broadcast/Reader.cs", Parser(Anchor, SecondAnchor));
-            Write(directory, "Carina.Contracts/Reader.cs", Parser(Anchor, SecondAnchor));
+            Write(directory, "Carina.Domain/Reader.cs", Parser(Anchor, SecondAnchor));
 
             Assert.Equal(
-                ["Carina.Contracts/Reader.cs"],
+                ["Carina.Domain/Reader.cs"],
                 MeasurementRules.PlacesThatShowTheMarksOfAParser(directory.FullName));
         }
         finally
@@ -73,7 +73,7 @@ public sealed class MeasurementRuleSelfCheckTests
         {
             Write(
                 directory,
-                "Carina.Driver/Ipc/Permissions.cs",
+                "Carina.Infrastructure/Driver/Permissions.cs",
                 Parser(
                     "private const uint Mode = 0x0FFF;",
                     "private const int RetryAfterMilliseconds = 188;"));
@@ -181,7 +181,7 @@ public sealed class MeasurementRuleSelfCheckTests
 
         try
         {
-            Write(directory, "Carina.Driver/Recording/QuietAudit.cs", source);
+            Write(directory, "Carina.Infrastructure/Streaming/QuietAudit.cs", source);
 
             Assert.Equal(marks, MeasurementRules.MarksIn(source));
             Assert.True(
@@ -196,35 +196,38 @@ public sealed class MeasurementRuleSelfCheckTests
     }
 
     [Fact]
-    public void DetectsASecondPlaceThatCountsAndLeavesTheDefinitionAlone()
+    public void DetectsAPlaceThatNamesTheCounterAndLeavesAByteSinkAlone()
     {
-        DirectoryInfo directory = Counting();
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-measurement-");
 
         try
         {
+            Write(
+                directory,
+                "Carina.Infrastructure/Streaming/CountingSupply.cs",
+                """
+                namespace Sample;
+                public sealed class CountingSupply
+                {
+                    private readonly ContinuityCounterTracker counters = new();
+
+                    public void Write(byte[] chunk) => counters.Observe(chunk.Length);
+                }
+                """);
+            Write(
+                directory,
+                "Carina.Infrastructure/Streaming/Supply.cs",
+                """
+                namespace Sample;
+                public sealed class Supply
+                {
+                    public void Write(byte[] chunk) { }
+                }
+                """);
+
             Assert.Equal(
-                [
-                    "Carina.Driver/Recording/RecordingSink.cs",
-                    "Carina.Driver/Sessions/TunerSession.cs",
-                ],
+                ["Carina.Infrastructure/Streaming/CountingSupply.cs"],
                 MeasurementRules.PlacesThatCountWhatTheTunerGave(directory.FullName));
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
-    public void DetectsAWriterThatReadsPacketsAndLeavesAByteSinkAlone()
-    {
-        DirectoryInfo directory = Counting();
-
-        try
-        {
-            Assert.Equal(
-                ["Carina.Driver/Recording/RecordingSink.cs"],
-                MeasurementRules.PacketsReadInsideTheRecordingWriter(directory.FullName));
         }
         finally
         {
@@ -236,56 +239,6 @@ public sealed class MeasurementRuleSelfCheckTests
         "namespace Sample;\npublic sealed class Sample\n{\n    "
         + string.Join("\n    ", lines)
         + "\n}\n";
-
-    private static DirectoryInfo Counting()
-    {
-        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-measurement-");
-
-        Write(
-            directory,
-            "Carina.Driver/Transport/ContinuityCounterTracker.cs",
-            """
-            namespace Sample;
-            public sealed class ContinuityCounterTracker
-            {
-                public void Observe(int counter) { }
-            }
-            """);
-        Write(
-            directory,
-            "Carina.Driver/Sessions/TunerSession.cs",
-            """
-            namespace Sample;
-            public sealed class TunerSession
-            {
-                public ContinuityCounterTracker Counters { get; } = new();
-            }
-            """);
-        Write(
-            directory,
-            "Carina.Driver/Recording/RecordingSink.cs",
-            """
-            namespace Sample;
-            public sealed class RecordingSink
-            {
-                private readonly ContinuityCounterTracker counters = new();
-
-                public void Write(byte[] chunk) => counters.Observe(chunk.Length);
-            }
-            """);
-        Write(
-            directory,
-            "Carina.Driver/Recording/RecordingWriter.cs",
-            """
-            namespace Sample;
-            public sealed class RecordingWriter
-            {
-                public void Write(byte[] chunk) { }
-            }
-            """);
-
-        return directory;
-    }
 
     private static void Write(DirectoryInfo directory, string relative, string source)
     {

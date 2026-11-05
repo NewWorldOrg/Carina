@@ -1,5 +1,6 @@
-using Carina.Contracts;
 using Carina.Domain.Programmes;
+
+using Puppis.Contracts;
 
 namespace Carina.Domain.Tests.Programmes;
 

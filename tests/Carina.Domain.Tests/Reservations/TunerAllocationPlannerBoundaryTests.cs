@@ -1,7 +1,8 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
+
+using Puppis.Contracts;
 
 namespace Carina.Domain.Tests.Reservations;
 

@@ -1,10 +1,11 @@
 using System.Text;
 
 using Carina.Api.Events;
-using Carina.Contracts;
 using Carina.Infrastructure.Events;
 
 using Microsoft.AspNetCore.Http;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.Unit;
 

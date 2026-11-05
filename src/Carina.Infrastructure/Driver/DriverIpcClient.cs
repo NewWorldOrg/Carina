@@ -3,13 +3,14 @@ using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
-using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Infrastructure.Configuration;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Driver;
 

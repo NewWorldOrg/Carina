@@ -1,7 +1,7 @@
 using Carina.Api.Services;
-
-using Carina.Contracts;
 using Carina.Domain.Quality;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Responder.Quality;
 

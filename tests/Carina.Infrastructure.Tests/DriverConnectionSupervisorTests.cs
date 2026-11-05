@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 
-using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Infrastructure.Configuration;
@@ -9,6 +8,8 @@ using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests;
 

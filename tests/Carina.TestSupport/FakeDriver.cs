@@ -1,12 +1,12 @@
 using System.Text.Json.Serialization.Metadata;
 using System.Threading.Channels;
 
-using Carina.Contracts;
-
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+
+using Puppis.Contracts;
 
 namespace Carina.TestSupport;
 

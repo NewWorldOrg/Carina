@@ -1,6 +1,5 @@
 using System.Net.Sockets;
 
-using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
@@ -9,6 +8,8 @@ using Carina.TestSupport;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests;
 

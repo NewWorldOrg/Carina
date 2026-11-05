@@ -1,5 +1,6 @@
-using Carina.Contracts;
 using Carina.Domain.Recordings;
+
+using Puppis.Contracts;
 
 using static Carina.Domain.Tests.Recordings.RecordingFactory;
 

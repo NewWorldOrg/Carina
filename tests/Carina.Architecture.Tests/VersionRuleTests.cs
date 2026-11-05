@@ -18,14 +18,13 @@ public sealed partial class VersionRuleTests
     }
 
     [Fact]
-    public void TheRuleReachesBothOfTheProcessesThisRepositoryBuilds()
+    public void TheRuleReachesTheProcessThisRepositoryBuilds()
     {
         Assert.Equal(
-            ["src/Carina.Api/Carina.Api.csproj", "src/Carina.Driver/Carina.Driver.csproj"],
+            ["src/Carina.Api/Carina.Api.csproj"],
             BuildFiles(RepositoryLayout.Root)
                 .Select(file => Relative(RepositoryLayout.Root, file))
-                .Where(file => file.EndsWith("/Carina.Api.csproj", StringComparison.Ordinal)
-                    || file.EndsWith("/Carina.Driver.csproj", StringComparison.Ordinal))
+                .Where(file => file.EndsWith("/Carina.Api.csproj", StringComparison.Ordinal))
                 .Order(StringComparer.Ordinal));
     }
 
@@ -40,11 +39,11 @@ public sealed partial class VersionRuleTests
             Laid(held, "src/Carina.Api/Carina.Api.csproj", "<Project />");
             Laid(
                 held,
-                "src/Carina.Driver/Carina.Driver.csproj",
+                "src/Carina.Db/Carina.Db.csproj",
                 "<Project><PropertyGroup><Version>9.9.9</Version></PropertyGroup></Project>");
 
             Assert.Equal(
-                ["src/Carina.Driver/Carina.Driver.csproj"],
+                ["src/Carina.Db/Carina.Db.csproj"],
                 BuildFilesTakingAVersionOfTheirOwn(held.FullName));
         }
         finally

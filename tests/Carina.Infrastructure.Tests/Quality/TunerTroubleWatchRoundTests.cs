@@ -1,9 +1,10 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Events;
 using Carina.Domain.Quality;
 using Carina.Infrastructure.Quality;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Quality;
 

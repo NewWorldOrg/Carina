@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-using Carina.Contracts;
+using Puppis.Contracts;
 
 namespace Carina.Api.Requests;
 

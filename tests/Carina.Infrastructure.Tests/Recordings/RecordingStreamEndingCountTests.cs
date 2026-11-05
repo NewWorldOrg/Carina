@@ -1,9 +1,10 @@
-using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Recordings;
+
+using Puppis.Contracts;
 
 using static Carina.Infrastructure.Tests.Recordings.RecordingStreamFixture;
 

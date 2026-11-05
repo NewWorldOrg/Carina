@@ -1,8 +1,9 @@
 # Carina
 
-Backend of a self-hosted recording system for Japanese digital broadcasting: a
-privileged driver process that owns the tuner hardware and writes recordings, and
-an unprivileged app process that serves the HTTP API around it.
+Backend of a self-hosted recording system for Japanese digital broadcasting: the
+unprivileged app process that serves the HTTP API around a privileged driver
+process. The driver, which owns the tuner hardware and writes recordings, lives in
+its own repository, Puppis, and ships as an image of its own.
 
 Two properties decide most of what follows, and are the argument to answer before
 relaxing any of it:
@@ -13,29 +14,29 @@ relaxing any of it:
   recording is being written, so a broken recording is found by searching for it
   rather than on playback.
 
-`README.md` is for running this — setup, configuration, image roles, driver
-operation. This file is for changing it, and does not repeat what is there.
+`README.md` is for running this — setup, configuration, image roles, how the
+driver is reached. This file is for changing it, and does not repeat what is
+there.
 
 ## Tech Stack
 
 - .NET 10, ASP.NET Core, xUnit.
 - EF Core and PostgreSQL. Migrations are applied by the `Carina.Db --migrate`
   entry point, never by the app on startup.
-- The driver reaches the tuner through the Linux DVB API with P/Invoke and the
-  card reader through `libpcsclite`, loaded at run time, and answers the app over
-  HTTP/1.1 on a Unix domain socket. It binds no TCP port for the app; the one
-  TCP port it can open is card lending's, and only when the configuration asks.
+- The app reaches the driver over HTTP/1.1 on a Unix domain socket. The contract —
+  the endpoints, events and messages the two exchange — is the NuGet package
+  `Puppis.Contracts`, published from the driver's repository and pinned to one
+  version in `Directory.Packages.props`. Nothing of the contract is defined here.
 - Build settings are central in `Directory.Build.props`, package versions in
   `Directory.Packages.props`. Neither is repeated per project.
 
 ## Architecture
 
-Two processes, one repository.
+One process, one repository; the driver is the other half of the pair and is
+reached only through the contract package.
 
 | Project | What it holds |
 | --- | --- |
-| `src/Carina.Driver` | privileged: tuning, descrambling, transport stream handling, sessions, recording files |
-| `src/Carina.Contracts` | the only artifact both processes share — the IPC contract |
 | `src/Carina.Domain` | entities, value objects and repository interfaces, grouped by aggregate |
 | `src/Carina.Broadcast` | broadcast-standard parsing, as a library that depends on nothing |
 | `src/Carina.Infrastructure` | persistence, the driver IPC client, external boundaries |
@@ -46,16 +47,14 @@ Reference direction is one way, and `tests/Carina.Architecture.Tests` holds it,
 reading the project files rather than the compiled output so that a reference
 declared but not yet used is still caught:
 
-- `Carina.Driver` may reference `Carina.Contracts` and nothing else. Reaching
-  into the app's layers would tie the two release streams back together.
-- `Carina.Domain` may reference `Carina.Contracts` and nothing else, and carries
-  no package reference at all — the driver client interface speaks the wire
-  types, and mirroring them would duplicate every additive contract change.
-- `Carina.Contracts` itself has neither project nor package references, because
-  a package added there reaches the domain transitively. It carries shared
-  vocabulary only: message records, enums, identifiers. A source rule keeps
-  `DriverEndpoints` and `DriverJson` out of the domain even though both compile
-  against it.
+- `Carina.Domain` references no project, and the one package it references is
+  `Puppis.Contracts` — the driver client interface speaks the wire types, and
+  mirroring them would duplicate every additive contract change. A source rule
+  keeps `DriverEndpoints` and `DriverJson` out of the domain even though both
+  compile against it.
+- `Puppis.Contracts` is pinned once, in `Directory.Packages.props`; no project
+  names a version of its own. Raising it is a deliberate act, made in the same
+  change as the first use of what the new version adds.
 - `Carina.Broadcast` has no project and no package references.
 - `Carina.Infrastructure` and `Carina.Api` depend inwards only.
 - `Carina.Db` is a leaf: no project may reference the migration entry point.
@@ -76,10 +75,13 @@ a green run means the rule holds, not that it inspected nothing. A rule marked
 way of breaking the invariant, not every way, and its self-check states what
 walks past it.
 
-- **Contract changes are additive only.** Removing or renaming an endpoint or an
-  event breaks the "old driver, new app" combination, which is the normal state.
+- **The contract is additive, and the app reads the driver's capabilities before
+  asking.** Puppis never removes or renames an endpoint or an event, so an old
+  driver with a new app is the normal state, and so is a new driver with an old
+  app. A driver that cannot do something says so in its greeting; the app asks
+  nothing the greeting does not list.
 - **App events are signals, not messages.** A producer signals through
-  `IAppEventPublisher` with a `Carina.Contracts.AppEventName` and nothing beside
+  `IAppEventPublisher` with a `Puppis.Contracts.AppEventName` and nothing beside
   it; the names declared there are the only instances, and none is reachable from
   a string. A subscriber reads a signal as "re-read", never as what changed.
 - **Reservations hold no foreign key to the channel definitions.** They persist
@@ -101,6 +103,11 @@ walks past it.
   mark that says a reservation has nowhere to tune is written only when the
   answer really was "nowhere" — a driver that went away would otherwise put it on
   everything.
+- **The head the recorder allows is the time the driver spends getting to the
+  first byte.** `RecordingSettings` names the three waits — a seat, the lock, the
+  first byte — in whole seconds, and a rule holds them equal to what the driver
+  waits. The driver's side of the same rule lives in Puppis, pinned to the same
+  three numbers; moving one means moving both.
 - **The programme cache is disposable.** Dropping it is recoverable by collecting
   again, so no table outside the cache may hold a foreign key into it.
 - **Which family a table belongs to is read from the feature namespace of its
@@ -111,23 +118,19 @@ walks past it.
 - **The process that writes a recording file is the only one that removes it.**
   The app's mount of the output roots is read-only, and throwing a recording away
   is a call over the socket naming one recording and one output root; there is no
-  call that throws away more than one. The driver derives the file name from the
-  recording id rather than being handed a path, and refuses a name that is not
-  one of its own, a root it does not declare, a root that holds no file at all
-  (which is what a lost mount looks like) and a recording a session is still
-  writing. The app removes only what it made from the recording — its picture,
-  its captions and the record of its data broadcast — the picture in a directory
-  of its own, the other two side by side in the captions directory.
+  call that throws away more than one. The app removes only what it made from the
+  recording — its picture, its captions and the record of its data broadcast —
+  the picture in a directory of its own, the other two side by side in the
+  captions directory. A rule lists every way the source tree could change what
+  is on disk, and the list holds no `FileStream` opened for writing: no recording
+  is written here.
 
   A file that no recording owns goes the same way, and only as something the most
   recent ledger check found. The caller names the finding, never a path: the app
   resolves it to the root, path, size and last write the check kept, checks again
   that nothing claims the file and that it has not changed, and hands exactly
-  those to the driver. The driver refuses a path that leaves the root or passes
-  through a link, the file of a recording a session is writing, a root that holds
-  no file at all, and a file whose size or last write is no longer the one it was
-  handed, which it reads again just before it unlinks. A finding about a
-  recording's own file is never a way to remove it.
+  those to the driver, which refuses anything that is not what it was handed. A
+  finding about a recording's own file is never a way to remove it.
 
   The check also walks the places the app writes into itself — the encode roots,
   the thumbnail directory and the captions directory, which holds the records of
@@ -137,35 +140,14 @@ walks past it.
   recording root, or holds a file under a recording's own file name, so a
   recording root seen from another path is never judged as one of them.
 - **The version is declared once, in `Directory.Build.props`.** Every assembly
-  carries it, the application answers with what it was built as, and a test holds
-  the two together.
-- **The driver asks nobody on its socket who they are.** The gate is the socket's
-  permissions and owning group; authentication would mean putting a secret in the
-  privileged process. The only secret the driver may hold is the card-lending key,
-  read from a file only its owner and group may read, and only when
-  `cardLending` is configured; the entrypoint strips database settings out of the
-  driver role rather than trusting it to ignore them.
-- **The card is lent only inside the household, and only as keys.** A driver that
-  lends opens a port of its own, served by a server apart from the one on the
-  socket, carrying the three lending requests and nothing else. It closes a
-  connection from outside loopback, RFC 1918, ULA and link-local before reading
-  it (the carriers' shared range is outside), does not answer a host it is not
-  named, a request bearing a proxy's forwarding headers or a browser's `Origin`,
-  and sends with a small TTL set on the listening socket so the handshake is
-  limited too. Before lending it times three round trips with the borrower, each
-  answered with a proof keyed to the transcript and to which round trip it is,
-  and refuses when the quickest exceeds a cap that is always on (5 ms by default,
-  30 at most): a relay inside the house can hide where a borrower is, but without
-  the key it cannot answer for it, and it cannot make the path to the key shorter.
-  Connections that have not borrowed get seats of their own, few in all and fewer
-  per address (an IPv6 /64 counting as one); a newcomer to a full address or a
-  full door closes the one there that has waited longest, never one that has
-  answered with the key, and each is closed two seconds after it opens unless it
-  has borrowed, so nothing without the key can crowd out the leases. A lease is a
-  challenge answered with a proof derived from the key,
-  both nonces and the host, bound to one connection and given back when it
-  closes; answers go back sealed with AES-GCM under a key derived per lease. No
-  card command crosses the network, and no ECM or key reaches a log.
+  built here carries it, the application answers with what it was built as, and a
+  test holds the two together. The contract package carries the driver's version,
+  not this one.
+- **The app asks the driver for nothing it is not entitled to by the socket.**
+  The driver authenticates nobody; the gate is the socket's permissions and owning
+  group, which is why the entrypoint demotes the app into the group the driver
+  gives its socket by default, and a rule holds that number against the
+  `Dockerfile`.
 - **No endpoint exempts itself from the default denial,** and no production
   source reads an identity handed to it by an edge. Authentication is decided by
   the session the request carries, not by a header a proxy could be talked into
@@ -198,15 +180,14 @@ walks past it.
   a lie the planner believes. The definitions live in one place and the migration
   carries a frozen copy; changing a definition means a new migration, and a test
   says so.
-- **The recording and the count come from the same chunk.** The session's read
-  loop hands each chunk to the writer and then to the counter, because a second
-  pipeline over the same stream puts its own back pressure on the read the
-  recording depends on. Counting is always on; no setting turns it off. One rule
-  names the files allowed to mention the counter; another lists the files
-  carrying two or more marks of a transport-stream parser (the three type names,
-  the sync byte, the 188 and 184 strides, the pid and continuity masks). **Trip
-  wire:** a loop that shows one mark or none — a stride written `4 + 180 + 4`,
-  lower-case hex — walks past.
+- **Nothing here takes the transport stream apart or counts it, except the
+  library whose trade is parsing.** The driver counts continuity as it writes,
+  and `Carina.Broadcast` reads sections and tables; a rule lists the files
+  outside that library carrying two or more marks of a transport-stream parser
+  (the three type names, the sync byte, the 188 and 184 strides, the pid and
+  continuity masks) and the list is empty, and no file names the driver's
+  counter. **Trip wire:** a loop that shows one mark or none — a stride written
+  `4 + 180 + 4`, lower-case hex — walks past.
 - **Streaming reads, counts nothing, and writes nothing that is not its own.** The
   live and playback paths give the bytes the driver already hands out to one
   transcoder; the app's drop figure is the fan-out's, never a continuity count.
@@ -231,29 +212,14 @@ walks past it.
   driver counts packets read and packets never seen separately, and the ledger
   stores their sum — a recording that lost more than it received is ordinary in
   heavy rain.
-- **Every count and the position beside it are read in one breath,** under a
-  single lock, because a position read a moment later can place more losses than
-  the count admits to. Both the entity and the table reject that pairing.
-- **Where a loss happened is kept as a second of the stream's own clock.** The
-  programme clock reference is what the file is played back against: a byte
-  offset only approximates it at a variable bit rate, and the wall clock keeps
-  running while a recording is interrupted. The 33-bit wrap is followed through;
-  a jump the broadcast spliced in is written down as a re-anchor, so the timeline
-  only reads forwards. A packet that sets the discontinuity indicator is taken at
-  its word; the size test behind it admits a hundred times the longest gap the
-  standard allows between two clock readings, and exists only for breaks nobody
-  declared.
+- **Every count and the position beside it are written together.** A position
+  read a moment later than its count can place more losses than the count admits
+  to, so both the entity and the table reject that pairing; the driver reads the
+  two under one lock before it sends them.
 - **The driver announces progress every thirty seconds** while anything is being
   recorded; the app wakes on it and writes the counts into the ledger as the
   recording runs, so one that dies part way through can be told from a perfect
   one.
-- **The clock the positions are measured against is the one the recorded service
-  carries, and the driver cannot yet know which that is.** Measurement runs on
-  the whole multiplex and follows the first programme clock it hears, handing
-  over only when that one goes silent. A PID filter that narrows the file to one
-  service would leave the followed clock possibly belonging to a service the file
-  no longer contains, so deciding how the recorded service's clock reaches the
-  session is a precondition for adding that filter.
 - **A search is one vocabulary and one predicate.** The names a search is asked
   by are declared once, in `ProgrammeSearchQuery`, which reads a query string into
   a `ProgrammeSearch`; the HTTP action declares no argument of its own, and the
@@ -280,11 +246,10 @@ walks past it.
   marks, through both.
 
   Folding in C# needs the runtime's Unicode tables (with `InvariantGlobalization`
-  on, `String.Normalize` silently returns its input). The driver folds nothing,
-  so it and its tests keep the invariant tables and a rule names the pair. Both
-  application entry points pin the default culture to the invariant one before
-  anything else, and the reading and folding are measured under several languages
-  to show no answer moves.
+  on, `String.Normalize` silently returns its input). No project here keeps the
+  invariant tables, and a rule says so. The application entry point pins the
+  default culture to the invariant one before anything else, and the reading and
+  folding are measured under several languages to show no answer moves.
 - **A visit of the guide is written in one statement, and its merge has two
   implementations.** `ProgrammeRepository.AbsorbAsync` hands the whole visit to
   the store as one `INSERT ... ON CONFLICT DO UPDATE ... WHERE (...) IS DISTINCT
@@ -360,9 +325,6 @@ walks past it.
   refuses the constant anywhere else, a render node written as a literal, and a
   flag that opens the card in any file but the three argument builders handed the
   settings. **Trip wire:** a node assembled from pieces walks past.
-- **A stop the driver was asked for exits 0; anything else exits 70.** Coming
-  back is the supervisor's half of the deal, which is why `on-failure` is the one
-  restart policy the driver must never be given.
 
 ## Conventions
 
@@ -413,6 +375,12 @@ and `Carina.Conventions.Tests` for the rules above. `Carina.TestSupport` and
 may reference another test project, and the shared support reaches no further than
 the domain.
 
+The driver is not built here, so no test starts one. The tests that drive the
+application through its HTTP surface stand a fake driver on a Unix socket, speaking
+the contract package; what the pair does together — a recording carried across an
+app swap, the counts a driver keeps while the app is away — is proven where both
+halves are present, not in this repository.
+
 Five filters divide the suite, and CI runs one job per filter:
 
 | Filter | What it selects |
@@ -458,38 +426,35 @@ tasks the README describes. Add a task rather than passing a longer command
 around by hand.
 
 GitHub Actions runs, on push and pull request to `master`, the build with warnings
-as errors, the format check, the test jobs above and the image-tag check. A second
-workflow builds the image and renders the compose file; it stays out of the way of
-draft pull requests, and on `master` publishes the image under the tags the README
-describes. A third, on a `v*` tag, builds nothing: it refuses a tag that is not the
-version `Directory.Build.props` declares, and gives the images that commit was
-already published under the release's tags.
-
-`.github/image-tags.sh` derives the driver and app sides of the image from the
-stages of the `Dockerfile` and the project references they publish rather than
-from a list, and refuses to answer when something that goes into the image belongs
-to neither side. Its `prove` runs on every push: a change to one side alone must
-move that side's tag and leave the other where it was. A tag already in the
-registry is never pushed again, because a driver left running on it would have its
-image changed underneath it. `driver-latest` and `app-latest` are the exception, and
-follow the newest release that is not a prerelease; `.github/release-latest.sh` makes
-that call and its `prove` runs on every push.
+as errors, the format check and the test jobs above. A second workflow builds the
+image and renders the compose file; it stays out of the way of draft pull
+requests, and on `master` publishes the image as `sha-<commit>`, the first twelve
+digits of the commit. A tag already in the registry is never pushed again. A third
+workflow, on a `v*` tag, builds nothing: it refuses a tag that is not the version
+`Directory.Build.props` declares, gives the image that commit was already
+published under the tag `vX.Y.Z`, and moves `latest` onto it when the release is
+the newest that is not a prerelease; `.github/release-latest.sh` makes that call
+and its `prove` runs on every pull request.
 
 `THIRD-PARTY-NOTICES.md` is checked by the image build. `docker/notices/nuget.sh`
-writes the license of every NuGet package the driver, app and migrate programs
-carry into the image, and `docker/notices/check.sh` fails the build when the NuGet
-table or the table of Ubuntu packages added to the base image differs from what
-the image holds, or when a package listed under a GPL license has no source
-package beside it. A package added on either side needs its row.
+writes the license of every NuGet package the app and migrate programs carry into
+the image, and `docker/notices/check.sh` fails the build when the NuGet table or
+the table of Ubuntu packages added to the base image differs from what the image
+holds, or when a package listed under a GPL license has no source package beside
+it. A package added needs its row; `Puppis.Contracts` has one, and its license
+text is `docker/notices/nuget/Puppis.Contracts.txt` because the package declares
+its license by expression and carries no text of its own.
 
 ## Development environment
 
-`compose.yml` brings up `app`, `driver` and `db` on the repository mounted at
-`/code`, sharing `/run/carina` where the driver socket lives. No tuner device is
-mapped: development runs against the synthetic tuner backend named in
-`docker/driver.development.json`. Real hardware is attached by an untracked
-compose override, which is also where the configuration for a real machine
-belongs.
+`compose.yml` brings up `app` on the repository mounted at `/code`, `driver` and
+`db`, the first two sharing `/run/carina` where the driver socket lives. `driver`
+is the Puppis image at a version written in the compose file, not a build of this
+repository; its configuration is the `configs` entry beside it, naming the
+synthetic tuner backend, and reaches the container as the file
+`CARINA_DRIVER_CONFIG` points at. No tuner device is mapped. Real hardware is
+attached by an untracked compose override, which is also where the configuration
+for a real machine belongs.
 
 The render node is the exception, because the transcoder is meant to find it
 without being configured. `task up` reads the host through `docker/dri-env.sh` and
@@ -506,10 +471,9 @@ container and hands the demoted process those beside its own group, so the numbe
 comes from the device rather than from a name; group 0 is never handed over.
 
 The `driver` service runs the driver as its own main process, so it receives
-SIGTERM directly and `stop_grace_period` covers the recording linger. It builds
-into a container-local artifacts path, so building from the `app` container never
-writes over the assembly the running driver has open, and a tree that does not
-compile costs one build attempt per cooldown rather than a restart loop.
+SIGTERM directly and `stop_grace_period` covers the recording linger. Changing the
+driver means changing Puppis and moving the version in the compose file; nothing
+built from this tree reaches it.
 
 `--migrate` takes a PostgreSQL advisory lock, so a second one waits instead of
 racing. Do not run it in parallel: two migrations still make the slower deploy
@@ -520,8 +484,8 @@ wait on a lock it cannot see.
 The system is the sum of the domains below. Each carries its own share of the
 HTTP surface, its own tables and its own tests.
 
-1. Foundation — the driver and app skeletons, IPC over the Unix socket, and an
-   execution environment driven entirely by configuration
+1. Foundation — the app skeleton, IPC over the Unix socket, and an execution
+   environment driven entirely by configuration
 2. Tuners and channel selection
 3. Programme guide
 4. Authentication

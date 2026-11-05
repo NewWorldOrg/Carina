@@ -1,8 +1,9 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-using Carina.Contracts;
 using Carina.Domain.Channels;
+
+using Puppis.Contracts;
 
 namespace Carina.Domain.Tests.Channels;
 

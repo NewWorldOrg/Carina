@@ -13,7 +13,7 @@ public sealed class ComposeHealthRuleSelfCheckTests
 
           driver:
             healthcheck:
-              test: ['CMD', 'dotnet', '/driver/Carina.Driver.dll', '--probe']
+              test: ['CMD', '/opt/puppis/Puppis.Driver', '--probe']
 
           db:
             healthcheck:
@@ -30,7 +30,7 @@ public sealed class ComposeHealthRuleSelfCheckTests
     public void DetectsADriverAskedThroughAGeneralHttpClient()
     {
         string compose = Sound.Replace(
-            "['CMD', 'dotnet', '/driver/Carina.Driver.dll', '--probe']",
+            "['CMD', '/opt/puppis/Puppis.Driver', '--probe']",
             "['CMD', 'curl', '--unix-socket', '/run/carina/driver.sock', 'http://localhost/health']",
             StringComparison.Ordinal);
 
@@ -50,7 +50,7 @@ public sealed class ComposeHealthRuleSelfCheckTests
                 """
                   driver:
                     healthcheck:
-                      test: ['CMD', 'dotnet', '/driver/Carina.Driver.dll', '--probe']
+                      test: ['CMD', '/opt/puppis/Puppis.Driver', '--probe']
                 """,
                 """
                   driver:

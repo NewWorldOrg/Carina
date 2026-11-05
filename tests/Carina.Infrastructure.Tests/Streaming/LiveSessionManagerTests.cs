@@ -1,6 +1,5 @@
 using System.Reflection;
 
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Streaming;
@@ -8,6 +7,8 @@ using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 
