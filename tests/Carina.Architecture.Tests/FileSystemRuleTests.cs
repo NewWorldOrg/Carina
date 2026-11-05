@@ -21,38 +21,6 @@ public sealed class FileSystemRuleTests
         "/Carina.Domain/Segments/SoundTrack.cs .CopyTo(",
         "/Carina.Domain/Streaming/LiveCaptions.cs .CopyTo(",
         "/Carina.Domain/Streaming/LiveFrame.cs .CopyTo(",
-        "/Carina.Driver/CardLending/BorrowedCard.cs .CopyTo(",
-        "/Carina.Driver/CardLending/CardLender.cs .CopyTo(",
-        "/Carina.Driver/CardLending/LendingProtocol.cs .Decrypt(",
-        "/Carina.Driver/CardLending/LendingProtocol.cs .Encrypt(",
-        "/Carina.Driver/Configuration/AtomicFile.cs File.Delete",
-        "/Carina.Driver/Configuration/AtomicFile.cs File.Move",
-        "/Carina.Driver/Configuration/AtomicFile.cs FileMode.",
-        "/Carina.Driver/Configuration/AtomicFile.cs newFileStream",
-        "/Carina.Driver/Configuration/DriverConfigurationReader.cs File.Create",
-        "/Carina.Driver/Configuration/DriverConfigurationReader.cs File.Delete",
-        "/Carina.Driver/Descrambling/CardReaders.cs .Replace(",
-        "/Carina.Driver/Descrambling/PcscLibrary.cs NativeLibrary",
-        "/Carina.Driver/Descrambling/SectionCollector.cs .CopyTo(",
-        "/Carina.Driver/Descrambling/TransportStreamDescrambler.cs .CopyTo(",
-        "/Carina.Driver/Ipc/DriverSocket.cs File.Delete",
-        "/Carina.Driver/Ipc/DriverSocket.cs File.SetUnixFileMode",
-        "/Carina.Driver/Ipc/StorageViews.cs File.Delete",
-        "/Carina.Driver/Ipc/StorageViews.cs FileMode.",
-        "/Carina.Driver/Ipc/UnixFile.cs LibraryImport",
-        "/Carina.Driver/Recording/RecordingEraser.cs File.Delete",
-        "/Carina.Driver/Recording/RecordingWriter.cs .Replace(",
-        "/Carina.Driver/Recording/RecordingWriter.cs FileMode.",
-        "/Carina.Driver/Recording/RecordingWriter.cs newFileStream",
-        "/Carina.Driver/Recording/StrayFileEraser.cs File.Delete",
-        "/Carina.Driver/Tuning/Dvb/DvbSystemCalls.cs LibraryImport",
-        "/Carina.Driver/Tuning/Dvb/DvbTunerDetector.cs .Replace(",
-        "/Carina.Driver/Tuning/TunerLedgerStore.cs .Replace(",
-        "/Carina.Driver/Tuning/Usb/CechZd1/CaptureUnpacker.cs .CopyTo(",
-        "/Carina.Driver/Tuning/Usb/CechZd1/CechZd1TunerDevice.cs .CopyTo(",
-        "/Carina.Driver/Tuning/Usb/LinuxUsbBulkReader.cs .CopyTo(",
-        "/Carina.Driver/Tuning/Usb/LinuxUsbConnection.cs LibraryImport",
-        "/Carina.Driver/Tuning/Usb/LinuxUsbHost.cs LibraryImport",
         "/Carina.Infrastructure/Auth/SigningKeys.cs .Create()",
         "/Carina.Infrastructure/Captions/CaptionRecordFormat.cs .CopyTo(",
         "/Carina.Infrastructure/Captions/CaptionShelf.cs Directory.CreateDirectory",
@@ -66,8 +34,8 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/DataBroadcast/DataBroadcastShelf.cs File.Create",
         "/Carina.Infrastructure/DataBroadcast/DataBroadcastShelf.cs File.Delete",
         "/Carina.Infrastructure/DataBroadcast/DataBroadcastShelf.cs File.Move",
-                "/Carina.Infrastructure/Encodings/CaptionTrackMux.cs File.WriteAllTextAsync",
-"/Carina.Infrastructure/Encodings/ChapterMetadataFile.cs File.WriteAllTextAsync",
+        "/Carina.Infrastructure/Encodings/CaptionTrackMux.cs File.WriteAllTextAsync",
+        "/Carina.Infrastructure/Encodings/ChapterMetadataFile.cs File.WriteAllTextAsync",
         "/Carina.Infrastructure/Encodings/EncodeArtefactPlacer.cs File.Move",
         "/Carina.Infrastructure/Encodings/EncodeScratchCleaner.cs File.Delete",
         "/Carina.Infrastructure/Encodings/Mp4TrackFlags.cs FileMode.",
@@ -101,14 +69,9 @@ public sealed class FileSystemRuleTests
     }
 
     [Fact]
-    public void TheOnlyProcessThatWritesRecordingsIsTheOneThatOwnsTheHardware()
+    public void NothingHereOpensAFileStreamOfItsOwnBecauseRecordingsAreWrittenByTheDriver()
     {
-        Assert.Equal(
-            [
-                "/Carina.Driver/Configuration/AtomicFile.cs newFileStream",
-                "/Carina.Driver/Recording/RecordingWriter.cs newFileStream",
-            ],
-            Inventory.Where(entry => entry.EndsWith("newFileStream", StringComparison.Ordinal)).ToArray());
+        Assert.DoesNotContain(Inventory, entry => entry.EndsWith("newFileStream", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -254,21 +217,5 @@ public sealed class FileSystemRuleTests
 
         Assert.Equal([".Replace("], FileSystemRules.WhatCouldChangeWhatIsOnDiskIn(source));
         Assert.Contains("Path.GetRelativePath(root, entry).Replace(", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TheReplaceInTheRecordingWriterRewordsAFailureAndMovesNoFile()
-    {
-        string source = File.ReadAllText(Path.Combine(
-            RepositoryLayout.SourceDirectory,
-            "Carina.Driver",
-            "Recording",
-            "RecordingWriter.cs"));
-
-        Assert.Equal(
-            [".Replace(", "FileMode.", "newFileStream"],
-            FileSystemRules.WhatCouldChangeWhatIsOnDiskIn(source));
-        Assert.Contains("error.Message.Replace(", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("File.Replace(", source, StringComparison.Ordinal);
     }
 }

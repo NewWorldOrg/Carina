@@ -43,7 +43,6 @@ public sealed class DeclaredVersionTests
         Assembly[] built =
         [
             typeof(DeclaredVersion).Assembly,
-            typeof(Carina.Contracts.DriverProtocol).Assembly,
             typeof(Carina.Domain.Recordings.RecordingId).Assembly,
         ];
 

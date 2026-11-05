@@ -1,7 +1,8 @@
-using Carina.Contracts;
 using Carina.Domain.Integrity;
 
 using Microsoft.Extensions.Logging;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Integrity;
 

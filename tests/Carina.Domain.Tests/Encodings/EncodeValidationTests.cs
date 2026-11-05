@@ -1,8 +1,9 @@
 using System.Reflection;
 
-using Carina.Contracts;
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
+
+using Puppis.Contracts;
 
 namespace Carina.Domain.Tests.Encodings;
 
@@ -198,9 +199,9 @@ public sealed class EncodeValidationTests
             [
                 typeof(EncodeDestinationDraft),
                 typeof(EncodeProfileDraft),
-                typeof(IReadOnlyList<StorageRootDto>),
                 typeof(IReadOnlyList<EncodeProfileId>),
                 typeof(IReadOnlyList<OutputRoot>),
+                typeof(IReadOnlyList<StorageRootDto>),
             ],
             handedIn.Distinct().OrderBy(type => type.ToString(), StringComparer.Ordinal));
     }

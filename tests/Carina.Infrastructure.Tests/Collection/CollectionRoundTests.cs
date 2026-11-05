@@ -1,7 +1,6 @@
 using Carina.Broadcast.Descriptors;
 using Carina.Broadcast.Tables;
 using Carina.BroadcastTestSupport;
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
@@ -11,6 +10,8 @@ using Carina.Infrastructure.Tests.Scanning;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Collection;
 

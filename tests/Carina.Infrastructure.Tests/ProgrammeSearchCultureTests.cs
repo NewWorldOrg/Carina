@@ -1,10 +1,11 @@
 using System.Globalization;
 
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Programmes;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests;
 

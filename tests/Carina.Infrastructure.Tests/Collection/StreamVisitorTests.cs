@@ -1,6 +1,5 @@
 using Carina.Broadcast.Tables;
 using Carina.BroadcastTestSupport;
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
@@ -8,6 +7,8 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Scanning;
 using Carina.TestSupport;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Collection;
 
@@ -135,7 +136,7 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
 
         await Visitor(driver, context).VisitAsync(Channel, hurried: true, Cancel);
 
-        Assert.Contains(Contracts.SessionPurpose.SurveyNow, driver.Purposes);
+        Assert.Contains(Puppis.Contracts.SessionPurpose.SurveyNow, driver.Purposes);
     }
 
     [Fact]
@@ -149,7 +150,7 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
 
         await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
 
-        Assert.Equal([Contracts.SessionPurpose.Survey], driver.Purposes);
+        Assert.Equal([Puppis.Contracts.SessionPurpose.Survey], driver.Purposes);
     }
 
     [Fact]

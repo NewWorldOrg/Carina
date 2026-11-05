@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Captions;
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
@@ -10,6 +9,8 @@ using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Recordings;
 

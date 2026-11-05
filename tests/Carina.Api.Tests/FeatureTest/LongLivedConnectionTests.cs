@@ -1,11 +1,12 @@
 using System.Net;
 
 using Carina.Api.Events;
-using Carina.Contracts;
 using Carina.Domain.Auth;
 using Carina.Infrastructure.Events;
 
 using Microsoft.Extensions.DependencyInjection;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

@@ -1,4 +1,4 @@
-using Carina.Contracts;
+using Puppis.Contracts;
 
 namespace Carina.Api.Services;
 

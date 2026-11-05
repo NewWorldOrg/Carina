@@ -5,7 +5,7 @@ using System.Runtime.Versioning;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Recordings;
 
-using driver::Carina.Driver.Configuration;
+using driver::Puppis.Driver.Configuration;
 
 namespace Carina.Api.Tests.FeatureTest;
 

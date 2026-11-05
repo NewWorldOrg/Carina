@@ -4,12 +4,6 @@ namespace Carina.Architecture.Tests;
 
 public sealed partial class GlobalizationRuleTests
 {
-    private static readonly string[] TheProcessesThatNormaliseNothing =
-    [
-        "src/Carina.Driver/Carina.Driver.csproj",
-        "tests/Carina.Driver.Tests/Carina.Driver.Tests.csproj",
-    ];
-
     [Fact]
     public void TheRepositoryAsksTheRuntimeForItsUnicodeTables()
         => Assert.Equal(
@@ -17,33 +11,22 @@ public sealed partial class GlobalizationRuleTests
             Declared(Path.Combine(RepositoryLayout.Root, "Directory.Build.props")));
 
     [Fact]
-    public void OnlyTheProcessesThatNormaliseNothingKeepTheInvariantTablesAndTheirTestsGoWithThem()
+    public void NoProjectKeepsTheInvariantTablesBecauseEveryProcessHereFoldsText()
     {
-        string[] declaring =
-        [
-            .. Projects()
-                .Where(project => Declared(project) is not null)
-                .Select(project => Path.GetRelativePath(RepositoryLayout.Root, project).Replace('\\', '/'))
-                .Order(StringComparer.Ordinal),
-        ];
-
-        Assert.Equal(TheProcessesThatNormaliseNothing.Order(StringComparer.Ordinal), declaring);
-        Assert.All(
-            TheProcessesThatNormaliseNothing,
-            project => Assert.Equal("true", Declared(Path.Combine(RepositoryLayout.Root, project))));
+        Assert.Empty(Projects()
+            .Where(project => Declared(project) is not null)
+            .Select(project => Path.GetRelativePath(RepositoryLayout.Root, project).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal));
     }
 
     [Fact]
-    public void TheRuleWouldSeeAProjectThatKeptTheInvariantTablesWithoutSayingSoHere()
+    public void TheRuleWouldSeeAProjectThatKeptTheInvariantTables()
     {
         string fixture = Path.Combine(
             RepositoryLayout.Root,
             "tests/Carina.Architecture.Tests/Fixtures/BreaksTheGlobalizationRule/Violating.csproj.fixture");
 
         Assert.Equal("true", Declared(fixture));
-        Assert.DoesNotContain(
-            Path.GetRelativePath(RepositoryLayout.Root, fixture).Replace('\\', '/'),
-            TheProcessesThatNormaliseNothing);
     }
 
     private static IEnumerable<string> Projects()

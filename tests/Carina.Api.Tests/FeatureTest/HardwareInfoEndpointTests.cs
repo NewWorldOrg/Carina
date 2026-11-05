@@ -1,8 +1,9 @@
 using System.Net;
 using System.Text.Json;
 
-using Carina.Contracts;
 using Carina.TestSupport;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

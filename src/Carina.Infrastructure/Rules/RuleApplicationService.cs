@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
@@ -7,6 +6,8 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Reservations;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Rules;
 

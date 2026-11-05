@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Captions;
 using Carina.Domain.Driver;
 using Carina.Domain.Integrity;
@@ -8,6 +7,8 @@ using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Thumbnails;
 
 using Microsoft.Extensions.Logging;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Recordings;
 

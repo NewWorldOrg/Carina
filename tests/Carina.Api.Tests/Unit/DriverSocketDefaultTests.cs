@@ -9,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-using DriverConfiguration = driver::Carina.Driver.Configuration.DriverConfiguration;
+using DriverConfiguration = driver::Puppis.Driver.Configuration.DriverConfiguration;
 
 namespace Carina.Api.Tests.Unit;
 

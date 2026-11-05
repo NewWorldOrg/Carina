@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Events;
@@ -6,6 +5,8 @@ using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 
 using Microsoft.Extensions.Logging;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Quality;
 

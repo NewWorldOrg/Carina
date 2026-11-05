@@ -1,11 +1,12 @@
 using System.Runtime.Versioning;
 
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

@@ -1,8 +1,9 @@
 using Carina.Api.Common;
-using Carina.Contracts;
 using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Machines;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Services;
 

@@ -1,7 +1,8 @@
 using System.Reflection;
 
-using Carina.Contracts;
 using Carina.Domain.Events;
+
+using Puppis.Contracts;
 
 namespace Carina.Conventions.Tests;
 

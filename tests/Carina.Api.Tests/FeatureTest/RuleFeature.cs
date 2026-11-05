@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using Carina.Api.Tests.Unit;
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
@@ -21,6 +20,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

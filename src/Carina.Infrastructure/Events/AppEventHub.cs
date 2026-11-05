@@ -2,8 +2,9 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 
-using Carina.Contracts;
 using Carina.Domain.Events;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Events;
 

@@ -1,6 +1,5 @@
 using System.Globalization;
 
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
@@ -8,6 +7,8 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Migration;
 

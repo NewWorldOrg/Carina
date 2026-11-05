@@ -1,8 +1,9 @@
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Scans;
+
+using Puppis.Contracts;
 
 namespace Carina.TestSupport;
 
@@ -356,13 +357,13 @@ public sealed class RecordingAppEvents : IAppEventPublisher
 
 public sealed class HeldRecordingTitles : Carina.Domain.Recordings.IRecordingTitles
 {
-    public Dictionary<Carina.Contracts.SessionId, string> Titles { get; } = [];
+    public Dictionary<Puppis.Contracts.SessionId, string> Titles { get; } = [];
 
     public int Asked { get; private set; }
 
     public Exception? Failure { get; set; }
 
-    public Task<IReadOnlyDictionary<Carina.Contracts.SessionId, string>> TitlesAsync(
+    public Task<IReadOnlyDictionary<Puppis.Contracts.SessionId, string>> TitlesAsync(
         CancellationToken cancellationToken)
     {
         Asked++;
@@ -372,7 +373,7 @@ public sealed class HeldRecordingTitles : Carina.Domain.Recordings.IRecordingTit
             throw Failure;
         }
 
-        return Task.FromResult<IReadOnlyDictionary<Carina.Contracts.SessionId, string>>(
-            new Dictionary<Carina.Contracts.SessionId, string>(Titles));
+        return Task.FromResult<IReadOnlyDictionary<Puppis.Contracts.SessionId, string>>(
+            new Dictionary<Puppis.Contracts.SessionId, string>(Titles));
     }
 }

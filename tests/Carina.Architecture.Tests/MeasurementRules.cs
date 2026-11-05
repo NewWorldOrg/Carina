@@ -6,27 +6,9 @@ public static partial class MeasurementRules
 {
     public const string Counter = "ContinuityCounterTracker";
 
-    public const string Packet = "TsPacket";
-
-    public const string Reader = "TsPacketReader";
-
-    public const string CounterDefinition = "ContinuityCounterTracker.cs";
-
-    public const string RecordingFolder = "Carina.Driver/Recording/";
-
     public const int MarksThatMakeAParser = 2;
 
     public static readonly IReadOnlyList<string> ParsersByTrade = ["Carina.Broadcast"];
-
-    public static readonly IReadOnlyList<string> AllowedToTakeTheStreamApart =
-    [
-        "Carina.Driver/Descrambling/TransportStreamDescrambler.cs",
-        "Carina.Driver/Sessions/TunerSession.cs",
-        "Carina.Driver/Transport/ContinuityCounterTracker.cs",
-        "Carina.Driver/Transport/TsPacketReader.cs",
-        "Carina.Driver/Tuning/FakeTunerDevice.cs",
-        "Carina.Driver/Tuning/Usb/CechZd1/CaptureUnpacker.cs",
-    ];
 
     public static IReadOnlyList<Regex> Marks =>
         [
@@ -56,18 +38,7 @@ public static partial class MeasurementRules
         ];
 
     public static IReadOnlyList<string> PlacesThatCountWhatTheTunerGave(string directory) =>
-        [
-            .. SourceScan
-                .FilesMentioning(directory, Counter)
-                .Where(file => !file.EndsWith(CounterDefinition, StringComparison.Ordinal)),
-        ];
-
-    public static IReadOnlyList<string> PacketsReadInsideTheRecordingWriter(string directory) =>
-        [
-            .. SourceScan
-                .FilesMentioning(directory, Counter, Packet, Reader)
-                .Where(file => file.Contains(RecordingFolder, StringComparison.Ordinal)),
-        ];
+        SourceScan.FilesMentioning(directory, Counter);
 
     private static bool PliesTheTrade(string relative) =>
         ParsersByTrade.Any(project =>

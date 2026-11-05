@@ -1,10 +1,11 @@
-using Carina.Contracts;
 using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Encodings;
 

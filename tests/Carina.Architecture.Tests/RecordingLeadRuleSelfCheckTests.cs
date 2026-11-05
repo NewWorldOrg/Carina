@@ -2,21 +2,6 @@ namespace Carina.Architecture.Tests;
 
 public sealed class RecordingLeadRuleSelfCheckTests
 {
-    private const string Driver = """
-        public sealed record DvbTunerSettings(TimeSpan LockPatience, TimeSpan RetryInterval, TimeSpan BytePatience)
-        {
-            public static readonly DvbTunerSettings Default = new(
-                TimeSpan.FromSeconds(5),
-                TimeSpan.FromMilliseconds(100),
-                TimeSpan.FromSeconds(5)
-            );
-        }
-        """;
-
-    private const string Sessions = """
-        public static readonly TimeSpan HandOverLimit = TimeSpan.FromSeconds(10);
-        """;
-
     [Theory]
     [InlineData(5, 5, 10, 0)]
     [InlineData(4, 5, 10, 1)]
@@ -38,31 +23,12 @@ public sealed class RecordingLeadRuleSelfCheckTests
         Assert.Equal(3, Judged("public static readonly TimeSpan TuningLead = TimeSpan.FromSeconds(25);").Count);
     }
 
-    [Fact]
-    public void ADriverWhoseShapeTheRuleCannotReadIsReportedRatherThanPassed()
-    {
-        Assert.Single(Judged(Recorder(5, 5, 10), driver: "public sealed record DvbTunerSettings;"));
-    }
-
-    [Fact]
-    public void ADriverThatNamesADifferentNumberOfWaitsIsReportedRatherThanPassed()
-    {
-        string third = Driver.Replace(
-            "TimeSpan.FromMilliseconds(100)",
-            "TimeSpan.FromSeconds(1)",
-            StringComparison.Ordinal);
-
-        Assert.Single(Judged(Recorder(5, 5, 10), driver: third));
-    }
-
-    private static IReadOnlyList<string> Judged(string recorder, string? driver = null)
+    private static IReadOnlyList<string> Judged(string recorder)
     {
         DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-head-");
 
         try
         {
-            Write(directory, RecordingLeadRules.DriverSettings, driver ?? Driver);
-            Write(directory, RecordingLeadRules.DriverSessions, Sessions);
             Write(directory, RecordingLeadRules.RecorderSettings, recorder);
 
             return RecordingLeadRules.WhereTheHeadDisagreesWithTheDriver(directory.FullName);

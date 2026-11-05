@@ -2,12 +2,13 @@ using Carina.Api.Controllers.DriverStatus;
 using Carina.Api.Responder;
 using Carina.Api.Responder.DriverStatus;
 using Carina.Api.Services;
-using Carina.Contracts;
 using Carina.Domain.DriverStatus;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.Unit;
 

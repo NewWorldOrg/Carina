@@ -32,12 +32,14 @@ expect() {
 }
 
 prove() {
+  expect v0.1.0 yes "v0.1.0"
   expect v0.1.2 yes "v0.1.0 v0.1.1 v0.1.2"
   expect v0.1.1 "v0.1.1 is older than v0.1.2" "v0.1.0 v0.1.1 v0.1.2"
   expect v0.2.0-rc.1 "v0.2.0-rc.1 is a prerelease" "v0.1.2 v0.2.0-rc.1"
   expect v0.2.0 yes "v0.1.2 v0.2.0-rc.1 v0.2.0-rc.2 v0.2.0"
   expect v0.1.3 yes "v0.1.2 v0.1.3 v0.2.0-rc.1"
   expect v0.10.0 yes "v0.9.0 v0.10.0"
+  expect v1.0.0 "v1.0.0 is older than v1.0.1" "v0.9.0 v1.0.0 v1.0.1"
 }
 
 case "${1-}" in

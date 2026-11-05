@@ -1,9 +1,10 @@
 using System.Numerics;
 
-using Carina.Contracts;
 using Carina.Domain.Migration;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Programmes;
+
+using Puppis.Contracts;
 
 using static Carina.Infrastructure.Tests.Migration.CarriedMigrationFixtures;
 

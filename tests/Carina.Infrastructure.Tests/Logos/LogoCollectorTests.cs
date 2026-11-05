@@ -1,6 +1,5 @@
 using Carina.Broadcast.Tables;
 using Carina.BroadcastTestSupport;
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Infrastructure.Driver;
@@ -12,6 +11,8 @@ using Carina.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Logos;
 

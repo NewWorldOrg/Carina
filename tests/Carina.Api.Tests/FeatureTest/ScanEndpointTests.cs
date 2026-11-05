@@ -2,11 +2,11 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Api.Common;
-
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.TestSupport;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

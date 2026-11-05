@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
@@ -9,6 +8,8 @@ using Carina.Infrastructure.Collection;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Streaming;
 

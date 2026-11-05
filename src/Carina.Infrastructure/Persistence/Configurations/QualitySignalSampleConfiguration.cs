@@ -1,6 +1,5 @@
 using System.Text.Json;
 
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
@@ -8,6 +7,8 @@ using Carina.Domain.Recordings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Persistence.Configurations;
 

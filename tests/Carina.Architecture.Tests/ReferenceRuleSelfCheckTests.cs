@@ -3,12 +3,10 @@ namespace Carina.Architecture.Tests;
 public sealed class ReferenceRuleSelfCheckTests
 {
     private static ProjectGraph ViolatingGraph() => ProjectGraph.FromNodes(
-        new ProjectNode("Carina.Contracts", [], ["Microsoft.EntityFrameworkCore"]),
-        new ProjectNode("Carina.Domain", ["Carina.Infrastructure"], ["Microsoft.EntityFrameworkCore"]),
+        new ProjectNode("Carina.Domain", ["Carina.Infrastructure"], ["Puppis.Contracts", "Microsoft.EntityFrameworkCore"]),
         new ProjectNode("Carina.Infrastructure", ["Carina.Domain"], []),
         new ProjectNode("Carina.Db", [], []),
-        new ProjectNode("Carina.Api", ["Carina.Db"], []),
-        new ProjectNode("Carina.Driver", ["Carina.Contracts", "Carina.Infrastructure"], []));
+        new ProjectNode("Carina.Api", ["Carina.Db"], []));
 
     [Fact]
     public void DetectsAProjectOnDiskTheSolutionDoesNotList()
@@ -47,43 +45,12 @@ public sealed class ReferenceRuleSelfCheckTests
     }
 
     [Fact]
-    public void DetectsADriverThatReachesTheDomain()
-    {
-        IReadOnlyList<string> forbidden = ViolatingGraph().ForbiddenReferencesOf("Carina.Driver", "Carina.Contracts");
-
-        Assert.Equal(["Carina.Domain", "Carina.Infrastructure"], forbidden);
-    }
-
-    [Fact]
-    public void DetectsADriverThatTakesTheDomainsOwnAllowanceForItsOwn()
-    {
-        var graph = ProjectGraph.FromNodes(
-            new ProjectNode("Carina.Contracts", [], []),
-            new ProjectNode("Carina.Domain", ["Carina.Contracts"], []),
-            new ProjectNode("Carina.Driver", ["Carina.Contracts", "Carina.Domain"], []));
-
-        Assert.Empty(graph.ForbiddenReferencesOf("Carina.Domain", "Carina.Contracts"));
-        Assert.Equal(["Carina.Domain"], graph.ForbiddenReferencesOf("Carina.Driver", "Carina.Contracts"));
-    }
-
-    [Fact]
     public void DetectsADomainThatDependsOnAnythingBeyondTheContract()
     {
         ProjectGraph graph = ViolatingGraph();
 
-        Assert.Equal(
-            ["Carina.Domain", "Carina.Infrastructure"],
-            graph.ForbiddenReferencesOf("Carina.Domain", "Carina.Contracts"));
-        Assert.NotEmpty(graph.Node("Carina.Domain").PackageReferences);
-    }
-
-    [Fact]
-    public void DetectsAContractThatTakesOnAPackage()
-    {
-        ProjectNode contracts = ViolatingGraph().Node("Carina.Contracts");
-
-        Assert.Empty(contracts.ProjectReferences);
-        Assert.NotEmpty(contracts.PackageReferences);
+        Assert.Equal(["Carina.Domain", "Carina.Infrastructure"], graph.ForbiddenReferencesOf("Carina.Domain"));
+        Assert.NotEqual(["Puppis.Contracts"], graph.Node("Carina.Domain").PackageReferences);
     }
 
     [Fact]
@@ -135,7 +102,7 @@ public sealed class ReferenceRuleSelfCheckTests
     {
         var graph = ProjectGraph.Load(RepositoryLayout.SourceDirectory);
 
-        Assert.Contains("Carina.Contracts", graph.Node("Carina.Driver").ProjectReferences, StringComparer.Ordinal);
+        Assert.Equal(["Puppis.Contracts"], graph.Node("Carina.Domain").PackageReferences);
         Assert.Contains("Carina.Domain", graph.TransitiveReferencesOf("Carina.Api"));
     }
 }

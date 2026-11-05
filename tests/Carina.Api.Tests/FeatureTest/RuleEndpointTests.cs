@@ -1,13 +1,13 @@
 using System.Net;
 using System.Text.Json;
 
-using Carina.Contracts;
-
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

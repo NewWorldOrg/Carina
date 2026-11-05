@@ -1,8 +1,9 @@
 using Carina.Api.Services;
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Responder.Epg;
 

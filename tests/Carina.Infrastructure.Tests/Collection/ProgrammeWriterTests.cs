@@ -1,7 +1,6 @@
 using Carina.Broadcast.Tables;
 using Carina.Broadcast.Text;
 using Carina.BroadcastTestSupport;
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
@@ -11,6 +10,8 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Scanning;
 using Carina.TestSupport;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Collection;
 

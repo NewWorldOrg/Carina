@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
-using Carina.Contracts;
+using Puppis.Contracts;
 
 namespace Carina.Domain.Driver;
 

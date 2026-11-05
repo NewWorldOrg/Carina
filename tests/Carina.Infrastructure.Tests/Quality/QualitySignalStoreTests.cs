@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
@@ -7,6 +6,8 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Quality;
 
 using Microsoft.EntityFrameworkCore;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Quality;
 

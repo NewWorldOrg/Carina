@@ -1,9 +1,10 @@
 using System.Diagnostics;
 
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
+
+using Puppis.Contracts;
 
 using Xunit.Abstractions;
 

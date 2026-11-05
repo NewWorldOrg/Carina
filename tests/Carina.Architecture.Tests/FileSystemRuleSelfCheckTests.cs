@@ -79,7 +79,6 @@ public sealed class FileSystemRuleSelfCheckTests
     {
         IReadOnlyList<string> found = FileSystemRules.WhatCouldChangeWhatIsOnDisk(RepositoryLayout.SourceDirectory);
 
-        Assert.Contains(found, entry => entry.StartsWith("/Carina.Driver/", StringComparison.Ordinal));
         Assert.Contains(found, entry => entry.StartsWith("/Carina.Api/", StringComparison.Ordinal));
         Assert.Contains(found, entry => entry.StartsWith("/Carina.Broadcast/", StringComparison.Ordinal));
         Assert.Contains(found, entry => entry.StartsWith("/Carina.Infrastructure/", StringComparison.Ordinal));

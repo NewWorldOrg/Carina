@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
@@ -7,6 +6,8 @@ using Carina.Infrastructure.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Reservations;
 

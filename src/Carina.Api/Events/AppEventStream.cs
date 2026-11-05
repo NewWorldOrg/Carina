@@ -1,8 +1,9 @@
 using System.Threading.Channels;
 
 using Carina.Api.Responder;
-using Carina.Contracts;
 using Carina.Infrastructure.Events;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Events;
 

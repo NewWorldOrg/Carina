@@ -1,5 +1,4 @@
 using Carina.Api.Common;
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
@@ -7,6 +6,8 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
 
 using Microsoft.EntityFrameworkCore;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Services;
 

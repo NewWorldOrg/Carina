@@ -62,9 +62,6 @@ public sealed class StreamingRuleTests
         Assert.NotEmpty(SourceScan.FilesMentioning(
             Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Infrastructure", "Collection"),
             "SurveySubscriber"));
-        Assert.Equal(
-            ["Carina.Contracts/DriverEndpoints.cs"],
-            SourceScan.FilesMentioning(RepositoryLayout.SourceDirectory, "public const string ViewerSubscriber"));
     }
 
     [Fact]

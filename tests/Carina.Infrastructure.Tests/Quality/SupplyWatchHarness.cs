@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
@@ -6,6 +5,8 @@ using Carina.Infrastructure.Quality;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Tests.Quality;
 

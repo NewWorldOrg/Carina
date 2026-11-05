@@ -1,10 +1,9 @@
 #!/bin/sh
 set -eu
 
-repository="${1:?the repository the image is in}"
-published="${2:?the tag this commit was already published under}"
+repository="${1:?the repository the image is in, such as ghcr.io/owner/carina}"
+published="${2:?the tag this commit was already published under, such as sha-0123456789ab}"
 release="${3:?the release, such as v0.1.0}"
-prefix="${4-}"
 
 fail() {
   echo "$*" >&2
@@ -17,7 +16,7 @@ digest_of() {
 
 if ! digest="$(digest_of "${repository}:${published}")"; then
   case "${digest}" in
-    *": not found"*) fail "${repository}:${published} is not in the registry yet. The image workflow publishes it once this commit is on master, so run this job again after that has finished." ;;
+    *": not found"*) fail "${repository}:${published} is not in the registry yet. The image workflow publishes it once this commit is on master; run this job again when that has finished." ;;
     *) fail "whether ${repository}:${published} is there could not be told: ${digest}" ;;
   esac
 fi
@@ -29,7 +28,7 @@ name() {
   echo "$1 names ${digest}, the image of ${published}."
 }
 
-pinned="${repository}:${prefix}${release}"
+pinned="${repository}:${release}"
 
 if there="$(digest_of "${pinned}")"; then
   [ "${there}" = "${digest}" ] || fail "${pinned} is already there as ${there}, not ${digest}, and a version tag is never moved"
@@ -44,7 +43,7 @@ fi
 takes_latest="$(git tag --list 'v*' | "$(dirname "$0")/release-latest.sh" answer "${release}")"
 
 if [ "${takes_latest}" = yes ]; then
-  name "${repository}:${prefix}latest"
+  name "${repository}:latest"
 else
-  echo "${takes_latest}, so ${repository}:${prefix}latest stays where it is."
+  echo "${takes_latest}, so ${repository}:latest stays where it is."
 fi

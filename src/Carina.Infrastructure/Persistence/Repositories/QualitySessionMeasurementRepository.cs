@@ -1,7 +1,8 @@
-using Carina.Contracts;
 using Carina.Domain.Quality;
 
 using Microsoft.EntityFrameworkCore;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 

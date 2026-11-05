@@ -1,7 +1,8 @@
 using System.Globalization;
 
-using Carina.Contracts;
 using Carina.Domain.Programmes;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Programmes;
 

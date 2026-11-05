@@ -110,7 +110,7 @@ public sealed class RecordingWatchedPositionTests
     {
         await using var feature = new RecordingFeature();
         Recording recording = feature.Held();
-        feature.Driver.Writing(Carina.Contracts.SessionId.Parse("session-a"), recording.Id.Wire);
+        feature.Driver.Writing(Puppis.Contracts.SessionId.Parse("session-a"), recording.Id.Wire);
         feature.Positions.Positions.Add(Reached(recording, TestAuthenticationHandler.Tester, 42));
 
         (HttpStatusCode status, JsonElement body) = await feature.PostAsync(

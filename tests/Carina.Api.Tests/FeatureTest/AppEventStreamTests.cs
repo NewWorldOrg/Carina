@@ -3,11 +3,12 @@ using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 
 using Carina.Api.Events;
-using Carina.Contracts;
 using Carina.Infrastructure.Events;
 
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

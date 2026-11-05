@@ -1,5 +1,6 @@
-using Carina.Contracts;
 using Carina.Domain.Streaming;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Streaming;
 

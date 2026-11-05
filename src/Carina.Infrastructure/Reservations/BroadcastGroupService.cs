@@ -1,8 +1,9 @@
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Reservations;
 

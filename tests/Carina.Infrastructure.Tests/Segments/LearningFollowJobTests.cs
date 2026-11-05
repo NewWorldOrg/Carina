@@ -1,8 +1,9 @@
-using Carina.Contracts;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 using Carina.TestSupport;
+
+using Puppis.Contracts;
 
 using static Carina.Infrastructure.Tests.Segments.LearningFollowHarness;
 

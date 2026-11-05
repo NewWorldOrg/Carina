@@ -2,18 +2,18 @@ extern alias driver;
 
 using System.Runtime.Versioning;
 
-using Carina.Contracts;
-
-using driver::Carina.Driver;
-using driver::Carina.Driver.Configuration;
-using driver::Carina.Driver.Descrambling;
-using driver::Carina.Driver.Ipc;
-using driver::Carina.Driver.Sessions;
-using driver::Carina.Driver.Transport;
-using driver::Carina.Driver.Tuning;
+using driver::Puppis.Driver;
+using driver::Puppis.Driver.Configuration;
+using driver::Puppis.Driver.Descrambling;
+using driver::Puppis.Driver.Ipc;
+using driver::Puppis.Driver.Sessions;
+using driver::Puppis.Driver.Transport;
+using driver::Puppis.Driver.Tuning;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 

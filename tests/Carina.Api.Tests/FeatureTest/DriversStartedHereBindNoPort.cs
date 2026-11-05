@@ -3,7 +3,7 @@ extern alias driver;
 using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 
-using driver::Carina.Driver.Ipc;
+using driver::Puppis.Driver.Ipc;
 
 namespace Carina.Api.Tests.FeatureTest;
 

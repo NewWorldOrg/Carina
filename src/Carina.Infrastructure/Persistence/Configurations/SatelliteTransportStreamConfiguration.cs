@@ -1,8 +1,9 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Persistence.Configurations;
 

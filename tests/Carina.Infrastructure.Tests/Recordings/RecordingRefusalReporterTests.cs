@@ -1,4 +1,3 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
@@ -7,6 +6,8 @@ using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
 
 using static Carina.Infrastructure.Tests.Recordings.RecordingTickFixture;
 

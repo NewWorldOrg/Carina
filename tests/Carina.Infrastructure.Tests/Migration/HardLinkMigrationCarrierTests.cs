@@ -229,7 +229,7 @@ public sealed class HardLinkMigrationCarrierTests : IDisposable
     }
 
     private static RecordingFileName Named(RecordingId id)
-        => RecordingFileName.For(id, Carina.Contracts.RecordingFile.Extension);
+        => RecordingFileName.For(id, Puppis.Contracts.RecordingFile.Extension);
 
     private HardLinkMigrationCarrier Carrier() => new(from, into, Root);
 }

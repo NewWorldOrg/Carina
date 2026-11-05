@@ -41,7 +41,7 @@ tasks:
   logs:driver:
     cmd: docker compose logs -f driver
   probe:driver:
-    cmd: docker compose exec driver dotnet /driver/bin/Carina.Driver/debug/Carina.Driver.dll --probe
+    cmd: docker compose exec driver /opt/puppis/Puppis.Driver --probe
   migrate:
     cmd: docker compose exec app dotnet run --project src/Carina.Db -- --migrate
   psql:

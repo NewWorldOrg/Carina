@@ -1,7 +1,8 @@
-using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
+
+using Puppis.Contracts;
 
 namespace Carina.TestSupport;
 

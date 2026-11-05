@@ -4,8 +4,8 @@ using System.Runtime.Versioning;
 
 using Carina.Infrastructure.Driver;
 
-using driver::Carina.Driver.Sessions;
-using driver::Carina.Driver.Tuning.Dvb;
+using driver::Puppis.Driver.Sessions;
+using driver::Puppis.Driver.Tuning.Dvb;
 
 namespace Carina.Api.Tests.Unit;
 

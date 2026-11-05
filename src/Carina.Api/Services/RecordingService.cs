@@ -1,5 +1,4 @@
 using Carina.Api.Common;
-using Carina.Contracts;
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Driver;
@@ -9,6 +8,8 @@ using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Viewing;
 using Carina.Infrastructure.Thumbnails;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Services;
 

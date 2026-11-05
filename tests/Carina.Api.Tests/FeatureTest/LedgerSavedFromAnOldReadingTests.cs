@@ -5,7 +5,7 @@ using System.Net.Http.Json;
 using System.Runtime.Versioning;
 using System.Text.Json;
 
-using driver::Carina.Driver.Configuration;
+using driver::Puppis.Driver.Configuration;
 
 namespace Carina.Api.Tests.FeatureTest;
 

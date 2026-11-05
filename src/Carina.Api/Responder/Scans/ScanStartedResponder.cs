@@ -1,5 +1,6 @@
-using Carina.Contracts;
 using Carina.Infrastructure.Scanning;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Responder.Scans;
 

@@ -1,9 +1,10 @@
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Events;
 using Carina.Domain.Quality;
 
 using Microsoft.Extensions.Logging;
+
+using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Quality;
 

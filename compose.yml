@@ -59,33 +59,26 @@ services:
 
   driver:
     logging: *logging
-    build:
-      context: .
-      target: driver-develop
-    working_dir: /code
-    command: ['bash', 'docker/driver.dev.sh']
+    image: ghcr.io/newworldorg/puppis:sha-e2c89245801f
     restart: unless-stopped
+    configs:
+      - source: driver
+        target: /etc/puppis/driver.json
     volumes:
-      - .:/code
-      - nuget:/root/.nuget/packages
       - driver-run:/run/carina
       - ${CARINA_RECORDINGS_DIR:-recordings}:/srv/recordings
-      - driver-build:/driver
       # pcscd replaces the socket inside this directory whenever it restarts, so bind the directory: a bind mount of the socket file would go on pointing at the one that is gone.
       - /run/pcscd:/run/pcscd:ro
     stop_grace_period: 7h
     healthcheck:
-      test: ['CMD', 'dotnet', '/driver/bin/Carina.Driver/debug/Carina.Driver.dll', '--probe']
+      test: ['CMD', '/opt/puppis/Puppis.Driver', '--probe']
       interval: 30s
       timeout: 15s
       retries: 3
       start_period: 5m
       start_interval: 10s
     environment:
-      CARINA_DRIVER_CONFIG: /code/docker/driver.development.json
-      DOTNET_hostBuilder__reloadConfigOnChange: 'false'
-      ASPNETCORE_HTTP_PORTS: ''
-      ASPNETCORE_HTTPS_PORTS: ''
+      CARINA_DRIVER_CONFIG: /etc/puppis/driver.json
 
   db:
     logging: *logging
@@ -107,7 +100,6 @@ services:
 volumes:
   nuget:
   driver-run:
-  driver-build:
   recordings:
   thumbnails:
   captions:
@@ -115,3 +107,23 @@ volumes:
   data-protection-keys:
   learning-import:
   pgdata:
+
+configs:
+  driver:
+    content: |
+      {
+        "socketPath": "/run/carina/driver.sock",
+        "socketGroupId": 10001,
+        "outputRoots": [{ "name": "primary", "path": "/srv/recordings" }],
+        "shutdownGraceHours": 6,
+        "liveSessionMinutes": 240,
+        "tuner": {
+          "backend": "fake",
+          "signalQualitySeconds": 10,
+          "demuxBufferBytes": 16777216
+        },
+        "devices": [
+          { "id": "fake-terrestrial", "kind": "terrestrial", "enabled": true },
+          { "id": "fake-satellite", "kind": "satellite", "enabled": true }
+        ]
+      }

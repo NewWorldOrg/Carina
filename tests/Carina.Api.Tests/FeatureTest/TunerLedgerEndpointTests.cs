@@ -3,13 +3,14 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Http;
+
+using Puppis.Contracts;
 
 namespace Carina.Api.Tests.FeatureTest;
 
