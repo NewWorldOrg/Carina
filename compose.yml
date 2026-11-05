@@ -39,7 +39,6 @@ services:
       CARINA_DATA_PROTECTION_KEYS: /var/lib/carina/keys
       CARINA_KNOWN_NETWORKS: ${CARINA_KNOWN_NETWORKS:-172.16.0.0/12}
       CARINA_PUBLIC_ORIGIN: ${CARINA_PUBLIC_ORIGIN:-}
-      CARINA_ANONYMOUS_NETWORKS: ${CARINA_ANONYMOUS_NETWORKS:-}
       Integrity__OutputRoots: primary=/srv/recordings
       Thumbnails__WrittenTo: /srv/thumbnails
       Captions__WrittenTo: /srv/captions
