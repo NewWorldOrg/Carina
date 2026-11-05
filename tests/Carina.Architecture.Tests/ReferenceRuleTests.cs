@@ -6,6 +6,8 @@ public sealed class ReferenceRuleTests
 {
     private const string Contract = "Puppis.Contracts";
 
+    private const string Driver = "Puppis.Driver";
+
     private static readonly ProjectGraph Graph = ProjectGraph.Load(RepositoryLayout.SourceDirectory);
 
     [Fact]
@@ -17,21 +19,39 @@ public sealed class ReferenceRuleTests
         Assert.Equal([Contract], domain.PackageReferences);
     }
 
-    [Fact]
-    public void TheContractIsPinnedOnceAtTheRootAndEveryProjectTakesThatVersion()
+    [Theory]
+    [InlineData(Contract)]
+    [InlineData(Driver)]
+    public void EachPuppisPackageIsPinnedOnceAtTheRootAndEveryProjectTakesThatVersion(string package)
     {
         XDocument pinned = XDocument.Load(Path.Combine(RepositoryLayout.Root, "Directory.Packages.props"));
 
         Assert.Single(
             pinned.Descendants("PackageVersion"),
-            package => (string?)package.Attribute("Include") == Contract);
+            version => (string?)version.Attribute("Include") == package);
         Assert.DoesNotContain(
-            Directory.EnumerateFiles(RepositoryLayout.SourceDirectory, "*.csproj", SearchOption.AllDirectories),
+            Directory.EnumerateFiles(RepositoryLayout.SourceDirectory, "*.csproj", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(RepositoryLayout.TestDirectory, "*.csproj", SearchOption.AllDirectories)),
             project => XDocument.Load(project)
                 .Descendants("PackageReference")
-                .Any(package => (string?)package.Attribute("Include") == Contract
-                    && (package.Attribute("Version") is not null || package.Attribute("VersionOverride") is not null)));
+                .Any(reference => (string?)reference.Attribute("Include") == package
+                    && (reference.Attribute("Version") is not null || reference.Attribute("VersionOverride") is not null)));
     }
+
+    [Fact]
+    public void TheDriverAndTheContractArePinnedToOneVersion()
+    {
+        XDocument pinned = XDocument.Load(Path.Combine(RepositoryLayout.Root, "Directory.Packages.props"));
+
+        Assert.Equal(
+            PinnedVersion(pinned, Contract),
+            PinnedVersion(pinned, Driver));
+    }
+
+    private static string? PinnedVersion(XDocument pinned, string package)
+        => (string?)pinned.Descendants("PackageVersion")
+            .Single(version => (string?)version.Attribute("Include") == package)
+            .Attribute("Version");
 
     [Fact]
     public void TheDomainNamesNoTransportDetail()

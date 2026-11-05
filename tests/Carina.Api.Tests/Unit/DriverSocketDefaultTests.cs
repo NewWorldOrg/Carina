@@ -1,3 +1,5 @@
+extern alias driver;
+
 using System.Runtime.Versioning;
 
 using Carina.Infrastructure.Configuration;
@@ -7,15 +9,17 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+using DriverConfiguration = driver::Puppis.Driver.Configuration.DriverConfiguration;
+
 namespace Carina.Api.Tests.Unit;
 
 [SupportedOSPlatform("linux")]
 public sealed class DriverSocketDefaultTests
 {
     [Fact]
-    public void TheAppDefaultsToTheSocketTheDriverOpensByDefault()
+    public void TheAppAndTheDriverDefaultToOneSocket()
     {
-        Assert.Equal("/run/carina/driver.sock", DriverOptions.DefaultSocketPath);
+        Assert.Equal(DriverConfiguration.DefaultSocketPath, DriverOptions.DefaultSocketPath);
     }
 
     [Fact]

@@ -1,7 +1,10 @@
+extern alias driver;
+
 using System.Runtime.Versioning;
 
 using Carina.Api.Responder.Recordings;
 using Carina.Api.Services;
+using Carina.BroadcastTestSupport;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
@@ -10,6 +13,8 @@ using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
+using driver::Puppis.Driver.Transport;
+
 using Puppis.Contracts;
 
 namespace Carina.Api.Tests.Unit;
@@ -17,19 +22,20 @@ namespace Carina.Api.Tests.Unit;
 [SupportedOSPlatform("linux")]
 public sealed class InjectedDropsReachTheDetailTests
 {
+    private const int VideoPid = 0x0100;
+
     private const int LostPackets = 3;
 
     private const int InjectedAtSecond = 7;
 
+    private const int AdaptationForAClock = TransportStreamWriter.ProgrammeClockFieldLength;
+
     private static readonly DateTime Noon = new(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void TheSecondADropWasCountedAtIsTheSecondTheDetailPutsItAt()
+    public void TheSecondADropWasInjectedAtIsTheSecondTheDetailPutsItAt()
     {
-        DropTimeline placed = Measured(new DropPositionsDto(
-            0,
-            [new DropBucketDto(InjectedAtSecond, LostPackets, 0)],
-            []));
+        DropTimeline placed = Measured(Injected());
 
         Assert.Equal(InjectedAtSecond, Assert.Single(placed.Buckets).Second);
 
@@ -43,9 +49,9 @@ public sealed class InjectedDropsReachTheDetailTests
     }
 
     [Fact]
-    public void AStreamNothingWasCountedInPutsNoMarkOnTheDetail()
+    public void AStreamNothingWasInjectedIntoPutsNoMarkOnTheDetail()
     {
-        DropTimeline placed = Measured(new DropPositionsDto(0, [], []));
+        DropTimeline placed = Measured(Clean());
 
         RecordingDetailResponder detail = Detail(placed, dropped: 0);
 
@@ -53,11 +59,56 @@ public sealed class InjectedDropsReachTheDetailTests
         Assert.Empty(detail.Positions.Buckets);
     }
 
-    private static DropTimeline Measured(DropPositionsDto positions)
-        => DropTimeline.Rehydrate(
+    private static byte[] Injected()
+    {
+        var writer = new TransportStreamWriter(VideoPid);
+
+        writer.Packet(null, [0x01], AdaptationForAClock, continuityCounter: 0, programmeClock: 0);
+        writer.Packet(
+            null,
+            [0x02],
+            AdaptationForAClock,
+            continuityCounter: 1,
+            programmeClock: InjectedAtSecond * TransportStreamWriter.ProgrammeClockTicksPerSecond);
+        writer.Packet(null, [0x03], continuityCounter: 2 + LostPackets);
+        writer.Packet(null, [0x04], continuityCounter: 3 + LostPackets);
+        writer.Packet(null, [0x05], continuityCounter: 4 + LostPackets);
+
+        return writer.Bytes;
+    }
+
+    private static byte[] Clean()
+    {
+        var writer = new TransportStreamWriter(VideoPid);
+
+        writer.Packet(null, [0x01], AdaptationForAClock, continuityCounter: 0, programmeClock: 0);
+
+        foreach (int counter in Enumerable.Range(1, 4))
+        {
+            writer.Packet(null, [(byte)(counter + 1)], continuityCounter: counter);
+        }
+
+        return writer.Bytes;
+    }
+
+    private static DropTimeline Measured(byte[] stream)
+    {
+        var reader = new TsPacketReader();
+        var tracker = new ContinuityCounterTracker();
+
+        foreach (TsPacket packet in reader.Read(stream))
+        {
+            tracker.Observe(packet);
+        }
+
+        DropPositionsDto positions = tracker.Snapshot().Positions
+            ?? throw new InvalidOperationException("The synthetic stream said what time it was, so it has a place.");
+
+        return DropTimeline.Rehydrate(
             positions.AnchorPcr,
             [.. positions.Buckets.Select(bucket => new DropBucket(bucket.Second, bucket.Continuity, bucket.Scrambled))],
             [.. positions.Reanchors.Select(reanchor => new PcrReanchor(reanchor.Second, reanchor.Before, reanchor.After))]);
+    }
 
     private static RecordingDetailResponder Detail(DropTimeline placed, long dropped)
     {

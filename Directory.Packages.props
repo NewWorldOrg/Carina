@@ -24,6 +24,7 @@
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.14" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="Puppis.Contracts" Version="0.1.0" />
+    <PackageVersion Include="Puppis.Driver" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test">
