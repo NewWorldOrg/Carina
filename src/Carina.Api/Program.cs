@@ -39,7 +39,6 @@ builder.Services.AddApplicationServices();
 builder.Services.AddFrameSurfaces();
 builder.Services.AddTrustedProxies(builder.Configuration);
 builder.Services.AddPublicOrigin(builder.Configuration);
-builder.Services.AddAnonymousNetworks(builder.Configuration);
 builder.Services.AddCarinaInfrastructure(builder.Configuration);
 builder.Services
     .AddAuthentication(SessionAuthenticationHandler.SchemeName)

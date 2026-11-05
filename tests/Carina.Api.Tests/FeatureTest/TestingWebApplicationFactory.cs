@@ -35,7 +35,6 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
         PublicOrigin.Key,
         TrustedProxies.ProxiesKey,
         TrustedProxies.NetworksKey,
-        AnonymousNetworks.Key,
     ];
 
     /// <summary>
@@ -61,7 +60,6 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseSetting(PublicOrigin.Key, string.Empty);
         builder.UseSetting(TrustedProxies.ProxiesKey, string.Empty);
         builder.UseSetting(TrustedProxies.NetworksKey, string.Empty);
-        builder.UseSetting(AnonymousNetworks.Key, string.Empty);
     }
 
     protected override IHost CreateHost(IHostBuilder builder)
