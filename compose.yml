@@ -81,7 +81,7 @@ services:
 
   db:
     logging: *logging
-    image: postgres:18-alpine
+    image: postgres:18-trixie
     environment:
       POSTGRES_DB: carina
       POSTGRES_USER: carina
