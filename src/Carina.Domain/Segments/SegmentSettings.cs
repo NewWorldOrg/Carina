@@ -24,7 +24,7 @@ public sealed class SegmentSettings
     {
         if (!(skipThreshold is >= SegmentSettingsStanding.LowestSkipThreshold and <= SegmentSettingsStanding.HighestSkipThreshold))
         {
-            throw new ArgumentOutOfRangeException(nameof(skipThreshold), skipThreshold, "A skip button is offered from a threshold of 0.50 to 0.95.");
+            throw new ArgumentOutOfRangeException(nameof(skipThreshold), skipThreshold, "A skip button is offered from a threshold of 0.50 to 0.99.");
         }
 
         return new SegmentSettings
@@ -48,7 +48,7 @@ public sealed record SegmentSettingsStanding
 
     public const double LowestSkipThreshold = 0.50;
 
-    public const double HighestSkipThreshold = 0.95;
+    public const double HighestSkipThreshold = 0.99;
 
     private const int ThresholdDigits = 2;
 
@@ -84,7 +84,7 @@ public sealed record SegmentSettingsStanding
     {
         if (SkipThresholdOf(skipThreshold) != skipThreshold)
         {
-            throw new ArgumentOutOfRangeException(nameof(skipThreshold), skipThreshold, "A threshold is set to the hundredth, from 0.50 to 0.95.");
+            throw new ArgumentOutOfRangeException(nameof(skipThreshold), skipThreshold, "A threshold is set to the hundredth, from 0.50 to 0.99.");
         }
 
         return skipThreshold == SkipThreshold

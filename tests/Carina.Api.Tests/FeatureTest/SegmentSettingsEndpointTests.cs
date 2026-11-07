@@ -130,7 +130,7 @@ public sealed class SegmentSettingsEndpointTests
     [InlineData(0.654, 0.65)]
     [InlineData(0.655, 0.66)]
     [InlineData(0.5, 0.5)]
-    [InlineData(0.95, 0.95)]
+    [InlineData(0.99, 0.99)]
     public async Task AThresholdIsTakenToTheHundredth(double sent, double taken)
     {
         await using var feature = new SegmentSettingsFeature();
@@ -141,11 +141,11 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(taken, body.GetProperty("data").GetProperty("skipThreshold").GetDouble());
     }
 
-    [Theory(DisplayName = "BR-CV-002: a threshold outside 0.50 to 0.95 is refused naming it, and nothing is written")]
+    [Theory(DisplayName = "BR-CV-002: a threshold outside 0.50 to 0.99 is refused naming it, and nothing is written")]
     [InlineData("""{"skipThreshold":0.49}""")]
     [InlineData("""{"skipThreshold":0.4999}""")]
-    [InlineData("""{"skipThreshold":0.96}""")]
-    [InlineData("""{"skipThreshold":0.9501}""")]
+    [InlineData("""{"skipThreshold":1.00}""")]
+    [InlineData("""{"skipThreshold":0.9901}""")]
     [InlineData("""{"skipThreshold":1}""")]
     [InlineData("""{"skipThreshold":-0.7}""")]
     public async Task AThresholdOutsideTheRangeIsRefused(string json)
