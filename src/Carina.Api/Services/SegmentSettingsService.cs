@@ -14,7 +14,7 @@ public sealed class SegmentSettingsService(
     TimeProvider clock)
 {
     private const string SkipThresholdExpected =
-        "skipThreshold: expected how likely a stretch is before a button offers to skip it, from 0.50 to 0.95.";
+        "skipThreshold: expected how likely a stretch is before a button offers to skip it, from 0.50 to 0.99.";
 
     public async Task<ServiceResult<SegmentSettingsStanding>> ReadAsync(CancellationToken cancellationToken)
         => ServiceResult<SegmentSettingsStanding>.Success(await StandingAsync(cancellationToken));

@@ -57,12 +57,12 @@ public sealed class SegmentSettingsSchemaTests(MigratedScratchDatabase database)
             await ScalarAsync(connection, $"SELECT string_agg(column_name::text, ' ' ORDER BY column_name) FROM information_schema.columns WHERE table_name = '{SegmentSettingsConfiguration.TableName}'"));
     }
 
-    [Theory(DisplayName = "BR-CV-002: the migrated settings table keeps a threshold from 0.50 to 0.95, in hundredths, and refuses one outside")]
+    [Theory(DisplayName = "BR-CV-002: the migrated settings table keeps a threshold from 0.50 to 0.99, in hundredths, and refuses one outside")]
     [InlineData("0.50", "0.50")]
-    [InlineData("0.95", "0.95")]
+    [InlineData("0.99", "0.99")]
     [InlineData("0.654", "0.65")]
     [InlineData("0.49", null)]
-    [InlineData("0.96", null)]
+    [InlineData("1.00", null)]
     [InlineData("0", null)]
     public async Task TheMigratedSettingsTableKeepsTheThresholdInItsRange(string written, string? kept)
     {

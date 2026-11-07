@@ -28,25 +28,25 @@ public sealed class SegmentSettingsTests
         Assert.Equal(Noon, standing.SkipThresholdChangedAt);
     }
 
-    [Theory(DisplayName = "BR-CV-002: a row keeps a threshold from 0.50 to 0.95 only, timed in UTC")]
+    [Theory(DisplayName = "BR-CV-002: a row keeps a threshold from 0.50 to 0.99 only, timed in UTC")]
     [InlineData(0.49)]
-    [InlineData(0.96)]
+    [InlineData(1.00)]
     [InlineData(double.NaN)]
-    public void ARowKeepsAThresholdFromHalfToNineteenTwentieths(double threshold)
+    public void ARowKeepsAThresholdFromHalfToNinetyNineHundredths(double threshold)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, threshold, Noon));
         Assert.Throws<ArgumentException>(
             () => SegmentSettings.Rehydrate(SegmentSettings.TheOnlyRow, 0.7, DateTime.SpecifyKind(Noon, DateTimeKind.Local)));
     }
 
-    [Theory(DisplayName = "BR-CV-002: a threshold asked for from 0.50 to 0.95 is taken to the hundredth, and one outside is not taken")]
+    [Theory(DisplayName = "BR-CV-002: a threshold asked for from 0.50 to 0.99 is taken to the hundredth, and one outside is not taken")]
     [InlineData(0.5, 0.5)]
-    [InlineData(0.95, 0.95)]
+    [InlineData(0.99, 0.99)]
     [InlineData(0.654, 0.65)]
     [InlineData(0.655, 0.66)]
     [InlineData(0.7049999, 0.7)]
     [InlineData(0.4999, null)]
-    [InlineData(0.9501, null)]
+    [InlineData(0.9901, null)]
     [InlineData(-1, null)]
     [InlineData(double.NaN, null)]
     [InlineData(double.PositiveInfinity, null)]

@@ -18,7 +18,7 @@ namespace Carina.Db.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -4258,7 +4258,7 @@ namespace Carina.Db.Migrations
                         {
                             t.HasCheckConstraint("ck_segment_settings_single_row", "id = 1");
 
-                            t.HasCheckConstraint("ck_segment_settings_skip_threshold", "skip_threshold BETWEEN 0.50 AND 0.95");
+                            t.HasCheckConstraint("ck_segment_settings_skip_threshold", "skip_threshold BETWEEN 0.50 AND 0.99");
                         });
                 });
 
