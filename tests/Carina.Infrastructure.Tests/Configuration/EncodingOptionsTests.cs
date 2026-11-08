@@ -105,9 +105,27 @@ public sealed class EncodingOptionsTests
     }
 
     [Theory]
+    [InlineData("Software", EncodeEncoder.Software)]
+    [InlineData("Vaapi", EncodeEncoder.Vaapi)]
+    [InlineData("Nvenc", EncodeEncoder.Nvenc)]
+    [InlineData("nvenc", EncodeEncoder.Nvenc)]
+    public void EachEncoderOnOfferIsReadByItsName(string named, EncodeEncoder read)
+    {
+        Assert.Equal(read, Read(("Encodings:Prefer", named)).Prefer);
+    }
+
+    [Fact]
+    public void AnEncoderOffTheListIsRefusedNamingTheThreeThereAre()
+    {
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => Read(("Encodings:Prefer", "cuda")));
+
+        Assert.Contains("Software, Vaapi, Nvenc", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("Encodings:Automatically", "yes")]
     [InlineData("Encodings:Prefer", "quicksync")]
-    [InlineData("Encodings:Prefer", "3")]
+    [InlineData("Encodings:Prefer", "4")]
     [InlineData("Encodings:MostCores", "0")]
     [InlineData("Encodings:MostCores", "two")]
     [InlineData("Encodings:MostAttempts", "0")]

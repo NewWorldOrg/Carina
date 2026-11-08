@@ -20,17 +20,7 @@ public sealed record LiveEncoderChoice
     public bool FellBack => FellBackBecause is not null;
 
     public static LiveEncoderChoice Asked(LiveEncoder encoder)
-    {
-        if (!Enum.IsDefined(encoder))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(encoder),
-                encoder,
-                "A picture is encoded by one of the two the benchmark compared.");
-        }
-
-        return new LiveEncoderChoice(encoder, null, string.Empty);
-    }
+        => new(LiveEncoders.Named(encoder), null, string.Empty);
 
     public static LiveEncoderChoice FellBackToSoftware(CardStanding because, string note)
     {

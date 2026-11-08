@@ -8,6 +8,7 @@ public sealed class LiveTranscodeTypeTests
     [Theory]
     [InlineData(LiveEncoder.Software)]
     [InlineData(LiveEncoder.Vaapi)]
+    [InlineData(LiveEncoder.Nvenc)]
     public void AnEncoderThatWasAskedForCarriesNoReasonToHaveFallenBack(LiveEncoder encoder)
     {
         LiveEncoderChoice chosen = LiveEncoderChoice.Asked(encoder);
@@ -19,7 +20,7 @@ public sealed class LiveTranscodeTypeTests
     }
 
     [Fact]
-    public void AnEncoderThatIsNotOneOfTheTwoCannotBeChosen()
+    public void AnEncoderThatIsNotOneOfThoseNamedCannotBeChosen()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => LiveEncoderChoice.Asked((LiveEncoder)7));
     }

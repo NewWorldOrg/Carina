@@ -18,7 +18,7 @@ public sealed class LiveEncoderSelection(LiveTranscodeSettings settings, IMachin
 
     public async Task<LiveEncoderChoice> ChooseAsync(CancellationToken cancellationToken)
     {
-        if (settings.Prefer is not LiveEncoder.Vaapi)
+        if (!LiveEncoders.OnTheCard(settings.Prefer))
         {
             return LiveEncoderChoice.Asked(settings.Prefer);
         }
@@ -26,7 +26,7 @@ public sealed class LiveEncoderSelection(LiveTranscodeSettings settings, IMachin
         MachineCapabilities can = await machine.ReadAsync(cancellationToken);
 
         return can.CardIsUsable
-            ? LiveEncoderChoice.Asked(LiveEncoder.Vaapi)
+            ? LiveEncoderChoice.Asked(settings.Prefer)
             : LiveEncoderChoice.FellBackToSoftware(can.Card, can.Note);
     }
 
@@ -35,7 +35,7 @@ public sealed class LiveEncoderSelection(LiveTranscodeSettings settings, IMachin
     /// </remarks>
     public async Task<IReadOnlyList<VideoCodec>> FormatsAsync(CancellationToken cancellationToken)
     {
-        if (settings.Prefer is not LiveEncoder.Vaapi)
+        if (!LiveEncoders.OnTheCard(settings.Prefer))
         {
             return [VideoCodecs.Unasked];
         }

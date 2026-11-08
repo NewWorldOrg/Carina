@@ -30,4 +30,6 @@ public enum EncodeEncoder
     Software = 1,
 
     Vaapi = 2,
+
+    Nvenc = 3,
 }

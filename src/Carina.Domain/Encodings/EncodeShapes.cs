@@ -29,5 +29,5 @@ public static class EncodeShapes
             : throw new ArgumentOutOfRangeException(
                 nameof(encoder),
                 encoder,
-                "A picture is encoded either by the processor or by the card.");
+                "A picture is encoded by the processor or by one of the cards named here.");
 }

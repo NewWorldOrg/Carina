@@ -103,7 +103,7 @@ public sealed class EncodeJobRunner(
                 cancellationToken);
         }
 
-        EncodePlan plan = EncodePlans.For(profile, settings.Prefer, await machine.ReadAsync(cancellationToken));
+        EncodePlan plan = EncodePlans.For(profile, settings.Prefer, programmes.Card, await machine.ReadAsync(cancellationToken));
 
         if (plan.Encoder is not { } encoder)
         {

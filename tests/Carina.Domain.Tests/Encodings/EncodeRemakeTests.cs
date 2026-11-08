@@ -43,6 +43,7 @@ public sealed class EncodeRemakeTests
 
         Assert.Equal(21, rate.On(EncodeEncoder.Software));
         Assert.Equal(27, rate.On(EncodeEncoder.Vaapi));
+        Assert.Equal(27, rate.On(EncodeEncoder.Nvenc));
     }
 
     [Fact(DisplayName = "the run that makes it again is four coarser on both, and never coarser than the coarsest")]
@@ -55,6 +56,7 @@ public sealed class EncodeRemakeTests
         Assert.Equal(31, coarser.On(EncodeEncoder.Vaapi));
         Assert.Equal(ConstantRateFactor.Coarsest, topped.On(EncodeEncoder.Software));
         Assert.Equal(ConstantQuantiser.Coarsest, topped.On(EncodeEncoder.Vaapi));
+        Assert.Equal(31, coarser.On(EncodeEncoder.Nvenc));
     }
 
     [Fact(DisplayName = "a second try smaller than the recording is kept, and is no larger than the recording")]

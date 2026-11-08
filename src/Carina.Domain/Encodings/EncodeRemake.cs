@@ -46,7 +46,7 @@ public sealed record EncodeRate
             new ConstantQuantiser(Math.Min(Quantiser.Quantiser + RemakeCoarser, ConstantQuantiser.Coarsest)));
 
     public int On(EncodeEncoder encoder)
-        => EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi ? Quantiser.Quantiser : RateFactor.RateFactor;
+        => EncodeEncoders.OnTheCard(encoder) ? Quantiser.Quantiser : RateFactor.RateFactor;
 }
 
 public static class EncodeRemakes

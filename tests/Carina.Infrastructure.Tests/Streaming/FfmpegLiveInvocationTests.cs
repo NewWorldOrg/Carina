@@ -1001,9 +1001,9 @@ public sealed class FfmpegLiveInvocationTests
     }
 
     [Fact]
-    public void ThereAreOnlyTheTwoEncodersTheBenchmarkCompared()
+    public void ThereAreTheProcessorAndTheTwoKindsOfCard()
     {
-        Assert.Equal([LiveEncoder.Software, LiveEncoder.Vaapi], Enum.GetValues<LiveEncoder>());
+        Assert.Equal([LiveEncoder.Software, LiveEncoder.Vaapi, LiveEncoder.Nvenc], Enum.GetValues<LiveEncoder>());
     }
 
     [Fact]
