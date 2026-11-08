@@ -465,6 +465,15 @@ container's `/etc/group`. A host without the node gets `/dev/null` in the device
 entry, because a `devices:` entry naming a missing path stops the container from
 being created.
 
+An NVIDIA card is not a device entry at all: `gpu-nvidia.yml` reserves the host's
+cards through the NVIDIA container runtime (`task up:nvidia`), which mounts the
+driver's libraries into the container, and the image carries nothing of NVIDIA's.
+The ffmpeg in the image is built with nv-codec-headers, so it loads those
+libraries at run time and the NVENC probe fails cleanly on a host without them.
+The image sets `NVIDIA_DRIVER_CAPABILITIES=video,compute,utility` because the
+runtime's default leaves out `video`, and without it `libnvidia-encode` is never
+mounted and every NVENC probe fails on a host that has the card.
+
 The image demotes `app` to an unprivileged user before starting it. The `app` role
 reads the owning group off the `card` and `render` nodes actually present in the
 container and hands the demoted process those beside its own group, so the number

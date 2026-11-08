@@ -3,6 +3,8 @@ version: '3'
 tasks:
   up:
     cmd: env $(bash docker/dri-env.sh) docker compose up -d
+  up:nvidia:
+    cmd: env $(bash docker/dri-env.sh) docker compose -f compose.yml -f gpu-nvidia.yml up -d
   dri:
     cmd: bash docker/dri-env.sh
   down:
