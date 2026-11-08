@@ -67,7 +67,7 @@ internal sealed class EncodingFeature : IAsyncDisposable
         Settings = new EncodeSettings { OutputRoots = [new StorageRootPath(Encodes, shelf.Root)], Prefer = prefer };
         Driver.Roots.Add(new StorageRootDto { Name = Primary.Value, FreeBytes = 900, TotalBytes = 1_000, Writable = true });
 
-        WebApplicationFactory<Program> configured = factory
+        Built = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();
@@ -88,9 +88,11 @@ internal sealed class EncodingFeature : IAsyncDisposable
                 services.AddSingleton<IMachineCapabilityReader>(new AnsweredMachine(can ?? WithACard));
             }));
 
-        Client = configured.WithTestScheme().CreateClient();
+        Client = Built.WithTestScheme().CreateClient();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
     }
+
+    public WebApplicationFactory<Program> Built { get; }
 
     public HttpClient Client { get; }
 
@@ -212,6 +214,31 @@ internal sealed class EncodingFeature : IAsyncDisposable
         return job;
     }
 
+    public EncodeJob Failed(Recording recording, EncodeProfile profile, EncodeDestination destination, bool makesItAgain = false)
+    {
+        EncodeJob job = makesItAgain
+            ? EncodeJob.QueueAgain(EncodeJobId.New(), recording.Id, profile.Id, destination.Id, destination.OutputRoot, Noon.AddMinutes(-30))
+            : EncodeJob.Queue(EncodeJobId.New(), recording.Id, profile.Id, destination.Id, destination.OutputRoot, Noon.AddMinutes(-30));
+        job.Start(Noon.AddMinutes(-20));
+        job.Fail(EncodeFailure.SourceMissing, "the recording file is not where the ledger says", Noon.AddMinutes(-10));
+        Jobs.Jobs.Add(job);
+
+        return job;
+    }
+
+    public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
+
+    public HttpClient FromElsewhere()
+    {
+        HttpClient client = Built.WithTestScheme().CreateClient();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
+        client.DefaultRequestHeaders.Remove(Microsoft.Net.Http.Headers.HeaderNames.Origin);
+        client.DefaultRequestHeaders.Add(Microsoft.Net.Http.Headers.HeaderNames.Origin, "https://elsewhere.example");
+
+        return client;
+    }
+
     public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
     {
         using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
@@ -219,9 +246,9 @@ internal sealed class EncodingFeature : IAsyncDisposable
         return await ReadAsync(response);
     }
 
-    public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null)
+    public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null, HttpClient? client = null)
     {
-        using HttpResponseMessage response = await Client.PostAsJsonAsync(new Uri(path, UriKind.Relative), body ?? new { });
+        using HttpResponseMessage response = await (client ?? Client).PostAsJsonAsync(new Uri(path, UriKind.Relative), body ?? new { });
 
         return await ReadAsync(response);
     }
