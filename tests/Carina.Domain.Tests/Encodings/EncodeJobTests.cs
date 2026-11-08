@@ -314,6 +314,23 @@ public sealed class EncodeJobTests
         Assert.Equal(EncodeClaimStanding.TakenMeanwhile, EncodeClaim.TakenMeanwhile().Standing);
     }
 
+    [Fact(DisplayName = "a programme reported as begun before the job began is written down as begun when the job began, under its own id; one begun after is written as reported")]
+    public void AProgrammeReportedAsBegunBeforeTheJobIsWrittenDownAsBegunWithTheJob()
+    {
+        EncodeJob early = Running();
+        EncodeJob late = Running();
+
+        early.Spawned(new RunningProgramme(4242, Started.AddMilliseconds(-400)));
+        late.Spawned(new RunningProgramme(4343, Started.AddMilliseconds(400)));
+
+        Assert.Equal(4242, early.Programme!.ProcessId);
+        Assert.Equal(Started, early.Programme.StartedAt);
+        Assert.Equal(4343, late.Programme!.ProcessId);
+        Assert.Equal(Started.AddMilliseconds(400), late.Programme.StartedAt);
+        Assert.Throws<InvalidOperationException>(() => Waiting().Spawned(new RunningProgramme(4242, Started)));
+        Assert.Throws<ArgumentNullException>(() => Running().Spawned(null!));
+    }
+
     [Fact(DisplayName = "a failure is a classification, and the words beside it are not the reason")]
     public void AFailureIsAClassificationAndTheWordsBesideItAreNotTheReason()
     {

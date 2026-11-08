@@ -391,12 +391,16 @@ public sealed class EncodeJob
         Route = route;
     }
 
+    /// <summary>
+    /// Writes down the programme this job runs as, begun no earlier than the job itself: the operating
+    /// system reports a process start at a coarser resolution than the clock the job keeps.
+    /// </summary>
     public void Spawned(RunningProgramme programme)
     {
         ArgumentNullException.ThrowIfNull(programme);
         Only(EncodeJobStatus.Running, "have a programme of its own");
 
-        Programme = programme;
+        Programme = programme.NoEarlierThan(StartedAt!.Value);
     }
 
     public void Reached(EncodeProgress progress, DateTime at)
