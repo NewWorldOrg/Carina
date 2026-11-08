@@ -30,4 +30,19 @@ public sealed class RunningProgrammeTests
         Assert.False(programme.IsTheSameAs(Began.AddHours(-1), tolerance));
         Assert.Throws<ArgumentOutOfRangeException>(() => programme.IsTheSameAs(Began, TimeSpan.FromSeconds(-1)));
     }
+
+    [Fact(DisplayName = "held to a moment, a programme that began before it is written as begun at that moment under the same id, and one that began at or after it is written as it is")]
+    public void HeldToAMomentAProgrammeThatBeganBeforeItIsWrittenAsBegunAtThatMoment()
+    {
+        var programme = new RunningProgramme(4242, Began);
+
+        RunningProgramme held = programme.NoEarlierThan(Began.AddMilliseconds(400));
+        RunningProgramme asIs = programme.NoEarlierThan(Began.AddMilliseconds(-400));
+
+        Assert.Equal(4242, held.ProcessId);
+        Assert.Equal(Began.AddMilliseconds(400), held.StartedAt);
+        Assert.Same(programme, programme.NoEarlierThan(Began));
+        Assert.Same(programme, asIs);
+        Assert.Throws<ArgumentException>(() => programme.NoEarlierThan(DateTime.SpecifyKind(Began, DateTimeKind.Local)));
+    }
 }

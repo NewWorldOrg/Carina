@@ -30,4 +30,13 @@ public sealed record RunningProgramme
 
         return (UtcTimes.Required(startedAt, nameof(startedAt)) - StartedAt).Duration() <= tolerance;
     }
+
+    /// <summary>
+    /// This programme written as begun no earlier than <paramref name="moment"/>, because the operating
+    /// system reports when a process began at a coarser resolution than the clock the caller keeps.
+    /// </summary>
+    public RunningProgramme NoEarlierThan(DateTime moment)
+        => UtcTimes.Required(moment, nameof(moment)) > StartedAt
+            ? new RunningProgramme(ProcessId, moment)
+            : this;
 }
