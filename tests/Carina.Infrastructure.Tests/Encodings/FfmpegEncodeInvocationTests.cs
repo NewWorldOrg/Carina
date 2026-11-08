@@ -95,6 +95,24 @@ public sealed class FfmpegEncodeInvocationTests
             { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Vaapi, "scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
             { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
             { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Nvenc, "format=nv12,hwupload_cuda", "h264_nvenc" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Nvenc, "bwdif=mode=send_frame,format=nv12,hwupload_cuda", "h264_nvenc" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Nvenc, "bwdif=mode=send_field,format=nv12,hwupload_cuda", "h264_nvenc" },
+            { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Nvenc, "scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "h264_nvenc" },
+            { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Nvenc, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "h264_nvenc" },
+            { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Nvenc, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "h264_nvenc" },
+            { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Nvenc, "scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "h264_nvenc" },
+            { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Nvenc, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "h264_nvenc" },
+            { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Nvenc, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "h264_nvenc" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Nvenc, "format=nv12,hwupload_cuda", "hevc_nvenc" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Nvenc, "bwdif=mode=send_frame,format=nv12,hwupload_cuda", "hevc_nvenc" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Nvenc, "bwdif=mode=send_field,format=nv12,hwupload_cuda", "hevc_nvenc" },
+            { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Nvenc, "scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "hevc_nvenc" },
+            { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Nvenc, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "hevc_nvenc" },
+            { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Nvenc, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "hevc_nvenc" },
+            { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Nvenc, "scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "hevc_nvenc" },
+            { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Nvenc, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "hevc_nvenc" },
+            { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Nvenc, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload_cuda", "hevc_nvenc" },
         };
 
     private static EncodeProfile Profile(
@@ -139,8 +157,18 @@ public sealed class FfmpegEncodeInvocationTests
         string filter,
         string video)
     {
-        string[] onTheCard = encoder is EncodeEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
-        string[] rateControl = encoder is EncodeEncoder.Vaapi ? ["-rc_mode", "CQP", "-qp", "24"] : ["-preset", "medium", "-crf", "22"];
+        string[] onTheCard = encoder switch
+        {
+            EncodeEncoder.Vaapi => ["-vaapi_device", RenderNode],
+            EncodeEncoder.Nvenc => ["-init_hw_device", "cuda=cu", "-filter_hw_device", "cu"],
+            _ => [],
+        };
+        string[] rateControl = encoder switch
+        {
+            EncodeEncoder.Vaapi => ["-rc_mode", "CQP", "-qp", "24"],
+            EncodeEncoder.Nvenc => ["-rc", "constqp", "-qp", "24"],
+            _ => ["-preset", "medium", "-crf", "22"],
+        };
         string[] looking = filter.Length is 0 ? [] : ["-vf", filter];
         string[] tagged = codec is EncodeCodec.H265 ? ["-tag:v", "hvc1"] : [];
         string[] expected =
@@ -201,9 +229,12 @@ public sealed class FfmpegEncodeInvocationTests
             Service, Profile(rateFactor: rateFactor, quantiser: quantiser), EncodeEncoder.Software, Machine, Source, Cores, HeadSkip, AsItStands);
         IReadOnlyList<string> vaapi = FfmpegEncodeInvocation.Arguments(
             Service, Profile(rateFactor: rateFactor, quantiser: quantiser), EncodeEncoder.Vaapi, Machine, Source, Cores, HeadSkip, AsItStands);
+        IReadOnlyList<string> nvenc = FfmpegEncodeInvocation.Arguments(
+            Service, Profile(rateFactor: rateFactor, quantiser: quantiser), EncodeEncoder.Nvenc, Machine, Source, Cores, HeadSkip, AsItStands);
 
         Assert.Equal(onTheProcessor, software[software.ToList().IndexOf("-crf") + 1]);
         Assert.Equal(onTheCard, vaapi[vaapi.ToList().IndexOf("-qp") + 1]);
+        Assert.Equal(onTheCard, nvenc[nvenc.ToList().IndexOf("-qp") + 1]);
     }
 
     [Theory]
@@ -696,6 +727,27 @@ public sealed class FfmpegEncodeInvocationTests
         Assert.DoesNotContain("-b:v", onTheProcessor);
     }
 
+    [Fact(DisplayName = "an NVIDIA card is opened as the CUDA device before the input, handed the frames by hwupload_cuda, and given the same quantiser at constant QP")]
+    public void AnNvidiaCardIsOpenedAsTheCudaDeviceAndGivenTheSameQuantiser()
+    {
+        string[] onTheCard = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Nvenc, Machine, Source, Cores, HeadSkip, AsItStands)];
+
+        Assert.Equal("cuda=cu", onTheCard[Array.IndexOf(onTheCard, "-init_hw_device") + 1]);
+        Assert.Equal("cu", onTheCard[Array.IndexOf(onTheCard, "-filter_hw_device") + 1]);
+        Assert.True(Array.IndexOf(onTheCard, "-init_hw_device") < Array.IndexOf(onTheCard, "-i"));
+        Assert.EndsWith("format=nv12,hwupload_cuda", onTheCard[Array.IndexOf(onTheCard, "-vf") + 1], StringComparison.Ordinal);
+        Assert.Equal("hevc_nvenc", onTheCard[Array.IndexOf(onTheCard, "-c:v") + 1]);
+        Assert.Equal("constqp", onTheCard[Array.IndexOf(onTheCard, "-rc") + 1]);
+        Assert.Equal("24", onTheCard[Array.IndexOf(onTheCard, "-qp") + 1]);
+        Assert.Equal("hvc1", onTheCard[Array.IndexOf(onTheCard, "-tag:v") + 1]);
+        Assert.DoesNotContain("-vaapi_device", onTheCard);
+        Assert.DoesNotContain("-rc_mode", onTheCard);
+        Assert.DoesNotContain("-hwaccel", onTheCard);
+        Assert.DoesNotContain("-crf", onTheCard);
+        Assert.DoesNotContain(onTheCard, argument => argument.Contains("/dev/", StringComparison.Ordinal));
+        Assert.DoesNotContain(onTheCard, argument => argument.Contains("cuvid", StringComparison.Ordinal) || argument.Contains("_cuda", StringComparison.Ordinal) && argument != "format=nv12,hwupload_cuda" && !argument.EndsWith(",format=nv12,hwupload_cuda", StringComparison.Ordinal));
+    }
+
     [Fact(DisplayName = "a run handed a coarser rate writes it where the profile's would be, and changes nothing else")]
     public void ARunHandedACoarserRateWritesItWhereTheProfilesWouldBe()
     {
@@ -706,7 +758,7 @@ public sealed class FfmpegEncodeInvocationTests
         {
             string[] asDefined = [.. FfmpegEncodeInvocation.Arguments(Service, profile, encoder, Machine, Source, Cores, HeadSkip, AsItStands, Breaks)];
             string[] again = [.. FfmpegEncodeInvocation.Arguments(Service, profile, encoder, Machine, Source, Cores, HeadSkip, AsItStands, Breaks, coarser)];
-            string flag = encoder is EncodeEncoder.Vaapi ? "-qp" : "-crf";
+            string flag = encoder is EncodeEncoder.Software ? "-crf" : "-qp";
             int at = Array.IndexOf(asDefined, flag) + 1;
 
             Assert.Equal(EncodeRate.Of(profile).On(encoder).ToString(CultureInfo.InvariantCulture), asDefined[at]);
@@ -739,6 +791,10 @@ public sealed class FfmpegEncodeInvocationTests
             "2",
             "-vaapi_device",
             RenderNode,
+            "-init_hw_device",
+            "cuda=cu",
+            "-filter_hw_device",
+            "cu",
             "-i",
             Source,
             "-f",
@@ -758,12 +814,16 @@ public sealed class FfmpegEncodeInvocationTests
             "libx265",
             "h264_vaapi",
             "hevc_vaapi",
+            "h264_nvenc",
+            "hevc_nvenc",
             "-preset",
             "medium",
             "-crf",
             "22",
             "-rc_mode",
             "CQP",
+            "-rc",
+            "constqp",
             "-qp",
             "24",
             "-tag:v",
@@ -794,6 +854,15 @@ public sealed class FfmpegEncodeInvocationTests
             "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload",
             "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload",
             "scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload",
+            "bwdif=mode=send_frame,format=nv12,hwupload_cuda",
+            "bwdif=mode=send_field,format=nv12,hwupload_cuda",
+            "format=nv12,hwupload_cuda",
+            "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda",
+            "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda",
+            "scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda",
+            "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload_cuda",
+            "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload_cuda",
+            "scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload_cuda",
         ];
 
         IReadOnlyList<string> arguments =
@@ -862,6 +931,12 @@ public sealed class FfmpegEncodeInvocationTests
 
         Assert.Contains(
             "-vaapi_device",
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Machine, Source, Cores, HeadSkip, AsItStands));
+        Assert.DoesNotContain(
+            "-init_hw_device",
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Machine, Source, Cores, HeadSkip, AsItStands));
+        Assert.DoesNotContain(
+            "-init_hw_device",
             FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Machine, Source, Cores, HeadSkip, AsItStands));
     }
 
@@ -939,6 +1014,8 @@ public sealed class FfmpegEncodeInvocationTests
         Assert.Contains("libx264", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Software, Machine, Source, Cores, HeadSkip, AsItStands));
         Assert.Contains("hevc_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, Machine, Source, Cores, HeadSkip, AsItStands));
         Assert.Contains("h264_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, Machine, Source, Cores, HeadSkip, AsItStands));
+        Assert.Contains("hevc_nvenc", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Nvenc, Machine, Source, Cores, HeadSkip, AsItStands));
+        Assert.Contains("h264_nvenc", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Nvenc, Machine, Source, Cores, HeadSkip, AsItStands));
     }
 
     private static string FilterIn(EncodeProfile profile, EncodeEncoder encoder)
@@ -975,6 +1052,7 @@ public sealed class FfmpegEncodeInvocationTests
     [Theory]
     [InlineData(EncodeEncoder.Software)]
     [InlineData(EncodeEncoder.Vaapi)]
+    [InlineData(EncodeEncoder.Nvenc)]
     public void TheCardIsOpenedThroughTheRenderNodeItIsHandedAndOnlyWhenItEncodes(EncodeEncoder encoder)
     {
         string[] onAnother = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), encoder, new MachineSettings { RenderNode = "/dev/dri/renderD130" }, Source, Cores, HeadSkip, AsItStands)];
@@ -987,6 +1065,7 @@ public sealed class FfmpegEncodeInvocationTests
     [Theory]
     [InlineData(EncodeEncoder.Software)]
     [InlineData(EncodeEncoder.Vaapi)]
+    [InlineData(EncodeEncoder.Nvenc)]
     public void NoRunIsBuiltWithoutARenderNodeToOpenTheCardThrough(EncodeEncoder encoder)
     {
         Assert.Throws<ArgumentNullException>(

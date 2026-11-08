@@ -33,14 +33,7 @@ public static class FfmpegPlaybackInvocation
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(sound);
         ArgumentOutOfRangeException.ThrowIfLessThan(from, TimeSpan.Zero);
-
-        if (!Enum.IsDefined(encoder))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(encoder),
-                encoder,
-                "A picture is encoded by one of the two the benchmark compared.");
-        }
+        LiveEncoders.Named(encoder);
 
         return
         [

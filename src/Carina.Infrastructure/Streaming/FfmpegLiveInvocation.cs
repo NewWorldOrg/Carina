@@ -4,6 +4,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Machines;
 using Carina.Domain.Playback;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Streaming;
 
@@ -65,14 +66,7 @@ public static class FfmpegLiveInvocation
         ArgumentNullException.ThrowIfNull(attributes);
         ArgumentNullException.ThrowIfNull(machine);
         ArgumentException.ThrowIfNullOrEmpty(machine.RenderNode);
-
-        if (!Enum.IsDefined(encoder))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(encoder),
-                encoder,
-                "A picture is encoded by one of the two the benchmark compared.");
-        }
+        LiveEncoders.Named(encoder);
 
         if (!Enum.IsDefined(captions))
         {
@@ -175,8 +169,17 @@ public static class FfmpegLiveInvocation
             target,
         ];
 
+    /// <summary>
+    /// What opens the card, before the input: a VAAPI card through the render node, an NVIDIA card as the CUDA
+    /// device, and nothing for the processor.
+    /// </summary>
     internal static IReadOnlyList<string> Device(LiveEncoder encoder, string renderNode)
-        => encoder is LiveEncoder.Vaapi ? ["-vaapi_device", renderNode] : [];
+        => LiveEncoders.Named(encoder) switch
+        {
+            LiveEncoder.Vaapi => ["-vaapi_device", renderNode],
+            LiveEncoder.Nvenc => ["-init_hw_device", CudaDevice.Made, "-filter_hw_device", CudaDevice.Name],
+            _ => [],
+        };
 
     internal static IReadOnlyList<string> Decoding(StreamAttributes attributes, CaptionOutlet captions)
         => captions is CaptionOutlet.Drawn
@@ -230,10 +233,10 @@ public static class FfmpegLiveInvocation
         steps.Add(Scaling(profile.Size));
         steps.Add("setsar=1");
 
-        if (encoder is LiveEncoder.Vaapi)
+        if (LiveEncoders.OnTheCard(encoder))
         {
             steps.Add("format=nv12");
-            steps.Add("hwupload");
+            steps.Add(encoder is LiveEncoder.Nvenc ? "hwupload_cuda" : "hwupload");
         }
 
         return string.Join(',', steps);
@@ -258,7 +261,7 @@ public static class FfmpegLiveInvocation
     {
         VideoCodec asked = VideoCodecs.Named(format);
 
-        if (encoder is not LiveEncoder.Vaapi && asked is not VideoCodecs.Unasked)
+        if (!LiveEncoders.OnTheCard(encoder) && asked is not VideoCodecs.Unasked)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(format),
@@ -266,18 +269,29 @@ public static class FfmpegLiveInvocation
                 "The processor encodes H.264 alone; another format is encoded on the card.");
         }
 
-        return encoder is LiveEncoder.Vaapi
-            ?
+        return encoder switch
+        {
+            LiveEncoder.Vaapi =>
             [
                 "-c:v",
-                OnTheCard(asked),
+                OnVaapi(asked),
                 "-g",
                 Keyframes(profile),
                 "-rc_mode",
                 "CQP",
                 .. Quality(profile.VaapiRateControl, asked),
-            ]
-            :
+            ],
+            LiveEncoder.Nvenc =>
+            [
+                "-c:v",
+                OnNvenc(asked),
+                "-g",
+                Keyframes(profile),
+                "-rc",
+                "constqp",
+                .. NvencQuality(profile.VaapiRateControl, asked),
+            ],
+            _ =>
             [
                 "-c:v",
                 "libx264",
@@ -295,7 +309,8 @@ public static class FfmpegLiveInvocation
                 Kilobits(profile.SoftwareRateControl.KilobitsPerSecond),
                 "-bufsize",
                 Kilobits(profile.SoftwareRateControl.KilobitsPerSecond * BufferedSeconds),
-            ];
+            ],
+        };
     }
 
     internal static IReadOnlyList<string> Sound()
@@ -307,11 +322,18 @@ public static class FfmpegLiveInvocation
             Kilobits(SoundKilobitsPerSecond),
         ];
 
-    private static string OnTheCard(VideoCodec format) => format switch
+    private static string OnVaapi(VideoCodec format) => format switch
     {
         VideoCodec.H265 => "hevc_vaapi",
         VideoCodec.Av1 => "av1_vaapi",
         _ => "h264_vaapi",
+    };
+
+    private static string OnNvenc(VideoCodec format) => format switch
+    {
+        VideoCodec.H265 => "hevc_nvenc",
+        VideoCodec.Av1 => "av1_nvenc",
+        _ => "h264_nvenc",
     };
 
     /// <summary>
@@ -322,6 +344,18 @@ public static class FfmpegLiveInvocation
     {
         VideoCodec.H265 => ["-qp", Number(handed.H265.Quantiser), "-tag:v", ArtefactCodecReading.TagSafariPlays],
         VideoCodec.Av1 => ["-global_quality", Number(handed.Av1.Index)],
+        _ => ["-qp", Number(handed.H264.Quantiser)],
+    };
+
+    /// <summary>
+    /// What an NVIDIA card is handed for the format, on the same scale as the VAAPI card: a quantiser for H.264 and
+    /// H.265, and for AV1 the index it quantises by, which its encoder takes through the same option. H.265 is
+    /// tagged hvc1, the tag Safari plays.
+    /// </summary>
+    private static IReadOnlyList<string> NvencQuality(CardRateControl handed, VideoCodec format) => format switch
+    {
+        VideoCodec.H265 => ["-qp", Number(handed.H265.Quantiser), "-tag:v", ArtefactCodecReading.TagSafariPlays],
+        VideoCodec.Av1 => ["-qp", Number(handed.Av1.Index)],
         _ => ["-qp", Number(handed.H264.Quantiser)],
     };
 

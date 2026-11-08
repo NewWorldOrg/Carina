@@ -4,6 +4,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Playback;
+using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Streaming;
 
 namespace Carina.Infrastructure.Encodings;
@@ -31,7 +32,8 @@ public static class FfmpegEncodeInvocation
 
     /// <summary>
     /// The arguments for one run. The core cap is written for the decoder, the filters and the encoder.
-    /// The card is opened through the render node the machine is set to, and only when it is what encodes.
+    /// The card is opened only when it is what encodes: a VAAPI card through the render node the machine is
+    /// set to, an NVIDIA card as the CUDA device.
     /// Chapters to bake into the artefact come in as a second input, after the recording; with none,
     /// no argument is added. The picture is encoded at <paramref name="rate"/>, and at the profile's own
     /// when none is handed.
@@ -117,7 +119,12 @@ public static class FfmpegEncodeInvocation
         => string.IsNullOrEmpty(chapters) ? [] : ["-map_chapters", ChaptersInput];
 
     internal static IReadOnlyList<string> Device(EncodeEncoder encoder, string renderNode)
-        => EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi ? ["-vaapi_device", renderNode] : [];
+        => EncodeShapes.Named(encoder) switch
+        {
+            EncodeEncoder.Vaapi => ["-vaapi_device", renderNode],
+            EncodeEncoder.Nvenc => ["-init_hw_device", CudaDevice.Made, "-filter_hw_device", CudaDevice.Name],
+            _ => [],
+        };
 
     internal static IReadOnlyList<string> Mapping(ServiceId service, EncodeSound sound)
     {
@@ -204,32 +211,49 @@ public static class FfmpegEncodeInvocation
             steps.Add(SquarePixels);
         }
 
-        if (EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi)
+        if (EncodeEncoders.OnTheCard(encoder))
         {
             steps.Add(OntoTheCard);
-            steps.Add("hwupload");
+            steps.Add(Uploading(encoder));
         }
 
         return string.Join(',', steps);
     }
+
+    /// <summary>
+    /// The filter that hands the decoded frames to the card: each kind of card has its own.
+    /// </summary>
+    private static string Uploading(EncodeEncoder encoder)
+        => encoder is EncodeEncoder.Nvenc ? "hwupload_cuda" : "hwupload";
 
     internal static IReadOnlyList<string> Encoding(EncodeProfile profile, EncodeEncoder encoder, EncodeRate rate)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(rate);
 
-        return EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi
-            ?
+        return EncodeShapes.Named(encoder) switch
+        {
+            EncodeEncoder.Vaapi =>
             [
                 "-c:v",
-                OnTheCard(profile.Codec),
+                OnVaapi(profile.Codec),
                 "-rc_mode",
                 "CQP",
                 "-qp",
                 rate.Quantiser.Quantiser.ToString(CultureInfo.InvariantCulture),
                 .. Tagging(profile.Codec),
-            ]
-            :
+            ],
+            EncodeEncoder.Nvenc =>
+            [
+                "-c:v",
+                OnNvenc(profile.Codec),
+                "-rc",
+                "constqp",
+                "-qp",
+                rate.Quantiser.Quantiser.ToString(CultureInfo.InvariantCulture),
+                .. Tagging(profile.Codec),
+            ],
+            _ =>
             [
                 "-c:v",
                 OnTheProcessor(profile.Codec),
@@ -238,7 +262,8 @@ public static class FfmpegEncodeInvocation
                 "-crf",
                 rate.RateFactor.RateFactor.ToString(CultureInfo.InvariantCulture),
                 .. Tagging(profile.Codec),
-            ];
+            ],
+        };
     }
 
     /// <summary>
@@ -250,8 +275,11 @@ public static class FfmpegEncodeInvocation
     private static string OnTheProcessor(EncodeCodec codec)
         => EncodeShapes.Named(codec) is EncodeCodec.H265 ? "libx265" : "libx264";
 
-    private static string OnTheCard(EncodeCodec codec)
+    private static string OnVaapi(EncodeCodec codec)
         => EncodeShapes.Named(codec) is EncodeCodec.H265 ? "hevc_vaapi" : "h264_vaapi";
+
+    private static string OnNvenc(EncodeCodec codec)
+        => EncodeShapes.Named(codec) is EncodeCodec.H265 ? "hevc_nvenc" : "h264_nvenc";
 
     private static string? Undoing(Deinterlace deinterlace)
         => EncodeShapes.Named(deinterlace) switch
