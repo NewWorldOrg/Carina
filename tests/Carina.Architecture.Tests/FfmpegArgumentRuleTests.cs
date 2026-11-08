@@ -10,6 +10,7 @@ public sealed class FfmpegArgumentRuleTests
         "/Carina.Infrastructure/Encodings/FfprobeHeadInvocation.cs",
         "/Carina.Infrastructure/Encodings/FfprobeLengthInvocation.cs",
         "/Carina.Infrastructure/Machines/FacultyInvocation.cs",
+        "/Carina.Infrastructure/Machines/NvencProbeInvocation.cs",
         "/Carina.Infrastructure/Machines/VaapiProbeInvocation.cs",
         "/Carina.Infrastructure/Segments/FfmpegLearningInvocation.cs",
         "/Carina.Infrastructure/Segments/FfmpegReducedCopyInvocation.cs",

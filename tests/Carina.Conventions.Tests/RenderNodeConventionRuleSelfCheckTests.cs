@@ -6,6 +6,19 @@ public sealed class RenderNodeConventionRuleSelfCheckTests
 
     private const string InAFile = "Carina.Infrastructure/Widgets/Widget.cs";
 
+    private const string TheCudaDevice = "Carina.Infrastructure/Machines/CudaDevice.cs";
+
+    private const string TheCudaDeviceAsItStands = """
+        namespace Carina.Infrastructure.Machines;
+
+        public static class CudaDevice
+        {
+            public const string Made = "cuda=cu";
+
+            public const string Name = "cu";
+        }
+        """;
+
     private const string TheSettingsAsTheyStand = """
         namespace Carina.Domain.Machines;
 
@@ -79,6 +92,29 @@ public sealed class RenderNodeConventionRuleSelfCheckTests
         tree.Write(InAFile, source);
 
         Assert.Equal([$"/{InAFile}:1"], RenderNodeConventionRules.RenderNodesWrittenOut(tree.Root));
+    }
+
+    [Fact]
+    public void TheCudaDeviceAsItStandsPasses()
+    {
+        using SourceTree tree = new();
+        tree.Write(TheCudaDevice, TheCudaDeviceAsItStands);
+        tree.Write(InAFile, "class Widget { string[] Device() => [\"-init_hw_device\", CudaDevice.Made, \"-filter_hw_device\", CudaDevice.Name]; }");
+
+        Assert.Empty(RenderNodeConventionRules.CudaDevicesWrittenOut(tree.Root));
+    }
+
+    [Theory]
+    [InlineData("class Widget { string[] Device() => [\"-init_hw_device\", \"cuda=cu\"]; }")]
+    [InlineData("class Widget { const string Device = \"cuda=gpu:1\"; }")]
+    [InlineData("class Widget { string Device(int n) => $\"cuda={n}\"; }")]
+    public void ACudaDeviceWrittenOutAnywhereElseIsReported(string source)
+    {
+        using SourceTree tree = new();
+        tree.Write(TheCudaDevice, TheCudaDeviceAsItStands);
+        tree.Write(InAFile, source);
+
+        Assert.Equal([$"/{InAFile}:1"], RenderNodeConventionRules.CudaDevicesWrittenOut(tree.Root));
     }
 
     [Fact]
