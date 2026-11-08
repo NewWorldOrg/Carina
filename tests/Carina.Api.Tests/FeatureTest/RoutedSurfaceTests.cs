@@ -127,7 +127,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void TheEncodingSurfacesAreTheFifteenTheDefinitionsTheQueueAndTheAutoRunAreReachedThrough()
+    public void TheEncodingSurfacesAreTheSixteenTheDefinitionsTheQueueAndTheAutoRunAreReachedThrough()
     {
         Assert.Equal(
             [
@@ -143,6 +143,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "PATCH /api/encoding/profiles/{id:guid}",
                 "POST /api/encoding/destinations",
                 "POST /api/encoding/jobs",
+                "POST /api/encoding/jobs/retry",
                 "POST /api/encoding/jobs/{id:guid}/cancel",
                 "POST /api/encoding/profiles",
                 "PUT /api/encoding/settings",

@@ -24,7 +24,7 @@ public sealed record EncodeJobDraft(
 public sealed record EncodeJobView(EncodeJob Job, TimeSpan? QuietFor, bool Stalled, bool WaitingForAViewer);
 
 /// <summary>
-/// Queues one recording by hand and calls one job off.
+/// Queues one recording by hand, runs failed jobs again and calls one job off.
 /// </summary>
 /// <remarks>
 /// A recording still being written, or one that failed, is refused. A recording with a job already
@@ -149,6 +149,47 @@ public sealed class EncodeJobService(
 
         return ServiceResult<EncodeJobView, EncodingFailure>.Success(
             Seen(queued, Now(), await turn.YieldsToAViewerAsync(cancellationToken)));
+    }
+
+    /// <summary>
+    /// Runs failed jobs again, one id at a time and in the order asked, by queuing the recording each was made
+    /// from with the profile and destination it named, through the same path a person queues one recording by
+    /// hand. A job that did not fail is left as it stands, and what the queue refuses is answered as that row's
+    /// outcome rather than as a refusal of the whole request.
+    /// </summary>
+    public async Task<ServiceResult<IReadOnlyList<EncodeRerunRow>>> RerunAsync(IReadOnlyList<EncodeJobId> ids, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        List<EncodeRerunRow> rows = new(ids.Count);
+
+        foreach (EncodeJobId id in ids)
+        {
+            rows.Add(await RerunAsync(id, cancellationToken));
+        }
+
+        return ServiceResult<IReadOnlyList<EncodeRerunRow>>.Success(rows);
+    }
+
+    private async Task<EncodeRerunRow> RerunAsync(EncodeJobId id, CancellationToken cancellationToken)
+    {
+        if (await jobs.FindAsync(id, cancellationToken) is not { } job)
+        {
+            return EncodeRerunRow.NoSuchJob(id);
+        }
+
+        if (!EncodeReruns.CanRunAgain(job))
+        {
+            return EncodeRerunRow.NotFailed(id, job);
+        }
+
+        ServiceResult<EncodeJobView, EncodingFailure> queued = await QueueAsync(
+            new EncodeJobDraft(job.RecordingId, job.ProfileId, job.DestinationId, job.MakesItAgain),
+            cancellationToken);
+
+        return queued.IsSuccess
+            ? EncodeRerunRow.QueuedAgain(id, queued.Data!)
+            : EncodeRerunRow.NotQueued(id, queued.ErrorMessage!, queued.ErrorType);
     }
 
     public async Task<ServiceResult<EncodeJobView, EncodingFailure>> CancelAsync(EncodeJobId id, CancellationToken cancellationToken)
