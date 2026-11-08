@@ -87,6 +87,28 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Null(readWaiting.StartedAt);
     }
 
+    [Fact(DisplayName = "a job that asked for the NVIDIA card and ran on it goes into the ledger and comes back routed so, with no swerve")]
+    public async Task AJobRoutedToTheNvidiaCardComesBackRoutedSo()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob running = Job(profile, destination);
+        running.Start(Started);
+        running.Routed(new EncodeRoute(EncodeEncoder.Nvenc, EncodeEncoder.Nvenc, null));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(running, Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(running.Id, Cancel);
+
+        Assert.NotNull(read);
+        Assert.Equal(new EncodeRoute(EncodeEncoder.Nvenc, EncodeEncoder.Nvenc, null), read.Route);
+        Assert.False(read.Route!.WasDegraded);
+    }
+
     [Fact(DisplayName = "where a job ran, the programme it started and how far it got go into the ledger and come back with the job, and go when the job's moves let them go")]
     public async Task WhereAJobRanItsProgrammeAndItsHeadwayComeBackWithTheJob()
     {
