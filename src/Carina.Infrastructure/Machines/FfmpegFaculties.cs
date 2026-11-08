@@ -14,11 +14,17 @@ public static partial class FfmpegFaculties
 
     public const string H265OnTheProcessor = "libx265";
 
-    public const string H264OnTheCard = "h264_vaapi";
+    public const string H264OnVaapi = "h264_vaapi";
 
-    public const string H265OnTheCard = "hevc_vaapi";
+    public const string H265OnVaapi = "hevc_vaapi";
 
-    public const string Av1OnTheCard = "av1_vaapi";
+    public const string Av1OnVaapi = "av1_vaapi";
+
+    public const string H264OnNvenc = "h264_nvenc";
+
+    public const string H265OnNvenc = "hevc_nvenc";
+
+    public const string Av1OnNvenc = "av1_nvenc";
 
     public const string AribCaptions = "libaribcaption";
 
@@ -51,13 +57,20 @@ public static partial class FfmpegFaculties
         return named;
     }
 
+    public static string H264On(CardKind card) => CardKinds.Named(card) is CardKind.Nvenc ? H264OnNvenc : H264OnVaapi;
+
+    public static string H265On(CardKind card) => CardKinds.Named(card) is CardKind.Nvenc ? H265OnNvenc : H265OnVaapi;
+
+    public static string Av1On(CardKind card) => CardKinds.Named(card) is CardKind.Nvenc ? Av1OnNvenc : Av1OnVaapi;
+
     /// <summary>
-    /// The faculties of this machine. Each of the card's three faculties is answered by a frame actually
-    /// encoded with that encoder, not by the build listing it.
+    /// The faculties of this machine, whose card is of <paramref name="card"/>'s kind. Each of the card's three
+    /// faculties is answered by a frame actually encoded with that card's encoder, not by the build listing it.
     /// </summary>
     public static IReadOnlyList<Faculty> Of(
         IReadOnlyList<string> encoders,
         IReadOnlyList<string> decoders,
+        CardKind card,
         bool cardEncodesH264,
         bool cardEncodesH265,
         bool cardEncodesAv1)
@@ -69,10 +82,10 @@ public static partial class FfmpegFaculties
 
         Add(can, Faculty.EncodeH264OnTheProcessor, encoders.Contains(H264OnTheProcessor, StringComparer.Ordinal));
         Add(can, Faculty.EncodeH265OnTheProcessor, encoders.Contains(H265OnTheProcessor, StringComparer.Ordinal));
-        Add(can, Faculty.EncodeH264OnTheCard, cardEncodesH264 && encoders.Contains(H264OnTheCard, StringComparer.Ordinal));
-        Add(can, Faculty.EncodeH265OnTheCard, cardEncodesH265 && encoders.Contains(H265OnTheCard, StringComparer.Ordinal));
+        Add(can, Faculty.EncodeH264OnTheCard, cardEncodesH264 && encoders.Contains(H264On(card), StringComparer.Ordinal));
+        Add(can, Faculty.EncodeH265OnTheCard, cardEncodesH265 && encoders.Contains(H265On(card), StringComparer.Ordinal));
         Add(can, Faculty.DecodeAribCaptions, decoders.Contains(AribCaptions, StringComparer.Ordinal));
-        Add(can, Faculty.EncodeAv1OnTheCard, cardEncodesAv1 && encoders.Contains(Av1OnTheCard, StringComparer.Ordinal));
+        Add(can, Faculty.EncodeAv1OnTheCard, cardEncodesAv1 && encoders.Contains(Av1On(card), StringComparer.Ordinal));
 
         return can;
     }

@@ -198,6 +198,7 @@ public sealed class LiveProfileTests
     public void AMachineWithACardIsOfferedEveryLineAndEveryField()
     {
         Assert.Same(LiveProfile.FullHd60, LiveProfile.Unasked(LiveEncoder.Vaapi));
+        Assert.Same(LiveProfile.FullHd60, LiveProfile.Unasked(LiveEncoder.Nvenc));
     }
 
     [Fact]

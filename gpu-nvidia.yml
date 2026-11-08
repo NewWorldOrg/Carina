@@ -1,0 +1,17 @@
+# Hands the host's NVIDIA cards to app through the NVIDIA container runtime, for
+# Encodings__Prefer / Transcoding__Prefer set to Nvenc:
+#
+#   docker compose -f compose.yml -f gpu-nvidia.yml up -d
+#
+# or `task up:nvidia`. The runtime mounts the driver's libraries into the
+# container; the image carries nothing of NVIDIA's. `video` is the capability
+# that brings libnvidia-encode.
+services:
+  app:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, video]

@@ -14,6 +14,6 @@ public static class EncodeQueues
     {
         ArgumentOutOfRangeException.ThrowIfNegative(watching);
 
-        return EncodeShapes.Named(prefer) is EncodeEncoder.Vaapi && cardIsUsable && watching > 0;
+        return EncodeEncoders.OnTheCard(prefer) && cardIsUsable && watching > 0;
     }
 }

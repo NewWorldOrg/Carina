@@ -1018,7 +1018,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_encode_job_replaced", "replaced_at IS NULL OR (status = 'Completed' AND artefact_name IS NOT NULL AND replaced_at >= ended_at)");
 
-                            t.HasCheckConstraint("ck_encode_job_route", "((encoder_asked IS NULL) = (encoder_ran IS NULL))\nAND (encoder_asked IS NULL OR status <> 'Queued')\nAND (encoder_asked IS NULL OR encoder_asked IN ('Software', 'Vaapi'))\nAND (encoder_ran IS NULL OR encoder_ran IN ('Software', 'Vaapi'))\nAND (swerve IS NULL OR swerve IN ('TheCardIsOutOfReach', 'TheCardCannotDoThisCodec', 'TheProcessorCannotDoThisCodec'))\nAND (encoder_asked IS NULL OR ((swerve IS NULL) = (encoder_asked = encoder_ran)))");
+                            t.HasCheckConstraint("ck_encode_job_route", "((encoder_asked IS NULL) = (encoder_ran IS NULL))\nAND (encoder_asked IS NULL OR status <> 'Queued')\nAND (encoder_asked IS NULL OR encoder_asked IN ('Software', 'Vaapi', 'Nvenc'))\nAND (encoder_ran IS NULL OR encoder_ran IN ('Software', 'Vaapi', 'Nvenc'))\nAND (swerve IS NULL OR swerve IN ('TheCardIsOutOfReach', 'TheCardCannotDoThisCodec', 'TheProcessorCannotDoThisCodec'))\nAND (encoder_asked IS NULL OR ((swerve IS NULL) = (encoder_asked = encoder_ran)))");
 
                             t.HasCheckConstraint("ck_encode_job_status", "status IN ('Queued', 'Running', 'Completed', 'Failed', 'Cancelled')");
 

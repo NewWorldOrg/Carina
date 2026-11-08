@@ -34,7 +34,7 @@ public sealed class VaapiProbeInvocationTests
     [Fact]
     public void ThePictureIsNoSmallerThanTheSmallestEitherCodecEncodesOnTheCard()
     {
-        string[] arguments = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.H265OnTheCard)];
+        string[] arguments = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.H265OnVaapi)];
         string picture = arguments[arguments.IndexOf("-i") + 1];
         string[] size = picture.Split(':')[1]["s=".Length..].Split('x');
 
@@ -56,7 +56,7 @@ public sealed class VaapiProbeInvocationTests
     public void AskingAboutH265OnTheCardIsTheSamePictureThroughHevcVaapi()
     {
         string[] h264 = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode)];
-        string[] hevc = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.H265OnTheCard)];
+        string[] hevc = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.H265OnVaapi)];
 
         Assert.Equal("hevc_vaapi", hevc[hevc.IndexOf("-c:v") + 1]);
         Assert.Equal(h264.Where(argument => argument is not "h264_vaapi"), hevc.Where(argument => argument is not "hevc_vaapi"));
@@ -67,7 +67,7 @@ public sealed class VaapiProbeInvocationTests
     public void AskingAboutAv1OnTheCardIsTheSamePictureThroughAv1Vaapi()
     {
         string[] h264 = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode)];
-        string[] av1 = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.Av1OnTheCard)];
+        string[] av1 = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.Av1OnVaapi)];
         string[] size = av1[av1.IndexOf("-i") + 1].Split(':')[1]["s=".Length..].Split('x');
 
         Assert.Equal("av1_vaapi", av1[av1.IndexOf("-c:v") + 1]);

@@ -35,6 +35,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 | --- | --- | --- | --- |
 | FFmpeg 6.1.6, built with `--enable-gpl` and libx264 | GPL-2.0-or-later | <https://ffmpeg.org/releases/ffmpeg-6.1.6.tar.xz> | `/usr/share/doc/carina/ffmpeg/` |
 | libaribcaption v1.1.2 | MIT | <https://github.com/xqq/libaribcaption> | `/usr/share/doc/carina/libaribcaption/` |
+| nv-codec-headers n12.1.14.0 | MIT | <https://github.com/FFmpeg/nv-codec-headers> | `/usr/share/doc/carina/nv-codec-headers/` (the notice at the head of each header) |
 
 ## Fonts fetched into the image
 
@@ -48,6 +49,12 @@ The font is checked against the `SHA256SUMS` of the same release and against
 The corresponding source of the FFmpeg binaries is in the image at
 `/usr/share/doc/carina/ffmpeg/source/`: the release archive as downloaded, the
 patches applied to it, and the configure options.
+
+nv-codec-headers is headers alone, compiled into FFmpeg so that it can encode on
+an NVIDIA card; its archive as downloaded is at
+`/usr/share/doc/carina/nv-codec-headers/source/`. The NVIDIA libraries FFmpeg
+loads at run time for that (`libcuda`, `libnvidia-encode`) are not in the image:
+the NVIDIA container runtime mounts them from the host.
 
 ## .NET
 

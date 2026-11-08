@@ -11,6 +11,14 @@ public sealed class EncodeQueueTests
         Assert.True(EncodeQueues.YieldsToAViewer(EncodeEncoder.Vaapi, cardIsUsable: true, watching: 4));
     }
 
+    [Fact(DisplayName = "A job bound for an NVIDIA card waits the same way, because it is the one card too")]
+    public void AJobBoundForAnNvidiaCardWaitsTheSameWay()
+    {
+        Assert.True(EncodeQueues.YieldsToAViewer(EncodeEncoder.Nvenc, cardIsUsable: true, watching: 1));
+        Assert.False(EncodeQueues.YieldsToAViewer(EncodeEncoder.Nvenc, cardIsUsable: true, watching: 0));
+        Assert.False(EncodeQueues.YieldsToAViewer(EncodeEncoder.Nvenc, cardIsUsable: false, watching: 2));
+    }
+
     [Fact(DisplayName = "A job bound for the card starts as usual when nobody is watching")]
     public void AJobBoundForTheCardStartsWhenNobodyIsWatching()
         => Assert.False(EncodeQueues.YieldsToAViewer(EncodeEncoder.Vaapi, cardIsUsable: true, watching: 0));
@@ -24,7 +32,7 @@ public sealed class EncodeQueueTests
         => Assert.False(EncodeQueues.YieldsToAViewer(EncodeEncoder.Vaapi, cardIsUsable: false, watching: 3));
 
     [Fact]
-    public void AnEncoderOutsideTheTwoOnOfferIsRefused()
+    public void AnEncoderOutsideThoseOnOfferIsRefused()
         => Assert.Throws<ArgumentOutOfRangeException>(
             () => EncodeQueues.YieldsToAViewer((EncodeEncoder)7, cardIsUsable: true, watching: 0));
 

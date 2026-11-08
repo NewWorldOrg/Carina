@@ -46,6 +46,7 @@ public sealed class TranscodingOptionsTests
     [Theory]
     [InlineData("Software", LiveEncoder.Software)]
     [InlineData("Vaapi", LiveEncoder.Vaapi)]
+    [InlineData("Nvenc", LiveEncoder.Nvenc)]
     public void TheEncoderAskedForReachesTheSettingsTheTranscoderReads(string named, LiveEncoder read)
     {
         Assert.Equal(read, ReadLive(("Transcoding:Prefer", named)).Prefer);
@@ -54,7 +55,9 @@ public sealed class TranscodingOptionsTests
     [Theory]
     [InlineData("vaapi")]
     [InlineData("VAAPI")]
+    [InlineData("nvenc")]
     [InlineData("2")]
+    [InlineData("3")]
     [InlineData("hardware")]
     [InlineData("Software ")]
     public void AnEncoderOffTheListIsRefusedByNameAndNamesTheOnesThereAre(string named)
@@ -63,7 +66,7 @@ public sealed class TranscodingOptionsTests
 
         Assert.Equal("Prefer", refusal.ParamName);
         Assert.Contains("Transcoding:Prefer", refusal.Message, StringComparison.Ordinal);
-        Assert.Contains("Software, Vaapi", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Software, Vaapi, Nvenc", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

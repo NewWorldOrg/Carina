@@ -329,17 +329,41 @@ public sealed class FfmpegPlaybackInvocationTests
         Assert.Contains("h264_vaapi", arguments);
     }
 
+    [Fact]
+    public void AnNvidiaCardIsOpenedAsTheCudaDeviceBeforeTheInputWhenItIsWhatEncodes()
+    {
+        IReadOnlyList<string> arguments = FfmpegPlaybackInvocation.Arguments(
+            Service,
+            LiveProfile.Hd30,
+            Interlaced,
+            LiveEncoder.Nvenc,
+            Machine,
+            Recorded,
+            TimeSpan.FromMinutes(1),
+            TheWholeFirstStream);
+
+        Assert.Equal("cuda=cu", After(arguments, "-init_hw_device"));
+        Assert.Equal("cu", After(arguments, "-filter_hw_device"));
+        Assert.True(Where(arguments, "-init_hw_device") < Where(arguments, "-i"));
+        Assert.Contains("h264_nvenc", arguments);
+        Assert.EndsWith("format=nv12,hwupload_cuda", After(arguments, "-vf"), StringComparison.Ordinal);
+        Assert.DoesNotContain("-vaapi_device", arguments);
+    }
+
     [Theory(DisplayName = "a recording is encoded on the card in the format asked for, by the same words a live viewer's picture is")]
-    [InlineData(VideoCodec.H264)]
-    [InlineData(VideoCodec.H265)]
-    [InlineData(VideoCodec.Av1)]
-    public void ARecordingIsEncodedInTheFormatAskedForByTheSameWordsALiveViewersPictureIs(VideoCodec format)
+    [InlineData(LiveEncoder.Vaapi, VideoCodec.H264)]
+    [InlineData(LiveEncoder.Vaapi, VideoCodec.H265)]
+    [InlineData(LiveEncoder.Vaapi, VideoCodec.Av1)]
+    [InlineData(LiveEncoder.Nvenc, VideoCodec.H264)]
+    [InlineData(LiveEncoder.Nvenc, VideoCodec.H265)]
+    [InlineData(LiveEncoder.Nvenc, VideoCodec.Av1)]
+    public void ARecordingIsEncodedInTheFormatAskedForByTheSameWordsALiveViewersPictureIs(LiveEncoder card, VideoCodec format)
     {
         IReadOnlyList<string> playing = FfmpegPlaybackInvocation.Arguments(
             Service,
             LiveProfile.Hd30,
             Interlaced,
-            LiveEncoder.Vaapi,
+            card,
             Machine,
             Recorded,
             TimeSpan.FromMinutes(1),
@@ -349,7 +373,7 @@ public sealed class FfmpegPlaybackInvocationTests
             Service,
             LiveProfile.Hd30,
             Interlaced,
-            LiveEncoder.Vaapi,
+            card,
             Machine,
             CaptionOutlet.None,
             TheWholeFirstStream,
@@ -387,21 +411,25 @@ public sealed class FfmpegPlaybackInvocationTests
 
     [Fact]
     public void TheProcessorEncodingOpensNoCard()
-        => Assert.DoesNotContain(
-            "-vaapi_device",
-            FfmpegPlaybackInvocation.Arguments(
-                Service,
-                LiveProfile.Hd30,
-                Interlaced,
-                LiveEncoder.Software,
-                Machine,
-                Recorded,
-                TimeSpan.Zero,
-                TheWholeFirstStream));
+    {
+        IReadOnlyList<string> arguments = FfmpegPlaybackInvocation.Arguments(
+            Service,
+            LiveProfile.Hd30,
+            Interlaced,
+            LiveEncoder.Software,
+            Machine,
+            Recorded,
+            TimeSpan.Zero,
+            TheWholeFirstStream);
+
+        Assert.DoesNotContain("-vaapi_device", arguments);
+        Assert.DoesNotContain("-init_hw_device", arguments);
+    }
 
     [Theory]
     [InlineData(LiveEncoder.Software)]
     [InlineData(LiveEncoder.Vaapi)]
+    [InlineData(LiveEncoder.Nvenc)]
     public void NoCommandIsBuiltWithoutARenderNodeToOpenTheCardThrough(LiveEncoder encoder)
     {
         Assert.Throws<ArgumentNullException>(() => FfmpegPlaybackInvocation.Arguments(

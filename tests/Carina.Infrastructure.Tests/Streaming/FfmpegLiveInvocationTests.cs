@@ -41,6 +41,7 @@ public sealed class FfmpegLiveInvocationTests
             {
                 pairs.Add(profile, LiveEncoder.Software);
                 pairs.Add(profile, LiveEncoder.Vaapi);
+                pairs.Add(profile, LiveEncoder.Nvenc);
             }
 
             return pairs;
@@ -137,6 +138,91 @@ public sealed class FfmpegLiveInvocationTests
                 "192k",
             ],
             FfmpegLiveInvocation.Arguments(Service, LiveProfile.FullHd60, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None));
+    }
+
+    [Fact]
+    public void TheNvencArgumentsAreExactlyThese()
+    {
+        Assert.Equal(
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-nostats",
+                "-loglevel",
+                "level+info",
+                "-probesize",
+                "500000",
+                "-analyzeduration",
+                "250000",
+                "-copyts",
+                "-init_hw_device",
+                "cuda=cu",
+                "-filter_hw_device",
+                "cu",
+                "-i",
+                "pipe:0",
+                "-map",
+                "p:1040:v:0",
+                "-map",
+                "p:1040:a:0",
+                "-vf",
+                "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda",
+                "-r",
+                "60000/1001",
+                "-c:v",
+                "h264_nvenc",
+                "-g",
+                "120",
+                "-rc",
+                "constqp",
+                "-qp",
+                "24",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+            ],
+            FfmpegLiveInvocation.Arguments(Service, LiveProfile.FullHd60, Interlaced, LiveEncoder.Nvenc, Machine, CaptionOutlet.None));
+    }
+
+    [Theory(DisplayName = "an NVIDIA card encodes each format by its own encoder, at the same quantiser or index the VAAPI card is handed, H.265 tagged hvc1")]
+    [InlineData(VideoCodec.H264, "h264_nvenc", "24", false)]
+    [InlineData(VideoCodec.H265, "hevc_nvenc", "24", true)]
+    [InlineData(VideoCodec.Av1, "av1_nvenc", "80", false)]
+    public void AnNvidiaCardEncodesEachFormatByItsOwnEncoder(VideoCodec format, string encoder, string quality, bool tagged)
+    {
+        string[] tag = tagged ? ["-tag:v", "hvc1"] : [];
+
+        Assert.Equal(
+            ["-c:v", encoder, "-g", "120", "-rc", "constqp", "-qp", quality, .. tag],
+            Encoder(FfmpegLiveInvocation.Arguments(
+                Service,
+                LiveProfile.FullHd60,
+                Interlaced,
+                LiveEncoder.Nvenc,
+                Machine,
+                CaptionOutlet.None,
+                format: format)));
+    }
+
+    [Theory(DisplayName = "on an NVIDIA card a format changes nothing but the encoder and what it is handed")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void OnAnNvidiaCardAFormatChangesNothingButTheEncoderAndWhatItIsHanded(LiveProfile profile, VideoCodec format)
+    {
+        string[] h264 = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Nvenc, Machine, CaptionOutlet.Drawn)];
+        string[] asked = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Nvenc, Machine, CaptionOutlet.Drawn, format: format)];
+        int handed = format switch
+        {
+            VideoCodec.H265 => profile.VaapiRateControl.H265.Quantiser,
+            VideoCodec.Av1 => profile.VaapiRateControl.Av1.Index,
+            _ => profile.VaapiRateControl.H264.Quantiser,
+        };
+
+        Assert.Equal(AllButTheEncoder(h264), AllButTheEncoder(asked));
+        Assert.Equal(handed.ToString(CultureInfo.InvariantCulture), asked[asked.IndexOf("-qp") + 1]);
+        Assert.Single(asked, argument => argument is "-qp");
+        Assert.DoesNotContain("-global_quality", asked);
+        Assert.DoesNotContain("-rc_mode", asked);
     }
 
     [Fact(DisplayName = "the H.265 arguments are exactly these, tagged hvc1 so that Safari plays them")]
@@ -621,7 +707,12 @@ public sealed class FfmpegLiveInvocationTests
         string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
 
         Assert.Equal(
-            encoder is LiveEncoder.Vaapi ? "h264_vaapi" : "libx264",
+            encoder switch
+            {
+                LiveEncoder.Vaapi => "h264_vaapi",
+                LiveEncoder.Nvenc => "h264_nvenc",
+                _ => "libx264",
+            },
             arguments[arguments.IndexOf("-c:v") + 1]);
         Assert.Single(arguments, argument => string.Equals(argument, "-c:v", StringComparison.Ordinal));
     }
@@ -632,9 +723,11 @@ public sealed class FfmpegLiveInvocationTests
     {
         string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
 
-        if (encoder is LiveEncoder.Vaapi)
+        if (encoder is not LiveEncoder.Software)
         {
-            Assert.Equal("CQP", arguments[arguments.IndexOf("-rc_mode") + 1]);
+            Assert.Equal(
+                encoder is LiveEncoder.Vaapi ? "CQP" : "constqp",
+                arguments[arguments.IndexOf(encoder is LiveEncoder.Vaapi ? "-rc_mode" : "-rc") + 1]);
             Assert.Equal(
                 profile.VaapiRateControl.H264.Quantiser.ToString(CultureInfo.InvariantCulture),
                 arguments[arguments.IndexOf("-qp") + 1]);
@@ -648,6 +741,7 @@ public sealed class FfmpegLiveInvocationTests
         Assert.Equal(profile.SoftwareRateControl.ToString(), arguments[arguments.IndexOf("-b:v") + 1]);
         Assert.Equal(profile.SoftwareRateControl.ToString(), arguments[arguments.IndexOf("-maxrate") + 1]);
         Assert.DoesNotContain("-rc_mode", arguments);
+        Assert.DoesNotContain("-rc", arguments);
         Assert.DoesNotContain("-qp", arguments);
     }
 
@@ -676,11 +770,25 @@ public sealed class FfmpegLiveInvocationTests
             Assert.Equal(RenderNode, arguments[arguments.IndexOf("-vaapi_device") + 1]);
             Assert.True(arguments.IndexOf("-vaapi_device") < arguments.IndexOf("-i"));
             Assert.EndsWith("format=nv12,hwupload", filter, StringComparison.Ordinal);
+            Assert.DoesNotContain("-init_hw_device", arguments);
+
+            return;
+        }
+
+        if (encoder is LiveEncoder.Nvenc)
+        {
+            Assert.Equal("cuda=cu", arguments[arguments.IndexOf("-init_hw_device") + 1]);
+            Assert.Equal("cu", arguments[arguments.IndexOf("-filter_hw_device") + 1]);
+            Assert.True(arguments.IndexOf("-init_hw_device") < arguments.IndexOf("-i"));
+            Assert.EndsWith("format=nv12,hwupload_cuda", filter, StringComparison.Ordinal);
+            Assert.DoesNotContain("-vaapi_device", arguments);
+            Assert.DoesNotContain(arguments, argument => argument.Contains("/dev/", StringComparison.Ordinal));
 
             return;
         }
 
         Assert.DoesNotContain("-vaapi_device", arguments);
+        Assert.DoesNotContain("-init_hw_device", arguments);
         Assert.DoesNotContain("hwupload", filter, StringComparison.Ordinal);
     }
 
@@ -694,6 +802,7 @@ public sealed class FfmpegLiveInvocationTests
         Assert.DoesNotContain("-hwaccel_output_format", arguments);
         Assert.DoesNotContain("-c:v:0", arguments);
         Assert.DoesNotContain("mpeg2_vaapi", arguments);
+        Assert.DoesNotContain(arguments, argument => argument.Contains("cuvid", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -815,11 +924,14 @@ public sealed class FfmpegLiveInvocationTests
     [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
     public void TheCardPutsAKeyframeEveryTwoSeconds(LiveProfile profile, VideoCodec format)
     {
-        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, null, format)];
+        foreach (LiveEncoder card in new[] { LiveEncoder.Vaapi, LiveEncoder.Nvenc })
+        {
+            string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, card, Machine, CaptionOutlet.None, null, format)];
 
-        Assert.Equal(
-            Math.Round(profile.Rate.PerSecond * 2).ToString(CultureInfo.InvariantCulture),
-            arguments[arguments.IndexOf("-g") + 1]);
+            Assert.Equal(
+                Math.Round(profile.Rate.PerSecond * 2).ToString(CultureInfo.InvariantCulture),
+                arguments[arguments.IndexOf("-g") + 1]);
+        }
     }
 
     [Fact]
@@ -965,7 +1077,7 @@ public sealed class FfmpegLiveInvocationTests
     }
 
     [Fact]
-    public void AnEncoderThatIsNotOneOfTheTwoIsRefused()
+    public void AnEncoderThatIsNotOneOfThoseNamedIsRefused()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
             () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, (LiveEncoder)7, Machine, CaptionOutlet.None));
@@ -974,6 +1086,7 @@ public sealed class FfmpegLiveInvocationTests
     [Theory]
     [InlineData(LiveEncoder.Software)]
     [InlineData(LiveEncoder.Vaapi)]
+    [InlineData(LiveEncoder.Nvenc)]
     public void TheCardIsOpenedThroughTheRenderNodeItIsHandedAndOnlyWhenItEncodes(LiveEncoder encoder)
     {
         string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, encoder, new MachineSettings { RenderNode = "/dev/dri/renderD130" }, CaptionOutlet.None)];
@@ -985,6 +1098,7 @@ public sealed class FfmpegLiveInvocationTests
     [Theory]
     [InlineData(LiveEncoder.Software)]
     [InlineData(LiveEncoder.Vaapi)]
+    [InlineData(LiveEncoder.Nvenc)]
     public void NoCommandIsBuiltWithoutARenderNodeToOpenTheCardThrough(LiveEncoder encoder)
     {
         Assert.Throws<ArgumentNullException>(
@@ -1001,9 +1115,9 @@ public sealed class FfmpegLiveInvocationTests
     }
 
     [Fact]
-    public void ThereAreOnlyTheTwoEncodersTheBenchmarkCompared()
+    public void ThereAreTheProcessorAndTheTwoKindsOfCard()
     {
-        Assert.Equal([LiveEncoder.Software, LiveEncoder.Vaapi], Enum.GetValues<LiveEncoder>());
+        Assert.Equal([LiveEncoder.Software, LiveEncoder.Vaapi, LiveEncoder.Nvenc], Enum.GetValues<LiveEncoder>());
     }
 
     [Fact]

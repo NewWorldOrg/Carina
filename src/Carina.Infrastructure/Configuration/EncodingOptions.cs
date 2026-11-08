@@ -2,6 +2,8 @@ using System.Globalization;
 
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
+using Carina.Domain.Machines;
+using Carina.Domain.Streaming;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -182,5 +184,33 @@ public sealed class RootsHeldApartValidation(IOptions<IntegrityOptions> sweeping
                 + $"{string.Join(", ", shared)}. The two are separate sets: an artefact is written only into a root "
                 + "this process holds, and the ledger sweep walks only the roots the recordings are read from, so a "
                 + "name in both would have the sweep report finished artefacts as files no ledger row claims.");
+    }
+}
+
+/// <summary>
+/// Holds the two encoder settings to one kind of card: either names a card or the processor, and the two
+/// never name different cards, because a machine is taken to have one kind of card and is asked about
+/// that one alone.
+/// </summary>
+public sealed class OneCardValidation(IOptions<TranscodingOptions> transcoding) : IValidateOptions<EncodingOptions>
+{
+    public ValidateOptionsResult Validate(string? name, EncodingOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        try
+        {
+            CardKinds.Agreed(
+                EncodeEncoders.CardOf(options.Read().Prefer),
+                LiveEncoders.CardOf(transcoding.Value.ReadLive().Prefer));
+        }
+        catch (ArgumentException refusal)
+        {
+            return ValidateOptionsResult.Fail(
+                $"{EncodingOptions.Section}:{nameof(EncodingOptions.Prefer)} and "
+                + $"{TranscodingOptions.Section}:{nameof(TranscodingOptions.Prefer)}: {refusal.Message}");
+        }
+
+        return ValidateOptionsResult.Success;
     }
 }

@@ -5,6 +5,8 @@ ARG ARIBCAPTION_TAG=v1.1.2
 ARG ARIBCAPTION_COMMIT=c64c23b8905ba514b87c9789269e9f66f949ffe0
 ARG FFMPEG_VERSION=6.1.6
 ARG FFMPEG_SHA256=d4fcb164028dd3beee5d92c0ac72e46aac6973c75ea12dc14de07bf8f407370a
+ARG NV_CODEC_HEADERS_VERSION=n12.1.14.0
+ARG NV_CODEC_HEADERS_SHA256=2fefaa227d2a3b4170797796425a59d1dd2ed5fd231db9b4244468ba327acd0b
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates cmake curl g++ gcc git make nasm patch pkg-config xz-utils \
@@ -18,6 +20,17 @@ RUN git clone --depth 1 --branch "${ARIBCAPTION_TAG}" \
         -DARIBCC_SHARED_LIBRARY=ON -DARIBCC_USE_FONTCONFIG=ON -DARIBCC_USE_FREETYPE=ON -DARIBCC_BUILD_TESTS=OFF \
     && cmake --build aribcaption-build -j"$(nproc)" \
     && cmake --install aribcaption-build --prefix /usr/local
+RUN curl -fsSL -o "nv-codec-headers-${NV_CODEC_HEADERS_VERSION}.tar.gz" \
+        "https://github.com/FFmpeg/nv-codec-headers/archive/refs/tags/${NV_CODEC_HEADERS_VERSION}.tar.gz" \
+    && echo "${NV_CODEC_HEADERS_SHA256}  nv-codec-headers-${NV_CODEC_HEADERS_VERSION}.tar.gz" | sha256sum -c - \
+    && tar xzf "nv-codec-headers-${NV_CODEC_HEADERS_VERSION}.tar.gz" \
+    && make -C "nv-codec-headers-${NV_CODEC_HEADERS_VERSION}" PREFIX=/usr/local install \
+    && mkdir -p /out/notices/nv-codec-headers/source \
+    && sed -n '/^\/\*/,/^ \*\//p' "nv-codec-headers-${NV_CODEC_HEADERS_VERSION}/include/ffnvcodec/nvEncodeAPI.h" \
+        | sed -n '1,/^ \*\//p' > /out/notices/nv-codec-headers/LICENSE \
+    && grep -q 'Permission is hereby granted' /out/notices/nv-codec-headers/LICENSE \
+    && cp "nv-codec-headers-${NV_CODEC_HEADERS_VERSION}.tar.gz" "nv-codec-headers-${NV_CODEC_HEADERS_VERSION}/README" \
+        /out/notices/nv-codec-headers/source/
 COPY patches/ffmpeg-aribcaption-erase-on-clear.patch patches/ffmpeg-copyts-drop-audio-before-any-timestamp.patch /src/patches/
 RUN curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && echo "${FFMPEG_SHA256}  ffmpeg-${FFMPEG_VERSION}.tar.xz" | sha256sum -c - \
@@ -28,6 +41,7 @@ RUN curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure --prefix=/usr/local \
         --disable-doc --disable-debug --disable-ffplay \
         --enable-gpl --enable-libx264 --enable-vaapi --enable-libdrm \
+        --enable-ffnvcodec --enable-nvenc \
         --enable-libaribcaption --enable-libfreetype --enable-libfontconfig \
     && make -j"$(nproc)" \
     && make install \
@@ -88,6 +102,7 @@ COPY docker/fonts.conf /etc/fonts/local.conf
 COPY --from=ffmpeg-build /out/ffmpeg/bin/ /usr/local/bin/
 COPY --from=ffmpeg-build /out/ffmpeg/lib/ /usr/local/lib/
 RUN ldconfig
+ENV NVIDIA_DRIVER_CAPABILITIES=video,compute,utility
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime-base
 
@@ -129,6 +144,7 @@ RUN --mount=type=bind,from=app-notices,source=/notices,target=/run/notices \
 
 ENV CARINA_ROLE=app \
     CARINA_DRIVER_SOCKET=/run/carina/driver.sock \
-    DOTNET_hostBuilder__reloadConfigOnChange=false
+    DOTNET_hostBuilder__reloadConfigOnChange=false \
+    NVIDIA_DRIVER_CAPABILITIES=video,compute,utility
 
 ENTRYPOINT ["/usr/local/bin/carina"]

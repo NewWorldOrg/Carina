@@ -15,16 +15,28 @@ public sealed class LiveEncoderSelectionTests
         Assert.False(chosen.FellBack);
     }
 
+    [Fact(DisplayName = "an NVIDIA card is the card this machine was asked about, and is used the same way")]
+    public async Task AnNvidiaCardIsUsedWhenThisMachineCanEncodeOnIt()
+    {
+        LiveEncoderChoice chosen = await Choosing(LiveEncoder.Nvenc, WithACard);
+
+        Assert.Equal(LiveEncoder.Nvenc, chosen.Encoder);
+        Assert.False(chosen.FellBack);
+    }
+
     [Theory]
-    [InlineData(CardStanding.NodeMissing)]
-    [InlineData(CardStanding.NodeUnreadable)]
-    [InlineData(CardStanding.DriverUnusable)]
-    [InlineData(CardStanding.ProbeTimedOut)]
-    [InlineData(CardStanding.ProbeProgrammeMissing)]
-    public async Task ACardThisMachineCannotEncodeOnMeansSoftwareAndSaysWhy(CardStanding standing)
+    [InlineData(LiveEncoder.Vaapi, CardStanding.NodeMissing)]
+    [InlineData(LiveEncoder.Vaapi, CardStanding.NodeUnreadable)]
+    [InlineData(LiveEncoder.Vaapi, CardStanding.DriverUnusable)]
+    [InlineData(LiveEncoder.Vaapi, CardStanding.ProbeTimedOut)]
+    [InlineData(LiveEncoder.Vaapi, CardStanding.ProbeProgrammeMissing)]
+    [InlineData(LiveEncoder.Nvenc, CardStanding.DriverUnusable)]
+    [InlineData(LiveEncoder.Nvenc, CardStanding.ProbeTimedOut)]
+    [InlineData(LiveEncoder.Nvenc, CardStanding.ProbeProgrammeMissing)]
+    public async Task ACardThisMachineCannotEncodeOnMeansSoftwareAndSaysWhy(LiveEncoder prefer, CardStanding standing)
     {
         LiveEncoderChoice chosen = await Choosing(
-            LiveEncoder.Vaapi,
+            prefer,
             MachineCapabilities.Of(standing, [], "the card was turned down"));
 
         Assert.Equal(LiveEncoder.Software, chosen.Encoder);
@@ -56,11 +68,13 @@ public sealed class LiveEncoderSelectionTests
         Assert.Equal(1, machine.Times);
     }
 
-    [Fact(DisplayName = "a card that encodes all three formats offers all three, H.264 first")]
-    public async Task ACardThatEncodesAllThreeFormatsOffersAllThree()
+    [Theory(DisplayName = "a card that encodes all three formats offers all three, H.264 first")]
+    [InlineData(LiveEncoder.Vaapi)]
+    [InlineData(LiveEncoder.Nvenc)]
+    public async Task ACardThatEncodesAllThreeFormatsOffersAllThree(LiveEncoder prefer)
     {
         IReadOnlyList<VideoCodec> offered = await Offering(
-            LiveEncoder.Vaapi,
+            prefer,
             MachineCapabilities.Of(
                 CardStanding.Usable,
                 [Faculty.EncodeH264OnTheCard, Faculty.EncodeH265OnTheCard, Faculty.EncodeAv1OnTheCard],

@@ -147,6 +147,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IValidateOptions<EncodingOptions>, EncodingValidation>();
         services.AddSingleton<IValidateOptions<EncodingOptions>, RootsHeldApartValidation>();
+        services.AddSingleton<IValidateOptions<EncodingOptions>, OneCardValidation>();
         services.AddOptions<EncodingOptions>()
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
@@ -396,7 +397,12 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<ISoundOnAir, SoundOnAir>();
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton<MachineSettings>(provider =>
-            provider.GetRequiredService<IOptions<MachineOptions>>().Value.Read());
+            provider.GetRequiredService<IOptions<MachineOptions>>().Value.Read() with
+            {
+                Card = CardKinds.Agreed(
+                    EncodeEncoders.CardOf(provider.GetRequiredService<EncodeSettings>().Prefer),
+                    LiveEncoders.CardOf(provider.GetRequiredService<LiveTranscodeSettings>().Prefer)),
+            });
         services.TryAddSingleton<QualitySignalSettings>(provider =>
             provider.GetRequiredService<IOptions<QualitySignalOptions>>().Value.Read());
         services.TryAddSingleton<EncodeSettings>(provider =>

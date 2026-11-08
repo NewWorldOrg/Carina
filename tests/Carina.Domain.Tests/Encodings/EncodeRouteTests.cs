@@ -18,6 +18,17 @@ public sealed class EncodeRouteTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new EncodeRoute(EncodeEncoder.Vaapi, EncodeEncoder.Software, (EncodeSwerve)9));
     }
 
+    [Fact(DisplayName = "a route to or from an NVIDIA card is kept like any other")]
+    public void ARouteToOrFromAnNvidiaCardIsKeptLikeAnyOther()
+    {
+        var asAsked = new EncodeRoute(EncodeEncoder.Nvenc, EncodeEncoder.Nvenc, null);
+        var swerved = new EncodeRoute(EncodeEncoder.Software, EncodeEncoder.Nvenc, EncodeSwerve.TheProcessorCannotDoThisCodec);
+
+        Assert.False(asAsked.WasDegraded);
+        Assert.True(swerved.WasDegraded);
+        Assert.Equal(EncodeEncoder.Nvenc, swerved.Ran);
+    }
+
     [Fact(DisplayName = "a route is read off the plan a run was given, and a plan that runs nowhere is no route")]
     public void ARouteIsReadOffThePlan()
     {

@@ -54,13 +54,22 @@ root で起動すると、app は uid と gid を 10001 に切り替えて動き
 | `Integrity__OutputRoots` | driver の録画ディレクトリが app から見えるパス(`primary=/srv/recordings`) |
 | `Encodings__OutputRoots` | エンコード済みファイルの保存先(`encodes=/srv/encodes`) |
 | `Thumbnails__WrittenTo` / `Captions__WrittenTo` | サムネイルと字幕の保存先。空なら作りません |
-| `Encodings__Prefer` / `Transcoding__Prefer` | エンコードと、ライブ・再生の変換に使うエンコーダー。`Software` か `Vaapi`。既定は `Software` |
-| `Machine__RenderNode` | VAAPI で使う GPU のデバイス。既定は `/dev/dri/renderD128` |
+| `Encodings__Prefer` / `Transcoding__Prefer` | エンコードと、ライブ・再生の変換に使うエンコーダー。`Software`・`Vaapi`・`Nvenc` のどれか。既定は `Software`。2 つに別のカードは指定できません |
+| `Machine__RenderNode` | VAAPI で使う GPU のデバイス。既定は `/dev/dri/renderD128`。NVENC では使いません |
 | `Encodings__Automatically` | 録画が終わったら自動でエンコードするか。既定は `true` |
 | `Encodings__MostCores` | 1 本のエンコードが使うコア数の上限。既定は 2 |
 
 番組表の収集間隔、録画の再試行、セッションの有効期間などは `Collection:` `Recording:` `RecordingRetry:` `Auth:` などの名前空間にあり、既定のままで動きます。\
 品質の閾値とエンコードの自動実行は画面からも変えられます。
+
+### GPU
+
+`Vaapi` は Intel の GPU を `/dev/dri` のデバイスで渡します。\
+`Nvenc` は NVIDIA のカードを NVIDIA Container Toolkit で渡します(`docker run --gpus all`、compose では `gpu-nvidia.yml` の重ね)。\
+ホストの NVIDIA ドライバは 530.41.03 以上が必要です。\
+イメージの ffmpeg は NVENC 対応で組んでありますが、NVIDIA のライブラリはイメージに入れず、コンテナランタイムがホストから差し込みます。\
+差し込む範囲はイメージの `NVIDIA_DRIVER_CAPABILITIES=video,compute,utility` で決まっていて、`video` が無いと `libnvidia-encode` が入らず NVENC は使えません。\
+カードが無い、ランタイムが無い、ドライバが古いときは起動時の確認で分かり、ソフトウェアのエンコードに切り替えて結果に記録します。
 
 ## 移行
 

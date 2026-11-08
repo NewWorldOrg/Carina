@@ -29,7 +29,7 @@ public sealed class EncodePlanTests
     [Fact(DisplayName = "what was asked for is what runs when this machine can do it")]
     public void WhatWasAskedForIsWhatRunsWhenThisMachineCanDoIt()
     {
-        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, AsThisMachineIs);
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, CardKind.Vaapi, AsThisMachineIs);
 
         Assert.True(plan.CanRun);
         Assert.Equal(EncodeEncoder.Vaapi, plan.Encoder);
@@ -40,7 +40,7 @@ public sealed class EncodePlanTests
     [Fact(DisplayName = "a card that is out of reach is not a refusal, it is the processor instead")]
     public void ACardThatIsOutOfReachIsNotARefusalItIsTheProcessorInstead()
     {
-        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, WithNoCard);
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, CardKind.Vaapi, WithNoCard);
 
         Assert.True(plan.CanRun);
         Assert.Equal(EncodeEncoder.Software, plan.Encoder);
@@ -51,7 +51,7 @@ public sealed class EncodePlanTests
     [Fact(DisplayName = "a build with no libx265 sends H.265 to the card rather than failing it")]
     public void ABuildWithNoSoftwareH265SendsItToTheCard()
     {
-        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, AsThisMachineIs);
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, CardKind.Vaapi, AsThisMachineIs);
 
         Assert.True(plan.CanRun);
         Assert.Equal(EncodeEncoder.Vaapi, plan.Encoder);
@@ -61,7 +61,7 @@ public sealed class EncodePlanTests
     [Fact(DisplayName = "a codec neither the processor nor the card can do is the one thing that refuses")]
     public void ACodecNeitherSideCanDoIsTheOneThingThatRefuses()
     {
-        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, WithNoCard);
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, CardKind.Vaapi, WithNoCard);
 
         Assert.False(plan.CanRun);
         Assert.Null(plan.Encoder);
@@ -77,7 +77,7 @@ public sealed class EncodePlanTests
             [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH265OnTheProcessor, Faculty.EncodeH264OnTheCard],
             string.Empty);
 
-        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, cardWithoutH265);
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, CardKind.Vaapi, cardWithoutH265);
 
         Assert.True(plan.CanRun);
         Assert.Equal(EncodeEncoder.Software, plan.Encoder);
@@ -92,7 +92,7 @@ public sealed class EncodePlanTests
             [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard],
             string.Empty);
 
-        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, neitherDoesH265);
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, CardKind.Vaapi, neitherDoesH265);
 
         Assert.False(plan.CanRun);
         Assert.Equal(EncodeFailure.CapabilityUnavailable, plan.Refused);
@@ -101,10 +101,39 @@ public sealed class EncodePlanTests
     [Fact(DisplayName = "the card is not asked for when the processor was, and can do it")]
     public void TheCardIsNotAskedForWhenTheProcessorWasAndCanDoIt()
     {
-        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Software, AsThisMachineIs);
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Software, CardKind.Vaapi, AsThisMachineIs);
 
         Assert.Equal(EncodeEncoder.Software, plan.Encoder);
         Assert.Null(plan.Swerved);
+    }
+
+    [Fact(DisplayName = "an NVIDIA card that works runs what asked for it, and one out of reach is the processor instead")]
+    public void AnNvidiaCardThatWorksRunsWhatAskedForIt()
+    {
+        EncodePlan onTheCard = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Nvenc, CardKind.Nvenc, AsThisMachineIs);
+        EncodePlan outOfReach = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Nvenc, CardKind.Nvenc, WithNoCard);
+
+        Assert.Equal(EncodeEncoder.Nvenc, onTheCard.Encoder);
+        Assert.Null(onTheCard.Swerved);
+        Assert.Equal(EncodeEncoder.Software, outOfReach.Encoder);
+        Assert.Equal(EncodeSwerve.TheCardIsOutOfReach, outOfReach.Swerved);
+    }
+
+    [Fact(DisplayName = "a build with no libx265 sends H.265 to whichever card this machine has")]
+    public void ABuildWithNoSoftwareH265SendsItToTheCardThisMachineHas()
+    {
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, CardKind.Nvenc, AsThisMachineIs);
+
+        Assert.Equal(EncodeEncoder.Nvenc, plan.Encoder);
+        Assert.Equal(EncodeSwerve.TheProcessorCannotDoThisCodec, plan.Swerved);
+    }
+
+    [Fact(DisplayName = "a card this machine does not have is not something to swerve from or to")]
+    public void ACardThisMachineDoesNotHaveIsRefused()
+    {
+        Assert.Throws<ArgumentException>(() => EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, CardKind.Nvenc, AsThisMachineIs));
+        Assert.Throws<ArgumentException>(() => EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Nvenc, CardKind.Vaapi, AsThisMachineIs));
+        Assert.Throws<ArgumentOutOfRangeException>(() => EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Software, (CardKind)9, AsThisMachineIs));
     }
 
     [Fact]

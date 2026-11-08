@@ -2,9 +2,10 @@ namespace Carina.Conventions.Tests;
 
 public sealed class RenderNodeConventionRuleTests
 {
-    private static readonly string[] TheBuildersHandedTheNode =
+    private static readonly string[] TheBuildersThatOpenTheCard =
     [
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs",
+        "/Carina.Infrastructure/Machines/NvencProbeInvocation.cs",
         "/Carina.Infrastructure/Machines/VaapiProbeInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs",
     ];
@@ -22,8 +23,14 @@ public sealed class RenderNodeConventionRuleTests
     }
 
     [Fact]
-    public void OnlyTheBuildersHandedTheRenderNodeOpenTheCard()
+    public void NoCudaDeviceIsWrittenOutButTheOneDeclared()
     {
-        Assert.Equal(TheBuildersHandedTheNode, RenderNodeConventionRules.FilesThatOpenTheCard(RepositoryPaths.SourceDirectory));
+        Assert.Empty(RenderNodeConventionRules.CudaDevicesWrittenOut(RepositoryPaths.SourceDirectory));
+    }
+
+    [Fact]
+    public void OnlyTheBuildersOpenTheCard()
+    {
+        Assert.Equal(TheBuildersThatOpenTheCard, RenderNodeConventionRules.FilesThatOpenTheCard(RepositoryPaths.SourceDirectory));
     }
 }

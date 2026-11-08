@@ -58,24 +58,36 @@ public sealed record EncodePlan
 
 public static class EncodePlans
 {
-    public static EncodePlan For(EncodeProfile profile, EncodeEncoder asked, MachineCapabilities can)
+    /// <summary>
+    /// The plan for a run asked to encode on <paramref name="asked"/>, on a machine whose card is of
+    /// <paramref name="card"/>'s kind. An encoder asking for a card of another kind is refused outright,
+    /// because what the machine was asked about is the one card it has.
+    /// </summary>
+    public static EncodePlan For(EncodeProfile profile, EncodeEncoder asked, CardKind card, MachineCapabilities can)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(can);
 
+        if (EncodeEncoders.CardOf(asked) is { } named && named != CardKinds.Named(card))
+        {
+            throw new ArgumentException(
+                $"A run asked for the {named} card on a machine whose card is {card}; a machine has one kind of card.",
+                nameof(asked));
+        }
+
         bool onTheCard = can.Has(OnTheCard(profile.Codec));
         bool onTheProcessor = can.Has(OnTheProcessor(profile.Codec));
 
-        return EncodeShapes.Named(asked) is EncodeEncoder.Vaapi
-            ? WhenTheCardWasAskedFor(onTheCard, onTheProcessor, can)
-            : WhenTheProcessorWasAskedFor(onTheCard, onTheProcessor, can);
+        return EncodeEncoders.OnTheCard(asked)
+            ? WhenTheCardWasAskedFor(asked, onTheCard, onTheProcessor, can)
+            : WhenTheProcessorWasAskedFor(EncodeEncoders.On(card), onTheCard, onTheProcessor, can);
     }
 
-    private static EncodePlan WhenTheCardWasAskedFor(bool onTheCard, bool onTheProcessor, MachineCapabilities can)
+    private static EncodePlan WhenTheCardWasAskedFor(EncodeEncoder card, bool onTheCard, bool onTheProcessor, MachineCapabilities can)
     {
         if (onTheCard)
         {
-            return EncodePlan.AsAsked(EncodeEncoder.Vaapi);
+            return EncodePlan.AsAsked(card);
         }
 
         if (!onTheProcessor)
@@ -91,7 +103,7 @@ public static class EncodePlans
             : EncodePlan.Swerving(EncodeEncoder.Software, EncodeSwerve.TheCardIsOutOfReach, can.Note);
     }
 
-    private static EncodePlan WhenTheProcessorWasAskedFor(bool onTheCard, bool onTheProcessor, MachineCapabilities can)
+    private static EncodePlan WhenTheProcessorWasAskedFor(EncodeEncoder card, bool onTheCard, bool onTheProcessor, MachineCapabilities can)
     {
         if (onTheProcessor)
         {
@@ -100,7 +112,7 @@ public static class EncodePlans
 
         return onTheCard
             ? EncodePlan.Swerving(
-                EncodeEncoder.Vaapi,
+                card,
                 EncodeSwerve.TheProcessorCannotDoThisCodec,
                 "the build on this machine has no encoder for that codec on the processor")
             : EncodePlan.NothingHereCanDoIt(Nowhere(can));

@@ -50,7 +50,7 @@ public sealed class ThisMachineTests
         MachineCapabilities can = await Reading();
         ProgrammeSaid tried = await AnotherProgramme.SayAsync(
             new MachineSettings().Programme,
-            VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.H265OnTheCard),
+            VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.H265OnVaapi),
             TimeSpan.FromSeconds(30),
             TimeProvider.System,
             CancellationToken.None);
@@ -64,7 +64,7 @@ public sealed class ThisMachineTests
         MachineCapabilities can = await Reading();
         ProgrammeSaid tried = await AnotherProgramme.SayAsync(
             new MachineSettings().Programme,
-            VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.Av1OnTheCard),
+            VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.Av1OnVaapi),
             TimeSpan.FromSeconds(30),
             TimeProvider.System,
             CancellationToken.None);

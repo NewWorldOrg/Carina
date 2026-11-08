@@ -3,9 +3,11 @@ using Carina.Domain.Machines;
 namespace Carina.Infrastructure.Machines;
 
 /// <summary>
-/// Asks this machine what it can do and keeps the answer. An answer in which a question ran out of
-/// time is kept only for <see cref="MachineSettings.AskAgainAfterATimeOut"/>; every other answer is
-/// kept for as long as the process lives.
+/// Asks this machine what it can do and keeps the answer. The card asked about is the one kind
+/// <see cref="MachineSettings.Card"/> names: a VAAPI card through the render node, an NVIDIA card
+/// through the CUDA device alone. An answer in which a question ran out of time is kept only for
+/// <see cref="MachineSettings.AskAgainAfterATimeOut"/>; every other answer is kept for as long as the
+/// process lives.
 /// </summary>
 public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvider clock) : IMachineCapabilityReader
 {
@@ -40,14 +42,15 @@ public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvid
         ProgrammeSaid decoders = await SayingAsync(FacultyInvocation.Decoders());
         CardAnswer card = await AskTheCardAsync();
         bool cardEncodesH264 = CardStandings.IsUsable(card.Standing);
-        ProgrammeSaid? h265 = await OnTheCardAsync(cardEncodesH264, FfmpegFaculties.H265OnTheCard);
-        ProgrammeSaid? av1 = await OnTheCardAsync(cardEncodesH264, FfmpegFaculties.Av1OnTheCard);
+        ProgrammeSaid? h265 = await OnTheCardAsync(cardEncodesH264, FfmpegFaculties.H265On(settings.Card));
+        ProgrammeSaid? av1 = await OnTheCardAsync(cardEncodesH264, FfmpegFaculties.Av1On(settings.Card));
 
         MachineCapabilities capabilities = MachineCapabilities.Of(
             card.Standing,
             FfmpegFaculties.Of(
                 FfmpegFaculties.Listed(encoders.Said),
                 FfmpegFaculties.Listed(decoders.Said),
+                settings.Card,
                 cardEncodesH264,
                 Encoded(h265),
                 Encoded(av1)),
@@ -63,18 +66,27 @@ public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvid
     /// A frame encoded with <paramref name="encoder"/>, asked of a card that encoded an H.264 one and of no other.
     /// </summary>
     private async Task<ProgrammeSaid?> OnTheCardAsync(bool cardEncodesH264, string encoder)
-        => cardEncodesH264 ? await SayingAsync(VaapiProbeInvocation.Arguments(settings.RenderNode, encoder)) : null;
+        => cardEncodesH264 ? await SayingAsync(Probing(encoder)) : null;
 
     private static bool Encoded(ProgrammeSaid? said) => said is { Ran: true, ExitCode: 0 };
 
+    /// <summary>
+    /// The probe that encodes a frame with <paramref name="encoder"/> on the card this machine has. Only a VAAPI
+    /// card is reached through the render node.
+    /// </summary>
+    private IReadOnlyList<string> Probing(string encoder)
+        => CardKinds.Named(settings.Card) is CardKind.Nvenc
+            ? NvencProbeInvocation.Arguments(encoder)
+            : VaapiProbeInvocation.Arguments(settings.RenderNode, encoder);
+
     private async Task<CardAnswer> AskTheCardAsync()
     {
-        if (OutOfReach() is { } absent)
+        if (CardKinds.Named(settings.Card) is CardKind.Vaapi && OutOfReach() is { } absent)
         {
             return absent;
         }
 
-        ProgrammeSaid probe = await SayingAsync(VaapiProbeInvocation.Arguments(settings.RenderNode));
+        ProgrammeSaid probe = await SayingAsync(Probing(FfmpegFaculties.H264On(settings.Card)));
 
         return probe.Fault switch
         {
