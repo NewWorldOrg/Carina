@@ -61,6 +61,11 @@ public sealed record QueueEncodeJobRequest
     public bool? MakeItAgain { get; init; }
 }
 
+public sealed record RerunEncodeJobsRequest
+{
+    public IReadOnlyList<Guid>? Ids { get; init; }
+}
+
 public sealed record PutEncodeSettingsRequest
 {
     public bool? Automatically { get; init; }

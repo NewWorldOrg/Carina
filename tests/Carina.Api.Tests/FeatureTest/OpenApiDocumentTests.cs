@@ -233,6 +233,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "removeEncodeDestination",
                 "removeEncodeProfile",
                 "replaceRule",
+                "rerunEncodeJobs",
                 "restartDriver",
                 "restoreReservation",
                 "reviseEncodeDestination",
