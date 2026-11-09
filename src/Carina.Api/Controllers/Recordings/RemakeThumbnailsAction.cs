@@ -11,10 +11,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace Carina.Api.Controllers.Recordings;
 
 /// <summary>
-/// Draws the pictures of several recordings again, each by its id, up to <see cref="ThumbnailRemakes.MostAtOnce"/>
-/// in one request. Each id is taken on its own, through the same path a person asks for one recording's
-/// picture by hand, and the answer holds one row per id in the order asked, so a refusal of one leaves the
-/// rest drawn.
+/// Puts several recordings back in the queue the thumbnail pass reads, each by its id, up to
+/// <see cref="ThumbnailRemakes.MostAtOnce"/> in one request. Nothing is drawn here: each id is checked as the
+/// single recording's action checks it, then marked as waiting for a picture, and the pass draws them in
+/// order on its next run. The answer holds one row per id in the order asked, so a refusal of one leaves
+/// the rest queued.
 /// </summary>
 [ApiController]
 [Route("api/recordings/thumbnails/remake")]

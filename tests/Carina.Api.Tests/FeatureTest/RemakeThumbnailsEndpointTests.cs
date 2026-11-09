@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 
 using Carina.Domain.Recordings;
@@ -10,82 +11,90 @@ public sealed class RemakeThumbnailsEndpointTests
 {
     private const string Path = "/api/recordings/thumbnails/remake";
 
-    [Fact(DisplayName = "BR-KD-012: each id is taken on its own through the single recording's path, the answer holds one row per id in the order asked, and a refusal of one leaves the rest drawn")]
-    public async Task EachIdIsTakenOnItsOwnAndAnsweredInTheOrderAsked()
+    [Fact(DisplayName = "BR-KD-012: each id is checked on its own as the single recording's action checks it, put back in the pass's queue rather than drawn here, and answered in the order asked")]
+    public async Task EachIdIsQueuedOnItsOwnAndAnsweredInTheOrderAsked()
     {
-        await using var feature = new RecordingFeature();
-        Recording drawn = Ended(feature);
-        Recording skipped = Ended(feature, 4002);
-        Recording failed = Ended(feature, 4003);
-        Recording outOfReach = Ended(feature, 4004);
-        Recording unknownToThePass = Ended(feature, 4005);
-        Recording writing = feature.Held(eventId: 4006);
+        await using RecordingFeature feature = new();
+        Recording queued = Ended(feature);
+        Recording nowhere = Ended(feature, 4002);
+        Recording unknownToThePass = Ended(feature, 4003);
+        Recording writing = feature.Held(eventId: 4004);
         string unknown = RecordingId.New().Wire;
-        feature.Remaker.AnswersByRecording[skipped.Id] = ThumbnailRemake.Skipped;
-        feature.Remaker.AnswersByRecording[failed.Id] = ThumbnailRemake.Failed;
-        feature.Remaker.AnswersByRecording[outOfReach.Id] = ThumbnailRemake.OutOfReach;
-        feature.Remaker.AnswersByRecording[unknownToThePass.Id] = ThumbnailRemake.NothingToAskAbout;
+        feature.Remaker.AskAgainAnswersByRecording[nowhere.Id] = ThumbnailAskedAgain.NowhereToPutThem;
+        feature.Remaker.AskAgainAnswersByRecording[unknownToThePass.Id] = ThumbnailAskedAgain.NothingToAskAbout;
 
         (HttpStatusCode status, JsonElement body) = await feature.PostAsync(Path, new
         {
-            ids = new[]
-            {
-                drawn.Id.Wire,
-                unknown,
-                writing.Id.Wire,
-                skipped.Id.Wire,
-                failed.Id.Wire,
-                outOfReach.Id.Wire,
-                unknownToThePass.Id.Wire,
-                drawn.Id.Wire,
-            },
+            ids = new[] { queued.Id.Wire, unknown, writing.Id.Wire, nowhere.Id.Wire, unknownToThePass.Id.Wire, queued.Id.Wire },
         });
         JsonElement[] rows = [.. body.GetProperty("data").GetProperty("items").EnumerateArray()];
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
-            [drawn.Id.Wire, unknown, writing.Id.Wire, skipped.Id.Wire, failed.Id.Wire, outOfReach.Id.Wire, unknownToThePass.Id.Wire, drawn.Id.Wire],
+            [queued.Id.Wire, unknown, writing.Id.Wire, nowhere.Id.Wire, unknownToThePass.Id.Wire, queued.Id.Wire],
             rows.Select(row => row.GetProperty("id").GetString()!).ToArray());
         Assert.Equal(
-            ["drawn", "noSuchRecording", "stillRecording", "skipped", "failed", "refused", "noSuchRecording", "drawn"],
+            ["queued", "noSuchRecording", "stillRecording", "refused", "noSuchRecording", "queued"],
             rows.Select(row => row.GetProperty("outcome").GetString()!).ToArray());
-        Assert.Equal(
-            [drawn.Id, skipped.Id, failed.Id, outOfReach.Id, unknownToThePass.Id, drawn.Id],
-            feature.Remaker.Asked);
-        Assert.Equal(ThumbnailState.Ready, drawn.ThumbnailState);
-        Assert.Equal(ThumbnailState.Skipped, skipped.ThumbnailState);
-        Assert.Equal(ThumbnailState.Failed, failed.ThumbnailState);
+        Assert.Equal([queued.Id, nowhere.Id, unknownToThePass.Id, queued.Id], feature.Remaker.AskedAgain);
+        Assert.Empty(feature.Remaker.Asked);
+        Assert.Equal(ThumbnailState.Pending, queued.ThumbnailState);
     }
 
-    [Fact(DisplayName = "a row that drew a picture says nothing beside the outcome, and one that did not says why without naming what was sent")]
-    public async Task ARowThatDrewNothingSaysWhyWithoutNamingWhatWasSent()
+    [Fact(DisplayName = "a row that queued the recording says nothing beside the outcome, and one that did not says why without naming what was sent")]
+    public async Task ARowThatQueuedNothingSaysWhyWithoutNamingWhatWasSent()
     {
-        await using var feature = new RecordingFeature();
-        Recording drawn = Ended(feature);
+        await using RecordingFeature feature = new();
+        Recording queued = Ended(feature);
         Recording writing = feature.Held(eventId: 4002);
         Recording nowhere = Ended(feature, 4003);
         string unknown = RecordingId.New().Wire;
-        feature.Remaker.AnswersByRecording[nowhere.Id] = ThumbnailRemake.NowhereToPutThem;
+        feature.Remaker.AskAgainAnswersByRecording[nowhere.Id] = ThumbnailAskedAgain.NowhereToPutThem;
 
         (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
             Path,
-            new { ids = new[] { drawn.Id.Wire, writing.Id.Wire, unknown, nowhere.Id.Wire } });
+            new { ids = new[] { queued.Id.Wire, writing.Id.Wire, unknown, nowhere.Id.Wire } });
         JsonElement[] rows = [.. body.GetProperty("data").GetProperty("items").EnumerateArray()];
 
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(["drawn", "stillRecording", "noSuchRecording", "refused"], rows.Select(row => row.GetProperty("outcome").GetString()!).ToArray());
+        Assert.Equal(["queued", "stillRecording", "noSuchRecording", "refused"], rows.Select(row => row.GetProperty("outcome").GetString()!).ToArray());
         Assert.Equal(string.Empty, rows[0].GetProperty("message").GetString());
         Assert.All(rows.Skip(1), row => Assert.NotEmpty(row.GetProperty("message").GetString()!));
         Assert.DoesNotContain(writing.Id.Wire, rows[1].GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(unknown, rows[2].GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("thumbnails", rows[3].GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Equal(ThumbnailState.Pending, writing.ThumbnailState);
+        Assert.DoesNotContain(writing.Id, feature.Remaker.AskedAgain);
     }
 
-    [Fact(DisplayName = "BR-KD-012: more than a hundred ids, none, or an unreadable one is refused whole, and no picture is asked for")]
+    [Fact(DisplayName = "a store that throws for one recording costs that row alone: it is answered as refused with a fixed message, and the rows after it are still queued")]
+    public async Task AStoreThatThrowsForOneRecordingCostsThatRowAlone()
+    {
+        await using RecordingFeature feature = new();
+        Recording before = Ended(feature);
+        Recording broken = Ended(feature, 4002);
+        Recording after = Ended(feature, 4003);
+        feature.Remaker.ThrowsWhenAskedAgainFor.Add(broken.Id);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            Path,
+            new { ids = new[] { before.Id.Wire, broken.Id.Wire, after.Id.Wire } });
+        JsonElement[] rows = [.. body.GetProperty("data").GetProperty("items").EnumerateArray()];
+        string said = rows[1].GetProperty("message").GetString()!;
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["queued", "refused", "queued"], rows.Select(row => row.GetProperty("outcome").GetString()!).ToArray());
+        Assert.NotEmpty(said);
+        Assert.DoesNotContain("store went away", said, StringComparison.Ordinal);
+        Assert.DoesNotContain(broken.Id.Wire, said, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal([before.Id, broken.Id, after.Id], feature.Remaker.AskedAgain);
+        Assert.Equal(ThumbnailState.Pending, after.ThumbnailState);
+    }
+
+    [Fact(DisplayName = "BR-KD-012: more than a hundred ids, none, or an unreadable one is refused whole, and nothing is queued")]
     public async Task MoreThanAHundredIdsOrNoneOrAnUnreadableOneIsRefusedWhole()
     {
-        await using var feature = new RecordingFeature();
+        await using RecordingFeature feature = new();
         Recording ended = Ended(feature);
         string[] aHundredAndOne = [.. Enumerable.Repeat(ended.Id.Wire, 101)];
 
@@ -101,13 +110,13 @@ public sealed class RemakeThumbnailsEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, zeroes);
         Assert.Equal(HttpStatusCode.BadRequest, hyphenated);
         Assert.Contains("ids", said.GetProperty("message").GetString(), StringComparison.Ordinal);
-        Assert.Empty(feature.Remaker.Asked);
+        Assert.Empty(feature.Remaker.AskedAgain);
     }
 
-    [Fact(DisplayName = "exactly a hundred ids are taken, and a recording named twice is drawn twice")]
+    [Fact(DisplayName = "exactly a hundred ids are taken, and a recording named twice is queued twice")]
     public async Task ExactlyAHundredIdsAreTaken()
     {
-        await using var feature = new RecordingFeature();
+        await using RecordingFeature feature = new();
         Recording ended = Ended(feature);
         string[] aHundred = [.. Enumerable.Repeat(ended.Id.Wire, 100)];
 
@@ -116,15 +125,15 @@ public sealed class RemakeThumbnailsEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(100, outcomes.Length);
-        Assert.All(outcomes, outcome => Assert.Equal("drawn", outcome));
-        Assert.Equal(100, feature.Remaker.Asked.Count);
+        Assert.All(outcomes, outcome => Assert.Equal("queued", outcome));
+        Assert.Equal(100, feature.Remaker.AskedAgain.Count);
     }
 
     [Fact(DisplayName = "an id that is not thirty-two hexadecimal digits is refused as unreadable, without repeating it")]
     public async Task AnIdThatIsNotARecordingIdIsRefusedAsUnreadable()
     {
-        await using var feature = new RecordingFeature();
-        using var content = new StringContent("""{"ids":["not-an-id"]}""", System.Text.Encoding.UTF8, "application/json");
+        await using RecordingFeature feature = new();
+        using StringContent content = new("""{"ids":["not-an-id"]}""", Encoding.UTF8, "application/json");
 
         using HttpResponseMessage response = await feature.Client.PostAsync(new Uri(Path, UriKind.Relative), content);
         string body = await response.Content.ReadAsStringAsync();
@@ -132,13 +141,13 @@ public sealed class RemakeThumbnailsEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("ids", body, StringComparison.Ordinal);
         Assert.DoesNotContain("not-an-id", body, StringComparison.Ordinal);
-        Assert.Empty(feature.Remaker.Asked);
+        Assert.Empty(feature.Remaker.AskedAgain);
     }
 
-    [Fact(DisplayName = "BR-EA2-001: a request from another origin, or by a caller who has not signed in, is refused and no picture is asked for")]
+    [Fact(DisplayName = "BR-EA2-001: a request from another origin, or by a caller who has not signed in, is refused and nothing is queued")]
     public async Task ARequestFromAnotherOriginOrNoSessionIsRefused()
     {
-        await using var feature = new RecordingFeature();
+        await using RecordingFeature feature = new();
         Recording ended = Ended(feature);
         using HttpClient elsewhere = feature.FromElsewhere();
         using HttpClient anonymous = feature.Anonymous();
@@ -147,7 +156,7 @@ public sealed class RemakeThumbnailsEndpointTests
         (HttpStatusCode signedOut, _) = await feature.PostAsync(Path, new { ids = new[] { ended.Id.Wire } }, anonymous);
 
         Assert.Equal((HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized), (fromElsewhere, signedOut));
-        Assert.Empty(feature.Remaker.Asked);
+        Assert.Empty(feature.Remaker.AskedAgain);
     }
 
     private static Recording Ended(RecordingFeature feature, int eventId = 4001)

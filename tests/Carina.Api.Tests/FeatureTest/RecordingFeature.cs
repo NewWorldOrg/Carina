@@ -164,26 +164,51 @@ internal sealed class ScriptedRemaker(HeldRecordings recordings) : IThumbnailRem
 {
     public ThumbnailRemake Answer { get; set; } = ThumbnailRemake.Drawn;
 
-    public Dictionary<RecordingId, ThumbnailRemake> AnswersByRecording { get; } = [];
-
     public List<RecordingId> Asked { get; } = [];
+
+    public ThumbnailAskedAgain AskAgainAnswer { get; set; } = ThumbnailAskedAgain.Queued;
+
+    public Dictionary<RecordingId, ThumbnailAskedAgain> AskAgainAnswersByRecording { get; } = [];
+
+    public HashSet<RecordingId> ThrowsWhenAskedAgainFor { get; } = [];
+
+    public List<RecordingId> AskedAgain { get; } = [];
 
     public Task<ThumbnailRemake> RemakeAsync(RecordingId id, CancellationToken cancellationToken)
     {
         Asked.Add(id);
-        ThumbnailRemake answer = AnswersByRecording.TryGetValue(id, out ThumbnailRemake scripted) ? scripted : Answer;
 
-        if (answer is ThumbnailRemake.Drawn or ThumbnailRemake.Skipped or ThumbnailRemake.Failed
+        if (Answer is ThumbnailRemake.Drawn or ThumbnailRemake.Skipped or ThumbnailRemake.Failed
             && recordings.Recordings.FirstOrDefault(recording => recording.Id.Equals(id)) is { } held)
         {
             held.Illustrate(
-                answer switch
+                Answer switch
                 {
                     ThumbnailRemake.Drawn => ThumbnailState.Ready,
                     ThumbnailRemake.Skipped => ThumbnailState.Skipped,
                     _ => ThumbnailState.Failed,
                 },
-                answer is ThumbnailRemake.Failed ? ThumbnailFault.SourceOutOfReach : null);
+                Answer is ThumbnailRemake.Failed ? ThumbnailFault.SourceOutOfReach : null);
+        }
+
+        return Task.FromResult(Answer);
+    }
+
+    public Task<ThumbnailAskedAgain> AskAgainAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        AskedAgain.Add(id);
+
+        if (ThrowsWhenAskedAgainFor.Contains(id))
+        {
+            throw new InvalidOperationException("the store went away while this recording was being queued");
+        }
+
+        ThumbnailAskedAgain answer = AskAgainAnswersByRecording.TryGetValue(id, out ThumbnailAskedAgain scripted) ? scripted : AskAgainAnswer;
+
+        if (answer is ThumbnailAskedAgain.Queued
+            && recordings.Recordings.FirstOrDefault(recording => recording.Id.Equals(id)) is { } held)
+        {
+            held.Illustrate(ThumbnailState.Pending);
         }
 
         return Task.FromResult(answer);

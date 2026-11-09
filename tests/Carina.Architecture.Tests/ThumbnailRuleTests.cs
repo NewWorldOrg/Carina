@@ -82,7 +82,7 @@ public sealed class ThumbnailRuleTests
     {
         IReadOnlyList<string> declared = ThumbnailRules.TypesTheFeatureDeclares(RepositoryLayout.SourceDirectory);
 
-        Assert.Equal(27, declared.Count);
+        Assert.Equal(28, declared.Count);
         Assert.Contains("ThumbnailIntent", declared, StringComparer.Ordinal);
         Assert.Contains("ThumbnailRequest", declared, StringComparer.Ordinal);
         Assert.Contains("ThumbnailValidation", declared, StringComparer.Ordinal);

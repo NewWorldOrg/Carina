@@ -71,6 +71,23 @@ public sealed class ThumbnailJob(
         };
     }
 
+    public async Task<ThumbnailAskedAgain> AskAgainAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        if (!settings.DrawsAnything)
+        {
+            return ThumbnailAskedAgain.NowhereToPutThem;
+        }
+
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        IThumbnailWorklist worklist = scope.ServiceProvider.GetRequiredService<IThumbnailWorklist>();
+
+        return await worklist.AskAgainAsync(id, cancellationToken) is null
+            ? ThumbnailAskedAgain.NothingToAskAbout
+            : ThumbnailAskedAgain.Queued;
+    }
+
     public override void Dispose()
     {
         oneAtATime.Dispose();
