@@ -14,7 +14,9 @@ namespace Carina.Api.Controllers.Recordings;
 /// Puts several recordings back in the queue the thumbnail pass reads, each by its id, up to
 /// <see cref="ThumbnailRemakes.MostAtOnce"/> in one request. Nothing is drawn here: each id is checked as the
 /// single recording's action checks it, then marked as waiting for a picture, and the pass draws them in
-/// order on its next run. The answer holds one row per id in the order asked, so a refusal of one leaves
+/// order. A row answered <c>queued</c> is drawn by that pass: it is woken as soon as one row was queued and
+/// takes eight recordings a run, then keeps to its cadence of one run every five minutes, so a hundred
+/// rows take about an hour. The answer holds one row per id in the order asked, so a refusal of one leaves
 /// the rest queued.
 /// </summary>
 [ApiController]

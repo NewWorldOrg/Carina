@@ -11,7 +11,7 @@ public sealed class RemakeThumbnailsEndpointTests
 {
     private const string Path = "/api/recordings/thumbnails/remake";
 
-    [Fact(DisplayName = "BR-KD-012: each id is checked on its own as the single recording's action checks it, put back in the pass's queue rather than drawn here, and answered in the order asked")]
+    [Fact(DisplayName = "BR-KD-012: each id is checked on its own as the single recording's action checks it, put back in the pass's queue rather than drawn here, answered in the order asked, and the pass is woken once")]
     public async Task EachIdIsQueuedOnItsOwnAndAnsweredInTheOrderAsked()
     {
         await using RecordingFeature feature = new();
@@ -39,6 +39,7 @@ public sealed class RemakeThumbnailsEndpointTests
         Assert.Equal([queued.Id, nowhere.Id, unknownToThePass.Id, queued.Id], feature.Remaker.AskedAgain);
         Assert.Empty(feature.Remaker.Asked);
         Assert.Equal(ThumbnailState.Pending, queued.ThumbnailState);
+        Assert.Equal(1, feature.Remaker.Nudges);
     }
 
     [Fact(DisplayName = "a row that queued the recording says nothing beside the outcome, and one that did not says why without naming what was sent")]
@@ -65,6 +66,7 @@ public sealed class RemakeThumbnailsEndpointTests
         Assert.Contains("thumbnails", rows[3].GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Equal(ThumbnailState.Pending, writing.ThumbnailState);
         Assert.DoesNotContain(writing.Id, feature.Remaker.AskedAgain);
+        Assert.Equal(1, feature.Remaker.Nudges);
     }
 
     [Fact(DisplayName = "a store that throws for one recording costs that row alone: it is answered as refused with a fixed message, and the rows after it are still queued")]
@@ -89,6 +91,7 @@ public sealed class RemakeThumbnailsEndpointTests
         Assert.DoesNotContain(broken.Id.Wire, said, StringComparison.OrdinalIgnoreCase);
         Assert.Equal([before.Id, broken.Id, after.Id], feature.Remaker.AskedAgain);
         Assert.Equal(ThumbnailState.Pending, after.ThumbnailState);
+        Assert.Equal(1, feature.Remaker.Nudges);
     }
 
     [Fact(DisplayName = "BR-KD-012: more than a hundred ids, none, or an unreadable one is refused whole, and nothing is queued")]
@@ -111,6 +114,7 @@ public sealed class RemakeThumbnailsEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, hyphenated);
         Assert.Contains("ids", said.GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Empty(feature.Remaker.AskedAgain);
+        Assert.Equal(0, feature.Remaker.Nudges);
     }
 
     [Fact(DisplayName = "exactly a hundred ids are taken, and a recording named twice is queued twice")]
@@ -157,6 +161,7 @@ public sealed class RemakeThumbnailsEndpointTests
 
         Assert.Equal((HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized), (fromElsewhere, signedOut));
         Assert.Empty(feature.Remaker.AskedAgain);
+        Assert.Equal(0, feature.Remaker.Nudges);
     }
 
     private static Recording Ended(RecordingFeature feature, int eventId = 4001)

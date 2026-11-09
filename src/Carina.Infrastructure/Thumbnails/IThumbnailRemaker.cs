@@ -7,4 +7,6 @@ public interface IThumbnailRemaker
     Task<ThumbnailRemake> RemakeAsync(RecordingId id, CancellationToken cancellationToken);
 
     Task<ThumbnailAskedAgain> AskAgainAsync(RecordingId id, CancellationToken cancellationToken);
+
+    void Nudge();
 }

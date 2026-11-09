@@ -1,3 +1,5 @@
+using System.Threading.Channels;
+
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
@@ -20,7 +22,12 @@ public sealed class ThumbnailJob(
 
     private readonly SemaphoreSlim oneAtATime = new(1, 1);
 
+    private readonly Channel<bool> nudges = Channel.CreateBounded<bool>(
+        new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
+
     private int running;
+
+    public void Nudge() => nudges.Writer.TryWrite(true);
 
     public async Task<ThumbnailPass> RunAsync(CancellationToken cancellationToken)
     {
@@ -105,16 +112,22 @@ public sealed class ThumbnailJob(
         }
 
         TimeSpan waiting = settings.BeforeFirstPass;
+        Task nudged = nudges.Reader.ReadAsync(stoppingToken).AsTask();
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(waiting, clock, stoppingToken);
+                await await Task.WhenAny(Task.Delay(waiting, clock, stoppingToken), nudged);
             }
             catch (OperationCanceledException)
             {
                 break;
+            }
+
+            if (nudged.IsCompleted)
+            {
+                nudged = nudges.Reader.ReadAsync(stoppingToken).AsTask();
             }
 
             waiting = settings.BetweenPasses;

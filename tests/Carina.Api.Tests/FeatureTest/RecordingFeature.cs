@@ -174,6 +174,10 @@ internal sealed class ScriptedRemaker(HeldRecordings recordings) : IThumbnailRem
 
     public List<RecordingId> AskedAgain { get; } = [];
 
+    public int Nudges { get; private set; }
+
+    public void Nudge() => Nudges++;
+
     public Task<ThumbnailRemake> RemakeAsync(RecordingId id, CancellationToken cancellationToken)
     {
         Asked.Add(id);

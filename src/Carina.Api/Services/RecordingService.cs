@@ -288,6 +288,11 @@ public sealed class RecordingService(
             rows.Add(await QueueThumbnailAsync(id, cancellationToken));
         }
 
+        if (rows.Exists(row => row.Outcome is ThumbnailRemakeOutcome.Queued))
+        {
+            thumbnails.Nudge();
+        }
+
         return ServiceResult<IReadOnlyList<ThumbnailRemakeRow>>.Success(rows);
     }
 
