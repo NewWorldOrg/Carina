@@ -31,6 +31,7 @@ public static class ThumbnailRules
         "ThumbnailRender",
         "ThumbnailRequest",
         "ThumbnailRemake",
+        "ThumbnailAskedAgain",
         "IThumbnailRemaker",
         "ThumbnailFrameRequest",
         "IScrubFrames",

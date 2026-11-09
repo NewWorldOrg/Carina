@@ -44,6 +44,65 @@ public enum RecordingFailure
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
 
+/// <summary>
+/// What became of one recording handed in to have its picture drawn again: it is back in the queue the
+/// thumbnail pass reads, or it is not, for the reason named.
+/// </summary>
+public enum ThumbnailRemakeOutcome
+{
+    Queued = 1,
+
+    NoSuchRecording = 2,
+
+    StillRecording = 3,
+
+    Refused = 4,
+}
+
+/// <summary>
+/// One row of the answer to queueing pictures to be drawn again: the recording as it was asked, what became
+/// of it, and why when it was not queued.
+/// </summary>
+public sealed record ThumbnailRemakeRow(RecordingId Id, ThumbnailRemakeOutcome Outcome, string Message)
+{
+    public static ThumbnailRemakeRow Queued(RecordingId id)
+        => new(id, ThumbnailRemakeOutcome.Queued, string.Empty);
+
+    public static ThumbnailRemakeRow NotQueued(RecordingId id, string message, RecordingFailure failure)
+        => new(id, ThumbnailRemakes.Outcome(failure), ThumbnailRemakes.Said(failure, message));
+
+    public static ThumbnailRemakeRow Threw(RecordingId id)
+        => new(id, ThumbnailRemakeOutcome.Refused, ThumbnailRemakes.SaidOfOneThatThrew);
+}
+
+/// <summary>
+/// The rules of queueing pictures to be drawn again for several recordings: how many are taken in one
+/// request, and how the single recording's refusals read as the outcome of a row. They sit beside the
+/// service because a file of their own named for thumbnails would count as part of the feature.
+/// </summary>
+public static class ThumbnailRemakes
+{
+    public const int MostAtOnce = 100;
+
+    public const string SaidOfOneThatThrew = "Queueing this recording failed on this side; the rest were taken, and the log says what happened.";
+
+    public static readonly string Description = $"between one and {MostAtOnce} recording ids.";
+
+    public static ThumbnailRemakeOutcome Outcome(RecordingFailure failure) => failure switch
+    {
+        RecordingFailure.NoSuchRecording => ThumbnailRemakeOutcome.NoSuchRecording,
+        RecordingFailure.StillRecording => ThumbnailRemakeOutcome.StillRecording,
+        _ => ThumbnailRemakeOutcome.Refused,
+    };
+
+    internal static string Said(RecordingFailure failure, string message) => failure switch
+    {
+        RecordingFailure.NoSuchRecording => "The ledger holds no such recording.",
+        RecordingFailure.StillRecording => "The recording is still being written, and a picture is taken of a recording that has ended.",
+        _ => message,
+    };
+}
+
 public sealed record RecordingSeen(
     Recording Recording,
     EncodeStanding Encode,
@@ -72,7 +131,8 @@ public sealed class RecordingService(
     IPlaybackPositionRepository positions,
     RecordingDeletions deletions,
     IAppEventPublisher events,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<RecordingService> logger)
 {
     public async Task<ServiceResult<RecordingPage>> ListAsync(
         RecordingQuery query,
@@ -213,6 +273,63 @@ public sealed class RecordingService(
         return await recordings.FindAsync(id, cancellationToken) is { } drawn
             ? ServiceResult<ThumbnailRemade, RecordingFailure>.Success(new ThumbnailRemade(drawn, remake))
             : Missing<ThumbnailRemade>(id);
+    }
+
+    public async Task<ServiceResult<IReadOnlyList<ThumbnailRemakeRow>>> RemakeThumbnailsAsync(
+        IReadOnlyList<RecordingId> ids,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        List<ThumbnailRemakeRow> rows = new(ids.Count);
+
+        foreach (RecordingId id in ids)
+        {
+            rows.Add(await QueueThumbnailAsync(id, cancellationToken));
+        }
+
+        if (rows.Exists(row => row.Outcome is ThumbnailRemakeOutcome.Queued))
+        {
+            thumbnails.Nudge();
+        }
+
+        return ServiceResult<IReadOnlyList<ThumbnailRemakeRow>>.Success(rows);
+    }
+
+    private async Task<ThumbnailRemakeRow> QueueThumbnailAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (await recordings.FindAsync(id, cancellationToken) is not { } recording)
+            {
+                return ThumbnailRemakeRow.NotQueued(id, "There is no such recording.", RecordingFailure.NoSuchRecording);
+            }
+
+            if (recording.IsInFlight)
+            {
+                return ThumbnailRemakeRow.NotQueued(id, "The recording is still being written.", RecordingFailure.StillRecording);
+            }
+
+            return await thumbnails.AskAgainAsync(id, cancellationToken) switch
+            {
+                ThumbnailAskedAgain.Queued => ThumbnailRemakeRow.Queued(id),
+                ThumbnailAskedAgain.NothingToAskAbout => ThumbnailRemakeRow.NotQueued(id, "There is no such recording.", RecordingFailure.NoSuchRecording),
+                _ => ThumbnailRemakeRow.NotQueued(
+                    id,
+                    "Nothing tells this process where to put thumbnails, so none can be drawn until it is configured.",
+                    RecordingFailure.NowhereToPutPictures),
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception failure)
+        {
+            logger.LogError(failure, "Queueing recording {Recording} for a picture threw; the other rows of the request are unaffected.", id.Wire);
+
+            return ThumbnailRemakeRow.Threw(id);
+        }
     }
 
     public async Task<ServiceResult<RecordingDiscarded, RecordingFailure>> DiscardAsync(

@@ -262,6 +262,60 @@ public sealed class ThumbnailJobTests
     }
 
     [Fact]
+    public async Task ANudgeStartsAPassWithoutWaitingForTheTimerAndTheCadenceHoldsAfterIt()
+    {
+        HeldWorklist worklist = new HeldWorklist().Holding(Subject(RecordingOutcome.Complete));
+        using ThumbnailJob job = Job(worklist, new HeldRenderer(), clock: new StillClock());
+        using CancellationTokenSource stopping = new();
+
+        await job.StartAsync(stopping.Token);
+        await Task.Delay(TimeSpan.FromMilliseconds(200));
+        int beforeTheNudge = worklist.Reads;
+        job.Nudge();
+        await Eventually.Happens(() => worklist.Reads >= 1, "the nudge never started a pass");
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Equal(0, beforeTheNudge);
+        Assert.Equal(1, worklist.Reads);
+    }
+
+    [Fact]
+    public async Task WithoutANudgeTheLoopWaitsForItsTimer()
+    {
+        HeldWorklist worklist = new HeldWorklist().Holding(Subject(RecordingOutcome.Complete));
+        using ThumbnailJob job = Job(worklist, new HeldRenderer(), clock: new StillClock());
+        using CancellationTokenSource stopping = new();
+
+        await job.StartAsync(stopping.Token);
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Equal(0, worklist.Reads);
+    }
+
+    [Fact]
+    public async Task NudgesThatPileUpBeforeThePassWakeItOnce()
+    {
+        HeldWorklist worklist = new HeldWorklist().Holding(Subject(RecordingOutcome.Complete));
+        using ThumbnailJob job = Job(worklist, new HeldRenderer(), clock: new StillClock());
+        using CancellationTokenSource stopping = new();
+
+        await job.StartAsync(stopping.Token);
+        job.Nudge();
+        job.Nudge();
+        job.Nudge();
+        await Eventually.Happens(() => worklist.Reads >= 1, "the nudges never started a pass");
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Equal(1, worklist.Reads);
+    }
+
+    [Fact]
     public async Task TheLoopDoesNotStartWhenThereIsNowhereToPutThem()
     {
         HeldWorklist worklist = new HeldWorklist().Holding(Subject(RecordingOutcome.Complete));

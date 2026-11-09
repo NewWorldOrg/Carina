@@ -166,6 +166,18 @@ internal sealed class ScriptedRemaker(HeldRecordings recordings) : IThumbnailRem
 
     public List<RecordingId> Asked { get; } = [];
 
+    public ThumbnailAskedAgain AskAgainAnswer { get; set; } = ThumbnailAskedAgain.Queued;
+
+    public Dictionary<RecordingId, ThumbnailAskedAgain> AskAgainAnswersByRecording { get; } = [];
+
+    public HashSet<RecordingId> ThrowsWhenAskedAgainFor { get; } = [];
+
+    public List<RecordingId> AskedAgain { get; } = [];
+
+    public int Nudges { get; private set; }
+
+    public void Nudge() => Nudges++;
+
     public Task<ThumbnailRemake> RemakeAsync(RecordingId id, CancellationToken cancellationToken)
     {
         Asked.Add(id);
@@ -184,6 +196,26 @@ internal sealed class ScriptedRemaker(HeldRecordings recordings) : IThumbnailRem
         }
 
         return Task.FromResult(Answer);
+    }
+
+    public Task<ThumbnailAskedAgain> AskAgainAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        AskedAgain.Add(id);
+
+        if (ThrowsWhenAskedAgainFor.Contains(id))
+        {
+            throw new InvalidOperationException("the store went away while this recording was being queued");
+        }
+
+        ThumbnailAskedAgain answer = AskAgainAnswersByRecording.TryGetValue(id, out ThumbnailAskedAgain scripted) ? scripted : AskAgainAnswer;
+
+        if (answer is ThumbnailAskedAgain.Queued
+            && recordings.Recordings.FirstOrDefault(recording => recording.Id.Equals(id)) is { } held)
+        {
+            held.Illustrate(ThumbnailState.Pending);
+        }
+
+        return Task.FromResult(answer);
     }
 }
 
@@ -261,7 +293,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
         Remaker = new ScriptedRemaker(Recordings);
         IRecordingFileEraser erasingWith = erasing ?? Eraser;
 
-        WebApplicationFactory<Program> configured = factory
+        Built = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();
@@ -280,11 +312,13 @@ internal sealed class RecordingFeature : IAsyncDisposable
                 services.AddSingleton<TimeProvider>(new FixedTimeProvider(Noon.AddMinutes(30)));
             }));
 
-        Client = configured.WithTestScheme().CreateClient();
+        Client = Built.WithTestScheme().CreateClient();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             TestAuthenticationHandler.SchemeName,
             "anything");
     }
+
+    public WebApplicationFactory<Program> Built { get; }
 
     public HttpClient Client { get; }
 
@@ -395,9 +429,22 @@ internal sealed class RecordingFeature : IAsyncDisposable
         return await response.Content.ReadAsStringAsync();
     }
 
-    public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null)
+    public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
+
+    public HttpClient FromElsewhere()
     {
-        using HttpResponseMessage response = await Client.PostAsJsonAsync(
+        HttpClient client = Built.WithTestScheme().CreateClient();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
+        client.DefaultRequestHeaders.Remove(Microsoft.Net.Http.Headers.HeaderNames.Origin);
+        client.DefaultRequestHeaders.Add(Microsoft.Net.Http.Headers.HeaderNames.Origin, "https://elsewhere.example");
+
+        return client;
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null, HttpClient? client = null)
+    {
+        using HttpResponseMessage response = await (client ?? Client).PostAsJsonAsync(
             new Uri(path, UriKind.Relative),
             body ?? new { });
 
