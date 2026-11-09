@@ -164,26 +164,29 @@ internal sealed class ScriptedRemaker(HeldRecordings recordings) : IThumbnailRem
 {
     public ThumbnailRemake Answer { get; set; } = ThumbnailRemake.Drawn;
 
+    public Dictionary<RecordingId, ThumbnailRemake> AnswersByRecording { get; } = [];
+
     public List<RecordingId> Asked { get; } = [];
 
     public Task<ThumbnailRemake> RemakeAsync(RecordingId id, CancellationToken cancellationToken)
     {
         Asked.Add(id);
+        ThumbnailRemake answer = AnswersByRecording.TryGetValue(id, out ThumbnailRemake scripted) ? scripted : Answer;
 
-        if (Answer is ThumbnailRemake.Drawn or ThumbnailRemake.Skipped or ThumbnailRemake.Failed
+        if (answer is ThumbnailRemake.Drawn or ThumbnailRemake.Skipped or ThumbnailRemake.Failed
             && recordings.Recordings.FirstOrDefault(recording => recording.Id.Equals(id)) is { } held)
         {
             held.Illustrate(
-                Answer switch
+                answer switch
                 {
                     ThumbnailRemake.Drawn => ThumbnailState.Ready,
                     ThumbnailRemake.Skipped => ThumbnailState.Skipped,
                     _ => ThumbnailState.Failed,
                 },
-                Answer is ThumbnailRemake.Failed ? ThumbnailFault.SourceOutOfReach : null);
+                answer is ThumbnailRemake.Failed ? ThumbnailFault.SourceOutOfReach : null);
         }
 
-        return Task.FromResult(Answer);
+        return Task.FromResult(answer);
     }
 }
 
@@ -261,7 +264,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
         Remaker = new ScriptedRemaker(Recordings);
         IRecordingFileEraser erasingWith = erasing ?? Eraser;
 
-        WebApplicationFactory<Program> configured = factory
+        Built = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();
@@ -280,11 +283,13 @@ internal sealed class RecordingFeature : IAsyncDisposable
                 services.AddSingleton<TimeProvider>(new FixedTimeProvider(Noon.AddMinutes(30)));
             }));
 
-        Client = configured.WithTestScheme().CreateClient();
+        Client = Built.WithTestScheme().CreateClient();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             TestAuthenticationHandler.SchemeName,
             "anything");
     }
+
+    public WebApplicationFactory<Program> Built { get; }
 
     public HttpClient Client { get; }
 
@@ -395,9 +400,22 @@ internal sealed class RecordingFeature : IAsyncDisposable
         return await response.Content.ReadAsStringAsync();
     }
 
-    public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null)
+    public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
+
+    public HttpClient FromElsewhere()
     {
-        using HttpResponseMessage response = await Client.PostAsJsonAsync(
+        HttpClient client = Built.WithTestScheme().CreateClient();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
+        client.DefaultRequestHeaders.Remove(Microsoft.Net.Http.Headers.HeaderNames.Origin);
+        client.DefaultRequestHeaders.Add(Microsoft.Net.Http.Headers.HeaderNames.Origin, "https://elsewhere.example");
+
+        return client;
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null, HttpClient? client = null)
+    {
+        using HttpResponseMessage response = await (client ?? Client).PostAsJsonAsync(
             new Uri(path, UriKind.Relative),
             body ?? new { });
 

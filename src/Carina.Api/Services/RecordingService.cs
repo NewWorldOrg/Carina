@@ -44,6 +44,82 @@ public enum RecordingFailure
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
 
+/// <summary>
+/// What became of one recording handed in to have its picture drawn again: the answer the pass gave when
+/// it was asked, or why it was not asked.
+/// </summary>
+public enum ThumbnailRemakeOutcome
+{
+    Drawn = 1,
+
+    Skipped = 2,
+
+    Failed = 3,
+
+    NoSuchRecording = 4,
+
+    StillRecording = 5,
+
+    Refused = 6,
+}
+
+/// <summary>
+/// One row of the answer to drawing pictures again: the recording as it was asked, what became of it, and
+/// why when nothing was drawn.
+/// </summary>
+public sealed record ThumbnailRemakeRow(RecordingId Id, ThumbnailRemakeOutcome Outcome, string Message)
+{
+    public static ThumbnailRemakeRow Remade(RecordingId id, ThumbnailRemake remake)
+        => new(id, ThumbnailRemakes.Outcome(remake), ThumbnailRemakes.Said(remake));
+
+    public static ThumbnailRemakeRow NotRemade(RecordingId id, string message, RecordingFailure failure)
+        => new(id, ThumbnailRemakes.Outcome(failure), ThumbnailRemakes.Said(failure, message));
+}
+
+/// <summary>
+/// The rules of drawing pictures again for several recordings: how many are taken in one request, and
+/// how the single recording's answer and refusals read as the outcome of a row. They sit beside the
+/// service because a file of their own named for thumbnails would count as part of the feature.
+/// </summary>
+public static class ThumbnailRemakes
+{
+    public const int MostAtOnce = 100;
+
+    public static readonly string Description = $"between one and {MostAtOnce} recording ids.";
+
+    public static ThumbnailRemakeOutcome Outcome(ThumbnailRemake remake) => remake switch
+    {
+        ThumbnailRemake.Drawn => ThumbnailRemakeOutcome.Drawn,
+        ThumbnailRemake.Skipped => ThumbnailRemakeOutcome.Skipped,
+        ThumbnailRemake.Failed => ThumbnailRemakeOutcome.Failed,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(remake),
+            remake,
+            "An answer that drew nothing is a refusal of the recording, not the outcome of a picture drawn again."),
+    };
+
+    public static ThumbnailRemakeOutcome Outcome(RecordingFailure failure) => failure switch
+    {
+        RecordingFailure.NoSuchRecording => ThumbnailRemakeOutcome.NoSuchRecording,
+        RecordingFailure.StillRecording => ThumbnailRemakeOutcome.StillRecording,
+        _ => ThumbnailRemakeOutcome.Refused,
+    };
+
+    internal static string Said(ThumbnailRemake remake) => remake switch
+    {
+        ThumbnailRemake.Skipped => "No picture is drawn of a recording that failed.",
+        ThumbnailRemake.Failed => "A picture could not be drawn of this recording.",
+        _ => string.Empty,
+    };
+
+    internal static string Said(RecordingFailure failure, string message) => failure switch
+    {
+        RecordingFailure.NoSuchRecording => "The ledger holds no such recording.",
+        RecordingFailure.StillRecording => "The recording is still being written, and a picture is taken of a recording that has ended.",
+        _ => message,
+    };
+}
+
 public sealed record RecordingSeen(
     Recording Recording,
     EncodeStanding Encode,
@@ -213,6 +289,26 @@ public sealed class RecordingService(
         return await recordings.FindAsync(id, cancellationToken) is { } drawn
             ? ServiceResult<ThumbnailRemade, RecordingFailure>.Success(new ThumbnailRemade(drawn, remake))
             : Missing<ThumbnailRemade>(id);
+    }
+
+    public async Task<ServiceResult<IReadOnlyList<ThumbnailRemakeRow>>> RemakeThumbnailsAsync(
+        IReadOnlyList<RecordingId> ids,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        List<ThumbnailRemakeRow> rows = new(ids.Count);
+
+        foreach (RecordingId id in ids)
+        {
+            ServiceResult<ThumbnailRemade, RecordingFailure> remade = await RemakeThumbnailAsync(id, cancellationToken);
+
+            rows.Add(remade.IsSuccess
+                ? ThumbnailRemakeRow.Remade(id, remade.Data!.Remake)
+                : ThumbnailRemakeRow.NotRemade(id, remade.ErrorMessage!, remade.ErrorType));
+        }
+
+        return ServiceResult<IReadOnlyList<ThumbnailRemakeRow>>.Success(rows);
     }
 
     public async Task<ServiceResult<RecordingDiscarded, RecordingFailure>> DiscardAsync(

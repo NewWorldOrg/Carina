@@ -230,6 +230,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "queueEncodeJob",
                 "rebuildEpg",
                 "remakeThumbnail",
+                "remakeThumbnails",
                 "removeEncodeDestination",
                 "removeEncodeProfile",
                 "replaceRule",
