@@ -1122,6 +1122,41 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             kind["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
+    [Fact(DisplayName = "BR-NT-004: a rule set is described with the thirteen kinds it chooses among, and a delivery with all sixteen a notice can be")]
+    public async Task ARuleSetIsDescribedWithTheKindsItChoosesAmong()
+    {
+        string[] chosen =
+        [
+            "recordingStarted",
+            "recordingCompleted",
+            "recordingTruncated",
+            "recordingFailed",
+            "encodeStarted",
+            "encodeCompleted",
+            "encodeFailed",
+            "reservationCompeting",
+            "reservationMissed",
+            "programmeMoved",
+            "qualityIncidentDetected",
+            "qualityIncidentResolved",
+            "deviceDisconnected",
+        ];
+        string[] ofAProgrammeAskedFor = ["programmeStarting", "watchedProgrammeMoved", "watchedProgrammeGone"];
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+
+        Assert.All(
+            (string[])["CreateNotificationRuleRequest", "ReviseNotificationRuleRequest", "NotificationRuleResponder"],
+            described => Assert.Equal(chosen, Values(schemas[described]!["properties"]!["events"]!["items"]!)));
+        Assert.Equal([.. chosen, .. ofAProgrammeAskedFor], Values(schemas["NoticeKind"]!));
+        Assert.Equal(
+            "#/components/schemas/NoticeKind",
+            schemas["NotificationDeliveryResponder"]!["properties"]!["kind"]!["$ref"]!.GetValue<string>());
+
+        static string[] Values(JsonNode described)
+            => [.. described["enum"]!.AsArray().Select(value => value!.GetValue<string>())];
+    }
+
     [Fact(DisplayName = "what queues a job names the recording, the profile and the destination, and says whether the artefact is to be made again")]
     public async Task WhatQueuesAJobSaysWhetherTheArtefactIsToBeMadeAgain()
     {
