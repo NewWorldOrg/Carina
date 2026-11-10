@@ -10,6 +10,7 @@ using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Machines;
 using Carina.Domain.Migration;
+using Carina.Domain.Notifications;
 using Carina.Domain.Playback;
 using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
@@ -33,6 +34,7 @@ using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Logos;
 using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Migration;
+using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Playback;
@@ -232,6 +234,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IQualitySignalReader, QualitySignalReader>();
         services.AddScoped<IQualityIncidentRepository, QualityIncidentRepository>();
         services.AddScoped<IQualitySupplyReader, QualitySupplyReader>();
+        services.AddScoped<INoticeRepository, NoticeRepository>();
+        services.AddScoped<INoticeSourceReader, NoticeSourceReader>();
+        services.AddScoped<INotificationDestinationRepository, NotificationDestinationRepository>();
+        services.AddScoped<INotificationRuleRepository, NotificationRuleRepository>();
+        services.AddScoped<INotificationDeliveryRepository, NotificationDeliveryRepository>();
+        services.AddScoped<INotificationSettingsRepository, NotificationSettingsRepository>();
         services.AddScoped<SignalSampleRound>();
         services.AddScoped<SupplyWatchRound>();
         services.TryAddSingleton<ISupplyStandingBoard, SupplyStandingBoard>();
@@ -259,6 +267,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeJobRunner>();
         services.AddScoped<EncodeRestart>();
         services.AddScoped<EncodeIntakeRound>();
+        services.AddScoped<NotificationIntakeRound>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<ICaptionWorklist, CaptionWorklist>();
         services.AddScoped<IDataBroadcastWorklist, DataBroadcastWorklist>();
@@ -408,6 +417,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<EncodeSettings>(provider =>
             provider.GetRequiredService<IOptions<EncodingOptions>>().Value.Read());
         services.TryAddSingleton<EncodePlaces>();
+        services.TryAddSingleton(new NotificationIntakeSettings());
+        services.TryAddSingleton(NoticeLinkBase.None);
         services.TryAddSingleton<EncodeQueueTurn>();
         services.TryAddSingleton<OutputRootDeclarations>();
         services.TryAddSingleton<IRenameProbe, DirectoryRenameProbe>();
@@ -476,6 +487,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<EncodeMountCheck>();
         services.AddHostedService<EncodeDispatch>();
         services.AddHostedService<EncodeIntakeJob>();
+        services.AddHostedService<NotificationIntakeJob>();
         services.AddHostedService<SignalSampleJob>();
         services.AddHostedService<QualitySignalRollupJob>();
         services.AddHostedService<SupplyWatchJob>();
