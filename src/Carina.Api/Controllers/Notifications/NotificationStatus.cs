@@ -8,7 +8,10 @@ public static class NotificationStatus
         => failure switch
         {
             NotificationFailure.Refused => StatusCodes.Status400BadRequest,
-            NotificationFailure.NoSuchDestination or NotificationFailure.NoSuchRule => StatusCodes.Status404NotFound,
+            NotificationFailure.NoSuchDestination
+                or NotificationFailure.NoSuchRule
+                or NotificationFailure.NoSuchProgramme
+                or NotificationFailure.NoSuchWatch => StatusCodes.Status404NotFound,
             NotificationFailure.TooSoon => StatusCodes.Status429TooManyRequests,
             _ => StatusCodes.Status409Conflict,
         };

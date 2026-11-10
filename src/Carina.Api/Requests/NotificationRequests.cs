@@ -44,6 +44,17 @@ public sealed record ReviseNotificationRuleRequest
     public IReadOnlyList<Guid>? Destinations { get; init; }
 }
 
+public sealed record CreateNotificationWatchRequest
+{
+    public string? Programme { get; init; }
+
+    public DateTimeOffset? ProgrammeStartsAt { get; init; }
+
+    public int? LeadMinutes { get; init; }
+
+    public IReadOnlyList<Guid>? Destinations { get; init; }
+}
+
 public sealed record PutNotificationSettingsRequest
 {
     public int? NotifyLeadMinutes { get; init; }

@@ -13,4 +13,16 @@ public enum NotificationFailure
     TooSoon = 5,
 
     Unreadable = 6,
+
+    NoSuchProgramme = 7,
+
+    NoSuchWatch = 8,
+
+    AlreadyBegun = 9,
+
+    AlreadyAsked = 10,
+
+    NoDestination = 11,
+
+    NotWaiting = 12,
 }

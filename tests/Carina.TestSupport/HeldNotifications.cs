@@ -1,4 +1,5 @@
 using Carina.Domain.Notifications;
+using Carina.Domain.Programmes;
 
 namespace Carina.TestSupport;
 
@@ -152,6 +153,15 @@ public sealed class HeldProgrammeWatches : IProgrammeWatchRepository
     public Task<ProgrammeWatch?> FindAsync(ProgrammeWatchId id, CancellationToken cancellationToken)
         => Task.FromResult(Watches.Where(watch => watch.Id.Equals(id)).Select(Copy).FirstOrDefault());
 
+    public Task<ProgrammeWatch?> FindOfAsync(ProgrammeId programme, CancellationToken cancellationToken)
+        => Task.FromResult(Watches.Where(watch => watch.Programme.Equals(programme)).Select(Copy).FirstOrDefault());
+
+    public Task<IReadOnlyList<ProgrammeWatch>> ListAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<ProgrammeWatch>>(
+        [
+            .. Watches.OrderBy(watch => watch.StartsAt).ThenBy(watch => watch.Id.Value).Select(Copy),
+        ]);
+
     public Task<IReadOnlyList<ProgrammeWatch>> ListFollowedAsync(DateTime at, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<ProgrammeWatch>>(
         [
@@ -173,6 +183,13 @@ public sealed class HeldProgrammeWatches : IProgrammeWatchRepository
     {
         Watches.RemoveAll(held => held.Id.Equals(watch.Id));
         Watches.Add(Copy(watch));
+
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
+    {
+        Watches.RemoveAll(held => held.Id.Equals(watch.Id));
 
         return Task.CompletedTask;
     }

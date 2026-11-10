@@ -1,4 +1,5 @@
 using Carina.Domain.Notifications;
+using Carina.Domain.Programmes;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +19,26 @@ public sealed class ProgrammeWatchRepository(CarinaDbContext context) : IProgram
             .AsNoTracking()
             .SingleOrDefaultAsync(watch => watch.Id == id, cancellationToken);
     }
+
+    public async Task<ProgrammeWatch?> FindOfAsync(ProgrammeId programme, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(programme);
+
+        return await context.Set<ProgrammeWatch>()
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                watch => watch.NetworkId == programme.NetworkId
+                    && watch.ServiceId == programme.ServiceId
+                    && watch.EventId == programme.EventId,
+                cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ProgrammeWatch>> ListAsync(CancellationToken cancellationToken)
+        => await context.Set<ProgrammeWatch>()
+            .AsNoTracking()
+            .OrderBy(watch => watch.StartsAt)
+            .ThenBy(watch => watch.Id)
+            .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ProgrammeWatch>> ListFollowedAsync(DateTime at, CancellationToken cancellationToken)
         => await context.Set<ProgrammeWatch>()
@@ -44,6 +65,15 @@ public sealed class ProgrammeWatchRepository(CarinaDbContext context) : IProgram
         context.Update(watch);
 
         await WriteAsync(watch, cancellationToken);
+    }
+
+    public async Task RemoveAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(watch);
+
+        await context.Set<ProgrammeWatch>()
+            .Where(held => held.Id == watch.Id)
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     private async Task WriteAsync(ProgrammeWatch watch, CancellationToken cancellationToken)

@@ -12,7 +12,9 @@ using System.Text.Json;
 
 using Carina.Api.Authentication;
 using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
+using Carina.Domain.Programmes;
 using Carina.Infrastructure.Notifications;
 using Carina.TestSupport;
 
@@ -25,6 +27,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Net.Http.Headers;
+
+using EventId = Carina.Domain.Programmes.EventId;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -205,6 +209,10 @@ internal sealed class NotificationFeature : IAsyncDisposable
 
     public const string Settings = "/api/notifications/settings";
 
+    public const string Watches = "/api/notifications/watches";
+
+    public const string Station = "作り物テレビ";
+
     public static readonly DateTime Noon = new(2026, 9, 5, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly TestingWebApplicationFactory factory = new();
@@ -224,6 +232,9 @@ internal sealed class NotificationFeature : IAsyncDisposable
                 services.AddSingleton<INotificationRuleRepository>(HeldRules);
                 services.AddSingleton<INotificationDeliveryRepository>(HeldDeliveries);
                 services.AddSingleton<INotificationSettingsRepository>(HeldSettings);
+                services.AddSingleton<IProgrammeWatchRepository>(HeldWatches);
+                services.AddSingleton<IProgrammeRepository>(HeldProgrammes);
+                services.AddSingleton<IBroadcastServiceRepository>(HeldServices);
                 services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.AddSingleton<INoticeNetwork>(Network);
                 services.AddSingleton<NoticeLine>(_ => new NoticeLine(
@@ -260,11 +271,19 @@ internal sealed class NotificationFeature : IAsyncDisposable
 
     public HeldNotificationSettings HeldSettings { get; } = new();
 
+    public HeldProgrammeWatches HeldWatches { get; } = new();
+
+    public HeldProgrammes HeldProgrammes { get; } = new();
+
+    public HeldServices HeldServices { get; } = new();
+
     public static string OneOf(Guid id) => $"{Destinations}/{id}";
 
     public static string TrialOf(Guid id) => $"{Destinations}/{id}/test";
 
     public static string RuleOf(Guid id) => $"{Rules}/{id}";
+
+    public static string WatchOf(Guid id) => $"{Watches}/{id}";
 
     public HttpClient Anonymous() => Built.CreateClient();
 
@@ -288,6 +307,42 @@ internal sealed class NotificationFeature : IAsyncDisposable
     public async Task<Guid> RegisteredAsync(string name = "居間", string url = SlackUrl)
     {
         (HttpStatusCode status, JsonElement body) = await PostAsync(Destinations, new { name, url });
+
+        Assert.Equal(HttpStatusCode.Created, status);
+
+        return body.GetProperty("data").GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// Puts a half-hour programme in the guide, on a station of its own, and gives the text it is named by.
+    /// </summary>
+    public string Announced(int carried, DateTime startsAt, string name = "作り物の番組")
+    {
+        NetworkId network = new(32_736);
+        ServiceId service = new(1024);
+
+        if (HeldServices.Services.Count is 0)
+        {
+            HeldServices.Services.Add(BroadcastService.Discover(network, service, Station, ServiceCategory.Television, Noon));
+        }
+
+        HeldProgrammes.Programmes.Add(Programme.Discover(
+            new ProgrammeBroadcast(
+                new ProgrammeId(network, service, new EventId(carried)),
+                new TransportStreamId(32_736),
+                startsAt,
+                startsAt.AddMinutes(30),
+                name,
+                string.Empty,
+                false),
+            Noon));
+
+        return $"32736-1024-{carried}";
+    }
+
+    public async Task<Guid> AskedAsync(string programme, DateTime startsAt)
+    {
+        (HttpStatusCode status, JsonElement body) = await PostAsync(Watches, new { programme, programmeStartsAt = startsAt });
 
         Assert.Equal(HttpStatusCode.Created, status);
 
