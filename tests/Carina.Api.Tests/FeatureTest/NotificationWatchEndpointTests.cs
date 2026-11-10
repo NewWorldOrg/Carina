@@ -20,7 +20,7 @@ public sealed class NotificationWatchEndpointTests
         "discord.com",
     ];
 
-    [Fact(DisplayName = "D-5: A programme that has not begun is asked to be told of, with the usual minutes and every destination that is turned on")]
+    [Fact(DisplayName = "BR-NT-007: A programme that has not begun is asked to be told of, with the usual minutes and every destination that is turned on")]
     public async Task AProgrammeIsAskedToBeToldOfWithTheUsualMinutesAndEveryDestinationTurnedOn()
     {
         await using NotificationFeature feature = new();
@@ -70,7 +70,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Equal(10, body.GetProperty("data").GetProperty("leadMinutes").GetInt32());
     }
 
-    [Fact(DisplayName = "D-5: A programme is asked to be told of with minutes and destinations of its own")]
+    [Fact(DisplayName = "BR-NT-007: A programme is asked to be told of with minutes and destinations of its own")]
     public async Task AProgrammeIsAskedWithMinutesAndDestinationsOfItsOwn()
     {
         await using NotificationFeature feature = new();
@@ -106,7 +106,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Empty(feature.HeldWatches.Watches);
     }
 
-    [Theory(DisplayName = "D-5: A programme asked to be told of to no destination, to one that is not registered or to one that is turned off is refused")]
+    [Theory(DisplayName = "BR-NT-007: A programme asked to be told of to no destination, to one that is not registered or to one that is turned off is refused")]
     [InlineData("none")]
     [InlineData("unregistered")]
     [InlineData("turnedOff")]
@@ -132,7 +132,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Empty(feature.HeldWatches.Watches);
     }
 
-    [Fact(DisplayName = "D-5: A programme asked to be told of while no destination is turned on is refused as a conflict")]
+    [Fact(DisplayName = "BR-NT-007: A programme asked to be told of while no destination is turned on is refused as a conflict")]
     public async Task AProgrammeAskedWhileNoDestinationIsTurnedOnIsRefused()
     {
         await using NotificationFeature feature = new();
@@ -148,7 +148,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Empty(feature.HeldWatches.Watches);
     }
 
-    [Theory(DisplayName = "D-5: A request that names no programme, or names it in a form that cannot be read, is refused")]
+    [Theory(DisplayName = "BR-NT-007: A request that names no programme, or names it in a form that cannot be read, is refused")]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("32736-1024")]
@@ -165,7 +165,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, status);
     }
 
-    [Fact(DisplayName = "D-5: A request that does not say when the programme starts is refused")]
+    [Fact(DisplayName = "BR-NT-007: A request that does not say when the programme starts is refused")]
     public async Task ARequestWithoutTheStartIsRefused()
     {
         await using NotificationFeature feature = new();
@@ -178,7 +178,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Empty(feature.HeldWatches.Watches);
     }
 
-    [Fact(DisplayName = "D-5: A programme the guide does not hold, or holds at another start, is not found")]
+    [Fact(DisplayName = "BR-NT-007: A programme the guide does not hold, or holds at another start, is not found")]
     public async Task AProgrammeTheGuideDoesNotHoldIsNotFound()
     {
         await using NotificationFeature feature = new();
@@ -197,7 +197,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Empty(feature.HeldWatches.Watches);
     }
 
-    [Theory(DisplayName = "D-5: A programme that has begun or has ended is refused as a conflict")]
+    [Theory(DisplayName = "BR-NT-007: A programme that has begun or has ended is refused as a conflict")]
     [InlineData(0)]
     [InlineData(10)]
     [InlineData(45)]
@@ -250,7 +250,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Empty(feature.HeldWatches.Watches);
     }
 
-    [Fact(DisplayName = "BR-NS-003: A programme already waiting to be told of is not asked for a second time")]
+    [Fact(DisplayName = "BR-NT-007: A programme already waiting to be told of is not asked for a second time")]
     public async Task AProgrammeAlreadyWaitingIsNotAskedAgain()
     {
         await using NotificationFeature feature = new();
@@ -268,7 +268,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Equal(3, held.LeadMinutes);
     }
 
-    [Fact(DisplayName = "BR-NS-003: A programme already told of and not yet over is not asked for a second time")]
+    [Fact(DisplayName = "BR-NT-007: A programme already told of and not yet over is not asked for a second time")]
     public async Task AProgrammeAlreadyToldOfIsNotAskedAgain()
     {
         await using NotificationFeature feature = new();
@@ -308,7 +308,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Equal(left, Assert.Single(feature.HeldWatches.Watches).State);
     }
 
-    [Fact(DisplayName = "BR-NS-003: A programme whose asking was withdrawn is asked for again, and the row withdrawn gives way to the new one")]
+    [Fact(DisplayName = "BR-NT-007: A programme whose asking was withdrawn is asked for again, and the row withdrawn gives way to the new one")]
     public async Task AProgrammeWithdrawnIsAskedForAgain()
     {
         await using NotificationFeature feature = new();
@@ -329,7 +329,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Equal(5, held.LeadMinutes);
     }
 
-    [Fact(DisplayName = "BR-NS-003: A broadcast that reuses the number of one that went by is asked for, and the old row gives way")]
+    [Fact(DisplayName = "BR-NT-007: A broadcast that reuses the number of one that went by is asked for, and the old row gives way")]
     public async Task ABroadcastReusingANumberIsAskedFor()
     {
         await using NotificationFeature feature = new();
@@ -348,7 +348,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Equal(ProgrammeWatchState.Waiting, held.State);
     }
 
-    [Fact(DisplayName = "D-5: The programmes asked to be told of are listed with their states, the earliest start first")]
+    [Fact(DisplayName = "BR-NS-003: The programmes asked to be told of are listed with their states, the earliest start first")]
     public async Task TheProgrammesAskedAreListedTheEarliestFirst()
     {
         await using NotificationFeature feature = new();
@@ -406,7 +406,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Equal(state, Assert.Single(feature.HeldWatches.Watches).State);
     }
 
-    [Fact(DisplayName = "D-5: Removing a destination takes it out of the programmes that wait, withdraws one left with nowhere to send, and leaves the ones told of as they were")]
+    [Fact(DisplayName = "BR-ND-013: Removing a destination takes it out of the programmes that wait, withdraws one left with nowhere to send, and leaves the ones told of as they were")]
     public async Task RemovingADestinationTakesItOutOfTheProgrammesThatWait()
     {
         await using NotificationFeature feature = new();
@@ -438,7 +438,7 @@ public sealed class NotificationWatchEndpointTests
         Assert.Empty(feature.HeldDeliveries.Rows);
     }
 
-    [Fact(DisplayName = "D-5: A programme nobody asked to be told of is not found, and an id of all zeroes is refused")]
+    [Fact(DisplayName = "BR-NS-003: A programme nobody asked to be told of is not found, and an id of all zeroes is refused")]
     public async Task AProgrammeNobodyAskedForIsNotFound()
     {
         await using NotificationFeature feature = new();

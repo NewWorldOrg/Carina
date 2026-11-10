@@ -24,7 +24,7 @@ public sealed class ProgrammeWatchTests
 
     private static readonly NotificationDestinationId Second = NotificationDestinationId.New();
 
-    [Fact(DisplayName = "D-5: a programme asked to be told of waits, holding what the guide said and where to tell")]
+    [Fact(DisplayName = "BR-NT-007: a programme asked to be told of waits, holding what the guide said and where to tell")]
     public void AProgrammeAskedToBeToldOfWaits()
     {
         ProgrammeWatchId id = ProgrammeWatchId.New();
@@ -66,7 +66,7 @@ public sealed class ProgrammeWatchTests
         Assert.Throws<ArgumentOutOfRangeException>(() => Waiting(leadMinutes));
     }
 
-    [Fact(DisplayName = "D-5: a programme is asked to be told of to at least one destination, each once")]
+    [Fact(DisplayName = "BR-NT-007: a programme is asked to be told of to at least one destination, each once")]
     public void AProgrammeIsToldOfToAtLeastOneDestination()
     {
         Assert.Throws<ArgumentException>(() => ProgrammeWatch.Ask(ProgrammeWatchId.New(), Watched, Announced, 3, [], Asked));
@@ -75,7 +75,7 @@ public sealed class ProgrammeWatchTests
             ProgrammeWatch.Ask(ProgrammeWatchId.New(), Watched, Announced, 3, [First, Second, First], Asked).Destinations);
     }
 
-    [Theory(DisplayName = "D-5: only a programme that has not begun is asked to be told of")]
+    [Theory(DisplayName = "BR-NT-007: only a programme that has not begun is asked to be told of")]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(3600)]
@@ -91,7 +91,7 @@ public sealed class ProgrammeWatchTests
                 Starts.AddSeconds(secondsAfterTheStart)));
     }
 
-    [Fact(DisplayName = "a broadcast that ends no later than it begins, or is named too long, is not held")]
+    [Fact(DisplayName = "BR-NT-007: a broadcast that ends no later than it begins, or is named too long, is not held")]
     public void ABroadcastThatDoesNotStandIsNotHeld()
     {
         Assert.Throws<ArgumentException>(() => Asking(Announced with { EndsAt = Starts }));
@@ -212,7 +212,7 @@ public sealed class ProgrammeWatchTests
         Assert.Equal(Starts.AddSeconds(80), watch.StartsAt);
     }
 
-    [Fact(DisplayName = "a guide that names the programme with nothing keeps the name held, and one that says the same changes nothing")]
+    [Fact(DisplayName = "BR-NS-003: a guide that names the programme with nothing keeps the name held, and one that says the same changes nothing")]
     public void AGuideThatSaysNothingNewChangesNothing()
     {
         ProgrammeWatch watch = Waiting(3);
@@ -235,7 +235,7 @@ public sealed class ProgrammeWatchTests
         Assert.Throws<InvalidOperationException>(() => skipped.Follow(Announced, Ends));
     }
 
-    [Fact(DisplayName = "D-5: a destination taken away is no longer told, and a waiting programme left with none is cancelled")]
+    [Fact(DisplayName = "BR-ND-013: a destination taken away is no longer told, and a waiting programme left with none is cancelled")]
     public void ADestinationTakenAwayIsNoLongerTold()
     {
         ProgrammeWatch watch = ProgrammeWatch.Ask(ProgrammeWatchId.New(), Watched, Announced, 3, [First, Second], Asked);
@@ -255,7 +255,7 @@ public sealed class ProgrammeWatchTests
         Assert.Equal(ProgrammeWatchState.Cancelled, watch.State);
     }
 
-    [Fact(DisplayName = "D-5: a programme already told of keeps the destinations it was told to")]
+    [Fact(DisplayName = "BR-ND-013: a programme already told of keeps the destinations it was told to")]
     public void AProgrammeAlreadyToldOfKeepsItsDestinations()
     {
         ProgrammeWatch watch = Waiting(3);
@@ -267,7 +267,7 @@ public sealed class ProgrammeWatchTests
         Assert.Equal(ProgrammeWatchState.Notified, watch.State);
     }
 
-    [Fact(DisplayName = "D-5: a programme stands in the way of asking again while it waits, or was told of and is not over")]
+    [Fact(DisplayName = "BR-NT-007: a programme stands in the way of asking again while it waits, or was told of and is not over")]
     public void AProgrammeStandsInTheWayOfAskingAgain()
     {
         ProgrammeWatch waiting = Waiting(3);
@@ -285,7 +285,7 @@ public sealed class ProgrammeWatchTests
         Assert.False(skipped.StandsAt(Ends));
     }
 
-    [Fact(DisplayName = "a row read back is refused when its state and the time it was told of disagree")]
+    [Fact(DisplayName = "BR-NS-003: a row read back is refused when its state and the time it was told of disagree")]
     public void ARowWhoseStateAndTimeDisagreeIsRefused()
     {
         Assert.Throws<ArgumentException>(() => Read(ProgrammeWatchState.Notified, null, [First]));

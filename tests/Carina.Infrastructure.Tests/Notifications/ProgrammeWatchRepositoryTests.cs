@@ -37,7 +37,7 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         Assert.Null(none);
     }
 
-    [Fact(DisplayName = "D-5: every row is listed, the ones that are settled among them, the earliest start first")]
+    [Fact(DisplayName = "BR-NS-003: every row is listed, the ones that are settled among them, the earliest start first")]
     public async Task EveryRowIsListedTheEarliestStartFirst()
     {
         ProgrammeId later = await watched.AnnouncedAsync(Starts.AddHours(2), Asked);
@@ -120,7 +120,7 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         Assert.Null(held.StationName);
     }
 
-    [Fact(DisplayName = "D-5: the rows that no longer wait and whose broadcast ended before a moment are cleared away, and the rest are kept")]
+    [Fact(DisplayName = "BR-ND-014: the rows that no longer wait and whose broadcast ended before a moment are cleared away, and the rest are kept")]
     public async Task TheRowsThatNoLongerWaitAreClearedAwayOnceTheirBroadcastIsLongOver()
     {
         DateTime asked = Asked.AddYears(-1);

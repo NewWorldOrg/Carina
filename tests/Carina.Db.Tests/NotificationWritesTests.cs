@@ -134,7 +134,7 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
         Assert.Equal([staying], left.Destinations);
     }
 
-    [Fact(DisplayName = "D-5: removing a destination takes it out of the programmes that wait, withdraws one left with nowhere to send, and adds no notice")]
+    [Fact(DisplayName = "BR-ND-013: removing a destination takes it out of the programmes that wait, withdraws one left with nowhere to send, and adds no notice")]
     public async Task RemovingADestinationTakesItOutOfTheProgrammesThatWait()
     {
         await EmptyAsync();
@@ -159,7 +159,7 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
         Assert.Equal(0, await context.Set<Notice>().CountAsync(Cancel));
     }
 
-    [Fact(DisplayName = "D-5: a destination whose programmes cannot be written is not removed, and stays in its sets of rules")]
+    [Fact(DisplayName = "BR-ND-013: a destination whose programmes cannot be written is not removed, and stays in its sets of rules")]
     public async Task ADestinationWhoseProgrammesCannotBeWrittenIsNotRemoved()
     {
         await EmptyAsync();

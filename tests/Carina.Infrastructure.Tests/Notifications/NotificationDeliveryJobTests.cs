@@ -97,7 +97,7 @@ public sealed class NotificationDeliveryJobTests
         Assert.Equal([first.AddDays(-14), first.AddHours(1).AddDays(-14)], machine.Notices.ClearedBefore);
     }
 
-    [Fact(DisplayName = "D-5: the programmes asked to be told of that are settled and fourteen days over are cleared away with the old notices")]
+    [Fact(DisplayName = "BR-ND-014: the programmes asked to be told of that are settled and fourteen days over are cleared away with the old notices")]
     public async Task SettledProgrammesLongOverAreClearedAwayWithTheOldNotices()
     {
         await using Loop machine = new();

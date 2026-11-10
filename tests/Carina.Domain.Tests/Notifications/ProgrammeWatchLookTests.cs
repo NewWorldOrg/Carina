@@ -168,7 +168,7 @@ public sealed class ProgrammeWatchLookTests
         Assert.Equal(new ProgrammeWatchStep(true, null), second);
     }
 
-    [Fact(DisplayName = "D-5: a programme the guide stops naming after it was told of, before it begins, is told of once more")]
+    [Fact(DisplayName = "BR-NS-003: a programme the guide stops naming after it was told of, before it begins, is told of once more")]
     public void AProgrammeTheGuideStopsNamingAfterItWasToldOfIsToldOfOnceMore()
     {
         ProgrammeWatch watch = ToldOf();
@@ -198,7 +198,7 @@ public sealed class ProgrammeWatchLookTests
         Assert.Equal(Starts, watch.StartsAt);
     }
 
-    [Fact(DisplayName = "D-5: the guide says of a programme what it names, and nothing of one it only holds a place for")]
+    [Fact(DisplayName = "BR-NS-003: the guide says of a programme what it names, and nothing of one it only holds a place for")]
     public void TheGuideSaysOfAProgrammeWhatItNames()
     {
         DateTime heard = Asked.AddHours(1);

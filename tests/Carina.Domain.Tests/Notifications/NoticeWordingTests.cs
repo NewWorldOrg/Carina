@@ -454,7 +454,7 @@ public sealed class NoticeWordingTests
         Assert.Equal("https://screens.example/guide", words.Link);
     }
 
-    [Fact(DisplayName = "a programme asked to be told of on a station with no name kept is worded without the station")]
+    [Fact(DisplayName = "BR-ND-001: a programme asked to be told of on a station with no name kept is worded without the station")]
     public void AWatchedProgrammeOnAStationWithNoNameIsWorded()
     {
         ProgrammeWatchNoticeSource watched = Watched(NoticeKind.ProgrammeStarting, Starts.AddMinutes(-3)) with
@@ -495,7 +495,7 @@ public sealed class NoticeWordingTests
         Assert.NotNull(Notice.Take(NoticeId.New(), NoticeKind.ProgrammeStarting, RowId, Starts, words, Starts));
     }
 
-    [Fact(DisplayName = "a programme asked to be told of is told of only as one of its three kinds")]
+    [Fact(DisplayName = "BR-NS-003: a programme asked to be told of is told of only as one of its three kinds")]
     public void AWatchedProgrammeIsToldOfOnlyAsItsKinds()
     {
         Assert.Throws<InvalidOperationException>(() => Watched(NoticeKind.RecordingStarted, Starts).Happenings());
