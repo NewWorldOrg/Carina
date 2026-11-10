@@ -30,4 +30,17 @@ public sealed class NotificationNameTests
     {
         Assert.Throws<ArgumentException>(() => new NotificationName("A\u0007channel"));
     }
+
+    [Theory(DisplayName = "BR-NT-003: a name written by a caller is read where it is one to sixty-four characters, and is nothing otherwise")]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("A\u0007channel", null)]
+    [InlineData(" A channel ", "A channel")]
+    public void ANameWrittenByACallerIsReadOrNothing(string? written, string? read)
+    {
+        Assert.Equal(read, NotificationName.Read(written)?.Value);
+        Assert.Equal(64, NotificationName.Read(new string('a', 64))?.Value.Length);
+        Assert.Null(NotificationName.Read(new string('a', 65)));
+    }
 }
