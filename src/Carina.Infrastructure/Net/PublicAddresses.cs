@@ -1,14 +1,14 @@
 using System.Net;
 using System.Net.Sockets;
 
-namespace Carina.Infrastructure.DataBroadcast;
+namespace Carina.Infrastructure.Net;
 
 /// <summary>
-/// Which addresses a broadcaster's server may stand at: anything reachable across the internet, and nothing on
-/// this machine, on the networks around it, or in a range kept for something else. An IPv6 address that carries an
-/// IPv4 one is judged by the IPv4 one it carries.
+/// Which addresses a server outside this installation may stand at: anything reachable across the internet, and
+/// nothing on this machine, on the networks around it, or in a range kept for something else. An IPv6 address that
+/// carries an IPv4 one is judged by the IPv4 one it carries.
 /// </summary>
-public static class RelayAddresses
+public static class PublicAddresses
 {
     private static readonly AddressRange[] NotPublicV4 =
     [

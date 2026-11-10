@@ -1,5 +1,7 @@
 using System.Net;
 
+using Carina.Infrastructure.Net;
+
 namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
@@ -55,5 +57,5 @@ public static class RelayDestination
     }
 
     private static bool WrittenAddressIsPublic(Uri address)
-        => !IPAddress.TryParse(address.DnsSafeHost, out IPAddress? written) || RelayAddresses.IsPublic(written);
+        => !IPAddress.TryParse(address.DnsSafeHost, out IPAddress? written) || PublicAddresses.IsPublic(written);
 }

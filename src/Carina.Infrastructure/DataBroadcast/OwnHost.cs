@@ -1,6 +1,8 @@
 using System.Collections.Frozen;
 using System.Net;
 
+using Carina.Infrastructure.Net;
+
 namespace Carina.Infrastructure.DataBroadcast;
 
 /// <summary>
@@ -53,12 +55,12 @@ public sealed class OwnHost
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        return addresses.Contains(RelayAddresses.Unmapped(address));
+        return addresses.Contains(PublicAddresses.Unmapped(address));
     }
 
     private static string Compared(string host)
         => WrittenAddress(host)?.ToString() ?? host.TrimEnd('.').ToLowerInvariant();
 
     private static IPAddress? WrittenAddress(string host)
-        => IPAddress.TryParse(host.Trim('[', ']'), out IPAddress? written) ? RelayAddresses.Unmapped(written) : null;
+        => IPAddress.TryParse(host.Trim('[', ']'), out IPAddress? written) ? PublicAddresses.Unmapped(written) : null;
 }

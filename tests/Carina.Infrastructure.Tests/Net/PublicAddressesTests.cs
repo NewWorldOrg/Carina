@@ -1,10 +1,11 @@
 using System.Net;
 
 using Carina.Infrastructure.DataBroadcast;
+using Carina.Infrastructure.Net;
 
-namespace Carina.Infrastructure.Tests.DataBroadcast;
+namespace Carina.Infrastructure.Tests.Net;
 
-public sealed class RelayAddressesTests
+public sealed class PublicAddressesTests
 {
     [Theory(DisplayName = "BR-BD-011: an address on this machine, on the networks around it or kept for something else is not public")]
     [InlineData("0.0.0.0")]
@@ -34,7 +35,7 @@ public sealed class RelayAddressesTests
     [InlineData("fec0::1")]
     [InlineData("ff02::1")]
     public void AnAddressInsideIsNotPublic(string address)
-        => Assert.False(RelayAddresses.IsPublic(IPAddress.Parse(address)));
+        => Assert.False(PublicAddresses.IsPublic(IPAddress.Parse(address)));
 
     [Theory(DisplayName = "BR-BD-011: an address reachable across the internet is public")]
     [InlineData("8.8.8.8")]
@@ -48,7 +49,7 @@ public sealed class RelayAddressesTests
     [InlineData("2002:808:808::1")]
     [InlineData("2400:cb00::1")]
     public void AnAddressAcrossTheInternetIsPublic(string address)
-        => Assert.True(RelayAddresses.IsPublic(IPAddress.Parse(address)));
+        => Assert.True(PublicAddresses.IsPublic(IPAddress.Parse(address)));
 
     [Theory(DisplayName = "BR-BD-011: only http and https on port 80 or 443 with no user named is admitted from the address alone")]
     [InlineData("http://bc.example.jp/bmltop/bc.txt", true)]
@@ -72,8 +73,8 @@ public sealed class RelayAddressesTests
     [Fact(DisplayName = "BR-BD-011: an address that carries an IPv4 one is compared as the IPv4 one, and any other as itself")]
     public void AnAddressCarryingAnIpv4OneIsComparedAsIt()
     {
-        Assert.Equal(IPAddress.Parse("198.51.100.9"), RelayAddresses.Unmapped(IPAddress.Parse("::ffff:198.51.100.9")));
-        Assert.Equal(IPAddress.Parse("3fff::9"), RelayAddresses.Unmapped(IPAddress.Parse("3fff::9")));
+        Assert.Equal(IPAddress.Parse("198.51.100.9"), PublicAddresses.Unmapped(IPAddress.Parse("::ffff:198.51.100.9")));
+        Assert.Equal(IPAddress.Parse("3fff::9"), PublicAddresses.Unmapped(IPAddress.Parse("3fff::9")));
     }
 
     [Fact(DisplayName = "BR-BD-011: an address longer than the relay takes is not admitted")]
