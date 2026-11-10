@@ -1,4 +1,6 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
+using Carina.Domain.Programmes;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Tests.DataBroadcast;
 using Carina.Infrastructure.Tests.Thumbnails;
@@ -6,6 +8,8 @@ using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
+using EventId = Carina.Domain.Programmes.EventId;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
@@ -93,6 +97,37 @@ public sealed class NotificationDeliveryJobTests
         Assert.Equal([first.AddDays(-14), first.AddHours(1).AddDays(-14)], machine.Notices.ClearedBefore);
     }
 
+    [Fact(DisplayName = "D-5: the programmes asked to be told of that are settled and fourteen days over are cleared away with the old notices")]
+    public async Task SettledProgrammesLongOverAreClearedAwayWithTheOldNotices()
+    {
+        await using Loop machine = new();
+        DateTime now = machine.Bench.Now + BeforeFirstRound;
+        ProgrammeWatch longOver = Told(4001, now.AddDays(-14).AddMinutes(-31));
+        ProgrammeWatch lately = Told(4002, now.AddDays(-13));
+        machine.Watches.Watches.AddRange([longOver, lately]);
+
+        using NotificationDeliveryJob job = machine.Job();
+        await job.StartAsync(Cancel);
+        await machine.WaitingAgain("the loop never settled into its first wait");
+        machine.Bench.Clock.Turn(BeforeFirstRound);
+        await machine.WaitingAgain("the loop never came back from the first pass");
+        await job.StopAsync(Cancel);
+
+        Assert.Equal([lately.Id], machine.Watches.Watches.Select(watch => watch.Id));
+    }
+
+    private static ProgrammeWatch Told(int carried, DateTime startsAt)
+        => ProgrammeWatch.Rehydrate(
+            ProgrammeWatchId.New(),
+            new ProgrammeId(new NetworkId(32_736), new ServiceId(1024), new EventId(carried)),
+            new WatchedBroadcast(startsAt, startsAt.AddMinutes(30), "A made-up programme", "Made-up Television"),
+            3,
+            [NotificationDestinationId.New()],
+            ProgrammeWatchState.Notified,
+            startsAt.AddMinutes(-3),
+            startsAt.AddHours(-1),
+            startsAt.AddMinutes(-3));
+
     private static IEnumerable<string> Errors<T>(HeardOf<T> said)
         => said.Said.Where(line => line.StartsWith($"{LogLevel.Error} ", StringComparison.Ordinal));
 
@@ -104,6 +139,8 @@ public sealed class NotificationDeliveryJobTests
 
         public NoticesToClear Notices { get; } = new();
 
+        public HeldProgrammeWatches Watches { get; } = new();
+
         public NotificationDeliveryJob Job()
         {
             ServiceCollection services = new();
@@ -111,6 +148,7 @@ public sealed class NotificationDeliveryJobTests
             services.AddScoped<INotificationDeliveryRepository>(_ => Bench.Deliveries);
             services.AddScoped<INotificationDestinationRepository>(_ => Bench.Destinations);
             services.AddScoped<INoticeRepository>(_ => Notices);
+            services.AddScoped<IProgrammeWatchRepository>(_ => Watches);
             services.AddSingleton(Bench.Settings);
             services.AddSingleton(Bench.Seal);
             services.AddSingleton(Bench.Dispatch);

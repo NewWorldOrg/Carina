@@ -30,4 +30,10 @@ public interface IProgrammeWatchRepository
     Task SaveAsync(ProgrammeWatch watch, CancellationToken cancellationToken);
 
     Task RemoveAsync(ProgrammeWatch watch, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Clears away the rows that no longer wait and whose broadcast ended before <paramref name="before"/>, and says
+    /// how many went.
+    /// </summary>
+    Task<int> RemoveSettledBeforeAsync(DateTime before, CancellationToken cancellationToken);
 }

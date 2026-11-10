@@ -76,6 +76,11 @@ public sealed class ProgrammeWatchRepository(CarinaDbContext context) : IProgram
             .ExecuteDeleteAsync(cancellationToken);
     }
 
+    public Task<int> RemoveSettledBeforeAsync(DateTime before, CancellationToken cancellationToken)
+        => context.Set<ProgrammeWatch>()
+            .Where(watch => watch.State != ProgrammeWatchState.Waiting && watch.EndsAt < before)
+            .ExecuteDeleteAsync(cancellationToken);
+
     private async Task WriteAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
     {
         try

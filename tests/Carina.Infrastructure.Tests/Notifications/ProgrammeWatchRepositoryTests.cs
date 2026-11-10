@@ -94,6 +94,32 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         Assert.Null(held.StationName);
     }
 
+    [Fact(DisplayName = "D-5: the rows that no longer wait and whose broadcast ended before a moment are cleared away, and the rest are kept")]
+    public async Task TheRowsThatNoLongerWaitAreClearedAwayOnceTheirBroadcastIsLongOver()
+    {
+        DateTime asked = Asked.AddYears(-1);
+        DateTime starts = asked.AddHours(1);
+        DateTime edge = starts.AddMinutes(10) + WatchedProgrammes.Length;
+        ProgrammeWatchId over = await watched.AskedAsync(
+            await watched.AnnouncedAsync(starts, asked), asked, 3, NotificationDestinationId.New());
+        ProgrammeWatchId onTheEdge = await watched.AskedAsync(
+            await watched.AnnouncedAsync(starts.AddMinutes(10), asked), asked, 3, NotificationDestinationId.New());
+        ProgrammeWatchId waiting = await watched.AskedAsync(
+            await watched.AnnouncedAsync(starts, asked), asked, 3, NotificationDestinationId.New());
+        await WithdrawnAsync(over);
+        await WithdrawnAsync(onTheEdge);
+
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWatchRepository rows = new(context);
+
+        int cleared = await rows.RemoveSettledBeforeAsync(edge, Cancel);
+
+        Assert.Equal(1, cleared);
+        Assert.Null(await rows.FindAsync(over, Cancel));
+        Assert.NotNull(await rows.FindAsync(onTheEdge, Cancel));
+        Assert.NotNull(await rows.FindAsync(waiting, Cancel));
+    }
+
     private async Task WithdrawnAsync(ProgrammeWatchId watch)
     {
         await using CarinaDbContext context = database.Open();

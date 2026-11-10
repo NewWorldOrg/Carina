@@ -364,5 +364,8 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
 
         public Task RemoveAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
             => held.RemoveAsync(watch, cancellationToken);
+
+        public Task<int> RemoveSettledBeforeAsync(DateTime before, CancellationToken cancellationToken)
+            => held.RemoveSettledBeforeAsync(before, cancellationToken);
     }
 }

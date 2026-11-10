@@ -7,8 +7,8 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Notifications;
 
 /// <summary>
-/// The loop that sends the notices that wait, one pass at a time, and now and then clears away the notices too old
-/// to keep.
+/// The loop that sends the notices that wait, one pass at a time, and now and then clears away the notices, and the
+/// settled programmes asked to be told of, too old to keep.
 /// </summary>
 public sealed class NotificationDeliveryJob(
     IServiceScopeFactory scopes,
@@ -79,10 +79,16 @@ public sealed class NotificationDeliveryJob(
         int removed = await scope.ServiceProvider
             .GetRequiredService<INoticeRepository>()
             .RemoveBeforeAsync(now - settings.Keeps, cancellationToken);
+        int forgotten = await scope.ServiceProvider
+            .GetRequiredService<IProgrammeWatchRepository>()
+            .RemoveSettledBeforeAsync(now - settings.Keeps, cancellationToken);
 
-        if (removed > 0)
+        if (removed + forgotten > 0)
         {
-            logger.LogInformation("Cleared away {Removed} notice(s) too old to keep.", removed);
+            logger.LogInformation(
+                "Cleared away {Removed} notice(s) and {Forgotten} programme(s) asked to be told of, too old to keep.",
+                removed,
+                forgotten);
         }
     }
 }

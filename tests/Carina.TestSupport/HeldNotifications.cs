@@ -194,6 +194,9 @@ public sealed class HeldProgrammeWatches : IProgrammeWatchRepository
         return Task.CompletedTask;
     }
 
+    public Task<int> RemoveSettledBeforeAsync(DateTime before, CancellationToken cancellationToken)
+        => Task.FromResult(Watches.RemoveAll(held => held.State is not ProgrammeWatchState.Waiting && held.EndsAt < before));
+
     private static ProgrammeWatch Copy(ProgrammeWatch watch)
         => ProgrammeWatch.Rehydrate(
             watch.Id,
