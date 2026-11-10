@@ -472,6 +472,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             + (await ledgers.NoticesOfAsync(failedAhead.Value)).Count
             + (await ledgers.NoticesOfAsync(fellAhead.Value)).Count;
         await ledgers.LookAsync(ahead);
+        await ledgers.ReceptionCameBackAsync(fellAhead, ahead.AddMinutes(1));
 
         Assert.Equal([nameof(NoticeKind.RecordingCompleted)], endedNowAtFirst);
         Assert.Equal(0, aheadAtFirst);
