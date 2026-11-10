@@ -47,6 +47,8 @@ public sealed class RuleRetirementRuleTests
             [
                 "Carina.Infrastructure.Persistence.Repositories.EncodeDestinationRepository.RemoveAsync",
                 "Carina.Infrastructure.Persistence.Repositories.EncodeProfileRepository.RemoveAsync",
+                "Carina.Infrastructure.Persistence.Repositories.NotificationDestinationRepository.RemoveAsync",
+                "Carina.Infrastructure.Persistence.Repositories.NotificationRuleRepository.RemoveAsync",
                 "Carina.Infrastructure.Persistence.Repositories.ReservationRepository.WithdrawAsync",
                 "Carina.Infrastructure.Persistence.Repositories.RuleRepository.RemoveAsync",
             ],
