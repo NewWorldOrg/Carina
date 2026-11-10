@@ -132,7 +132,7 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
             null,
             BroadcastGroupRole.Standalone,
             began,
-            null);
+            new TunerDeviceId("synthetic-0"));
 
         await using CarinaDbContext context = database.Open();
         context.Add(recording);
@@ -158,6 +158,18 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
         await context.SaveChangesAsync(Cancel);
     }
 
+    public async Task RecordingEndedScrambledAsync(RecordingId id, DateTime at)
+    {
+        await using CarinaDbContext context = database.Open();
+        Recording recording = await context.FindAsync<Recording>([id], Cancel)
+            ?? throw new InvalidOperationException("The recording to end was never written.");
+
+        recording.Abort(at);
+        recording.Note(new OutcomeDetail(RecordingFault.ScramblingUnresolved, null, "the picture was still scrambled when the window closed", at));
+        recording.Settle(RecordingOutcome.Complete, 1_200_000, at);
+        await context.SaveChangesAsync(Cancel);
+    }
+
     public async Task<ReservationId> ReservationIsPlannedAsync(string name, DateTime startsAt)
     {
         Reservation reservation = ReservationFixtures.Planned(
@@ -178,7 +190,8 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
         RecordingOutcome? recordingOutcome = null,
         IReadOnlyList<RecordingFault>? faults = null,
         IReadOnlyList<Guid>? recordedInstead = null,
-        RetryResult? retryResult = null)
+        RetryResult? retryResult = null,
+        RetryGiveUp? gaveUpBecause = null)
     {
         ReservationOutcomeId id = ReservationOutcomeId.New();
         ReservationOutcome outcome = ReservationOutcome.Rehydrate(
@@ -196,7 +209,8 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
             faults ?? [],
             recordedInstead ?? [],
             at,
-            retryResult);
+            retryResult,
+            gaveUpBecause);
 
         await using CarinaDbContext context = database.Open();
         await new ReservationOutcomeRepository(context).AddAsync(outcome, Cancel);

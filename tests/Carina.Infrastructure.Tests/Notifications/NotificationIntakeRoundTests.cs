@@ -34,14 +34,15 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             now,
             [NoticeKind.RecordingStarted, NoticeKind.RecordingCompleted],
             [destination]);
+        await ledgers.LookAsync(now);
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-20));
         await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Complete, now.AddMinutes(-1));
 
         NotificationIntake first = await ledgers.LookAsync(now);
         NotificationIntake second = await ledgers.LookAsync(now + BetweenLooks);
 
-        Assert.True(first.Taken >= 2);
-        Assert.True(first.Queued >= 2);
+        Assert.Equal(2, first.Taken);
+        Assert.Equal(2, first.Queued);
         Assert.Equal(0, second.Taken);
         Assert.Equal(0, second.Queued);
         Assert.Equal(
@@ -99,7 +100,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         ReservationId reservation = ReservationId.New();
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-20), reservation);
         await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Failed, now.AddMinutes(-5));
-        ReservationOutcomeId outcome = await ledgers.OutcomeAsync(
+        await ledgers.OutcomeAsync(
             ReservationOutcomeKind.RecordingFailure,
             now.AddMinutes(-5),
             reservation,
@@ -110,7 +111,132 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         await ledgers.LookAsync(now + BetweenLooks);
 
         Assert.Equal([NoticeKind.RecordingStarted], await ledgers.KindsOfAsync(recording.Value));
-        Assert.Equal([NoticeKind.ReservationMissed], await ledgers.KindsOfAsync(outcome.Value));
+        Assert.Equal([NoticeKind.ReservationMissed], await ledgers.KindsOfAsync(reservation.Value));
+    }
+
+    [Fact(DisplayName = "BR-ND-005: a recording cut short that has a reservation is told of once, from the recording")]
+    public async Task ARecordingCutShortThatHasAReservationIsToldOfOnceFromTheRecording()
+    {
+        DateTime now = await ADayOfItsOwnAsync(18);
+        ReservationId reservation = ReservationId.New();
+        RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-20), reservation);
+        await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Truncated, now.AddMinutes(-5));
+        ReservationOutcomeId outcome = await ledgers.OutcomeAsync(
+            ReservationOutcomeKind.RecordingFailure,
+            now.AddMinutes(-5),
+            reservation,
+            recordingOutcome: RecordingOutcome.Truncated,
+            faults: [RecordingFault.ShortOfTheWindow]);
+
+        await ledgers.LookAsync(now);
+        await ledgers.LookAsync(now + BetweenLooks);
+
+        Assert.Equal(
+            [NoticeKind.RecordingStarted, NoticeKind.RecordingTruncated],
+            await ledgers.KindsOfAsync(recording.Value));
+        Assert.Empty(await ledgers.NoticesOfAsync(reservation.Value));
+        Assert.Empty(await ledgers.NoticesOfAsync(outcome.Value));
+    }
+
+    [Fact(DisplayName = "BR-ND-005: a recording that ran its length but stayed scrambled, with a reservation, is told of once as not recorded")]
+    public async Task ARecordingThatStayedScrambledWithAReservationIsToldOfOnceAsNotRecorded()
+    {
+        DateTime now = await ADayOfItsOwnAsync(19);
+        ReservationId reservation = ReservationId.New();
+        RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-20), reservation);
+        await ledgers.RecordingEndedScrambledAsync(recording, now.AddMinutes(-5));
+        await ledgers.OutcomeAsync(
+            ReservationOutcomeKind.RecordingFailure,
+            now.AddMinutes(-5),
+            reservation,
+            recordingOutcome: RecordingOutcome.Complete,
+            faults: [RecordingFault.ScramblingUnresolved]);
+
+        await ledgers.LookAsync(now);
+        await ledgers.LookAsync(now + BetweenLooks);
+
+        Assert.Equal([NoticeKind.RecordingStarted], await ledgers.KindsOfAsync(recording.Value));
+        Notice notice = Assert.Single(await ledgers.NoticesOfAsync(reservation.Value));
+        Assert.Equal(NoticeKind.ReservationMissed, notice.Kind);
+        Assert.Contains("スクランブルが解けなかった", notice.Body, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-ND-005: a recording that ran its length but stayed scrambled, with no reservation, is told of once as failed")]
+    public async Task ARecordingThatStayedScrambledWithNoReservationIsToldOfOnceAsFailed()
+    {
+        DateTime now = await ADayOfItsOwnAsync(20);
+        RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-20));
+        await ledgers.RecordingEndedScrambledAsync(recording, now.AddMinutes(-5));
+
+        await ledgers.LookAsync(now);
+        await ledgers.LookAsync(now + BetweenLooks);
+
+        IReadOnlyList<Notice> notices = await ledgers.NoticesOfAsync(recording.Value);
+        Assert.Equal([NoticeKind.RecordingStarted, NoticeKind.RecordingFailed], notices.Select(notice => notice.Kind));
+        Assert.Contains("スクランブルが解けなかった", notices[1].Body, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-ND-004: a recording that failed and the retries given up after it are told of once for the reservation")]
+    public async Task ARecordingThatFailedAndTheRetriesGivenUpAfterItAreToldOfOnce()
+    {
+        DateTime now = await ADayOfItsOwnAsync(21);
+        ReservationId reservation = ReservationId.New();
+        await ledgers.OutcomeAsync(
+            ReservationOutcomeKind.RecordingFailure,
+            now.AddMinutes(-5),
+            reservation,
+            recordingOutcome: RecordingOutcome.Failed,
+            faults: [RecordingFault.ShortOfTheWindow]);
+
+        await ledgers.LookAsync(now);
+        await ledgers.OutcomeAsync(
+            ReservationOutcomeKind.GaveUpRetrying,
+            now.AddSeconds(5),
+            reservation,
+            gaveUpBecause: RetryGiveUp.BroadcastOver);
+        await ledgers.LookAsync(now + BetweenLooks);
+
+        Notice notice = Assert.Single(await ledgers.NoticesOfAsync(reservation.Value));
+        Assert.Equal(NoticeKind.ReservationMissed, notice.Kind);
+        Assert.Contains("録画の失敗", notice.Body, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-ND-004: a reservation missed and given up on in the same look is told of once")]
+    public async Task AReservationMissedAndGivenUpOnInTheSameLookIsToldOfOnce()
+    {
+        DateTime now = await ADayOfItsOwnAsync(22);
+        ReservationId reservation = ReservationId.New();
+        await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, now.AddMinutes(-4), reservation);
+        await ledgers.OutcomeAsync(
+            ReservationOutcomeKind.GaveUpRetrying,
+            now.AddMinutes(-3),
+            reservation,
+            gaveUpBecause: RetryGiveUp.BroadcastOver);
+
+        await ledgers.LookAsync(now);
+
+        Notice notice = Assert.Single(await ledgers.NoticesOfAsync(reservation.Value));
+        Assert.Contains("取り逃し", notice.Body, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-ND-004: when the giving up is read first, the miss written late does not tell of the reservation again")]
+    public async Task WhenTheGivingUpIsReadFirstTheMissWrittenLateDoesNotTellAgain()
+    {
+        DateTime now = await ADayOfItsOwnAsync(23);
+        ReservationId reservation = ReservationId.New();
+        await ledgers.OutcomeAsync(
+            ReservationOutcomeKind.GaveUpRetrying,
+            now.AddMinutes(-2),
+            reservation,
+            gaveUpBecause: RetryGiveUp.BroadcastOver);
+
+        await ledgers.LookAsync(now);
+        await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, now.AddMinutes(-4), reservation);
+        NotificationIntake later = await ledgers.LookAsync(now + BetweenLooks);
+
+        Assert.Equal(0, later.Taken);
+        Notice notice = Assert.Single(await ledgers.NoticesOfAsync(reservation.Value));
+        Assert.Contains("再試行の打ち切り", notice.Body, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "BR-ND-005: a failed recording that has no reservation is told of from the recording")]
@@ -141,7 +267,8 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             tuneFailure: TuneFailureKind.NoLock,
             faults: [RecordingFault.TuneFailed]);
         ReservationOutcomeId returned = await ledgers.OutcomeAsync(ReservationOutcomeKind.ProgrammeReturned, now.AddMinutes(-3));
-        ReservationOutcomeId missed = await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, now.AddMinutes(-3));
+        ReservationId missed = ReservationId.New();
+        await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, now.AddMinutes(-3), missed);
 
         await ledgers.LookAsync(now);
 

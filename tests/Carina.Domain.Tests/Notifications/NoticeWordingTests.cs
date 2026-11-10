@@ -541,7 +541,19 @@ public sealed class NoticeWordingTests
             Faults: []);
 
     private static ReservationOutcomeNoticeSource Outcome(ReservationOutcomeKind kind)
-        => new(RowId, kind, Programme, Station, Starts, Ends, Starts.AddHours(-1), Faults: [], GaveUpBecause: null, RecordedInstead: []);
+        => new(
+            RowId,
+            ReservationId: Guid.NewGuid(),
+            kind,
+            Programme,
+            Station,
+            Starts,
+            Ends,
+            Starts.AddHours(-1),
+            Recorded: kind is ReservationOutcomeKind.RecordingFailure ? RecordingOutcome.Failed : null,
+            Faults: [],
+            GaveUpBecause: null,
+            RecordedInstead: []);
 
     private static EncodeNoticeSource Encode(EncodeFailure? failure)
         => new(

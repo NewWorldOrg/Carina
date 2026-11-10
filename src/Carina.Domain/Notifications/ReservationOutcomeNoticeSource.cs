@@ -5,12 +5,14 @@ namespace Carina.Domain.Notifications;
 
 public sealed record ReservationOutcomeNoticeSource(
     Guid OutcomeId,
+    Guid ReservationId,
     ReservationOutcomeKind Kind,
     string ProgrammeName,
     string? Station,
     DateTime StartsAt,
     DateTime EndsAt,
     DateTime OccurredAt,
+    RecordingOutcome? Recorded,
     IReadOnlyList<RecordingFault> Faults,
     RetryGiveUp? GaveUpBecause,
     IReadOnlyList<string> RecordedInstead) : NoticeSource
@@ -26,11 +28,14 @@ public sealed record ReservationOutcomeNoticeSource(
             [ReservationOutcomeKind.ProgrammeGone] = NoticeKind.ProgrammeMoved,
         };
 
+    private bool IsLeftToTheRecording
+        => Kind is ReservationOutcomeKind.RecordingFailure && Recorded is RecordingOutcome.Truncated;
+
     public override IEnumerable<NoticeHappening> Happenings()
     {
-        if (KindsByOutcome.TryGetValue(Kind, out NoticeKind kind))
+        if (!IsLeftToTheRecording && KindsByOutcome.TryGetValue(Kind, out NoticeKind kind))
         {
-            yield return new NoticeHappening(kind, OutcomeId, OccurredAt, this);
+            yield return new NoticeHappening(kind, kind is NoticeKind.ReservationMissed ? ReservationId : OutcomeId, OccurredAt, this);
         }
     }
 }

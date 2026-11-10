@@ -180,12 +180,14 @@ public sealed class NoticeSourceReader(CarinaDbContext context) : INoticeSourceR
         Dictionary<Guid, string> reserved)
         => new(
             outcome.Id.Value,
+            outcome.ReservationId.Value,
             outcome.Kind,
             outcome.SnapshotName,
             stations.GetValueOrDefault((outcome.NetworkId, outcome.ServiceId)),
             outcome.EffectiveStartAt,
             outcome.EffectiveEndAt,
             outcome.OccurredAt,
+            outcome.RecordingOutcome,
             outcome.Faults,
             outcome.GaveUpBecause,
             [.. outcome.RecordedInstead.Where(reserved.ContainsKey).Select(id => reserved[id])]);

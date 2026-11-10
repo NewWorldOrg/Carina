@@ -20,7 +20,6 @@ public sealed record RecordingNoticeSource(
         {
             [RecordingOutcome.Complete] = NoticeKind.RecordingCompleted,
             [RecordingOutcome.Truncated] = NoticeKind.RecordingTruncated,
-            [RecordingOutcome.Failed] = NoticeKind.RecordingFailed,
         };
 
     public override IEnumerable<NoticeHappening> Happenings()
@@ -33,6 +32,10 @@ public sealed record RecordingNoticeSource(
         }
     }
 
+    private bool EndedInFailure(RecordingOutcome outcome)
+        => outcome is RecordingOutcome.Failed
+            || (outcome is RecordingOutcome.Complete && Faults.Contains(RecordingFault.ScramblingUnresolved));
+
     private NoticeHappening? Settled()
     {
         if (Outcome is not { } outcome || SettledAt is not { } settledAt)
@@ -40,9 +43,9 @@ public sealed record RecordingNoticeSource(
             return null;
         }
 
-        if (outcome is RecordingOutcome.Failed && Reserved)
+        if (EndedInFailure(outcome))
         {
-            return null;
+            return Reserved ? null : new NoticeHappening(NoticeKind.RecordingFailed, RecordingId, settledAt, this);
         }
 
         return KindsBySettledOutcome.TryGetValue(outcome, out NoticeKind kind)
