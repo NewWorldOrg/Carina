@@ -62,10 +62,12 @@ public sealed class NoticeLineTests
         Assert.Single(rig.Network.Connected);
     }
 
-    [Theory(DisplayName = "BR-NS-002: a 401 and a 404 are a rejection that says the address is gone")]
+    [Theory(DisplayName = "BR-NS-002: a 401, a 403, a 404 and a 410 are a rejection that says the address is gone")]
     [InlineData(401)]
+    [InlineData(403)]
     [InlineData(404)]
-    public async Task A401AndA404SayTheAddressIsGone(int status)
+    [InlineData(410)]
+    public async Task ARejectionOfTheAddressSaysTheAddressIsGone(int status)
     {
         await using WebhookRig rig = new(_ => CannedAnswer.Text(status, "no_service"));
 
@@ -76,8 +78,8 @@ public sealed class NoticeLineTests
 
     [Theory(DisplayName = "BR-NS-001: any other 4xx is a rejection that leaves the address standing")]
     [InlineData(400)]
-    [InlineData(403)]
-    [InlineData(410)]
+    [InlineData(402)]
+    [InlineData(405)]
     [InlineData(413)]
     public async Task AnyOther4xxIsARejectionThatLeavesTheAddressStanding(int status)
     {

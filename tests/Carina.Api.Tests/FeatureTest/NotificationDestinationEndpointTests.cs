@@ -273,6 +273,8 @@ public sealed class NotificationDestinationEndpointTests
     [InlineData(500, "serverFailed")]
     [InlineData(404, "rejected")]
     [InlineData(401, "rejected")]
+    [InlineData(403, "rejected")]
+    [InlineData(410, "rejected")]
     [InlineData(429, "rateLimited")]
     public async Task AFailedTrialNamesTheFailure(int answered, string word)
     {

@@ -146,13 +146,19 @@ public sealed class NotificationDeliveryRoundTests
         Assert.Equal(DeliveryBench.Began.AddMinutes(10), delivery.NextAttemptAt);
     }
 
-    [Theory(DisplayName = "BR-NS-002: a 401 or a 404 turns the destination off, and what else waited for it is given up unsent")]
-    [InlineData(401)]
-    [InlineData(404)]
-    public async Task AnAddressThatIsGoneTurnsTheDestinationOff(int status)
+    [Theory(DisplayName = "BR-NS-002: a 401, a 403, a 404 or a 410 turns the destination off, Slack or Discord, and what else waited for it is given up unsent")]
+    [InlineData(401, false)]
+    [InlineData(403, false)]
+    [InlineData(404, false)]
+    [InlineData(410, false)]
+    [InlineData(401, true)]
+    [InlineData(403, true)]
+    [InlineData(404, true)]
+    [InlineData(410, true)]
+    public async Task AnAddressThatIsGoneTurnsTheDestinationOff(int status, bool toSlack)
     {
         await using DeliveryBench bench = new(_ => CannedAnswer.Text(status, "unknown webhook"));
-        NotificationDestination destination = bench.Destination(WebhookRig.Discord);
+        NotificationDestination destination = bench.Destination(toSlack ? WebhookRig.Slack : WebhookRig.Discord);
         NotificationDelivery first = bench.Waiting(destination, DeliveryBench.Began);
         NotificationDelivery second = bench.Waiting(destination, DeliveryBench.Began.AddSeconds(1));
 
@@ -170,8 +176,10 @@ public sealed class NotificationDeliveryRoundTests
 
     [Theory(DisplayName = "BR-NS-001: any other 4xx, and a redirect, gives up that one notice and leaves the destination on")]
     [InlineData(400)]
-    [InlineData(403)]
+    [InlineData(402)]
+    [InlineData(301)]
     [InlineData(302)]
+    [InlineData(307)]
     public async Task AnotherRejectionGivesUpOnlyThatNotice(int status)
     {
         int answering = status;

@@ -120,7 +120,7 @@ public sealed class NoticeLine : IDisposable
         {
             >= 200 and < 300 => NoticeAnswer.Taken,
             429 => new NoticeAnswer(NoticeFailure.RateLimited, false, Asked(response)),
-            401 or 404 => new NoticeAnswer(NoticeFailure.Rejected, true, null),
+            401 or 403 or 404 or 410 => new NoticeAnswer(NoticeFailure.Rejected, true, null),
             >= 500 => NoticeAnswer.Failed(NoticeFailure.ServerFailed),
             _ => NoticeAnswer.Failed(NoticeFailure.Rejected),
         };
