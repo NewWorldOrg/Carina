@@ -256,6 +256,48 @@ public sealed class NoticeWordingTests
         Assert.Equal(link, words.Link);
     }
 
+    [Theory(DisplayName = "an encode that ended is worded with how far it shrank from the recording")]
+    [InlineData(2_254_857_830, 241_172_480, "大きさ: 2.1 GB → 230 MB(元の 11%)")]
+    [InlineData(3_221_225_472, 1_610_612_736, "大きさ: 3.0 GB → 1.5 GB(元の 50%)")]
+    [InlineData(1_048_576, 524_288, "大きさ: 1 MB → 512 KB(元の 50%)")]
+    [InlineData(1_073_741_824, 1_181_116_006, "大きさ: 1.0 GB → 1.1 GB(元の 110%)")]
+    [InlineData(1_073_741_824, 1_048_576, "大きさ: 1.0 GB → 1 MB(元の 1% 未満)")]
+    [InlineData(2_048, 100, "大きさ: 2 KB → 1 KB(元の 5%)")]
+    public void AnEncodeThatEndedIsWordedWithHowFarItShrank(long sourceBytes, long artefactBytes, string size)
+    {
+        EncodeNoticeSource ended = EncodeThatEnded() with { SourceBytes = sourceBytes, ArtefactBytes = artefactBytes };
+
+        NoticeWords words = Worded(ended, NoticeKind.EncodeCompleted);
+
+        Assert.Equal($"{Programme}\n形式: H.265\n{size}", words.Body);
+    }
+
+    [Theory(DisplayName = "an encode that ended says nothing of its size when either file was not weighed or weighs nothing")]
+    [InlineData(null, 241_172_480L)]
+    [InlineData(2_254_857_830L, null)]
+    [InlineData(0L, 241_172_480L)]
+    [InlineData(2_254_857_830L, 0L)]
+    public void AnEncodeThatEndedSaysNothingOfASizeItDoesNotKnow(long? sourceBytes, long? artefactBytes)
+    {
+        EncodeNoticeSource ended = EncodeThatEnded() with { SourceBytes = sourceBytes, ArtefactBytes = artefactBytes };
+
+        NoticeWords words = Worded(ended, NoticeKind.EncodeCompleted);
+
+        Assert.Equal($"{Programme}\n形式: H.265", words.Body);
+    }
+
+    [Theory(DisplayName = "an encode that started or failed says nothing of its size")]
+    [InlineData(NoticeKind.EncodeStarted)]
+    [InlineData(NoticeKind.EncodeFailed)]
+    public void AnEncodeThatStartedOrFailedSaysNothingOfItsSize(NoticeKind kind)
+    {
+        EncodeNoticeSource weighed = Encode(EncodeFailure.TimedOut) with { SourceBytes = 2_254_857_830, ArtefactBytes = 241_172_480 };
+
+        NoticeWords words = Worded(weighed, kind);
+
+        Assert.DoesNotContain("大きさ", words.Body, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "an encode whose profile is gone is worded with the programme alone")]
     public void AnEncodeWhoseProfileIsGoneIsWordedWithTheProgrammeAlone()
     {
@@ -564,7 +606,9 @@ public sealed class NoticeWordingTests
             failure is null ? EncodeJobStatus.Running : EncodeJobStatus.Failed,
             Ends.AddMinutes(1),
             failure is null ? null : Ends.AddMinutes(2),
-            failure);
+            failure,
+            SourceBytes: null,
+            ArtefactBytes: null);
 
     private static EncodeNoticeSource EncodeThatEnded()
         => Encode(null) with { Status = EncodeJobStatus.Completed, EndedAt = Ends.AddMinutes(2) };

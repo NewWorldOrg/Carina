@@ -13,7 +13,7 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 /// Reads the recording, reservation outcome, encode and quality ledgers for the rows a notice may be
 /// taken from, with the names their words need.
 /// </summary>
-public sealed class NoticeSourceReader(CarinaDbContext context) : INoticeSourceReader
+public sealed class NoticeSourceReader(CarinaDbContext context, IEncodeArtefactWeigher artefacts) : INoticeSourceReader
 {
     public async Task<IReadOnlyList<NoticeSource>> SinceAsync(DateTime since, CancellationToken cancellationToken)
     {
@@ -110,7 +110,7 @@ public sealed class NoticeSourceReader(CarinaDbContext context) : INoticeSourceR
         List<HeldName> names = await context.Set<Recording>()
             .AsNoTracking()
             .Where(recording => recorded.Contains(recording.Id))
-            .Select(recording => new HeldName(recording.Id, recording.SnapshotName))
+            .Select(recording => new HeldName(recording.Id, recording.SnapshotName, recording.FileSizeObserved))
             .ToListAsync(cancellationToken);
 
         List<HeldCodec> codecs = await context.Set<EncodeProfile>()
@@ -119,7 +119,7 @@ public sealed class NoticeSourceReader(CarinaDbContext context) : INoticeSourceR
             .Select(profile => new HeldCodec(profile.Id, profile.Codec))
             .ToListAsync(cancellationToken);
 
-        Dictionary<RecordingId, string> nameOf = names.ToDictionary(name => name.Recording, name => name.Name);
+        Dictionary<RecordingId, HeldName> recordingOf = names.ToDictionary(name => name.Recording);
         Dictionary<EncodeProfileId, EncodeCodec> codecOf = codecs.ToDictionary(codec => codec.Profile, codec => codec.Codec);
 
         return
@@ -127,14 +127,21 @@ public sealed class NoticeSourceReader(CarinaDbContext context) : INoticeSourceR
             .. jobs.Select(job => new EncodeNoticeSource(
                 job.Id.Value,
                 job.RecordingId.Value,
-                nameOf.GetValueOrDefault(job.RecordingId, string.Empty),
+                recordingOf.GetValueOrDefault(job.RecordingId)?.Name ?? string.Empty,
                 codecOf.TryGetValue(job.ProfileId, out EncodeCodec codec) ? codec : null,
                 job.Status,
                 job.StartedAt,
                 job.EndedAt,
-                job.Failure?.Failure)),
+                job.Failure?.Failure,
+                recordingOf.GetValueOrDefault(job.RecordingId)?.Bytes,
+                Weighed(job))),
         ];
     }
+
+    private long? Weighed(EncodeJob job)
+        => job.Status is EncodeJobStatus.Completed && job.ArtefactName is { } name
+            ? artefacts.Weigh(job.OutputRoot, name)
+            : null;
 
     private async Task<List<NoticeSource>> IncidentsAsync(DateTime since, CancellationToken cancellationToken)
     {
@@ -210,7 +217,7 @@ public sealed class NoticeSourceReader(CarinaDbContext context) : INoticeSourceR
 
     private sealed record HeldReservation(ReservationId Id, string Name);
 
-    private sealed record HeldName(RecordingId Recording, string Name);
+    private sealed record HeldName(RecordingId Recording, string Name, long? Bytes);
 
     private sealed record HeldCodec(EncodeProfileId Profile, EncodeCodec Codec);
 }

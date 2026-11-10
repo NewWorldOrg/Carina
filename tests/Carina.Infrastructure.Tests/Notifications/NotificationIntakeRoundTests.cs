@@ -552,6 +552,43 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         Assert.Equal(NoticeTone.Failure, notices[1].Tone);
     }
 
+    [Fact(DisplayName = "An encode that completes is told of with how far the artefact shrank from the recording")]
+    public async Task AnEncodeThatCompletesIsToldOfWithHowFarItShrank()
+    {
+        DateTime now = await ADayOfItsOwnAsync(27);
+        await ledgers.EmptyTheEncodesAsync();
+        RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-90));
+        await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Complete, now.AddMinutes(-60));
+        EncodeJobId job = await ledgers.EncodeIsQueuedAsync(recording, now.AddMinutes(-40));
+        await ledgers.EncodeStartedAsync(job, now.AddMinutes(-4));
+        await ledgers.EncodeCompletedAsync(job, now.AddMinutes(-2));
+
+        await ledgers.LookAsync(now, artefactBytes: 300_000);
+
+        IReadOnlyList<Notice> notices = await ledgers.NoticesOfAsync(job.Value);
+        Assert.Equal([NoticeKind.EncodeStarted, NoticeKind.EncodeCompleted], notices.Select(notice => notice.Kind));
+        Assert.DoesNotContain("大きさ", notices[0].Body, StringComparison.Ordinal);
+        Assert.EndsWith("大きさ: 1 MB → 293 KB(元の 25%)", notices[1].Body, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "An encode that completes is told of without a size when its artefact cannot be weighed")]
+    public async Task AnEncodeWhoseArtefactCannotBeWeighedIsToldOfWithoutASize()
+    {
+        DateTime now = await ADayOfItsOwnAsync(28);
+        await ledgers.EmptyTheEncodesAsync();
+        RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-90));
+        await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Complete, now.AddMinutes(-60));
+        EncodeJobId job = await ledgers.EncodeIsQueuedAsync(recording, now.AddMinutes(-40));
+        await ledgers.EncodeStartedAsync(job, now.AddMinutes(-4));
+        await ledgers.EncodeCompletedAsync(job, now.AddMinutes(-2));
+
+        await ledgers.LookAsync(now);
+
+        Notice completed = (await ledgers.NoticesOfAsync(job.Value))[^1];
+        Assert.Equal(NoticeKind.EncodeCompleted, completed.Kind);
+        Assert.DoesNotContain("大きさ", completed.Body, StringComparison.Ordinal);
+    }
+
     private static Notice ANotice(Guid source, DateTime at)
         => Notice.Take(
             NoticeId.New(),

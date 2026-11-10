@@ -10,7 +10,9 @@ public sealed record EncodeNoticeSource(
     EncodeJobStatus Status,
     DateTime? StartedAt,
     DateTime? EndedAt,
-    EncodeFailure? Failure) : NoticeSource
+    EncodeFailure? Failure,
+    long? SourceBytes,
+    long? ArtefactBytes) : NoticeSource
 {
     private static readonly IReadOnlyDictionary<EncodeJobStatus, NoticeKind> KindsByEnding =
         new Dictionary<EncodeJobStatus, NoticeKind>

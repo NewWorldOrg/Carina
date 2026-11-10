@@ -418,6 +418,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<EncodeSettings>(provider =>
             provider.GetRequiredService<IOptions<EncodingOptions>>().Value.Read());
         services.TryAddSingleton<EncodePlaces>();
+        services.TryAddSingleton<IEncodeArtefactWeigher, LocalEncodeArtefactWeigher>();
         services.TryAddSingleton(new NotificationIntakeSettings());
         services.TryAddSingleton(NoticeLinkBase.None);
         services.TryAddSingleton(new NotificationDeliverySettings());

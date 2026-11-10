@@ -52,11 +52,11 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
         await context.Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
     }
 
-    public async Task<NotificationIntake> LookAsync(DateTime now, NoticeLinkBase? links = null)
+    public async Task<NotificationIntake> LookAsync(DateTime now, NoticeLinkBase? links = null, long? artefactBytes = null)
     {
         await using CarinaDbContext context = database.Open();
         NotificationIntakeRound round = new(
-            new NoticeSourceReader(context),
+            new NoticeSourceReader(context, new ArtefactsThatWeigh(artefactBytes)),
             new NoticeRepository(context),
             new NotificationRuleRepository(context),
             new NotificationDestinationRepository(context),
@@ -247,6 +247,15 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
 
     public Task EncodeStartedAsync(EncodeJobId id, DateTime at) => EncodeAsync(id, job => job.Start(at));
 
+    public Task EncodeCompletedAsync(EncodeJobId id, DateTime at)
+        => EncodeAsync(
+            id,
+            job =>
+            {
+                job.Name(EncodeFileName.Artefact(job.RecordingId, job.ProfileId));
+                job.Complete(at);
+            });
+
     public Task EncodeFailedAsync(EncodeJobId id, DateTime at)
         => EncodeAsync(id, job => job.Fail(EncodeFailure.FfmpegExitedNonZero, "exit 1", at));
 
@@ -353,6 +362,11 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
 
         turn(incident);
         await new QualityIncidentRepository(context).SaveAsync(incident, Cancel);
+    }
+
+    private sealed class ArtefactsThatWeigh(long? bytes) : IEncodeArtefactWeigher
+    {
+        public long? Weigh(OutputRoot root, EncodeFileName name) => bytes;
     }
 
     private sealed class StoppedClock(DateTime at) : TimeProvider
