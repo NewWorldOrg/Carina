@@ -7,7 +7,8 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Notifications;
 
 /// <summary>
-/// The loop that reads the ledgers for what happened and takes it into the notice ledger, one look at a time.
+/// The loop that reads the ledgers for what happened, and the programmes asked to be told of, and takes what there
+/// is to tell into the notice ledger, one look at a time. Either of the two may fail without stopping the other.
 /// </summary>
 public sealed class NotificationIntakeJob(
     IServiceScopeFactory scopes,
@@ -32,33 +33,36 @@ public sealed class NotificationIntakeJob(
 
             waiting = settings.BetweenLooks;
 
-            try
-            {
-                NotificationIntake took = await TakeAsync(stoppingToken);
-
-                if (took.Taken > 0)
-                {
-                    logger.LogInformation(
-                        "Took {Taken} notice(s) and queued {Queued} delivery(ies).",
-                        took.Taken,
-                        took.Queued);
-                }
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception failure)
-            {
-                logger.LogError(failure, "A look for what to give notice of failed; the next one is unaffected.");
-            }
+            await LookAsync(
+                provider => provider.GetRequiredService<NotificationIntakeRound>().TakeAsync(stoppingToken),
+                stoppingToken);
+            await LookAsync(
+                provider => provider.GetRequiredService<ProgrammeWatchRound>().TakeAsync(stoppingToken),
+                stoppingToken);
         }
     }
 
-    private async Task<NotificationIntake> TakeAsync(CancellationToken cancellationToken)
+    private async Task LookAsync(Func<IServiceProvider, Task<NotificationIntake>> take, CancellationToken stoppingToken)
     {
-        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        try
+        {
+            await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+            NotificationIntake took = await take(scope.ServiceProvider);
 
-        return await scope.ServiceProvider.GetRequiredService<NotificationIntakeRound>().TakeAsync(cancellationToken);
+            if (took.Taken > 0)
+            {
+                logger.LogInformation(
+                    "Took {Taken} notice(s) and queued {Queued} delivery(ies).",
+                    took.Taken,
+                    took.Queued);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception failure)
+        {
+            logger.LogError(failure, "A look for what to give notice of failed; the next one is unaffected.");
+        }
     }
 }

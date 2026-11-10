@@ -39,7 +39,8 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
         await using NpgsqlConnection connection = new(context.Database.GetConnectionString());
         await connection.OpenAsync(Cancel);
         await using NpgsqlCommand emptying = new(
-            "DELETE FROM notification_event; DELETE FROM notification_rule; DELETE FROM notification_destination;",
+            "DELETE FROM notification_event; DELETE FROM notification_rule; DELETE FROM notification_destination; "
+            + "DELETE FROM notification_watch;",
             connection);
         await emptying.ExecuteNonQueryAsync(Cancel);
     }

@@ -1,0 +1,273 @@
+using Carina.Domain.Notifications;
+using Carina.Domain.Programmes;
+using Carina.Domain.Reservations;
+using Carina.Infrastructure.Notifications;
+using Carina.Infrastructure.Persistence;
+
+using Microsoft.EntityFrameworkCore;
+
+namespace Carina.Infrastructure.Tests.Notifications;
+
+[Collection(RepositoryDatabaseCollection.Name)]
+[Trait("Category", "DbIntegration")]
+public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
+{
+    private const int Lead = 3;
+
+    private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private static readonly DateTime Asked = new(2031, 5, 1, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime Starts = Asked.AddHours(1);
+
+    private static readonly TimeSpan BetweenLooks = TimeSpan.FromSeconds(15);
+
+    private readonly NoticeLedgers ledgers = new(database);
+
+    private readonly WatchedProgrammes watched = new(database);
+
+    [Fact(DisplayName = "BR-NS-003: a programme that waits is left alone until its minutes before the start are reached")]
+    public async Task AProgrammeThatWaitsIsLeftAloneUntilItsMinutesBeforeTheStartAreReached()
+    {
+        (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
+
+        NotificationIntake look = await watched.LookAsync(Starts.AddMinutes(-Lead).AddSeconds(-1));
+
+        Assert.Equal(0, look.Taken);
+        Assert.Equal(ProgrammeWatchState.Waiting, (await watched.RowAsync(watch)).State);
+        Assert.Empty(await ledgers.NoticesOfAsync(watch.Value));
+    }
+
+    [Fact(DisplayName = "BR-NS-003: once its minutes before the start are reached, a programme that waits is told of to its destination and the time is kept")]
+    public async Task OnceItsMinutesBeforeTheStartAreReachedAProgrammeThatWaitsIsToldOf()
+    {
+        (ProgrammeWatchId watch, NotificationDestinationId destination) = await AskedOfADestinationAsync();
+        DateTime now = Starts.AddMinutes(-Lead);
+
+        NotificationIntake look = await watched.LookAsync(now);
+
+        ProgrammeWatch row = await watched.RowAsync(watch);
+        Notice notice = Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
+        NotificationDelivery delivery = Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting));
+        Assert.Equal(new NotificationIntake(1, 1, 1), look);
+        Assert.Equal(ProgrammeWatchState.Notified, row.State);
+        Assert.Equal(now, row.NotifiedAt);
+        Assert.Equal(NoticeKind.ProgrammeStarting, notice.Kind);
+        Assert.Equal("まもなく放送が始まります", notice.Title);
+        Assert.Contains(WatchedProgrammes.ProgrammeName, notice.Body, StringComparison.Ordinal);
+        Assert.Contains("開始まで: 3 分", notice.Body, StringComparison.Ordinal);
+        Assert.Equal(destination, delivery.DestinationId);
+        Assert.Equal(NotificationDeliveryState.Queued, delivery.State);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a look that comes back after the start, with the programme on the air, tells of it as on the air")]
+    public async Task ALookThatComesBackAfterTheStartTellsOfTheProgrammeAsOnTheAir()
+    {
+        (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
+
+        await watched.LookAsync(Starts.AddMinutes(10));
+
+        Notice notice = Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
+        Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
+        Assert.Equal(NoticeKind.ProgrammeStarting, notice.Kind);
+        Assert.Equal("放送中です", notice.Title);
+        Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting));
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a look that comes back after the broadcast ended passes the programme over and sends nothing")]
+    public async Task ALookThatComesBackAfterTheBroadcastEndedPassesTheProgrammeOver()
+    {
+        (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
+
+        NotificationIntake look = await watched.LookAsync(Starts + WatchedProgrammes.Length);
+
+        ProgrammeWatch row = await watched.RowAsync(watch);
+        Assert.Equal(0, look.Taken);
+        Assert.Equal(ProgrammeWatchState.Skipped, row.State);
+        Assert.Null(row.NotifiedAt);
+        Assert.Empty(await ledgers.NoticesOfAsync(watch.Value));
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme the guide stops naming before it begins is cancelled, and that is told once")]
+    public async Task AProgrammeTheGuideStopsNamingBeforeItBeginsIsCancelledAndThatIsToldOnce()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", Asked);
+        ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
+        ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, destination);
+        await watched.DroppedAsync(programme, Asked.AddMinutes(20));
+
+        await watched.LookAsync(Asked.AddMinutes(21));
+        NotificationIntake again = await watched.LookAsync(Asked.AddMinutes(21) + BetweenLooks);
+
+        Notice notice = Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
+        Assert.Equal(0, again.Seen);
+        Assert.Equal(ProgrammeWatchState.Cancelled, (await watched.RowAsync(watch)).State);
+        Assert.Equal(NoticeKind.WatchedProgrammeGone, notice.Kind);
+        Assert.Equal("番組が番組表から消えました", notice.Title);
+        Assert.Equal(destination, Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.WatchedProgrammeGone)).DestinationId);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme that moves before it is told of is told of by its new time")]
+    public async Task AProgrammeThatMovesBeforeItIsToldOfIsToldOfByItsNewTime()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", Asked);
+        ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
+        ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, destination);
+        DateTime later = Starts.AddMinutes(30);
+        await watched.MovedAsync(programme, later, Asked.AddMinutes(20));
+
+        NotificationIntake atTheOldTime = await watched.LookAsync(Starts.AddMinutes(-Lead));
+        ProgrammeWatch followed = await watched.RowAsync(watch);
+        NotificationIntake atTheNewTime = await watched.LookAsync(later.AddMinutes(-Lead));
+
+        Assert.Equal(0, atTheOldTime.Taken);
+        Assert.Equal(ProgrammeWatchState.Waiting, followed.State);
+        Assert.Equal(later, followed.StartsAt);
+        Assert.Equal(later + WatchedProgrammes.Length, followed.EndsAt);
+        Assert.Equal(1, atTheNewTime.Taken);
+        Assert.Equal([NoticeKind.ProgrammeStarting], await ledgers.KindsOfAsync(watch.Value));
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme that moves after it was told of is told once more, and stays told of")]
+    public async Task AProgrammeThatMovesAfterItWasToldOfIsToldOnceMoreAndStaysToldOf()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", Asked);
+        ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
+        ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, destination);
+        DateTime told = Starts.AddMinutes(-Lead);
+        await watched.LookAsync(told);
+        DateTime later = Starts.AddMinutes(30);
+        await watched.MovedAsync(programme, later, told.AddSeconds(5));
+
+        NotificationIntake first = await watched.LookAsync(told + BetweenLooks);
+        NotificationIntake second = await watched.LookAsync(told + BetweenLooks + BetweenLooks);
+
+        ProgrammeWatch row = await watched.RowAsync(watch);
+        Notice moved = (await ledgers.NoticesOfAsync(watch.Value)).Single(notice => notice.Kind is NoticeKind.WatchedProgrammeMoved);
+        Assert.Equal(1, first.Taken);
+        Assert.Equal(0, second.Taken);
+        Assert.Equal(ProgrammeWatchState.Notified, row.State);
+        Assert.Equal(told, row.NotifiedAt);
+        Assert.Equal(later, row.StartsAt);
+        Assert.Equal("番組の時刻が変わりました", moved.Title);
+        Assert.Equal(
+            [NoticeKind.ProgrammeStarting, NoticeKind.WatchedProgrammeMoved],
+            await ledgers.KindsOfAsync(watch.Value));
+        Assert.Equal(destination, Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.WatchedProgrammeMoved)).DestinationId);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme the guide stops naming after it was told of, before it begins, is told once more and stays told of")]
+    public async Task AProgrammeTheGuideStopsNamingAfterItWasToldOfIsToldOnceMoreAndStaysToldOf()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", Asked);
+        ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
+        ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, destination);
+        DateTime told = Starts.AddMinutes(-Lead);
+        await watched.LookAsync(told);
+        await watched.DroppedAsync(programme, told.AddSeconds(5));
+
+        await watched.LookAsync(told + BetweenLooks);
+        NotificationIntake again = await watched.LookAsync(told + BetweenLooks + BetweenLooks);
+
+        Assert.Equal(0, again.Taken);
+        Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
+        Assert.Equal(
+            [NoticeKind.ProgrammeStarting, NoticeKind.WatchedProgrammeGone],
+            await ledgers.KindsOfAsync(watch.Value));
+    }
+
+    [Fact(DisplayName = "BR-ND-004: a programme told of at one look is not told of again at the next")]
+    public async Task AProgrammeToldOfAtOneLookIsNotToldOfAgainAtTheNext()
+    {
+        (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
+        DateTime now = Starts.AddMinutes(-Lead);
+        await watched.LookAsync(now);
+
+        NotificationIntake again = await watched.LookAsync(now + BetweenLooks);
+
+        Assert.Equal(new NotificationIntake(1, 0, 0), again);
+        Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
+        Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting));
+    }
+
+    [Fact(DisplayName = "BR-ND-010: a programme asked to be told of goes to the destinations asked for with it, whatever the rule sets name")]
+    public async Task AProgrammeAskedToBeToldOfGoesToTheDestinationsAskedForWithIt()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDestinationId asked = await ledgers.DestinationAsync("Asked for", Asked);
+        NotificationDestinationId switchedOff = await ledgers.DestinationAsync("Switched off", Asked, enabled: false);
+        NotificationDestinationId ofARule = await ledgers.DestinationAsync("Named by a rule set", Asked);
+        await ledgers.RuleAsync("Everything a rule set may name", Asked, [.. NoticeKinds.ChosenByRules], [ofARule]);
+        ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
+        ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, asked, switchedOff);
+
+        NotificationIntake look = await watched.LookAsync(Starts.AddMinutes(-Lead));
+
+        Assert.Equal(1, look.Queued);
+        Assert.Equal(asked, Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting)).DestinationId);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: when the notice cannot be written the programme still waits, and the next look tells of it")]
+    public async Task WhenTheNoticeCannotBeWrittenTheProgrammeStillWaitsAndTheNextLookTellsOfIt()
+    {
+        (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
+        DateTime now = Starts.AddMinutes(-Lead);
+
+        NotificationIntake failed = await watched.LookAsync(now, held => new NoticesThatCannotBeWritten(held));
+
+        Assert.Equal(0, failed.Taken);
+        Assert.Equal(ProgrammeWatchState.Waiting, (await watched.RowAsync(watch)).State);
+        Assert.Empty(await ledgers.NoticesOfAsync(watch.Value));
+
+        NotificationIntake next = await watched.LookAsync(now + BetweenLooks);
+
+        Assert.Equal(1, next.Taken);
+        Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
+    }
+
+    [Fact(DisplayName = "BR-ND-009: telling of a programme writes no reservation")]
+    public async Task TellingOfAProgrammeWritesNoReservation()
+    {
+        int before = await ReservationsAsync();
+        (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
+
+        await watched.LookAsync(Starts.AddMinutes(-Lead));
+
+        Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
+        Assert.Equal(before, await ReservationsAsync());
+    }
+
+    private async Task<(ProgrammeWatchId Watch, NotificationDestinationId Destination)> AskedOfADestinationAsync()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", Asked);
+        ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
+
+        return (await watched.AskedAsync(programme, Asked, Lead, destination), destination);
+    }
+
+    private async Task<int> ReservationsAsync()
+    {
+        await using CarinaDbContext context = database.Open();
+
+        return await context.Set<Reservation>().CountAsync(Cancel);
+    }
+
+    private sealed class NoticesThatCannotBeWritten(INoticeRepository held) : INoticeRepository
+    {
+        public Task<Notice?> FindAsync(NoticeId id, CancellationToken cancellationToken) => held.FindAsync(id, cancellationToken);
+
+        public Task<IReadOnlySet<NoticeKey>> HeldAmongAsync(IReadOnlyCollection<Guid> sourceIds, CancellationToken cancellationToken)
+            => held.HeldAmongAsync(sourceIds, cancellationToken);
+
+        public Task<bool> AddAsync(Notice notice, IReadOnlyList<NotificationDelivery> deliveries, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("The ledger could not be written.");
+
+        public Task<int> RemoveBeforeAsync(DateTime before, CancellationToken cancellationToken)
+            => held.RemoveBeforeAsync(before, cancellationToken);
+    }
+}

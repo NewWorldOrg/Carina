@@ -240,6 +240,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationRuleRepository, NotificationRuleRepository>();
         services.AddScoped<INotificationDeliveryRepository, NotificationDeliveryRepository>();
         services.AddScoped<INotificationSettingsRepository, NotificationSettingsRepository>();
+        services.AddScoped<IProgrammeWatchRepository, ProgrammeWatchRepository>();
         services.AddScoped<SignalSampleRound>();
         services.AddScoped<SupplyWatchRound>();
         services.TryAddSingleton<ISupplyStandingBoard, SupplyStandingBoard>();
@@ -268,6 +269,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeRestart>();
         services.AddScoped<EncodeIntakeRound>();
         services.AddScoped<NotificationIntakeRound>();
+        services.AddScoped<ProgrammeWatchRound>();
         services.AddScoped<NotificationDeliveryRound>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<ICaptionWorklist, CaptionWorklist>();
