@@ -10,6 +10,7 @@ public sealed class RecordingRetryRuleTests
     public void TheFilesTheRetryIsMadeOfAreTheOnesTheRuleAboveReads()
         => Assert.Equal(
             [
+                "/Carina.Domain/Notifications/NoticeRetry.cs",
                 "/Carina.Domain/Recordings/RetryAttempt.cs",
                 "/Carina.Domain/Recordings/RetryGiveUp.cs",
                 "/Carina.Domain/Recordings/RetryPolicy.cs",

@@ -17,6 +17,7 @@ public enum PersistenceFamily
     Viewing,
     Segments,
     DataBroadcast,
+    Notifications,
 }
 
 public static class PersistenceBoundaryRules
@@ -37,6 +38,7 @@ public static class PersistenceBoundaryRules
             ["Viewing"] = PersistenceFamily.Viewing,
             ["Segments"] = PersistenceFamily.Segments,
             ["DataBroadcast"] = PersistenceFamily.DataBroadcast,
+            ["Notifications"] = PersistenceFamily.Notifications,
             ["Auth"] = PersistenceFamily.Unrelated,
         };
 
@@ -101,6 +103,11 @@ public static class PersistenceBoundaryRules
         }
 
         if (declaring is PersistenceFamily.Segments || principal is PersistenceFamily.Segments)
+        {
+            return declaring != principal;
+        }
+
+        if (declaring is PersistenceFamily.Notifications || principal is PersistenceFamily.Notifications)
         {
             return declaring != principal;
         }

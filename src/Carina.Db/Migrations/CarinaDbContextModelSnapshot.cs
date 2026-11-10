@@ -1564,6 +1564,279 @@ namespace Carina.Db.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Carina.Domain.Notifications.Notice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("body");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Link")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("link");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<DateTime>("TakenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("taken_at");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Tone")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("tone");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_event");
+
+                    b.HasIndex("OccurredAt")
+                        .HasDatabaseName("ix_notification_event_occurred_at");
+
+                    b.HasIndex("SourceId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("ux_notification_event_source_kind");
+
+                    b.ToTable("notification_event", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_event_kind", "kind IN ('RecordingStarted', 'RecordingCompleted', 'RecordingTruncated', 'RecordingFailed', 'EncodeStarted', 'EncodeCompleted', 'EncodeFailed', 'ReservationCompeting', 'ReservationMissed', 'ProgrammeMoved', 'QualityIncidentDetected', 'QualityIncidentResolved', 'DeviceDisconnected')");
+
+                            t.HasCheckConstraint("ck_notification_event_tone", "tone IN ('Good', 'Informative', 'Caution', 'Failure')");
+
+                            t.HasCheckConstraint("ck_notification_event_words", "length(btrim(title)) > 0 AND length(btrim(body)) > 0 AND (link IS NULL OR link ~ '^https?://')");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Notifications.NotificationDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<Guid>("DestinationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("destination_id");
+
+                    b.Property<string>("LastFailure")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("last_failure");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<Guid>("NoticeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("queued_at");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("state");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_delivery");
+
+                    b.HasIndex("DestinationId")
+                        .HasDatabaseName("ix_notification_delivery_destination_id");
+
+                    b.HasIndex("NextAttemptAt")
+                        .HasDatabaseName("ix_notification_delivery_next_attempt_at")
+                        .HasFilter("next_attempt_at IS NOT NULL");
+
+                    b.HasIndex("NoticeId", "DestinationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_notification_delivery_event_destination");
+
+                    b.ToTable("notification_delivery", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_delivery_attempts", "attempts BETWEEN 0 AND 4");
+
+                            t.HasCheckConstraint("ck_notification_delivery_last_failure", "last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld', 'TlsFailed')");
+
+                            t.HasCheckConstraint("ck_notification_delivery_standing", "(state <> 'Queued'\n OR (attempts = 0 AND next_attempt_at IS NOT NULL AND sent_at IS NULL AND last_failure IS NULL))\nAND (state <> 'Failed'\n     OR (attempts > 0 AND next_attempt_at IS NOT NULL AND sent_at IS NULL AND last_failure IS NOT NULL))\nAND (state <> 'Sent'\n     OR (attempts > 0 AND next_attempt_at IS NULL AND sent_at IS NOT NULL AND last_failure IS NULL))\nAND (state <> 'GivenUp'\n     OR (next_attempt_at IS NULL AND sent_at IS NULL AND last_failure IS NOT NULL))");
+
+                            t.HasCheckConstraint("ck_notification_delivery_state", "state IN ('Queued', 'Sent', 'Failed', 'GivenUp')");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Notifications.NotificationDestination", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("LastFailure")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("last_failure");
+
+                    b.Property<DateTime?>("LastResultAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_result_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("name");
+
+                    b.Property<byte[]>("SealedUrl")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("sealed_url");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("target");
+
+                    b.Property<string>("UrlTail")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)")
+                        .HasColumnName("url_tail");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_destination");
+
+                    b.ToTable("notification_destination", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_destination_last_failure", "(last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld', 'TlsFailed'))\nAND (last_failure IS NULL OR last_result_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_notification_destination_name", "btrim(name) = name AND length(name) > 0");
+
+                            t.HasCheckConstraint("ck_notification_destination_sealed_url", "octet_length(sealed_url) BETWEEN 1 AND 4096");
+
+                            t.HasCheckConstraint("ck_notification_destination_target", "target IN ('Slack', 'Discord')");
+
+                            t.HasCheckConstraint("ck_notification_destination_url_tail", "length(url_tail) = 4");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Notifications.NotificationRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Destinations")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("destinations");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("Events")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("events");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_rule");
+
+                    b.ToTable("notification_rule", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_rule_destinations", "jsonb_typeof(destinations) = 'array' AND jsonb_array_length(destinations) > 0");
+
+                            t.HasCheckConstraint("ck_notification_rule_events", "jsonb_typeof(events) = 'array' AND events <@ '[\"RecordingStarted\", \"RecordingCompleted\", \"RecordingTruncated\", \"RecordingFailed\", \"EncodeStarted\", \"EncodeCompleted\", \"EncodeFailed\", \"ReservationCompeting\", \"ReservationMissed\", \"ProgrammeMoved\", \"QualityIncidentDetected\", \"QualityIncidentResolved\", \"DeviceDisconnected\"]'::jsonb");
+
+                            t.HasCheckConstraint("ck_notification_rule_name", "btrim(name) = name AND length(name) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Notifications.NotificationSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<int>("NotifyLeadMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("notify_lead_minutes");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_settings");
+
+                    b.ToTable("notification_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_settings_notify_lead_minutes", "notify_lead_minutes IN (0, 1, 3, 5, 10)");
+
+                            t.HasCheckConstraint("ck_notification_settings_single_row", "id = 1");
+                        });
+                });
+
             modelBuilder.Entity("Carina.Domain.Programmes.ArchivedProgramme", b =>
                 {
                     b.Property<int>("NetworkId")
@@ -4480,6 +4753,23 @@ namespace Carina.Db.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_migration_tally_migration_run_run_id");
+                });
+
+            modelBuilder.Entity("Carina.Domain.Notifications.NotificationDelivery", b =>
+                {
+                    b.HasOne("Carina.Domain.Notifications.NotificationDestination", null)
+                        .WithMany()
+                        .HasForeignKey("DestinationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_delivery_notification_destination_destination_");
+
+                    b.HasOne("Carina.Domain.Notifications.Notice", null)
+                        .WithMany()
+                        .HasForeignKey("NoticeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_delivery_notification_event_event_id");
                 });
 
             modelBuilder.Entity("Carina.Domain.Programmes.VisitTally", b =>

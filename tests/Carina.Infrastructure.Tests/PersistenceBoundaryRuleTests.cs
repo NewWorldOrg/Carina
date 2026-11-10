@@ -168,6 +168,34 @@ public sealed class PersistenceBoundaryRuleTests
             .SelectMany(entityType => entityType.GetForeignKeys()));
     }
 
+    [Fact(DisplayName = "the notification tables are five and the only keys they hold run from a delivery to its event and its destination")]
+    public void TheNotificationTablesAreFiveAndNoneOfThemHoldsAKeyIntoAnotherDomain()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            [
+                "notification_delivery",
+                "notification_destination",
+                "notification_event",
+                "notification_rule",
+                "notification_settings",
+            ],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Notifications));
+
+        Assert.Equal(
+            [
+                "notification_delivery -> notification_destination",
+                "notification_delivery -> notification_event",
+            ],
+            context.Model
+                .GetEntityTypes()
+                .Where(entityType => entityType.GetTableName() is { } table && table.StartsWith("notification_", StringComparison.Ordinal))
+                .SelectMany(entityType => entityType.GetForeignKeys())
+                .Select(foreignKey => $"{foreignKey.DeclaringEntityType.GetTableName()} -> {foreignKey.PrincipalEntityType.GetTableName()}")
+                .Order(StringComparer.Ordinal));
+    }
+
     [Fact(DisplayName = "what quality watches it reaches by value, so dropping its tables drags nothing away")]
     public void WhatQualityWatchesItReachesByValue()
     {
