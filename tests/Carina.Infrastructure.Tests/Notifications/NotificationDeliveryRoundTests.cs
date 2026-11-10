@@ -78,6 +78,39 @@ public sealed class NotificationDeliveryRoundTests
         Assert.Null(destination.LastFailure);
     }
 
+    [Theory(DisplayName = "BR-NC-001: a send that times out, cannot connect or fails on TLS waits thirty seconds, and the destination stays on")]
+    [InlineData(NoticeFailure.TimedOut)]
+    [InlineData(NoticeFailure.Unreachable)]
+    [InlineData(NoticeFailure.TlsFailed)]
+    public async Task AFailureOfTheLineWaitsThirtySeconds(NoticeFailure failure)
+    {
+        TaskCompletionSource heard = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource<CannedAnswer> never = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using DeliveryBench bench = new(_ =>
+        {
+            heard.TrySetResult();
+
+            return never.Task;
+        });
+        bench.Rig.Network.Refuses = failure == NoticeFailure.Unreachable;
+        bench.Rig.Network.Trusted = failure == NoticeFailure.TlsFailed ? null : bench.Rig.Network.Trusted;
+        NotificationDestination destination = bench.Destination(WebhookRig.Slack);
+        NotificationDelivery delivery = bench.Waiting(destination);
+
+        Task<NotificationDeliveries> passing = bench.PassAsync();
+        await Task.WhenAny(heard.Task, passing).WaitAsync(TimeSpan.FromSeconds(30));
+        bench.Deadlines.Turn(NoticeLine.UsualDeadline);
+        NotificationDeliveries moved = await passing.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(new NotificationDeliveries(0, 1, 0), moved);
+        Assert.Equal(NotificationDeliveryState.Failed, delivery.State);
+        Assert.Equal(failure, delivery.LastFailure);
+        Assert.Equal(failure, destination.LastFailure);
+        Assert.True(destination.Enabled);
+        Assert.Equal(DeliveryBench.Began.AddSeconds(30), delivery.NextAttemptAt);
+        Assert.Equal(failure == NoticeFailure.TimedOut ? 1 : 0, bench.Paths.Count);
+    }
+
     [Fact(DisplayName = "BR-NS-001: the fourth failure gives the notice up, after waits of 30 seconds, 2 minutes and 10 minutes")]
     public async Task TheFourthFailureGivesTheNoticeUp()
     {

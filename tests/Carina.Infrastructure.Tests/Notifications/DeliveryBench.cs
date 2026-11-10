@@ -145,7 +145,7 @@ internal sealed class DeliveryBench : IAsyncDisposable
     public DeliveryBench(Func<HeardRequest, Task<CannedAnswer>> answer, NotificationDeliverySettings? settings = null)
     {
         Settings = settings ?? new NotificationDeliverySettings();
-        Rig = new WebhookRig(answer);
+        Rig = new WebhookRig(answer, clock: Deadlines);
         Seal = new WebhookUrlSeal(keys);
         Dispatch = new NoticeDispatch(Rig.Line, Settings, Clock);
         Round = RoundThatRemembersNothing();
@@ -154,6 +154,8 @@ internal sealed class DeliveryBench : IAsyncDisposable
     public NotificationDeliverySettings Settings { get; }
 
     public HandTurnedClock Clock { get; } = new(new DateTimeOffset(Began));
+
+    public HandTurnedClock Deadlines { get; } = new(new DateTimeOffset(Began));
 
     public WebhookRig Rig { get; }
 
