@@ -25,14 +25,17 @@ internal static class NoticeSizes
 
     private static string Said(long bytes)
     {
-        if (bytes >= Gigabyte)
+        double megabytes = Math.Round((double)bytes / Megabyte);
+        double kilobytes = Math.Max(1, Math.Round((double)bytes / Kilobyte));
+
+        if (megabytes * Megabyte >= Gigabyte)
         {
             return string.Create(CultureInfo.InvariantCulture, $"{(double)bytes / Gigabyte:0.0} GB");
         }
 
-        return bytes >= Megabyte
-            ? string.Create(CultureInfo.InvariantCulture, $"{Math.Round((double)bytes / Megabyte):0} MB")
-            : string.Create(CultureInfo.InvariantCulture, $"{Math.Max(1, Math.Round((double)bytes / Kilobyte)):0} KB");
+        return kilobytes * Kilobyte >= Megabyte
+            ? string.Create(CultureInfo.InvariantCulture, $"{megabytes:0} MB")
+            : string.Create(CultureInfo.InvariantCulture, $"{kilobytes:0} KB");
     }
 
     private static string Share(long source, long artefact)

@@ -263,6 +263,8 @@ public sealed class NoticeWordingTests
     [InlineData(1_073_741_824, 1_181_116_006, "大きさ: 1.0 GB → 1.1 GB(元の 110%)")]
     [InlineData(1_073_741_824, 1_048_576, "大きさ: 1.0 GB → 1 MB(元の 1% 未満)")]
     [InlineData(2_048, 100, "大きさ: 2 KB → 1 KB(元の 5%)")]
+    [InlineData(1_073_217_535, 1_048_063, "大きさ: 1023 MB → 1023 KB(元の 1% 未満)")]
+    [InlineData(1_073_217_536, 1_048_064, "大きさ: 1.0 GB → 1 MB(元の 1% 未満)")]
     public void AnEncodeThatEndedIsWordedWithHowFarItShrank(long sourceBytes, long artefactBytes, string size)
     {
         EncodeNoticeSource ended = EncodeThatEnded() with { SourceBytes = sourceBytes, ArtefactBytes = artefactBytes };
