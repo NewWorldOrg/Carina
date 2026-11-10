@@ -194,7 +194,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting));
     }
 
-    [Fact(DisplayName = "BR-ND-010: a programme asked to be told of goes to the destinations asked for with it, whatever the rule sets name")]
+    [Fact(DisplayName = "BR-NC-003: a programme asked to be told of goes to the destinations asked for with it, whatever the rule sets name")]
     public async Task AProgrammeAskedToBeToldOfGoesToTheDestinationsAskedForWithIt()
     {
         await ledgers.EmptyTheNoticesAsync();
