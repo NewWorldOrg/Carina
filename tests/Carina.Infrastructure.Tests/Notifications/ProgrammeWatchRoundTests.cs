@@ -3,6 +3,7 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Tests.Thumbnails;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -247,6 +248,65 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
     }
 
+    [Fact(DisplayName = "BR-NS-003: when one programme's notice cannot be written the other programmes due at the same look are told of, and one error is logged")]
+    public async Task WhenOneProgrammesNoticeCannotBeWrittenTheOthersDueAtTheSameLookAreToldOf()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", Asked);
+        ProgrammeWatchId refused = await watched.AskedAsync(await watched.AnnouncedAsync(Starts, Asked), Asked, Lead, destination);
+        ProgrammeWatchId written = await watched.AskedAsync(
+            await watched.AnnouncedAsync(Starts.AddMinutes(1), Asked),
+            Asked,
+            Lead,
+            destination);
+        HeardOf<ProgrammeWatchRound> heard = new();
+
+        NotificationIntake look = await watched.LookAsync(
+            Starts.AddMinutes(1 - Lead),
+            held => new NoticesThatCannotBeWritten(held, refused.Value),
+            heard);
+
+        string error = Assert.Single(heard.Said, line => line.StartsWith("Error ", StringComparison.Ordinal));
+        Assert.Equal(new NotificationIntake(2, 1, 1), look);
+        Assert.Contains(refused.Value.ToString(), error, StringComparison.Ordinal);
+        Assert.Equal(ProgrammeWatchState.Waiting, (await watched.RowAsync(refused)).State);
+        Assert.Empty(await ledgers.NoticesOfAsync(refused.Value));
+        Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(written)).State);
+        Assert.Equal(destination, Assert.Single(await ledgers.DeliveriesOfAsync(written.Value, NoticeKind.ProgrammeStarting)).DestinationId);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme withdrawn after the look listed it and before the look wrote is not told of")]
+    public async Task AProgrammeWithdrawnAfterTheLookListedItAndBeforeTheLookWroteIsNotToldOf()
+    {
+        (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
+        DateTime now = Starts.AddMinutes(-Lead);
+
+        NotificationIntake look = await watched.LookAsync(
+            now,
+            held => new NoticesReadAfter(held, () => watched.WithdrawnAsync(watch, now)));
+
+        Assert.Equal(new NotificationIntake(1, 0, 0), look);
+        Assert.Equal(ProgrammeWatchState.Cancelled, (await watched.RowAsync(watch)).State);
+        Assert.Empty(await ledgers.NoticesOfAsync(watch.Value));
+    }
+
+    [Fact(DisplayName = "BR-ND-013: a programme whose only destination is removed after the look listed it and before the look wrote is not told of")]
+    public async Task AProgrammeWhoseOnlyDestinationIsRemovedAfterTheLookListedItIsNotToldOf()
+    {
+        (ProgrammeWatchId watch, NotificationDestinationId destination) = await AskedOfADestinationAsync();
+        DateTime now = Starts.AddMinutes(-Lead);
+
+        NotificationIntake look = await watched.LookAsync(
+            now,
+            held => new NoticesReadAfter(held, () => watched.DestinationRemovedAsync(destination, now)));
+
+        ProgrammeWatch row = await watched.RowAsync(watch);
+        Assert.Equal(new NotificationIntake(1, 0, 0), look);
+        Assert.Equal(ProgrammeWatchState.Cancelled, row.State);
+        Assert.Empty(row.Destinations);
+        Assert.Empty(await ledgers.NoticesOfAsync(watch.Value));
+    }
+
     [Fact(DisplayName = "BR-ND-009: telling of a programme writes no reservation")]
     public async Task TellingOfAProgrammeWritesNoReservation()
     {
@@ -275,7 +335,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         return await context.Set<Reservation>().CountAsync(Cancel);
     }
 
-    private sealed class NoticesThatCannotBeWritten(INoticeRepository held) : INoticeRepository
+    private sealed class NoticesThatCannotBeWritten(INoticeRepository held, Guid? onlyOf = null) : INoticeRepository
     {
         public Task<Notice?> FindAsync(NoticeId id, CancellationToken cancellationToken) => held.FindAsync(id, cancellationToken);
 
@@ -283,7 +343,33 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
             => held.HeldAmongAsync(sourceIds, cancellationToken);
 
         public Task<bool> AddAsync(Notice notice, IReadOnlyList<NotificationDelivery> deliveries, CancellationToken cancellationToken)
-            => throw new InvalidOperationException("The ledger could not be written.");
+            => onlyOf is null || notice.SourceId == onlyOf
+                ? throw new InvalidOperationException("The ledger could not be written.")
+                : held.AddAsync(notice, deliveries, cancellationToken);
+
+        public Task<int> RemoveBeforeAsync(DateTime before, CancellationToken cancellationToken)
+            => held.RemoveBeforeAsync(before, cancellationToken);
+    }
+
+    private sealed class NoticesReadAfter(INoticeRepository held, Func<Task> happensFirst) : INoticeRepository
+    {
+        private bool happened;
+
+        public Task<Notice?> FindAsync(NoticeId id, CancellationToken cancellationToken) => held.FindAsync(id, cancellationToken);
+
+        public async Task<IReadOnlySet<NoticeKey>> HeldAmongAsync(IReadOnlyCollection<Guid> sourceIds, CancellationToken cancellationToken)
+        {
+            if (!happened)
+            {
+                happened = true;
+                await happensFirst();
+            }
+
+            return await held.HeldAmongAsync(sourceIds, cancellationToken);
+        }
+
+        public Task<bool> AddAsync(Notice notice, IReadOnlyList<NotificationDelivery> deliveries, CancellationToken cancellationToken)
+            => held.AddAsync(notice, deliveries, cancellationToken);
 
         public Task<int> RemoveBeforeAsync(DateTime before, CancellationToken cancellationToken)
             => held.RemoveBeforeAsync(before, cancellationToken);

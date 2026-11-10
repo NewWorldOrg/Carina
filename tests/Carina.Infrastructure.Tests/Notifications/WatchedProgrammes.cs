@@ -7,7 +7,10 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+
+using EventId = Carina.Domain.Programmes.EventId;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
@@ -83,7 +86,10 @@ internal sealed class WatchedProgrammes(RepositoryDatabase database)
         return watch.Id;
     }
 
-    public async Task<NotificationIntake> LookAsync(DateTime now, Func<INoticeRepository, INoticeRepository>? notices = null)
+    public async Task<NotificationIntake> LookAsync(
+        DateTime now,
+        Func<INoticeRepository, INoticeRepository>? notices = null,
+        ILogger<ProgrammeWatchRound>? logger = null)
     {
         await using CarinaDbContext context = database.Open();
         NoticeRepository held = new(context);
@@ -97,9 +103,36 @@ internal sealed class WatchedProgrammes(RepositoryDatabase database)
             new DatabaseAtomicWrite(context),
             NoticeLinkBase.None,
             new HandTurnedClock(new DateTimeOffset(now)),
-            NullLogger<ProgrammeWatchRound>.Instance);
+            logger ?? NullLogger<ProgrammeWatchRound>.Instance);
 
         return await round.TakeAsync(Cancel);
+    }
+
+    public async Task WithdrawnAsync(ProgrammeWatchId id, DateTime at)
+    {
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWatchRepository watches = new(context);
+        ProgrammeWatch watch = (await watches.FindAsync(id, Cancel))!;
+
+        watch.Cancel(at);
+        await watches.SaveAsync(watch, Cancel);
+    }
+
+    public async Task DestinationRemovedAsync(NotificationDestinationId id, DateTime at)
+    {
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWatchRepository watches = new(context);
+        NotificationDestinationRepository destinations = new(context);
+
+        foreach (ProgrammeWatch watch in await watches.ListFollowedAsync(at, Cancel))
+        {
+            if (watch.StopTelling(id, at))
+            {
+                await watches.SaveAsync(watch, Cancel);
+            }
+        }
+
+        await destinations.RemoveAsync((await destinations.FindAsync(id, Cancel))!, Cancel);
     }
 
     public async Task<ProgrammeWatch> RowAsync(ProgrammeWatchId id)
