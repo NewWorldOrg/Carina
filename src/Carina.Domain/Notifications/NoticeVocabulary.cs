@@ -1,5 +1,3 @@
-using System.Globalization;
-
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Quality;
@@ -13,10 +11,6 @@ namespace Carina.Domain.Notifications;
 /// </summary>
 internal static class NoticeVocabulary
 {
-    private const string Plain = "0.###";
-
-    private const string Percent = "%";
-
     private static readonly IReadOnlyDictionary<RecordingFault, string> RecordingFaults = new Dictionary<RecordingFault, string>
     {
         [RecordingFault.TuneFailed] = "選局失敗",
@@ -85,17 +79,17 @@ internal static class NoticeVocabulary
         [QualityThresholdKey.SupplySilence] = "供給が途絶",
     };
 
-    private static readonly IReadOnlyDictionary<QualityThresholdKey, Measure> Measures = new Dictionary<QualityThresholdKey, Measure>
+    private static readonly IReadOnlyDictionary<QualityThresholdKey, NoticeUnit> Units = new Dictionary<QualityThresholdKey, NoticeUnit>
     {
-        [QualityThresholdKey.PacketsLostWarning] = new Measure(0.01, Plain, Percent),
-        [QualityThresholdKey.PacketsLostUnwatchable] = new Measure(0.01, Plain, Percent),
-        [QualityThresholdKey.PacketsLeftScrambled] = new Measure(0.01, Plain, Percent),
-        [QualityThresholdKey.PacketsLeftScrambledUnwatchable] = new Measure(0.01, Plain, Percent),
-        [QualityThresholdKey.Overflows] = new Measure(1, Plain, " 回"),
-        [QualityThresholdKey.LockRate] = new Measure(0.01, Plain, Percent),
-        [QualityThresholdKey.CarrierToNoiseFloor] = new Measure(1000, Plain, " dB"),
-        [QualityThresholdKey.BitErrorRateCeiling] = new Measure(1, "0.0E-0", string.Empty),
-        [QualityThresholdKey.SupplySilence] = new Measure(60, Plain, " 分"),
+        [QualityThresholdKey.PacketsLostWarning] = NoticeUnit.Share,
+        [QualityThresholdKey.PacketsLostUnwatchable] = NoticeUnit.Share,
+        [QualityThresholdKey.PacketsLeftScrambled] = NoticeUnit.Share,
+        [QualityThresholdKey.PacketsLeftScrambledUnwatchable] = NoticeUnit.Share,
+        [QualityThresholdKey.Overflows] = NoticeUnit.Count,
+        [QualityThresholdKey.LockRate] = NoticeUnit.Share,
+        [QualityThresholdKey.CarrierToNoiseFloor] = NoticeUnit.Decibels,
+        [QualityThresholdKey.BitErrorRateCeiling] = NoticeUnit.ErrorRate,
+        [QualityThresholdKey.SupplySilence] = NoticeUnit.Minutes,
     };
 
     private static readonly IReadOnlyDictionary<QualitySubjectKind, string> Subjects = new Dictionary<QualitySubjectKind, string>
@@ -137,7 +131,7 @@ internal static class NoticeVocabulary
     public static string? Of(TunerTroubleKind? trouble) => Said(trouble, Troubles);
 
     public static string? Measured(QualityThresholdKey breached, double value)
-        => Measures.TryGetValue(breached, out Measure? measure) ? measure.Said(value) : null;
+        => Units.TryGetValue(breached, out NoticeUnit unit) ? NoticeUnits.Said(unit, value) : null;
 
     private static IEnumerable<string> Said<T>(IEnumerable<T> classified, IReadOnlyDictionary<T, string> words)
         where T : struct, Enum
@@ -146,9 +140,4 @@ internal static class NoticeVocabulary
     private static string? Said<T>(T? classified, IReadOnlyDictionary<T, string> words)
         where T : struct, Enum
         => classified is { } one ? words.GetValueOrDefault(one) : null;
-
-    private sealed record Measure(double Unit, string Format, string Suffix)
-    {
-        public string Said(double value) => (value / Unit).ToString(Format, CultureInfo.InvariantCulture) + Suffix;
-    }
 }
