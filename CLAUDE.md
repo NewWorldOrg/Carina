@@ -325,6 +325,29 @@ walks past it.
   refuses the constant anywhere else, a render node written as a literal, and a
   flag that opens the card in any file but the three argument builders handed the
   settings. **Trip wire:** a node assembled from pieces walks past.
+- **The address of a webhook is sealed before it is kept, and nothing shows it
+  again.** The row of a destination holds the sealed address and its last four
+  characters. The address is read as written in two files only, the type that
+  seals it and the line that sends to it; neither writes to a log, and nothing
+  that answers a caller can name it. `WebhookUrlRuleTests` reads the source for
+  each of the three and a self-check shows the rule sees an offence. What the
+  other side answered is neither kept nor shown. **Trip wire:** an address
+  copied into a plain string in one of the two files and handed on from there
+  walks past.
+- **A notice is taken by reading the ledgers, never by listening.** The intake
+  looks on a timer at what recordings, reservations, encodes and the quality
+  ledger say happened, and writes each happening once: the notice ledger is
+  unique on the kind and the id of the row it came from, so a look that runs
+  twice, or two processes that look at once, write one notice. The notice and
+  its deliveries are written in one transaction. A signal that was never
+  raised, or raised while the process was down, therefore loses nothing.
+- **A programme asked to be told of uses no tuner.** Its row points at no other
+  table and is in none of the reservations, the reservation views, the plan
+  that hands out tuners, the capacity, the conflicts or the results of
+  recordings, so it can stand beside a reservation for the same programme. It
+  is told to the destinations asked for with it and to no rule set. **Trip
+  wire:** the schema test sees a foreign key, not a query that joins the row
+  to a reservation.
 
 ## Conventions
 
@@ -505,3 +528,4 @@ HTTP surface, its own tables and its own tests.
 9. Library
 10. Encoding
 11. Migration from an existing recording setup
+12. Notifications
