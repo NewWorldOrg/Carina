@@ -31,7 +31,7 @@ public sealed class NotificationRuleEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, status);
         JsonElement usual = Assert.Single(body.GetProperty("data").GetProperty("items").EnumerateArray());
-        Assert.Equal("失敗と異常を全部の送り先へ", usual.GetProperty("name").GetString());
+        Assert.Equal("失敗と異常", usual.GetProperty("name").GetString());
         Assert.True(usual.GetProperty("enabled").GetBoolean());
         Assert.Equal(UsualEvents, Words(usual.GetProperty("events")));
         Assert.Equal([first], Ids(usual.GetProperty("destinations")));
@@ -208,7 +208,7 @@ public sealed class NotificationRuleEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, unknownKind);
         Assert.Equal(HttpStatusCode.BadRequest, blank);
         Assert.Equal(HttpStatusCode.NotFound, noSuch);
-        Assert.Equal("失敗と異常を全部の送り先へ", usual.Name.Value);
+        Assert.Equal("失敗と異常", usual.Name.Value);
         Assert.True(usual.Enabled);
         Assert.Equal([livingRoom], usual.Destinations.Select(destination => destination.Value));
         Assert.Equal(NotificationFeature.Noon, usual.ChangedAt);

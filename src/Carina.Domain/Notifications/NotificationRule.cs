@@ -9,7 +9,7 @@ public sealed class NotificationRule
 {
     public const int MostRules = 20;
 
-    public const string UsualName = "失敗と異常を全部の送り先へ";
+    public const string UsualName = "失敗と異常";
 
     public static readonly IReadOnlyList<NoticeKind> UsualEvents =
     [

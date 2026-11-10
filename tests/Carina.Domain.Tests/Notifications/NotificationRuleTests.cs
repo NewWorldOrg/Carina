@@ -27,7 +27,7 @@ public sealed class NotificationRuleTests
 
         NotificationRule usual = NotificationRule.Usual(NotificationRuleId.New(), destination, At);
 
-        Assert.Equal("失敗と異常を全部の送り先へ", usual.Name.Value);
+        Assert.Equal("失敗と異常", usual.Name.Value);
         Assert.True(usual.Enabled);
         Assert.Equal([destination], usual.Destinations);
         Assert.Equal(
