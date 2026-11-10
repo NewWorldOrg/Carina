@@ -2,7 +2,7 @@ namespace Carina.Domain.Notifications;
 
 /// <summary>
 /// The address of a webhook, which is a secret: whoever knows it can post to the channel. It is read in the clear
-/// through <see cref="InTheClear"/> only, to seal it and to send to it.
+/// through <see cref="AddressAsWritten"/> only, to seal it and to send to it.
 /// </summary>
 public sealed class WebhookUrl
 {
@@ -21,12 +21,12 @@ public sealed class WebhookUrl
 
     private WebhookUrl(string written, WebhookTarget target)
     {
-        InTheClear = written;
+        AddressAsWritten = written;
         Target = target;
         Tail = written[^NotificationDestination.UrlTailLength..];
     }
 
-    public string InTheClear { get; }
+    public string AddressAsWritten { get; }
 
     public WebhookTarget Target { get; }
 

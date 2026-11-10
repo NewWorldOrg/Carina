@@ -99,7 +99,7 @@ public sealed class WebhookUrlTests
     }
 
     [Fact(DisplayName = "BR-NA-003: an address is read in the clear through one member only")]
-    public void AnAddressIsReadInTheClearThroughOneMemberOnly()
+    public void AnAddressIsReadAsWrittenThroughOneMemberOnly()
     {
         string[] telling =
         [
@@ -109,8 +109,8 @@ public sealed class WebhookUrlTests
                 .Order(StringComparer.Ordinal),
         ];
 
-        Assert.Equal([nameof(WebhookUrl.InTheClear), nameof(WebhookUrl.Tail)], telling);
-        Assert.Equal(OfSlack, WebhookUrl.Read(OfSlack)!.InTheClear);
+        Assert.Equal([nameof(WebhookUrl.AddressAsWritten), nameof(WebhookUrl.Tail)], telling);
+        Assert.Equal(OfSlack, WebhookUrl.Read(OfSlack)!.AddressAsWritten);
     }
 
     [Fact(DisplayName = "BR-NA-003: an address is not compared by what it holds, so it is no key to look one up by")]

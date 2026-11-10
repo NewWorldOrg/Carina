@@ -43,6 +43,11 @@ public static class AuthenticationBypasses
         "secret!.Value",
     ];
 
+    public static IReadOnlyList<string> WebhookAddressAsWritten { get; } =
+    [
+        ".AddressAsWritten",
+    ];
+
     public static IReadOnlyList<string> ReadingTheAuthorizationHeader { get; } =
     [
         "Headers.Authorization",

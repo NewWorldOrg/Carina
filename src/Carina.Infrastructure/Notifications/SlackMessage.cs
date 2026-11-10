@@ -12,6 +12,14 @@ public static class SlackMessage
 {
     public const string LinkLabel = "画面で開く";
 
+    private static readonly IReadOnlyDictionary<char, string> InALink = new Dictionary<char, string>
+    {
+        ['&'] = "&amp;",
+        ['<'] = "%3C",
+        ['>'] = "%3E",
+        ['|'] = "%7C",
+    };
+
     public static JsonObject Of(int colour, MarkedUpNotice words, string? link)
     {
         ArgumentNullException.ThrowIfNull(words);
@@ -42,9 +50,5 @@ public static class SlackMessage
         };
 
     private static string Linked(string link)
-        => link
-            .Replace("&", "&amp;", StringComparison.Ordinal)
-            .Replace("<", "%3C", StringComparison.Ordinal)
-            .Replace(">", "%3E", StringComparison.Ordinal)
-            .Replace("|", "%7C", StringComparison.Ordinal);
+        => string.Concat(link.Select(character => InALink.GetValueOrDefault(character, character.ToString())));
 }

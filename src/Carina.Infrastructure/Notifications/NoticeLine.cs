@@ -85,7 +85,7 @@ public sealed class NoticeLine : IDisposable
 
         try
         {
-            using HttpRequestMessage request = Request(new Uri(webhook.InTheClear), payload);
+            using HttpRequestMessage request = Request(new Uri(webhook.AddressAsWritten), payload);
             using HttpResponseMessage response = await client.SendAsync(request, linked.Token);
 
             return Answered(response);
