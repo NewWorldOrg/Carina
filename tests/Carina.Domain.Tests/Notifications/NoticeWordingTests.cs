@@ -256,7 +256,7 @@ public sealed class NoticeWordingTests
         Assert.Equal(link, words.Link);
     }
 
-    [Theory(DisplayName = "an encode that ended is worded with how far it shrank from the recording")]
+    [Theory(DisplayName = "BR-ND-001: an encode that ended is worded with how far it shrank from the recording")]
     [InlineData(2_254_857_830, 241_172_480, "大きさ: 2.1 GB → 230 MB(元の 11%)")]
     [InlineData(3_221_225_472, 1_610_612_736, "大きさ: 3.0 GB → 1.5 GB(元の 50%)")]
     [InlineData(1_048_576, 524_288, "大きさ: 1 MB → 512 KB(元の 50%)")]
@@ -274,7 +274,7 @@ public sealed class NoticeWordingTests
         Assert.Equal($"{Programme}\n形式: H.265\n{size}", words.Body);
     }
 
-    [Theory(DisplayName = "an encode that ended says nothing of its size when either file was not weighed or weighs nothing")]
+    [Theory(DisplayName = "BR-ND-001: an encode that ended says nothing of its size when either file was not weighed or weighs nothing")]
     [InlineData(null, 241_172_480L)]
     [InlineData(2_254_857_830L, null)]
     [InlineData(0L, 241_172_480L)]
@@ -288,7 +288,7 @@ public sealed class NoticeWordingTests
         Assert.Equal($"{Programme}\n形式: H.265", words.Body);
     }
 
-    [Theory(DisplayName = "an encode that started or failed says nothing of its size")]
+    [Theory(DisplayName = "BR-ND-001: an encode that started or failed says nothing of its size")]
     [InlineData(NoticeKind.EncodeStarted)]
     [InlineData(NoticeKind.EncodeFailed)]
     public void AnEncodeThatStartedOrFailedSaysNothingOfItsSize(NoticeKind kind)

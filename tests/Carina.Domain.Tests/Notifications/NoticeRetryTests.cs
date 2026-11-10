@@ -39,7 +39,7 @@ public sealed class NoticeRetryTests
         Assert.Null(NoticeRetry.After(4, TimeSpan.FromSeconds(1)));
     }
 
-    [Fact]
+    [Fact(DisplayName = "BR-NC-001: a wait follows at least one failure, and a wait asked for is never negative")]
     public void AWaitFollowsAtLeastOneFailureAndIsNeverNegative()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => NoticeRetry.After(0));

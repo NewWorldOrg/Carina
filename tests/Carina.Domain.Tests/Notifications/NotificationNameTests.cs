@@ -25,7 +25,7 @@ public sealed class NotificationNameTests
         Assert.Equal(new NotificationName("A channel"), new NotificationName(" A channel "));
     }
 
-    [Fact]
+    [Fact(DisplayName = "BR-NT-003: a name holds no control character")]
     public void ANameHoldsNoControlCharacter()
     {
         Assert.Throws<ArgumentException>(() => new NotificationName("A\u0007channel"));

@@ -100,7 +100,7 @@ public sealed class NotificationDestinationEndpointTests
         Assert.Equal("wxyz", held.UrlTail);
     }
 
-    [Fact(DisplayName = "A change that names only the name keeps the address, and an empty address keeps the held one")]
+    [Fact(DisplayName = "BR-NT-003: A change that names only the name keeps the address, and an empty address keeps the held one")]
     public async Task AChangeOfTheNameKeepsTheAddress()
     {
         await using NotificationFeature feature = new();
@@ -197,7 +197,7 @@ public sealed class NotificationDestinationEndpointTests
         Assert.Empty(feature.End.Heard);
     }
 
-    [Fact(DisplayName = "Removing a destination takes it out of the sets of rules, and removes a set left with nowhere to send")]
+    [Fact(DisplayName = "BR-NT-004: Removing a destination takes it out of the sets of rules, and removes a set left with nowhere to send")]
     public async Task RemovingTakesItOutOfTheRules()
     {
         await using NotificationFeature feature = new();
@@ -230,7 +230,7 @@ public sealed class NotificationDestinationEndpointTests
         Assert.Equal([kept], left.Destinations.Select(destination => destination.Value));
     }
 
-    [Fact(DisplayName = "A trial sends one fixed sample at once and answers whether it was taken")]
+    [Fact(DisplayName = "BR-NS-002: A trial sends one fixed sample at once and answers whether it was taken, and leaves no result on the destination")]
     public async Task ATrialSendsOneSample()
     {
         await using NotificationFeature feature = new();
