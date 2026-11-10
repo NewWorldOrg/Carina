@@ -70,6 +70,19 @@ public sealed class NotificationDeliveryRepository(CarinaDbContext context) : IN
 
         context.Update(delivery);
 
-        await context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.Entry(delivery).State = EntityState.Detached;
+        }
+        catch
+        {
+            context.Entry(delivery).State = EntityState.Detached;
+
+            throw;
+        }
     }
 }

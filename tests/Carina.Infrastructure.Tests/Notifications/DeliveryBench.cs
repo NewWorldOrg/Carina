@@ -19,6 +19,10 @@ internal sealed class HeldDeliveries : INotificationDeliveryRepository
 
     public int FailingReads { get; set; }
 
+    public int FailingSaves { get; set; }
+
+    public Action? BeforeSave { get; set; }
+
     public Task<NotificationDelivery?> FindAsync(NotificationDeliveryId id, CancellationToken cancellationToken)
         => Task.FromResult(Rows.Select(row => row.Delivery).SingleOrDefault(delivery => delivery.Id.Equals(id)));
 
@@ -48,9 +52,32 @@ internal sealed class HeldDeliveries : INotificationDeliveryRepository
 
     public Task SaveAsync(NotificationDelivery delivery, CancellationToken cancellationToken)
     {
+        BeforeSave?.Invoke();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (FailingSaves > 0)
+        {
+            FailingSaves--;
+            PutBackAsItWasQueued(delivery);
+
+            throw new InvalidOperationException("The ledger could not be written.");
+        }
+
         Saved++;
 
         return Task.CompletedTask;
+    }
+
+    public NotificationDelivery Held(NotificationDeliveryId id) => Rows.Select(row => row.Delivery).Single(delivery => delivery.Id.Equals(id));
+
+    private void PutBackAsItWasQueued(NotificationDelivery delivery)
+    {
+        int at = Rows.FindIndex(row => row.Delivery.Id.Equals(delivery.Id));
+
+        Rows[at] = Rows[at] with
+        {
+            Delivery = NotificationDelivery.Queue(delivery.Id, delivery.NoticeId, delivery.DestinationId, delivery.QueuedAt),
+        };
     }
 }
 
@@ -121,7 +148,7 @@ internal sealed class DeliveryBench : IAsyncDisposable
         Rig = new WebhookRig(answer);
         Seal = new WebhookUrlSeal(keys);
         Dispatch = new NoticeDispatch(Rig.Line, Settings, Clock);
-        Round = new NotificationDeliveryRound(Deliveries, Destinations, Seal, Dispatch, Settings, Clock, Said);
+        Round = RoundThatRemembersNothing();
     }
 
     public NotificationDeliverySettings Settings { get; }
@@ -141,6 +168,8 @@ internal sealed class DeliveryBench : IAsyncDisposable
     public HeardOf<NotificationDeliveryRound> Said { get; } = new();
 
     public NotificationDeliveryRound Round { get; }
+
+    public UnwrittenDeliveries Unwritten { get; private set; } = new();
 
     public DateTime Now => Clock.GetUtcNow().UtcDateTime;
 
@@ -186,6 +215,13 @@ internal sealed class DeliveryBench : IAsyncDisposable
     }
 
     public Task<NotificationDeliveries> PassAsync() => Round.SendAsync(CancellationToken.None);
+
+    public NotificationDeliveryRound RoundThatRemembersNothing()
+    {
+        Unwritten = new UnwrittenDeliveries();
+
+        return new NotificationDeliveryRound(Deliveries, Destinations, Seal, Dispatch, Unwritten, Settings, Clock, Said);
+    }
 
     public async ValueTask DisposeAsync() => await Rig.DisposeAsync();
 }

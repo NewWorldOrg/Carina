@@ -365,6 +365,136 @@ public sealed class NotificationDeliveryRoundTests
         Assert.Empty(bench.Paths);
     }
 
+    [Fact(DisplayName = "BR-NS-001: a notice that was taken but could not be written as sent is not sent again, and the next pass writes it")]
+    public async Task ANoticeTakenButNotWrittenIsNotSentAgain()
+    {
+        await using DeliveryBench bench = new(_ => CannedAnswer.Text(200, "ok"));
+        NotificationDestination unwritten = bench.Destination(WebhookRig.Slack);
+        NotificationDestination other = bench.Destination(WebhookRig.Discord);
+        NotificationDeliveryId first = bench.Waiting(unwritten, DeliveryBench.Began).Id;
+        NotificationDelivery second = bench.Waiting(other, DeliveryBench.Began);
+        bench.Deliveries.FailingSaves = 1;
+
+        NotificationDeliveries moved = await bench.PassAsync();
+
+        Assert.Equal(new NotificationDeliveries(2, 0, 0), moved);
+        Assert.Equal(NotificationDeliveryState.Queued, bench.Deliveries.Held(first).State);
+        Assert.Equal(NotificationDeliveryState.Sent, second.State);
+        Assert.Equal([SlackPath, DiscordPath], bench.Paths);
+        Assert.Equal(1, bench.Unwritten.Count);
+
+        bench.Clock.Turn(TimeSpan.FromSeconds(5));
+        NotificationDeliveries later = await bench.PassAsync();
+
+        Assert.Equal(NotificationDeliveries.None, later);
+        Assert.Equal(NotificationDeliveryState.Sent, bench.Deliveries.Held(first).State);
+        Assert.Equal(DeliveryBench.Began, bench.Deliveries.Held(first).SentAt);
+        Assert.Equal([SlackPath, DiscordPath], bench.Paths);
+        Assert.Equal(0, bench.Unwritten.Count);
+    }
+
+    [Fact(DisplayName = "BR-NS-001: a pass that no longer remembers a notice it could not write as sent sends it once more")]
+    public async Task APassThatForgotSendsOnceMore()
+    {
+        await using DeliveryBench bench = new(_ => CannedAnswer.Text(200, "ok"));
+        NotificationDeliveryId delivery = bench.Waiting(bench.Destination(WebhookRig.Slack)).Id;
+        bench.Deliveries.FailingSaves = 1;
+        await bench.PassAsync();
+
+        NotificationDeliveries moved = await bench.RoundThatRemembersNothing().SendAsync(CancellationToken.None);
+
+        Assert.Equal(new NotificationDeliveries(1, 0, 0), moved);
+        Assert.Equal(NotificationDeliveryState.Sent, bench.Deliveries.Held(delivery).State);
+        Assert.Equal([SlackPath, SlackPath], bench.Paths);
+    }
+
+    [Fact(DisplayName = "BR-NS-001: a notice that still cannot be written as sent stays remembered and is still not sent again")]
+    public async Task ANoticeThatStillCannotBeWrittenStaysRemembered()
+    {
+        await using DeliveryBench bench = new(_ => CannedAnswer.Text(200, "ok"));
+        NotificationDeliveryId delivery = bench.Waiting(bench.Destination(WebhookRig.Slack)).Id;
+        bench.Deliveries.FailingSaves = 2;
+        await bench.PassAsync();
+
+        await bench.PassAsync();
+
+        Assert.Equal(NotificationDeliveryState.Queued, bench.Deliveries.Held(delivery).State);
+        Assert.Equal(1, bench.Unwritten.Count);
+
+        await bench.PassAsync();
+
+        Assert.Equal(NotificationDeliveryState.Sent, bench.Deliveries.Held(delivery).State);
+        Assert.Equal([SlackPath], bench.Paths);
+        Assert.Equal(0, bench.Unwritten.Count);
+    }
+
+    [Fact(DisplayName = "BR-NS-001: a notice that was taken is forgotten once its delivery is no longer held")]
+    public async Task ANoticeTakenIsForgottenOnceItsDeliveryIsGone()
+    {
+        await using DeliveryBench bench = new(_ => CannedAnswer.Text(200, "ok"));
+        NotificationDestination destination = bench.Destination(WebhookRig.Slack);
+        bench.Waiting(destination);
+        bench.Deliveries.FailingSaves = 1;
+        await bench.PassAsync();
+        bench.Deliveries.Rows.Clear();
+        bench.Waiting(destination);
+
+        NotificationDeliveries moved = await bench.PassAsync();
+
+        Assert.Equal(new NotificationDeliveries(1, 0, 0), moved);
+        Assert.Equal(0, bench.Unwritten.Count);
+    }
+
+    [Fact(DisplayName = "BR-NS-001: a notice given up that could not be written so does not keep the rest of the pass from going")]
+    public async Task AGivingUpThatCouldNotBeWrittenDoesNotStopThePass()
+    {
+        await using DeliveryBench bench = new(_ => CannedAnswer.Text(200, "ok"));
+        NotificationDeliveryId tooOld = bench.Waiting(bench.Destination(WebhookRig.Slack), DeliveryBench.Began.AddHours(-2)).Id;
+        NotificationDelivery fresh = bench.Waiting(bench.Destination(WebhookRig.Discord));
+        bench.Deliveries.FailingSaves = 1;
+
+        NotificationDeliveries moved = await bench.PassAsync();
+
+        Assert.Equal(new NotificationDeliveries(1, 0, 0), moved);
+        Assert.Equal(NotificationDeliveryState.Queued, bench.Deliveries.Held(tooOld).State);
+        Assert.Equal(NotificationDeliveryState.Sent, fresh.State);
+        Assert.Equal(0, bench.Unwritten.Count);
+
+        Assert.Equal(new NotificationDeliveries(0, 0, 1), await bench.PassAsync());
+        Assert.Equal(NotificationDeliveryState.GivenUp, bench.Deliveries.Held(tooOld).State);
+        Assert.Equal([DiscordPath], bench.Paths);
+    }
+
+    [Fact(DisplayName = "BR-NA-003: what is said of a notice that could not be written carries no part of the address")]
+    public async Task WhatIsSaidOfAnUnwrittenNoticeCarriesNoAddress()
+    {
+        await using DeliveryBench bench = new(_ => CannedAnswer.Text(200, "ok"));
+        NotificationDeliveryId delivery = bench.Waiting(bench.Destination(WebhookRig.Slack)).Id;
+        bench.Deliveries.FailingSaves = 1;
+
+        await bench.PassAsync();
+
+        string said = Assert.Single(bench.Said.Said);
+        Assert.StartsWith("Error ", said, StringComparison.Ordinal);
+        Assert.Contains(delivery.Value.ToString(), said, StringComparison.Ordinal);
+        Assert.DoesNotContain("made-up", said, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("hooks.slack.com", said, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/services/", said, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact(DisplayName = "BR-NS-001: a pass called off while it writes is called off, and is not taken for a write that failed")]
+    public async Task APassCalledOffWhileItWritesIsCalledOff()
+    {
+        await using DeliveryBench bench = new(_ => CannedAnswer.Text(200, "ok"));
+        bench.Waiting(bench.Destination(WebhookRig.Slack));
+        using CancellationTokenSource calledOff = new();
+        bench.Deliveries.BeforeSave = calledOff.Cancel;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => bench.Round.SendAsync(calledOff.Token));
+
+        Assert.Empty(bench.Said.Said);
+    }
+
     [Theory(DisplayName = "BR-NA-003: whatever a webhook answers, no line of the log carries the address or any part of it")]
     [InlineData(200)]
     [InlineData(400)]

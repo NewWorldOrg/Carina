@@ -114,6 +114,7 @@ public sealed class NotificationDeliveryJobTests
             services.AddSingleton(Bench.Settings);
             services.AddSingleton(Bench.Seal);
             services.AddSingleton(Bench.Dispatch);
+            services.AddSingleton(Bench.Unwritten);
             services.AddSingleton<TimeProvider>(Bench.Clock);
             services.AddScoped<NotificationDeliveryRound>();
 

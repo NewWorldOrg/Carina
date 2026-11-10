@@ -25,13 +25,15 @@ public sealed record NotificationDeliveries(int Sent, int Failed, int GivenUp)
 /// </summary>
 /// <remarks>
 /// A delivery whose next attempt is not due is passed over without holding up the ones behind it. After a failure
-/// worth another try a destination is left alone until the next pass.
+/// worth another try a destination is left alone until the next pass. A delivery that was taken but could not be
+/// written as sent is not sent again while the process remembers it; only the writing is tried again.
 /// </remarks>
 public sealed class NotificationDeliveryRound(
     INotificationDeliveryRepository deliveries,
     INotificationDestinationRepository destinations,
     WebhookUrlSeal seal,
     NoticeDispatch dispatch,
+    UnwrittenDeliveries unwritten,
     NotificationDeliverySettings settings,
     TimeProvider clock,
     ILogger<NotificationDeliveryRound> logger)
@@ -39,6 +41,8 @@ public sealed class NotificationDeliveryRound(
     public async Task<NotificationDeliveries> SendAsync(CancellationToken cancellationToken)
     {
         IReadOnlyList<NoticeOnItsWay> waiting = await deliveries.WaitingAsync(cancellationToken);
+
+        unwritten.DropAllBut(waiting.Select(row => row.Delivery.Id));
 
         if (waiting.Count is 0)
         {
@@ -73,6 +77,13 @@ public sealed class NotificationDeliveryRound(
         {
             DateTime now = Now();
 
+            if (unwritten.TakenAt(row.Delivery.Id) is { } takenAt)
+            {
+                await WriteAsTakenAsync(row.Delivery, takenAt, cancellationToken);
+
+                continue;
+            }
+
             if (webhook is null || !destination.Enabled || IsTooOld(row.Notice, now))
             {
                 moved = moved.With(await GiveUpAsync(row, destination, webhook, cancellationToken));
@@ -106,7 +117,7 @@ public sealed class NotificationDeliveryRound(
         if (webhook is null)
         {
             destination.NoteFailed(NoticeFailure.Unreadable, Now());
-            await destinations.KeepResultAsync(destination, cancellationToken);
+            await KeepResultAsync(destination, cancellationToken);
             logger.LogWarning(
                 "The address of destination {Destination} does not open with the keys held; nothing is sent to it.",
                 destination.Id);
@@ -133,9 +144,63 @@ public sealed class NotificationDeliveryRound(
         }
 
         row.Delivery.GiveUp(reason);
-        await deliveries.SaveAsync(row.Delivery, cancellationToken);
 
-        return new NotificationDeliveries(0, 0, 1);
+        return await IsWrittenAsync(row.Delivery, cancellationToken)
+            ? new NotificationDeliveries(0, 0, 1)
+            : NotificationDeliveries.None;
+    }
+
+    private async Task WriteAsTakenAsync(NotificationDelivery delivery, DateTime takenAt, CancellationToken cancellationToken)
+    {
+        delivery.Deliver(takenAt);
+
+        if (await IsWrittenAsync(delivery, cancellationToken))
+        {
+            unwritten.Drop(delivery.Id);
+        }
+    }
+
+    private async Task<bool> IsWrittenAsync(NotificationDelivery delivery, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await deliveries.SaveAsync(delivery, cancellationToken);
+
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception failure)
+        {
+            logger.LogError(
+                "Delivery {Delivery} could not be written as {State} ({Failure}); the rest of this pass goes on.",
+                delivery.Id,
+                delivery.State,
+                failure.GetType().Name);
+
+            return false;
+        }
+    }
+
+    private async Task KeepResultAsync(NotificationDestination destination, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await destinations.KeepResultAsync(destination, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception failure)
+        {
+            logger.LogError(
+                "What came of the last send to destination {Destination} could not be written ({Failure}); the rest of this pass goes on.",
+                destination.Id,
+                failure.GetType().Name);
+        }
     }
 
     private async Task<NotificationDeliveries> SendOneAsync(
@@ -149,10 +214,15 @@ public sealed class NotificationDeliveryRound(
             webhook,
             NoticePayload.For(destination.Target, row.Notice),
             cancellationToken);
-        NotificationDeliveries came = Settle(row.Delivery, destination, answer, Now());
+        DateTime at = Now();
+        NotificationDeliveries came = Settle(row.Delivery, destination, answer, at);
 
-        await deliveries.SaveAsync(row.Delivery, cancellationToken);
-        await destinations.KeepResultAsync(destination, cancellationToken);
+        if (!await IsWrittenAsync(row.Delivery, cancellationToken) && answer.Failure is null)
+        {
+            unwritten.Keep(row.Delivery.Id, at);
+        }
+
+        await KeepResultAsync(destination, cancellationToken);
 
         if (answer.Failure is { } failure)
         {

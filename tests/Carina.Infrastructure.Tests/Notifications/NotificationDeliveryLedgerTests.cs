@@ -173,6 +173,7 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
                 new NotificationDestinationRepository(passing),
                 seal,
                 new NoticeDispatch(rig.Line, settings, clock),
+                new UnwrittenDeliveries(),
                 settings,
                 clock,
                 NullLogger<NotificationDeliveryRound>.Instance);
@@ -190,6 +191,66 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
         Assert.Empty(await deliveries.WaitingAsync(Cancel));
         Assert.Equal(Epoch, held.LastResultAt);
         Assert.True(held.Enabled);
+    }
+
+    [Fact(DisplayName = "BR-NS-001: a delivery removed while it was being sent stays gone, is not remembered, and does not keep the next one from being written")]
+    public async Task ADeliveryRemovedWhileItWasBeingSentStaysGone()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDeliveryId? removedOnTheWay = null;
+        await using WebhookRig rig = new(async _ =>
+        {
+            if (removedOnTheWay is { } leaving)
+            {
+                removedOnTheWay = null;
+                await using CarinaDbContext removing = database.Open();
+                await removing.Set<NotificationDelivery>().Where(delivery => delivery.Id == leaving).ExecuteDeleteAsync(Cancel);
+            }
+
+            return CannedAnswer.Text(200, "ok");
+        });
+        WebhookUrlSeal seal = new(new EphemeralDataProtectionProvider());
+        NotificationDestination destination = NotificationDestination.Register(
+            NotificationDestinationId.New(),
+            new NotificationName("Somewhere"),
+            WebhookRig.Slack.Target,
+            seal.Seal(WebhookRig.Slack),
+            WebhookRig.Slack.Tail,
+            Epoch);
+
+        await using (CarinaDbContext registering = database.Open())
+        {
+            await new NotificationDestinationRepository(registering).AddAsync(destination, Cancel);
+        }
+
+        NotificationDeliveryId first = await HeldAsync(destination.Id, Epoch.AddMinutes(-2));
+        NotificationDeliveryId second = await HeldAsync(destination.Id, Epoch.AddMinutes(-1));
+        removedOnTheWay = first;
+        NotificationDeliverySettings settings = new();
+        HandTurnedClock clock = new(new DateTimeOffset(Epoch));
+        UnwrittenDeliveries unwritten = new();
+
+        await using (CarinaDbContext passing = database.Open())
+        {
+            NotificationDeliveryRound round = new(
+                new NotificationDeliveryRepository(passing),
+                new NotificationDestinationRepository(passing),
+                seal,
+                new NoticeDispatch(rig.Line, settings, clock),
+                unwritten,
+                settings,
+                clock,
+                NullLogger<NotificationDeliveryRound>.Instance);
+            await round.SendAsync(Cancel);
+        }
+
+        await using CarinaDbContext context = database.Open();
+        NotificationDeliveryRepository deliveries = new(context);
+
+        Assert.Equal(2, rig.Server.Heard.Count);
+        Assert.Null(await deliveries.FindAsync(first, Cancel));
+        Assert.Equal(NotificationDeliveryState.Sent, (await deliveries.FindAsync(second, Cancel))!.State);
+        Assert.Equal(0, unwritten.Count);
     }
 
     [Fact(DisplayName = "BR-NT-006: a writer of the destinations and the sets of rules holds its turn until its transaction ends, and the next one waits for it")]

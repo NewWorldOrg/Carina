@@ -24,5 +24,8 @@ public interface INotificationDeliveryRepository
         int count,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Writes a delivery where it now stands. A delivery that is no longer held is left gone.
+    /// </summary>
     Task SaveAsync(NotificationDelivery delivery, CancellationToken cancellationToken);
 }

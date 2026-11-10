@@ -430,6 +430,7 @@ public static class ServiceCollectionExtensions
             NoticeLine.UsualDeadline));
         services.TryAddSingleton<WebhookUrlSeal>();
         services.TryAddSingleton<NoticeDispatch>();
+        services.TryAddSingleton<UnwrittenDeliveries>();
         services.TryAddSingleton<EncodeQueueTurn>();
         services.TryAddSingleton<OutputRootDeclarations>();
         services.TryAddSingleton<IRenameProbe, DirectoryRenameProbe>();
