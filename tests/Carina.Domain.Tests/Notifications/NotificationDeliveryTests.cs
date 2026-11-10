@@ -49,8 +49,8 @@ public sealed class NotificationDeliveryTests
         Assert.Equal(At.AddSeconds(31), delivery.NextAttemptAt);
     }
 
-    [Fact(DisplayName = "BR-NS-001: each failure moves the next attempt out by 30 seconds, 2 minutes and 10 minutes, and the one after is given up")]
-    public void TheFailureAfterTheThirdWaitIsGivenUp()
+    [Fact(DisplayName = "BR-NS-001, BR-NC-001: the first three failures move the next attempt out by 30 seconds, 2 minutes and 10 minutes, and the fourth failure is given up")]
+    public void TheFourthFailureAfterThreeWaitsIsGivenUp()
     {
         NotificationDelivery delivery = Queued();
 

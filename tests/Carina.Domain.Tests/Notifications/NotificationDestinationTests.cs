@@ -93,8 +93,23 @@ public sealed class NotificationDestinationTests
         Assert.Equal(NoticeFailure.ServerFailed, destination.LastFailure);
     }
 
-    [Fact(DisplayName = "BR-NS-002: a rejected destination stays off until it is turned on again")]
-    public void ARejectedDestinationStaysOffUntilItIsTurnedOnAgain()
+    [Fact(DisplayName = "BR-NS-002: a rejected destination nobody turned on again stays off, whatever comes of later attempts")]
+    public void ARejectedDestinationNobodyTurnedOnAgainStaysOff()
+    {
+        NotificationDestination destination = Registered();
+
+        destination.NoteFailed(NoticeFailure.Rejected, At.AddMinutes(1));
+        Assert.False(destination.Enabled);
+
+        destination.NoteDelivered(At.AddMinutes(2));
+        Assert.False(destination.Enabled);
+
+        destination.NoteFailed(NoticeFailure.ServerFailed, At.AddMinutes(3));
+        Assert.False(destination.Enabled);
+    }
+
+    [Fact(DisplayName = "BR-NS-002: a rejected destination is on again once somebody turns it on")]
+    public void ARejectedDestinationIsOnAgainOnceSomebodyTurnsItOn()
     {
         NotificationDestination destination = Registered();
         destination.NoteFailed(NoticeFailure.Rejected, At.AddMinutes(1));

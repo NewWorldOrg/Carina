@@ -13,8 +13,8 @@ public sealed class NoticeRetryTests
         Assert.Equal(TimeSpan.FromSeconds(seconds), NoticeRetry.After(failedAttempts));
     }
 
-    [Fact(DisplayName = "BR-NC-001: no attempt follows the failure after the third wait")]
-    public void NoAttemptFollowsTheFailureAfterTheThirdWait()
+    [Fact(DisplayName = "BR-NS-001, BR-NC-001: no attempt follows the fourth failure, the one after the third wait")]
+    public void NoAttemptFollowsTheFourthFailure()
     {
         Assert.Null(NoticeRetry.After(4));
         Assert.Equal(4, NoticeRetry.MostAttempts);
@@ -33,7 +33,7 @@ public sealed class NoticeRetryTests
         Assert.Equal(TimeSpan.FromMinutes(10), NoticeRetry.After(2, TimeSpan.FromHours(3)));
     }
 
-    [Fact(DisplayName = "BR-NC-001: a wait asked for after the last attempt does not bring another")]
+    [Fact(DisplayName = "BR-NS-001, BR-NC-001: a wait asked for after the fourth failure does not bring another attempt")]
     public void AWaitAskedForAfterTheLastAttemptDoesNotBringAnother()
     {
         Assert.Null(NoticeRetry.After(4, TimeSpan.FromSeconds(1)));

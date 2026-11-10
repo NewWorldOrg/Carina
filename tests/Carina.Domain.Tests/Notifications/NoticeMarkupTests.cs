@@ -41,6 +41,15 @@ public sealed class NoticeMarkupTests
         Assert.Equal(escaped, NoticeMarkup.Discord(written, NoticeMarkup.DiscordDescriptionLongest));
     }
 
+    [Theory(DisplayName = "BR-ND-002: the words Discord reads as a mention of everyone are left as written, the escaping not being what keeps them quiet")]
+    [InlineData("@everyone")]
+    [InlineData("@here")]
+    [InlineData("港町 @everyone 灯台 @here")]
+    public void TheWordsDiscordReadsAsAMentionOfEveryoneAreLeftAsWritten(string written)
+    {
+        Assert.Equal(written, NoticeMarkup.Discord(written, NoticeMarkup.DiscordDescriptionLongest));
+    }
+
     [Fact(DisplayName = "BR-ND-002: control characters and bidirectional controls do not reach either shape, and line breaks do")]
     public void ControlCharactersDoNotReachEitherShape()
     {
@@ -118,6 +127,21 @@ public sealed class NoticeMarkupTests
 
         Assert.True(shaped.Title.Length <= NoticeMarkup.DiscordTitleLongest);
         Assert.True(shaped.Body.Length <= NoticeMarkup.DiscordDescriptionLongest);
+        Assert.True(shaped.Title.Length + shaped.Body.Length <= NoticeMarkup.DiscordEmbedLongest);
+    }
+
+    [Theory(DisplayName = "BR-ND-003: a Discord title and description each at its own limit are kept whole, each one past it is cut, and both stay within 6000 together")]
+    [InlineData(256, 4096)]
+    [InlineData(257, 4097)]
+    public void ADiscordTitleAndDescriptionAtAndPastTheirOwnLimitsStayWithinTheTotal(int titleLength, int descriptionLength)
+    {
+        MarkedUpNotice shaped = NoticeMarkup.For(
+            WebhookTarget.Discord,
+            new string('題', titleLength),
+            new string('港', descriptionLength));
+
+        Assert.Equal(NoticeMarkup.DiscordTitleLongest, shaped.Title.Length);
+        Assert.Equal(NoticeMarkup.DiscordDescriptionLongest, shaped.Body.Length);
         Assert.True(shaped.Title.Length + shaped.Body.Length <= NoticeMarkup.DiscordEmbedLongest);
     }
 
