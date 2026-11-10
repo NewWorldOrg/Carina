@@ -57,6 +57,32 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         Assert.Equal(ProgrammeWatchState.Cancelled, listed.Single(row => row.Id.Equals(second)).State);
     }
 
+    [Fact(DisplayName = "BR-NS-003: a row that was told of is followed until the broadcast ends and no longer from the moment it ends, and a row that waits is followed past it")]
+    public async Task ARowThatWasToldOfIsFollowedUntilTheBroadcastEnds()
+    {
+        ProgrammeWatchId told = await watched.AskedAsync(
+            await watched.AnnouncedAsync(Starts, Asked), Asked, 3, NotificationDestinationId.New());
+        ProgrammeWatchId waiting = await watched.AskedAsync(
+            await watched.AnnouncedAsync(Starts, Asked), Asked, 3, NotificationDestinationId.New());
+        ProgrammeWatchId withdrawn = await watched.AskedAsync(
+            await watched.AnnouncedAsync(Starts, Asked), Asked, 3, NotificationDestinationId.New());
+        await ToldAsync(told);
+        await WithdrawnAsync(withdrawn);
+        DateTime ends = Starts + WatchedProgrammes.Length;
+
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWatchRepository rows = new(context);
+
+        IReadOnlyList<ProgrammeWatch> aSecondBefore = await rows.ListFollowedAsync(ends.AddSeconds(-1), Cancel);
+        IReadOnlyList<ProgrammeWatch> atTheEnd = await rows.ListFollowedAsync(ends, Cancel);
+
+        Assert.Contains(aSecondBefore, row => row.Id.Equals(told));
+        Assert.Contains(aSecondBefore, row => row.Id.Equals(waiting));
+        Assert.DoesNotContain(aSecondBefore, row => row.Id.Equals(withdrawn));
+        Assert.DoesNotContain(atTheEnd, row => row.Id.Equals(told));
+        Assert.Contains(atTheEnd, row => row.Id.Equals(waiting));
+    }
+
     [Fact(DisplayName = "BR-NS-003: a settled row is removed and the same broadcast asked for again in one write")]
     public async Task ASettledRowGivesWayToANewOneForTheSameBroadcast()
     {
@@ -126,6 +152,16 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         ProgrammeWatch held = (await rows.FindAsync(watch, Cancel))!;
 
         held.Cancel(Asked.AddMinutes(5));
+        await rows.SaveAsync(held, Cancel);
+    }
+
+    private async Task ToldAsync(ProgrammeWatchId watch)
+    {
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWatchRepository rows = new(context);
+        ProgrammeWatch held = (await rows.FindAsync(watch, Cancel))!;
+
+        held.Notify(Starts.AddMinutes(-3));
         await rows.SaveAsync(held, Cancel);
     }
 
