@@ -1,9 +1,10 @@
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
+using Carina.Infrastructure.Tests.Thumbnails;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
@@ -36,6 +37,25 @@ public sealed class NotificationIntakeJobTests
         Assert.Equal(
             [Began + BeforeFirstLook - LooksBack, Began + BeforeFirstLook + BetweenLooks - LooksBack],
             machine.Sources.Asked);
+    }
+
+    [Fact(DisplayName = "BR-NC-004: what happened exactly thirty minutes before a look is taken, and what happened a tick before that is not")]
+    public async Task WhatHappenedExactlyThirtyMinutesBeforeALookIsTakenAndATickBeforeIsNot()
+    {
+        Loop machine = new();
+        DateTime edge = Began + BeforeFirstLook - LooksBack;
+        Guid onTheEdge = machine.RecordingBegan(edge);
+        machine.RecordingBegan(edge - TimeSpan.FromTicks(1));
+
+        using NotificationIntakeJob job = machine.Job();
+        await job.StartAsync(Cancel);
+        await machine.WaitingAgain("the loop never settled into its first wait");
+        machine.Clock.Turn(BeforeFirstLook);
+        await machine.WaitingAgain("the loop never came back from the look");
+        await job.StopAsync(Cancel);
+
+        Notice notice = Assert.Single(machine.Notices.Held);
+        Assert.Equal(onTheEdge, notice.SourceId);
     }
 
     [Fact(DisplayName = "BR-ND-004: what one look took is not taken again at the next, and what came since is")]
@@ -80,6 +100,46 @@ public sealed class NotificationIntakeJobTests
         Assert.Equal(recording, notice.SourceId);
     }
 
+    [Fact(DisplayName = "a look that fails is logged once as an error, and the looks that go well log none")]
+    public async Task ALookThatFailsIsLoggedOnceAsAnError()
+    {
+        Loop machine = new();
+        machine.RecordingBegan(Began.AddSeconds(5));
+        machine.Sources.FailingLooks = 1;
+
+        using NotificationIntakeJob job = machine.Job();
+        await job.StartAsync(Cancel);
+        await machine.WaitingAgain("the loop never settled into its first wait");
+        machine.Clock.Turn(BeforeFirstLook);
+        await machine.WaitingAgain("the loop never came back from the look that failed");
+        machine.Clock.Turn(BetweenLooks);
+        await machine.WaitingAgain("the loop never came back from the look after the failure");
+        await job.StopAsync(Cancel);
+
+        Assert.Single(Errors(machine.SaidOfLooks));
+        Assert.Empty(Errors(machine.SaidOfNotices));
+    }
+
+    [Fact(DisplayName = "a notice that cannot be written is logged once as an error, naming the row it came from")]
+    public async Task ANoticeThatCannotBeWrittenIsLoggedOnceAsAnError()
+    {
+        Loop machine = new();
+        Guid refused = machine.RecordingBegan(Began.AddSeconds(5));
+        machine.RecordingBegan(Began.AddSeconds(6));
+        machine.Notices.Refusing = refused;
+
+        using NotificationIntakeJob job = machine.Job();
+        await job.StartAsync(Cancel);
+        await machine.WaitingAgain("the loop never settled into its first wait");
+        machine.Clock.Turn(BeforeFirstLook);
+        await machine.WaitingAgain("the loop never came back from the look");
+        await job.StopAsync(Cancel);
+
+        string error = Assert.Single(Errors(machine.SaidOfNotices));
+        Assert.Contains(refused.ToString(), error, StringComparison.Ordinal);
+        Assert.Empty(Errors(machine.SaidOfLooks));
+    }
+
     [Fact(DisplayName = "a notice that cannot be written does not keep the others of the same look from being written")]
     public async Task ANoticeThatCannotBeWrittenDoesNotKeepTheOthersFromBeingWritten()
     {
@@ -120,8 +180,15 @@ public sealed class NotificationIntakeJobTests
         Assert.Equal(Assert.Single(machine.Notices.Held).Id, delivery.NoticeId);
     }
 
+    private static IEnumerable<string> Errors<T>(HeardOf<T> said)
+        => said.Said.Where(line => line.StartsWith($"{LogLevel.Error} ", StringComparison.Ordinal));
+
     private sealed class Loop
     {
+        public HeardOf<NotificationIntakeJob> SaidOfLooks { get; } = new();
+
+        public HeardOf<NotificationIntakeRound> SaidOfNotices { get; } = new();
+
         public HandTurnedClock Clock { get; } = new(new DateTimeOffset(Began));
 
         public HeldSources Sources { get; } = new();
@@ -135,7 +202,7 @@ public sealed class NotificationIntakeJobTests
         public NotificationIntakeJob Job()
         {
             ServiceCollection services = new();
-            services.AddLogging();
+            services.AddSingleton<ILogger<NotificationIntakeRound>>(SaidOfNotices);
             services.AddScoped<INoticeSourceReader>(_ => Sources);
             services.AddScoped<INoticeRepository>(_ => Notices);
             services.AddScoped<INotificationRuleRepository>(_ => Rules);
@@ -149,7 +216,7 @@ public sealed class NotificationIntakeJobTests
                 services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
                 Settings(),
                 Clock,
-                NullLogger<NotificationIntakeJob>.Instance);
+                SaidOfLooks);
         }
 
         public Task WaitingAgain(string what) => Eventually.Happens(() => Clock.Pending is 1, what);
