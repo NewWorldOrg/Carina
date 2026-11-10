@@ -34,7 +34,7 @@ public sealed class NotificationDestinationEndpointTests
     [InlineData("https://someone@hooks.slack.com/services/T0000/B0000/made-up-token-wxyz")]
     [InlineData("https://hooks.slack.com.evil.example/services/T0000/B0000/made-up-token-wxyz")]
     [InlineData("https://discord.com/channels/1234/made-up-token-wxyz")]
-    [InlineData("https://[::ffff:10.0.0.3]/services/made-up-token-wxyz")]
+    [InlineData("https://[::ffff:10.20.30.40]/services/made-up-token-wxyz")]
     [InlineData("made-up-token-wxyz")]
     [InlineData("")]
     public async Task ABadAddressIsRefusedWithoutBeingRepeated(string url)

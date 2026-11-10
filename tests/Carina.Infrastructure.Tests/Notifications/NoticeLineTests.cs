@@ -180,7 +180,7 @@ public sealed class NoticeLineTests
     [InlineData("::1")]
     [InlineData("fe80::1")]
     [InlineData("fd00::1")]
-    [InlineData("::ffff:10.0.0.3")]
+    [InlineData("::ffff:10.20.30.40")]
     [InlineData("203.0.113.40,10.0.0.5")]
     public async Task ANameThatResolvesInwardsIsNotConnectedTo(string resolved)
     {
