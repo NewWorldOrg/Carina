@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
@@ -6,6 +7,7 @@ using System.Text;
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Tests.DataBroadcast;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
@@ -94,6 +96,8 @@ public sealed class NoticeLineTests
     [InlineData("Retry-After: 7", 7.0)]
     [InlineData("X-RateLimit-Reset-After: 1.5", 1.5)]
     [InlineData("Retry-After: 7|X-RateLimit-Reset-After: 90", 7.0)]
+    [InlineData("Retry-After: 600", 600.0)]
+    [InlineData("Retry-After: 601", 600.0)]
     [InlineData("Retry-After: 86400", 600.0)]
     [InlineData("X-RateLimit-Reset-After: 1e12", 600.0)]
     public async Task A429CarriesHowLongToWait(string headers, double seconds)
@@ -119,6 +123,35 @@ public sealed class NoticeLineTests
         Assert.Equal(new NoticeAnswer(NoticeFailure.RateLimited, false, null), answer);
     }
 
+    [Theory(DisplayName = "BR-NC-001: a 429 that names a time to come back at carries the wait until then, never more than 10 minutes")]
+    [InlineData(90, 90.0)]
+    [InlineData(600, 600.0)]
+    [InlineData(3600, 600.0)]
+    public async Task A429ThatNamesATimeCarriesTheWaitUntilThen(int secondsAhead, double seconds)
+    {
+        HandTurnedClock clock = new();
+        string at = clock.GetUtcNow().AddSeconds(secondsAhead).ToString("R", CultureInfo.InvariantCulture);
+        await using WebhookRig rig = new(_ => CannedAnswer.Of(429, [], $"Retry-After: {at}"), clock: clock);
+
+        NoticeAnswer answer = await rig.Line.SendAsync(WebhookRig.Slack, Payload, CancellationToken.None);
+
+        Assert.Equal(new NoticeAnswer(NoticeFailure.RateLimited, false, TimeSpan.FromSeconds(seconds)), answer);
+    }
+
+    [Theory(DisplayName = "BR-NC-001: a 429 that names a time already past carries no wait")]
+    [InlineData(1)]
+    [InlineData(86400)]
+    public async Task A429ThatNamesATimeAlreadyPastCarriesNoWait(int secondsAgo)
+    {
+        HandTurnedClock clock = new();
+        string at = clock.GetUtcNow().AddSeconds(-secondsAgo).ToString("R", CultureInfo.InvariantCulture);
+        await using WebhookRig rig = new(_ => CannedAnswer.Of(429, [], $"Retry-After: {at}"), clock: clock);
+
+        NoticeAnswer answer = await rig.Line.SendAsync(WebhookRig.Slack, Payload, CancellationToken.None);
+
+        Assert.Equal(new NoticeAnswer(NoticeFailure.RateLimited, false, null), answer);
+    }
+
     [Theory(DisplayName = "BR-NS-001: a 5xx is a failure of the other end")]
     [InlineData(500)]
     [InlineData(502)]
@@ -135,12 +168,27 @@ public sealed class NoticeLineTests
     [Fact(DisplayName = "BR-NS-001: a webhook that does not answer within the deadline is timed out")]
     public async Task AWebhookThatDoesNotAnswerInTimeIsTimedOut()
     {
+        HandTurnedClock clock = new();
+        TaskCompletionSource heard = new(TaskCreationOptions.RunContinuationsAsynchronously);
         TaskCompletionSource<CannedAnswer> never = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using WebhookRig rig = new(_ => never.Task, TimeSpan.FromMilliseconds(400));
+        await using WebhookRig rig = new(
+            _ =>
+            {
+                heard.TrySetResult();
 
-        NoticeAnswer answer = await rig.Line.SendAsync(WebhookRig.Slack, Payload, CancellationToken.None);
+                return never.Task;
+            },
+            NoticeLine.UsualDeadline,
+            clock);
 
-        Assert.Equal(NoticeAnswer.Failed(NoticeFailure.TimedOut), answer);
+        Task<NoticeAnswer> sending = rig.Line.SendAsync(WebhookRig.Slack, Payload, CancellationToken.None);
+        await heard.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        clock.Turn(NoticeLine.UsualDeadline - TimeSpan.FromTicks(1));
+        bool endedEarly = sending.IsCompleted;
+        clock.Turn(TimeSpan.FromTicks(1));
+
+        Assert.False(endedEarly);
+        Assert.Equal(NoticeAnswer.Failed(NoticeFailure.TimedOut), await sending.WaitAsync(TimeSpan.FromSeconds(30)));
     }
 
     [Fact(DisplayName = "BR-NS-001: the deadline of a notice is 10 seconds")]
@@ -224,11 +272,22 @@ public sealed class NoticeLineTests
     [Fact(DisplayName = "BR-NS-001: a send the caller calls off is called off, not timed out")]
     public async Task ASendTheCallerCallsOffIsCalledOff()
     {
+        TaskCompletionSource heard = new(TaskCreationOptions.RunContinuationsAsynchronously);
         TaskCompletionSource<CannedAnswer> never = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using WebhookRig rig = new(_ => never.Task);
-        using CancellationTokenSource calledOff = new(TimeSpan.FromMilliseconds(300));
+        await using WebhookRig rig = new(
+            _ =>
+            {
+                heard.TrySetResult();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => rig.Line.SendAsync(WebhookRig.Slack, Payload, calledOff.Token));
+                return never.Task;
+            },
+            clock: new HandTurnedClock());
+        using CancellationTokenSource calledOff = new();
+
+        Task<NoticeAnswer> sending = rig.Line.SendAsync(WebhookRig.Slack, Payload, calledOff.Token);
+        await heard.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await calledOff.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sending.WaitAsync(TimeSpan.FromSeconds(30)));
     }
 }
