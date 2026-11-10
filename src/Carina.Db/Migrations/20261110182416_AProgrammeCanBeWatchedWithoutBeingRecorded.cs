@@ -72,6 +72,9 @@ public partial class AProgrammeCanBeWatchedWithoutBeingRecorded : Migration
             name: "ck_notification_event_kind",
             table: "notification_event");
 
+        migrationBuilder.Sql(
+            "DELETE FROM notification_event WHERE kind IN ('ProgrammeStarting', 'WatchedProgrammeMoved', 'WatchedProgrammeGone')");
+
         migrationBuilder.AddCheckConstraint(
             name: "ck_notification_event_kind",
             table: "notification_event",
