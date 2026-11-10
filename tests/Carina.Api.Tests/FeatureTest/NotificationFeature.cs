@@ -237,7 +237,7 @@ internal sealed class NotificationFeature : IAsyncDisposable
                     services.AddSingleton<ILoggerProvider>(heard);
                 }
             });
-        });
+        }).WithTestScheme();
 
         Client = Signed();
     }
@@ -266,7 +266,7 @@ internal sealed class NotificationFeature : IAsyncDisposable
 
     public static string RuleOf(Guid id) => $"{Rules}/{id}";
 
-    public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
+    public HttpClient Anonymous() => Built.CreateClient();
 
     public HttpClient FromElsewhere()
     {
@@ -397,7 +397,7 @@ internal sealed class NotificationFeature : IAsyncDisposable
 
     private HttpClient Signed()
     {
-        HttpClient client = Built.WithTestScheme().CreateClient();
+        HttpClient client = Built.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
 
         return client;

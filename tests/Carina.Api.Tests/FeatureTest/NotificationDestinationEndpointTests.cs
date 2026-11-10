@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 
 using Carina.Domain.Notifications;
+using Carina.Infrastructure.Notifications;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -287,6 +288,91 @@ public sealed class NotificationDestinationEndpointTests
         Assert.All(answers.Take(5), status => Assert.Equal(HttpStatusCode.OK, status));
         Assert.Equal(HttpStatusCode.TooManyRequests, answers[5]);
         Assert.Equal(5, feature.End.Heard.Count);
+    }
+
+    [Fact(DisplayName = "BR-NC-002: Five trials within sixty seconds leave no room for a sixth, and sixty seconds after them a trial is taken again")]
+    public async Task TheRoomForTrialsComesBackAfterTheMinute()
+    {
+        await using NotificationFeature feature = new();
+        List<Guid> ids = [];
+
+        for (int index = 0; index < 6; index++)
+        {
+            ids.Add(await feature.RegisteredAsync($"送り先 {index}"));
+        }
+
+        foreach (Guid id in ids.Take(5))
+        {
+            await feature.PostAsync(NotificationFeature.TrialOf(id));
+        }
+
+        feature.Clock.Now = NotificationFeature.Noon.AddSeconds(59);
+        (HttpStatusCode early, _) = await feature.PostAsync(NotificationFeature.TrialOf(ids[5]));
+        feature.Clock.Now = NotificationFeature.Noon.AddSeconds(60);
+        (HttpStatusCode later, JsonElement body) = await feature.PostAsync(NotificationFeature.TrialOf(ids[5]));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, early);
+        Assert.Equal(HttpStatusCode.OK, later);
+        Assert.True(body.GetProperty("data").GetProperty("delivered").GetBoolean());
+        Assert.Equal(6, feature.End.Heard.Count);
+    }
+
+    [Fact(DisplayName = "BR-NC-002: A trial of a destination that was sent thirty notices within sixty seconds is refused without sending, and is taken once the minute has passed")]
+    public async Task ATrialIsRefusedWhileTheDestinationHasNoRoom()
+    {
+        await using NotificationFeature feature = new();
+        Guid id = await feature.RegisteredAsync();
+
+        for (int index = 0; index < 31; index++)
+        {
+            feature.Waiting(id);
+        }
+
+        NotificationDeliveries passed = await feature.PassAsync();
+        (HttpStatusCode full, _) = await feature.PostAsync(NotificationFeature.TrialOf(id));
+        int heardWhileFull = feature.End.Heard.Count;
+        feature.Clock.Now = NotificationFeature.Noon.AddSeconds(60);
+        (HttpStatusCode later, _) = await feature.PostAsync(NotificationFeature.TrialOf(id));
+
+        Assert.Equal(new NotificationDeliveries(30, 0, 0), passed);
+        Assert.Equal(HttpStatusCode.TooManyRequests, full);
+        Assert.Equal(30, heardWhileFull);
+        Assert.Equal(HttpStatusCode.OK, later);
+        Assert.Equal(31, feature.End.Heard.Count);
+    }
+
+    [Theory(DisplayName = "BR-NC-002: A destination given a new address starts with room, whether the old address had asked for a wait or had been sent thirty notices in the minute")]
+    [InlineData(1, 429)]
+    [InlineData(30, 204)]
+    public async Task ANewAddressStartsWithRoom(int sent, int answered)
+    {
+        await using NotificationFeature feature = new();
+        Guid id = await feature.RegisteredAsync();
+        feature.End.Status = answered;
+        feature.End.AnswerHeaders = answered == 429 ? "Retry-After: 600\r\n" : string.Empty;
+
+        for (int index = 0; index < sent; index++)
+        {
+            feature.Waiting(id);
+        }
+
+        await feature.PassAsync();
+        feature.End.Status = 204;
+        feature.End.AnswerHeaders = string.Empty;
+
+        (HttpStatusCode held, _) = await feature.PostAsync(NotificationFeature.TrialOf(id));
+        await feature.PatchAsync(NotificationFeature.OneOf(id), new { name = "書斎" });
+        (HttpStatusCode renamed, _) = await feature.PostAsync(NotificationFeature.TrialOf(id));
+        int heardBefore = feature.End.Heard.Count;
+        await feature.PatchAsync(NotificationFeature.OneOf(id), new { url = NotificationFeature.DiscordUrl });
+        (HttpStatusCode pointed, JsonElement body) = await feature.PostAsync(NotificationFeature.TrialOf(id));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, held);
+        Assert.Equal(HttpStatusCode.TooManyRequests, renamed);
+        Assert.Equal(sent, heardBefore);
+        Assert.Equal(HttpStatusCode.OK, pointed);
+        Assert.True(body.GetProperty("data").GetProperty("delivered").GetBoolean());
+        Assert.Equal(sent + 1, feature.End.Heard.Count);
     }
 
     [Theory(DisplayName = "A trial the other end does not take answers with the word of the failure and leaves the destination as it was")]
