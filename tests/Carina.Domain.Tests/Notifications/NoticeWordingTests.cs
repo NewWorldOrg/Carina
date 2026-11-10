@@ -393,6 +393,114 @@ public sealed class NoticeWordingTests
         Assert.Equal("チューナー · 11/09(月) 20:15 から", words.Body);
     }
 
+    [Theory(DisplayName = "D-9: a programme about to begin is worded with the programme, the station, its time and the minutes left, and links to the station's live screen")]
+    [InlineData(600, "10 分")]
+    [InlineData(180, "3 分")]
+    [InlineData(170, "3 分")]
+    [InlineData(60, "1 分")]
+    [InlineData(1, "1 分")]
+    public void AProgrammeAboutToBeginIsWorded(int secondsLeft, string left)
+    {
+        NoticeWords words = Worded(Watched(NoticeKind.ProgrammeStarting, Starts.AddSeconds(-secondsLeft)), NoticeKind.ProgrammeStarting);
+
+        Assert.Equal("まもなく放送が始まります", words.Title);
+        Assert.Equal(
+            $"""
+            港町レシピ帖 #15「灯台守のパン」
+            みなと総合1 · 11/09(月) 20:15〜21:00
+            開始まで: {left}
+            """.ReplaceLineEndings("\n"),
+            words.Body);
+        Assert.Equal("https://screens.example/live?ch=32000-1024", words.Link);
+    }
+
+    [Theory(DisplayName = "BR-NS-003: a programme told of as it begins is worded as begun, and one told of later as on air")]
+    [InlineData(0, "放送が始まりました")]
+    [InlineData(59, "放送が始まりました")]
+    [InlineData(60, "放送中です")]
+    [InlineData(1800, "放送中です")]
+    public void AProgrammeToldOfAfterItsStartIsWordedAsBegunOrOnAir(int secondsSince, string title)
+    {
+        NoticeWords words = Worded(Watched(NoticeKind.ProgrammeStarting, Starts.AddSeconds(secondsSince)), NoticeKind.ProgrammeStarting);
+
+        Assert.Equal(title, words.Title);
+        Assert.Equal($"{Programme}\n{Station} · 11/09(月) 20:15〜21:00", words.Body);
+        Assert.Equal("https://screens.example/live?ch=32000-1024", words.Link);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme whose time moved after it was told of is worded with its new time")]
+    public void AWatchedProgrammeThatMovedIsWorded()
+    {
+        ProgrammeWatchNoticeSource moved = Watched(NoticeKind.WatchedProgrammeMoved, Starts.AddMinutes(-2)) with
+        {
+            StartsAt = Starts.AddMinutes(30),
+            EndsAt = Ends.AddMinutes(30),
+        };
+
+        NoticeWords words = Worded(moved, NoticeKind.WatchedProgrammeMoved);
+
+        Assert.Equal("番組の時刻が変わりました", words.Title);
+        Assert.Equal($"{Programme}\n{Station} · 11/09(月) 20:45〜21:30", words.Body);
+        Assert.Equal("https://screens.example/live?ch=32000-1024", words.Link);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme the guide no longer names is worded with the time it had, and links to the guide")]
+    public void AWatchedProgrammeThatIsGoneIsWorded()
+    {
+        NoticeWords words = Worded(Watched(NoticeKind.WatchedProgrammeGone, Starts.AddHours(-1)), NoticeKind.WatchedProgrammeGone);
+
+        Assert.Equal("番組が番組表から消えました", words.Title);
+        Assert.Equal($"{Programme}\n{Station} · 11/09(月) 20:15〜21:00", words.Body);
+        Assert.Equal("https://screens.example/guide", words.Link);
+    }
+
+    [Fact(DisplayName = "a programme asked to be told of on a station with no name kept is worded without the station")]
+    public void AWatchedProgrammeOnAStationWithNoNameIsWorded()
+    {
+        ProgrammeWatchNoticeSource watched = Watched(NoticeKind.ProgrammeStarting, Starts.AddMinutes(-3)) with
+        {
+            ProgrammeName = string.Empty,
+            Station = null,
+        };
+
+        Assert.Equal("(番組名なし)\n11/09(月) 20:15〜21:00\n開始まで: 3 分", Worded(watched, NoticeKind.ProgrammeStarting).Body);
+    }
+
+    [Fact(DisplayName = "BR-ND-002: control characters a broadcaster wrote do not reach the words of a programme asked to be told of")]
+    public void ControlCharactersDoNotReachTheWordsOfAWatchedProgramme()
+    {
+        ProgrammeWatchNoticeSource watched = Watched(NoticeKind.ProgrammeStarting, Starts.AddMinutes(-3)) with
+        {
+            ProgrammeName = "港町\u202Eレシピ帖\n開始まで: 偽の行",
+            Station = "みなと\u0007総合1\u2067",
+        };
+
+        Assert.Equal(
+            "港町レシピ帖開始まで: 偽の行\nみなと総合1 · 11/09(月) 20:15〜21:00\n開始まで: 3 分",
+            Worded(watched, NoticeKind.ProgrammeStarting).Body);
+    }
+
+    [Fact(DisplayName = "BR-ND-003: the name of a programme asked to be told of is cut by grapheme when longer than the ledger holds")]
+    public void TheNameOfAWatchedProgrammeIsCut()
+    {
+        ProgrammeWatchNoticeSource watched = Watched(NoticeKind.ProgrammeStarting, Starts.AddMinutes(-3)) with
+        {
+            ProgrammeName = new string('港', 5000),
+        };
+
+        NoticeWords words = Worded(watched, NoticeKind.ProgrammeStarting);
+
+        Assert.Equal(Notice.BodyLongest, words.Body.Length);
+        Assert.EndsWith("…", words.Body, StringComparison.Ordinal);
+        Assert.NotNull(Notice.Take(NoticeId.New(), NoticeKind.ProgrammeStarting, RowId, Starts, words, Starts));
+    }
+
+    [Fact(DisplayName = "a programme asked to be told of is told of only as one of its three kinds")]
+    public void AWatchedProgrammeIsToldOfOnlyAsItsKinds()
+    {
+        Assert.Throws<InvalidOperationException>(() => Watched(NoticeKind.RecordingStarted, Starts).Happenings());
+    }
+
     [Fact(DisplayName = "D-7: with no address for the screens known, a notice carries no link")]
     public void WithNoAddressKnownANoticeCarriesNoLink()
     {
@@ -565,6 +673,10 @@ public sealed class NoticeWordingTests
             Encode(EncodeFailure.TimedOut),
             Quality(QualityIncidentOwner.Quality, null) with { ResolvedAt = Starts.AddMinutes(10) },
             Quality(QualityIncidentOwner.Tuner, TunerTroubleKind.Faulted),
+            Watched(NoticeKind.ProgrammeStarting, Starts.AddMinutes(-3)),
+            Watched(NoticeKind.ProgrammeStarting, Starts.AddMinutes(10)),
+            Watched(NoticeKind.WatchedProgrammeMoved, Starts.AddMinutes(-1)),
+            Watched(NoticeKind.WatchedProgrammeGone, Starts.AddMinutes(-1)),
         ];
 
         return [.. sources.SelectMany(source => source.Happenings())];
@@ -611,6 +723,9 @@ public sealed class NoticeWordingTests
             failure,
             SourceBytes: null,
             ArtefactBytes: null);
+
+    private static ProgrammeWatchNoticeSource Watched(NoticeKind told, DateTime at)
+        => new(told, RowId, NetworkId: 32000, ServiceId: 1024, Programme, Station, Starts, Ends, at);
 
     private static EncodeNoticeSource EncodeThatEnded()
         => Encode(null) with { Status = EncodeJobStatus.Completed, EndedAt = Ends.AddMinutes(2) };

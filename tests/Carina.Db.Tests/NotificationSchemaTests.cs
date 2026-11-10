@@ -9,6 +9,8 @@ namespace Carina.Db.Tests;
 [Trait("Category", "DbIntegration")]
 public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : IClassFixture<MigratedScratchDatabase>
 {
+    private static int lastEvent;
+
     private const string At = "timestamptz '2026-11-09 12:00:00+00'";
 
     private const string Later = "timestamptz '2026-11-09 12:00:30+00'";
@@ -23,9 +25,23 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
 
     private const string Settings = NotificationSettingsConfiguration.TableName;
 
+    private const string Watch = ProgrammeWatchConfiguration.TableName;
+
+    private const string Begins = "timestamptz '2026-11-09 13:00:00+00'";
+
+    private const string Ends = "timestamptz '2026-11-09 13:30:00+00'";
+
+    private const string OneDestination = "'[\"8f2f6f0e-5d0b-4c57-9d3e-3f2a1b0c9d8e\"]'";
+
     private const string Queued = $"'Queued', 0, {Later}, NULL, NULL";
 
     public static TheoryData<string> Kinds => Named(Enum.GetNames<NoticeKind>());
+
+    public static TheoryData<string> KindsChosenByRules => Named(NoticeKinds.ChosenByRules.Select(kind => kind.ToString()));
+
+    public static TheoryData<string> KindsOfAWatchedProgramme => Named(NoticeKinds.OfAWatchedProgramme.Select(kind => kind.ToString()));
+
+    public static TheoryData<string> WatchStates => Named(Enum.GetNames<ProgrammeWatchState>());
 
     public static TheoryData<string> Tones => Named(Enum.GetNames<NoticeTone>());
 
@@ -39,6 +55,7 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
     [InlineData(Rule, "changed_at created_at destinations enabled events id name")]
     [InlineData(Delivery, "attempts destination_id event_id id last_failure next_attempt_at queued_at sent_at state")]
     [InlineData(Settings, "changed_at id notify_lead_minutes")]
+    [InlineData(Watch, "changed_at created_at destinations ends_at event_id id lead_minutes network_id notified_at programme_name service_id starts_at state station_name")]
     public async Task TheMigratedNotificationTablesHoldTheseColumns(string table, string columns)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -256,15 +273,99 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
             refusedBy);
     }
 
-    [Theory(DisplayName = "BR-NT-004: a rule set holds every kind the domain names")]
-    [MemberData(nameof(Kinds))]
-    public async Task ARuleSetHoldsEveryKindTheDomainNames(string kind)
+    [Theory(DisplayName = "BR-NT-004: a rule set holds every kind the rules choose among")]
+    [MemberData(nameof(KindsChosenByRules))]
+    public async Task ARuleSetHoldsEveryKindTheRulesChooseAmong(string kind)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await RunAsync(
+        await RunAsync(connection, ARuleSetOf(kind));
+    }
+
+    [Theory(DisplayName = "D-10: a rule set holds no kind told of one programme asked for by itself")]
+    [MemberData(nameof(KindsOfAWatchedProgramme))]
+    public async Task ARuleSetHoldsNoKindToldOfOneProgramme(string kind)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await HoldsOrIsRefusedAsync(connection, ARuleSetOf(kind), NotificationRuleConfiguration.EventsCheck);
+    }
+
+    [Theory(DisplayName = "BR-NS-003: a programme asked to be told of is kept in every state the domain names")]
+    [MemberData(nameof(WatchStates))]
+    public async Task AWatchIsKeptInEveryStateTheDomainNames(string state)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        string notifiedAt = state is nameof(ProgrammeWatchState.Notified) ? At : "NULL";
+
+        await RunAsync(connection, AWatch($"3, {OneDestination}, '{state}', {notifiedAt}"));
+    }
+
+    [Theory(DisplayName = "BR-NT-005: a programme asked to be told of is told 0, 1, 3, 5 or 10 minutes ahead")]
+    [InlineData(0, null)]
+    [InlineData(1, null)]
+    [InlineData(3, null)]
+    [InlineData(5, null)]
+    [InlineData(10, null)]
+    [InlineData(2, ProgrammeWatchConfiguration.LeadCheck)]
+    [InlineData(15, ProgrammeWatchConfiguration.LeadCheck)]
+    [InlineData(-1, ProgrammeWatchConfiguration.LeadCheck)]
+    public async Task AWatchIsToldALeadOnOfferAhead(int lead, string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await HoldsOrIsRefusedAsync(connection, AWatch($"{lead}, {OneDestination}, 'Waiting', NULL"), refusedBy);
+    }
+
+    [Theory(DisplayName = "BR-NS-003: a programme asked to be told of waits with at least one destination, and is marked told exactly when it holds the time it was told")]
+    [InlineData($"3, {OneDestination}, 'Dozing', NULL", ProgrammeWatchConfiguration.StateCheck)]
+    [InlineData("3, '[]', 'Waiting', NULL", ProgrammeWatchConfiguration.DestinationsCheck)]
+    [InlineData("3, '{}', 'Cancelled', NULL", ProgrammeWatchConfiguration.DestinationsCheck)]
+    [InlineData("3, '[]', 'Cancelled', NULL", null)]
+    [InlineData($"3, {OneDestination}, 'Notified', NULL", ProgrammeWatchConfiguration.NotifiedCheck)]
+    [InlineData($"3, {OneDestination}, 'Waiting', {At}", ProgrammeWatchConfiguration.NotifiedCheck)]
+    [InlineData($"3, {OneDestination}, 'Skipped', {At}", ProgrammeWatchConfiguration.NotifiedCheck)]
+    public async Task AWatchHoldsWhatItsStateAllows(string values, string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await HoldsOrIsRefusedAsync(connection, AWatch(values), refusedBy);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme asked to be told of ends after it begins")]
+    public async Task AWatchEndsAfterItBegins()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await HoldsOrIsRefusedAsync(
             connection,
-            $"INSERT INTO {Rule} (id, enabled, created_at, changed_at, name, events, destinations) VALUES ('{Guid.NewGuid()}', TRUE, {At}, {At}, 'A rule set', '[\"{kind}\"]', '[\"{Guid.NewGuid()}\"]')");
+            AWatch($"3, {OneDestination}, 'Waiting', NULL", begins: Ends, ends: Ends),
+            ProgrammeWatchConfiguration.BroadcastCheck);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: one programme is asked to be told of in one row")]
+    public async Task OneProgrammeIsAskedToBeToldOfInOneRow()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        const int eventId = 60_000;
+        await RunAsync(connection, AWatch($"3, {OneDestination}, 'Cancelled', NULL", eventId));
+
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
+            () => RunAsync(connection, AWatch($"3, {OneDestination}, 'Waiting', NULL", eventId)));
+
+        Assert.Equal(
+            (PostgresErrorCodes.UniqueViolation, ProgrammeWatchConfiguration.ProgrammeIndexName),
+            (refused.SqlState, refused.ConstraintName));
+    }
+
+    [Fact(DisplayName = "BR-ND-009: a programme asked to be told of points at no other table")]
+    public async Task AWatchPointsAtNoOtherTable()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "0",
+            await ScalarAsync(connection, $"SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND (conrelid = '{Watch}'::regclass OR confrelid = '{Watch}'::regclass)"));
     }
 
     [Theory(DisplayName = "BR-NT-005: the settings are one row whose lead is 0, 1, 3, 5 or 10 minutes")]
@@ -290,6 +391,15 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
 
     private static string AnEvent(Guid id, string kind, Guid source, string tone = nameof(NoticeTone.Informative))
         => $"INSERT INTO {Event} (id, kind, source_id, occurred_at, tone, title, body, link, taken_at) VALUES ('{id}', '{kind}', '{source}', {At}, '{tone}', 'A title', 'A body', NULL, {At})";
+
+    private static string ARuleSetOf(string kind)
+        => $"INSERT INTO {Rule} (id, enabled, created_at, changed_at, name, events, destinations) VALUES ('{Guid.NewGuid()}', TRUE, {At}, {At}, 'A rule set', '[\"{kind}\"]', '[\"{Guid.NewGuid()}\"]')";
+
+    private static string AWatch(string standing, int? eventId = null, string begins = Begins, string ends = Ends)
+        => $"INSERT INTO {Watch} (id, network_id, service_id, event_id, starts_at, ends_at, programme_name, station_name, created_at, changed_at, lead_minutes, destinations, state, notified_at) VALUES ('{Guid.NewGuid()}', 32000, 1024, {eventId ?? NextEvent()}, {begins}, {ends}, 'A programme', NULL, {At}, {At}, {standing})";
+
+    private static int NextEvent()
+        => Interlocked.Increment(ref lastEvent);
 
     private static string ADestination(Guid id, string values)
         => $"INSERT INTO {Destination} (id, enabled, created_at, changed_at, name, target, sealed_url, url_tail, last_result_at, last_failure) VALUES ('{id}', TRUE, {At}, {At}, {values})";

@@ -43,6 +43,9 @@ public sealed class NoticeTests
     [InlineData(NoticeKind.QualityIncidentDetected, NoticeTone.Caution)]
     [InlineData(NoticeKind.QualityIncidentResolved, NoticeTone.Good)]
     [InlineData(NoticeKind.DeviceDisconnected, NoticeTone.Failure)]
+    [InlineData(NoticeKind.ProgrammeStarting, NoticeTone.Informative)]
+    [InlineData(NoticeKind.WatchedProgrammeMoved, NoticeTone.Caution)]
+    [InlineData(NoticeKind.WatchedProgrammeGone, NoticeTone.Caution)]
     public void TheToneFollowsTheKind(NoticeKind kind, NoticeTone tone)
     {
         Assert.Equal(tone, NoticeTones.Of(kind));

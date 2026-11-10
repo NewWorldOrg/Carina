@@ -8,9 +8,9 @@ internal static class NotificationVocabulary
         where T : struct, Enum
         => string.Join(", ", Enum.GetNames<T>().Select(name => $"'{name}'"));
 
-    public static string Listed<T>()
+    public static string Listed<T>(IEnumerable<T> named)
         where T : struct, Enum
-        => "[" + string.Join(", ", Enum.GetNames<T>().Select(name => $"\"{name}\"")) + "]";
+        => "[" + string.Join(", ", named.Select(name => $"\"{name}\"")) + "]";
 
     public static string AName(string column)
         => $"btrim({column}) = {column} AND length({column}) > 0";

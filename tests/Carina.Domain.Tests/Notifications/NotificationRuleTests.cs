@@ -64,6 +64,27 @@ public sealed class NotificationRuleTests
         Assert.Throws<ArgumentOutOfRangeException>(() => Rule([(NoticeKind)99]));
     }
 
+    [Theory(DisplayName = "D-10: a set of rules lists no kind told of one programme somebody asked to be told of")]
+    [InlineData(NoticeKind.ProgrammeStarting)]
+    [InlineData(NoticeKind.WatchedProgrammeMoved)]
+    [InlineData(NoticeKind.WatchedProgrammeGone)]
+    public void ASetOfRulesListsNoKindToldOfOneProgramme(NoticeKind kind)
+    {
+        Assert.Contains(kind, NoticeKinds.OfAWatchedProgramme);
+        Assert.DoesNotContain(kind, NoticeKinds.ChosenByRules);
+        Assert.Throws<ArgumentOutOfRangeException>(() => Rule([NoticeKind.RecordingFailed, kind]));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => Rule([NoticeKind.RecordingFailed]).Tell([kind], [NotificationDestinationId.New()], At));
+    }
+
+    [Fact(DisplayName = "D-10: every kind is either chosen by rules or told of one programme, never both")]
+    public void EveryKindIsChosenByRulesOrToldOfOneProgramme()
+    {
+        Assert.Equal(
+            Enum.GetValues<NoticeKind>().Order(),
+            NoticeKinds.ChosenByRules.Concat(NoticeKinds.OfAWatchedProgramme).Order());
+    }
+
     [Fact(DisplayName = "BR-NT-004: a set of rules sends to at least one destination, each once")]
     public void ASetOfRulesSendsToAtLeastOneDestination()
     {

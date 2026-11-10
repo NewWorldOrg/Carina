@@ -17,6 +17,8 @@ public static class NoticeWording
 
     private const string QualityScreen = "/settings/quality";
 
+    private const string GuideScreen = "/guide";
+
     private const string Why = "理由";
 
     private const string Format = "形式";
@@ -24,6 +26,8 @@ public static class NoticeWording
     private const string Listed = "、";
 
     private const int InsteadNamed = 3;
+
+    private static readonly TimeSpan JustBegun = TimeSpan.FromMinutes(1);
 
     private static readonly IReadOnlyDictionary<NoticeKind, NoticeTemplate<RecordingNoticeSource>> OfRecordings =
         new Dictionary<NoticeKind, NoticeTemplate<RecordingNoticeSource>>
@@ -97,6 +101,23 @@ public static class NoticeWording
                 _ => QualityScreen),
         };
 
+    private static readonly IReadOnlyDictionary<NoticeKind, NoticeTemplate<ProgrammeWatchNoticeSource>> OfWatches =
+        new Dictionary<NoticeKind, NoticeTemplate<ProgrammeWatchNoticeSource>>
+        {
+            [NoticeKind.ProgrammeStarting] = new(
+                "まもなく放送が始まります",
+                watched => About(watched).Fact("開始まで", MinutesUntilTheStart(watched)),
+                LiveScreen),
+            [NoticeKind.WatchedProgrammeMoved] = new("番組の時刻が変わりました", About, LiveScreen),
+            [NoticeKind.WatchedProgrammeGone] = new("番組が番組表から消えました", About, _ => GuideScreen),
+        };
+
+    private static readonly NoticeTemplate<ProgrammeWatchNoticeSource> OfAProgrammeJustBegun =
+        new("放送が始まりました", About, LiveScreen);
+
+    private static readonly NoticeTemplate<ProgrammeWatchNoticeSource> OfAProgrammeOnAir =
+        new("放送中です", About, LiveScreen);
+
     public static NoticeWords Of(NoticeHappening happening, NoticeLinkBase links)
     {
         ArgumentNullException.ThrowIfNull(happening);
@@ -110,6 +131,10 @@ public static class NoticeWording
             ReservationOutcomeNoticeSource outcome => Worded(happening.Kind, outcome, OfOutcomes, links),
             EncodeNoticeSource encode => Worded(happening.Kind, encode, OfEncodes, links),
             QualityNoticeSource quality => Worded(happening.Kind, quality, OfQuality, links),
+            ProgrammeWatchNoticeSource watched
+                when happening.Kind is NoticeKind.ProgrammeStarting && watched.ToldAt >= watched.StartsAt
+                => Worded(watched, Begun(watched), links),
+            ProgrammeWatchNoticeSource watched => Worded(happening.Kind, watched, OfWatches, links),
             _ => throw new ArgumentException("A notice is worded from a row of a ledger it is taken from.", nameof(happening)),
         };
     }
@@ -147,6 +172,18 @@ public static class NoticeWording
 
     private static NoticeLines About(EncodeNoticeSource encode)
         => NoticeLines.About(encode.ProgrammeName).Fact(Format, NoticeVocabulary.Of(encode.Codec));
+
+    private static NoticeLines About(ProgrammeWatchNoticeSource watched)
+        => NoticeLines.About(watched.ProgrammeName, watched.Station, NoticeTimes.Span(watched.StartsAt, watched.EndsAt));
+
+    private static NoticeTemplate<ProgrammeWatchNoticeSource> Begun(ProgrammeWatchNoticeSource watched)
+        => watched.ToldAt - watched.StartsAt < JustBegun ? OfAProgrammeJustBegun : OfAProgrammeOnAir;
+
+    private static string? MinutesUntilTheStart(ProgrammeWatchNoticeSource watched)
+        => Counted((long)Math.Ceiling((watched.StartsAt - watched.ToldAt).TotalMinutes), "分");
+
+    private static string LiveScreen(ProgrammeWatchNoticeSource watched)
+        => string.Create(CultureInfo.InvariantCulture, $"/live?ch={watched.NetworkId}-{watched.ServiceId}");
 
     private static NoticeLines Measured(QualityNoticeSource quality, string when)
         => new NoticeLines()
