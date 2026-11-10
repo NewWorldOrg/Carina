@@ -7,6 +7,7 @@ using Carina.TestSupport;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Notifications;
@@ -189,6 +190,25 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
         Assert.Empty(await deliveries.WaitingAsync(Cancel));
         Assert.Equal(Epoch, held.LastResultAt);
         Assert.True(held.Enabled);
+    }
+
+    [Fact(DisplayName = "BR-NT-006: a writer of the destinations and the sets of rules holds its turn until its transaction ends, and the next one waits for it")]
+    public async Task AWriterOfTheNotificationsHoldsItsTurnUntilItsTransactionEnds()
+    {
+        await using CarinaDbContext first = database.Open();
+        await using CarinaDbContext second = database.Open();
+        await using IDbContextTransaction holding = await first.Database.BeginTransactionAsync(Cancel);
+
+        await new NotificationRuleRepository(first).TakeTurnAsync(Cancel);
+
+        await using IDbContextTransaction waiting = await second.Database.BeginTransactionAsync(Cancel);
+        Task next = new NotificationRuleRepository(second).TakeTurnAsync(Cancel);
+
+        Assert.NotSame(next, await Task.WhenAny(next, Task.Delay(TimeSpan.FromMilliseconds(300), Cancel)));
+
+        await holding.CommitAsync(Cancel);
+        await next.WaitAsync(TimeSpan.FromSeconds(10), Cancel);
+        await waiting.CommitAsync(Cancel);
     }
 
     private async Task<NotificationDeliveryId> HeldAsync(

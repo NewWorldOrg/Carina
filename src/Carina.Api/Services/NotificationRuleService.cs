@@ -64,6 +64,8 @@ public sealed class NotificationRuleService(
         bool kept = await writes.AllOrNothingAsync(
             async inner =>
             {
+                await rules.TakeTurnAsync(inner);
+
                 IReadOnlyList<NotificationRule> held = await rules.ListAsync(inner);
 
                 if (held.Count >= NotificationRule.MostRules)

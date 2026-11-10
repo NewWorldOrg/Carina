@@ -58,6 +58,8 @@ public sealed class HeldNotificationRules : INotificationRuleRepository
         return Task.FromResult(listed);
     }
 
+    public Task TakeTurnAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
     public Task AddAsync(NotificationRule rule, CancellationToken cancellationToken)
     {
         Rules.Add(rule);

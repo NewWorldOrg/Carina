@@ -337,6 +337,8 @@ public sealed class NotificationIntakeJobTests
         public Task<IReadOnlyList<NotificationRule>> ListAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<NotificationRule>>([.. Rules]);
 
+        public Task TakeTurnAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
         public Task AddAsync(NotificationRule rule, CancellationToken cancellationToken)
         {
             Rules.Add(rule);

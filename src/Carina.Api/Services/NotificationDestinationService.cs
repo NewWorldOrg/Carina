@@ -74,6 +74,8 @@ public sealed class NotificationDestinationService(
         await writes.AllOrNothingAsync(
             async inner =>
             {
+                await rules.TakeTurnAsync(inner);
+
                 bool first = await IsNothingHeldAsync(inner);
 
                 await destinations.AddAsync(destination, inner);
@@ -158,6 +160,8 @@ public sealed class NotificationDestinationService(
         await writes.AllOrNothingAsync(
             async inner =>
             {
+                await rules.TakeTurnAsync(inner);
+
                 foreach (NotificationRule rule in await rules.ListAsync(inner))
                 {
                     await TakeOutOfAsync(rule, id, now, inner);
