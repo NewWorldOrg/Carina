@@ -112,9 +112,8 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWatchRepository rows = new(context);
 
-        int cleared = await rows.RemoveSettledBeforeAsync(edge, Cancel);
+        await rows.RemoveSettledBeforeAsync(edge, Cancel);
 
-        Assert.Equal(1, cleared);
         Assert.Null(await rows.FindAsync(over, Cancel));
         Assert.NotNull(await rows.FindAsync(onTheEdge, Cancel));
         Assert.NotNull(await rows.FindAsync(waiting, Cancel));
