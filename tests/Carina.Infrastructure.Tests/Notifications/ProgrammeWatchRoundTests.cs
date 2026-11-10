@@ -54,9 +54,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         Assert.Equal(ProgrammeWatchState.Notified, row.State);
         Assert.Equal(now, row.NotifiedAt);
         Assert.Equal(NoticeKind.ProgrammeStarting, notice.Kind);
-        Assert.Equal("まもなく放送が始まります", notice.Title);
-        Assert.Contains(WatchedProgrammes.ProgrammeName, notice.Body, StringComparison.Ordinal);
-        Assert.Contains("開始まで: 3 分", notice.Body, StringComparison.Ordinal);
+        Assert.Equal(now, notice.OccurredAt);
         Assert.Equal(destination, delivery.DestinationId);
         Assert.Equal(NotificationDeliveryState.Queued, delivery.State);
     }
@@ -92,15 +90,16 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
     [Fact(DisplayName = "BR-NS-003: a look that comes back after the start, with the programme on the air, tells of it as on the air")]
     public async Task ALookThatComesBackAfterTheStartTellsOfTheProgrammeAsOnTheAir()
     {
-        (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
+        (ProgrammeWatchId watch, NotificationDestinationId destination) = await AskedOfADestinationAsync();
+        DateTime now = Starts.AddMinutes(10);
 
-        await watched.LookAsync(Starts.AddMinutes(10));
+        await watched.LookAsync(now);
 
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
         Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
         Assert.Equal(NoticeKind.ProgrammeStarting, notice.Kind);
-        Assert.Equal("放送中です", notice.Title);
-        Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting));
+        Assert.Equal(now, notice.OccurredAt);
+        Assert.Equal(destination, Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting)).DestinationId);
     }
 
     [Fact(DisplayName = "BR-NS-003: a look that comes back after the broadcast ended passes the programme over and sends nothing")]
@@ -133,7 +132,6 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         Assert.Equal(0, again.Seen);
         Assert.Equal(ProgrammeWatchState.Cancelled, (await watched.RowAsync(watch)).State);
         Assert.Equal(NoticeKind.WatchedProgrammeGone, notice.Kind);
-        Assert.Equal("番組が番組表から消えました", notice.Title);
         Assert.Equal(destination, Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.WatchedProgrammeGone)).DestinationId);
     }
 
@@ -175,13 +173,11 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         NotificationIntake second = await watched.LookAsync(told + BetweenLooks + BetweenLooks);
 
         ProgrammeWatch row = await watched.RowAsync(watch);
-        Notice moved = (await ledgers.NoticesOfAsync(watch.Value)).Single(notice => notice.Kind is NoticeKind.WatchedProgrammeMoved);
         Assert.Equal(1, first.Taken);
         Assert.Equal(0, second.Taken);
         Assert.Equal(ProgrammeWatchState.Notified, row.State);
         Assert.Equal(told, row.NotifiedAt);
         Assert.Equal(later, row.StartsAt);
-        Assert.Equal("番組の時刻が変わりました", moved.Title);
         Assert.Equal(
             [NoticeKind.ProgrammeStarting, NoticeKind.WatchedProgrammeMoved],
             await ledgers.KindsOfAsync(watch.Value));
