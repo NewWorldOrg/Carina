@@ -55,6 +55,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "DELETE /api/encoding/destinations/{id:guid}",
                 "DELETE /api/encoding/profiles/{id:guid}",
                 "DELETE /api/notifications/destinations/{id:guid}",
+                "DELETE /api/notifications/rules/{id:guid}",
                 "DELETE /api/recordings/{id}",
                 "DELETE /api/reservations/{id:guid}",
                 "DELETE /api/rules/{id:guid}",
@@ -201,7 +202,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 .ToArray());
     }
 
-    [Fact(DisplayName = "BR-NA-002: the notification surfaces are the destinations and the sets of rules listed, made, changed and removed, a destination tried, the deliveries listed and the settings read and changed, and removing a destination is the one that discards")]
+    [Fact(DisplayName = "BR-NA-002: the notification surfaces are the destinations and the sets of rules listed, made, changed and removed, a destination tried, the deliveries listed and the settings read and changed, and removing a destination or a set of rules discards")]
     public void TheNotificationSurfacesAreTheOnesTheDestinationsRulesDeliveriesAndSettingsAreReachedThrough()
     {
         RoutedSurface[] notifications =
@@ -214,7 +215,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             [
                 "DELETE /api/notifications/destinations/{id:guid} Destructive",
-                "DELETE /api/notifications/rules/{id:guid} Changing",
+                "DELETE /api/notifications/rules/{id:guid} Destructive",
                 "GET /api/notifications/deliveries Reading",
                 "GET /api/notifications/destinations Reading",
                 "GET /api/notifications/rules Reading",

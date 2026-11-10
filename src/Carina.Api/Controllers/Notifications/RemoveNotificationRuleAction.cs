@@ -12,7 +12,7 @@ namespace Carina.Api.Controllers.Notifications;
 
 [ApiController]
 [Route("api/notifications/rules/{id:guid}")]
-[EndpointEffect(EndpointEffect.Changing)]
+[EndpointEffect(EndpointEffect.Destructive)]
 public sealed class RemoveNotificationRuleAction(NotificationRuleService rules) : ControllerBase
 {
     [HttpDelete]
