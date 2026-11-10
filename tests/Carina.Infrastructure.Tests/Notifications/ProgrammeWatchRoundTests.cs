@@ -61,6 +61,34 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         Assert.Equal(NotificationDeliveryState.Queued, delivery.State);
     }
 
+    [Fact(DisplayName = "BR-NS-003: a programme asked to be told of at its start waits through the second before it and is told of as begun at the start")]
+    public async Task AProgrammeAskedToBeToldOfAtItsStartIsToldOfAsBegunAtTheStart()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", Asked);
+        ProgrammeWatchId watch = await watched.AskedAsync(await watched.AnnouncedAsync(Starts, Asked), Asked, 0, destination);
+
+        NotificationIntake before = await watched.LookAsync(Starts.AddSeconds(-1));
+        ProgrammeWatch waiting = await watched.RowAsync(watch);
+        IReadOnlyList<Notice> nothing = await ledgers.NoticesOfAsync(watch.Value);
+        NotificationIntake atTheStart = await watched.LookAsync(Starts);
+
+        ProgrammeWatch row = await watched.RowAsync(watch);
+        Notice notice = Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
+        Assert.Equal(new NotificationIntake(1, 0, 0), before);
+        Assert.Equal(ProgrammeWatchState.Waiting, waiting.State);
+        Assert.Empty(nothing);
+        Assert.Equal(new NotificationIntake(1, 1, 1), atTheStart);
+        Assert.Equal(ProgrammeWatchState.Notified, row.State);
+        Assert.Equal(Starts, row.NotifiedAt);
+        Assert.Equal(NoticeKind.ProgrammeStarting, notice.Kind);
+        Assert.Equal(Starts, notice.OccurredAt);
+        Assert.Equal(WordsOf(row, Starts), (notice.Title, notice.Body));
+        Assert.NotEqual(WordsOf(row, Starts.AddSeconds(-1)).Title, notice.Title);
+        Assert.NotEqual(WordsOf(row, Starts.AddMinutes(1)).Title, notice.Title);
+        Assert.Equal(destination, Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting)).DestinationId);
+    }
+
     [Fact(DisplayName = "BR-NS-003: a look that comes back after the start, with the programme on the air, tells of it as on the air")]
     public async Task ALookThatComesBackAfterTheStartTellsOfTheProgrammeAsOnTheAir()
     {
@@ -326,6 +354,15 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
 
         return (await watched.AskedAsync(programme, Asked, Lead, destination), destination);
+    }
+
+    private static (string Title, string Body) WordsOf(ProgrammeWatch watch, DateTime toldAt)
+    {
+        NoticeWords words = NoticeWording.Of(
+            ProgrammeWatchNoticeSource.Of(watch, NoticeKind.ProgrammeStarting, toldAt).Happening(),
+            NoticeLinkBase.None);
+
+        return (words.Title, words.Body);
     }
 
     private async Task<int> ReservationsAsync()
