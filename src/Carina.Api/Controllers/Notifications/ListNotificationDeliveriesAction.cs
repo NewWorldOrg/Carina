@@ -4,6 +4,7 @@ using Carina.Api.Responder;
 using Carina.Api.Responder.Notifications;
 using Carina.Api.Services;
 using Carina.Domain.Notifications;
+
 using Microsoft.AspNetCore.Mvc;
 
 namespace Carina.Api.Controllers.Notifications;
