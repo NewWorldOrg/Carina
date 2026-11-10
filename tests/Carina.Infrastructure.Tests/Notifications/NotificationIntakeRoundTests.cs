@@ -93,6 +93,49 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         Assert.Contains(new NoticeKey(NoticeKind.RecordingStarted, source), await notices.HeldAmongAsync([source], Cancel));
     }
 
+    [Fact(DisplayName = "BR-ND-004: a notice that could not be written is not written by the next write either")]
+    public async Task ANoticeThatCouldNotBeWrittenIsNotWrittenByTheNextWriteEither()
+    {
+        DateTime now = await ADayOfItsOwnAsync(25);
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", now);
+        Notice unwritten = ANotice(Guid.NewGuid(), now);
+        NotificationDelivery nowhere = ADelivery(unwritten, NotificationDestinationId.New(), now);
+        Notice next = ANotice(Guid.NewGuid(), now);
+
+        await using CarinaDbContext context = database.Open();
+        NoticeRepository notices = new(context);
+        await Assert.ThrowsAsync<DbUpdateException>(() => notices.AddAsync(unwritten, [nowhere], Cancel));
+        bool written = await notices.AddAsync(next, [ADelivery(next, destination, now)], Cancel);
+
+        Assert.True(written);
+        Assert.Empty(await ledgers.NoticesOfAsync(unwritten.SourceId));
+        Assert.Single(await ledgers.NoticesOfAsync(next.SourceId));
+        Assert.Single(await ledgers.DeliveriesOfAsync(next.SourceId, NoticeKind.RecordingStarted));
+    }
+
+    [Fact(DisplayName = "BR-ND-004: a notice refused as already held does not keep the next one from being written")]
+    public async Task ANoticeRefusedAsAlreadyHeldDoesNotKeepTheNextOneFromBeingWritten()
+    {
+        DateTime now = await ADayOfItsOwnAsync(26);
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", now);
+        Guid source = Guid.NewGuid();
+        Notice first = ANotice(source, now);
+        Notice again = ANotice(source, now);
+        Notice next = ANotice(Guid.NewGuid(), now);
+
+        await using CarinaDbContext context = database.Open();
+        NoticeRepository notices = new(context);
+        await notices.AddAsync(first, [ADelivery(first, destination, now)], Cancel);
+        bool writtenAgain = await notices.AddAsync(again, [ADelivery(again, destination, now)], Cancel);
+        bool written = await notices.AddAsync(next, [ADelivery(next, destination, now)], Cancel);
+
+        Assert.False(writtenAgain);
+        Assert.True(written);
+        Assert.Single(await ledgers.NoticesOfAsync(source));
+        Assert.Single(await ledgers.DeliveriesOfAsync(source, NoticeKind.RecordingStarted));
+        Assert.Single(await ledgers.DeliveriesOfAsync(next.SourceId, NoticeKind.RecordingStarted));
+    }
+
     [Fact(DisplayName = "BR-ND-005: a failed recording that has a reservation is told of once, from the reservation's outcome")]
     public async Task AFailedRecordingThatHasAReservationIsToldOfOnceFromTheReservationsOutcome()
     {
@@ -365,6 +408,44 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
 
         Assert.Empty(await ledgers.NoticesOfAsync(longAgo.Value));
         Assert.Equal([NoticeKind.RecordingCompleted], await ledgers.KindsOfAsync(lately.Value));
+    }
+
+    [Fact(DisplayName = "BR-NC-004: what happened exactly thirty minutes ago is taken, and what happened a moment before that is not")]
+    public async Task WhatHappenedExactlyThirtyMinutesAgoIsTakenAndAMomentBeforeIsNot()
+    {
+        DateTime now = await ADayOfItsOwnAsync(24);
+        await ledgers.EmptyTheEncodesAsync();
+        DateTime edge = now.AddMinutes(-30);
+        DateTime pastTheEdge = edge - TimeSpan.FromMicroseconds(1);
+        RecordingId endedOnTheEdge = await ledgers.RecordingBeganAsync(now.AddMinutes(-120));
+        await ledgers.RecordingEndedAsync(endedOnTheEdge, RecordingOutcome.Complete, edge);
+        RecordingId endedPastTheEdge = await ledgers.RecordingBeganAsync(now.AddMinutes(-120));
+        await ledgers.RecordingEndedAsync(endedPastTheEdge, RecordingOutcome.Complete, pastTheEdge);
+        ReservationId missedOnTheEdge = ReservationId.New();
+        await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, edge, missedOnTheEdge);
+        ReservationId missedPastTheEdge = ReservationId.New();
+        await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, pastTheEdge, missedPastTheEdge);
+        EncodeJobId failedPastTheEdge = await ledgers.EncodeIsQueuedAsync(endedPastTheEdge, now.AddMinutes(-110));
+        await ledgers.EncodeStartedAsync(failedPastTheEdge, now.AddMinutes(-100));
+        await ledgers.EncodeFailedAsync(failedPastTheEdge, pastTheEdge);
+        EncodeJobId failedOnTheEdge = await ledgers.EncodeIsQueuedAsync(endedOnTheEdge, now.AddMinutes(-110));
+        await ledgers.EncodeStartedAsync(failedOnTheEdge, now.AddMinutes(-100));
+        await ledgers.EncodeFailedAsync(failedOnTheEdge, edge);
+        QualityIncidentId fellOnTheEdge = await ledgers.ReceptionFellAsync(edge);
+        QualityIncidentId fellPastTheEdge = await ledgers.ReceptionFellAsync(pastTheEdge);
+
+        await ledgers.LookAsync(now);
+        await ledgers.ReceptionCameBackAsync(fellOnTheEdge, now);
+        await ledgers.ReceptionCameBackAsync(fellPastTheEdge, now);
+
+        Assert.Equal([NoticeKind.RecordingCompleted], await ledgers.KindsOfAsync(endedOnTheEdge.Value));
+        Assert.Equal([NoticeKind.ReservationMissed], await ledgers.KindsOfAsync(missedOnTheEdge.Value));
+        Assert.Equal([NoticeKind.EncodeFailed], await ledgers.KindsOfAsync(failedOnTheEdge.Value));
+        Assert.Equal([NoticeKind.QualityIncidentDetected], await ledgers.KindsOfAsync(fellOnTheEdge.Value));
+        Assert.Empty(await ledgers.NoticesOfAsync(endedPastTheEdge.Value));
+        Assert.Empty(await ledgers.NoticesOfAsync(missedPastTheEdge.Value));
+        Assert.Empty(await ledgers.NoticesOfAsync(failedPastTheEdge.Value));
+        Assert.Empty(await ledgers.NoticesOfAsync(fellPastTheEdge.Value));
     }
 
     [Fact(DisplayName = "A recording that began and ended between two looks is told of twice in the one look")]
