@@ -345,9 +345,13 @@ walks past it.
   table and is in none of the reservations, the reservation views, the plan
   that hands out tuners, the capacity, the conflicts or the results of
   recordings, so it can stand beside a reservation for the same programme. It
-  is told to the destinations asked for with it and to no rule set. **Trip
-  wire:** the schema test sees a foreign key, not a query that joins the row
-  to a reservation.
+  is told to the destinations asked for with it and to no rule set. The schema
+  tests refuse a foreign key on the row and a view that names its table, and a
+  rule test refuses any type of the reservations, the plan or the capacity that
+  mentions the row, its ledger or its look in what it holds, takes, returns or
+  calls. **Trip wire:** the rule knows those types by their namespace and their
+  names, and sees neither a use through reflection nor SQL written out in a
+  string that joins the row to a reservation.
 
 ## Conventions
 

@@ -3,6 +3,8 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Reservations;
 using Carina.Infrastructure.Tests.Thumbnails;
 
 using Microsoft.EntityFrameworkCore;
@@ -341,6 +343,46 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
 
         Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
         Assert.Equal(before, await ReservationsAsync());
+    }
+
+    [Fact(DisplayName = "BR-ND-009: a programme reserved for recording can be asked to be told of as well, and telling of it leaves the reservation as it was")]
+    public async Task AProgrammeReservedForRecordingCanBeAskedToBeToldOfAsWell()
+    {
+        await ledgers.EmptyTheNoticesAsync();
+        NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", Asked);
+        ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
+        Reservation reserved = await ReservedAsync(programme);
+        ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, destination);
+
+        NotificationIntake look = await watched.LookAsync(Starts.AddMinutes(-Lead));
+
+        Reservation kept = await ReservationAsync(reserved.Id);
+        Assert.Equal(new NotificationIntake(1, 1, 1), look);
+        Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
+        Assert.Equal(programme, (await watched.RowAsync(watch)).Programme);
+        Assert.Equal(
+            (reserved.State, reserved.Programme, reserved.StartAt, reserved.EndAt),
+            (kept.State, kept.Programme, kept.StartAt, kept.EndAt));
+    }
+
+    private async Task<Reservation> ReservedAsync(ProgrammeId programme)
+    {
+        Reservation reservation = ReservationFixtures.Planned(
+            programme: new ProgrammeRef(programme.NetworkId, programme.ServiceId, programme.EventId, Starts),
+            endAt: Starts + WatchedProgrammes.Length,
+            snapshot: ReservationFixtures.Snapshot(WatchedProgrammes.ProgrammeName));
+
+        await using CarinaDbContext context = database.Open();
+        await new ReservationRepository(context).AddAsync(reservation, Cancel);
+
+        return reservation;
+    }
+
+    private async Task<Reservation> ReservationAsync(ReservationId id)
+    {
+        await using CarinaDbContext context = database.Open();
+
+        return Assert.IsType<Reservation>(await new ReservationRepository(context).FindAsync(id, Cancel));
     }
 
     private async Task<(ProgrammeWatchId Watch, NotificationDestinationId Destination)> AskedOfADestinationAsync()

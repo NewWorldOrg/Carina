@@ -372,6 +372,19 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
             await ScalarAsync(connection, $"SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND (conrelid = '{Watch}'::regclass OR confrelid = '{Watch}'::regclass)"));
     }
 
+    [Fact(DisplayName = "BR-ND-009: no view reads the programmes asked to be told of")]
+    public async Task NoViewReadsTheProgrammesAskedToBeToldOf()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "0",
+            await ScalarAsync(connection, $"SELECT (SELECT count(*) FROM pg_views WHERE schemaname = current_schema() AND definition ILIKE '%{Watch}%') + (SELECT count(*) FROM pg_matviews WHERE schemaname = current_schema() AND definition ILIKE '%{Watch}%')"));
+        Assert.NotEqual(
+            "0",
+            await ScalarAsync(connection, "SELECT count(*) FROM pg_views WHERE schemaname = current_schema()"));
+    }
+
     [Theory(DisplayName = "BR-NT-005: the settings are one row whose lead is 0, 1, 3, 5 or 10 minutes")]
     [InlineData("1, 0", null)]
     [InlineData("1, 1", null)]
