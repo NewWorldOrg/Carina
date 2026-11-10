@@ -36,6 +36,7 @@ public sealed class NotificationDeliveryTests
     [InlineData(NoticeFailure.RateLimited)]
     [InlineData(NoticeFailure.TimedOut)]
     [InlineData(NoticeFailure.Unreachable)]
+    [InlineData(NoticeFailure.TlsFailed)]
     public void AFailureWorthAnotherTryLeavesTheDeliveryDueAfterTheWait(NoticeFailure failure)
     {
         NotificationDelivery delivery = Queued();

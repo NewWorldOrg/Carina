@@ -17,6 +17,8 @@ public enum NoticeFailure
     Unreadable = 7,
 
     TooOld = 8,
+
+    TlsFailed = 9,
 }
 
 public static class NoticeFailures
@@ -27,6 +29,7 @@ public static class NoticeFailures
         NoticeFailure.RateLimited,
         NoticeFailure.ServerFailed,
         NoticeFailure.Unreachable,
+        NoticeFailure.TlsFailed,
     };
 
     public static NoticeFailure Named(NoticeFailure failure)

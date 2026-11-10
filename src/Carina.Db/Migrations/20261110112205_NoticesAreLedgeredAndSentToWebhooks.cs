@@ -30,7 +30,7 @@ public partial class NoticesAreLedgeredAndSentToWebhooks : Migration
             constraints: table =>
             {
                 table.PrimaryKey("pk_notification_destination", x => x.id);
-                table.CheckConstraint("ck_notification_destination_last_failure", "(last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld'))\nAND (last_failure IS NULL OR last_result_at IS NOT NULL)");
+                table.CheckConstraint("ck_notification_destination_last_failure", "(last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld', 'TlsFailed'))\nAND (last_failure IS NULL OR last_result_at IS NOT NULL)");
                 table.CheckConstraint("ck_notification_destination_name", "btrim(name) = name AND length(name) > 0");
                 table.CheckConstraint("ck_notification_destination_sealed_url", "octet_length(sealed_url) BETWEEN 1 AND 4096");
                 table.CheckConstraint("ck_notification_destination_target", "target IN ('Slack', 'Discord')");
@@ -112,7 +112,7 @@ public partial class NoticesAreLedgeredAndSentToWebhooks : Migration
             {
                 table.PrimaryKey("pk_notification_delivery", x => x.id);
                 table.CheckConstraint("ck_notification_delivery_attempts", "attempts BETWEEN 0 AND 4");
-                table.CheckConstraint("ck_notification_delivery_last_failure", "last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld')");
+                table.CheckConstraint("ck_notification_delivery_last_failure", "last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld', 'TlsFailed')");
                 table.CheckConstraint("ck_notification_delivery_standing", "(state <> 'Queued'\n OR (attempts = 0 AND next_attempt_at IS NOT NULL AND sent_at IS NULL AND last_failure IS NULL))\nAND (state <> 'Failed'\n     OR (attempts > 0 AND next_attempt_at IS NOT NULL AND sent_at IS NULL AND last_failure IS NOT NULL))\nAND (state <> 'Sent'\n     OR (attempts > 0 AND next_attempt_at IS NULL AND sent_at IS NOT NULL AND last_failure IS NULL))\nAND (state <> 'GivenUp'\n     OR (next_attempt_at IS NULL AND sent_at IS NULL AND last_failure IS NOT NULL))");
                 table.CheckConstraint("ck_notification_delivery_state", "state IN ('Queued', 'Sent', 'Failed', 'GivenUp')");
                 table.ForeignKey(

@@ -1693,7 +1693,7 @@ namespace Carina.Db.Migrations
                         {
                             t.HasCheckConstraint("ck_notification_delivery_attempts", "attempts BETWEEN 0 AND 4");
 
-                            t.HasCheckConstraint("ck_notification_delivery_last_failure", "last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld')");
+                            t.HasCheckConstraint("ck_notification_delivery_last_failure", "last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld', 'TlsFailed')");
 
                             t.HasCheckConstraint("ck_notification_delivery_standing", "(state <> 'Queued'\n OR (attempts = 0 AND next_attempt_at IS NOT NULL AND sent_at IS NULL AND last_failure IS NULL))\nAND (state <> 'Failed'\n     OR (attempts > 0 AND next_attempt_at IS NOT NULL AND sent_at IS NULL AND last_failure IS NOT NULL))\nAND (state <> 'Sent'\n     OR (attempts > 0 AND next_attempt_at IS NULL AND sent_at IS NOT NULL AND last_failure IS NULL))\nAND (state <> 'GivenUp'\n     OR (next_attempt_at IS NULL AND sent_at IS NULL AND last_failure IS NOT NULL))");
 
@@ -1756,7 +1756,7 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("notification_destination", null, t =>
                         {
-                            t.HasCheckConstraint("ck_notification_destination_last_failure", "(last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld'))\nAND (last_failure IS NULL OR last_result_at IS NOT NULL)");
+                            t.HasCheckConstraint("ck_notification_destination_last_failure", "(last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld', 'TlsFailed'))\nAND (last_failure IS NULL OR last_result_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_notification_destination_name", "btrim(name) = name AND length(name) > 0");
 
