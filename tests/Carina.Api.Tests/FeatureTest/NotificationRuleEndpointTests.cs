@@ -188,6 +188,31 @@ public sealed class NotificationRuleEndpointTests
         Assert.Equal(NotificationFeature.Noon, last.GetProperty("createdAt").GetDateTime());
     }
 
+    [Fact(DisplayName = "BR-NT-004: A destination named twice in a set of rules is held once, when the set is made and when it is changed")]
+    public async Task ADestinationNamedTwiceIsHeldOnce()
+    {
+        await using NotificationFeature feature = new();
+        Guid livingRoom = await feature.RegisteredAsync();
+        Guid study = await feature.RegisteredAsync("書斎", NotificationFeature.DiscordUrl);
+        feature.HeldRules.Rules.Clear();
+
+        (HttpStatusCode made, JsonElement body) = await feature.PostAsync(
+            NotificationFeature.Rules,
+            new { name = "録画の終わり", events = new[] { "recordingCompleted" }, destinations = new[] { study, livingRoom, study } });
+        NotificationRule held = Assert.Single(feature.HeldRules.Rules);
+        Guid[] heldWhenMade = [.. held.Destinations.Select(destination => destination.Value)];
+        (HttpStatusCode changed, JsonElement after) = await feature.PatchAsync(
+            NotificationFeature.RuleOf(held.Id.Value),
+            new { destinations = new[] { livingRoom, livingRoom } });
+
+        Assert.Equal(HttpStatusCode.Created, made);
+        Assert.Equal([study, livingRoom], Ids(body.GetProperty("data").GetProperty("destinations")));
+        Assert.Equal([study, livingRoom], heldWhenMade);
+        Assert.Equal(HttpStatusCode.OK, changed);
+        Assert.Equal([livingRoom], Ids(after.GetProperty("data").GetProperty("destinations")));
+        Assert.Equal([livingRoom], Assert.Single(feature.HeldRules.Rules).Destinations.Select(destination => destination.Value));
+    }
+
     [Fact(DisplayName = "BR-NT-004: A change that would leave a set of rules telling nobody, or names what is not held, is refused and changes nothing")]
     public async Task ABadChangeChangesNothing()
     {
