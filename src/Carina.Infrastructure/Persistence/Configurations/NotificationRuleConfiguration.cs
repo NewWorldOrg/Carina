@@ -27,7 +27,7 @@ public sealed class NotificationRuleConfiguration : IEntityTypeConfiguration<Not
             table.HasCheckConstraint(NameCheck, NotificationVocabulary.AName("name"));
             table.HasCheckConstraint(
                 EventsCheck,
-                $"jsonb_typeof(events) = 'array' AND events <@ '{NotificationVocabulary.Listed<NoticeKind>()}'::jsonb");
+                $"jsonb_typeof(events) = 'array' AND events <@ '{NotificationVocabulary.Listed(NoticeKinds.ChosenByRules)}'::jsonb");
             table.HasCheckConstraint(
                 DestinationsCheck,
                 "jsonb_typeof(destinations) = 'array' AND jsonb_array_length(destinations) > 0");

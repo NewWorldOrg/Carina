@@ -1,4 +1,5 @@
 using Carina.Domain.Notifications;
+using Carina.Domain.Programmes;
 
 namespace Carina.TestSupport;
 
@@ -139,4 +140,73 @@ public sealed class HeldNotificationSettings : INotificationSettingsRepository
 
         return Task.CompletedTask;
     }
+}
+
+/// <summary>
+/// Holds the programmes asked to be told of and hands out copies, as the database does: a row changes only
+/// when it is saved.
+/// </summary>
+public sealed class HeldProgrammeWatches : IProgrammeWatchRepository
+{
+    public List<ProgrammeWatch> Watches { get; } = [];
+
+    public Task<ProgrammeWatch?> FindAsync(ProgrammeWatchId id, CancellationToken cancellationToken)
+        => Task.FromResult(Watches.Where(watch => watch.Id.Equals(id)).Select(Copy).FirstOrDefault());
+
+    public Task<ProgrammeWatch?> FindOfAsync(ProgrammeId programme, CancellationToken cancellationToken)
+        => Task.FromResult(Watches.Where(watch => watch.Programme.Equals(programme)).Select(Copy).FirstOrDefault());
+
+    public Task<IReadOnlyList<ProgrammeWatch>> ListAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<ProgrammeWatch>>(
+        [
+            .. Watches.OrderBy(watch => watch.StartsAt).ThenBy(watch => watch.Id.Value).Select(Copy),
+        ]);
+
+    public Task<IReadOnlyList<ProgrammeWatch>> ListFollowedAsync(DateTime at, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<ProgrammeWatch>>(
+        [
+            .. Watches
+                .Where(watch => watch.State is ProgrammeWatchState.Waiting
+                    || (watch.State is ProgrammeWatchState.Notified && watch.EndsAt > at))
+                .OrderBy(watch => watch.StartsAt)
+                .Select(Copy),
+        ]);
+
+    public Task AddAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
+    {
+        Watches.Add(Copy(watch));
+
+        return Task.CompletedTask;
+    }
+
+    public Task SaveAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
+    {
+        Watches.RemoveAll(held => held.Id.Equals(watch.Id));
+        Watches.Add(Copy(watch));
+
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
+    {
+        Watches.RemoveAll(held => held.Id.Equals(watch.Id));
+
+        return Task.CompletedTask;
+    }
+
+    public Task<int> RemoveSettledBeforeAsync(DateTime before, CancellationToken cancellationToken)
+        => Task.FromResult(Watches.RemoveAll(held => held.State is not ProgrammeWatchState.Waiting && held.EndsAt < before));
+
+    private static ProgrammeWatch Copy(ProgrammeWatch watch)
+        => ProgrammeWatch.Rehydrate(
+            watch.Id,
+            watch.Programme,
+            new WatchedBroadcast(watch.StartsAt, watch.EndsAt, watch.ProgrammeName, watch.StationName),
+            watch.LeadMinutes,
+            watch.Destinations,
+            watch.State,
+            watch.NotifiedAt,
+            watch.ToldStartsAt,
+            watch.CreatedAt,
+            watch.ChangedAt);
 }

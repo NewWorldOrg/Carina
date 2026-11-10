@@ -39,7 +39,8 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
         await using NpgsqlConnection connection = new(context.Database.GetConnectionString());
         await connection.OpenAsync(Cancel);
         await using NpgsqlCommand emptying = new(
-            "DELETE FROM notification_event; DELETE FROM notification_rule; DELETE FROM notification_destination;",
+            "DELETE FROM notification_event; DELETE FROM notification_rule; DELETE FROM notification_destination; "
+            + "DELETE FROM notification_watch;",
             connection);
         await emptying.ExecuteNonQueryAsync(Cancel);
     }
@@ -316,6 +317,17 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
         await new NotificationDestinationRepository(context).AddAsync(destination, Cancel);
 
         return destination.Id;
+    }
+
+    public async Task SwitchedOffAsync(NotificationDestinationId id, DateTime at)
+    {
+        await using CarinaDbContext context = database.Open();
+        NotificationDestinationRepository destinations = new(context);
+        NotificationDestination destination = await destinations.FindAsync(id, Cancel)
+            ?? throw new InvalidOperationException("The destination to switch off was never registered.");
+
+        destination.Disable(at);
+        await destinations.SaveAsync(destination, Cancel);
     }
 
     public async Task<NotificationRuleId> RuleAsync(

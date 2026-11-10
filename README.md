@@ -49,7 +49,7 @@ root で起動すると、app は uid と gid を 10001 に切り替えて動き
 | `ConnectionStrings__Carina` | PostgreSQL の接続文字列。必須です |
 | `CARINA_DRIVER_SOCKET` | driver のソケットのパス。既定は `/run/carina/driver.sock` |
 | `CARINA_DATA_PROTECTION_KEYS` | OIDC の client secret を暗号化する鍵を置くディレクトリ。必須です。データベースとは別にバックアップしてください |
-| `CARINA_PUBLIC_ORIGIN` | ブラウザから見たサーバのアドレス(`https://host`)。OIDC の redirect URI の元になります |
+| `CARINA_PUBLIC_ORIGIN` | ブラウザから見たサーバのアドレス(`https://host`)。OIDC の redirect URI の元になります。指定しないと通知の文面に画面へのリンクが付きません |
 | `CARINA_KNOWN_NETWORKS` | `X-Forwarded-*` を信頼するリバースプロキシのネットワーク(`10.42.0.0/16` など)。指定しないと https として扱われず、セッション Cookie に Secure が付きません |
 | `Integrity__OutputRoots` | driver の録画ディレクトリが app から見えるパス(`primary=/srv/recordings`) |
 | `Encodings__OutputRoots` | エンコード済みファイルの保存先(`encodes=/srv/encodes`) |

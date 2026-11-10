@@ -168,8 +168,8 @@ public sealed class PersistenceBoundaryRuleTests
             .SelectMany(entityType => entityType.GetForeignKeys()));
     }
 
-    [Fact(DisplayName = "the notification tables are five and the only keys they hold run from a delivery to its event and its destination")]
-    public void TheNotificationTablesAreFiveAndNoneOfThemHoldsAKeyIntoAnotherDomain()
+    [Fact(DisplayName = "BR-ND-009: the notification tables are six and the only keys they hold run from a delivery to its event and its destination")]
+    public void TheNotificationTablesAreSixAndNoneOfThemHoldsAKeyIntoAnotherDomain()
     {
         using CarinaDbContext context = Carina();
 
@@ -180,6 +180,7 @@ public sealed class PersistenceBoundaryRuleTests
                 "notification_event",
                 "notification_rule",
                 "notification_settings",
+                "notification_watch",
             ],
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Notifications));
 

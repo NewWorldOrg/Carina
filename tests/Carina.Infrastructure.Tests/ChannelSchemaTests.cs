@@ -292,6 +292,7 @@ public sealed class ChannelSchemaTests
                 "notification_event",
                 "notification_rule",
                 "notification_settings",
+                "notification_watch",
                 "oidc_config",
                 "playback_position",
                 "programme",

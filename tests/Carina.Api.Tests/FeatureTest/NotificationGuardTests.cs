@@ -16,6 +16,8 @@ public sealed class NotificationGuardTests
 
     private const string OneRule = "/api/notifications/rules/00000000-0000-0000-0000-000000000002";
 
+    private const string OneWatch = "/api/notifications/watches/00000000-0000-0000-0000-000000000003";
+
     private static readonly string[] LettersOfAnAddress =
     [
         NotificationFeature.Secret,
@@ -32,6 +34,8 @@ public sealed class NotificationGuardTests
         { "POST", NotificationFeature.Rules },
         { "PATCH", OneRule },
         { "DELETE", OneRule },
+        { "POST", NotificationFeature.Watches },
+        { "DELETE", OneWatch },
         { "PUT", NotificationFeature.Settings },
     };
 
@@ -39,6 +43,7 @@ public sealed class NotificationGuardTests
     {
         { "GET", NotificationFeature.Destinations },
         { "GET", NotificationFeature.Rules },
+        { "GET", NotificationFeature.Watches },
         { "GET", $"{NotificationFeature.Deliveries}?destinationId=00000000-0000-0000-0000-000000000001" },
         { "GET", NotificationFeature.Settings },
     };

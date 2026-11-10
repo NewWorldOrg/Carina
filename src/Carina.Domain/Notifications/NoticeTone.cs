@@ -28,6 +28,9 @@ public static class NoticeTones
         [NoticeKind.QualityIncidentDetected] = NoticeTone.Caution,
         [NoticeKind.QualityIncidentResolved] = NoticeTone.Good,
         [NoticeKind.DeviceDisconnected] = NoticeTone.Failure,
+        [NoticeKind.ProgrammeStarting] = NoticeTone.Informative,
+        [NoticeKind.WatchedProgrammeMoved] = NoticeTone.Caution,
+        [NoticeKind.WatchedProgrammeGone] = NoticeTone.Caution,
     };
 
     public static NoticeTone Of(NoticeKind kind) => ByKind[NoticeKinds.Named(kind)];

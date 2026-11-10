@@ -144,7 +144,7 @@ public sealed class NotificationRuleService(
         => ServiceResult<T, NotificationFailure>.Failure(message, failure);
 
     private static IReadOnlyList<NoticeKind>? Kinds(IReadOnlyList<NoticeKind>? asked)
-        => asked is not null && asked.All(kind => Enum.IsDefined(kind)) ? asked : null;
+        => asked is not null && asked.All(NoticeKinds.ChosenByRules.Contains) ? asked : null;
 
     private static void Change(
         NotificationRule held,

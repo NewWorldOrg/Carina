@@ -116,7 +116,7 @@ public sealed class NotificationRule
     {
         ArgumentNullException.ThrowIfNull(events);
 
-        return [.. events.Select(NoticeKinds.Named).Distinct().Order()];
+        return [.. events.Select(NoticeKinds.ChosenByARule).Distinct().Order()];
     }
 
     private static IReadOnlyList<NotificationDestinationId> SentTo(IReadOnlyList<NotificationDestinationId> destinations)

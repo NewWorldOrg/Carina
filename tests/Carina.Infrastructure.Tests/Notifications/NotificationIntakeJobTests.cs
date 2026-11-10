@@ -1,10 +1,15 @@
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
+using Carina.Domain.Programmes;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Tests.Thumbnails;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
+using EventId = Carina.Domain.Programmes.EventId;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
@@ -180,6 +185,66 @@ public sealed class NotificationIntakeJobTests
         Assert.Equal(Assert.Single(machine.Notices.Held).Id, delivery.NoticeId);
     }
 
+    [Fact(DisplayName = "BR-NC-003: each look also tells of the programmes asked to be told of, to the destinations asked for with them")]
+    public async Task EachLookAlsoTellsOfTheProgrammesAskedToBeToldOf()
+    {
+        Loop machine = new();
+        NotificationDestinationId destination = machine.Destination();
+        ProgrammeWatchId watch = machine.AskedToBeToldOf(Began + BeforeFirstLook + TimeSpan.FromMinutes(2), destination);
+
+        using NotificationIntakeJob job = machine.Job();
+        await job.StartAsync(Cancel);
+        await machine.WaitingAgain("the loop never settled into its first wait");
+        machine.Clock.Turn(BeforeFirstLook);
+        await machine.WaitingAgain("the loop never came back from the look");
+        await job.StopAsync(Cancel);
+
+        Notice notice = Assert.Single(machine.Notices.Held);
+        Assert.Equal(NoticeKind.ProgrammeStarting, notice.Kind);
+        Assert.Equal(watch.Value, notice.SourceId);
+        Assert.Equal(destination, Assert.Single(machine.Notices.Queued).DestinationId);
+        Assert.Equal(ProgrammeWatchState.Notified, Assert.Single(machine.Watches.Watches).State);
+    }
+
+    [Fact(DisplayName = "BR-NC-003: a look at the ledgers that fails does not keep the programmes asked to be told of from being told")]
+    public async Task ALookAtTheLedgersThatFailsDoesNotKeepTheProgrammesFromBeingTold()
+    {
+        Loop machine = new();
+        ProgrammeWatchId watch = machine.AskedToBeToldOf(Began + BeforeFirstLook + TimeSpan.FromMinutes(2), machine.Destination());
+        machine.Sources.FailingLooks = 1;
+
+        using NotificationIntakeJob job = machine.Job();
+        await job.StartAsync(Cancel);
+        await machine.WaitingAgain("the loop never settled into its first wait");
+        machine.Clock.Turn(BeforeFirstLook);
+        await machine.WaitingAgain("the loop never came back from the look that failed");
+        await job.StopAsync(Cancel);
+
+        Assert.Equal(watch.Value, Assert.Single(machine.Notices.Held).SourceId);
+        Assert.Single(Errors(machine.SaidOfLooks));
+        Assert.Empty(Errors(machine.SaidOfWatches));
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme that cannot be told of is logged once as an error, naming its row")]
+    public async Task AProgrammeThatCannotBeToldOfIsLoggedOnceNamingItsRow()
+    {
+        Loop machine = new();
+        ProgrammeWatchId watch = machine.AskedToBeToldOf(Began + BeforeFirstLook + TimeSpan.FromMinutes(2), machine.Destination());
+        machine.Notices.Refusing = watch.Value;
+
+        using NotificationIntakeJob job = machine.Job();
+        await job.StartAsync(Cancel);
+        await machine.WaitingAgain("the loop never settled into its first wait");
+        machine.Clock.Turn(BeforeFirstLook);
+        await machine.WaitingAgain("the loop never came back from the look");
+        await job.StopAsync(Cancel);
+
+        string error = Assert.Single(Errors(machine.SaidOfWatches));
+        Assert.Contains(watch.Value.ToString(), error, StringComparison.Ordinal);
+        Assert.Empty(Errors(machine.SaidOfLooks));
+        Assert.Empty(machine.Notices.Held);
+    }
+
     private static IEnumerable<string> Errors<T>(HeardOf<T> said)
         => said.Said.Where(line => line.StartsWith($"{LogLevel.Error} ", StringComparison.Ordinal));
 
@@ -199,6 +264,10 @@ public sealed class NotificationIntakeJobTests
 
         public HeldDestinations Destinations { get; } = new();
 
+        public HeldProgrammeWatches Watches { get; } = new();
+
+        public HeardOf<ProgrammeWatchRound> SaidOfWatches { get; } = new();
+
         public NotificationIntakeJob Job()
         {
             ServiceCollection services = new();
@@ -211,6 +280,12 @@ public sealed class NotificationIntakeJobTests
             services.AddSingleton(NoticeLinkBase.None);
             services.AddSingleton<TimeProvider>(Clock);
             services.AddScoped<NotificationIntakeRound>();
+            services.AddSingleton<ILogger<ProgrammeWatchRound>>(SaidOfWatches);
+            services.AddScoped<IProgrammeWatchRepository>(_ => Watches);
+            services.AddScoped<IAnnouncedProgrammes>(_ => new HeldProgrammes());
+            services.AddScoped<IBroadcastServiceRepository>(_ => new HeldServices());
+            services.AddScoped<IAtomicWrite>(_ => new UnguardedWrites());
+            services.AddScoped<ProgrammeWatchRound>();
 
             return new NotificationIntakeJob(
                 services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
@@ -238,6 +313,20 @@ public sealed class NotificationIntakeJobTests
                 Faults: []));
 
             return recording;
+        }
+
+        public ProgrammeWatchId AskedToBeToldOf(DateTime startsAt, NotificationDestinationId destination)
+        {
+            ProgrammeWatch watch = ProgrammeWatch.Ask(
+                ProgrammeWatchId.New(),
+                new ProgrammeId(new NetworkId(32736), new ServiceId(1984), new EventId(7)),
+                new WatchedBroadcast(startsAt, startsAt.AddMinutes(30), "A made-up programme", null),
+                3,
+                [destination],
+                Began);
+            Watches.Watches.Add(watch);
+
+            return watch.Id;
         }
 
         public NotificationDestinationId Destination()

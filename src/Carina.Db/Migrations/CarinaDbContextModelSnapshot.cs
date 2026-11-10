@@ -1623,7 +1623,7 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("notification_event", null, t =>
                         {
-                            t.HasCheckConstraint("ck_notification_event_kind", "kind IN ('RecordingStarted', 'RecordingCompleted', 'RecordingTruncated', 'RecordingFailed', 'EncodeStarted', 'EncodeCompleted', 'EncodeFailed', 'ReservationCompeting', 'ReservationMissed', 'ProgrammeMoved', 'QualityIncidentDetected', 'QualityIncidentResolved', 'DeviceDisconnected')");
+                            t.HasCheckConstraint("ck_notification_event_kind", "kind IN ('RecordingStarted', 'RecordingCompleted', 'RecordingTruncated', 'RecordingFailed', 'EncodeStarted', 'EncodeCompleted', 'EncodeFailed', 'ReservationCompeting', 'ReservationMissed', 'ProgrammeMoved', 'QualityIncidentDetected', 'QualityIncidentResolved', 'DeviceDisconnected', 'ProgrammeStarting', 'WatchedProgrammeMoved', 'WatchedProgrammeGone')");
 
                             t.HasCheckConstraint("ck_notification_event_tone", "tone IN ('Good', 'Informative', 'Caution', 'Failure')");
 
@@ -1834,6 +1834,100 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_notification_settings_notify_lead_minutes", "notify_lead_minutes IN (0, 1, 3, 5, 10)");
 
                             t.HasCheckConstraint("ck_notification_settings_single_row", "id = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Notifications.ProgrammeWatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Destinations")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("destinations");
+
+                    b.Property<DateTime>("EndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ends_at");
+
+                    b.Property<int>("EventId")
+                        .HasColumnType("integer")
+                        .HasColumnName("event_id");
+
+                    b.Property<int>("LeadMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("lead_minutes");
+
+                    b.Property<int>("NetworkId")
+                        .HasColumnType("integer")
+                        .HasColumnName("network_id");
+
+                    b.Property<DateTime?>("NotifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("notified_at");
+
+                    b.Property<string>("ProgrammeName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("programme_name");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("service_id");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("starts_at");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("StationName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("station_name");
+
+                    b.Property<DateTime?>("ToldStartsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("told_starts_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_watch");
+
+                    b.HasIndex("State", "StartsAt")
+                        .HasDatabaseName("ix_notification_watch_state_starts_at");
+
+                    b.HasIndex("NetworkId", "ServiceId", "EventId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_notification_watch_programme");
+
+                    b.ToTable("notification_watch", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_watch_broadcast", "ends_at > starts_at");
+
+                            t.HasCheckConstraint("ck_notification_watch_destinations", "jsonb_typeof(destinations) = 'array' AND (state <> 'Waiting' OR jsonb_array_length(destinations) > 0)");
+
+                            t.HasCheckConstraint("ck_notification_watch_lead_minutes", "lead_minutes IN (0, 1, 3, 5, 10)");
+
+                            t.HasCheckConstraint("ck_notification_watch_notified_at", "(state = 'Notified') = (notified_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_notification_watch_state", "state IN ('Waiting', 'Notified', 'Skipped', 'Cancelled')");
+
+                            t.HasCheckConstraint("ck_notification_watch_told_starts_at", "(state = 'Notified') = (told_starts_at IS NOT NULL)");
                         });
                 });
 

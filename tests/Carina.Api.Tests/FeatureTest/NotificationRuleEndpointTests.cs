@@ -136,6 +136,31 @@ public sealed class NotificationRuleEndpointTests
         Assert.Empty(feature.HeldRules.Rules);
     }
 
+    [Theory(DisplayName = "D-10: A set of rules cannot tell of the kinds told of one programme asked for by itself")]
+    [InlineData("programmeStarting")]
+    [InlineData("watchedProgrammeMoved")]
+    [InlineData("watchedProgrammeGone")]
+    public async Task ARuleNamesNoKindToldOfOneProgramme(string kind)
+    {
+        await using NotificationFeature feature = new();
+        Guid livingRoom = await feature.RegisteredAsync();
+        feature.HeldRules.Rules.Clear();
+        Guid[] destinations = [livingRoom];
+        (_, JsonElement made) = await feature.PostAsync(
+            NotificationFeature.Rules,
+            new { name = "失敗だけ", events = new[] { "recordingFailed" }, destinations });
+        string held = $"{NotificationFeature.Rules}/{made.GetProperty("data").GetProperty("id").GetString()}";
+
+        (HttpStatusCode making, _) = await feature.PostAsync(
+            NotificationFeature.Rules,
+            new { name = "番組の開始", events = new[] { kind }, destinations });
+        (HttpStatusCode changing, _) = await feature.PatchAsync(held, new { events = new[] { "recordingFailed", kind } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, making);
+        Assert.Equal(HttpStatusCode.BadRequest, changing);
+        Assert.Equal([NoticeKind.RecordingFailed], Assert.Single(feature.HeldRules.Rules).Events);
+    }
+
     [Fact(DisplayName = "BR-NT-006: The twenty-first set of rules is refused as a conflict, and the twenty stay as they were")]
     public async Task TheTwentyFirstRuleIsRefused()
     {
