@@ -319,6 +319,17 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
         return destination.Id;
     }
 
+    public async Task SwitchedOffAsync(NotificationDestinationId id, DateTime at)
+    {
+        await using CarinaDbContext context = database.Open();
+        NotificationDestinationRepository destinations = new(context);
+        NotificationDestination destination = await destinations.FindAsync(id, Cancel)
+            ?? throw new InvalidOperationException("The destination to switch off was never registered.");
+
+        destination.Disable(at);
+        await destinations.SaveAsync(destination, Cancel);
+    }
+
     public async Task<NotificationRuleId> RuleAsync(
         string name,
         DateTime at,

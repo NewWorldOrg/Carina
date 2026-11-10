@@ -211,6 +211,24 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         Assert.Equal(asked, Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting)).DestinationId);
     }
 
+    [Fact(DisplayName = "BR-NS-003: a programme whose destinations are all switched off by the time it is due is told of with nothing to send")]
+    public async Task AProgrammeWhoseDestinationsAreAllSwitchedOffByTheTimeItIsDueIsToldOfWithNothingToSend()
+    {
+        (ProgrammeWatchId watch, NotificationDestinationId destination) = await AskedOfADestinationAsync();
+        await ledgers.SwitchedOffAsync(destination, Asked.AddMinutes(10));
+        DateTime now = Starts.AddMinutes(-Lead);
+
+        NotificationIntake look = await watched.LookAsync(now);
+
+        ProgrammeWatch row = await watched.RowAsync(watch);
+        Assert.Equal(new NotificationIntake(1, 1, 0), look);
+        Assert.Equal(ProgrammeWatchState.Notified, row.State);
+        Assert.Equal(now, row.NotifiedAt);
+        Assert.Equal([destination], row.Destinations);
+        Assert.Equal([NoticeKind.ProgrammeStarting], await ledgers.KindsOfAsync(watch.Value));
+        Assert.Empty(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting));
+    }
+
     [Fact(DisplayName = "BR-NS-003: when the notice cannot be written the programme still waits, and the next look tells of it")]
     public async Task WhenTheNoticeCannotBeWrittenTheProgrammeStillWaitsAndTheNextLookTellsOfIt()
     {
