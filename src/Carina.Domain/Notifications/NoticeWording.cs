@@ -68,7 +68,10 @@ public static class NoticeWording
         new Dictionary<NoticeKind, NoticeTemplate<EncodeNoticeSource>>
         {
             [NoticeKind.EncodeStarted] = new("エンコードを始めました", About, _ => EncodeScreen),
-            [NoticeKind.EncodeCompleted] = new("エンコードが終わりました", About, encode => RecordingScreen(encode.RecordingId)),
+            [NoticeKind.EncodeCompleted] = new(
+                "エンコードが終わりました",
+                encode => About(encode).Fact("大きさ", NoticeSizes.Shrunk(encode.SourceBytes, encode.ArtefactBytes)),
+                encode => RecordingScreen(encode.RecordingId)),
             [NoticeKind.EncodeFailed] = new(
                 "エンコードできませんでした",
                 encode => About(encode).Fact(Why, NoticeVocabulary.Of(encode.Failure)),

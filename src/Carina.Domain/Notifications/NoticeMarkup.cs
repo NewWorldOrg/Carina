@@ -7,6 +7,8 @@ public static class NoticeMarkup
 {
     public const int SlackSectionLongest = 3000;
 
+    public const int SlackTitleLongest = SlackSectionLongest - 2;
+
     public const int DiscordTitleLongest = 256;
 
     public const int DiscordDescriptionLongest = 4096;
@@ -30,7 +32,7 @@ public static class NoticeMarkup
     public static MarkedUpNotice For(WebhookTarget target, string title, string body)
         => target switch
         {
-            WebhookTarget.Slack => new MarkedUpNotice(Slack(title, SlackSectionLongest), Slack(body, SlackSectionLongest)),
+            WebhookTarget.Slack => new MarkedUpNotice(Slack(title, SlackTitleLongest), Slack(body, SlackSectionLongest)),
             WebhookTarget.Discord => ForAnEmbed(Discord(title, DiscordTitleLongest), body),
             _ => throw new ArgumentOutOfRangeException(nameof(target), target, "A notice is shaped for Slack or for Discord."),
         };

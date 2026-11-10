@@ -82,6 +82,18 @@ public sealed class NotificationDestinationTests
         Assert.Equal(At.AddMinutes(1), destination.LastResultAt);
     }
 
+    [Fact(DisplayName = "BR-NS-001: a destination that turned one notice down without its address being gone stays on and keeps why")]
+    public void ADestinationThatTurnedOneNoticeDownStaysOn()
+    {
+        NotificationDestination destination = Registered();
+
+        destination.NoteTurnedDown(At.AddMinutes(1));
+
+        Assert.True(destination.Enabled);
+        Assert.Equal(NoticeFailure.Rejected, destination.LastFailure);
+        Assert.Equal(At.AddMinutes(1), destination.LastResultAt);
+    }
+
     [Fact(DisplayName = "BR-NS-002: a failure worth another try leaves the destination turned on")]
     public void AFailureWorthAnotherTryLeavesTheDestinationTurnedOn()
     {
@@ -133,6 +145,32 @@ public sealed class NotificationDestinationTests
         Assert.Equal([7, 8], destination.SealedUrl);
         Assert.Equal("abcd", destination.UrlTail);
         Assert.Equal(At.AddHours(1), destination.ChangedAt);
+    }
+
+    [Fact(DisplayName = "BR-NS-002: a destination pointed elsewhere forgets what came of the last send to the old address")]
+    public void ADestinationPointedElsewhereForgetsTheLastResult()
+    {
+        NotificationDestination destination = Registered();
+        destination.NoteTurnedDown(At.AddMinutes(1));
+
+        destination.PointAt(WebhookTarget.Discord, [7, 8], "abcd", At.AddHours(1));
+
+        Assert.Null(destination.LastResultAt);
+        Assert.Null(destination.LastFailure);
+        Assert.True(destination.Enabled);
+    }
+
+    [Fact(DisplayName = "BR-NS-002: a destination that was turned off stays off when it is pointed elsewhere")]
+    public void ADestinationTurnedOffStaysOffWhenPointedElsewhere()
+    {
+        NotificationDestination destination = Registered();
+        destination.NoteFailed(NoticeFailure.Rejected, At.AddMinutes(1));
+
+        destination.PointAt(WebhookTarget.Discord, [7, 8], "abcd", At.AddHours(1));
+
+        Assert.False(destination.Enabled);
+        Assert.Null(destination.LastResultAt);
+        Assert.Null(destination.LastFailure);
     }
 
     private static NotificationDestination Registered()

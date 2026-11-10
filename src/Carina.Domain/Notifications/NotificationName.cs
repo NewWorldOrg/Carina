@@ -11,6 +11,16 @@ public sealed class NotificationName : CommonValueObject<string>
     {
     }
 
+    /// <summary>
+    /// The name as written, or nothing where it is not one a destination or a set of rules can carry.
+    /// </summary>
+    public static NotificationName? Read(string? written)
+    {
+        string trimmed = written?.Trim() ?? string.Empty;
+
+        return trimmed.Length is 0 or > Longest || trimmed.Any(char.IsControl) ? null : new NotificationName(trimmed);
+    }
+
     private static string Validated(string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);

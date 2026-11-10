@@ -14,4 +14,10 @@ public interface INoticeRepository
     /// written nothing, when the ledger already holds a notice of the same kind taken from the same row.
     /// </summary>
     Task<bool> AddAsync(Notice notice, IReadOnlyList<NotificationDelivery> deliveries, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes the notices of what happened before <paramref name="before"/>, with their deliveries, and answers how
+    /// many notices went.
+    /// </summary>
+    Task<int> RemoveBeforeAsync(DateTime before, CancellationToken cancellationToken);
 }

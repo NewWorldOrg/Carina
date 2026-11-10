@@ -268,6 +268,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeRestart>();
         services.AddScoped<EncodeIntakeRound>();
         services.AddScoped<NotificationIntakeRound>();
+        services.AddScoped<NotificationDeliveryRound>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<ICaptionWorklist, CaptionWorklist>();
         services.AddScoped<IDataBroadcastWorklist, DataBroadcastWorklist>();
@@ -417,8 +418,19 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<EncodeSettings>(provider =>
             provider.GetRequiredService<IOptions<EncodingOptions>>().Value.Read());
         services.TryAddSingleton<EncodePlaces>();
+        services.TryAddSingleton<IEncodeArtefactWeigher, LocalEncodeArtefactWeigher>();
         services.TryAddSingleton(new NotificationIntakeSettings());
         services.TryAddSingleton(NoticeLinkBase.None);
+        services.TryAddSingleton(new NotificationDeliverySettings());
+        services.TryAddSingleton<INoticeNetwork, SystemNoticeNetwork>();
+        services.TryAddSingleton<NoticeLine>(provider => new NoticeLine(
+            provider.GetRequiredService<INoticeNetwork>(),
+            provider.GetRequiredService<BroadcasterRelaySettings>().UserAgent,
+            provider.GetRequiredService<TimeProvider>(),
+            NoticeLine.UsualDeadline));
+        services.TryAddSingleton<WebhookUrlSeal>();
+        services.TryAddSingleton<NoticeDispatch>();
+        services.TryAddSingleton<UnwrittenDeliveries>();
         services.TryAddSingleton<EncodeQueueTurn>();
         services.TryAddSingleton<OutputRootDeclarations>();
         services.TryAddSingleton<IRenameProbe, DirectoryRenameProbe>();
@@ -488,6 +500,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<EncodeDispatch>();
         services.AddHostedService<EncodeIntakeJob>();
         services.AddHostedService<NotificationIntakeJob>();
+        services.AddHostedService<NotificationDeliveryJob>();
         services.AddHostedService<SignalSampleJob>();
         services.AddHostedService<QualitySignalRollupJob>();
         services.AddHostedService<SupplyWatchJob>();

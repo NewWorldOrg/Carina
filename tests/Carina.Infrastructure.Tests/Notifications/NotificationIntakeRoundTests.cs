@@ -448,6 +448,40 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         Assert.Empty(await ledgers.NoticesOfAsync(fellPastTheEdge.Value));
     }
 
+    [Fact(DisplayName = "BR-NC-004: what a row dates after this moment is not taken until that moment has come")]
+    public async Task WhatARowDatesAfterThisMomentWaitsUntilThatMomentHasCome()
+    {
+        DateTime now = await ADayOfItsOwnAsync(29);
+        await ledgers.EmptyTheEncodesAsync();
+        DateTime ahead = now.AddMinutes(10);
+        RecordingId endedNow = await ledgers.RecordingBeganAsync(now.AddMinutes(-120));
+        await ledgers.RecordingEndedAsync(endedNow, RecordingOutcome.Complete, now);
+        RecordingId endedAhead = await ledgers.RecordingBeganAsync(now.AddMinutes(-120));
+        await ledgers.RecordingEndedAsync(endedAhead, RecordingOutcome.Complete, ahead);
+        ReservationId missedAhead = ReservationId.New();
+        await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, ahead, missedAhead);
+        EncodeJobId failedAhead = await ledgers.EncodeIsQueuedAsync(endedAhead, now.AddMinutes(-110));
+        await ledgers.EncodeStartedAsync(failedAhead, now.AddMinutes(-100));
+        await ledgers.EncodeFailedAsync(failedAhead, ahead);
+        QualityIncidentId fellAhead = await ledgers.ReceptionFellAsync(ahead);
+
+        await ledgers.LookAsync(now);
+        string[] endedNowAtFirst = [.. (await ledgers.KindsOfAsync(endedNow.Value)).Select(kind => kind.ToString())];
+        int aheadAtFirst = (await ledgers.NoticesOfAsync(endedAhead.Value)).Count
+            + (await ledgers.NoticesOfAsync(missedAhead.Value)).Count
+            + (await ledgers.NoticesOfAsync(failedAhead.Value)).Count
+            + (await ledgers.NoticesOfAsync(fellAhead.Value)).Count;
+        await ledgers.LookAsync(ahead);
+        await ledgers.ReceptionCameBackAsync(fellAhead, ahead.AddMinutes(1));
+
+        Assert.Equal([nameof(NoticeKind.RecordingCompleted)], endedNowAtFirst);
+        Assert.Equal(0, aheadAtFirst);
+        Assert.Equal([NoticeKind.RecordingCompleted], await ledgers.KindsOfAsync(endedAhead.Value));
+        Assert.Equal([NoticeKind.ReservationMissed], await ledgers.KindsOfAsync(missedAhead.Value));
+        Assert.Equal([NoticeKind.EncodeFailed], await ledgers.KindsOfAsync(failedAhead.Value));
+        Assert.Equal([NoticeKind.QualityIncidentDetected], await ledgers.KindsOfAsync(fellAhead.Value));
+    }
+
     [Fact(DisplayName = "A recording that began and ended between two looks is told of twice in the one look")]
     public async Task ARecordingThatBeganAndEndedBetweenTwoLooksIsToldOfTwiceInTheOneLook()
     {
@@ -550,6 +584,43 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         Assert.All(notices, notice => Assert.StartsWith(NoticeLedgers.ProgrammeName, notice.Body, StringComparison.Ordinal));
         Assert.Contains("H.264", notices[0].Body, StringComparison.Ordinal);
         Assert.Equal(NoticeTone.Failure, notices[1].Tone);
+    }
+
+    [Fact(DisplayName = "An encode that completes is told of with how far the artefact shrank from the recording")]
+    public async Task AnEncodeThatCompletesIsToldOfWithHowFarItShrank()
+    {
+        DateTime now = await ADayOfItsOwnAsync(27);
+        await ledgers.EmptyTheEncodesAsync();
+        RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-90));
+        await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Complete, now.AddMinutes(-60));
+        EncodeJobId job = await ledgers.EncodeIsQueuedAsync(recording, now.AddMinutes(-40));
+        await ledgers.EncodeStartedAsync(job, now.AddMinutes(-4));
+        await ledgers.EncodeCompletedAsync(job, now.AddMinutes(-2));
+
+        await ledgers.LookAsync(now, artefactBytes: 300_000);
+
+        IReadOnlyList<Notice> notices = await ledgers.NoticesOfAsync(job.Value);
+        Assert.Equal([NoticeKind.EncodeStarted, NoticeKind.EncodeCompleted], notices.Select(notice => notice.Kind));
+        Assert.DoesNotContain("大きさ", notices[0].Body, StringComparison.Ordinal);
+        Assert.EndsWith("大きさ: 1 MB → 293 KB(元の 25%)", notices[1].Body, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "An encode that completes is told of without a size when its artefact cannot be weighed")]
+    public async Task AnEncodeWhoseArtefactCannotBeWeighedIsToldOfWithoutASize()
+    {
+        DateTime now = await ADayOfItsOwnAsync(28);
+        await ledgers.EmptyTheEncodesAsync();
+        RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-90));
+        await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Complete, now.AddMinutes(-60));
+        EncodeJobId job = await ledgers.EncodeIsQueuedAsync(recording, now.AddMinutes(-40));
+        await ledgers.EncodeStartedAsync(job, now.AddMinutes(-4));
+        await ledgers.EncodeCompletedAsync(job, now.AddMinutes(-2));
+
+        await ledgers.LookAsync(now);
+
+        Notice completed = (await ledgers.NoticesOfAsync(job.Value))[^1];
+        Assert.Equal(NoticeKind.EncodeCompleted, completed.Kind);
+        Assert.DoesNotContain("大きさ", completed.Body, StringComparison.Ordinal);
     }
 
     private static Notice ANotice(Guid source, DateTime at)

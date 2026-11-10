@@ -6,6 +6,10 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class NotificationRuleRepository(CarinaDbContext context) : INotificationRuleRepository
 {
+    public const long WriterLock = 5_243_197_610_106;
+
+    private static readonly string TakeTurnSql = $"SELECT pg_advisory_xact_lock({WriterLock})";
+
     public async Task<NotificationRule?> FindAsync(
         NotificationRuleId id,
         CancellationToken cancellationToken)
@@ -21,6 +25,9 @@ public sealed class NotificationRuleRepository(CarinaDbContext context) : INotif
             .OrderBy(rule => rule.CreatedAt)
             .ThenBy(rule => rule.Id)
             .ToListAsync(cancellationToken);
+
+    public async Task TakeTurnAsync(CancellationToken cancellationToken)
+        => await context.Database.ExecuteSqlRawAsync(TakeTurnSql, cancellationToken);
 
     public async Task AddAsync(NotificationRule rule, CancellationToken cancellationToken)
     {

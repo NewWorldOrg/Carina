@@ -3,6 +3,7 @@ using System.Net;
 using Carina.Api.Authentication;
 using Carina.Api.Events;
 using Carina.Api.Services;
+using Carina.Domain.Notifications;
 using Carina.Infrastructure.DataBroadcast;
 
 using Microsoft.AspNetCore.Builder;
@@ -71,6 +72,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<QualityIncidentService>();
         services.AddScoped<QualityCandidateScoreService>();
         services.AddScoped<MigrationRecordService>();
+        services.AddScoped<NotificationDestinationService>();
+        services.AddScoped<NotificationRuleService>();
+        services.AddScoped<NotificationDeliveryService>();
+        services.AddScoped<NotificationSettingsService>();
+        services.AddSingleton<NoticeTrials>();
         services.AddSingleton<PlaybackTicketGate>();
 
         return services;
@@ -117,6 +123,8 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<IOptions<PublicOriginOptions>>().Value.Read());
         services.AddSingleton(provider =>
             provider.GetRequiredService<PublicOrigin>().Address is { } address ? OwnHost.Of([address]) : OwnHost.Unnamed);
+        services.AddSingleton(provider =>
+            provider.GetRequiredService<PublicOrigin>().Address is { } address ? NoticeLinkBase.At(address) : NoticeLinkBase.None);
 
         services.AddHostedService<PublicOriginDiagnosis>();
 

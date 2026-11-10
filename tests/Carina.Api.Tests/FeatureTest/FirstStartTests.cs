@@ -17,7 +17,8 @@ internal sealed record SaidLine(
     string Category,
     LogLevel Level,
     string Text,
-    IReadOnlyList<KeyValuePair<string, object?>> Values)
+    IReadOnlyList<KeyValuePair<string, object?>> Values,
+    string Thrown)
 {
     public string Only(string name)
         => Values.FirstOrDefault(value => value.Key == name).Value?.ToString() ?? string.Empty;
@@ -83,7 +84,8 @@ internal sealed class RecordedStartup : ILoggerProvider
                 category,
                 logLevel,
                 formatter(state, exception),
-                state as IReadOnlyList<KeyValuePair<string, object?>> ?? []);
+                state as IReadOnlyList<KeyValuePair<string, object?>> ?? [],
+                exception?.ToString() ?? string.Empty);
 
             lock (said)
             {

@@ -34,7 +34,7 @@ public sealed class NotificationIntakeRound(
         [
             .. (await sources.SinceAsync(since, cancellationToken))
                 .SelectMany(source => source.Happenings())
-                .Where(happening => happening.OccurredAt >= since)
+                .Where(happening => happening.OccurredAt >= since && happening.OccurredAt <= now)
                 .OrderBy(happening => happening.OccurredAt),
         ];
 

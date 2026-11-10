@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 
 using Carina.Domain.DataBroadcast;
+using Carina.Infrastructure.Net;
 
 namespace Carina.Infrastructure.DataBroadcast;
 
@@ -259,9 +260,9 @@ public sealed class RelayLine : IDisposable
         }
 
         IReadOnlyList<IPAddress> addresses = await AddressesOfAsync(endpoint.Host, cancellationToken);
-        IPAddress[] machine = [.. network.OwnAddresses().Select(RelayAddresses.Unmapped)];
+        IPAddress[] machine = [.. network.OwnAddresses().Select(PublicAddresses.Unmapped)];
 
-        if (!addresses.All(address => ConnectsTo(RelayAddresses.Unmapped(address), machine)))
+        if (!addresses.All(address => ConnectsTo(PublicAddresses.Unmapped(address), machine)))
         {
             throw new RelayFailureException(RelayResult.RefusedOrTooLarge, "The name resolves to an address the relay does not connect to.");
         }
@@ -284,7 +285,7 @@ public sealed class RelayLine : IDisposable
     }
 
     private bool ConnectsTo(IPAddress address, IPAddress[] machine)
-        => RelayAddresses.IsPublic(address) && !own.IsAt(address) && !machine.Contains(address);
+        => PublicAddresses.IsPublic(address) && !own.IsAt(address) && !machine.Contains(address);
 
     private async Task<IReadOnlyList<IPAddress>> AddressesOfAsync(string host, CancellationToken cancellationToken)
     {

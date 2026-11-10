@@ -12,6 +12,17 @@ public static class LoggingBuilderExtensions
         "Microsoft.AspNetCore.Routing.Matching",
     ];
 
+    public static readonly IReadOnlyList<string> CategoriesThatNameTheAddressCalled =
+    [
+        "System.Net.Http",
+    ];
+
+    private static readonly IReadOnlyList<string> CategoriesKeptToWarnings =
+    [
+        .. CategoriesThatNameTheRequestPath,
+        .. CategoriesThatNameTheAddressCalled,
+    ];
+
     /// <summary>
     /// Has every line written to the console begin with the moment it was written, in UTC.
     /// </summary>
@@ -27,7 +38,8 @@ public static class LoggingBuilderExtensions
     }
 
     /// <summary>
-    /// Keeps the framework from writing the lines that name the path a request came on, whatever level is configured.
+    /// Keeps the framework from writing the lines that name the path a request came on or the address a request went
+    /// to, whatever level is configured.
     /// </summary>
     public static ILoggingBuilder KeepRequestLinesOut(this ILoggingBuilder logging)
     {
@@ -55,7 +67,7 @@ public static class LoggingBuilderExtensions
 
         foreach (string? provider in providers)
         {
-            foreach (string category in CategoriesThatNameTheRequestPath)
+            foreach (string category in CategoriesKeptToWarnings)
             {
                 options.Rules.Add(new LoggerFilterRule(provider, category, LogLevel.Warning, null));
             }
@@ -64,7 +76,7 @@ public static class LoggingBuilderExtensions
 
     private static bool NamesTheRequestPath(LoggerFilterRule rule)
         => rule.CategoryName is { } category
-           && CategoriesThatNameTheRequestPath.Any(kept => category.StartsWith(kept, StringComparison.OrdinalIgnoreCase));
+           && CategoriesKeptToWarnings.Any(kept => category.StartsWith(kept, StringComparison.OrdinalIgnoreCase));
 
     private static LogLevel AtMostWarnings(LogLevel? level)
         => level is { } said && said > LogLevel.Warning ? said : LogLevel.Warning;

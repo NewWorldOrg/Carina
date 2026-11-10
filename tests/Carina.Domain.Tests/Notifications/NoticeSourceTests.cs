@@ -254,7 +254,7 @@ public sealed class NoticeSourceTests
             .Select(happening => new NoticeKey(happening.Kind, happening.SourceId));
 
     private static EncodeNoticeSource Encode(EncodeJobStatus status, DateTime? startedAt, DateTime? endedAt)
-        => new(Guid.NewGuid(), Guid.NewGuid(), "A programme", EncodeCodec.H265, status, startedAt, endedAt, null);
+        => new(Guid.NewGuid(), Guid.NewGuid(), "A programme", EncodeCodec.H265, status, startedAt, endedAt, null, null, null);
 
     private static QualityNoticeSource Quality(QualityIncidentOwner owner, DateTime? resolvedAt)
         => new(

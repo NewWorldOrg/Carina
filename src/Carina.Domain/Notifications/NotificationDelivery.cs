@@ -8,6 +8,8 @@ namespace Carina.Domain.Notifications;
 /// </summary>
 public sealed class NotificationDelivery
 {
+    public const int MostListed = 50;
+
     private NotificationDelivery()
     {
     }
@@ -31,6 +33,8 @@ public sealed class NotificationDelivery
     public DateTime QueuedAt { get; private set; }
 
     public bool IsWaiting => State is NotificationDeliveryState.Queued or NotificationDeliveryState.Failed;
+
+    public static int Listed(int? perPage) => ListingGuards.Clamped(perPage, MostListed, MostListed);
 
     public static NotificationDelivery Queue(
         NotificationDeliveryId id,

@@ -54,6 +54,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "DELETE /api/auth/sessions/{id}",
                 "DELETE /api/encoding/destinations/{id:guid}",
                 "DELETE /api/encoding/profiles/{id:guid}",
+                "DELETE /api/notifications/destinations/{id:guid}",
+                "DELETE /api/notifications/rules/{id:guid}",
                 "DELETE /api/recordings/{id}",
                 "DELETE /api/reservations/{id:guid}",
                 "DELETE /api/rules/{id:guid}",
@@ -81,6 +83,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "DELETE /api/auth/sessions/{id}",
                 "DELETE /api/encoding/destinations/{id:guid}",
                 "DELETE /api/encoding/profiles/{id:guid}",
+                "DELETE /api/notifications/destinations/{id:guid}",
+                "DELETE /api/notifications/rules/{id:guid}",
                 "DELETE /api/recordings/{id}",
                 "DELETE /api/reservations/{id:guid}",
                 "DELETE /api/rules/{id:guid}",
@@ -196,6 +200,34 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 .OrderBy(surface => surface.Pattern, StringComparer.Ordinal)
                 .Select(surface => surface.Effect)
                 .ToArray());
+    }
+
+    [Fact(DisplayName = "BR-NA-002: the notification surfaces are the destinations and the sets of rules listed, made, changed and removed, a destination tried, the deliveries listed and the settings read and changed, and removing a destination or a set of rules discards")]
+    public void TheNotificationSurfacesAreTheOnesTheDestinationsRulesDeliveriesAndSettingsAreReachedThrough()
+    {
+        RoutedSurface[] notifications =
+        [
+            .. Inventory()
+                .Where(surface => surface.Pattern.StartsWith("/api/notifications", StringComparison.Ordinal))
+                .OrderBy(surface => surface.ToString(), StringComparer.Ordinal),
+        ];
+
+        Assert.Equal(
+            [
+                "DELETE /api/notifications/destinations/{id:guid} Destructive",
+                "DELETE /api/notifications/rules/{id:guid} Destructive",
+                "GET /api/notifications/deliveries Reading",
+                "GET /api/notifications/destinations Reading",
+                "GET /api/notifications/rules Reading",
+                "GET /api/notifications/settings Reading",
+                "PATCH /api/notifications/destinations/{id:guid} Changing",
+                "PATCH /api/notifications/rules/{id:guid} Changing",
+                "POST /api/notifications/destinations Changing",
+                "POST /api/notifications/destinations/{id:guid}/test Changing",
+                "POST /api/notifications/rules Changing",
+                "PUT /api/notifications/settings Changing",
+            ],
+            notifications.Select(surface => $"{surface} {surface.Effect}").ToArray());
     }
 
     [Fact(DisplayName = "the segment surfaces are the settings read and changed, the status read and the version in use chosen, and none of them discards anything")]

@@ -20,6 +20,32 @@ public sealed class NotificationRuleTests
         Assert.Equal(At.AddMinutes(1), rule.ChangedAt);
     }
 
+    [Fact(DisplayName = "D-9: the set of rules made with the first destination tells it of failures and trouble, and of nothing that went well")]
+    public void TheUsualSetOfRulesTellsOfFailuresAndTrouble()
+    {
+        NotificationDestinationId destination = NotificationDestinationId.New();
+
+        NotificationRule usual = NotificationRule.Usual(NotificationRuleId.New(), destination, At);
+
+        Assert.Equal("失敗と異常", usual.Name.Value);
+        Assert.True(usual.Enabled);
+        Assert.Equal([destination], usual.Destinations);
+        Assert.Equal(
+            [
+                NoticeKind.RecordingTruncated,
+                NoticeKind.RecordingFailed,
+                NoticeKind.EncodeFailed,
+                NoticeKind.ReservationCompeting,
+                NoticeKind.ReservationMissed,
+                NoticeKind.ProgrammeMoved,
+                NoticeKind.QualityIncidentDetected,
+                NoticeKind.QualityIncidentResolved,
+                NoticeKind.DeviceDisconnected,
+            ],
+            usual.Events);
+        Assert.Equal(At, usual.CreatedAt);
+    }
+
     [Fact(DisplayName = "BR-NT-004: a set of rules that lists no kind is kept and covers nothing")]
     public void ASetOfRulesThatListsNoKindCoversNothing()
     {

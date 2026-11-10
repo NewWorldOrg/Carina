@@ -323,6 +323,8 @@ public sealed class NotificationIntakeJobTests
 
             return Task.FromResult(true);
         }
+
+        public Task<int> RemoveBeforeAsync(DateTime before, CancellationToken cancellationToken) => Task.FromResult(0);
     }
 
     private sealed class HeldRules : INotificationRuleRepository
@@ -334,6 +336,8 @@ public sealed class NotificationIntakeJobTests
 
         public Task<IReadOnlyList<NotificationRule>> ListAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<NotificationRule>>([.. Rules]);
+
+        public Task TakeTurnAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task AddAsync(NotificationRule rule, CancellationToken cancellationToken)
         {
@@ -370,6 +374,8 @@ public sealed class NotificationIntakeJobTests
         }
 
         public Task SaveAsync(NotificationDestination destination, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task KeepResultAsync(NotificationDestination destination, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task RemoveAsync(NotificationDestination destination, CancellationToken cancellationToken)
         {

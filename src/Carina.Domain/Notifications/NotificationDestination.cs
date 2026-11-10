@@ -94,6 +94,8 @@ public sealed class NotificationDestination
         SealedUrl = ValidatedSeal(sealedUrl);
         UrlTail = ValidatedTail(urlTail);
         ChangedAt = UtcTimes.Required(at, nameof(at));
+        LastResultAt = null;
+        LastFailure = null;
     }
 
     public void Enable(DateTime at)
@@ -127,6 +129,15 @@ public sealed class NotificationDestination
         {
             Disable(at);
         }
+    }
+
+    /// <summary>
+    /// Keeps that the other end turned one notice down while its address still stands. The destination stays on.
+    /// </summary>
+    public void NoteTurnedDown(DateTime at)
+    {
+        LastFailure = NoticeFailure.Rejected;
+        LastResultAt = UtcTimes.Required(at, nameof(at));
     }
 
     private static WebhookTarget Named(WebhookTarget target)

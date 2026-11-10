@@ -55,12 +55,17 @@ internal sealed class BroadcasterServerStandIn : IAsyncDisposable
 
     public ConcurrentQueue<HeardRequest> Heard { get; } = new();
 
-    public static X509Certificate2 SelfSigned(string host)
+    public static X509Certificate2 SelfSigned(string host, params string[] alsoNamed)
     {
         using RSA key = RSA.Create(2048);
         CertificateRequest request = new($"CN={host}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         SubjectAlternativeNameBuilder names = new();
         names.AddDnsName(host);
+
+        foreach (string other in alsoNamed)
+        {
+            names.AddDnsName(other);
+        }
         request.CertificateExtensions.Add(names.Build());
 
         using X509Certificate2 made = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
