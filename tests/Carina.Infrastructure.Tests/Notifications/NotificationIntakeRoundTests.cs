@@ -448,6 +448,39 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         Assert.Empty(await ledgers.NoticesOfAsync(fellPastTheEdge.Value));
     }
 
+    [Fact(DisplayName = "BR-NC-004: what a row dates after this moment is not taken until that moment has come")]
+    public async Task WhatARowDatesAfterThisMomentWaitsUntilThatMomentHasCome()
+    {
+        DateTime now = await ADayOfItsOwnAsync(29);
+        await ledgers.EmptyTheEncodesAsync();
+        DateTime ahead = now.AddMinutes(10);
+        RecordingId endedNow = await ledgers.RecordingBeganAsync(now.AddMinutes(-120));
+        await ledgers.RecordingEndedAsync(endedNow, RecordingOutcome.Complete, now);
+        RecordingId endedAhead = await ledgers.RecordingBeganAsync(now.AddMinutes(-120));
+        await ledgers.RecordingEndedAsync(endedAhead, RecordingOutcome.Complete, ahead);
+        ReservationId missedAhead = ReservationId.New();
+        await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, ahead, missedAhead);
+        EncodeJobId failedAhead = await ledgers.EncodeIsQueuedAsync(endedAhead, now.AddMinutes(-110));
+        await ledgers.EncodeStartedAsync(failedAhead, now.AddMinutes(-100));
+        await ledgers.EncodeFailedAsync(failedAhead, ahead);
+        QualityIncidentId fellAhead = await ledgers.ReceptionFellAsync(ahead);
+
+        await ledgers.LookAsync(now);
+        string[] endedNowAtFirst = [.. (await ledgers.KindsOfAsync(endedNow.Value)).Select(kind => kind.ToString())];
+        int aheadAtFirst = (await ledgers.NoticesOfAsync(endedAhead.Value)).Count
+            + (await ledgers.NoticesOfAsync(missedAhead.Value)).Count
+            + (await ledgers.NoticesOfAsync(failedAhead.Value)).Count
+            + (await ledgers.NoticesOfAsync(fellAhead.Value)).Count;
+        await ledgers.LookAsync(ahead);
+
+        Assert.Equal([nameof(NoticeKind.RecordingCompleted)], endedNowAtFirst);
+        Assert.Equal(0, aheadAtFirst);
+        Assert.Equal([NoticeKind.RecordingCompleted], await ledgers.KindsOfAsync(endedAhead.Value));
+        Assert.Equal([NoticeKind.ReservationMissed], await ledgers.KindsOfAsync(missedAhead.Value));
+        Assert.Equal([NoticeKind.EncodeFailed], await ledgers.KindsOfAsync(failedAhead.Value));
+        Assert.Equal([NoticeKind.QualityIncidentDetected], await ledgers.KindsOfAsync(fellAhead.Value));
+    }
+
     [Fact(DisplayName = "A recording that began and ended between two looks is told of twice in the one look")]
     public async Task ARecordingThatBeganAndEndedBetweenTwoLooksIsToldOfTwiceInTheOneLook()
     {
