@@ -3,6 +3,7 @@ using Carina.Infrastructure.Tests.Fixtures.Channels;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
 using Carina.Infrastructure.Tests.Fixtures.Library;
 using Carina.Infrastructure.Tests.Fixtures.Migration;
+using Carina.Infrastructure.Tests.Fixtures.Notifications;
 using Carina.Infrastructure.Tests.Fixtures.Programmes;
 using Carina.Infrastructure.Tests.Fixtures.Quality;
 using Carina.Infrastructure.Tests.Fixtures.Recordings;
@@ -50,6 +51,8 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                 log.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
             modelBuilder.Entity<LessonTrace>(trace =>
                 trace.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
+            modelBuilder.Entity<TapeBulletin>(bulletin =>
+                bulletin.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
         }
     }
 
@@ -121,6 +124,16 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
+    [Fact(DisplayName = "detects a notification table that holds a foreign key into the recording ledger")]
+    public void DetectsANotificationTableThatHoldsAForeignKeyIntoTheRecordingLedger()
+    {
+        using ViolatingDbContext context = Violating();
+
+        Assert.Contains(
+            "tape_bulletin -> tape_entry",
+            PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
+    }
+
     [Fact(DisplayName = "detects an encode job that holds a foreign key to the recording ledger")]
     public void DetectsAnEncodeJobThatHoldsAForeignKeyToTheRecordingLedger()
     {
@@ -155,6 +168,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                 "lesson_trace -> tape_entry",
                 "recording_job -> guide_entry",
                 "signal_trace -> tape_entry",
+                "tape_bulletin -> tape_entry",
                 "tape_entry -> booking",
                 "tape_entry -> channel_lineup",
             ],
@@ -178,6 +192,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                 "lesson_trace -> tape_entry",
                 "recording_job -> guide_entry",
                 "signal_trace -> tape_entry",
+                "tape_bulletin -> tape_entry",
                 "tape_entry -> booking",
                 "tape_entry -> channel_lineup",
             ],
