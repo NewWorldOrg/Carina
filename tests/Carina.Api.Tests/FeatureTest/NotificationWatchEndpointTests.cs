@@ -216,6 +216,24 @@ public sealed class NotificationWatchEndpointTests
         Assert.Empty(feature.HeldWatches.Watches);
     }
 
+    [Fact(DisplayName = "BR-NT-007: A programme asked to be told of a second before it begins is taken")]
+    public async Task AProgrammeAskedForASecondBeforeItBeginsIsTaken()
+    {
+        await using NotificationFeature feature = new();
+        await feature.RegisteredAsync();
+        string programme = feature.Announced(4001, Starts);
+        feature.Clock.Now = Starts.AddSeconds(-1);
+
+        (HttpStatusCode status, _) = await feature.PostAsync(
+            NotificationFeature.Watches,
+            new { programme, programmeStartsAt = Starts });
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        ProgrammeWatch held = Assert.Single(feature.HeldWatches.Watches);
+        Assert.Equal(ProgrammeWatchState.Waiting, held.State);
+        Assert.Equal(Starts, held.StartsAt);
+    }
+
     [Fact(DisplayName = "BR-NT-007: A programme carried as a shadow of another service's broadcast is refused as a conflict, as it is when asked to be recorded")]
     public async Task AShadowOfAnotherServicesBroadcastIsRefused()
     {
@@ -265,6 +283,29 @@ public sealed class NotificationWatchEndpointTests
 
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.Single(feature.HeldWatches.Watches);
+    }
+
+    [Theory(DisplayName = "BR-NT-007: A row told of stands in the way of the number's next broadcast until its own broadcast ends, and gives way from the moment it ends")]
+    [InlineData(-1, HttpStatusCode.Conflict, ProgrammeWatchState.Notified)]
+    [InlineData(0, HttpStatusCode.Created, ProgrammeWatchState.Waiting)]
+    public async Task ARowToldOfGivesWayFromTheMomentItsBroadcastEnds(
+        int secondsFromTheEnd,
+        HttpStatusCode expected,
+        ProgrammeWatchState left)
+    {
+        await using NotificationFeature feature = new();
+        Guid livingRoom = await feature.RegisteredAsync();
+        DateTime before = Starts.AddHours(-1);
+        string programme = feature.Announced(4001, Starts);
+        feature.HeldWatches.Watches.Add(Settled(feature, 4001, before, ProgrammeWatchState.Notified, livingRoom));
+        feature.Clock.Now = before.AddMinutes(30).AddSeconds(secondsFromTheEnd);
+
+        (HttpStatusCode status, _) = await feature.PostAsync(
+            NotificationFeature.Watches,
+            new { programme, programmeStartsAt = Starts });
+
+        Assert.Equal(expected, status);
+        Assert.Equal(left, Assert.Single(feature.HeldWatches.Watches).State);
     }
 
     [Fact(DisplayName = "BR-NS-003: A programme whose asking was withdrawn is asked for again, and the row withdrawn gives way to the new one")]
