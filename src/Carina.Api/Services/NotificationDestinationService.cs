@@ -71,7 +71,21 @@ public sealed class NotificationDestinationService(
             webhook.Tail,
             Now());
 
-        await destinations.AddAsync(destination, cancellationToken);
+        await writes.AllOrNothingAsync(
+            async inner =>
+            {
+                bool first = await IsNothingHeldAsync(inner);
+
+                await destinations.AddAsync(destination, inner);
+
+                if (first)
+                {
+                    await rules.AddAsync(NotificationRule.Usual(NotificationRuleId.New(), destination.Id, destination.CreatedAt), inner);
+                }
+
+                return true;
+            },
+            cancellationToken);
 
         return ServiceResult<ListedNotificationDestination, NotificationFailure>.Success(new ListedNotificationDestination(destination, true));
     }
@@ -215,6 +229,14 @@ public sealed class NotificationDestinationService(
         {
             held.Disable(now);
         }
+    }
+
+    private async Task<bool> IsNothingHeldAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<NotificationDestination> heldDestinations = await destinations.ListAsync(cancellationToken);
+        IReadOnlyList<NotificationRule> heldRules = await rules.ListAsync(cancellationToken);
+
+        return heldDestinations.Count is 0 && heldRules.Count is 0;
     }
 
     private async Task GiveUpWhatWaitsForAsync(NotificationDestinationId id, CancellationToken cancellationToken)

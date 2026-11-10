@@ -9,6 +9,21 @@ public sealed class NotificationRule
 {
     public const int MostRules = 20;
 
+    public const string UsualName = "失敗と異常を全部の送り先へ";
+
+    public static readonly IReadOnlyList<NoticeKind> UsualEvents =
+    [
+        NoticeKind.RecordingTruncated,
+        NoticeKind.RecordingFailed,
+        NoticeKind.EncodeFailed,
+        NoticeKind.ReservationCompeting,
+        NoticeKind.ReservationMissed,
+        NoticeKind.ProgrammeMoved,
+        NoticeKind.QualityIncidentDetected,
+        NoticeKind.QualityIncidentResolved,
+        NoticeKind.DeviceDisconnected,
+    ];
+
     private NotificationRule()
     {
     }
@@ -34,6 +49,12 @@ public sealed class NotificationRule
         IReadOnlyList<NotificationDestinationId> destinations,
         DateTime at)
         => Rehydrate(id, name, enabled: true, events, destinations, at, at);
+
+    /// <summary>
+    /// The set of rules made with the first destination: failures and trouble, told to that destination.
+    /// </summary>
+    public static NotificationRule Usual(NotificationRuleId id, NotificationDestinationId destination, DateTime at)
+        => Define(id, new NotificationName(UsualName), UsualEvents, [destination], at);
 
     public static NotificationRule Rehydrate(
         NotificationRuleId id,

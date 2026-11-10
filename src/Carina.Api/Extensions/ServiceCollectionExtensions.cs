@@ -73,6 +73,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<QualityCandidateScoreService>();
         services.AddScoped<MigrationRecordService>();
         services.AddScoped<NotificationDestinationService>();
+        services.AddScoped<NotificationRuleService>();
         services.AddSingleton<NoticeTrials>();
         services.AddSingleton<PlaybackTicketGate>();
 

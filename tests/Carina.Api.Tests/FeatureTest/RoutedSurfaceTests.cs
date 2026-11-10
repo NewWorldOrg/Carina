@@ -83,6 +83,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "DELETE /api/encoding/destinations/{id:guid}",
                 "DELETE /api/encoding/profiles/{id:guid}",
                 "DELETE /api/notifications/destinations/{id:guid}",
+                "DELETE /api/notifications/rules/{id:guid}",
                 "DELETE /api/recordings/{id}",
                 "DELETE /api/reservations/{id:guid}",
                 "DELETE /api/rules/{id:guid}",
@@ -200,8 +201,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 .ToArray());
     }
 
-    [Fact(DisplayName = "BR-NA-002: the notification surfaces are the destinations listed, registered, changed, removed and tried, and removing a destination is the one that discards")]
-    public void TheNotificationSurfacesAreTheOnesTheDestinationsAreReachedThrough()
+    [Fact(DisplayName = "BR-NA-002: the notification surfaces are the destinations and the sets of rules listed, made, changed and removed and a destination tried, and removing a destination is the one that discards")]
+    public void TheNotificationSurfacesAreTheOnesTheDestinationsAndRulesAreReachedThrough()
     {
         RoutedSurface[] notifications =
         [
@@ -213,10 +214,14 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             [
                 "DELETE /api/notifications/destinations/{id:guid} Destructive",
+                "DELETE /api/notifications/rules/{id:guid} Changing",
                 "GET /api/notifications/destinations Reading",
+                "GET /api/notifications/rules Reading",
                 "PATCH /api/notifications/destinations/{id:guid} Changing",
+                "PATCH /api/notifications/rules/{id:guid} Changing",
                 "POST /api/notifications/destinations Changing",
                 "POST /api/notifications/destinations/{id:guid}/test Changing",
+                "POST /api/notifications/rules Changing",
             ],
             notifications.Select(surface => $"{surface} {surface.Effect}").ToArray());
     }
