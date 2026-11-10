@@ -314,7 +314,7 @@ internal sealed class NotificationFeature : IAsyncDisposable
     }
 
     /// <summary>
-    /// Puts a half-hour programme in the guide, on a station of its own, and gives the text it is named by.
+    /// Puts a half-hour programme in the guide, on the one made-up station, and gives the text it is named by.
     /// </summary>
     public string Announced(int carried, DateTime startsAt, string name = "作り物の番組")
     {

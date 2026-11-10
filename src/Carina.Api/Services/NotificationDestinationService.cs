@@ -15,12 +15,13 @@ public sealed record NotificationRemoved(Guid Id);
 
 /// <summary>
 /// Lists, registers, changes, removes and tries the webhooks notices are sent to. The address of a webhook is sealed
-/// before it is kept and is never given back.
+/// before it is kept and is never given back. A webhook removed leaves the sets of rules and the programmes that wait.
 /// </summary>
 public sealed class NotificationDestinationService(
     INotificationDestinationRepository destinations,
     INotificationRuleRepository rules,
     INotificationDeliveryRepository deliveries,
+    IProgrammeWatchRepository watches,
     IAtomicWrite writes,
     WebhookUrlSeal seal,
     NoticeDispatch dispatch,
@@ -167,6 +168,7 @@ public sealed class NotificationDestinationService(
                     await TakeOutOfAsync(rule, id, now, inner);
                 }
 
+                await StopTellingAsync(id, now, inner);
                 await destinations.RemoveAsync(held, inner);
 
                 return true;
@@ -272,6 +274,17 @@ public sealed class NotificationDestinationService(
 
         rule.Tell(rule.Events, left, now);
         await rules.SaveAsync(rule, cancellationToken);
+    }
+
+    private async Task StopTellingAsync(NotificationDestinationId id, DateTime now, CancellationToken cancellationToken)
+    {
+        foreach (ProgrammeWatch watch in await watches.ListFollowedAsync(now, cancellationToken))
+        {
+            if (watch.StopTelling(id, now))
+            {
+                await watches.SaveAsync(watch, cancellationToken);
+            }
+        }
     }
 
     private ListedNotificationDestination Listed(NotificationDestination destination)

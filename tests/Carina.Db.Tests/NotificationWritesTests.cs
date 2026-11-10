@@ -1,6 +1,8 @@
 using Carina.Api.Common;
 using Carina.Api.Services;
+using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
+using Carina.Domain.Programmes;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -132,6 +134,45 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
         Assert.Equal([staying], left.Destinations);
     }
 
+    [Fact(DisplayName = "D-5: removing a destination takes it out of the programmes that wait, withdraws one left with nowhere to send, and adds no notice")]
+    public async Task RemovingADestinationTakesItOutOfTheProgrammesThatWait()
+    {
+        await EmptyAsync();
+        NotificationDestinationId leaving = await RegisteredAsync("Leaving");
+        NotificationDestinationId staying = await RegisteredAsync("Staying");
+        ProgrammeWatch both = await AskedToBeToldAsync(4001, leaving, staying);
+        ProgrammeWatch only = await AskedToBeToldAsync(4002, leaving);
+        clock.Turn(TimeSpan.FromMinutes(5));
+
+        await AsOneCallerAsync(caller => caller.Destinations.RemoveAsync(leaving, Cancel));
+
+        await using CarinaDbContext context = Context();
+        ProgrammeWatchRepository watches = new(context);
+        ProgrammeWatch shared = (await watches.FindAsync(both.Id, Cancel))!;
+        ProgrammeWatch alone = (await watches.FindAsync(only.Id, Cancel))!;
+
+        Assert.Equal(ProgrammeWatchState.Waiting, shared.State);
+        Assert.Equal([staying], shared.Destinations);
+        Assert.Equal(Noon.AddMinutes(5), shared.ChangedAt);
+        Assert.Equal(ProgrammeWatchState.Cancelled, alone.State);
+        Assert.Empty(alone.Destinations);
+        Assert.Equal(0, await context.Set<Notice>().CountAsync(Cancel));
+    }
+
+    [Fact(DisplayName = "D-5: a destination whose programmes cannot be written is not removed, and stays in its sets of rules")]
+    public async Task ADestinationWhoseProgrammesCannotBeWrittenIsNotRemoved()
+    {
+        await EmptyAsync();
+        NotificationDestinationId leaving = await RegisteredAsync("Leaving");
+        await AskedToBeToldAsync(4001, leaving);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AsOneCallerAsync(caller => caller.Destinations.RemoveAsync(leaving, Cancel), watchesCanBeSaved: false));
+
+        Assert.Single(await HeldDestinationsAsync());
+        Assert.Equal([leaving], Assert.Single(await HeldRulesAsync()).Destinations);
+    }
+
     [Fact(DisplayName = "D-9: a first destination whose set of rules cannot be written is not registered either")]
     public async Task AFirstDestinationWhoseSetOfRulesCannotBeWrittenIsNotRegistered()
     {
@@ -149,12 +190,14 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
 
     private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
 
-    private async Task<T> AsOneCallerAsync<T>(Func<Caller, Task<T>> ask, bool rulesCanBeAdded = true)
+    private async Task<T> AsOneCallerAsync<T>(Func<Caller, Task<T>> ask, bool rulesCanBeAdded = true, bool watchesCanBeSaved = true)
     {
         await using CarinaDbContext context = Context();
         NotificationDestinationRepository destinations = new(context);
         NotificationRuleRepository held = new(context);
         INotificationRuleRepository rules = rulesCanBeAdded ? held : new RulesNobodyCanAdd(held);
+        ProgrammeWatchRepository asked = new(context);
+        IProgrammeWatchRepository watches = watchesCanBeSaved ? asked : new WatchesNobodyCanSave(asked);
         DatabaseAtomicWrite writes = new(context);
         NoticeDispatch dispatch = new(
             new NoticeLine(new SystemNoticeNetwork(), "Carina/0.0.0-test", clock, NoticeLine.UsualDeadline),
@@ -167,6 +210,7 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
                     destinations,
                     rules,
                     new NotificationDeliveryRepository(context),
+                    watches,
                     writes,
                     seal,
                     dispatch,
@@ -217,6 +261,22 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
         }
     }
 
+    private async Task<ProgrammeWatch> AskedToBeToldAsync(int carried, params NotificationDestinationId[] destinations)
+    {
+        ProgrammeWatch watch = ProgrammeWatch.Ask(
+            ProgrammeWatchId.New(),
+            new ProgrammeId(new NetworkId(32_736), new ServiceId(1024), new EventId(carried)),
+            new WatchedBroadcast(Noon.AddHours(2), Noon.AddHours(3), "作り物の番組", "作り物の局"),
+            3,
+            destinations,
+            Noon);
+
+        await using CarinaDbContext context = Context();
+        await new ProgrammeWatchRepository(context).AddAsync(watch, Cancel);
+
+        return watch;
+    }
+
     private async Task<Notice> ToldAsync(params NotificationDestinationId[] destinations)
     {
         Notice notice = Notice.Take(
@@ -254,7 +314,8 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         await using NpgsqlCommand emptying = new(
-            "DELETE FROM notification_event; DELETE FROM notification_rule; DELETE FROM notification_destination;",
+            "DELETE FROM notification_event; DELETE FROM notification_rule; DELETE FROM notification_destination; "
+            + "DELETE FROM notification_watch;",
             connection);
         await emptying.ExecuteNonQueryAsync(Cancel);
     }
@@ -279,5 +340,29 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
 
         public Task RemoveAsync(NotificationRule rule, CancellationToken cancellationToken)
             => held.RemoveAsync(rule, cancellationToken);
+    }
+
+    private sealed class WatchesNobodyCanSave(IProgrammeWatchRepository held) : IProgrammeWatchRepository
+    {
+        public Task<ProgrammeWatch?> FindAsync(ProgrammeWatchId id, CancellationToken cancellationToken)
+            => held.FindAsync(id, cancellationToken);
+
+        public Task<ProgrammeWatch?> FindOfAsync(ProgrammeId programme, CancellationToken cancellationToken)
+            => held.FindOfAsync(programme, cancellationToken);
+
+        public Task<IReadOnlyList<ProgrammeWatch>> ListAsync(CancellationToken cancellationToken)
+            => held.ListAsync(cancellationToken);
+
+        public Task<IReadOnlyList<ProgrammeWatch>> ListFollowedAsync(DateTime at, CancellationToken cancellationToken)
+            => held.ListFollowedAsync(at, cancellationToken);
+
+        public Task AddAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
+            => held.AddAsync(watch, cancellationToken);
+
+        public Task SaveAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("This ledger keeps its programmes as they are.");
+
+        public Task RemoveAsync(ProgrammeWatch watch, CancellationToken cancellationToken)
+            => held.RemoveAsync(watch, cancellationToken);
     }
 }
