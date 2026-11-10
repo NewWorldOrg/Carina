@@ -94,6 +94,8 @@ public sealed class NotificationDestination
         SealedUrl = ValidatedSeal(sealedUrl);
         UrlTail = ValidatedTail(urlTail);
         ChangedAt = UtcTimes.Required(at, nameof(at));
+        LastResultAt = null;
+        LastFailure = null;
     }
 
     public void Enable(DateTime at)

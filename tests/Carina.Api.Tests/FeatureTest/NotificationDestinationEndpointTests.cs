@@ -135,6 +135,26 @@ public sealed class NotificationDestinationEndpointTests
         Assert.DoesNotContain(NotificationFeature.Secret, body.GetRawText(), StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "BR-NS-002: A change of the address clears the last result and leaves a destination that was off still off, and a change of the name alone clears nothing")]
+    public async Task AChangeOfTheAddressClearsTheLastResult()
+    {
+        await using NotificationFeature feature = new();
+        Guid id = await feature.RegisteredAsync();
+        feature.HeldDestinations.Destinations[0].NoteFailed(NoticeFailure.Rejected, NotificationFeature.Noon);
+
+        (_, JsonElement renamed) = await feature.PatchAsync(NotificationFeature.OneOf(id), new { name = "書斎" });
+        (HttpStatusCode status, JsonElement pointed) = await feature.PatchAsync(
+            NotificationFeature.OneOf(id),
+            new { url = NotificationFeature.DiscordUrl });
+
+        Assert.Equal("rejected", renamed.GetProperty("data").GetProperty("lastFailure").GetString());
+        Assert.Equal(NotificationFeature.Noon, renamed.GetProperty("data").GetProperty("lastResultAt").GetDateTime());
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(JsonValueKind.Null, pointed.GetProperty("data").GetProperty("lastFailure").ValueKind);
+        Assert.Equal(JsonValueKind.Null, pointed.GetProperty("data").GetProperty("lastResultAt").ValueKind);
+        Assert.False(pointed.GetProperty("data").GetProperty("enabled").GetBoolean());
+    }
+
     [Fact(DisplayName = "BR-NT-001: A change to a bad address or a bad name is refused and nothing is changed")]
     public async Task ABadChangeIsRefused()
     {

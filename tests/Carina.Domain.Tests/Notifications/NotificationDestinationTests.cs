@@ -147,6 +147,32 @@ public sealed class NotificationDestinationTests
         Assert.Equal(At.AddHours(1), destination.ChangedAt);
     }
 
+    [Fact(DisplayName = "BR-NS-002: a destination pointed elsewhere forgets what came of the last send to the old address")]
+    public void ADestinationPointedElsewhereForgetsTheLastResult()
+    {
+        NotificationDestination destination = Registered();
+        destination.NoteTurnedDown(At.AddMinutes(1));
+
+        destination.PointAt(WebhookTarget.Discord, [7, 8], "abcd", At.AddHours(1));
+
+        Assert.Null(destination.LastResultAt);
+        Assert.Null(destination.LastFailure);
+        Assert.True(destination.Enabled);
+    }
+
+    [Fact(DisplayName = "BR-NS-002: a destination that was turned off stays off when it is pointed elsewhere")]
+    public void ADestinationTurnedOffStaysOffWhenPointedElsewhere()
+    {
+        NotificationDestination destination = Registered();
+        destination.NoteFailed(NoticeFailure.Rejected, At.AddMinutes(1));
+
+        destination.PointAt(WebhookTarget.Discord, [7, 8], "abcd", At.AddHours(1));
+
+        Assert.False(destination.Enabled);
+        Assert.Null(destination.LastResultAt);
+        Assert.Null(destination.LastFailure);
+    }
+
     private static NotificationDestination Registered()
         => NotificationDestination.Register(
             NotificationDestinationId.New(),
