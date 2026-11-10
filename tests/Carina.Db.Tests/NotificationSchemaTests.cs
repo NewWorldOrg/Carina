@@ -323,7 +323,7 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
 
     private static TheoryData<string> Named(IEnumerable<string> names)
     {
-        var data = new TheoryData<string>();
+        TheoryData<string> data = new();
 
         foreach (string name in names)
         {
@@ -335,14 +335,14 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
 
     private static async Task RunAsync(NpgsqlConnection connection, string sql)
     {
-        await using var running = new NpgsqlCommand(sql, connection);
+        await using NpgsqlCommand running = new(sql, connection);
 
         await running.ExecuteNonQueryAsync();
     }
 
     private static async Task<string> ScalarAsync(NpgsqlConnection connection, string sql)
     {
-        await using var reading = new NpgsqlCommand(sql, connection);
+        await using NpgsqlCommand reading = new(sql, connection);
 
         return Convert.ToString(await reading.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture)!;
     }
