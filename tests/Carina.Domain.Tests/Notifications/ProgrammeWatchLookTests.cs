@@ -136,6 +136,38 @@ public sealed class ProgrammeWatchLookTests
         Assert.Equal(new ProgrammeWatchStep(true, null), step);
     }
 
+    [Fact(DisplayName = "BR-NS-003: a start that drifts a little at a time is told of as a move once it is more than a minute from the start that was told")]
+    public void AStartThatDriftsALittleAtATimeIsToldOfOnceItIsFarFromTheStartThatWasTold()
+    {
+        ProgrammeWatch watch = ToldOf();
+
+        ProgrammeWatchStep first = ProgrammeWatchLook.At(watch, DriftedBy(40), NothingTold, Starts.AddMinutes(-2));
+        ProgrammeWatchStep second = ProgrammeWatchLook.At(watch, DriftedBy(80), NothingTold, Starts.AddSeconds(-90));
+        ProgrammeWatchStep third = ProgrammeWatchLook.At(watch, DriftedBy(120), Told(NoticeKind.WatchedProgrammeMoved), Starts.AddMinutes(-1));
+
+        Assert.Equal(new ProgrammeWatchStep(true, null), first);
+        Assert.Equal(new ProgrammeWatchStep(true, NoticeKind.WatchedProgrammeMoved), second);
+        Assert.Equal(new ProgrammeWatchStep(true, null), third);
+        Assert.Equal(Starts.AddSeconds(120), watch.StartsAt);
+
+        static WatchedGuide DriftedBy(int seconds)
+            => new(GuideStanding.Announced, AsAsked with { StartsAt = Starts.AddSeconds(seconds) });
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a start that drifts away and comes back within a minute of the start that was told is not told of as a move")]
+    public void AStartThatComesBackIsNotToldOfAsAMove()
+    {
+        ProgrammeWatch watch = ToldOf();
+        WatchedGuide away = new(GuideStanding.Announced, AsAsked with { StartsAt = Starts.AddSeconds(50) });
+        WatchedGuide back = new(GuideStanding.Announced, AsAsked with { StartsAt = Starts.AddSeconds(-20) });
+
+        ProgrammeWatchStep first = ProgrammeWatchLook.At(watch, away, NothingTold, Starts.AddMinutes(-2));
+        ProgrammeWatchStep second = ProgrammeWatchLook.At(watch, back, NothingTold, Starts.AddSeconds(-90));
+
+        Assert.Equal(new ProgrammeWatchStep(true, null), first);
+        Assert.Equal(new ProgrammeWatchStep(true, null), second);
+    }
+
     [Fact(DisplayName = "D-5: a programme the guide stops naming after it was told of, before it begins, is told of once more")]
     public void AProgrammeTheGuideStopsNamingAfterItWasToldOfIsToldOfOnceMore()
     {
@@ -198,6 +230,7 @@ public sealed class ProgrammeWatchLookTests
             [NotificationDestinationId.New()],
             state,
             state is ProgrammeWatchState.Notified ? Starts.AddMinutes(-3) : null,
+            state is ProgrammeWatchState.Notified ? Starts : null,
             Asked,
             Starts.AddMinutes(-3));
 

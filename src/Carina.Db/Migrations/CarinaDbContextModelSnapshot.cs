@@ -1901,6 +1901,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("station_name");
 
+                    b.Property<DateTime?>("ToldStartsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("told_starts_at");
+
                     b.HasKey("Id")
                         .HasName("pk_notification_watch");
 
@@ -1922,6 +1926,8 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_notification_watch_notified_at", "(state = 'Notified') = (notified_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_notification_watch_state", "state IN ('Waiting', 'Notified', 'Skipped', 'Cancelled')");
+
+                            t.HasCheckConstraint("ck_notification_watch_told_starts_at", "(state = 'Notified') = (told_starts_at IS NOT NULL)");
                         });
                 });
 

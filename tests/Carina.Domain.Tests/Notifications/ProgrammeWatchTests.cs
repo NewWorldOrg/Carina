@@ -125,6 +125,8 @@ public sealed class ProgrammeWatchTests
 
         Assert.Equal(ProgrammeWatchState.Notified, watch.State);
         Assert.Equal(at, watch.NotifiedAt);
+        Assert.Equal(Starts, watch.ToldStartsAt);
+        Assert.False(watch.HasMovedSinceTold);
         Assert.Equal(at, watch.ChangedAt);
         Assert.Throws<InvalidOperationException>(() => watch.Notify(at));
         Assert.Throws<InvalidOperationException>(() => watch.Skip(at));
@@ -162,9 +164,11 @@ public sealed class ProgrammeWatchTests
         ProgrammeWatch watch = Waiting(3);
         DateTime at = Asked.AddHours(1);
 
-        bool moved = watch.Follow(new WatchedBroadcast(Starts.AddMinutes(30), Ends.AddMinutes(40), "港町レシピ帖 #15", null), at);
+        bool changed = watch.Follow(new WatchedBroadcast(Starts.AddMinutes(30), Ends.AddMinutes(40), "港町レシピ帖 #15", null), at);
 
-        Assert.True(moved);
+        Assert.True(changed);
+        Assert.False(watch.HasMovedSinceTold);
+        Assert.Null(watch.ToldStartsAt);
         Assert.Equal(Starts.AddMinutes(30), watch.StartsAt);
         Assert.Equal(Ends.AddMinutes(40), watch.EndsAt);
         Assert.Equal("港町レシピ帖 #15", watch.ProgrammeName);
@@ -174,7 +178,7 @@ public sealed class ProgrammeWatchTests
         Assert.Equal(ProgrammeWatchMoment.NotYet, watch.MomentAt(Starts.AddMinutes(-3)));
     }
 
-    [Theory(DisplayName = "BR-NS-003: a start that moves by a minute or less is followed without being a move")]
+    [Theory(DisplayName = "BR-NS-003: a start within a minute of the start that was told is followed without being a move")]
     [InlineData(60, false)]
     [InlineData(-60, false)]
     [InlineData(61, true)]
@@ -184,9 +188,28 @@ public sealed class ProgrammeWatchTests
         ProgrammeWatch watch = Waiting(3);
         watch.Notify(Starts.AddMinutes(-3));
 
-        Assert.Equal(moved, watch.Follow(Announced with { StartsAt = Starts.AddSeconds(seconds) }, Starts.AddMinutes(-2)));
+        Assert.True(watch.Follow(Announced with { StartsAt = Starts.AddSeconds(seconds) }, Starts.AddMinutes(-2)));
+
+        Assert.Equal(moved, watch.HasMovedSinceTold);
         Assert.Equal(Starts.AddSeconds(seconds), watch.StartsAt);
+        Assert.Equal(Starts, watch.ToldStartsAt);
         Assert.Equal(ProgrammeWatchState.Notified, watch.State);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: the start that was told stays while the row follows the guide step by step")]
+    public void TheStartThatWasToldStaysWhileTheRowFollowsTheGuide()
+    {
+        ProgrammeWatch watch = Waiting(3);
+        watch.Notify(Starts.AddMinutes(-3));
+
+        watch.Follow(Announced with { StartsAt = Starts.AddSeconds(40) }, Starts.AddMinutes(-2));
+        bool afterOneStep = watch.HasMovedSinceTold;
+        watch.Follow(Announced with { StartsAt = Starts.AddSeconds(80) }, Starts.AddMinutes(-1));
+
+        Assert.False(afterOneStep);
+        Assert.True(watch.HasMovedSinceTold);
+        Assert.Equal(Starts, watch.ToldStartsAt);
+        Assert.Equal(Starts.AddSeconds(80), watch.StartsAt);
     }
 
     [Fact(DisplayName = "a guide that names the programme with nothing keeps the name held, and one that says the same changes nothing")]
@@ -267,6 +290,9 @@ public sealed class ProgrammeWatchTests
     {
         Assert.Throws<ArgumentException>(() => Read(ProgrammeWatchState.Notified, null, [First]));
         Assert.Throws<ArgumentException>(() => Read(ProgrammeWatchState.Waiting, Starts, [First]));
+        Assert.Throws<ArgumentException>(() => Told(Starts, null));
+        Assert.Throws<ArgumentException>(() => Told(null, Starts));
+        Assert.Equal(Starts.AddMinutes(-5), Told(Starts, Starts.AddMinutes(-5)).ToldStartsAt);
         Assert.Throws<ArgumentException>(() => Read(ProgrammeWatchState.Waiting, null, []));
         Assert.Throws<ArgumentOutOfRangeException>(() => Read((ProgrammeWatchState)9, null, [First]));
         Assert.Empty(Read(ProgrammeWatchState.Cancelled, null, []).Destinations);
@@ -291,6 +317,20 @@ public sealed class ProgrammeWatchTests
             destinations,
             state,
             notifiedAt,
+            notifiedAt is null ? null : Starts,
+            Asked,
+            Asked);
+
+    private static ProgrammeWatch Told(DateTime? notifiedAt, DateTime? toldStartsAt)
+        => ProgrammeWatch.Rehydrate(
+            ProgrammeWatchId.New(),
+            Watched,
+            Announced,
+            3,
+            [First],
+            notifiedAt is null ? ProgrammeWatchState.Waiting : ProgrammeWatchState.Notified,
+            notifiedAt,
+            toldStartsAt,
             Asked,
             Asked);
 }

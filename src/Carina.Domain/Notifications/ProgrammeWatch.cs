@@ -41,6 +41,17 @@ public sealed class ProgrammeWatch
 
     public DateTime? NotifiedAt { get; private set; }
 
+    /// <summary>
+    /// The start the notice named when the programme was told of, kept while the row follows the guide on.
+    /// </summary>
+    public DateTime? ToldStartsAt { get; private set; }
+
+    /// <summary>
+    /// Whether the start now held is further from the start that was told than the guide's usual drift.
+    /// </summary>
+    public bool HasMovedSinceTold
+        => ToldStartsAt is { } told && (StartsAt - told).Duration() > EpgComparison.Unremarkable;
+
     public DateTime CreatedAt { get; private set; }
 
     public DateTime ChangedAt { get; private set; }
@@ -62,7 +73,7 @@ public sealed class ProgrammeWatch
             throw new InvalidOperationException("Only a programme that has not begun is asked to be told of.");
         }
 
-        return Rehydrate(id, programme, announced, leadMinutes, destinations, ProgrammeWatchState.Waiting, null, at, at);
+        return Rehydrate(id, programme, announced, leadMinutes, destinations, ProgrammeWatchState.Waiting, null, null, at, at);
     }
 
     public static ProgrammeWatch Rehydrate(
@@ -73,6 +84,7 @@ public sealed class ProgrammeWatch
         IReadOnlyList<NotificationDestinationId> destinations,
         ProgrammeWatchState state,
         DateTime? notifiedAt,
+        DateTime? toldStartsAt,
         DateTime createdAt,
         DateTime changedAt)
     {
@@ -98,6 +110,11 @@ public sealed class ProgrammeWatch
             throw new ArgumentException("A programme was told of exactly when a time is kept for it.", nameof(notifiedAt));
         }
 
+        if (state is ProgrammeWatchState.Notified != toldStartsAt is not null)
+        {
+            throw new ArgumentException("A programme was told of exactly when the start it was told by is kept.", nameof(toldStartsAt));
+        }
+
         WatchedBroadcast held = Held(announced);
 
         return new ProgrammeWatch
@@ -114,6 +131,7 @@ public sealed class ProgrammeWatch
             Destinations = ToldTo(destinations, state),
             State = state,
             NotifiedAt = notifiedAt is { } told ? UtcTimes.Required(told, nameof(notifiedAt)) : null,
+            ToldStartsAt = toldStartsAt is { } named ? UtcTimes.Required(named, nameof(toldStartsAt)) : null,
             CreatedAt = UtcTimes.Required(createdAt, nameof(createdAt)),
             ChangedAt = UtcTimes.Required(changedAt, nameof(changedAt)),
         };
@@ -141,7 +159,7 @@ public sealed class ProgrammeWatch
         => State is ProgrammeWatchState.Waiting || (State is ProgrammeWatchState.Notified && at < EndsAt);
 
     /// <summary>
-    /// Takes what the guide says now. Returns whether the start moved by more than the guide's usual drift.
+    /// Takes what the guide says now. Returns whether the row changed.
     /// </summary>
     public bool Follow(WatchedBroadcast announced, DateTime at)
     {
@@ -157,8 +175,6 @@ public sealed class ProgrammeWatch
             ProgrammeName = announced.ProgrammeName.Length > 0 ? announced.ProgrammeName : ProgrammeName,
             StationName = announced.StationName ?? StationName,
         });
-        bool moved = (now.StartsAt - StartsAt).Duration() > EpgComparison.Unremarkable;
-
         if (now == new WatchedBroadcast(StartsAt, EndsAt, ProgrammeName, StationName))
         {
             return false;
@@ -170,13 +186,14 @@ public sealed class ProgrammeWatch
         StationName = now.StationName;
         ChangedAt = UtcTimes.Required(at, nameof(at));
 
-        return moved;
+        return true;
     }
 
     public void Notify(DateTime at)
     {
         Settle(ProgrammeWatchState.Notified, at);
         NotifiedAt = ChangedAt;
+        ToldStartsAt = StartsAt;
     }
 
     public void Skip(DateTime at) => Settle(ProgrammeWatchState.Skipped, at);

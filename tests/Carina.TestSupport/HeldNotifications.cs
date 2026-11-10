@@ -206,6 +206,7 @@ public sealed class HeldProgrammeWatches : IProgrammeWatchRepository
             watch.Destinations,
             watch.State,
             watch.NotifiedAt,
+            watch.ToldStartsAt,
             watch.CreatedAt,
             watch.ChangedAt);
 }

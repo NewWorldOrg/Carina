@@ -32,6 +32,7 @@ public partial class AProgrammeCanBeWatchedWithoutBeingRecorded : Migration
                 destinations = table.Column<string>(type: "jsonb", nullable: false),
                 state = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                 notified_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                told_starts_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                 created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                 changed_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
             },
@@ -43,6 +44,7 @@ public partial class AProgrammeCanBeWatchedWithoutBeingRecorded : Migration
                 table.CheckConstraint("ck_notification_watch_lead_minutes", "lead_minutes IN (0, 1, 3, 5, 10)");
                 table.CheckConstraint("ck_notification_watch_notified_at", "(state = 'Notified') = (notified_at IS NOT NULL)");
                 table.CheckConstraint("ck_notification_watch_state", "state IN ('Waiting', 'Notified', 'Skipped', 'Cancelled')");
+                table.CheckConstraint("ck_notification_watch_told_starts_at", "(state = 'Notified') = (told_starts_at IS NOT NULL)");
             });
 
         migrationBuilder.AddCheckConstraint(

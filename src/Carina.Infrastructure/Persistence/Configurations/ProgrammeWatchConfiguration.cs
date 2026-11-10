@@ -22,6 +22,8 @@ public sealed class ProgrammeWatchConfiguration : IEntityTypeConfiguration<Progr
 
     public const string NotifiedCheck = "ck_notification_watch_notified_at";
 
+    public const string ToldStartCheck = "ck_notification_watch_told_starts_at";
+
     public const string BroadcastCheck = "ck_notification_watch_broadcast";
 
     public const string ProgrammeIndexName = "ux_notification_watch_programme";
@@ -46,6 +48,7 @@ public sealed class ProgrammeWatchConfiguration : IEntityTypeConfiguration<Progr
                 DestinationsCheck,
                 $"jsonb_typeof(destinations) = 'array' AND (state <> '{Waiting}' OR jsonb_array_length(destinations) > 0)");
             table.HasCheckConstraint(NotifiedCheck, $"(state = '{Notified}') = (notified_at IS NOT NULL)");
+            table.HasCheckConstraint(ToldStartCheck, $"(state = '{Notified}') = (told_starts_at IS NOT NULL)");
             table.HasCheckConstraint(BroadcastCheck, "ends_at > starts_at");
         });
 
@@ -97,6 +100,8 @@ public sealed class ProgrammeWatchConfiguration : IEntityTypeConfiguration<Progr
             .IsRequired();
 
         builder.Property(watch => watch.NotifiedAt);
+
+        builder.Property(watch => watch.ToldStartsAt);
 
         builder.Property(watch => watch.CreatedAt).IsRequired();
 

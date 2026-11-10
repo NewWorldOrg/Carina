@@ -55,7 +55,7 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
     [InlineData(Rule, "changed_at created_at destinations enabled events id name")]
     [InlineData(Delivery, "attempts destination_id event_id id last_failure next_attempt_at queued_at sent_at state")]
     [InlineData(Settings, "changed_at id notify_lead_minutes")]
-    [InlineData(Watch, "changed_at created_at destinations ends_at event_id id lead_minutes network_id notified_at programme_name service_id starts_at state station_name")]
+    [InlineData(Watch, "changed_at created_at destinations ends_at event_id id lead_minutes network_id notified_at programme_name service_id starts_at state station_name told_starts_at")]
     public async Task TheMigratedNotificationTablesHoldTheseColumns(string table, string columns)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -298,7 +298,7 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
         await using NpgsqlConnection connection = await database.OpenAsync();
         string notifiedAt = state is nameof(ProgrammeWatchState.Notified) ? At : "NULL";
 
-        await RunAsync(connection, AWatch($"3, {OneDestination}, '{state}', {notifiedAt}"));
+        await RunAsync(connection, AWatch($"3, {OneDestination}, '{state}', {notifiedAt}, {notifiedAt}"));
     }
 
     [Theory(DisplayName = "BR-NT-005: a programme asked to be told of is told 0, 1, 3, 5 or 10 minutes ahead")]
@@ -314,17 +314,21 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await HoldsOrIsRefusedAsync(connection, AWatch($"{lead}, {OneDestination}, 'Waiting', NULL"), refusedBy);
+        await HoldsOrIsRefusedAsync(connection, AWatch($"{lead}, {OneDestination}, 'Waiting', NULL, NULL"), refusedBy);
     }
 
-    [Theory(DisplayName = "BR-NS-003: a programme asked to be told of waits with at least one destination, and is marked told exactly when it holds the time it was told")]
-    [InlineData($"3, {OneDestination}, 'Dozing', NULL", ProgrammeWatchConfiguration.StateCheck)]
-    [InlineData("3, '[]', 'Waiting', NULL", ProgrammeWatchConfiguration.DestinationsCheck)]
-    [InlineData("3, '{}', 'Cancelled', NULL", ProgrammeWatchConfiguration.DestinationsCheck)]
-    [InlineData("3, '[]', 'Cancelled', NULL", null)]
-    [InlineData($"3, {OneDestination}, 'Notified', NULL", ProgrammeWatchConfiguration.NotifiedCheck)]
-    [InlineData($"3, {OneDestination}, 'Waiting', {At}", ProgrammeWatchConfiguration.NotifiedCheck)]
-    [InlineData($"3, {OneDestination}, 'Skipped', {At}", ProgrammeWatchConfiguration.NotifiedCheck)]
+    [Theory(DisplayName = "BR-NS-003: a programme asked to be told of waits with at least one destination, and is marked told exactly when it holds the time it was told and the start it was told by")]
+    [InlineData($"3, {OneDestination}, 'Dozing', NULL, NULL", ProgrammeWatchConfiguration.StateCheck)]
+    [InlineData("3, '[]', 'Waiting', NULL, NULL", ProgrammeWatchConfiguration.DestinationsCheck)]
+    [InlineData("3, '{}', 'Cancelled', NULL, NULL", ProgrammeWatchConfiguration.DestinationsCheck)]
+    [InlineData("3, '[]', 'Cancelled', NULL, NULL", null)]
+    [InlineData($"3, {OneDestination}, 'Notified', NULL, {At}", ProgrammeWatchConfiguration.NotifiedCheck)]
+    [InlineData($"3, {OneDestination}, 'Waiting', {At}, NULL", ProgrammeWatchConfiguration.NotifiedCheck)]
+    [InlineData($"3, {OneDestination}, 'Skipped', {At}, NULL", ProgrammeWatchConfiguration.NotifiedCheck)]
+    [InlineData($"3, {OneDestination}, 'Notified', {At}, NULL", ProgrammeWatchConfiguration.ToldStartCheck)]
+    [InlineData($"3, {OneDestination}, 'Waiting', NULL, {At}", ProgrammeWatchConfiguration.ToldStartCheck)]
+    [InlineData($"3, {OneDestination}, 'Cancelled', NULL, {At}", ProgrammeWatchConfiguration.ToldStartCheck)]
+    [InlineData($"3, {OneDestination}, 'Notified', {At}, {At}", null)]
     public async Task AWatchHoldsWhatItsStateAllows(string values, string? refusedBy)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -339,7 +343,7 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
 
         await HoldsOrIsRefusedAsync(
             connection,
-            AWatch($"3, {OneDestination}, 'Waiting', NULL", begins: Ends, ends: Ends),
+            AWatch($"3, {OneDestination}, 'Waiting', NULL, NULL", begins: Ends, ends: Ends),
             ProgrammeWatchConfiguration.BroadcastCheck);
     }
 
@@ -348,10 +352,10 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         const int eventId = 60_000;
-        await RunAsync(connection, AWatch($"3, {OneDestination}, 'Cancelled', NULL", eventId));
+        await RunAsync(connection, AWatch($"3, {OneDestination}, 'Cancelled', NULL, NULL", eventId));
 
         PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
-            () => RunAsync(connection, AWatch($"3, {OneDestination}, 'Waiting', NULL", eventId)));
+            () => RunAsync(connection, AWatch($"3, {OneDestination}, 'Waiting', NULL, NULL", eventId)));
 
         Assert.Equal(
             (PostgresErrorCodes.UniqueViolation, ProgrammeWatchConfiguration.ProgrammeIndexName),
@@ -396,7 +400,7 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
         => $"INSERT INTO {Rule} (id, enabled, created_at, changed_at, name, events, destinations) VALUES ('{Guid.NewGuid()}', TRUE, {At}, {At}, 'A rule set', '[\"{kind}\"]', '[\"{Guid.NewGuid()}\"]')";
 
     private static string AWatch(string standing, int? eventId = null, string begins = Begins, string ends = Ends)
-        => $"INSERT INTO {Watch} (id, network_id, service_id, event_id, starts_at, ends_at, programme_name, station_name, created_at, changed_at, lead_minutes, destinations, state, notified_at) VALUES ('{Guid.NewGuid()}', 32000, 1024, {eventId ?? NextEvent()}, {begins}, {ends}, 'A programme', NULL, {At}, {At}, {standing})";
+        => $"INSERT INTO {Watch} (id, network_id, service_id, event_id, starts_at, ends_at, programme_name, station_name, created_at, changed_at, lead_minutes, destinations, state, notified_at, told_starts_at) VALUES ('{Guid.NewGuid()}', 32000, 1024, {eventId ?? NextEvent()}, {begins}, {ends}, 'A programme', NULL, {At}, {At}, {standing})";
 
     private static int NextEvent()
         => Interlocked.Increment(ref lastEvent);

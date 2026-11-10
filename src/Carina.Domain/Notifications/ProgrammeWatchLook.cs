@@ -40,13 +40,7 @@ public static class ProgrammeWatchLook
 
     private static ProgrammeWatchStep Waiting(ProgrammeWatch watch, WatchedGuide guide, DateTime at)
     {
-        WatchedBroadcast before = Held(watch);
-
-        if (guide.Announced is { } announced)
-        {
-            watch.Follow(announced, at);
-        }
-
+        bool followed = guide.Announced is { } announced && watch.Follow(announced, at);
         ProgrammeWatchMoment moment = watch.MomentAt(at);
 
         if (moment is ProgrammeWatchMoment.Over)
@@ -65,7 +59,7 @@ public static class ProgrammeWatchLook
 
         if (moment is ProgrammeWatchMoment.NotYet)
         {
-            return new ProgrammeWatchStep(Held(watch) != before, null);
+            return new ProgrammeWatchStep(followed, null);
         }
 
         watch.Notify(at);
@@ -79,11 +73,9 @@ public static class ProgrammeWatchLook
         IReadOnlySet<NoticeKind> told,
         DateTime at)
     {
-        WatchedBroadcast before = Held(watch);
-        bool moved = guide.Announced is { } announced && watch.Follow(announced, at);
-        bool changed = Held(watch) != before;
+        bool changed = guide.Announced is { } announced && watch.Follow(announced, at);
 
-        if (moved && !told.Contains(NoticeKind.WatchedProgrammeMoved))
+        if (watch.HasMovedSinceTold && !told.Contains(NoticeKind.WatchedProgrammeMoved))
         {
             return new ProgrammeWatchStep(changed, NoticeKind.WatchedProgrammeMoved);
         }
@@ -95,7 +87,4 @@ public static class ProgrammeWatchLook
 
     private static bool IsGoneBeforeItBegins(ProgrammeWatch watch, WatchedGuide guide, DateTime at)
         => guide.Standing is GuideStanding.NoLongerAnnounced && at < watch.StartsAt;
-
-    private static WatchedBroadcast Held(ProgrammeWatch watch)
-        => new(watch.StartsAt, watch.EndsAt, watch.ProgrammeName, watch.StationName);
 }

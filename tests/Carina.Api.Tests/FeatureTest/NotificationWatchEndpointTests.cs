@@ -449,6 +449,7 @@ public sealed class NotificationWatchEndpointTests
             [new NotificationDestinationId(destination)],
             state,
             state is ProgrammeWatchState.Notified ? startsAt.AddMinutes(-3) : null,
+            state is ProgrammeWatchState.Notified ? startsAt : null,
             asked,
             startsAt.AddMinutes(-3));
     }

@@ -125,6 +125,7 @@ public sealed class NotificationDeliveryJobTests
             [NotificationDestinationId.New()],
             ProgrammeWatchState.Notified,
             startsAt.AddMinutes(-3),
+            startsAt,
             startsAt.AddHours(-1),
             startsAt.AddMinutes(-3));
 
