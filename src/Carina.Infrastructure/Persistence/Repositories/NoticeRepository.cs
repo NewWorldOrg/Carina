@@ -75,6 +75,11 @@ public sealed class NoticeRepository(CarinaDbContext context) : INoticeRepositor
         }
     }
 
+    public async Task<int> RemoveBeforeAsync(DateTime before, CancellationToken cancellationToken)
+        => await context.Set<Notice>()
+            .Where(notice => notice.OccurredAt < before)
+            .ExecuteDeleteAsync(cancellationToken);
+
     private static bool IsAlreadyHeld(DbUpdateException exception)
         => exception.InnerException is PostgresException
         {

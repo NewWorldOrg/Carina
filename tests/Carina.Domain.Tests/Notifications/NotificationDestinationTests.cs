@@ -82,6 +82,18 @@ public sealed class NotificationDestinationTests
         Assert.Equal(At.AddMinutes(1), destination.LastResultAt);
     }
 
+    [Fact(DisplayName = "BR-NS-001: a destination that turned one notice down without its address being gone stays on and keeps why")]
+    public void ADestinationThatTurnedOneNoticeDownStaysOn()
+    {
+        NotificationDestination destination = Registered();
+
+        destination.NoteTurnedDown(At.AddMinutes(1));
+
+        Assert.True(destination.Enabled);
+        Assert.Equal(NoticeFailure.Rejected, destination.LastFailure);
+        Assert.Equal(At.AddMinutes(1), destination.LastResultAt);
+    }
+
     [Fact(DisplayName = "BR-NS-002: a failure worth another try leaves the destination turned on")]
     public void AFailureWorthAnotherTryLeavesTheDestinationTurnedOn()
     {

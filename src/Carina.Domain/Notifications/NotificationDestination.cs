@@ -129,6 +129,15 @@ public sealed class NotificationDestination
         }
     }
 
+    /// <summary>
+    /// Keeps that the other end turned one notice down while its address still stands. The destination stays on.
+    /// </summary>
+    public void NoteTurnedDown(DateTime at)
+    {
+        LastFailure = NoticeFailure.Rejected;
+        LastResultAt = UtcTimes.Required(at, nameof(at));
+    }
+
     private static WebhookTarget Named(WebhookTarget target)
         => Enum.IsDefined(target)
             ? target

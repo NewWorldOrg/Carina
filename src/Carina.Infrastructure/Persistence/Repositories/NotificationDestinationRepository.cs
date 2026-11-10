@@ -40,6 +40,25 @@ public sealed class NotificationDestinationRepository(CarinaDbContext context) :
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task KeepResultAsync(NotificationDestination destination, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+
+        NotificationDestinationId id = destination.Id;
+        DateTime? at = destination.LastResultAt;
+        NoticeFailure? failure = destination.LastFailure;
+        bool on = destination.Enabled;
+
+        await context.Set<NotificationDestination>()
+            .Where(held => held.Id == id)
+            .ExecuteUpdateAsync(
+                held => held
+                    .SetProperty(row => row.LastResultAt, at)
+                    .SetProperty(row => row.LastFailure, failure)
+                    .SetProperty(row => row.Enabled, row => row.Enabled && on),
+                cancellationToken);
+    }
+
     public async Task RemoveAsync(NotificationDestination destination, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(destination);
