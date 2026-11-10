@@ -39,3 +39,8 @@ public sealed record ReviseNotificationRuleRequest
 
     public IReadOnlyList<Guid>? Destinations { get; init; }
 }
+
+public sealed record PutNotificationSettingsRequest
+{
+    public int? NotifyLeadMinutes { get; init; }
+}

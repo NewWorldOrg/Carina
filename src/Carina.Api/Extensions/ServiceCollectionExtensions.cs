@@ -74,6 +74,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MigrationRecordService>();
         services.AddScoped<NotificationDestinationService>();
         services.AddScoped<NotificationRuleService>();
+        services.AddScoped<NotificationDeliveryService>();
+        services.AddScoped<NotificationSettingsService>();
         services.AddSingleton<NoticeTrials>();
         services.AddSingleton<PlaybackTicketGate>();
 

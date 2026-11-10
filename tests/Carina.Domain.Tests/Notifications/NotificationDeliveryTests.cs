@@ -6,6 +6,16 @@ public sealed class NotificationDeliveryTests
 {
     private static readonly DateTime At = new(2026, 11, 9, 12, 0, 0, DateTimeKind.Utc);
 
+    [Theory(DisplayName = "FR: at most fifty of a destination's deliveries are listed, and that is how many are listed unless fewer are asked for")]
+    [InlineData(null, 50)]
+    [InlineData(0, 50)]
+    [InlineData(-3, 50)]
+    [InlineData(1, 1)]
+    [InlineData(50, 50)]
+    [InlineData(51, 50)]
+    public void AtMostFiftyDeliveriesAreListed(int? asked, int listed)
+        => Assert.Equal(listed, NotificationDelivery.Listed(asked));
+
     [Fact(DisplayName = "BR-NS-001: a delivery starts queued, untried, and due at once")]
     public void ADeliveryStartsQueuedAndDueAtOnce()
     {

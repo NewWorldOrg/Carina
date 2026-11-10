@@ -201,8 +201,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 .ToArray());
     }
 
-    [Fact(DisplayName = "BR-NA-002: the notification surfaces are the destinations and the sets of rules listed, made, changed and removed and a destination tried, and removing a destination is the one that discards")]
-    public void TheNotificationSurfacesAreTheOnesTheDestinationsAndRulesAreReachedThrough()
+    [Fact(DisplayName = "BR-NA-002: the notification surfaces are the destinations and the sets of rules listed, made, changed and removed, a destination tried, the deliveries listed and the settings read and changed, and removing a destination is the one that discards")]
+    public void TheNotificationSurfacesAreTheOnesTheDestinationsRulesDeliveriesAndSettingsAreReachedThrough()
     {
         RoutedSurface[] notifications =
         [
@@ -215,13 +215,16 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             [
                 "DELETE /api/notifications/destinations/{id:guid} Destructive",
                 "DELETE /api/notifications/rules/{id:guid} Changing",
+                "GET /api/notifications/deliveries Reading",
                 "GET /api/notifications/destinations Reading",
                 "GET /api/notifications/rules Reading",
+                "GET /api/notifications/settings Reading",
                 "PATCH /api/notifications/destinations/{id:guid} Changing",
                 "PATCH /api/notifications/rules/{id:guid} Changing",
                 "POST /api/notifications/destinations Changing",
                 "POST /api/notifications/destinations/{id:guid}/test Changing",
                 "POST /api/notifications/rules Changing",
+                "PUT /api/notifications/settings Changing",
             ],
             notifications.Select(surface => $"{surface} {surface.Effect}").ToArray());
     }
