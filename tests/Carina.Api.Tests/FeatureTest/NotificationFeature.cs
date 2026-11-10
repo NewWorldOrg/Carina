@@ -156,12 +156,28 @@ internal sealed class PointedNoticeNetwork(WebhookEnd end) : INoticeNetwork
 
     public ConcurrentQueue<IPEndPoint> Connected { get; } = new();
 
+    public bool Refuses { get; set; }
+
+    public bool Stalls { get; set; }
+
+    public bool Distrusts { get; set; }
+
     public Task<IReadOnlyList<IPAddress>> ResolveAsync(string host, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<IPAddress>>([Public]);
 
     public async Task<Stream> ConnectAsync(IPEndPoint endpoint, CancellationToken cancellationToken)
     {
         Connected.Enqueue(endpoint);
+
+        if (Refuses)
+        {
+            throw new SocketException((int)SocketError.ConnectionRefused);
+        }
+
+        if (Stalls)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
 
         Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         await socket.ConnectAsync(new IPEndPoint(IPAddress.Loopback, end.Port), cancellationToken);
@@ -170,7 +186,7 @@ internal sealed class PointedNoticeNetwork(WebhookEnd end) : INoticeNetwork
     }
 
     public bool Trusts(X509Certificate? certificate, SslPolicyErrors errors)
-        => certificate is not null && certificate.GetCertHashString() == end.Certificate.GetCertHashString();
+        => !Distrusts && certificate is not null && certificate.GetCertHashString() == end.Certificate.GetCertHashString();
 }
 
 internal sealed class NotificationFeature : IAsyncDisposable
@@ -193,7 +209,7 @@ internal sealed class NotificationFeature : IAsyncDisposable
 
     private readonly TestingWebApplicationFactory factory = new();
 
-    public NotificationFeature(string? publicOrigin = null, RecordedStartup? heard = null)
+    public NotificationFeature(string? publicOrigin = null, RecordedStartup? heard = null, TimeSpan? deadline = null)
     {
         Network = new PointedNoticeNetwork(End);
         Built = factory.WithWebHostBuilder(builder =>
@@ -210,6 +226,11 @@ internal sealed class NotificationFeature : IAsyncDisposable
                 services.AddSingleton<INotificationSettingsRepository>(HeldSettings);
                 services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.AddSingleton<INoticeNetwork>(Network);
+                services.AddSingleton<NoticeLine>(_ => new NoticeLine(
+                    Network,
+                    "Carina/0.0.0-test",
+                    Clock,
+                    deadline ?? NoticeLine.UsualDeadline));
 
                 if (heard is not null)
                 {
@@ -289,6 +310,13 @@ internal sealed class NotificationFeature : IAsyncDisposable
         HeldDeliveries.Rows.Add(row);
 
         return row;
+    }
+
+    public async Task<NotificationDeliveries> PassAsync()
+    {
+        await using AsyncServiceScope scope = Built.Services.CreateAsyncScope();
+
+        return await scope.ServiceProvider.GetRequiredService<NotificationDeliveryRound>().SendAsync(CancellationToken.None);
     }
 
     public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)

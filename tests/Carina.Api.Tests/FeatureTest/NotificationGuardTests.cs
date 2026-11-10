@@ -158,16 +158,16 @@ public sealed class NotificationGuardTests
         feature.End.AnswerHeaders = string.Empty;
         feature.End.AnswerBody = "{\"message\":\"https://discord.com/api/webhooks/1234/made-up-token-abcd\"}";
         feature.Waiting(id);
-        NotificationDeliveries failed = await SentAsync(feature);
+        NotificationDeliveries failed = await feature.PassAsync();
 
         feature.Clock.Now = feature.Clock.Now.AddMinutes(1);
         feature.End.Status = 204;
         feature.End.AnswerBody = string.Empty;
-        NotificationDeliveries sent = await SentAsync(feature);
+        NotificationDeliveries sent = await feature.PassAsync();
 
         feature.End.Status = 404;
         feature.Waiting(id);
-        NotificationDeliveries refused = await SentAsync(feature);
+        NotificationDeliveries refused = await feature.PassAsync();
 
         answered.Add(Said(await feature.GetAsync($"{NotificationFeature.Deliveries}?destinationId={id}")));
         answered.Add(Said(await feature.GetAsync(NotificationFeature.Destinations)));
@@ -187,19 +187,47 @@ public sealed class NotificationGuardTests
         });
     }
 
+    [Theory(DisplayName = "BR-NA-003: No line of the log, with what was thrown, carries the address when a send times out, cannot connect or fails on TLS, and no answer does")]
+    [InlineData("timedOut")]
+    [InlineData("unreachable")]
+    [InlineData("tlsFailed")]
+    public async Task NeitherTheLogNorAnAnswerCarriesTheAddressWhenTheLineFails(string failure)
+    {
+        RecordedStartup heard = new();
+        await using NotificationFeature feature = new(heard: heard, deadline: TimeSpan.FromMilliseconds(200));
+        Guid id = await feature.RegisteredAsync();
+        feature.Network.Stalls = failure == "timedOut";
+        feature.Network.Refuses = failure == "unreachable";
+        feature.Network.Distrusts = failure == "tlsFailed";
+
+        (HttpStatusCode status, JsonElement tried) = await feature.PostAsync(NotificationFeature.TrialOf(id));
+        feature.Waiting(id);
+        NotificationDeliveries passed = await feature.PassAsync();
+        (_, JsonElement listed) = await feature.GetAsync(NotificationFeature.Destinations);
+        (_, JsonElement delivered) = await feature.GetAsync($"{NotificationFeature.Deliveries}?destinationId={id}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(failure, tried.GetProperty("data").GetProperty("failure").GetString());
+        Assert.Equal(new NotificationDeliveries(0, 1, 0), passed);
+        Assert.Equal(failure, listed.GetProperty("data").GetProperty("items")[0].GetProperty("lastFailure").GetString());
+        Assert.Empty(feature.End.Heard);
+        Assert.Contains(heard.Everything, line => line.Category.StartsWith("Carina.Infrastructure.Notifications", StringComparison.Ordinal));
+        Assert.All(LettersOfAnAddress, letters =>
+        {
+            Assert.DoesNotContain(heard.Everything, line => Carries(line, letters));
+            Assert.DoesNotContain(letters, tried.GetRawText(), StringComparison.Ordinal);
+            Assert.DoesNotContain(letters, listed.GetRawText(), StringComparison.Ordinal);
+            Assert.DoesNotContain(letters, delivered.GetRawText(), StringComparison.Ordinal);
+        });
+    }
+
     private static bool Carries(SaidLine line, string letters)
         => line.Text.Contains(letters, StringComparison.Ordinal)
+            || line.Thrown.Contains(letters, StringComparison.Ordinal)
             || line.Values.Any(value => (value.Value?.ToString() ?? string.Empty).Contains(letters, StringComparison.Ordinal));
 
     private static string Said((HttpStatusCode Status, JsonElement Body) answer)
         => answer.Body.ValueKind is JsonValueKind.Undefined ? string.Empty : answer.Body.GetRawText();
-
-    private static async Task<NotificationDeliveries> SentAsync(NotificationFeature feature)
-    {
-        await using AsyncServiceScope scope = feature.Built.Services.CreateAsyncScope();
-
-        return await scope.ServiceProvider.GetRequiredService<NotificationDeliveryRound>().SendAsync(CancellationToken.None);
-    }
 
     private static StringContent Json() => new("{}", Encoding.UTF8, "application/json");
 
