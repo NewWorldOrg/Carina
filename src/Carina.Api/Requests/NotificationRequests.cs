@@ -7,6 +7,8 @@ public sealed record CreateNotificationDestinationRequest
     public string? Name { get; init; }
 
     public string? Url { get; init; }
+
+    public override string ToString() => "a request to register a destination";
 }
 
 public sealed record ReviseNotificationDestinationRequest
@@ -16,6 +18,8 @@ public sealed record ReviseNotificationDestinationRequest
     public string? Url { get; init; }
 
     public bool? Enabled { get; init; }
+
+    public override string ToString() => "a request to change a destination";
 }
 
 public sealed record CreateNotificationRuleRequest
