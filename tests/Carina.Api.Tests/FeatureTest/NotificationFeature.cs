@@ -316,7 +316,7 @@ internal sealed class NotificationFeature : IAsyncDisposable
     /// <summary>
     /// Puts a half-hour programme in the guide, on the one made-up station, and gives the text it is named by.
     /// </summary>
-    public string Announced(int carried, DateTime startsAt, string name = "作り物の番組")
+    public string Announced(int carried, DateTime startsAt, string name = "作り物の番組", bool shadow = false)
     {
         NetworkId network = new(32_736);
         ServiceId service = new(1024);
@@ -334,7 +334,7 @@ internal sealed class NotificationFeature : IAsyncDisposable
                 startsAt.AddMinutes(30),
                 name,
                 string.Empty,
-                false),
+                shadow),
             Noon));
 
         return $"32736-1024-{carried}";

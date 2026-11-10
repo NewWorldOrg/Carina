@@ -216,6 +216,22 @@ public sealed class NotificationWatchEndpointTests
         Assert.Empty(feature.HeldWatches.Watches);
     }
 
+    [Fact(DisplayName = "BR-NT-007: A programme carried as a shadow of another service's broadcast is refused as a conflict, as it is when asked to be recorded")]
+    public async Task AShadowOfAnotherServicesBroadcastIsRefused()
+    {
+        await using NotificationFeature feature = new();
+        await feature.RegisteredAsync();
+        string programme = feature.Announced(4001, Starts, shadow: true);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            NotificationFeature.Watches,
+            new { programme, programmeStartsAt = Starts });
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains("shadow", body.GetProperty("message").GetString()!, StringComparison.Ordinal);
+        Assert.Empty(feature.HeldWatches.Watches);
+    }
+
     [Fact(DisplayName = "BR-NS-003: A programme already waiting to be told of is not asked for a second time")]
     public async Task AProgrammeAlreadyWaitingIsNotAskedAgain()
     {

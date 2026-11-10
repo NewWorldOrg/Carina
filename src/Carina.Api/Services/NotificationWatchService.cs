@@ -28,6 +28,9 @@ public sealed class NotificationWatchService(
 {
     private const string UnknownProgramme = "The guide holds no programme of that name starting then.";
 
+    private const string Shadow =
+        "That programme is carried as a shadow of a broadcast that belongs to another service, so it is not the entry to be told of.";
+
     private const string Begun = "Only a programme that has not begun is asked to be told of.";
 
     private const string NoneTurnedOn = "No destination is turned on. Register one, or turn one on, to be told of a programme.";
@@ -57,6 +60,11 @@ public sealed class NotificationWatchService(
         if (announced is null || announced.StartsAt != asked.ProgrammeStartsAt)
         {
             return Failure(UnknownProgramme, NotificationFailure.NoSuchProgramme);
+        }
+
+        if (announced.IsShadow)
+        {
+            return Failure(Shadow, NotificationFailure.ProgrammeIsAShadow);
         }
 
         DateTime now = Now();

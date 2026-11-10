@@ -25,4 +25,6 @@ public enum NotificationFailure
     NoDestination = 11,
 
     NotWaiting = 12,
+
+    ProgrammeIsAShadow = 13,
 }
