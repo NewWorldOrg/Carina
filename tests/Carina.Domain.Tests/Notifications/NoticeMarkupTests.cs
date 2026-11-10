@@ -75,6 +75,16 @@ public sealed class NoticeMarkupTests
         Assert.Equal(new string('港', 2999) + "…", body);
     }
 
+    [Fact(DisplayName = "BR-ND-003: a title for Slack is kept up to 2998 characters and cut beyond, which leaves room for the two marks that make it bold")]
+    public void ATitleForSlackLeavesRoomForTheMarksAroundIt()
+    {
+        string kept = NoticeMarkup.For(WebhookTarget.Slack, new string('題', 2998), "本文").Title;
+        string cut = NoticeMarkup.For(WebhookTarget.Slack, new string('題', 2999), "本文").Title;
+
+        Assert.Equal(new string('題', 2998), kept);
+        Assert.Equal(new string('題', 2997) + "…", cut);
+    }
+
     [Fact(DisplayName = "BR-ND-003: the limit of a Slack section is counted after escaping, and no entity is cut in two")]
     public void TheLimitOfASlackSectionIsCountedAfterEscaping()
     {

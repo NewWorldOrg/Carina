@@ -121,6 +121,20 @@ public sealed class NoticePayloadTests
         Assert.InRange(embed.GetProperty("description").GetString()!.Length, 1, 4096);
     }
 
+    [Theory(DisplayName = "BR-ND-003: a title as long as a Slack section, or longer, still fits the section once it is made bold")]
+    [InlineData(2998)]
+    [InlineData(3000)]
+    [InlineData(3001)]
+    public void ATitleAsLongAsASlackSectionStillFitsOnceItIsBold(int length)
+    {
+        using JsonDocument slack = JsonDocument.Parse(Written(WebhookTarget.Slack, NoticeTone.Good, new string('題', length), Body, null));
+
+        string heading = slack.RootElement.GetProperty("attachments")[0].GetProperty("blocks")[0].GetProperty("text").GetProperty("text").GetString()!;
+        Assert.Equal(3000, heading.Length);
+        Assert.StartsWith("*題", heading, StringComparison.Ordinal);
+        Assert.EndsWith("*", heading, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "BR-ND-007: a notice is shaped from what was worded once, for the kind of the destination")]
     public void ANoticeIsShapedFromWhatWasWordedOnce()
     {
