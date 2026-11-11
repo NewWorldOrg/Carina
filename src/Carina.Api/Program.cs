@@ -22,6 +22,7 @@ using Carina.Infrastructure.Events;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Microsoft.OpenApi;
 
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
@@ -47,6 +48,7 @@ builder.Services
         _ => { });
 builder.Services.AddOpenApi(options =>
 {
+    options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1;
     options.AddDocumentTransformer<ApiDocumentTransformer>();
     options.AddSchemaTransformer<StringEnumSchemaTransformer>();
     options.AddSchemaTransformer<WireChoicesSchemaTransformer>();
@@ -56,6 +58,7 @@ builder.Services.AddOpenApi(options =>
     options.AddOperationTransformer<OperationNamingTransformer>();
     options.AddOperationTransformer<SearchVocabularyTransformer>();
     options.AddOperationTransformer<QueryInputTransformer>();
+    options.AddOperationTransformer<QueryEnumSchemaTransformer>();
 });
 
 WebApplication app = builder.Build();
