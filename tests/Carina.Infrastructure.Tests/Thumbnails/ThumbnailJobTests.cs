@@ -303,10 +303,10 @@ public sealed class ThumbnailJobTests
         using ThumbnailJob job = Job(worklist, new HeldRenderer(), clock: new StillClock());
         using CancellationTokenSource stopping = new();
 
+        job.Nudge();
+        job.Nudge();
+        job.Nudge();
         await job.StartAsync(stopping.Token);
-        job.Nudge();
-        job.Nudge();
-        job.Nudge();
         await Eventually.Happens(() => worklist.Reads >= 1, "the nudges never started a pass");
         await Task.Delay(TimeSpan.FromMilliseconds(300));
         await stopping.CancelAsync();
