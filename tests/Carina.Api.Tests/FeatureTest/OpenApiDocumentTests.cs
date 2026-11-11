@@ -376,6 +376,56 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task TheDocumentIsWrittenInTheOpenApiVersionTheClientGeneratorReads()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+
+        Assert.StartsWith("3.1.", document["openapi"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/api/reservations", "origin", "ReservationOrigin")]
+    [InlineData("/api/reservations", "sort", "ReservationSort")]
+    [InlineData("/api/recordings", "standing", "RecordingStanding")]
+    [InlineData("/api/recordings", "drops", "DropReading")]
+    [InlineData("/api/recordings", "sort", "RecordingSort")]
+    [InlineData("/api/quality/trends", "subject", "QualityTrendSubject")]
+    [InlineData("/api/quality/channels", "sort", "QualityGroupSort")]
+    [InlineData("/api/quality/recordings", "sort", "QualityRecordingSort")]
+    [InlineData("/api/quality/tuners", "sort", "QualityGroupSort")]
+    [InlineData("/api/live/channels", "sort", "LiveChannelSort")]
+    [InlineData("/api/programs", "type", "TuneSystem")]
+    public async Task AnEnumTakenFromTheQueryIsTheSchemaABodySpellsItWith(string path, string name, string schema)
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode parameter = document["paths"]![path]!["get"]!["parameters"]!
+            .AsArray()
+            .Single(parameter => parameter!["name"]!.GetValue<string>() == name)!;
+        string[] values = [.. document["components"]!["schemas"]![schema]!["enum"]!
+            .AsArray()
+            .Where(value => value is not null)
+            .Select(value => value!.GetValue<string>())];
+
+        Assert.Equal($"#/components/schemas/{schema}", parameter["schema"]!["$ref"]?.GetValue<string>());
+        Assert.All(values, value => Assert.True(char.IsLower(value[0]), value));
+    }
+
+    [Theory]
+    [InlineData("DropReading")]
+    [InlineData("QualityGroupSort")]
+    [InlineData("QualityRecordingSort")]
+    public async Task AnEnumOnlyTheQueryTakesAndMayLeaveOutSaysItCanBeAbsent(string schema)
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode described = document["components"]!["schemas"]![schema]!;
+
+        Assert.Equal(
+            ["null", "string"],
+            described["type"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Contains(null, described["enum"]!.AsArray());
+    }
+
+    [Fact]
     public async Task AnEnumAValueCanBeAbsentFromSaysSoBesideTheValuesItHas()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);

@@ -34,7 +34,7 @@ public sealed class SegmentSettingsConfiguration : IEntityTypeConfiguration<Segm
             .ValueGeneratedNever();
 
         builder.Property(settings => settings.SkipThreshold)
-            .HasConversion<decimal>()
+            .HasConversion(threshold => decimal.Round((decimal)threshold, 2), stored => (double)stored)
             .HasColumnType("numeric(3,2)")
             .HasDefaultValue(SegmentSettingsStanding.DefaultSkipThreshold)
             .IsRequired();

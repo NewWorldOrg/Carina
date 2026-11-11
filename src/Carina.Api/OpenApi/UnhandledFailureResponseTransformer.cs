@@ -25,7 +25,7 @@ public sealed class UnhandledFailureResponseTransformer : IOpenApiOperationTrans
         answers[Failure] = new OpenApiResponse
         {
             Description = "The request failed before it could answer for itself. The body carries the usual envelope with no data.",
-            Content = new Dictionary<string, OpenApiMediaType> { [Json] = new() { Schema = envelope } },
+            Content = new Dictionary<string, IOpenApiMediaType> { [Json] = new OpenApiMediaType { Schema = envelope } },
         };
 
         return Task.CompletedTask;
@@ -33,7 +33,7 @@ public sealed class UnhandledFailureResponseTransformer : IOpenApiOperationTrans
 
     private static IOpenApiSchema? EnvelopeOf(IDictionary<string, IOpenApiResponse> answers)
         => answers.Values
-            .Select(answer => answer.Content is { } content && content.TryGetValue(Json, out OpenApiMediaType? body)
+            .Select(answer => answer.Content is { } content && content.TryGetValue(Json, out IOpenApiMediaType? body)
                 ? body.Schema
                 : null)
             .FirstOrDefault(schema => schema is not null);

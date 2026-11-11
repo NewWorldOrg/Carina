@@ -1,4 +1,4 @@
-ARG DOTNET_VERSION=10.0
+ARG DOTNET_VERSION=11.0
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS ffmpeg-build
 ARG ARIBCAPTION_TAG=v1.1.2
@@ -95,7 +95,7 @@ RUN /notices/nuget.sh /out/notices app /out/app/Carina.Api.deps.json \
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS develop
 COPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 \
+    && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-165 \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f
 COPY docker/fonts.conf /etc/fonts/local.conf
@@ -111,10 +111,10 @@ FROM runtime-base AS runtime
 COPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/
 RUN sed 's/^Types: deb$/Types: deb-src/' /etc/apt/sources.list.d/ubuntu.sources > /etc/apt/sources.list.d/ubuntu-src.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 \
+    && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-165 \
     && mkdir -p /usr/share/doc/carina/x264/source \
     && cd /usr/share/doc/carina/x264/source \
-    && apt-get source --download-only "x264=$(dpkg-query -W -f '${source:Version}' libx264-164)" \
+    && apt-get source --download-only "x264=$(dpkg-query -W -f '${source:Version}' libx264-165)" \
     && rm /etc/apt/sources.list.d/ubuntu-src.sources \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f

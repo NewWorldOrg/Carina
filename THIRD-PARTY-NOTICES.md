@@ -91,25 +91,16 @@ contract between `app` and the driver, published from
 | `Microsoft.EntityFrameworkCore.Abstractions` | MIT | app, migrate |
 | `Microsoft.EntityFrameworkCore.Design` | MIT | migrate |
 | `Microsoft.EntityFrameworkCore.Relational` | MIT | app, migrate |
-| `Microsoft.Extensions.Caching.Abstractions` | MIT | migrate |
 | `Microsoft.Extensions.Caching.Memory` | MIT | migrate |
 | `Microsoft.Extensions.Configuration` | MIT | migrate |
-| `Microsoft.Extensions.Configuration.Abstractions` | MIT | migrate |
 | `Microsoft.Extensions.Configuration.Binder` | MIT | migrate |
 | `Microsoft.Extensions.DependencyInjection` | MIT | migrate |
-| `Microsoft.Extensions.DependencyInjection.Abstractions` | MIT | migrate |
 | `Microsoft.Extensions.DependencyModel` | MIT | migrate |
 | `Microsoft.Extensions.Diagnostics` | MIT | migrate |
-| `Microsoft.Extensions.Diagnostics.Abstractions` | MIT | migrate |
-| `Microsoft.Extensions.FileProviders.Abstractions` | MIT | migrate |
-| `Microsoft.Extensions.Hosting.Abstractions` | MIT | migrate |
 | `Microsoft.Extensions.Http` | MIT | migrate |
 | `Microsoft.Extensions.Logging` | MIT | migrate |
-| `Microsoft.Extensions.Logging.Abstractions` | MIT | migrate |
-| `Microsoft.Extensions.Options` | MIT | migrate |
 | `Microsoft.Extensions.Options.ConfigurationExtensions` | MIT | migrate |
 | `Microsoft.Extensions.Options.DataAnnotations` | MIT | migrate |
-| `Microsoft.Extensions.Primitives` | MIT | migrate |
 | `Microsoft.OpenApi` | MIT | app |
 | `Microsoft.VisualStudio.SolutionPersistence` | MIT | migrate |
 | `Mono.TextTemplating` | MIT | migrate |
@@ -150,7 +141,7 @@ The license of each package is `/usr/share/doc/<package>/copyright`.
 | `libpng16-16t64` | `libpng1.6` | libpng-2.0 |
 | `libva-drm2` | `libva` | MIT |
 | `libva2` | `libva` | MIT |
-| `libx264-164` | `x264` | GPL-2.0-or-later |
+| `libx264-165` | `x264` | GPL-2.0-or-later |
 
 The corresponding source of each package under a GPL license is in the image at
 `/usr/share/doc/carina/<source package>/source/`, as the Ubuntu source package of
@@ -162,7 +153,7 @@ uses it under the FreeType License. Portions of this software are copyright ©
 
 ## Packages of the base image
 
-The base image `mcr.microsoft.com/dotnet/aspnet` is Ubuntu 24.04. The license of
+The base image `mcr.microsoft.com/dotnet/aspnet` is Ubuntu 26.04. The license of
 each of its packages is `/usr/share/doc/<package>/copyright`, and Ubuntu publishes
 the source of every version at
 `https://launchpad.net/ubuntu/+source/<source package>/<version>`, under the name

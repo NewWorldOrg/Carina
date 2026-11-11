@@ -20,7 +20,7 @@ there.
 
 ## Tech Stack
 
-- .NET 10, ASP.NET Core, xUnit.
+- .NET 11, ASP.NET Core, xUnit.
 - EF Core and PostgreSQL. Migrations are applied by the `Carina.Db --migrate`
   entry point, never by the app on startup.
 - The app reaches the driver over HTTP/1.1 on a Unix domain socket. The contract —
