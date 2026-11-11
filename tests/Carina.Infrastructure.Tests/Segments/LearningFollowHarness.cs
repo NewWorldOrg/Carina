@@ -10,6 +10,7 @@ using Carina.Domain.Segments;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Tests.Integrity;
+using Carina.Infrastructure.Tests.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -24,13 +25,6 @@ internal sealed class HeldLearningWorklist : ILearningWorklist
 {
     public List<Recording> Recordings { get; } = [];
 
-    public Dictionary<RecordingId, DateTime> Ends { get; } = [];
-
-    /// <summary>
-    /// Run as a look reads when a recording's programme ends, which is part way through the look.
-    /// </summary>
-    public Action<Recording>? WhileLooking { get; set; }
-
     public Task<IReadOnlyList<Recording>> BeingRecordedAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<Recording>>(
             [.. Recordings.Where(recording => recording.IsInFlight && withinReach.Contains(recording.OutputRoot))]);
@@ -42,13 +36,37 @@ internal sealed class HeldLearningWorklist : ILearningWorklist
             { IsInFlight: true } => RecordingStanding.InFlight,
             _ => RecordingStanding.Ended,
         });
+}
 
-    public Task<DateTime?> ProgrammeEndsAtAsync(Recording recording, CancellationToken cancellationToken)
+/// <summary>
+/// The guide as working out when a recording's programme ends reads it, which is part way through a look.
+/// </summary>
+internal sealed class LookedUpProgrammes : IAnnouncedProgrammes
+{
+    public HeldProgrammes Guide { get; } = new();
+
+    public Action? WhileLooking { get; set; }
+
+    public Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken)
     {
-        WhileLooking?.Invoke(recording);
+        WhileLooking?.Invoke();
 
-        return Task.FromResult(Ends.TryGetValue(recording.Id, out DateTime ends) ? ends : (DateTime?)null);
+        return Guide.FindAsync(id, cancellationToken);
     }
+
+    public Task<DateTime?> HeardWholeAtAsync(int networkId, int serviceId, CancellationToken cancellationToken)
+        => Guide.HeardWholeAtAsync(networkId, serviceId, cancellationToken);
+
+    public void Guides(Recording recording, DateTime endsAt)
+        => Guide.Programmes.Add(Programme.Rehydrate(
+            new ProgrammeId(recording.NetworkId, recording.ServiceId, recording.EventId),
+            new TransportStreamId(32736),
+            recording.ProgrammeStartsAt,
+            endsAt,
+            "A programme",
+            string.Empty,
+            false,
+            recording.StartedAtActual));
 }
 
 /// <summary>
@@ -109,6 +127,9 @@ internal sealed class LearningFollowHarness : IDisposable
             .AddSingleton<ILearningExtractionRepository>(Records)
             .AddSingleton<ILearningDataRepository>(Data)
             .AddSingleton<ILearningWorklist>(Worklist)
+            .AddSingleton<IAnnouncedProgrammes>(Programmes)
+            .AddSingleton<IReservationRepository>(Reservations)
+            .AddScoped<ProgrammeEndDomainService>()
             .BuildServiceProvider();
 
         Store = new LearningRecords(provider.GetRequiredService<IServiceScopeFactory>());
@@ -120,6 +141,10 @@ internal sealed class LearningFollowHarness : IDisposable
     public HeldLearningData Data { get; } = new();
 
     public HeldLearningWorklist Worklist { get; } = new();
+
+    public LookedUpProgrammes Programmes { get; } = new();
+
+    public HeldReservations Reservations { get; } = new();
 
     public LearningRecords Store { get; }
 

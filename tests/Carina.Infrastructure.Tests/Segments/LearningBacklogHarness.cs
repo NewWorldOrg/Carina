@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 
 using Carina.Domain.Captions;
 using Carina.Domain.Integrity;
+using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Segments;
@@ -253,6 +254,8 @@ internal sealed class LearningBacklogHarness : IDisposable
             .AddSingleton<ILearningBacklog>(Backlog)
             .AddSingleton<IRecordingRepository>(new WorklistRecordings(Worklist))
             .AddSingleton<IReservationRepository>(Reservations)
+            .AddSingleton<IAnnouncedProgrammes>(Programmes)
+            .AddScoped<ProgrammeEndDomainService>()
             .AddSingleton<IWatching>(Watching)
             .AddScoped<IBusynessReader, BusynessReader>()
             .AddScoped<IOccupancyReader, OccupancyReader>()
@@ -272,6 +275,8 @@ internal sealed class LearningBacklogHarness : IDisposable
     public HeldLearningBacklog Backlog { get; }
 
     public HeldReservations Reservations { get; } = new();
+
+    public LookedUpProgrammes Programmes { get; } = new();
 
     public HeldWatching Watching { get; } = new();
 

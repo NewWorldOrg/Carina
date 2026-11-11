@@ -37,11 +37,17 @@ reached only through the contract package.
 
 | Project | What it holds |
 | --- | --- |
-| `src/Carina.Domain` | entities, value objects and repository interfaces, grouped by aggregate |
+| `src/Carina.Domain` | entities, value objects, repository interfaces and domain services, grouped by aggregate |
 | `src/Carina.Broadcast` | broadcast-standard parsing, as a library that depends on nothing |
 | `src/Carina.Infrastructure` | persistence, the driver IPC client, external boundaries |
 | `src/Carina.Db` | the migration entry point |
 | `src/Carina.Api` | the HTTP surface, and the OpenAPI document it serves |
+
+A request reaches an action, the action calls an application service, and the
+service either calls a domain service, which reaches persistence and the driver
+through interfaces the domain declares, or calls the infrastructure directly. A
+background job enters at the same level, calling a service or a domain service
+from a timer.
 
 Reference direction is one way, and `tests/Carina.Architecture.Tests` holds it,
 reading the project files rather than the compiled output so that a reference
@@ -370,6 +376,18 @@ walks past it.
   immutable — no property may have a setter.
 - Entities have a private constructor and a static `Rehydrate`. A type that
   offers `Rehydrate` exposes no public constructor beside it.
+- A business decision one aggregate can make from its own state and the values
+  handed to it is a method of that aggregate. A calculation that needs only
+  values, such as `TunerAllocationPlanner.Plan`, stays a static pure function.
+- A decision that needs a repository lookup, or spans several aggregates, is a
+  domain service: a sealed, non-static class in `Carina.Domain/<Area>/` whose
+  name and file name both end in `DomainService`, taking only interfaces the
+  domain declares and `TimeProvider` through its constructor. The outer layers
+  register it, so the domain still references nothing beyond `Puppis.Contracts`.
+  It answers a refusal as a domain type; turning that into HTTP is the Api's job.
+- An application `{Entity}Service` keeps the orchestration only: the transaction
+  and the turn lock, calling domain services and aggregates, saving, and mapping
+  the answer to `ServiceResult`.
 - Time is taken from an injected `TimeProvider`, never from the ambient clock.
 - Asynchronous methods end in `Async`.
 - Declarations name their type. `var` is only for a right-hand side that is a
@@ -392,7 +410,11 @@ walks past it.
 
 The first five bullets are checked by reflection in `tests/Carina.Conventions.Tests`,
 which is kept apart from `Carina.Architecture.Tests` so that the latter can go on
-referencing no production assembly.
+referencing no production assembly. `DomainServiceRuleTests` there holds the
+shape of a domain service: a class of the domain that takes a domain interface or
+`TimeProvider` through its constructor is one, except the outcomes that carry a
+live stream, a transcoder seat or a socket back to their caller, which the rule
+lists by type, and no type outside the domain carries the name.
 
 ## Tests
 

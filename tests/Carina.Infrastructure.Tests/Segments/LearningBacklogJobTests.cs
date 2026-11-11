@@ -25,7 +25,7 @@ public sealed class LearningBacklogJobTests : IDisposable
     {
         harness.Ended(90, 7601);
         Recording newest = harness.Ended(40, 7602);
-        harness.Worklist.Ends[newest.Id] = Now.AddMinutes(25);
+        harness.Programmes.Guides(newest, Now.AddMinutes(25));
         LearningBacklogJob job = harness.Job();
 
         LearningBacklogLook look = await job.LookAsync(Cancel);

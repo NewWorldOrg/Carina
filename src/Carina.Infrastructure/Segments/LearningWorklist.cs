@@ -1,14 +1,9 @@
-using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
-using Carina.Domain.Reservations;
 using Carina.Domain.Segments;
 
 namespace Carina.Infrastructure.Segments;
 
-public sealed class LearningWorklist(
-    IRecordingRepository recordings,
-    IAnnouncedProgrammes programmes,
-    IReservationRepository reservations) : ILearningWorklist
+public sealed class LearningWorklist(IRecordingRepository recordings) : ILearningWorklist
 {
     public async Task<IReadOnlyList<Recording>> BeingRecordedAsync(
         IReadOnlyList<OutputRoot> withinReach,
@@ -38,30 +33,4 @@ public sealed class LearningWorklist(
 
         return found.IsInFlight ? RecordingStanding.InFlight : RecordingStanding.Ended;
     }
-
-    public async Task<DateTime?> ProgrammeEndsAtAsync(Recording recording, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(recording);
-
-        Programme? announced = await programmes.FindAsync(
-            new ProgrammeId(recording.NetworkId, recording.ServiceId, recording.EventId),
-            cancellationToken);
-
-        if (After(announced?.EndsAt, recording) is { } guided)
-        {
-            return guided;
-        }
-
-        Reservation? reservation = recording.ReservationId is { } reserved ? await reservations.FindAsync(reserved, cancellationToken) : null;
-
-        if (reservation is { EndAtConfirmed: true } && After(reservation.EndAt, recording) is { } confirmed)
-        {
-            return confirmed;
-        }
-
-        return After(recording.PromisedWindowEnd, recording);
-    }
-
-    private static DateTime? After(DateTime? endsAt, Recording recording)
-        => endsAt > recording.ProgrammeStartsAt ? endsAt : null;
 }

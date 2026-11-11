@@ -226,7 +226,7 @@ public sealed class LearningBacklogJob(
         ILearningBacklog backlog,
         CancellationToken cancellationToken)
     {
-        ILearningWorklist worklist = scope.ServiceProvider.GetRequiredService<ILearningWorklist>();
+        ProgrammeEndDomainService programmeEnds = scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>();
         IReadOnlyList<OutputRoot> withinReach = [.. mounts.OutputRoots.Select(mounted => mounted.Root)];
         int outOfReach = 0;
         int looked = 0;
@@ -244,7 +244,7 @@ public sealed class LearningBacklogJob(
                     continue;
                 }
 
-                if (await BeganAsync(worklist, next, source, cancellationToken) is { } claimed)
+                if (await BeganAsync(programmeEnds, next, source, cancellationToken) is { } claimed)
                 {
                     return (claimed ? next.Recording.Id : null, outOfReach);
                 }
@@ -264,12 +264,12 @@ public sealed class LearningBacklogJob(
     /// read, and null when the recording no longer waits.
     /// </summary>
     private async Task<bool?> BeganAsync(
-        ILearningWorklist worklist,
+        ProgrammeEndDomainService programmeEnds,
         BackloggedRecording next,
         string source,
         CancellationToken cancellationToken)
     {
-        switch (await ClaimAsync(worklist, next, cancellationToken))
+        switch (await ClaimAsync(programmeEnds, next, cancellationToken))
         {
             case ExtractionChange.Written:
                 Begin(next.Recording, source);
@@ -287,7 +287,7 @@ public sealed class LearningBacklogJob(
     }
 
     private async Task<ExtractionChange> ClaimAsync(
-        ILearningWorklist worklist,
+        ProgrammeEndDomainService programmeEnds,
         BackloggedRecording next,
         CancellationToken cancellationToken)
     {
@@ -295,7 +295,7 @@ public sealed class LearningBacklogJob(
 
         if (next.Record is null)
         {
-            ProgrammeCopy copy = ProgrammeCopy.Of(recording, await worklist.ProgrammeEndsAtAsync(recording, cancellationToken));
+            ProgrammeCopy copy = ProgrammeCopy.Of(recording, await programmeEnds.EndsAtAsync(recording, cancellationToken));
 
             await records.AddAsync(LearningExtraction.Waiting(recording.Id, copy, Now()), cancellationToken);
         }

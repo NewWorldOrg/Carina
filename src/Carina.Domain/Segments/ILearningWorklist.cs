@@ -3,7 +3,7 @@ using Carina.Domain.Recordings;
 namespace Carina.Domain.Segments;
 
 /// <summary>
-/// What following recordings for their learning data reads of the recordings and their programmes.
+/// What following recordings for their learning data reads of the recordings.
 /// </summary>
 public interface ILearningWorklist
 {
@@ -16,11 +16,4 @@ public interface ILearningWorklist
     /// Whether the recording is still being written or has ended; null when no such recording is kept.
     /// </summary>
     Task<RecordingStanding?> StandingAsync(RecordingId id, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// When the recording's programme ends by the guide, or else by its reservation once that end has
-    /// been announced, or else where the recording was promised to end, when the guide no longer holds the
-    /// programme; null when what they say is no later than the programme starts.
-    /// </summary>
-    Task<DateTime?> ProgrammeEndsAtAsync(Recording recording, CancellationToken cancellationToken);
 }
