@@ -523,6 +523,7 @@ public sealed class ServiceCollectionExtensionsTests
             service => ReferenceEquals(service, provider.GetRequiredService<LearningFollowJob>()));
         Assert.IsType<FfmpegLearningFollower>(provider.GetRequiredService<ILearningFollower>());
         Assert.IsType<LearningWorklist>(scope.ServiceProvider.GetRequiredService<ILearningWorklist>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>());
         Assert.Same(LearningFollowSettings.Default, provider.GetRequiredService<LearningFollowSettings>());
     }
 

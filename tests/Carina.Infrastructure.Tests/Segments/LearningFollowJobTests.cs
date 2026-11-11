@@ -182,7 +182,7 @@ public sealed class LearningFollowJobTests : IDisposable
     {
         Recording first = harness.Recording(eventId: 7310);
         System.Collections.Concurrent.ConcurrentQueue<Recording> begunDuringTheLook = new();
-        harness.Worklist.WhileLooking = _ =>
+        harness.Programmes.WhileLooking = () =>
         {
             if (begunDuringTheLook.IsEmpty)
             {

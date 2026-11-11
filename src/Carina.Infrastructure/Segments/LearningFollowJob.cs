@@ -71,7 +71,7 @@ public sealed class LearningFollowJob(
         Reap();
         await TellAsync(worklist, recording, cancellationToken);
 
-        int began = await FollowEachAsync(worklist, recording, cancellationToken);
+        int began = await FollowEachAsync(scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>(), recording, cancellationToken);
 
         return new LearningLook(putBack, began, follows.Count);
     }
@@ -135,7 +135,7 @@ public sealed class LearningFollowJob(
     }
 
     private async Task<int> FollowEachAsync(
-        ILearningWorklist worklist,
+        ProgrammeEndDomainService programmeEnds,
         IReadOnlyList<Recording> recording,
         CancellationToken cancellationToken)
     {
@@ -148,7 +148,7 @@ public sealed class LearningFollowJob(
                 continue;
             }
 
-            if (await FollowedFromTheHeadAsync(worklist, being, cancellationToken))
+            if (await FollowedFromTheHeadAsync(programmeEnds, being, cancellationToken))
             {
                 Begin(being, source);
                 began++;
@@ -158,7 +158,10 @@ public sealed class LearningFollowJob(
         return began;
     }
 
-    private async Task<bool> FollowedFromTheHeadAsync(ILearningWorklist worklist, Recording recording, CancellationToken cancellationToken)
+    private async Task<bool> FollowedFromTheHeadAsync(
+        ProgrammeEndDomainService programmeEnds,
+        Recording recording,
+        CancellationToken cancellationToken)
     {
         LearningExtraction? record = await records.FindAsync(recording.Id, cancellationToken);
         DateTime now = Now();
@@ -167,7 +170,7 @@ public sealed class LearningFollowJob(
         {
             case null:
                 await records.AddAsync(
-                    LearningExtraction.Following(recording.Id, await CopyAsync(worklist, recording, cancellationToken), ExtractionVersion.Current, now),
+                    LearningExtraction.Following(recording.Id, await CopyAsync(programmeEnds, recording, cancellationToken), ExtractionVersion.Current, now),
                     cancellationToken);
 
                 return true;
@@ -277,8 +280,11 @@ public sealed class LearningFollowJob(
     private static async Task EndedAsync(Follow follow)
         => await follow.Running.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
 
-    private static async Task<ProgrammeCopy> CopyAsync(ILearningWorklist worklist, Recording recording, CancellationToken cancellationToken)
-        => ProgrammeCopy.Of(recording, await worklist.ProgrammeEndsAtAsync(recording, cancellationToken));
+    private static async Task<ProgrammeCopy> CopyAsync(
+        ProgrammeEndDomainService programmeEnds,
+        Recording recording,
+        CancellationToken cancellationToken)
+        => ProgrammeCopy.Of(recording, await programmeEnds.EndsAtAsync(recording, cancellationToken));
 
     private string? Source(Recording recording)
         => mounts.OutputRoots.FirstOrDefault(mounted => mounted.Root.Equals(recording.OutputRoot)) is { } mounted

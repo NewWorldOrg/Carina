@@ -85,14 +85,20 @@ public sealed class ReducedCopyReaderTests : IDisposable
         Assert.Equal(Path.Combine(directory, ReducedCopy.CaptionsFile), copy.Captions);
     }
 
-    [Theory(DisplayName = "the programme ends when the guide says, else when its reservation says once that end was announced, and nowhere when neither says or it would end before it starts")]
-    [InlineData(30, null, false, 30)]
-    [InlineData(null, 45, true, 45)]
-    [InlineData(null, 45, false, null)]
-    [InlineData(-10, 45, true, 45)]
-    [InlineData(null, 0, true, null)]
-    [InlineData(null, null, false, null)]
-    public void TheProgrammeEndsWhenTheGuideOrTheReservationSays(int? guided, int? reserved, bool announced, int? ends)
+    [Theory(DisplayName = "BR-CD-005: the programme ends when the guide says, else when its reservation says once that end was announced, else where its recording was promised to end, and nowhere when none says or it would end before it starts")]
+    [InlineData(30, null, false, null, 30)]
+    [InlineData(null, 45, true, null, 45)]
+    [InlineData(null, 45, false, null, null)]
+    [InlineData(-10, 45, true, null, 45)]
+    [InlineData(null, 0, true, null, null)]
+    [InlineData(null, null, false, null, null)]
+    [InlineData(30, 45, true, 60, 30)]
+    [InlineData(null, 45, true, 60, 45)]
+    [InlineData(null, 45, false, 60, 60)]
+    [InlineData(null, null, false, 60, 60)]
+    [InlineData(null, 0, true, 60, 60)]
+    [InlineData(null, null, false, 0, null)]
+    public void TheProgrammeEndsWhenTheGuideTheReservationOrThePromiseSays(int? guided, int? reserved, bool announced, int? promised, int? ends)
     {
         CopyDescription description = new()
         {
@@ -100,6 +106,7 @@ public sealed class ReducedCopyReaderTests : IDisposable
             ReservationEndsAt = reserved is { } byTheReservation ? Starts.AddMinutes(byTheReservation) : null,
             ReservationEndAnnounced = announced,
             Reserved = reserved is not null,
+            PromisedEndsAt = promised is { } byThePromise ? Starts.AddMinutes(byThePromise) : null,
         };
 
         ReducedCopy copy = Assert.IsType<ReducedCopy>(ReducedCopyReader.Read(ReducedCopies.Write(shelf.Root, "ends", description)).Copy);

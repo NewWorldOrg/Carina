@@ -43,6 +43,8 @@ internal sealed record CopyDescription
 
     public bool ReservationEndAnnounced { get; init; }
 
+    public DateTime? PromisedEndsAt { get; init; }
+
     public bool Reserved { get; init; } = true;
 
     public string FileBegins { get; init; } = "1000.500000";
@@ -101,6 +103,7 @@ internal sealed record CopyDescription
                 ["snapshot_genres"] = new JsonArray(new JsonObject { ["kind"] = 7, ["sort"] = 0 }, new JsonObject { ["kind"] = 7, ["sort"] = 1 }),
                 ["snapshot_audio"] = Audio,
                 ["file_name"] = $"{Id.Wire}.m2ts",
+                ["promised_window_end"] = PromisedEndsAt is { } promised ? Instant(promised) : null,
             },
             ["reservation"] = Reserved
                 ? new JsonObject

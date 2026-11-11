@@ -51,11 +51,12 @@ public sealed record ReducedCopyRead(ReducedCopy? Copy, string? Refusal);
 /// <summary>
 /// Reads a reduced copy from its directory: every file it is read from is there and holds something, its
 /// manifest names the shape <see cref="ReducedCopy.Shape"/> and the same recording as the rows copied beside
-/// it, and those rows give the copy of the programme. The programme ends when the guide said, or else when
-/// its reservation said once that end had been announced. Where the copy starts on the recording's own time
-/// is where the programme's first picture or first sound began, whichever came first, after the file's
-/// clock began, both as the probe of the file read them; a time further than <see cref="FurthestSeconds"/>
-/// from zero is no time a file's clock holds. Nothing in the directory is written.
+/// it, and those rows give the copy of the programme. The programme ends by <see cref="ProgrammeEnd"/>, read
+/// from what the rows of the guide, the reservation and the recording say. Where the copy starts on the
+/// recording's own time is where the programme's first picture or first sound began, whichever came first,
+/// after the file's clock began, both as the probe of the file read them; a time further than
+/// <see cref="FurthestSeconds"/> from zero is no time a file's clock holds. Nothing in the directory is
+/// written.
 /// </summary>
 public static class ReducedCopyReader
 {
@@ -172,7 +173,7 @@ public static class ReducedCopyReader
             new NetworkId(Field(recording, "network_id")?.GetInt32() ?? throw Missing("network_id")),
             new ServiceId(Field(recording, "service_id")?.GetInt32() ?? throw Missing("service_id")),
             starts,
-            EndOf(starts, programme, reservation),
+            EndOf(starts, recording, programme, reservation),
             Instant(recording, "started_at_actual"),
             name,
             Field(recording, "snapshot_genres")?.Deserialize<List<ProgrammeGenre>>(Columns) ?? throw Missing("snapshot_genres"),
@@ -184,20 +185,13 @@ public static class ReducedCopyReader
             null);
     }
 
-    private static DateTime? EndOf(DateTime starts, JsonElement? programme, JsonElement? reservation)
-    {
-        DateTime? guided = programme is { } announced ? OptionalInstant(announced, "end_at") : null;
-        DateTime? reserved = reservation is { } booked && Field(booked, "end_at_confirmed")?.GetBoolean() is true
-            ? OptionalInstant(booked, "end_at")
-            : null;
-
-        if (guided > starts)
-        {
-            return guided;
-        }
-
-        return reserved > starts ? reserved : null;
-    }
+    private static DateTime? EndOf(DateTime starts, JsonElement recording, JsonElement? programme, JsonElement? reservation)
+        => ProgrammeEnd.Of(
+            starts,
+            programme is { } announced ? OptionalInstant(announced, "end_at") : null,
+            reservation is { } booked ? OptionalInstant(booked, "end_at") : null,
+            reservation is { } confirmed && Field(confirmed, "end_at_confirmed")?.GetBoolean() is true,
+            OptionalInstant(recording, "promised_window_end"));
 
     private static bool Holds(string directory, string file)
     {

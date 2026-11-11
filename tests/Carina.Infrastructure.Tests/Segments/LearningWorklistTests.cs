@@ -22,7 +22,9 @@ public sealed class LearningWorklistTests
 
     private readonly HeldReservations reservations = new();
 
-    private LearningWorklist Worklist => new(recordings, programmes, reservations);
+    private LearningWorklist Worklist => new(recordings);
+
+    private ProgrammeEndDomainService ProgrammeEnds => new(programmes, reservations);
 
     [Fact(DisplayName = "the recordings being written are those under the roots named, the earliest started first")]
     public async Task TheRecordingsBeingWrittenAreThoseUnderTheRootsNamedEarliestFirst()
@@ -49,44 +51,11 @@ public sealed class LearningWorklistTests
         Assert.Null(await Worklist.StandingAsync(RecordingId.New(), Cancel));
     }
 
-    [Fact(DisplayName = "a programme ends when the guide says it does")]
-    public async Task AProgrammeEndsWhenTheGuideSays()
-    {
-        Recording recording = Made(Mounted, 7406, Now);
-        await programmes.AddAsync(Announced(recording, Now.AddMinutes(25)), Cancel);
-
-        Assert.Equal(Now.AddMinutes(25), await Worklist.ProgrammeEndsAtAsync(recording, Cancel));
-    }
-
-    [Fact(DisplayName = "without the guide a programme ends when its reservation says, once that end has been announced, and otherwise where its recording was promised to end")]
-    public async Task WithoutTheGuideAProgrammeEndsWhenItsReservationSays()
-    {
-        Reservation confirmed = ReservationFixtures.Planned(endAt: Now.AddMinutes(30), endAtConfirmed: true);
-        Reservation provisional = ReservationFixtures.Planned(endAt: Now.AddMinutes(30), endAtConfirmed: false);
-        await reservations.AddAsync(confirmed, Cancel);
-        await reservations.AddAsync(provisional, Cancel);
-        Recording unreserved = Made(Mounted, 7409, Now);
-
-        Assert.Equal(Now.AddMinutes(30), await Worklist.ProgrammeEndsAtAsync(Made(Mounted, 7407, Now, confirmed.Id), Cancel));
-        Assert.Equal(Now.AddMinutes(54), await Worklist.ProgrammeEndsAtAsync(Made(Mounted, 7408, Now, provisional.Id), Cancel));
-        Assert.Equal(unreserved.PromisedWindowEnd, await Worklist.ProgrammeEndsAtAsync(unreserved, Cancel));
-        Assert.Equal(Now.AddMinutes(54), unreserved.PromisedWindowEnd);
-    }
-
-    [Fact(DisplayName = "an end from the guide no later than the programme's start is passed over for where the recording was promised to end")]
-    public async Task AnEndNoLaterThanTheStartIsPassedOver()
-    {
-        Recording recording = Made(Mounted, 7410, Now);
-        await programmes.AddAsync(Announced(recording, recording.ProgrammeStartsAt), Cancel);
-
-        Assert.Equal(recording.PromisedWindowEnd, await Worklist.ProgrammeEndsAtAsync(recording, Cancel));
-    }
-
     [Fact(DisplayName = "BR-CD-005: a sound heard at the end of two weekly recordings whose programmes the guide no longer holds is their ending, the programmes ending where the recordings were promised to")]
     public async Task AnEndingIsFoundWhereTheGuideNoLongerHoldsTheProgrammes()
     {
         Recording[] weeks = [Weekly(0), Weekly(1)];
-        ProgrammeCopy[] copies = [.. await Task.WhenAll(weeks.Select(async week => ProgrammeCopy.Of(week, await Worklist.ProgrammeEndsAtAsync(week, Cancel))))];
+        ProgrammeCopy[] copies = [.. await Task.WhenAll(weeks.Select(async week => ProgrammeCopy.Of(week, await ProgrammeEnds.EndsAtAsync(week, Cancel))))];
         ProgrammeCopy[] unended = [.. weeks.Select(week => ProgrammeCopy.Of(week, null))];
         CatalogEntryId entry = CatalogEntryId.New();
 
@@ -136,17 +105,6 @@ public sealed class LearningWorklistTests
 
         return recording;
     }
-
-    private static Programme Announced(Recording recording, DateTime endsAt)
-        => Programme.Rehydrate(
-            new ProgrammeId(recording.NetworkId, recording.ServiceId, recording.EventId),
-            new TransportStreamId(32736),
-            recording.ProgrammeStartsAt,
-            endsAt,
-            "A programme",
-            string.Empty,
-            false,
-            Now);
 
     private sealed class KeptRecordings : IRecordingRepository
     {

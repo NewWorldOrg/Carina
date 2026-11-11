@@ -49,11 +49,11 @@ public sealed class RecordingFenceRuleTests
     {
         Assert.Equal(
             [
+                "/Carina.Domain/Recordings/ProgrammeEndDomainService.cs",
                 "/Carina.Infrastructure/Recordings/OrphanRecoveryService.cs",
                 "/Carina.Infrastructure/Recordings/ProgramExtensionFollower.cs",
                 "/Carina.Infrastructure/Recordings/RecordingRetries.cs",
                 "/Carina.Infrastructure/Recordings/RecordingRound.cs",
-                "/Carina.Infrastructure/Segments/LearningWorklist.cs",
             ],
             RecordingFenceRules.HoldersOfTheReadOnlyGuidePort(RepositoryLayout.SourceDirectory));
     }
