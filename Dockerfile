@@ -1,4 +1,4 @@
-ARG DOTNET_VERSION=10.0
+ARG DOTNET_VERSION=11.0
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS ffmpeg-build
 ARG ARIBCAPTION_TAG=v1.1.2
