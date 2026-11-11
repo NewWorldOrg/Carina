@@ -30,6 +30,13 @@ public sealed class ShelfFound(IShelf? shelf)
     public IShelf? Shelf { get; } = shelf;
 }
 
+public sealed class ShelfKeeper(IShelf shelf)
+{
+    public IShelf Shelf { get; } = shelf;
+}
+
+public sealed record ShelfHeld(IShelf Shelf);
+
 public sealed class Tally(IReadOnlyList<int> counts)
 {
     public int Count => counts.Count;

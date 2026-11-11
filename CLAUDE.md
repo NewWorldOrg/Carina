@@ -412,9 +412,9 @@ The first five bullets are checked by reflection in `tests/Carina.Conventions.Te
 which is kept apart from `Carina.Architecture.Tests` so that the latter can go on
 referencing no production assembly. `DomainServiceRuleTests` there holds the
 shape of a domain service: a class of the domain that takes a domain interface or
-`TimeProvider` through its constructor is one, unless it hands that interface on
-through a public property as a streaming outcome does, and no type outside the
-domain carries the name.
+`TimeProvider` through its constructor is one, except the outcomes that carry a
+live stream, a transcoder seat or a socket back to their caller, which the rule
+lists by type, and no type outside the domain carries the name.
 
 ## Tests
 

@@ -16,7 +16,19 @@ public sealed class DomainServiceRuleTests
     [Fact(DisplayName = "a class of the domain that takes a repository or the clock through its constructor is a domain service")]
     public void ADomainClassThatTakesAPortIsADomainService()
     {
-        Assert.Empty(DomainServiceRules.DomainClassesTakingAPortUnderAnotherName(ProductionTypes, DomainServiceRules.Domain));
+        Assert.Empty(DomainServiceRules.DomainClassesTakingAPortUnderAnotherName(
+            ProductionTypes,
+            DomainServiceRules.Domain,
+            DomainServiceRules.OutcomesHoldingAHandle));
+    }
+
+    [Fact(DisplayName = "every outcome let off for holding a handle still takes one, so the list holds nothing it no longer needs")]
+    public void EveryListedOutcomeStillTakesAHandle()
+    {
+        Assert.Empty(DomainServiceRules.ListedOutcomesTakingNoPort(
+            ProductionTypes,
+            DomainServiceRules.Domain,
+            DomainServiceRules.OutcomesHoldingAHandle));
     }
 
     [Fact(DisplayName = "neither the application services nor the infrastructure declare a domain service")]

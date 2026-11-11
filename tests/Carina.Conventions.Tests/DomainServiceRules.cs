@@ -1,6 +1,9 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
+using Carina.Domain.DataBroadcast;
+using Carina.Domain.Streaming;
+
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -11,16 +14,29 @@ namespace Carina.Conventions.Tests;
 /// domain service: a sealed, non-static class of the domain whose name ends in <see cref="Suffix"/>, which
 /// takes only interfaces the domain declares, and <see cref="TimeProvider"/>, through its constructor. The
 /// domain is the namespace handed in and every namespace under it. A class of the domain that takes such a
-/// dependency under another name is reported, unless it hands that dependency on through a public property of
-/// its type, as an outcome carrying a live stream or a socket does; a type of that name outside the domain or
-/// of another shape is reported too. The source rule reads every declaration whose name ends in <see cref="Suffix"/> and reports one
-/// outside the domain's folder or in a file not named after it; generated migrations are left alone.
+/// dependency under another name is reported unless <see cref="OutcomesHoldingAHandle"/> lists it: an
+/// outcome that carries a live stream, a transcoder seat or a socket back to its caller. A type of that name
+/// outside the domain or of another shape is reported too. The source rule reads every declaration whose
+/// name ends in <see cref="Suffix"/> and reports one outside the domain's folder or in a file not named
+/// after it; generated migrations are left alone.
 /// </summary>
 public static class DomainServiceRules
 {
     public const string Suffix = "DomainService";
 
     public const string Domain = "Carina.Domain";
+
+    public static readonly IReadOnlyList<Type> OutcomesHoldingAHandle =
+    [
+        typeof(RelayedSocket),
+        typeof(IssuedHlsKey),
+        typeof(LiveHandover),
+        typeof(LiveJoin),
+        typeof(LiveSupplyStart),
+        typeof(LiveTranscoderStart),
+        typeof(OnTheFlyStart),
+        typeof(TranscodeClaim),
+    ];
 
     public static IReadOnlyList<string> DomainServices(IEnumerable<Type> types, string domain)
         => types
@@ -29,10 +45,22 @@ public static class DomainServiceRules
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-    public static IReadOnlyList<string> DomainClassesTakingAPortUnderAnotherName(IEnumerable<Type> types, string domain)
-        => types
-            .Where(type => type.IsClass && IsIn(type, domain) && !IsGenerated(type) && !IsNamedADomainService(type))
-            .Where(type => Parameters(type).Any(parameter => IsAPort(parameter.ParameterType, domain) && !HandsOn(type, parameter.ParameterType)))
+    public static IReadOnlyList<string> DomainClassesTakingAPortUnderAnotherName(
+        IEnumerable<Type> types,
+        string domain,
+        IReadOnlyCollection<Type> outcomes)
+        => TakingAPort(types, domain)
+            .Where(type => !IsNamedADomainService(type) && !outcomes.Contains(type))
+            .Select(type => type.FullName!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    public static IReadOnlyList<string> ListedOutcomesTakingNoPort(
+        IEnumerable<Type> types,
+        string domain,
+        IReadOnlyCollection<Type> outcomes)
+        => outcomes
+            .Except(TakingAPort(types, domain))
             .Select(type => type.FullName!)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -91,8 +119,10 @@ public static class DomainServiceRules
             .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
             .SelectMany(constructor => constructor.GetParameters());
 
-    private static bool HandsOn(Type type, Type held)
-        => type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Any(property => property.PropertyType == held);
+    private static IEnumerable<Type> TakingAPort(IEnumerable<Type> types, string domain)
+        => types
+            .Where(type => type.IsClass && IsIn(type, domain) && !IsGenerated(type))
+            .Where(type => Parameters(type).Any(parameter => IsAPort(parameter.ParameterType, domain)));
 
     private static bool IsAPort(Type type, string domain)
         => type == typeof(TimeProvider) || (type.IsInterface && IsIn(type, domain));

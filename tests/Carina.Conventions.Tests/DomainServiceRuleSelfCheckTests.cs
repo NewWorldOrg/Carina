@@ -15,6 +15,8 @@ public sealed class DomainServiceRuleSelfCheckTests
         typeof(ShelfReader),
         typeof(Clocked),
         typeof(ShelfFound),
+        typeof(ShelfKeeper),
+        typeof(ShelfHeld),
         typeof(Tally),
         typeof(UnsealedDomainService),
         typeof(StaticDomainService),
@@ -28,7 +30,37 @@ public sealed class DomainServiceRuleSelfCheckTests
     {
         Assert.Equal(
             [typeof(Clocked).FullName!, typeof(ShelfReader).FullName!],
-            DomainServiceRules.DomainClassesTakingAPortUnderAnotherName(Fixtures, FixtureDomain));
+            DomainServiceRules.DomainClassesTakingAPortUnderAnotherName(
+                [typeof(Clocked), typeof(ShelfReader), typeof(Tally), typeof(ShelfDomainService)],
+                FixtureDomain,
+                []));
+    }
+
+    [Fact]
+    public void DetectsAClassThatTakesARepositoryAndHandsItBackOutThroughAProperty()
+    {
+        Assert.Equal(
+            [typeof(ShelfFound).FullName!, typeof(ShelfHeld).FullName!, typeof(ShelfKeeper).FullName!],
+            DomainServiceRules.DomainClassesTakingAPortUnderAnotherName(
+                [typeof(ShelfFound), typeof(ShelfKeeper), typeof(ShelfHeld)],
+                FixtureDomain,
+                []));
+    }
+
+    [Fact]
+    public void LetsOffOnlyTheOutcomesItIsHanded()
+    {
+        Assert.Equal(
+            [typeof(Clocked).FullName!, typeof(ShelfHeld).FullName!, typeof(ShelfKeeper).FullName!, typeof(ShelfReader).FullName!],
+            DomainServiceRules.DomainClassesTakingAPortUnderAnotherName(Fixtures, FixtureDomain, [typeof(ShelfFound)]));
+    }
+
+    [Fact]
+    public void DetectsAListedOutcomeThatNoLongerTakesAHandle()
+    {
+        Assert.Equal(
+            [typeof(Tally).FullName!],
+            DomainServiceRules.ListedOutcomesTakingNoPort(Fixtures, FixtureDomain, [typeof(ShelfFound), typeof(Tally)]));
     }
 
     [Fact]
