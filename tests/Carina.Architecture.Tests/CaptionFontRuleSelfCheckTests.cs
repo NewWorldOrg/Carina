@@ -3,7 +3,7 @@ namespace Carina.Architecture.Tests;
 public sealed class CaptionFontRuleSelfCheckTests
 {
     private const string Sound = """
-        FROM mcr.microsoft.com/dotnet/sdk:10.0 AS denpa-font
+        FROM mcr.microsoft.com/dotnet/sdk:11.0 AS denpa-font
         ARG DENPA_FONT_VERSION=v3.2
         ARG DENPA_FONT_SHA256=c20f77bdad691223c50c43609df4b4e87916bfdc7d29fe7c4690f2fd6e72414c
         RUN curl -fsSLO "https://github.com/NewWorldOrg/denpa-font/releases/download/${DENPA_FONT_VERSION}/denpa-font.ttf" \
@@ -12,12 +12,12 @@ public sealed class CaptionFontRuleSelfCheckTests
             && echo "${DENPA_FONT_SHA256}  denpa-font.ttf" | sha256sum -c - \
             && cp denpa-font.ttf /out/fonts/denpa-font/
 
-        FROM mcr.microsoft.com/dotnet/sdk:10.0 AS develop
+        FROM mcr.microsoft.com/dotnet/sdk:11.0 AS develop
         COPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/
         RUN apt-get install -y fontconfig fonts-noto-cjk \
             && fc-cache -f
 
-        FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime-base
+        FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS runtime-base
 
         FROM runtime-base AS runtime
         COPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/
@@ -98,8 +98,8 @@ public sealed class CaptionFontRuleSelfCheckTests
     public void DetectsAStageWithoutTheFallbackFace()
     {
         string dockerfile = Sound.Replace(
-            "FROM mcr.microsoft.com/dotnet/sdk:10.0 AS develop\nCOPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/\nRUN apt-get install -y fontconfig fonts-noto-cjk \\",
-            "FROM mcr.microsoft.com/dotnet/sdk:10.0 AS develop\nCOPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/\nRUN apt-get install -y fontconfig \\",
+            "FROM mcr.microsoft.com/dotnet/sdk:11.0 AS develop\nCOPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/\nRUN apt-get install -y fontconfig fonts-noto-cjk \\",
+            "FROM mcr.microsoft.com/dotnet/sdk:11.0 AS develop\nCOPY --from=denpa-font /out/fonts/ /usr/local/share/fonts/\nRUN apt-get install -y fontconfig \\",
             StringComparison.Ordinal);
 
         Assert.Equal(["develop: the fallback face's package is not installed."], CaptionFontRules.Violations(dockerfile));
