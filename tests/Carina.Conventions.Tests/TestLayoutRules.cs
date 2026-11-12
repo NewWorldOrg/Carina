@@ -40,7 +40,6 @@ public static class TestLayoutRules
         "Machines",
         "Migration",
         "Net",
-        "Notifications",
         "Persistence",
         "Playback",
         "Programmes",
@@ -75,6 +74,12 @@ public static class TestLayoutRules
         new("Auth", "src/Carina.Db/Migrations/20260929160610_TheClientSecretIsSealed.cs"),
         new("Auth", "src/Carina.Infrastructure/Configuration/AuthOptions.cs"),
         new("Auth", "src/Carina.Infrastructure/Persistence/Repositories/OidcSettingsRepository.cs"),
+        new("Notifications", "src/Carina.Api/Requests/NotificationRequests.cs"),
+        new("Notifications", "src/Carina.Api/Services/NotificationDestinationService.cs"),
+        new("Notifications", "src/Carina.Api/Services/NotificationPushService.cs"),
+        new("Notifications", "src/Carina.Api/Services/NotificationRuleService.cs"),
+        new("Notifications", "src/Carina.Db/Migrations/20261110182416_AProgrammeCanBeWatchedWithoutBeingRecorded.cs"),
+        new("Notifications", "src/Carina.Db/Migrations/20261112182442_ANoticeCanBeSentToABrowser.cs"),
     ];
 
     /// <summary>
@@ -259,7 +264,11 @@ public static class TestLayoutRules
 
     public static IReadOnlyList<string> SubjectsBuiltByHand(Reading reading)
         => Offences(
-            InTheLayout(reading).Where(file => file.Seat.Place! is { Kind: DbIntegration, Subject: Subject.DomainPort or Subject.AppService }),
+            InTheLayout(reading).Where(file => file.Seat.Place! is
+            {
+                Kind: DbIntegration,
+                Subject: Subject.DomainPort or Subject.AppService or Subject.InfrastructureType,
+            }),
             HandBuilding);
 
     public static IReadOnlyList<string> ClassesLeftInTheOldPlace(
@@ -376,6 +385,7 @@ public static class TestLayoutRules
             .Where(file => file.Seat.Standing == Standing.InAnOldFolder)
             .Select(file => file.Seat.Area)
             .Concat(flat.SelectMany(file => file.Classes.SelectMany(type => AreasOf(reading, SubjectOf(type.Name), listed))))
+            .Concat(flat.SelectMany(ImportedAreas))
             .Concat(reading.Routes
                 .Where(route => flat.Any(file => IsAnOldFeatureTest(file) && file.ApiPaths.Any(path => Reaches(path, route.Template))))
                 .Select(route => route.Area));
@@ -503,7 +513,8 @@ public static class TestLayoutRules
         string subject = SubjectOf(type.Name);
         string taken = file.Seat.Place!.Subject == Subject.DomainPort ? PortOf(subject) : subject;
 
-        if (!file.Resolved.Contains(taken))
+        if (!file.Resolved.Contains(taken)
+            && !(file.Seat.Place!.Subject == Subject.InfrastructureType && file.Composed.Contains(taken)))
         {
             yield return $"does not take {taken} from the container";
         }
@@ -542,6 +553,10 @@ public static class TestLayoutRules
             .Where(area => !notYetMoved.Contains(area))
             .Order(StringComparer.Ordinal)
             .Select(area => $"is named after a type of {area}, which has moved")
+            .Concat(ImportedAreas(file)
+                .Where(area => !notYetMoved.Contains(area))
+                .Order(StringComparer.Ordinal)
+                .Select(area => $"imports the tests of {area}, which has moved"))
             .Concat(SpeaksOnlyToMovedAreas(reading, file, notYetMoved) ? ["speaks only to routes of areas that have moved"] : [])
             .Concat(HasANamesakeInTheLayout(reading, file, type) ? ["has a namesake in the layout"] : []);
     }
@@ -565,6 +580,26 @@ public static class TestLayoutRules
             ["", "src", "Carina.Api", "Controllers", string area, _, ..] => area,
             _ => string.Empty,
         };
+
+    private static bool IsAHostedServiceFromTheContainer(GenericNameSyntax name)
+        => name.Identifier.ValueText == "OfType"
+           && name.Parent is MemberAccessExpressionSyntax { Expression: InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax hosted } } }
+           && hosted.Identifier.ValueText == "GetServices"
+           && hosted.TypeArgumentList.Arguments is [TypeSyntax service]
+           && Simple(service) == "IHostedService";
+
+    private static bool IsCalledWithTheProviderAlone(GenericNameSyntax name)
+        => (name.Parent is MemberAccessExpressionSyntax access && access.Name == name ? access.Parent : name.Parent)
+            is InvocationExpressionSyntax { ArgumentList.Arguments.Count: 1 };
+
+    private static IEnumerable<string> ImportedAreas(TestFile file)
+        => file.Imports
+            .Select(space => space.Split('.'))
+            .Where(segments => segments.Length > 3)
+            .Select(segments => SeatOf(string.Join('.', segments[..3]), segments[3..]))
+            .Where(seat => seat.Standing == Standing.InTheLayout)
+            .Select(seat => seat.Area)
+            .Distinct(StringComparer.Ordinal);
 
     private static bool SpeaksOnlyToMovedAreas(Reading reading, TestFile file, IReadOnlyCollection<string> notYetMoved)
         => IsAnOldFeatureTest(file)
@@ -652,8 +687,19 @@ public static class TestLayoutRules
             file.Root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? string.Empty,
             file.Root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(HoldsATest).Select(TestClassOf).ToArray(),
             Identifiers(file.Root).ToHashSet(StringComparer.Ordinal),
+            file.Root.DescendantNodes().OfType<UsingDirectiveSyntax>()
+                .Where(directive => directive.Alias is null && directive.StaticKeyword.IsKind(SyntaxKind.None) && directive.Name is not null)
+                .Select(directive => directive.Name!.ToString())
+                .ToHashSet(StringComparer.Ordinal),
             file.Root.DescendantNodes().OfType<GenericNameSyntax>()
-                .Where(name => name.Identifier.ValueText == "GetRequiredService" && name.TypeArgumentList.Arguments.Count == 1)
+                .Where(name => name.TypeArgumentList.Arguments.Count == 1
+                               && (name.Identifier.ValueText == "GetRequiredService" || IsAHostedServiceFromTheContainer(name)))
+                .Select(name => Simple(name.TypeArgumentList.Arguments[0]))
+                .ToHashSet(StringComparer.Ordinal),
+            file.Root.DescendantNodes().OfType<GenericNameSyntax>()
+                .Where(name => name.Identifier.ValueText == "CreateInstance"
+                               && name.TypeArgumentList.Arguments.Count == 1
+                               && IsCalledWithTheProviderAlone(name))
                 .Select(name => Simple(name.TypeArgumentList.Arguments[0]))
                 .ToHashSet(StringComparer.Ordinal),
             file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().Select(Created).ToHashSet(StringComparer.Ordinal),
@@ -891,7 +937,9 @@ public static class TestLayoutRules
         string Namespace,
         IReadOnlyList<TestClass> Classes,
         IReadOnlySet<string> Identifiers,
+        IReadOnlySet<string> Imports,
         IReadOnlySet<string> Resolved,
+        IReadOnlySet<string> Composed,
         IReadOnlySet<string> Created,
         IReadOnlyList<string> ApiPaths);
 

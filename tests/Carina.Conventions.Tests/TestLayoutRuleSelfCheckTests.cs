@@ -760,6 +760,51 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAnInfrastructureTypeBuiltByHandOverADatabase()
+    {
+        using SourceTree tree = new();
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs",
+            TestLayoutRules.DbIntegration,
+            "LocalAccountBootstrap bootstrap = new LocalAccountBootstrap(accounts);");
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs:4 LocalAccountBootstrapTests builds LocalAccountBootstrap by hand",
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs:4 LocalAccountBootstrapTests does not take LocalAccountBootstrap from the container",
+            ],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void DetectsAnInfrastructureTypeComposedWithStandInsHandedOverByHand()
+    {
+        using SourceTree tree = new();
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs",
+            TestLayoutRules.DbIntegration,
+            "OidcSettingsRepository settings = ActivatorUtilities.CreateInstance<OidcSettingsRepository>(scope.ServiceProvider, standIn);");
+
+        Assert.Equal(
+            ["/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs:4 OidcSettingsRepositoryTests does not take OidcSettingsRepository from the container"],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void DetectsADomainServiceComposedRatherThanTakenFromTheContainer()
+    {
+        using SourceTree tree = new();
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Domain/Auth/SessionExpiryDomainServiceTests.cs",
+            TestLayoutRules.DbIntegration,
+            "SessionExpiryDomainService service = ActivatorUtilities.CreateInstance<SessionExpiryDomainService>(services);");
+
+        Assert.Equal(
+            ["/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionExpiryDomainServiceTests.cs:4 SessionExpiryDomainServiceTests does not take SessionExpiryDomainService from the container"],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
     public void LetsOffASubjectTakenFromTheContainerAndASubjectBuiltByHandWhereNoContainerIsAsked()
     {
         using SourceTree tree = new();
@@ -780,8 +825,20 @@ public sealed class TestLayoutRuleSelfCheckTests
             TestLayoutRules.Unit,
             "AuthSessionService service = new(sessions);");
         tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs",
+            TestLayoutRules.DbIntegration,
+            "OidcSettingsRepository settings = ActivatorUtilities.CreateInstance<OidcSettingsRepository>(scope.ServiceProvider);");
+        tree.Test(
             $"{InfrastructureTests}/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs",
             TestLayoutRules.DbIntegration,
+            "LocalAccountBootstrap bootstrap = services.GetServices<IHostedService>().OfType<LocalAccountBootstrap>().Single();");
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/AuthUpkeepJobTests.cs",
+            TestLayoutRules.DbIntegration,
+            "AuthUpkeepJob job = scope.ServiceProvider.GetRequiredService<AuthUpkeepJob>();");
+        tree.Test(
+            $"{InfrastructureTests}/Unit/Infra/Auth/LocalAccountBootstrapTests.cs",
+            TestLayoutRules.Unit,
             "LocalAccountBootstrap bootstrap = new LocalAccountBootstrap(accounts);");
         tree.Test(
             $"{InfrastructureTests}/Auth/AuthSessionRepositoryTests.cs",
@@ -866,6 +923,24 @@ public sealed class TestLayoutRuleSelfCheckTests
 
         Assert.Equal(
             ["/tests/Carina.Api.Tests/FeatureTest/SignInJourneyTests.cs:4 SignInJourneyTests speaks only to routes of areas that have moved"],
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void DetectsAnOldTestThatImportsTheTestsOfAnAreaThatHasMoved()
+    {
+        using SourceTree tree = new();
+        DeclareAuthAndRecordings(tree);
+        tree.Write(
+            $"{ApiTests}/FeatureTest/PushRoundTests.cs",
+            "using Carina.Api.Tests.Feature.Auth;\n\n" + Source("Carina.Api.Tests.FeatureTest", "PushRoundTests", TestLayoutRules.Feature));
+        tree.Write(
+            $"{ApiTests}/FeatureTest/RecordingRoundTests.cs",
+            "using Carina.Api.Tests.Feature.Recordings;\nusing Carina.Infrastructure.Tests.Auth;\n\n"
+            + Source("Carina.Api.Tests.FeatureTest", "RecordingRoundTests", TestLayoutRules.Feature));
+
+        Assert.Equal(
+            ["/tests/Carina.Api.Tests/FeatureTest/PushRoundTests.cs:6 PushRoundTests imports the tests of Auth, which has moved"],
             TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }
 

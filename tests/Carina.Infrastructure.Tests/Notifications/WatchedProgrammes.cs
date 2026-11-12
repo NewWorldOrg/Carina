@@ -1,11 +1,8 @@
-using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
-using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
-using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -84,28 +81,6 @@ internal sealed class WatchedProgrammes(RepositoryDatabase database)
         await new ProgrammeWatchRepository(context).AddAsync(watch, Cancel);
 
         return watch.Id;
-    }
-
-    public async Task<NotificationIntake> LookAsync(
-        DateTime now,
-        Func<INoticeRepository, INoticeRepository>? notices = null,
-        ILogger<ProgrammeWatchRound>? logger = null)
-    {
-        await using CarinaDbContext context = database.Open();
-        NoticeRepository held = new(context);
-        ProgrammeWatchRound round = new(
-            new ProgrammeWatchRepository(context),
-            new ProgrammeRepository(context),
-            new BroadcastServiceRepository(context),
-            notices is null ? held : notices(held),
-            new NotificationRuleRepository(context),
-            new NotificationDestinationRepository(context),
-            new DatabaseAtomicWrite(context),
-            NoticeLinkBase.None,
-            new HandTurnedClock(new DateTimeOffset(now)),
-            logger ?? NullLogger<ProgrammeWatchRound>.Instance);
-
-        return await round.TakeAsync(Cancel);
     }
 
     public async Task WithdrawnAsync(ProgrammeWatchId id, DateTime at)

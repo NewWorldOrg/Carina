@@ -5,6 +5,8 @@ using Carina.Infrastructure.Tests.Auth;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Auth;
 
@@ -14,7 +16,8 @@ public sealed class LocalAccountBootstrapTests(RepositoryDatabase database) : IA
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    private readonly ServiceProvider services = database.Infrastructure();
+    private readonly ServiceProvider services = database.Infrastructure(
+        replace => replace.AddSingleton<ILogger<LocalAccountBootstrap>, RecordedLog>());
 
     public Task InitializeAsync() => Task.CompletedTask;
 
@@ -23,13 +26,13 @@ public sealed class LocalAccountBootstrapTests(RepositoryDatabase database) : IA
     [Fact]
     public async Task TheBootstrapFindsTheAccountItAlreadyMadeAndLeavesItAlone()
     {
-        var log = new RecordedLog();
+        RecordedLog log = Assert.IsType<RecordedLog>(services.GetRequiredService<ILogger<LocalAccountBootstrap>>());
 
         await ClearAsync();
 
         await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            await EnsureAsync(log, writing);
+            await EnsureAsync(writing);
         }
 
         string first;
@@ -41,7 +44,7 @@ public sealed class LocalAccountBootstrapTests(RepositoryDatabase database) : IA
 
         await using (AsyncServiceScope again = services.CreateAsyncScope())
         {
-            await EnsureAsync(log, again);
+            await EnsureAsync(again);
         }
 
         await using AsyncServiceScope after = services.CreateAsyncScope();
@@ -51,11 +54,8 @@ public sealed class LocalAccountBootstrapTests(RepositoryDatabase database) : IA
         Assert.Single(log.Lines);
     }
 
-    private Task EnsureAsync(RecordedLog log, AsyncServiceScope scope)
-        => new LocalAccountBootstrap(
-                services.GetRequiredService<IServiceScopeFactory>(),
-                services.GetRequiredService<PasswordHashPolicy>(),
-                log)
+    private Task EnsureAsync(AsyncServiceScope scope)
+        => services.GetServices<IHostedService>().OfType<LocalAccountBootstrap>().Single()
             .EnsureAnAccountExistsAsync(
                 scope.ServiceProvider.GetRequiredService<LocalAccountProvisioningDomainService>(),
                 Accounts(scope),
