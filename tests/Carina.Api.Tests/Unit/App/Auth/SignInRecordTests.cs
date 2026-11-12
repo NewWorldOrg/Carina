@@ -8,8 +8,9 @@ using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.Logging;
 using Microsoft.Net.Http.Headers;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class SignInRecordTests
 {
     private const string Tablet =

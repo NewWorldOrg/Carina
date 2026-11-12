@@ -8,8 +8,9 @@ using Carina.TestSupport;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class PlaybackTicketGateTests
 {
     private const string TheContent = "the recording itself";
@@ -21,6 +22,10 @@ public sealed class PlaybackTicketGateTests
     private static readonly PlaybackTarget Seven = PlaybackTarget.Recording("7");
 
     private static readonly PlaybackTarget Eight = PlaybackTarget.Recording("8");
+
+    private static readonly PlaybackTarget Tokyo = PlaybackTarget.LiveChannel("32736-1024");
+
+    private static readonly PlaybackTarget Education = PlaybackTarget.LiveChannel("32737-1032");
 
     [Fact]
     public async Task ATicketForThisRecordingReachesItAndSaysWhoIsWatching()
@@ -149,6 +154,131 @@ public sealed class PlaybackTicketGateTests
         Assert.False(served.Headers.ContainsKey(HeaderNames.WWWAuthenticate));
     }
 
+    [Fact]
+    public async Task APlayerThatComesBackForEveryRangeIsAdmittedOnTheGrantEnteringOpened()
+    {
+        Gate gate = Made(out _);
+        string carrier = gate.Issue(Watcher, Seven);
+
+        Assert.Equal(StatusCodes.Status200OK, await gate.EnterAsync(carrier, Seven));
+
+        foreach (int again in Enumerable.Range(0, 20))
+        {
+            Assert.Equal(StatusCodes.Status200OK, await gate.EnterAsync(carrier, Seven));
+        }
+    }
+
+    [Fact]
+    public async Task TheTicketItselfIsSpentByTheFirstRequestSoItOpensNothingElse()
+    {
+        Gate gate = Made(out _);
+        string carrier = gate.Issue(Watcher, Seven);
+
+        await gate.EnterAsync(carrier, Seven);
+
+        Assert.Null(gate.Tickets.Take(carrier, Seven));
+    }
+
+    [Fact]
+    public async Task TheGrantIsShutInOnTheOneRecordingItWasOpenedFor()
+    {
+        Gate gate = Made(out _);
+        string carrier = gate.Issue(Watcher, Seven);
+
+        await gate.EnterAsync(carrier, Seven);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Eight));
+    }
+
+    [Fact]
+    public async Task TheGrantStopsAdmittingWhenItsTwoHoursAreUpAndTheTicketCannotOpenAnother()
+    {
+        Gate gate = Made(out WoundClock clock);
+        string carrier = gate.Issue(Watcher, Seven);
+
+        await gate.EnterAsync(carrier, Seven);
+        clock.Wind(PlaybackGrantPolicy.Default.Lifetime);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Seven));
+    }
+
+    [Fact]
+    public async Task ATicketThatLapsedBeforeItWasUsedOpensNoGrant()
+    {
+        Gate gate = Made(out WoundClock clock);
+        string carrier = gate.Issue(Watcher, Seven);
+
+        clock.Wind(PlaybackTicketPolicy.Default.Lifetime);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Seven));
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Seven));
+    }
+
+    [Fact]
+    public async Task TakingTheWatchersGrantsBackShutsTheStreamOutOfTheNextRequest()
+    {
+        Gate gate = Made(out _);
+        string carrier = gate.Issue(Watcher, Seven);
+
+        await gate.EnterAsync(carrier, Seven);
+        gate.Grants.RevokeEverythingOf(Watcher);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Seven));
+    }
+
+    [Fact]
+    public async Task APlayerThatOpensALiveChannelAgainIsAdmittedOnTheGrantEnteringOpened()
+    {
+        Gate gate = Made(out _);
+        string carrier = gate.Issue(Watcher, Tokyo);
+
+        Assert.Equal(StatusCodes.Status200OK, await gate.EnterAsync(carrier, Tokyo));
+        Assert.Equal(1, gate.Grants.Count);
+        Assert.Equal(StatusCodes.Status200OK, await gate.EnterAsync(carrier, Tokyo));
+        Assert.Null(gate.Tickets.Take(carrier, Tokyo));
+    }
+
+    [Fact]
+    public async Task AGrantOpenedForALiveChannelOpensNoOtherChannelAndNoRecording()
+    {
+        Gate gate = Made(out _);
+        string carrier = gate.Issue(Watcher, Tokyo);
+
+        await gate.EnterAsync(carrier, Tokyo);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Education));
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Seven));
+    }
+
+    [Fact]
+    public async Task AGrantOpenedForARecordingOpensNoLiveChannel()
+    {
+        Gate gate = Made(out _);
+        string carrier = gate.Issue(Watcher, Seven);
+
+        await gate.EnterAsync(carrier, Seven);
+
+        Assert.Equal(StatusCodes.Status403Forbidden, await gate.EnterAsync(carrier, Tokyo));
+    }
+
+    [Fact]
+    public async Task EveryRefusalOnTheGrantWayInReadsTheSame()
+    {
+        Gate gate = Made(out _);
+        string carrier = gate.Issue(Watcher, Eight);
+
+        List<string> refusals =
+        [
+            await gate.BodyOfAsync(null, Seven),
+            await gate.BodyOfAsync("not-a-ticket", Seven),
+            await gate.BodyOfAsync(Unguessable.Issue(), Seven),
+            await gate.BodyOfAsync(carrier, Seven),
+        ];
+
+        Assert.Single(refusals.Distinct(StringComparer.Ordinal));
+        Assert.Equal(PlaybackTicketGate.TheSameRefusalForEveryBadTicket, refusals[0]);
+    }
+
     private static HttpContext Offering(string ticket)
     {
         DefaultHttpContext context = new();
@@ -204,6 +334,13 @@ public sealed class PlaybackTicketGateTests
             body.Written,
             watcher,
             context.Response.Headers);
+    }
+
+    private static Gate Made(out WoundClock clock)
+    {
+        clock = new WoundClock(At);
+
+        return new Gate(clock);
     }
 
     private sealed record Served(
@@ -266,6 +403,65 @@ public sealed class PlaybackTicketGateTests
             Write(new ReadOnlySpan<byte>(buffer, offset, count));
 
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class Gate
+    {
+        private readonly PlaybackTicketGate gate;
+
+        internal Gate(WoundClock clock)
+        {
+            Tickets = new PlaybackTicketStore(clock, PlaybackTicketPolicy.Default);
+            Grants = new PlaybackGrantStore(clock, PlaybackGrantPolicy.Default);
+            gate = new PlaybackTicketGate(Tickets, Grants);
+        }
+
+        internal PlaybackTicketStore Tickets { get; }
+
+        internal PlaybackGrantStore Grants { get; }
+
+        internal string Issue(Subject subject, PlaybackTarget target)
+        {
+            IssuedPlaybackTicket? issued = Tickets.Issue(subject, target);
+
+            Assert.NotNull(issued);
+
+            return issued.InTheClear;
+        }
+
+        internal async Task<int> EnterAsync(string? carrier, PlaybackTarget target)
+        {
+            HttpContext context = Offering(carrier);
+
+            await gate.AdmitForAsLongAsTheGrantLastsAsync(context, target, (_, _) => Task.CompletedTask);
+
+            return context.Response.StatusCode;
+        }
+
+        internal async Task<string> BodyOfAsync(string? carrier, PlaybackTarget target)
+        {
+            HttpContext context = Offering(carrier);
+            using var written = new MemoryStream();
+
+            context.Response.Body = written;
+
+            await gate.AdmitForAsLongAsTheGrantLastsAsync(context, target, (_, _) => Task.CompletedTask);
+
+            return System.Text.Encoding.UTF8.GetString(written.ToArray());
+        }
+
+        private static HttpContext Offering(string? carrier)
+        {
+            DefaultHttpContext context = new();
+
+            if (carrier is not null)
+            {
+                context.Request.Headers[HeaderNames.Authorization] =
+                    $"Basic {Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"carina:{carrier}"))}";
+            }
+
+            return context;
         }
     }
 }

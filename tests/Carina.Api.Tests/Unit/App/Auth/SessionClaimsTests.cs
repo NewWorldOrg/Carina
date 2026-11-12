@@ -3,8 +3,9 @@ using System.Security.Claims;
 using Carina.Api.Authentication;
 using Carina.Domain.Auth;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class SessionClaimsTests
 {
     private static readonly DateTime At = new(2026, 9, 26, 9, 0, 0, DateTimeKind.Utc);

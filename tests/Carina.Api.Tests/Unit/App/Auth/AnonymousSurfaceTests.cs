@@ -2,8 +2,9 @@ using Carina.Api.Authentication;
 
 using Microsoft.Extensions.Hosting;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class AnonymousSurfaceTests
 {
     [Theory]

@@ -7,8 +7,9 @@ using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class LocalAccountServiceTests
 {
     private const string Password = "a password long enough";

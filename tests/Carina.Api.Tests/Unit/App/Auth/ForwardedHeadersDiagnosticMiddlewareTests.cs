@@ -7,8 +7,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class ForwardedHeadersDiagnosticMiddlewareTests
 {
     private const string Forwarded = "X-Forwarded-Proto";

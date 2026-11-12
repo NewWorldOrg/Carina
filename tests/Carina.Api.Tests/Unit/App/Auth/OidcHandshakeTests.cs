@@ -3,8 +3,9 @@ using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Http;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class OidcHandshakeTests
 {
     [Fact]

@@ -3,8 +3,9 @@ using Carina.Api.Authentication;
 using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.AspNetCore.Http;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class SessionCookiePolicyTests
 {
     [Fact]

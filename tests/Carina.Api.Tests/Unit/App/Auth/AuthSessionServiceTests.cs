@@ -5,8 +5,9 @@ using Carina.BroadcastTestSupport;
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class AuthSessionServiceTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

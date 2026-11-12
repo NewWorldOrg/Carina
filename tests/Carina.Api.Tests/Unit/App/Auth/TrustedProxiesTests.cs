@@ -2,8 +2,9 @@ using System.Net;
 
 using Carina.Api.Authentication;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class TrustedProxiesTests
 {
     [Fact]

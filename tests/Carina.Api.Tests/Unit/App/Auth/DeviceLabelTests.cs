@@ -1,8 +1,9 @@
 using Carina.Api.Authentication;
 using Carina.Domain.Auth;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class DeviceLabelTests
 {
     [Fact]
