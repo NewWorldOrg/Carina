@@ -3,8 +3,9 @@ using Carina.Db.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.Unit.Infra.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class AuthenticationMigrationTests
 {
     private static readonly IReadOnlyList<MigrationOperation> Up =

@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Auth;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]

@@ -6,11 +6,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Auth;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ClientSecretSealMigrationTests
+public sealed class TheClientSecretIsSealedMigrationTests
 {
     private const string ScratchDatabase = "carina_client_secret_seal_test";
 

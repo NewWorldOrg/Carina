@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Auth;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class SessionDisplayNameTests
+public sealed class SessionDisplayNameMigrationTests
 {
     private const string ScratchDatabase = "carina_session_display_name_test";
 

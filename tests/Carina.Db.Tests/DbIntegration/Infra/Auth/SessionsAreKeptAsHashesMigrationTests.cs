@@ -4,20 +4,22 @@ using System.Security.Cryptography;
 using System.Text;
 
 using Carina.Domain.Auth;
+using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Auth;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class SessionHandleKeyTests
+public sealed class SessionsAreKeptAsHashesMigrationTests
 {
     private const string ScratchDatabase = "carina_session_handle_key_test";
 
@@ -76,8 +78,14 @@ public sealed class SessionHandleKeyTests
             await migrating.GetService<IMigrator>().MigrateAsync(TheHash, Cancel);
         }
 
-        await using CarinaDbContext reading = CarinaDbContextFactory.Create(Scratch());
-        var sessions = new AuthSessionRepository(reading);
+        await using ServiceProvider services = new ServiceCollection()
+            .AddLogging()
+            .AddCarinaInfrastructure(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Carina"] = Scratch() })
+                .Build())
+            .BuildServiceProvider();
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        IAuthSessionRepository sessions = reading.ServiceProvider.GetRequiredService<IAuthSessionRepository>();
 
         foreach (SessionId cookie in Carried)
         {
