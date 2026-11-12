@@ -10,6 +10,27 @@ public sealed record NotificationDestinationRetirement(
     IReadOnlyList<ProgrammeWatch> NoLongerTelling);
 
 /// <summary>
+/// The browser a subscription was registered for: the row added, with the set of rules made with the first
+/// destination, or the row already held under the same endpoint, which took the subscription.
+/// </summary>
+public sealed record PushEnrolment(NotificationDestination Destination, bool Added, NotificationRule? Usual);
+
+/// <summary>
+/// Why a browser does not take another subscription.
+/// </summary>
+public enum PushReplacementRefusal
+{
+    NoSuchBrowser = 1,
+
+    HeldByAnother = 2,
+}
+
+/// <summary>
+/// The browser that took another subscription, or why it did not.
+/// </summary>
+public sealed record PushReplacement(NotificationDestination? Destination, PushReplacementRefusal? Refusal);
+
+/// <summary>
 /// Decides what a destination registered, turned off or removed means for the sets of rules, the deliveries that wait
 /// and the programmes asked to be told of, looking each of them up.
 /// </summary>
@@ -33,6 +54,72 @@ public sealed class NotificationDestinationDomainService(
         return heldDestinations.Count is 0 && heldRules.Count is 0
             ? NotificationRule.Usual(NotificationRuleId.New(), registered.Id, registered.CreatedAt)
             : null;
+    }
+
+    /// <summary>
+    /// Registers a browser by its subscription. A browser already held under the same endpoint takes the
+    /// subscription and stays one row, with its name, whether it is turned on and the sets of rules that send to it
+    /// as they were.
+    /// </summary>
+    public async Task<PushEnrolment> EnrolAsync(
+        NotificationName name,
+        PushSubscription subscription,
+        byte[] sealedSubscription,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(subscription);
+
+        NotificationDestination? held = await destinations.FindByEndpointHashAsync(subscription.Fingerprint, cancellationToken);
+
+        if (held is not null)
+        {
+            held.Resubscribe(subscription, sealedSubscription, at);
+
+            return new PushEnrolment(held, false, null);
+        }
+
+        NotificationDestination added = NotificationDestination.Subscribe(
+            NotificationDestinationId.New(),
+            name,
+            subscription,
+            sealedSubscription,
+            at);
+
+        return new PushEnrolment(added, true, await UsualRuleForAsync(added, cancellationToken));
+    }
+
+    /// <summary>
+    /// Gives the browser of this row another subscription, unless another row is held under the same endpoint.
+    /// </summary>
+    public async Task<PushReplacement> ReplaceAsync(
+        NotificationDestinationId id,
+        PushSubscription subscription,
+        byte[] sealedSubscription,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(subscription);
+
+        NotificationDestination? held = await destinations.FindAsync(id, cancellationToken);
+
+        if (held is not { Target: WebhookTarget.Push })
+        {
+            return new PushReplacement(null, PushReplacementRefusal.NoSuchBrowser);
+        }
+
+        NotificationDestination? other = await destinations.FindByEndpointHashAsync(subscription.Fingerprint, cancellationToken);
+
+        if (other is not null && !other.Id.Equals(id))
+        {
+            return new PushReplacement(null, PushReplacementRefusal.HeldByAnother);
+        }
+
+        held.Resubscribe(subscription, sealedSubscription, at);
+
+        return new PushReplacement(held, null);
     }
 
     /// <summary>

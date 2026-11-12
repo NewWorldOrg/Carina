@@ -73,6 +73,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<QualityCandidateScoreService>();
         services.AddScoped<MigrationRecordService>();
         services.AddScoped<NotificationDestinationService>();
+        services.AddScoped<NotificationPushService>();
         services.AddScoped<NotificationRuleService>();
         services.AddScoped<NotificationWatchService>();
         services.AddScoped<NotificationDeliveryService>();

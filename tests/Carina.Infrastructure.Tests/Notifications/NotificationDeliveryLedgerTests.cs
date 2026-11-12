@@ -146,7 +146,8 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
     {
         await ledgers.EmptyTheNoticesAsync();
         await using WebhookRig rig = new(_ => CannedAnswer.Text(200, "ok"));
-        WebhookUrlSeal seal = new(new EphemeralDataProtectionProvider());
+        EphemeralDataProtectionProvider keys = new();
+        WebhookUrlSeal seal = new(keys);
         NotificationDestination destination = NotificationDestination.Register(
             NotificationDestinationId.New(),
             new NotificationName("Somewhere"),
@@ -164,6 +165,7 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
         NotificationDeliveryId second = await HeldAsync(destination.Id, Epoch.AddMinutes(-1));
         NotificationDeliverySettings settings = new();
         HandTurnedClock clock = new(new DateTimeOffset(Epoch));
+        using PushDesk push = new(keys, clock);
 
         NotificationDeliveries moved;
         await using (CarinaDbContext passing = database.Open())
@@ -173,6 +175,9 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
                 new NotificationDestinationRepository(passing),
                 new NotificationDeliveryDomainService(),
                 seal,
+                push.Seal,
+                push.Messages,
+                push.Handling,
                 new NoticeDispatch(rig.Line, settings, clock),
                 new UnwrittenDeliveries(),
                 settings,
@@ -210,7 +215,8 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
 
             return CannedAnswer.Text(200, "ok");
         });
-        WebhookUrlSeal seal = new(new EphemeralDataProtectionProvider());
+        EphemeralDataProtectionProvider keys = new();
+        WebhookUrlSeal seal = new(keys);
         NotificationDestination destination = NotificationDestination.Register(
             NotificationDestinationId.New(),
             new NotificationName("Somewhere"),
@@ -229,6 +235,7 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
         removedOnTheWay = first;
         NotificationDeliverySettings settings = new();
         HandTurnedClock clock = new(new DateTimeOffset(Epoch));
+        using PushDesk push = new(keys, clock);
         UnwrittenDeliveries unwritten = new();
 
         await using (CarinaDbContext passing = database.Open())
@@ -238,6 +245,9 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
                 new NotificationDestinationRepository(passing),
                 new NotificationDeliveryDomainService(),
                 seal,
+                push.Seal,
+                push.Messages,
+                push.Handling,
                 new NoticeDispatch(rig.Line, settings, clock),
                 unwritten,
                 settings,

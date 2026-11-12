@@ -33,12 +33,17 @@ public sealed class NotificationDeliveryRound(
     INotificationDestinationRepository destinations,
     NotificationDeliveryDomainService settlement,
     WebhookUrlSeal seal,
+    PushSubscriptionSeal pushSeal,
+    PushMessages messages,
+    PushHandlingDomainService handling,
     NoticeDispatch dispatch,
     UnwrittenDeliveries unwritten,
     NotificationDeliverySettings settings,
     TimeProvider clock,
     ILogger<NotificationDeliveryRound> logger)
 {
+    private delegate Task<NoticeAnswer> Way(NoticeOnItsWay row, CancellationToken cancellationToken);
+
     public async Task<NotificationDeliveries> SendAsync(CancellationToken cancellationToken)
     {
         IReadOnlyList<NoticeOnItsWay> waiting = await deliveries.WaitingAsync(cancellationToken);
@@ -70,7 +75,7 @@ public sealed class NotificationDeliveryRound(
         IReadOnlyList<NoticeOnItsWay> bound,
         CancellationToken cancellationToken)
     {
-        WebhookUrl? webhook = await OpenedAsync(destination, cancellationToken);
+        Way? way = await OpenedAsync(destination, cancellationToken);
         NotificationDeliveries moved = NotificationDeliveries.None;
         bool resting = false;
 
@@ -85,19 +90,19 @@ public sealed class NotificationDeliveryRound(
                 continue;
             }
 
-            if (settlement.ReasonToGiveUp(row, destination, webhook is not null, now, settings.TooOldAfter) is { } reason)
+            if (settlement.ReasonToGiveUp(row, destination, way is not null, now, settings.TooOldAfter) is { } reason)
             {
                 moved = moved.With(await GiveUpAsync(row.Delivery, reason, cancellationToken));
 
                 continue;
             }
 
-            if (webhook is null || resting || !row.Delivery.IsDueAt(now) || !dispatch.HasRoomFor(destination.Id))
+            if (way is null || resting || !row.Delivery.IsDueAt(now) || !dispatch.HasRoomFor(destination.Id))
             {
                 continue;
             }
 
-            NotificationDeliveries came = await SendOneAsync(row, destination, webhook, cancellationToken);
+            NotificationDeliveries came = await SendOneAsync(row, destination, way, cancellationToken);
 
             resting = came.Failed > 0;
             moved = moved.With(came);
@@ -106,16 +111,16 @@ public sealed class NotificationDeliveryRound(
         return moved;
     }
 
-    private async Task<WebhookUrl?> OpenedAsync(NotificationDestination destination, CancellationToken cancellationToken)
+    private async Task<Way?> OpenedAsync(NotificationDestination destination, CancellationToken cancellationToken)
     {
         if (!destination.Enabled)
         {
             return null;
         }
 
-        WebhookUrl? webhook = seal.Open(destination.SealedUrl);
+        Way? way = destination.Target is WebhookTarget.Push ? ToTheBrowser(destination) : ToTheWebhook(destination);
 
-        if (webhook is null)
+        if (way is null)
         {
             destination.NoteUnreadable(Now());
             await KeepResultAsync(destination, cancellationToken);
@@ -124,7 +129,39 @@ public sealed class NotificationDeliveryRound(
                 destination.Id);
         }
 
-        return webhook;
+        return way;
+    }
+
+    private Way? ToTheWebhook(NotificationDestination destination)
+    {
+        WebhookUrl? webhook = seal.Open(destination.SealedUrl);
+
+        if (webhook is null)
+        {
+            return null;
+        }
+
+        return (row, cancellationToken) => dispatch.SendAsync(
+            destination.Id,
+            webhook,
+            NoticePayload.For(destination.Target, row.Notice),
+            cancellationToken);
+    }
+
+    private Way? ToTheBrowser(NotificationDestination destination)
+    {
+        PushSubscription? subscription = pushSeal.Open(destination.SealedUrl);
+
+        if (subscription is null || !messages.CanSign())
+        {
+            return null;
+        }
+
+        return async (row, cancellationToken) => await dispatch.SendAsync(
+            destination.Id,
+            subscription,
+            messages.Telling(subscription, row.Notice, await handling.OfAsync(row.Notice, Now(), cancellationToken)),
+            cancellationToken);
     }
 
     private async Task<NotificationDeliveries> GiveUpAsync(
@@ -195,14 +232,10 @@ public sealed class NotificationDeliveryRound(
     private async Task<NotificationDeliveries> SendOneAsync(
         NoticeOnItsWay row,
         NotificationDestination destination,
-        WebhookUrl webhook,
+        Way way,
         CancellationToken cancellationToken)
     {
-        NoticeAnswer answer = await dispatch.SendAsync(
-            destination.Id,
-            webhook,
-            NoticePayload.For(destination.Target, row.Notice),
-            cancellationToken);
+        NoticeAnswer answer = await way(row, cancellationToken);
         DateTime at = Now();
         NotificationDeliveries came = Counted(
             settlement.Settle(row.Delivery, destination, answer.Failure, answer.AddressGone, answer.Asked, at));

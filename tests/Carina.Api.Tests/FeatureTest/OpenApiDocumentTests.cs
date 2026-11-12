@@ -140,6 +140,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "createNotificationDestination",
                 "createNotificationRule",
                 "createNotificationWatch",
+                "createPushSubscription",
                 "createReservation",
                 "createRule",
                 "deleteCandidateChannel",
@@ -168,6 +169,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getOidcConfig",
                 "getProgramme",
                 "getProgrammeGuide",
+                "getPushKey",
                 "getQualitySummary",
                 "getQualitySupplyHealth",
                 "getQualityTrends",
@@ -245,6 +247,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "removeEncodeProfile",
                 "removeNotificationDestination",
                 "removeNotificationRule",
+                "replacePushSubscription",
                 "replaceRule",
                 "rerunEncodeJobs",
                 "restartDriver",
@@ -1205,6 +1208,79 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         static string[] Values(JsonNode described)
             => [.. described["enum"]!.AsArray().Select(value => value!.GetValue<string>())];
+    }
+
+    [Fact(DisplayName = "BR-NT-008: a browser is registered by a name, its endpoint and its two keys and given another subscription by the endpoint and the keys, and the key notices are signed with is read as one string")]
+    public async Task ABrowserIsRegisteredByItsNameItsEndpointAndItsTwoKeys()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+        JsonNode paths = document["paths"]!;
+
+        Assert.Equal(["name", "endpoint", "keys"], Named(schemas["CreatePushSubscriptionRequest"]!));
+        Assert.Equal(["endpoint", "keys"], Named(schemas["ReplacePushSubscriptionRequest"]!));
+        Assert.Equal(["p256dh", "auth"], Named(schemas["PushKeysRequest"]!));
+        Assert.Equal(["publicKey"], Named(schemas["PushKeyResponder"]!));
+        Assert.Equal("string", schemas["PushKeyResponder"]!["properties"]!["publicKey"]!["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["200", "401", "409", "500"],
+            Answers(paths["/api/notifications/push/key"]!["get"]!));
+        Assert.Equal(
+            ["200", "201", "400", "401", "409", "500"],
+            Answers(paths["/api/notifications/push/subscriptions"]!["post"]!));
+        Assert.Equal(
+            ["200", "400", "401", "404", "409", "500"],
+            Answers(paths["/api/notifications/push/subscriptions/{destinationId}"]!["put"]!));
+        Assert.Equal(
+            ["destinationId:path:uuid"],
+            paths["/api/notifications/push/subscriptions/{destinationId}"]!["put"]!["parameters"]!.AsArray()
+                .Select(parameter => $"{parameter!["name"]!.GetValue<string>()}:{parameter["in"]!.GetValue<string>()}:{parameter["schema"]!["format"]!.GetValue<string>()}")
+                .ToArray());
+        Assert.All(
+            (string[])["/api/notifications/push/subscriptions", "/api/notifications/push/subscriptions/{destinationId}"],
+            path => Assert.All(
+                paths[path]!.AsObject().SelectMany(operation => operation.Value!["responses"]!.AsObject())
+                    .Where(answer => answer.Value!["content"] is not null),
+                answer => Assert.Equal(
+                    "#/components/schemas/BaseResponderOfNotificationDestinationResponder",
+                    answer.Value!["content"]!["application/json"]!["schema"]!["$ref"]!.GetValue<string>())));
+
+        static string[] Named(JsonNode described)
+            => [.. described["properties"]!.AsObject().Select(entry => entry.Key)];
+
+        static string[] Answers(JsonNode operation)
+            => [.. operation["responses"]!.AsObject().Select(entry => entry.Key).Order(StringComparer.Ordinal)];
+    }
+
+    [Fact(DisplayName = "BR-NA-003: a destination is described by its kind, one of slack, discord and push, the end of what it is told apart by and the fingerprint a browser's has, and by nothing a notice is sent with")]
+    public async Task ADestinationIsDescribedByItsKindAndItsFingerprintAndByNothingANoticeIsSentWith()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode schemas = document["components"]!["schemas"]!;
+        JsonNode destination = schemas["NotificationDestinationResponder"]!;
+
+        Assert.Equal(
+            ["id", "name", "kind", "tail", "fingerprint", "enabled", "readable", "lastResultAt", "lastFailure", "createdAt", "changedAt"],
+            destination["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(
+            ["null", "string"],
+            destination["properties"]!["fingerprint"]!["type"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(
+            "#/components/schemas/WebhookTarget",
+            destination["properties"]!["kind"]!["$ref"]!.GetValue<string>());
+        Assert.Equal(
+            ["slack", "discord", "push"],
+            schemas["WebhookTarget"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.All(
+            (string[])["CreatePushSubscriptionRequest", "ReplacePushSubscriptionRequest", "PushKeysRequest", "PushKeyResponder", "NotificationDestinationResponder"],
+            described =>
+            {
+                string written = schemas[described]!.ToJsonString();
+
+                Assert.DoesNotContain("\"example", written, StringComparison.Ordinal);
+                Assert.DoesNotContain("\"default\"", written, StringComparison.Ordinal);
+                Assert.DoesNotContain("https://", written, StringComparison.Ordinal);
+            });
     }
 
     [Fact(DisplayName = "what queues a job names the recording, the profile and the destination, and says whether the artefact is to be made again")]

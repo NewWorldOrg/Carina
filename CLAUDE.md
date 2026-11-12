@@ -341,6 +341,24 @@ walks past it.
   other side answered is neither kept nor shown. **Trip wire:** an address
   copied into a plain string in one of the two files and handed on from there
   walks past.
+- **What a browser subscribed with is sealed like the address of a webhook, and
+  a notice to a browser is encrypted here.** A destination of the kind `Push`
+  holds the endpoint and the two keys of one browser, sealed together, with the
+  SHA-256 of the endpoint beside them: the hash keeps one row for one endpoint
+  and is the fingerprint the list shows. The three are read as written in two
+  files only, the type that seals them and the line that sends to them; neither
+  writes to a log, and nothing that answers a caller can name them.
+  `WebhookUrlRuleTests` holds this rule too, with its own self-check. An
+  endpoint is taken only when it is `https` on port 443 at one of the push
+  services the domain type names. The body is encrypted as RFC 8291 says and
+  signed as RFC 8292 says with .NET's own cryptography, and no Web Push package
+  is added. The key the server signs with is made once, when first needed, and
+  kept as a file in the directory `CARINA_DATA_PROTECTION_KEYS` names, so the
+  backup of that directory covers it; losing the file makes every browser
+  subscribe again. Nothing is registered while `CARINA_PUBLIC_ORIGIN` is empty.
+  **Trip wire:** the rule knows the three by the names they are read through, so
+  an endpoint or a key copied into a plain string in one of the two files and
+  handed on from there walks past.
 - **A notice is taken by reading the ledgers, never by listening.** The intake
   looks on a timer at what recordings, reservations, encodes and the quality
   ledger say happened, and writes each happening once: the notice ledger is

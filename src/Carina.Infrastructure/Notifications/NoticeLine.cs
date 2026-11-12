@@ -1,3 +1,4 @@
+using System.Buffers.Text;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -24,9 +25,9 @@ public sealed record NoticeAnswer(NoticeFailure? Failure, bool AddressGone, Time
 }
 
 /// <summary>
-/// The connection notices go out to webhooks on. Only a public address is connected to, judged on what the name
-/// resolves to as the connection is opened. No redirect is followed, no cookie is kept, no proxy is used, and what
-/// the other end writes back is never read.
+/// The connection notices go out on, to webhooks and to push services alike. Only a public address is connected to,
+/// judged on what the name resolves to as the connection is opened. No redirect is followed, no cookie is kept, no
+/// proxy is used, and what the other end writes back is never read.
 /// </summary>
 public sealed class NoticeLine : IDisposable
 {
@@ -34,7 +35,15 @@ public sealed class NoticeLine : IDisposable
 
     private const string ResetAfter = "X-RateLimit-Reset-After";
 
+    private const string ContentCoding = "aes128gcm";
+
     private static readonly MediaTypeHeaderValue Json = new("application/json");
+
+    private static readonly MediaTypeHeaderValue Octets = new("application/octet-stream");
+
+    private static readonly int[] GoneForAWebhook = [401, 403, 404, 410];
+
+    private static readonly int[] GoneForABrowser = [404, 410];
 
     private readonly INoticeNetwork network;
 
@@ -80,15 +89,34 @@ public sealed class NoticeLine : IDisposable
         ArgumentNullException.ThrowIfNull(webhook);
         ArgumentNullException.ThrowIfNull(payload);
 
+        return await PostAsync(() => Request(new Uri(webhook.AddressAsWritten), payload, Json), GoneForAWebhook, cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends one message to the push service of a browser (RFC 8030), encrypted for that browser alone. Only a
+    /// subscription the push service no longer knows counts as gone; a refusal of the server's own token does not.
+    /// </summary>
+    public async Task<NoticeAnswer> SendAsync(PushSubscription subscription, PushMessage message, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+        ArgumentNullException.ThrowIfNull(message);
+
+        return await PostAsync(() => Request(subscription, message), GoneForABrowser, cancellationToken);
+    }
+
+    public void Dispose() => client.Dispose();
+
+    private async Task<NoticeAnswer> PostAsync(Func<HttpRequestMessage> written, int[] gone, CancellationToken cancellationToken)
+    {
         using CancellationTokenSource running = new(deadline, clock);
         using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, running.Token);
 
         try
         {
-            using HttpRequestMessage request = Request(new Uri(webhook.AddressAsWritten), payload);
+            using HttpRequestMessage request = written();
             using HttpResponseMessage response = await client.SendAsync(request, linked.Token);
 
-            return Answered(response);
+            return Answered(response, gone);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -99,8 +127,6 @@ public sealed class NoticeLine : IDisposable
             return NoticeAnswer.Failed(named);
         }
     }
-
-    public void Dispose() => client.Dispose();
 
     private static NoticeFailure? Named(Exception failure)
     {
@@ -115,15 +141,23 @@ public sealed class NoticeLine : IDisposable
         return failure is HttpRequestException or IOException or SocketException ? NoticeFailure.Unreachable : null;
     }
 
-    private NoticeAnswer Answered(HttpResponseMessage response)
-        => (int)response.StatusCode switch
+    private NoticeAnswer Answered(HttpResponseMessage response, int[] gone)
+    {
+        int status = (int)response.StatusCode;
+
+        if (gone.Contains(status))
+        {
+            return new NoticeAnswer(NoticeFailure.Rejected, true, null);
+        }
+
+        return status switch
         {
             >= 200 and < 300 => NoticeAnswer.Taken,
             429 => new NoticeAnswer(NoticeFailure.RateLimited, false, Asked(response)),
-            401 or 403 or 404 or 410 => new NoticeAnswer(NoticeFailure.Rejected, true, null),
             >= 500 => NoticeAnswer.Failed(NoticeFailure.ServerFailed),
             _ => NoticeAnswer.Failed(NoticeFailure.Rejected),
         };
+    }
 
     private TimeSpan? Asked(HttpResponseMessage response)
     {
@@ -155,7 +189,7 @@ public sealed class NoticeLine : IDisposable
         return TimeSpan.FromSeconds(Math.Min(seconds, NoticeRetry.LongestWait.TotalSeconds));
     }
 
-    private HttpRequestMessage Request(Uri at, byte[] payload)
+    private HttpRequestMessage Request(Uri at, byte[] payload, MediaTypeHeaderValue type)
     {
         HttpRequestMessage request = new(HttpMethod.Post, at)
         {
@@ -165,7 +199,24 @@ public sealed class NoticeLine : IDisposable
         };
 
         request.Headers.UserAgent.ParseAdd(userAgent);
-        request.Content.Headers.ContentType = Json;
+        request.Content.Headers.ContentType = type;
+
+        return request;
+    }
+
+    private HttpRequestMessage Request(PushSubscription subscription, PushMessage message)
+    {
+        byte[] sealedContent = PushEncryption.Encrypt(
+            message.Content,
+            Base64Url.DecodeFromChars(subscription.KeyAsWritten),
+            Base64Url.DecodeFromChars(subscription.SecretAsWritten));
+        HttpRequestMessage request = Request(new Uri(subscription.EndpointAsWritten), sealedContent, Octets);
+        long lifetime = (long)message.Handling.Lifetime.TotalSeconds;
+
+        request.Content!.Headers.ContentEncoding.Add(ContentCoding);
+        request.Headers.TryAddWithoutValidation("Authorization", message.Authorization);
+        request.Headers.TryAddWithoutValidation("TTL", lifetime.ToString(CultureInfo.InvariantCulture));
+        request.Headers.TryAddWithoutValidation("Urgency", message.Handling.Urgency is PushUrgency.High ? "high" : "normal");
 
         return request;
     }

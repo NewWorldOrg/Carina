@@ -3,6 +3,7 @@ using Carina.Api.Services;
 using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
+using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -11,6 +12,7 @@ using Carina.TestSupport;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Options;
 
 using Npgsql;
 
@@ -22,6 +24,8 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
 {
     private const string Address = "https://hooks.slack.com/services/T0000/B0000/made-up-token-wxyz";
 
+    private const string Endpoint = "https://fcm.googleapis.com/fcm/send/made-up-registration-qrst";
+
     private const int AtOnce = 6;
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -30,9 +34,13 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
 
     private static readonly NotificationDeliverySettings Settings = new();
 
+    private static readonly NoticeLinkBase Screens = NoticeLinkBase.At(new Uri("https://screens.example"));
+
     private readonly HandTurnedClock clock = new(new DateTimeOffset(Noon));
 
     private readonly WebhookUrlSeal seal = new(new EphemeralDataProtectionProvider());
+
+    private readonly PushSubscriptionSeal pushSeal = new(new EphemeralDataProtectionProvider());
 
     [Fact(DisplayName = "BR-NT-006: of the sets of rules defined at the same moment beside nineteen, one is kept and the rest are refused")]
     public async Task OfTheSetsOfRulesDefinedAtTheSameMomentBesideNineteenOneIsKept()
@@ -173,6 +181,148 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
         Assert.Equal([leaving], Assert.Single(await HeldRulesAsync()).Destinations);
     }
 
+    [Fact(DisplayName = "BR-ND-015: one endpoint registered at the same moment by several callers is held in one row, and makes one set of rules")]
+    public async Task OneEndpointRegisteredAtTheSameMomentIsHeldInOneRow()
+    {
+        await EmptyAsync();
+        using PushReceiver browser = new();
+
+        ServiceResult<PushEnrolled, NotificationFailure>[] answers = await Task.WhenAll(
+            Enumerable.Range(0, AtOnce).Select(_ => AsOneCallerAsync(caller => caller.Push.SubscribeAsync(
+                "A made-up browser",
+                Endpoint,
+                browser.KeyAsWritten,
+                browser.SecretAsWritten,
+                Cancel))));
+
+        NotificationDestination held = Assert.Single(await HeldDestinationsAsync());
+
+        Assert.All(answers, answer => Assert.True(answer.IsSuccess));
+        Assert.Single(answers, answer => answer.Data!.Added);
+        Assert.All(answers, answer => Assert.Equal(held.Id, answer.Data!.Destination.Destination.Id));
+        Assert.Equal(WebhookTarget.Push, held.Target);
+        Assert.Equal([held.Id], Assert.Single(await HeldRulesAsync()).Destinations);
+    }
+
+    [Fact(DisplayName = "D-9: browsers registered at the same moment into an empty ledger make one set of rules between them")]
+    public async Task BrowsersRegisteredAtTheSameMomentMakeOneSetOfRulesBetweenThem()
+    {
+        await EmptyAsync();
+        using PushReceiver browser = new();
+
+        ServiceResult<PushEnrolled, NotificationFailure>[] answers = await Task.WhenAll(
+            Enumerable.Range(0, AtOnce).Select(index => AsOneCallerAsync(caller => caller.Push.SubscribeAsync(
+                "A made-up browser",
+                $"{Endpoint}-{index}",
+                browser.KeyAsWritten,
+                browser.SecretAsWritten,
+                Cancel))));
+
+        NotificationRule made = Assert.Single(await HeldRulesAsync());
+
+        Assert.All(answers, answer => Assert.True(answer.IsSuccess && answer.Data!.Added));
+        Assert.Equal(AtOnce, (await HeldDestinationsAsync()).Count);
+        Assert.Contains(Assert.Single(made.Destinations), answers.Select(answer => answer.Data!.Destination.Destination.Id));
+    }
+
+    [Fact(DisplayName = "BR-NT-006: a browser is not registered while another writer of the notifications holds its turn")]
+    public async Task ABrowserIsNotRegisteredWhileAnotherWriterHoldsItsTurn()
+    {
+        await EmptyAsync();
+        using PushReceiver browser = new();
+
+        await WaitsItsTurnAsync(() => AsOneCallerAsync(caller => caller.Push.SubscribeAsync(
+            "A made-up browser",
+            Endpoint,
+            browser.KeyAsWritten,
+            browser.SecretAsWritten,
+            Cancel)));
+
+        Assert.Single(await HeldDestinationsAsync());
+    }
+
+    [Fact(DisplayName = "BR-ND-015: a row given the endpoint another row holds is refused, and both rows keep what they held")]
+    public async Task ARowGivenTheEndpointAnotherRowHoldsIsRefused()
+    {
+        await EmptyAsync();
+        using PushReceiver browser = new();
+        ServiceResult<PushEnrolled, NotificationFailure> first = await AsOneCallerAsync(caller => caller.Push.SubscribeAsync(
+            "A made-up browser",
+            Endpoint,
+            browser.KeyAsWritten,
+            browser.SecretAsWritten,
+            Cancel));
+        ServiceResult<PushEnrolled, NotificationFailure> second = await AsOneCallerAsync(caller => caller.Push.SubscribeAsync(
+            "Another made-up browser",
+            $"{Endpoint}-other",
+            browser.KeyAsWritten,
+            browser.SecretAsWritten,
+            Cancel));
+        IReadOnlyList<NotificationDestination> before = await HeldDestinationsAsync();
+
+        ServiceResult<ListedNotificationDestination, NotificationFailure> answer = await AsOneCallerAsync(caller => caller.Push.ResubscribeAsync(
+            second.Data!.Destination.Destination.Id,
+            Endpoint,
+            browser.KeyAsWritten,
+            browser.SecretAsWritten,
+            Cancel));
+
+        IReadOnlyList<NotificationDestination> after = await HeldDestinationsAsync();
+
+        Assert.True(first.IsSuccess);
+        Assert.False(answer.IsSuccess);
+        Assert.Equal(NotificationFailure.HeldByAnother, answer.ErrorType);
+        Assert.Equal(
+            before.Select(held => (held.Id, held.EndpointHash, Convert.ToHexString(held.SealedUrl))),
+            after.Select(held => (held.Id, held.EndpointHash, Convert.ToHexString(held.SealedUrl))));
+    }
+
+    [Fact(DisplayName = "BR-ND-015: a row given a new endpoint holds it from then on, and the endpoint it gave up can be registered again")]
+    public async Task ARowGivenANewEndpointHoldsItFromThenOn()
+    {
+        await EmptyAsync();
+        using PushReceiver browser = new();
+        ServiceResult<PushEnrolled, NotificationFailure> first = await AsOneCallerAsync(caller => caller.Push.SubscribeAsync(
+            "A made-up browser",
+            Endpoint,
+            browser.KeyAsWritten,
+            browser.SecretAsWritten,
+            Cancel));
+
+        ServiceResult<ListedNotificationDestination, NotificationFailure> moved = await AsOneCallerAsync(caller => caller.Push.ResubscribeAsync(
+            first.Data!.Destination.Destination.Id,
+            $"{Endpoint}-renewed",
+            browser.KeyAsWritten,
+            browser.SecretAsWritten,
+            Cancel));
+        ServiceResult<PushEnrolled, NotificationFailure> again = await AsOneCallerAsync(caller => caller.Push.SubscribeAsync(
+            "Another made-up browser",
+            Endpoint,
+            browser.KeyAsWritten,
+            browser.SecretAsWritten,
+            Cancel));
+
+        Assert.True(moved.IsSuccess);
+        Assert.True(again.IsSuccess && again.Data!.Added);
+        Assert.Equal(2, (await HeldDestinationsAsync()).Count);
+        Assert.Single(await HeldRulesAsync());
+    }
+
+    [Fact(DisplayName = "D-9: a first browser whose set of rules cannot be written is not registered either")]
+    public async Task AFirstBrowserWhoseSetOfRulesCannotBeWrittenIsNotRegistered()
+    {
+        await EmptyAsync();
+        using PushReceiver browser = new();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AsOneCallerAsync(
+                caller => caller.Push.SubscribeAsync("A made-up browser", Endpoint, browser.KeyAsWritten, browser.SecretAsWritten, Cancel),
+                rulesCanBeAdded: false));
+
+        Assert.Empty(await HeldDestinationsAsync());
+        Assert.Empty(await HeldRulesAsync());
+    }
+
     [Fact(DisplayName = "D-9: a first destination whose set of rules cannot be written is not registered either")]
     public async Task AFirstDestinationWhoseSetOfRulesCannotBeWrittenIsNotRegistered()
     {
@@ -205,6 +355,12 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
             Settings,
             clock);
 
+        NotificationDestinationDomainService handling = new(destinations, rules, deliveries, watches);
+        PushMessages messages = new(
+            new PushServerKey(Options.Create(new SealingKeyOptions { Directory = Path.Combine(Path.GetTempPath(), "carina-db-tests") })),
+            Screens,
+            clock);
+
         return await ask(
             new Caller(
                 new NotificationDestinationService(
@@ -212,14 +368,17 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
                     rules,
                     deliveries,
                     watches,
-                    new NotificationDestinationDomainService(destinations, rules, deliveries, watches),
+                    handling,
                     writes,
                     seal,
+                    pushSeal,
+                    messages,
                     dispatch,
                     new NoticeTrials(Settings, clock),
                     NoticeLinkBase.None,
                     clock),
-                new NotificationRuleService(rules, new NotificationRuleDomainService(rules, destinations), writes, clock)));
+                new NotificationRuleService(rules, new NotificationRuleDomainService(rules, destinations), writes, clock),
+                new NotificationPushService(destinations, rules, handling, writes, pushSeal, messages, dispatch, Screens, clock)));
     }
 
     private async Task WaitsItsTurnAsync<T>(Func<Task<T>> write)
@@ -322,7 +481,7 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
         await emptying.ExecuteNonQueryAsync(Cancel);
     }
 
-    private sealed record Caller(NotificationDestinationService Destinations, NotificationRuleService Rules);
+    private sealed record Caller(NotificationDestinationService Destinations, NotificationRuleService Rules, NotificationPushService Push);
 
     private sealed class RulesNobodyCanAdd(INotificationRuleRepository held) : INotificationRuleRepository
     {

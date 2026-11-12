@@ -152,10 +152,13 @@ public sealed class NotificationDeliveryJobTests
             services.AddScoped<IProgrammeWatchRepository>(_ => Watches);
             services.AddSingleton(Bench.Settings);
             services.AddSingleton(Bench.Seal);
+            services.AddSingleton(Bench.Push.Seal);
+            services.AddSingleton(Bench.Push.Messages);
             services.AddSingleton(Bench.Dispatch);
             services.AddSingleton(Bench.Unwritten);
             services.AddSingleton<TimeProvider>(Bench.Clock);
             services.AddScoped<NotificationDeliveryDomainService>();
+            services.AddScoped<PushHandlingDomainService>();
             services.AddScoped<NotificationDeliveryRound>();
 
             return new NotificationDeliveryJob(

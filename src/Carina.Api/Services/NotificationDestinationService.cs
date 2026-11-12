@@ -14,8 +14,9 @@ public sealed record NoticeTrialOutcome(bool Delivered, NoticeFailure? Failure);
 public sealed record NotificationRemoved(Guid Id);
 
 /// <summary>
-/// Lists, registers, changes, removes and tries the webhooks notices are sent to. The address of a webhook is sealed
-/// before it is kept and is never given back. A webhook removed leaves the sets of rules and the programmes that wait.
+/// Lists, changes, removes and tries the destinations notices are sent to, and registers the webhooks among them. The
+/// address of a webhook and the subscription of a browser are sealed before they are kept and are never given back. A
+/// destination removed leaves the sets of rules and the programmes that wait.
 /// </summary>
 public sealed class NotificationDestinationService(
     INotificationDestinationRepository destinations,
@@ -25,6 +26,8 @@ public sealed class NotificationDestinationService(
     NotificationDestinationDomainService retiring,
     IAtomicWrite writes,
     WebhookUrlSeal seal,
+    PushSubscriptionSeal pushSeal,
+    PushMessages messages,
     NoticeDispatch dispatch,
     NoticeTrials trials,
     NoticeLinkBase links,
@@ -42,6 +45,18 @@ public sealed class NotificationDestinationService(
         "The address is not one a notice can be sent to: an https webhook of Slack or of Discord. It is not repeated here.";
 
     private const string Unknown = "No destination is registered under that id.";
+
+    private const string NoAddressToChange =
+        "A browser has no address to change. It is given another subscription by subscribing again.";
+
+    private const string Unopened =
+        "The address of this destination cannot be opened with the keys this server holds. Write the address again to send to it.";
+
+    private const string UnopenedBrowser =
+        "This browser cannot be sent to with the keys this server holds. Subscribe from the browser again to send to it.";
+
+    private const string TooSoon =
+        "A trial was sent a moment ago. One destination is tried once a minute, and five trials are sent a minute in all.";
 
     public async Task<ServiceResult<IReadOnlyList<ListedNotificationDestination>>> ListAsync(CancellationToken cancellationToken)
     {
@@ -116,6 +131,11 @@ public sealed class NotificationDestinationService(
             return Failure<ListedNotificationDestination>(BadName, NotificationFailure.Refused);
         }
 
+        if (!keepsTheAddress && held.Target is WebhookTarget.Push)
+        {
+            return Failure<ListedNotificationDestination>(NoAddressToChange, NotificationFailure.Refused);
+        }
+
         if (!keepsTheAddress && webhook is null)
         {
             return Failure<ListedNotificationDestination>(BadAddress, NotificationFailure.Refused);
@@ -187,28 +207,56 @@ public sealed class NotificationDestinationService(
             return Failure<NoticeTrialOutcome>(Unknown, NotificationFailure.NoSuchDestination);
         }
 
-        if (seal.Open(held.SealedUrl) is not { } webhook)
-        {
-            return Failure<NoticeTrialOutcome>(
-                "The address of this destination cannot be opened with the keys this server holds. Write the address again to send to it.",
-                NotificationFailure.Unreadable);
-        }
-
-        if (!dispatch.HasRoomFor(id) || !trials.Admit(id))
-        {
-            return Failure<NoticeTrialOutcome>(
-                "A trial was sent a moment ago. One destination is tried once a minute, and five trials are sent a minute in all.",
-                NotificationFailure.TooSoon);
-        }
-
-        byte[] sample = NoticePayload.For(held.Target, NoticeTone.Informative, TrialTitle, TrialBody, links.To(Screen));
-        NoticeAnswer answer = await dispatch.SendAsync(id, webhook, sample, cancellationToken);
-
-        return ServiceResult<NoticeTrialOutcome, NotificationFailure>.Success(new NoticeTrialOutcome(answer.IsTaken, answer.Failure));
+        return held.Target is WebhookTarget.Push
+            ? await TryBrowserAsync(held, cancellationToken)
+            : await TryWebhookAsync(held, cancellationToken);
     }
 
     private static ServiceResult<T, NotificationFailure> Failure<T>(string message, NotificationFailure failure)
         => ServiceResult<T, NotificationFailure>.Failure(message, failure);
+
+    private async Task<ServiceResult<NoticeTrialOutcome, NotificationFailure>> TryWebhookAsync(
+        NotificationDestination held,
+        CancellationToken cancellationToken)
+    {
+        if (seal.Open(held.SealedUrl) is not { } webhook)
+        {
+            return Failure<NoticeTrialOutcome>(Unopened, NotificationFailure.Unreadable);
+        }
+
+        if (!Admits(held.Id))
+        {
+            return Failure<NoticeTrialOutcome>(TooSoon, NotificationFailure.TooSoon);
+        }
+
+        byte[] sample = NoticePayload.For(held.Target, NoticeTone.Informative, TrialTitle, TrialBody, links.To(Screen));
+
+        return Tried(await dispatch.SendAsync(held.Id, webhook, sample, cancellationToken));
+    }
+
+    private async Task<ServiceResult<NoticeTrialOutcome, NotificationFailure>> TryBrowserAsync(
+        NotificationDestination held,
+        CancellationToken cancellationToken)
+    {
+        if (pushSeal.Open(held.SealedUrl) is not { } subscription || !messages.CanSign())
+        {
+            return Failure<NoticeTrialOutcome>(UnopenedBrowser, NotificationFailure.Unreadable);
+        }
+
+        if (!Admits(held.Id))
+        {
+            return Failure<NoticeTrialOutcome>(TooSoon, NotificationFailure.TooSoon);
+        }
+
+        PushMessage sample = messages.Trying(subscription, TrialTitle, TrialBody, Screen);
+
+        return Tried(await dispatch.SendAsync(held.Id, subscription, sample, cancellationToken));
+    }
+
+    private static ServiceResult<NoticeTrialOutcome, NotificationFailure> Tried(NoticeAnswer answer)
+        => ServiceResult<NoticeTrialOutcome, NotificationFailure>.Success(new NoticeTrialOutcome(answer.IsTaken, answer.Failure));
+
+    private bool Admits(NotificationDestinationId id) => dispatch.HasRoomFor(id) && trials.Admit(id);
 
     private void Change(NotificationDestination held, NotificationName named, WebhookUrl? webhook, bool? enabled, DateTime now)
     {
@@ -260,7 +308,11 @@ public sealed class NotificationDestinationService(
     }
 
     private ListedNotificationDestination Listed(NotificationDestination destination)
-        => new(destination, seal.Open(destination.SealedUrl) is not null);
+        => new(
+            destination,
+            destination.Target is WebhookTarget.Push
+                ? pushSeal.Open(destination.SealedUrl) is not null
+                : seal.Open(destination.SealedUrl) is not null);
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 }
