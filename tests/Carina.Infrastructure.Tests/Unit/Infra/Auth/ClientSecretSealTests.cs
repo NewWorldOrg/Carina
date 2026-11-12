@@ -1,8 +1,10 @@
 using Carina.Domain.Auth;
 using Carina.Infrastructure.Auth;
+using Carina.Infrastructure.Tests.Auth;
 
-namespace Carina.Infrastructure.Tests.Auth;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class ClientSecretSealTests
 {
     [Fact]

@@ -2,8 +2,9 @@ using Carina.BroadcastTestSupport;
 using Carina.Domain.Auth;
 using Carina.Infrastructure.Auth;
 
-namespace Carina.Infrastructure.Tests.Auth;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class LoginThrottleTests
 {
     private const string Caller = "10.0.0.9";

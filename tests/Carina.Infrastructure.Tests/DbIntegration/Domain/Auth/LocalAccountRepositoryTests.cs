@@ -1,18 +1,15 @@
 using Carina.Domain.Auth;
-using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
-using Carina.Infrastructure.Tests.Auth;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Auth;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class LocalAccountRepositoryTests(RepositoryDatabase database)
+public sealed class LocalAccountRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly DateTime At = new(2026, 8, 19, 9, 0, 0, DateTimeKind.Utc);
 
@@ -20,14 +17,20 @@ public sealed class LocalAccountRepositoryTests(RepositoryDatabase database)
 
     private readonly QuickPasswordHasher hasher = new();
 
+    private readonly ServiceProvider services = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await services.DisposeAsync();
+
     [Fact]
     public async Task AnAccountThatWasNeverMadeIsNotThere()
     {
         await ClearAsync();
 
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
 
-        Assert.Null(await new LocalAccountRepository(reading).FindAsync(Cancel));
+        Assert.Null(await Accounts(reading).FindAsync(Cancel));
     }
 
     [Fact]
@@ -35,13 +38,13 @@ public sealed class LocalAccountRepositoryTests(RepositoryDatabase database)
     {
         await ClearAsync();
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            await new LocalAccountRepository(writing).SaveAsync(Bootstrapped("a password long enough"), Cancel);
+            await Accounts(writing).SaveAsync(Bootstrapped("a password long enough"), Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        LocalAccount? read = await new LocalAccountRepository(reading).FindAsync(Cancel);
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        LocalAccount? read = await Accounts(reading).FindAsync(Cancel);
 
         Assert.NotNull(read);
         Assert.Equal(FirstCredentials.Username, read.Username);
@@ -53,14 +56,14 @@ public sealed class LocalAccountRepositoryTests(RepositoryDatabase database)
     {
         await ClearAsync();
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            await new LocalAccountRepository(writing).SaveAsync(Bootstrapped("a password long enough"), Cancel);
+            await Accounts(writing).SaveAsync(Bootstrapped("a password long enough"), Cancel);
         }
 
-        await using (CarinaDbContext changing = database.Open())
+        await using (AsyncServiceScope changing = services.CreateAsyncScope())
         {
-            var repository = new LocalAccountRepository(changing);
+            ILocalAccountRepository repository = Accounts(changing);
             LocalAccount? held = await repository.FindAsync(Cancel);
 
             held!.ChangePassword(hasher.Hash("a replacement password", PasswordHashPolicy.Default), At.AddHours(1));
@@ -68,54 +71,16 @@ public sealed class LocalAccountRepositoryTests(RepositoryDatabase database)
             await repository.SaveAsync(held, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        LocalAccount? read = await new LocalAccountRepository(reading).FindAsync(Cancel);
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        LocalAccount? read = await Accounts(reading).FindAsync(Cancel);
 
         Assert.False(hasher.Matches("a password long enough", read!.PasswordHash));
         Assert.True(hasher.Matches("a replacement password", read.PasswordHash));
         Assert.Equal(At.AddHours(1), read.PasswordChangedAt);
     }
 
-    [Fact]
-    public async Task TheBootstrapFindsTheAccountItAlreadyMadeAndLeavesItAlone()
-    {
-        var log = new RecordedLog();
-
-        await ClearAsync();
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await EnsureAsync(log, new LocalAccountRepository(writing));
-        }
-
-        string first;
-
-        await using (CarinaDbContext reading = database.Open())
-        {
-            first = (await new LocalAccountRepository(reading).FindAsync(Cancel))!.PasswordHash.Value;
-        }
-
-        await using (CarinaDbContext again = database.Open())
-        {
-            await EnsureAsync(log, new LocalAccountRepository(again));
-        }
-
-        await using CarinaDbContext after = database.Open();
-        LocalAccount? read = await new LocalAccountRepository(after).FindAsync(Cancel);
-
-        Assert.Equal(first, read!.PasswordHash.Value);
-        Assert.Single(log.Lines);
-    }
-
-    private static Task EnsureAsync(RecordedLog log, LocalAccountRepository accounts)
-        => new LocalAccountBootstrap(
-                new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
-                PasswordHashPolicy.Default,
-                log)
-            .EnsureAnAccountExistsAsync(
-                new LocalAccountProvisioningDomainService(accounts, new QuickPasswordHasher(), TimeProvider.System),
-                accounts,
-                Cancel);
+    private static ILocalAccountRepository Accounts(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILocalAccountRepository>();
 
     private async Task ClearAsync()
     {

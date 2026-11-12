@@ -1,31 +1,37 @@
 using Carina.Domain.Auth;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Auth;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
+public sealed class AuthSessionRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly DateTime At = new(2026, 8, 19, 9, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly ServiceProvider services = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await services.DisposeAsync();
 
     [Fact]
     public async Task ASessionIsFoundByTheHashOfTheCookieItWasStartedWith()
     {
         AuthSession started = Started(new Subject("carina"), "a device");
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            await new AuthSessionRepository(writing).SaveAsync(started, Cancel);
+            await Sessions(writing).SaveAsync(started, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        AuthSession? read = await new AuthSessionRepository(reading).FindAsync(started.Handle, Cancel);
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        AuthSession? read = await Sessions(reading).FindAsync(started.Handle, Cancel);
 
         Assert.NotNull(read);
         Assert.Equal(started.Handle, read.Handle);
@@ -48,13 +54,13 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
             "a device",
             At);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            await new AuthSessionRepository(writing).SaveAsync(started, Cancel);
+            await Sessions(writing).SaveAsync(started, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        List<string> rows = await reading.Database
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        List<string> rows = await reading.ServiceProvider.GetRequiredService<CarinaDbContext>().Database
             .SqlQueryRaw<string>("SELECT row_to_json(held)::text AS \"Value\" FROM auth_session AS held")
             .ToListAsync(Cancel);
 
@@ -68,20 +74,20 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         AuthSession going = Started(new Subject("carina"), "a device that stopped asking");
         AuthSession staying = Started(new Subject("carina"), "the device still asking");
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            var repository = new AuthSessionRepository(writing);
+            IAuthSessionRepository repository = Sessions(writing);
             await repository.SaveAsync(going, Cancel);
             await repository.SaveAsync(staying, Cancel);
         }
 
-        await using (CarinaDbContext forgetting = database.Open())
+        await using (AsyncServiceScope forgetting = services.CreateAsyncScope())
         {
-            Assert.Equal(1, await new AuthSessionRepository(forgetting).ForgetAsync([going], Cancel));
+            Assert.Equal(1, await Sessions(forgetting).ForgetAsync([going], Cancel));
         }
 
-        await using CarinaDbContext reading = database.Open();
-        var after = new AuthSessionRepository(reading);
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        IAuthSessionRepository after = Sessions(reading);
 
         Assert.Null(await after.FindAsync(going.Handle, Cancel));
         Assert.NotNull(await after.FindAsync(staying.Handle, Cancel));
@@ -90,17 +96,17 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task ForgettingNothingIsAskedOfTheStoreAsNothing()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope context = services.CreateAsyncScope();
 
-        Assert.Equal(0, await new AuthSessionRepository(context).ForgetAsync([], Cancel));
+        Assert.Equal(0, await Sessions(context).ForgetAsync([], Cancel));
     }
 
     [Fact]
     public async Task AnIdentifierThatWasNeverIssuedFindsNothing()
     {
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
 
-        Assert.Null(await new AuthSessionRepository(reading).FindAsync(SessionHandle.Of(SessionId.Issue()), Cancel));
+        Assert.Null(await Sessions(reading).FindAsync(SessionHandle.Of(SessionId.Issue()), Cancel));
     }
 
     [Fact]
@@ -109,15 +115,15 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         AuthSession mine = Started(new Subject("carina"), "my device");
         AuthSession theirs = Started(new Subject("somebody-else"), "their device");
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            var repository = new AuthSessionRepository(writing);
+            IAuthSessionRepository repository = Sessions(writing);
             await repository.SaveAsync(mine, Cancel);
             await repository.SaveAsync(theirs, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<AuthSession> listed = await new AuthSessionRepository(reading)
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        IReadOnlyList<AuthSession> listed = await Sessions(reading)
             .ListAsync(new Subject("carina"), Cancel);
 
         Assert.Contains(listed, session => session.Handle.Equals(mine.Handle));
@@ -136,15 +142,15 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
             "their device",
             At.AddMinutes(1));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            var repository = new AuthSessionRepository(writing);
+            IAuthSessionRepository repository = Sessions(writing);
             await repository.SaveAsync(mine, Cancel);
             await repository.SaveAsync(theirs, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<AuthSession> listed = await new AuthSessionRepository(reading).ListAllAsync(Cancel);
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        IReadOnlyList<AuthSession> listed = await Sessions(reading).ListAllAsync(Cancel);
 
         int ofTheirs = listed.ToList().FindIndex(session => session.Handle.Equals(theirs.Handle));
         int ofMine = listed.ToList().FindIndex(session => session.Handle.Equals(mine.Handle));
@@ -160,14 +166,14 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
     {
         AuthSession started = Started(new Subject("carina"), "a device");
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            await new AuthSessionRepository(writing).SaveAsync(started, Cancel);
+            await Sessions(writing).SaveAsync(started, Cancel);
         }
 
-        await using (CarinaDbContext touching = database.Open())
+        await using (AsyncServiceScope touching = services.CreateAsyncScope())
         {
-            var repository = new AuthSessionRepository(touching);
+            IAuthSessionRepository repository = Sessions(touching);
             AuthSession? held = await repository.FindAsync(started.Handle, Cancel);
 
             Assert.True(held!.Touch(At.AddHours(1), SessionPolicy.Default));
@@ -175,8 +181,8 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
             await repository.SaveAsync(held, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        AuthSession? read = await new AuthSessionRepository(reading).FindAsync(started.Handle, Cancel);
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        AuthSession? read = await Sessions(reading).FindAsync(started.Handle, Cancel);
 
         Assert.Equal(At.AddHours(1), read!.LastUsedAt);
     }
@@ -188,16 +194,16 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         AuthSession here = Started(subject, "this device");
         AuthSession there = Started(subject, "another device");
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            var repository = new AuthSessionRepository(writing);
+            IAuthSessionRepository repository = Sessions(writing);
             await repository.SaveAsync(here, Cancel);
             await repository.SaveAsync(there, Cancel);
         }
 
-        await using (CarinaDbContext revoking = database.Open())
+        await using (AsyncServiceScope revoking = services.CreateAsyncScope())
         {
-            var repository = new AuthSessionRepository(revoking);
+            IAuthSessionRepository repository = Sessions(revoking);
             IReadOnlyList<AuthSession> held = await repository.ListAsync(subject, Cancel);
             List<AuthSession> ended = [];
 
@@ -212,8 +218,8 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
             await repository.SaveAllAsync(ended, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        var read = new AuthSessionRepository(reading);
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        IAuthSessionRepository read = Sessions(reading);
 
         Assert.Null((await read.FindAsync(here.Handle, Cancel))!.RevokedAt);
         Assert.Equal(At.AddMinutes(1), (await read.FindAsync(there.Handle, Cancel))!.RevokedAt);
@@ -224,19 +230,19 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
     {
         AuthSession started = Started(new Subject("carina"), "a device");
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            await new AuthSessionRepository(writing).SaveAsync(started, Cancel);
+            await Sessions(writing).SaveAsync(started, Cancel);
         }
 
-        await using (CarinaDbContext deleting = database.Open())
+        await using (AsyncServiceScope deleting = services.CreateAsyncScope())
         {
-            await new AuthSessionRepository(deleting).DeleteAsync(started.Handle, Cancel);
+            await Sessions(deleting).DeleteAsync(started.Handle, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
 
-        Assert.Null(await new AuthSessionRepository(reading).FindAsync(started.Handle, Cancel));
+        Assert.Null(await Sessions(reading).FindAsync(started.Handle, Cancel));
     }
 
     [Fact]
@@ -244,20 +250,23 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
     {
         AuthSession started = Started(new Subject("carina"), "a device");
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = services.CreateAsyncScope())
         {
-            await new AuthSessionRepository(writing).SaveAsync(started, Cancel);
+            await Sessions(writing).SaveAsync(started, Cancel);
         }
 
-        await using (CarinaDbContext deleting = database.Open())
+        await using (AsyncServiceScope deleting = services.CreateAsyncScope())
         {
-            await new AuthSessionRepository(deleting).DeleteAsync(SessionHandle.Of(SessionId.Issue()), Cancel);
+            await Sessions(deleting).DeleteAsync(SessionHandle.Of(SessionId.Issue()), Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
 
-        Assert.NotNull(await new AuthSessionRepository(reading).FindAsync(started.Handle, Cancel));
+        Assert.NotNull(await Sessions(reading).FindAsync(started.Handle, Cancel));
     }
+
+    private static IAuthSessionRepository Sessions(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IAuthSessionRepository>();
 
     private static AuthSession Started(Subject subject, string device)
         => AuthSession.Start(SessionId.Issue(), subject, subject.Value, AuthMethod.Local, device, At);

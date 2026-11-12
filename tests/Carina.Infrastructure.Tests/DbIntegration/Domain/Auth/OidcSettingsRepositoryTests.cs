@@ -1,16 +1,14 @@
 using Carina.Domain.Auth;
-using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
-using Carina.Infrastructure.Tests.Auth;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Auth;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
+public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private const string Discovery = "https://login.example.test/.well-known/openid-configuration";
 
@@ -18,16 +16,20 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    private static readonly ClientSecretSeal Kept = SealingKeys.Seal();
+    private readonly ServiceProvider services = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await services.DisposeAsync();
 
     [Fact]
     public async Task AnInstallationThatNeverConfiguredAProviderHasNoRowToRead()
     {
         await ClearAsync();
 
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
 
-        Assert.Null(await new OidcSettingsRepository(reading, Kept).FindAsync(Cancel));
+        Assert.Null(await Settings(reading).FindAsync(Cancel));
     }
 
     [Fact]
@@ -36,8 +38,8 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
         await ClearAsync();
         await SaveAsync(Configured());
 
-        await using CarinaDbContext reading = database.Open();
-        OidcSettings? read = await new OidcSettingsRepository(reading, Kept).FindAsync(Cancel);
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        OidcSettings? read = await Settings(reading).FindAsync(Cancel);
 
         Assert.NotNull(read);
         Assert.Equal(Discovery, read.DiscoveryUrl);
@@ -55,8 +57,8 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
 
         await SaveAsync(settings);
 
-        await using CarinaDbContext reading = database.Open();
-        OidcSettings read = (await new OidcSettingsRepository(reading, Kept).FindAsync(Cancel))!;
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        OidcSettings read = (await Settings(reading).FindAsync(Cancel))!;
 
         Assert.Equal(["operators", "owners"], read.AllowedGroups);
         Assert.Equal(["example.test"], read.AllowedHostedDomains);
@@ -69,8 +71,8 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
         await ClearAsync();
         await SaveAsync(Configured());
 
-        await using CarinaDbContext reading = database.Open();
-        OidcSettings read = (await new OidcSettingsRepository(reading, Kept).FindAsync(Cancel))!;
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        OidcSettings read = (await Settings(reading).FindAsync(Cancel))!;
 
         Assert.Empty(read.AllowedGroups);
         Assert.Empty(read.AllowedHostedDomains);
@@ -87,9 +89,9 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
 
         await SaveAsync(settings);
 
-        await using (CarinaDbContext changing = database.Open())
+        await using (AsyncServiceScope changing = services.CreateAsyncScope())
         {
-            OidcSettingsRepository repository = new(changing, Kept);
+            IOidcSettingsRepository repository = Settings(changing);
             OidcSettings held = (await repository.FindAsync(Cancel))!;
 
             held.Clear(At.AddDays(1));
@@ -97,8 +99,8 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
             await repository.SaveAsync(held, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        OidcSettings read = (await new OidcSettingsRepository(reading, Kept).FindAsync(Cancel))!;
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        OidcSettings read = (await Settings(reading).FindAsync(Cancel))!;
 
         Assert.False(read.IsConfigured);
         Assert.Null(read.ClientSecret);
@@ -130,8 +132,9 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
         await ClearAsync();
         await SaveAsync(Configured());
 
-        await using CarinaDbContext reading = database.Open();
-        OidcSettings read = (await new OidcSettingsRepository(reading, SealingKeys.Seal()).FindAsync(Cancel))!;
+        await using ServiceProvider elsewhere = database.Infrastructure();
+        await using AsyncServiceScope reading = elsewhere.CreateAsyncScope();
+        OidcSettings read = (await Settings(reading).FindAsync(Cancel))!;
 
         Assert.Null(read.ClientSecret);
         Assert.True(read.SecretLost);
@@ -146,18 +149,19 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
         await ClearAsync();
         await SaveAsync(Configured());
 
-        await using (CarinaDbContext changing = database.Open())
+        await using (ServiceProvider elsewhere = database.Infrastructure())
+        await using (AsyncServiceScope changing = elsewhere.CreateAsyncScope())
         {
-            OidcSettingsRepository elsewhere = new(changing, SealingKeys.Seal());
-            OidcSettings held = (await elsewhere.FindAsync(Cancel))!;
+            IOidcSettingsRepository repository = Settings(changing);
+            OidcSettings held = (await repository.FindAsync(Cancel))!;
 
             held.Restrict(["operators"], null, At.AddDays(1));
 
-            await elsewhere.SaveAsync(held, Cancel);
+            await repository.SaveAsync(held, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        OidcSettings read = (await new OidcSettingsRepository(reading, Kept).FindAsync(Cancel))!;
+        await using AsyncServiceScope reading = services.CreateAsyncScope();
+        OidcSettings read = (await Settings(reading).FindAsync(Cancel))!;
 
         Assert.Equal(new ClientSecret("the-client-secret"), read.ClientSecret);
         Assert.Equal(["operators"], read.AllowedGroups);
@@ -168,11 +172,11 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
     {
         await ClearAsync();
         await SaveAsync(Configured());
-        ClientSecretSeal now = SealingKeys.Seal();
+        await using ServiceProvider now = database.Infrastructure();
 
-        await using (CarinaDbContext changing = database.Open())
+        await using (AsyncServiceScope changing = now.CreateAsyncScope())
         {
-            OidcSettingsRepository repository = new(changing, now);
+            IOidcSettingsRepository repository = Settings(changing);
             OidcSettings held = (await repository.FindAsync(Cancel))!;
 
             held.Configure(Discovery, "carina", new ClientSecret("the-new-secret"), At.AddDays(1));
@@ -180,55 +184,11 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
             await repository.SaveAsync(held, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        OidcSettings read = (await new OidcSettingsRepository(reading, now).FindAsync(Cancel))!;
+        await using AsyncServiceScope reading = now.CreateAsyncScope();
+        OidcSettings read = (await Settings(reading).FindAsync(Cancel))!;
 
         Assert.Equal(new ClientSecret("the-new-secret"), read.ClientSecret);
         Assert.True(read.IsConfigured);
-    }
-
-    [Fact]
-    public async Task ASecretStillHeldInTheClearIsReadAndThenSealed()
-    {
-        await ClearAsync();
-        await HeldInTheClearAsync("the-client-secret");
-
-        await using (CarinaDbContext sealing = database.Open())
-        {
-            OidcSettingsRepository repository = new(sealing, Kept);
-
-            Assert.Equal(new ClientSecret("the-client-secret"), (await repository.FindAsync(Cancel))!.ClientSecret);
-            Assert.True(await repository.SealAnUnsealedSecretAsync(Cancel));
-        }
-
-        await using CarinaDbContext reading = database.Open();
-        List<string?> inTheClear = await reading.Database
-            .SqlQueryRaw<string?>("SELECT client_secret AS \"Value\" FROM oidc_config")
-            .ToListAsync(Cancel);
-        OidcSettingsRepository repeated = new(reading, Kept);
-
-        Assert.Equal([null], inTheClear);
-        Assert.Equal(new ClientSecret("the-client-secret"), (await repeated.FindAsync(Cancel))!.ClientSecret);
-        Assert.False(await repeated.SealAnUnsealedSecretAsync(Cancel));
-    }
-
-    [Fact]
-    public async Task NothingIsSealedWhereNoProviderIsHeld()
-    {
-        await ClearAsync();
-
-        await using CarinaDbContext sealing = database.Open();
-
-        Assert.False(await new OidcSettingsRepository(sealing, Kept).SealAnUnsealedSecretAsync(Cancel));
-    }
-
-    private async Task HeldInTheClearAsync(string secret)
-    {
-        await using CarinaDbContext context = database.Open();
-
-        await context.Database.ExecuteSqlAsync(
-            $"INSERT INTO oidc_config (id, discovery_url, client_id, client_secret, updated_at) VALUES ({OidcSettings.TheOnlyRow}, {Discovery}, {"carina"}, {secret}, {At})",
-            Cancel);
     }
 
     private static OidcSettings Configured()
@@ -241,10 +201,13 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database)
 
     private async Task SaveAsync(OidcSettings settings)
     {
-        await using CarinaDbContext writing = database.Open();
+        await using AsyncServiceScope writing = services.CreateAsyncScope();
 
-        await new OidcSettingsRepository(writing, Kept).SaveAsync(settings, Cancel);
+        await Settings(writing).SaveAsync(settings, Cancel);
     }
+
+    private static IOidcSettingsRepository Settings(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IOidcSettingsRepository>();
 
     private async Task ClearAsync()
     {

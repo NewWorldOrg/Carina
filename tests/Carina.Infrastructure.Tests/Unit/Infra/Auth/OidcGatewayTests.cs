@@ -6,8 +6,9 @@ using Carina.Domain.Auth;
 using Carina.Infrastructure.Auth;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Auth;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class OidcGatewayTests
 {
     private static readonly DateTime At = new(2026, 8, 19, 9, 0, 0, DateTimeKind.Utc);

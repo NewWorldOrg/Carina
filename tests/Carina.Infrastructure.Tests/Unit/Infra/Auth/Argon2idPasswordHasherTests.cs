@@ -1,8 +1,9 @@
 using Carina.Domain.Auth;
 using Carina.Infrastructure.Auth;
 
-namespace Carina.Infrastructure.Tests.Auth;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class Argon2idPasswordHasherTests
 {
     private static readonly PasswordHashPolicy Weaker = new(

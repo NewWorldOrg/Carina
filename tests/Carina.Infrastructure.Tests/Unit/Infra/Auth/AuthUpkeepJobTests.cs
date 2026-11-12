@@ -5,8 +5,9 @@ using Carina.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Infrastructure.Tests.Auth;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class AuthUpkeepJobTests
 {
     private static readonly DateTime At = new(2026, 8, 19, 9, 0, 0, DateTimeKind.Utc);
