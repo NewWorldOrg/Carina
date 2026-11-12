@@ -8,35 +8,29 @@ namespace Carina.Infrastructure.Auth;
 
 public sealed class LocalAccountBootstrap(
     IServiceScopeFactory scopes,
-    IPasswordHasher hasher,
     PasswordHashPolicy policy,
-    TimeProvider clock,
     ILogger<LocalAccountBootstrap> logger) : BackgroundService
 {
     public async Task EnsureAnAccountExistsAsync(
+        LocalAccountProvisioningDomainService provisioning,
         ILocalAccountRepository accounts,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(provisioning);
         ArgumentNullException.ThrowIfNull(accounts);
 
-        if (await accounts.FindAsync(cancellationToken) is not null)
+        if (await provisioning.FirstAccountAsync(policy, cancellationToken) is not { } made)
         {
             return;
         }
 
-        string password = FirstCredentials.MakePassword();
-        LocalAccount account = LocalAccount.Bootstrap(
-            FirstCredentials.Username,
-            hasher.Hash(password, policy),
-            clock.GetUtcNow().UtcDateTime);
-
-        await accounts.SaveAsync(account, cancellationToken);
+        await accounts.SaveAsync(made.Account, cancellationToken);
 
         logger.LogWarning(
             "No local account existed, so one was made. Sign in as {Username} with {Password} and change it: "
             + "this is the only time the password is written anywhere.",
-            account.Username,
-            password);
+            made.Account.Username,
+            made.Password);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -46,6 +40,7 @@ public sealed class LocalAccountBootstrap(
             await using AsyncServiceScope scope = scopes.CreateAsyncScope();
 
             await EnsureAnAccountExistsAsync(
+                scope.ServiceProvider.GetRequiredService<LocalAccountProvisioningDomainService>(),
                 scope.ServiceProvider.GetRequiredService<ILocalAccountRepository>(),
                 stoppingToken);
         }

@@ -176,6 +176,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBoundedRead, DatabaseBoundedRead>();
         services.AddScoped<IAuthSessionRepository, AuthSessionRepository>();
         services.AddScoped<ILocalAccountRepository, LocalAccountRepository>();
+        services.AddScoped<LocalAccountProvisioningDomainService>();
         services.AddScoped<LocalLoginDomainService>();
         services.AddScoped<PasswordChangeDomainService>();
         services.AddScoped<IOidcSettingsRepository, OidcSettingsRepository>();

@@ -14,6 +14,8 @@ internal sealed class RecordedLog : ILogger<LocalAccountBootstrap>
 
     public List<IReadOnlyList<KeyValuePair<string, object?>>> Values { get; } = [];
 
+    public List<string> Failures { get; } = [];
+
     public IDisposable? BeginScope<TState>(TState state)
         where TState : notnull
         => null;
@@ -30,6 +32,11 @@ internal sealed class RecordedLog : ILogger<LocalAccountBootstrap>
         ArgumentNullException.ThrowIfNull(formatter);
 
         Lines.Add(formatter(state, exception));
+
+        if (exception is not null)
+        {
+            Failures.Add(exception.Message);
+        }
 
         if (state is IReadOnlyList<KeyValuePair<string, object?>> named)
         {
@@ -60,7 +67,7 @@ public sealed class LocalAccountBootstrapTests
     [Fact]
     public async Task AnAppThatStartsWithNoCredentialsMakesSomeRatherThanWaitOpen()
     {
-        await Bootstrap().EnsureAnAccountExistsAsync(accounts, Cancel);
+        await Bootstrap().EnsureAnAccountExistsAsync(Provisioning(), accounts, Cancel);
 
         Assert.NotNull(accounts.Account);
         Assert.Equal(FirstCredentials.Username, accounts.Account.Username);
@@ -69,7 +76,7 @@ public sealed class LocalAccountBootstrapTests
     [Fact]
     public async Task ThePasswordIsWrittenOutOnceAndItIsTheOneThatOpensTheAccount()
     {
-        await Bootstrap().EnsureAnAccountExistsAsync(accounts, Cancel);
+        await Bootstrap().EnsureAnAccountExistsAsync(Provisioning(), accounts, Cancel);
 
         string written = log.Only("Password");
 
@@ -83,14 +90,14 @@ public sealed class LocalAccountBootstrapTests
     {
         LocalAccountBootstrap bootstrap = Bootstrap();
 
-        await bootstrap.EnsureAnAccountExistsAsync(accounts, Cancel);
+        await bootstrap.EnsureAnAccountExistsAsync(Provisioning(), accounts, Cancel);
 
         string first = accounts.Account!.PasswordHash.Value;
         int saves = accounts.Saves;
 
         clock.MoveOn(TimeSpan.FromDays(1));
 
-        await bootstrap.EnsureAnAccountExistsAsync(accounts, Cancel);
+        await bootstrap.EnsureAnAccountExistsAsync(Provisioning(), accounts, Cancel);
 
         Assert.Equal(first, accounts.Account!.PasswordHash.Value);
         Assert.Equal(saves, accounts.Saves);
@@ -105,7 +112,7 @@ public sealed class LocalAccountBootstrapTests
             hasher.Hash("a password the operator chose", PasswordHashPolicy.Default),
             clock.GetUtcNow().UtcDateTime);
 
-        await Bootstrap().EnsureAnAccountExistsAsync(accounts, Cancel);
+        await Bootstrap().EnsureAnAccountExistsAsync(Provisioning(), accounts, Cancel);
 
         Assert.Equal("someone", accounts.Account.Username);
         Assert.Empty(log.Lines);
@@ -117,14 +124,15 @@ public sealed class LocalAccountBootstrapTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<ILocalAccountRepository>(new RefusingAccounts());
+        services.AddSingleton<IPasswordHasher>(hasher);
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddScoped<LocalAccountProvisioningDomainService>();
 
         await using ServiceProvider provider = services.BuildServiceProvider();
 
         var bootstrap = new LocalAccountBootstrap(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            hasher,
             PasswordHashPolicy.Default,
-            clock,
             log);
 
         await bootstrap.StartAsync(Cancel);
@@ -133,6 +141,7 @@ public sealed class LocalAccountBootstrapTests
 
         Assert.Single(log.Lines);
         Assert.Contains("nobody can sign in", log.Lines[0], StringComparison.Ordinal);
+        Assert.Contains("The store is not there.", log.Failures, StringComparer.Ordinal);
     }
 
     private LocalAccountBootstrap Bootstrap()
@@ -142,11 +151,11 @@ public sealed class LocalAccountBootstrapTests
 
         return new LocalAccountBootstrap(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
-            hasher,
             PasswordHashPolicy.Default,
-            clock,
             log);
     }
+
+    private LocalAccountProvisioningDomainService Provisioning() => new(accounts, hasher, clock);
 }
 
 internal sealed class RefusingAccounts : ILocalAccountRepository
