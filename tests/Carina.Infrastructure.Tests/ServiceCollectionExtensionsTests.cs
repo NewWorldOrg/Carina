@@ -550,6 +550,8 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<LiveChannelDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<CandidateChannelDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ScanPlanningDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ChannelRotationDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ChannelLineupDomainService>());
         Assert.IsType<ServiceTuningDomainService>(scope.ServiceProvider.GetRequiredService<IServiceTuningDirectory>());
     }
 

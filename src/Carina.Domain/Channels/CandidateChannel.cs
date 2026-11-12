@@ -94,6 +94,30 @@ public sealed class CandidateChannel
         return added;
     }
 
+    /// <summary>
+    /// A candidate a scan found starts with the stream it saw, and as received when the scan measured it.
+    /// </summary>
+    public static CandidateChannel FoundByScan(
+        CandidateChannelId id,
+        NetworkId networkId,
+        ServiceId serviceId,
+        TuningParameters tuning,
+        TransportStreamId? observedStreamId,
+        SignalMeasurement? measurement,
+        DateTime at)
+    {
+        CandidateChannel found = Discover(id, networkId, serviceId, tuning, at);
+
+        found.CarriedBy(observedStreamId);
+
+        if (measurement is not null)
+        {
+            found.RecordTuningSuccess(measurement, at);
+        }
+
+        return found;
+    }
+
     public static CandidateChannel Rehydrate(
         CandidateChannelId id,
         NetworkId networkId,
@@ -166,6 +190,34 @@ public sealed class CandidateChannel
 
         ObservedStreamId = observedStreamId;
     }
+
+    /// <summary>
+    /// Whether a stream seen on this candidate's channel is another than the one it is known to carry; a scan that saw
+    /// no stream says nothing.
+    /// </summary>
+    public bool IsRestatedBy(TransportStreamId? observedStreamId)
+        => observedStreamId is not null && !observedStreamId.Equals(ObservedStreamId);
+
+    /// <summary>
+    /// Takes the stream seen when it is another than the one known, and says whether it did.
+    /// </summary>
+    public bool Restate(TransportStreamId? observedStreamId)
+    {
+        if (!IsRestatedBy(observedStreamId))
+        {
+            return false;
+        }
+
+        ObservedStreamId = observedStreamId;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Selected by a scan with nothing measured to compare it by, so a later scan may choose again.
+    /// </summary>
+    public bool ChosenBlindByAScan
+        => IsSelected && SelectionSource is Channels.SelectionSource.Scan && SelectionMeasurement is null;
 
     public void Select(SelectionSource source, SignalMeasurement? measuredAtSelection, DateTime at)
     {

@@ -117,8 +117,8 @@ public sealed class ScanHarness
             new ScanPlanningDomainService(Capacity, SatelliteStreams),
             Signals,
             Runs,
-            Services,
-            Candidates,
+            new ChannelRotationDomainService(Services, Candidates),
+            new ChannelLineupDomainService(Services, Candidates),
             Events,
             Clock,
             Settings);
