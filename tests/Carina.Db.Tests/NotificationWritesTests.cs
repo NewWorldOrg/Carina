@@ -198,6 +198,7 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
         INotificationRuleRepository rules = rulesCanBeAdded ? held : new RulesNobodyCanAdd(held);
         ProgrammeWatchRepository asked = new(context);
         IProgrammeWatchRepository watches = watchesCanBeSaved ? asked : new WatchesNobodyCanSave(asked);
+        NotificationDeliveryRepository deliveries = new(context);
         DatabaseAtomicWrite writes = new(context);
         NoticeDispatch dispatch = new(
             new NoticeLine(new SystemNoticeNetwork(), "Carina/0.0.0-test", clock, NoticeLine.UsualDeadline),
@@ -209,8 +210,9 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
                 new NotificationDestinationService(
                     destinations,
                     rules,
-                    new NotificationDeliveryRepository(context),
+                    deliveries,
                     watches,
+                    new NotificationDestinationDomainService(destinations, rules, deliveries, watches),
                     writes,
                     seal,
                     dispatch,
