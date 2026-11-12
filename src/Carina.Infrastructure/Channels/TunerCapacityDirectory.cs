@@ -18,29 +18,8 @@ public sealed class TunerCapacityDirectory(IDriverClient driver) : ITunerCapacit
 
         DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
-        IReadOnlyList<TunerSnapshot> observed = tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots)
-            ? snapshots
-            : [];
-        HashSet<string> faulted = [.. observed.Where(snapshot => snapshot.State is TunerState.Faulted).Select(snapshot => snapshot.DeviceId)];
-        HashSet<string> turnedOff = [.. observed.Where(snapshot => snapshot.State is TunerState.Disabled).Select(snapshot => snapshot.DeviceId)];
-
-        List<TunerSeat> seats = [];
-        List<string> undetermined = [];
-
-        foreach (TunerConfigEntry entry in document.Tuners.Where(entry => !entry.Disabled && !turnedOff.Contains(entry.DeviceId)))
-        {
-            if (BroadcastReception.Of(entry.Kind) is not { Count: > 0 } serves)
-            {
-                undetermined.Add(entry.DeviceId);
-
-                continue;
-            }
-
-            seats.Add(new TunerSeat(entry.DeviceId, serves, faulted.Contains(entry.DeviceId)));
-        }
-
-        return new TunerCapacity(
-            [.. seats.OrderBy(seat => seat.DeviceId, StringComparer.Ordinal)],
-            [.. undetermined.Order(StringComparer.Ordinal)]);
+        return TunerCapacity.Of(
+            document.Tuners,
+            tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots) ? snapshots : []);
     }
 }

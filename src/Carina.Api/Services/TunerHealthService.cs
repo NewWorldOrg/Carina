@@ -49,8 +49,7 @@ public sealed class TunerHealthService(
         int hoursOfSilence,
         CancellationToken cancellationToken)
     {
-        if (hoursOfSilence < ServiceReachSettings.ShortestHoursOfSilence
-            || hoursOfSilence > ServiceReachSettings.LongestHoursOfSilence)
+        if (!ServiceReachSettings.Allows(hoursOfSilence))
         {
             return ServiceResult<int, TunerHealthFailure>.Failure(
                 $"hoursOfSilence: expected {ServiceReachSettings.ShortestHoursOfSilence}"
