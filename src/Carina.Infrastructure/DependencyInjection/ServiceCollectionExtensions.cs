@@ -297,7 +297,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDataBroadcastWorklist, DataBroadcastWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
-        services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
+        services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDomainService>();
         services.AddScoped<ITunerCapacityDirectory, TunerCapacityDirectory>();
         services.AddScoped<IServiceTuningDirectory, ServiceTuningDomainService>();
         services.AddScoped<LiveChannelDomainService>();
