@@ -85,7 +85,7 @@ public sealed class LocalAccountRepositoryTests(RepositoryDatabase database)
 
         await using (CarinaDbContext writing = database.Open())
         {
-            await Bootstrap(log).EnsureAnAccountExistsAsync(new LocalAccountRepository(writing), Cancel);
+            await EnsureAsync(log, new LocalAccountRepository(writing));
         }
 
         string first;
@@ -97,7 +97,7 @@ public sealed class LocalAccountRepositoryTests(RepositoryDatabase database)
 
         await using (CarinaDbContext again = database.Open())
         {
-            await Bootstrap(log).EnsureAnAccountExistsAsync(new LocalAccountRepository(again), Cancel);
+            await EnsureAsync(log, new LocalAccountRepository(again));
         }
 
         await using CarinaDbContext after = database.Open();
@@ -107,13 +107,15 @@ public sealed class LocalAccountRepositoryTests(RepositoryDatabase database)
         Assert.Single(log.Lines);
     }
 
-    private static LocalAccountBootstrap Bootstrap(RecordedLog log)
-        => new(
-            new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
-            new QuickPasswordHasher(),
-            PasswordHashPolicy.Default,
-            TimeProvider.System,
-            log);
+    private static Task EnsureAsync(RecordedLog log, LocalAccountRepository accounts)
+        => new LocalAccountBootstrap(
+                new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
+                PasswordHashPolicy.Default,
+                log)
+            .EnsureAnAccountExistsAsync(
+                new LocalAccountProvisioningDomainService(accounts, new QuickPasswordHasher(), TimeProvider.System),
+                accounts,
+                Cancel);
 
     private async Task ClearAsync()
     {

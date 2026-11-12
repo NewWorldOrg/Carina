@@ -4,6 +4,8 @@ namespace Carina.Domain.Auth;
 
 public sealed record PlaybackGrantPolicy
 {
+    public const int MostHeldPerSubject = 8;
+
     public static readonly TimeSpan LongestLifetime = TimeSpan.FromHours(6);
 
     public PlaybackGrantPolicy(TimeSpan lifetime)
@@ -17,6 +19,21 @@ public sealed record PlaybackGrantPolicy
     public static PlaybackGrantPolicy Default { get; } = new(TimeSpan.FromHours(2));
 
     public TimeSpan Lifetime { get; }
+
+    /// <summary>
+    /// The grant of <paramref name="subject"/> to forget before another is opened for it, among those
+    /// <paramref name="held"/>: the one opened first, once the subject holds <see cref="MostHeldPerSubject"/>;
+    /// nothing while it holds fewer.
+    /// </summary>
+    public static PlaybackGrant? TheOneToForgetBeforeOpeningFor(Subject subject, IEnumerable<PlaybackGrant> held)
+    {
+        ArgumentNullException.ThrowIfNull(subject);
+        ArgumentNullException.ThrowIfNull(held);
+
+        PlaybackGrant[] theirs = [.. held.Where(grant => grant.BelongsTo(subject))];
+
+        return theirs.Length >= MostHeldPerSubject ? theirs.MinBy(grant => grant.OpenedAt) : null;
+    }
 }
 
 public sealed class PlaybackGrant

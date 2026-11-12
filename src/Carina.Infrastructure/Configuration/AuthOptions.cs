@@ -58,7 +58,7 @@ public sealed class AuthOptions
             LongestSession,
             "which is as long as a session may sit in the ledger before anything forgets it");
 
-        if (idle > lifetime)
+        if (!SessionPolicy.IdleFitsWithin(idle, lifetime))
         {
             throw new ArgumentException(
                 $"{Section}:{nameof(SessionIdleTimeout)} cannot outlast "
@@ -73,7 +73,7 @@ public sealed class AuthOptions
             LongestSession,
             "which is as long as a session may sit in the ledger before anything forgets it");
 
-        if (idle <= between)
+        if (!SessionPolicy.IdleOutlastsTheWrites(idle, between))
         {
             throw new ArgumentException(
                 $"{Section}:{nameof(SessionIdleTimeout)} has to be longer than the "

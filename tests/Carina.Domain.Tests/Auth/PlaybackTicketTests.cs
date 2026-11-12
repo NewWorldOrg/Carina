@@ -173,6 +173,70 @@ public sealed class PlaybackTicketTests
             () => PlaybackTicket.Issue(Watcher, null!, Noon, out _));
     }
 
+    [Fact(DisplayName = "BR-PV-002: a ticket lets the caller in once, on what it was issued for, within its lifetime")]
+    public void ATicketLetsTheCallerInOnce()
+    {
+        PlaybackTicket held = PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon, out _);
+
+        Assert.True(held.Spend(PlaybackTarget.Recording("7"), Noon, PlaybackTicketPolicy.Default));
+        Assert.False(held.Spend(PlaybackTarget.Recording("7"), Noon, PlaybackTicketPolicy.Default));
+    }
+
+    [Fact(DisplayName = "BR-PV-002: a ticket spent on the wrong target is spent all the same")]
+    public void ATicketSpentOnTheWrongTargetIsSpentAllTheSame()
+    {
+        PlaybackTicket held = PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon, out _);
+
+        Assert.False(held.Spend(PlaybackTarget.Recording("8"), Noon, PlaybackTicketPolicy.Default));
+        Assert.False(held.Spend(PlaybackTarget.Recording("7"), Noon, PlaybackTicketPolicy.Default));
+    }
+
+    [Fact(DisplayName = "BR-PV-002: a ticket lets nobody in the moment its lifetime is up")]
+    public void ATicketLetsNobodyInTheMomentItsLifetimeIsUp()
+    {
+        PlaybackTicket before = PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon, out _);
+        PlaybackTicket at = PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon, out _);
+        TimeSpan lifetime = PlaybackTicketPolicy.Default.Lifetime;
+
+        Assert.True(before.Spend(
+            PlaybackTarget.Recording("7"),
+            Noon + lifetime - TimeSpan.FromTicks(1),
+            PlaybackTicketPolicy.Default));
+        Assert.False(at.Spend(PlaybackTarget.Recording("7"), Noon + lifetime, PlaybackTicketPolicy.Default));
+    }
+
+    [Fact]
+    public void TicketsSpentFromManyThreadsAtOnceLetOneCallerIn()
+    {
+        PlaybackTicket held = PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon, out _);
+
+        bool[] answered = [.. Enumerable.Range(0, 32)
+            .AsParallel()
+            .Select(_ => held.Spend(PlaybackTarget.Recording("7"), Noon, PlaybackTicketPolicy.Default))];
+
+        Assert.Single(answered, admitted => admitted);
+    }
+
+    [Theory(DisplayName = "BR-PV-002: a subject is issued another ticket while it holds fewer than eight")]
+    [InlineData(PlaybackTicketPolicy.MostHeldPerSubject - 1, true)]
+    [InlineData(PlaybackTicketPolicy.MostHeldPerSubject, false)]
+    [InlineData(PlaybackTicketPolicy.MostHeldPerSubject + 1, false)]
+    public void ASubjectIsIssuedAnotherTicketWhileItHoldsFewerThanTheMost(int holding, bool room)
+    {
+        Subject other = new("someone else");
+        PlaybackTicket[] held =
+        [
+            .. Enumerable.Range(0, holding).Select(_ => IssuedTo(Watcher)),
+            .. Enumerable.Range(0, PlaybackTicketPolicy.MostHeldPerSubject).Select(_ => IssuedTo(other)),
+        ];
+
+        Assert.Equal(room, PlaybackTicketPolicy.HasRoomFor(Watcher, held));
+        Assert.Equal(8, PlaybackTicketPolicy.MostHeldPerSubject);
+    }
+
+    private static PlaybackTicket IssuedTo(Subject subject)
+        => PlaybackTicket.Issue(subject, PlaybackTarget.Recording("7"), Noon, out string _);
+
     private static PlaybackTicket Issue(out string inTheClear)
         => PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon, out inTheClear);
 }

@@ -225,7 +225,7 @@ public sealed class PlaybackTicketStoreTests
                 Assert.True(asker.Join(TimeSpan.FromMinutes(1)));
             }
 
-            Assert.Equal(PlaybackTicketStore.MostHeldPerSubject, issued);
+            Assert.Equal(PlaybackTicketPolicy.MostHeldPerSubject, issued);
             Assert.Equal(issued, store.Count);
         }
     }
@@ -248,13 +248,13 @@ public sealed class PlaybackTicketStoreTests
     {
         PlaybackTicketStore store = Store(out _);
 
-        for (int asked = 0; asked < PlaybackTicketStore.MostHeldPerSubject; asked++)
+        for (int asked = 0; asked < PlaybackTicketPolicy.MostHeldPerSubject; asked++)
         {
             Assert.NotNull(store.Issue(Watcher, Seven));
         }
 
         Assert.Null(store.Issue(Watcher, Seven));
-        Assert.Equal(PlaybackTicketStore.MostHeldPerSubject, store.Count);
+        Assert.Equal(PlaybackTicketPolicy.MostHeldPerSubject, store.Count);
     }
 
     [Fact]
@@ -262,7 +262,7 @@ public sealed class PlaybackTicketStoreTests
     {
         PlaybackTicketStore store = Store(out _);
 
-        for (int asked = 0; asked < PlaybackTicketStore.MostHeldPerSubject * 4; asked++)
+        for (int asked = 0; asked < PlaybackTicketPolicy.MostHeldPerSubject * 4; asked++)
         {
             Assert.NotNull(store.Take(Issued(store, Watcher, Seven).InTheClear, Seven));
         }
@@ -273,7 +273,7 @@ public sealed class PlaybackTicketStoreTests
     {
         PlaybackTicketStore store = Store(out WoundClock clock);
 
-        for (int asked = 0; asked < PlaybackTicketStore.MostHeldPerSubject; asked++)
+        for (int asked = 0; asked < PlaybackTicketPolicy.MostHeldPerSubject; asked++)
         {
             Assert.NotNull(store.Issue(Watcher, Seven));
         }

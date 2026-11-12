@@ -294,7 +294,7 @@ public sealed class LocalAccountServiceTests
         ServiceResult<int, PasswordRefusal> asked = await ChangeAsync(
             here,
             Password,
-            new string('x', LocalAccountService.ShortestPassword - 1));
+            new string('x', LocalAccount.ShortestPassword - 1));
 
         Assert.False(asked.IsSuccess);
         Assert.Equal(PasswordRefusal.OutOfLength, asked.ErrorType);
@@ -342,10 +342,11 @@ public sealed class LocalAccountServiceTests
     private LocalAccountService Service(ILocalAccountRepository repository, IPasswordHasher checking) => new(
         repository,
         sessions,
+        new LocalLoginDomainService(repository, checking, new LoginThrottle(LoginRatePolicy.Default, clock)),
+        new PasswordChangeDomainService(repository, sessions, checking, clock),
         grants,
         playlists,
         checking,
-        new LoginThrottle(LoginRatePolicy.Default, clock),
         PasswordHashPolicy.Default,
         SessionPolicy.Default,
         clock);

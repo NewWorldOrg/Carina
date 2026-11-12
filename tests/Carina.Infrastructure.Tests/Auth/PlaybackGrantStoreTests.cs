@@ -115,7 +115,7 @@ public sealed class PlaybackGrantStoreTests
         PlaybackGrantStore store = Store(out WoundClock clock);
         List<string> carriers = [];
 
-        for (int opened = 0; opened <= PlaybackGrantStore.MostHeldPerSubject; opened++)
+        for (int opened = 0; opened <= PlaybackGrantPolicy.MostHeldPerSubject; opened++)
         {
             string carrier = Unguessable.Issue();
 
@@ -124,11 +124,11 @@ public sealed class PlaybackGrantStoreTests
             clock.Wind(TimeSpan.FromSeconds(1));
         }
 
-        Assert.Equal(PlaybackGrantStore.MostHeldPerSubject, store.Count);
+        Assert.Equal(PlaybackGrantPolicy.MostHeldPerSubject, store.Count);
         Assert.Null(store.Admit(carriers[0], PlaybackTarget.Recording("0")));
         Assert.Equal(
             Watcher,
-            store.Admit(carriers[^1], PlaybackTarget.Recording(PlaybackGrantStore.MostHeldPerSubject.ToString(Culture))));
+            store.Admit(carriers[^1], PlaybackTarget.Recording(PlaybackGrantPolicy.MostHeldPerSubject.ToString(Culture))));
     }
 
     private static System.Globalization.CultureInfo Culture => System.Globalization.CultureInfo.InvariantCulture;

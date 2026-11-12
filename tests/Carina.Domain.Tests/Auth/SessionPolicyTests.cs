@@ -76,4 +76,41 @@ public sealed class SessionPolicyTests
 
         Assert.Equal(policy, same);
     }
+
+    [Fact(DisplayName = "BR-AU-005: an idle window may reach the absolute lifetime but not pass it")]
+    public void AnIdleWindowFitsWithinTheAbsoluteLifetimeUpToItsEnd()
+    {
+        Assert.True(SessionPolicy.IdleFitsWithin(TimeSpan.FromDays(7), TimeSpan.FromDays(7)));
+        Assert.True(SessionPolicy.IdleFitsWithin(TimeSpan.FromDays(7) - TimeSpan.FromTicks(1), TimeSpan.FromDays(7)));
+        Assert.False(SessionPolicy.IdleFitsWithin(TimeSpan.FromDays(7) + TimeSpan.FromTicks(1), TimeSpan.FromDays(7)));
+    }
+
+    [Fact(DisplayName = "BR-AU-005: an idle window has to be longer than the time between the writes that say a session was used")]
+    public void AnIdleWindowOutlastsTheWritesOnlyWhenLongerThanThem()
+    {
+        Assert.False(SessionPolicy.IdleOutlastsTheWrites(TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30)));
+        Assert.True(SessionPolicy.IdleOutlastsTheWrites(TimeSpan.FromMinutes(30) + TimeSpan.FromTicks(1), TimeSpan.FromMinutes(30)));
+        Assert.False(SessionPolicy.IdleOutlastsTheWrites(TimeSpan.FromMinutes(29), TimeSpan.FromMinutes(30)));
+    }
+
+    [Fact(DisplayName = "BR-AU-005: a policy is made exactly when both rules on its windows hold")]
+    public void APolicyIsMadeExactlyWhenBothRulesOnItsWindowsHold()
+    {
+        TimeSpan lifetime = TimeSpan.FromDays(7);
+        TimeSpan between = TimeSpan.FromMinutes(5);
+
+        foreach (TimeSpan idle in new[] { between, between + TimeSpan.FromTicks(1), lifetime, lifetime + TimeSpan.FromTicks(1) })
+        {
+            bool holds = SessionPolicy.IdleFitsWithin(idle, lifetime) && SessionPolicy.IdleOutlastsTheWrites(idle, between);
+
+            if (holds)
+            {
+                Assert.Equal(idle, new SessionPolicy(lifetime, idle, between).IdleTimeout);
+            }
+            else
+            {
+                Assert.Throws<ArgumentOutOfRangeException>(() => new SessionPolicy(lifetime, idle, between));
+            }
+        }
+    }
 }
