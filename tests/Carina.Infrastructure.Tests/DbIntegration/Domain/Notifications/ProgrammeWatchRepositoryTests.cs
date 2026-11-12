@@ -1,13 +1,15 @@
+using Carina.Domain.Base;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
-using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Notifications;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Notifications;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
+public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
@@ -17,6 +19,12 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
 
     private readonly WatchedProgrammes watched = new(database);
 
+    private readonly ServiceProvider services = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await services.DisposeAsync();
+
     [Fact(DisplayName = "BR-NS-003: the row held for a broadcast is found by the broadcast whatever state it is in, and none is found for a broadcast nobody asked for")]
     public async Task TheRowHeldForABroadcastIsFoundByTheBroadcast()
     {
@@ -25,8 +33,8 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, 3, NotificationDestinationId.New());
         await WithdrawnAsync(watch);
 
-        await using CarinaDbContext context = database.Open();
-        ProgrammeWatchRepository rows = new(context);
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        IProgrammeWatchRepository rows = Rows(scope);
 
         ProgrammeWatch? found = await rows.FindOfAsync(programme, Cancel);
         ProgrammeWatch? none = await rows.FindOfAsync(another, Cancel);
@@ -48,9 +56,9 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         ProgrammeWatchId second = await watched.AskedAsync(between, Asked, 3, NotificationDestinationId.New());
         await WithdrawnAsync(second);
 
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
 
-        IReadOnlyList<ProgrammeWatch> listed = await new ProgrammeWatchRepository(context).ListAsync(Cancel);
+        IReadOnlyList<ProgrammeWatch> listed = await Rows(scope).ListAsync(Cancel);
 
         ProgrammeWatchId[] mine = [first, second, third];
         Assert.Equal(mine, listed.Select(row => row.Id).Where(mine.Contains));
@@ -70,8 +78,8 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         await WithdrawnAsync(withdrawn);
         DateTime ends = Starts + WatchedProgrammes.Length;
 
-        await using CarinaDbContext context = database.Open();
-        ProgrammeWatchRepository rows = new(context);
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        IProgrammeWatchRepository rows = Rows(scope);
 
         IReadOnlyList<ProgrammeWatch> aSecondBefore = await rows.ListFollowedAsync(ends.AddSeconds(-1), Cancel);
         IReadOnlyList<ProgrammeWatch> atTheEnd = await rows.ListFollowedAsync(ends, Cancel);
@@ -90,9 +98,9 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         ProgrammeWatchId before = await watched.AskedAsync(programme, Asked, 3, NotificationDestinationId.New());
         await WithdrawnAsync(before);
 
-        await using (CarinaDbContext context = database.Open())
+        await using (AsyncServiceScope scope = services.CreateAsyncScope())
         {
-            ProgrammeWatchRepository rows = new(context);
+            IProgrammeWatchRepository rows = Rows(scope);
             ProgrammeWatch settled = (await rows.FindAsync(before, Cancel))!;
             ProgrammeWatch again = ProgrammeWatch.Ask(
                 ProgrammeWatchId.New(),
@@ -102,7 +110,7 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
                 [NotificationDestinationId.New()],
                 Asked.AddMinutes(10));
 
-            await new DatabaseAtomicWrite(context).AllOrNothingAsync(
+            await scope.ServiceProvider.GetRequiredService<IAtomicWrite>().AllOrNothingAsync(
                 async inner =>
                 {
                     await rows.RemoveAsync(settled, inner);
@@ -135,8 +143,8 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
         await WithdrawnAsync(over);
         await WithdrawnAsync(onTheEdge);
 
-        await using CarinaDbContext context = database.Open();
-        ProgrammeWatchRepository rows = new(context);
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        IProgrammeWatchRepository rows = Rows(scope);
 
         await rows.RemoveSettledBeforeAsync(edge, Cancel);
 
@@ -147,8 +155,8 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
 
     private async Task WithdrawnAsync(ProgrammeWatchId watch)
     {
-        await using CarinaDbContext context = database.Open();
-        ProgrammeWatchRepository rows = new(context);
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        IProgrammeWatchRepository rows = Rows(scope);
         ProgrammeWatch held = (await rows.FindAsync(watch, Cancel))!;
 
         held.Cancel(Asked.AddMinutes(5));
@@ -157,8 +165,8 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
 
     private async Task ToldAsync(ProgrammeWatchId watch)
     {
-        await using CarinaDbContext context = database.Open();
-        ProgrammeWatchRepository rows = new(context);
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        IProgrammeWatchRepository rows = Rows(scope);
         ProgrammeWatch held = (await rows.FindAsync(watch, Cancel))!;
 
         held.Notify(Starts.AddMinutes(-3));
@@ -167,8 +175,11 @@ public sealed class ProgrammeWatchRepositoryTests(RepositoryDatabase database)
 
     private async Task<ProgrammeWatch> HeldForAsync(ProgrammeId programme)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
 
-        return (await new ProgrammeWatchRepository(context).FindOfAsync(programme, Cancel))!;
+        return (await Rows(scope).FindOfAsync(programme, Cancel))!;
     }
+
+    private static IProgrammeWatchRepository Rows(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IProgrammeWatchRepository>();
 }

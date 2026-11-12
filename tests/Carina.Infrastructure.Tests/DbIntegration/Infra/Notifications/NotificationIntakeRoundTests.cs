@@ -7,10 +7,11 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Notifications;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Notifications;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]

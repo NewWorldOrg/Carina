@@ -4,12 +4,15 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Notifications;
 using Carina.Infrastructure.Tests.Reservations;
 using Carina.Infrastructure.Tests.Thumbnails;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+using WatchedProgrammes = Carina.Infrastructure.Tests.Notifications.WatchedProgrammes;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Notifications;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]

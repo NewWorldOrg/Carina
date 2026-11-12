@@ -6,8 +6,9 @@ using System.Text;
 using Carina.Infrastructure.Notifications;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class PushEncryptionTests
 {
     private const string Rfc8291Plaintext = "When I grow up, I want to be a watermelon";

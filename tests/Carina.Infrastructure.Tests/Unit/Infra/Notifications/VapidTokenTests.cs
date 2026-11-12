@@ -5,8 +5,9 @@ using System.Text.Json;
 using Carina.Infrastructure.Notifications;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class VapidTokenTests
 {
     private const string Rfc8292Unsigned =

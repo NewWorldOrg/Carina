@@ -3,12 +3,14 @@ using System.Text.Json;
 
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
+using Carina.Infrastructure.Tests.Notifications;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.DataProtection;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class PushMessagesTests : IDisposable
 {
     private static readonly DateTime At = new(2031, 4, 2, 3, 0, 0, DateTimeKind.Utc);

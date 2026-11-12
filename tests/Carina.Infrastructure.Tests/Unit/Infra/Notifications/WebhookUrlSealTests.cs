@@ -9,8 +9,9 @@ using Carina.Infrastructure.Tests.Auth;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class WebhookUrlSealTests
 {
     private const string Written = "https://hooks.slack.com/services/T0000/B0000/made-up-token-wxyz";

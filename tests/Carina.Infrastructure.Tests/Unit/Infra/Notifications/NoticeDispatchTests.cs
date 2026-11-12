@@ -3,10 +3,12 @@ using System.Text;
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Tests.DataBroadcast;
+using Carina.Infrastructure.Tests.Notifications;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NoticeDispatchTests
 {
     private static readonly byte[] Payload = Encoding.UTF8.GetBytes("""{"said":"作り物"}""");

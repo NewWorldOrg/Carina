@@ -4,8 +4,9 @@ using System.Text.Json;
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NoticePayloadTests
 {
     private const string Title = "録画が終わりました";

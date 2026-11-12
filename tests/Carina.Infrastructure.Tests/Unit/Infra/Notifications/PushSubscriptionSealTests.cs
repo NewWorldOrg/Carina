@@ -4,13 +4,15 @@ using Carina.Domain.Notifications;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Tests.Auth;
+using Carina.Infrastructure.Tests.Notifications;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class PushSubscriptionSealTests : IDisposable
 {
     private const string Endpoint = "https://fcm.googleapis.com/fcm/send/made-up-registration";

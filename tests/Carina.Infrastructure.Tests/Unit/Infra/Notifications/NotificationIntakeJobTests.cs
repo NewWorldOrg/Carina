@@ -11,8 +11,9 @@ using Microsoft.Extensions.Logging;
 
 using EventId = Carina.Domain.Programmes.EventId;
 
-namespace Carina.Infrastructure.Tests.Notifications;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NotificationIntakeJobTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
