@@ -237,10 +237,9 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
                 Rules,
                 Programmes,
                 Reservations,
-                Outcomes,
-                Visits,
-                new HeldEpochs(),
-                Streams,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
+                new RuleWithdrawalDomainService(Reservations, Streams, Visits, new HeldEpochs(), new FixedClock(Now)),
+                new RuleTakingDomainService(Reservations),
                 new ReservationSchedulingService(
                     Reservations,
                     new NoRecordings(),

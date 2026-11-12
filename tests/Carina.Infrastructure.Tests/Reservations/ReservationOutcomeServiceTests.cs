@@ -513,7 +513,7 @@ public sealed class ReservationOutcomeServiceTests
                 ledger,
                 outcomes,
                 claims,
-                recordings,
+                new ReservationOutcomeDomainService(outcomes, recordings),
                 write,
                 new ReservationOutcomeSettings { Grace = Grace },
                 events,

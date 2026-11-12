@@ -22,7 +22,7 @@ public sealed record GuideRun(
 /// </remarks>
 public sealed class ReservationGuideService(
     IReservationRepository reservations,
-    IReservationOutcomeRepository outcomes,
+    ReservationOutcomeDomainService ledger,
     IProgrammeRepository programmes,
     ReservationSchedulingService scheduling,
     IAtomicWrite write,
@@ -39,7 +39,7 @@ public sealed class ReservationGuideService(
 
         foreach (Reservation reservation in ahead)
         {
-            if (!NotYetUnderWay(reservation, at))
+            if (!reservation.IsYetToBeginAt(at))
             {
                 continue;
             }
@@ -113,25 +113,13 @@ public sealed class ReservationGuideService(
                         announced.StartsAt,
                         EpgComparison.EndOf(announced),
                         announced.EndsAt is not null,
-                        ProgrammeSnapshot.Of(
-                            announced.Name,
-                            announced.Summary,
-                            announced.Items,
-                            announced.Genres,
-                            at,
-                            announced.Audio,
-                            announced.Sounds),
+                        ProgrammeSnapshot.Of(announced, at),
                         divergences);
 
                     touched.Add(reservation);
                     followed.Add(reservation.Id);
 
-                    await ReservationLedger.WriteOnceAsync(
-                        outcomes,
-                        reservation,
-                        ReservationOutcomeKind.ProgrammeMoved,
-                        at,
-                        token);
+                    await ledger.RecordOnceAsync(reservation, ReservationOutcomeKind.ProgrammeMoved, at, token);
                 }
 
                 await reservations.SaveAllAsync(touched, token);
@@ -176,12 +164,7 @@ public sealed class ReservationGuideService(
 
                     await reservations.SaveAllAsync([reservation], token);
 
-                    return await ReservationLedger.WriteOnceAsync(
-                        outcomes,
-                        reservation,
-                        ReservationOutcomeKind.ProgrammeGone,
-                        at,
-                        token);
+                    return await ledger.RecordOnceAsync(reservation, ReservationOutcomeKind.ProgrammeGone, at, token);
                 },
                 cancellationToken);
 
@@ -190,9 +173,6 @@ public sealed class ReservationGuideService(
 
         return cancelled;
     }
-
-    private static bool NotYetUnderWay(Reservation reservation, DateTime at)
-        => !reservation.IsPinned && reservation.EffectiveStartAt > at;
 
     private static ReservationWindow Everything(DateTime at)
         => new(at, DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc));

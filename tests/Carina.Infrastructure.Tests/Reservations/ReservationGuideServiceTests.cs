@@ -289,7 +289,14 @@ public sealed class ReservationGuideServiceTests
             clock);
 
         return new Held(
-            new ReservationGuideService(ledger, outcomes, programmes, scheduling, write, events, clock),
+            new ReservationGuideService(
+                ledger,
+                new ReservationOutcomeDomainService(outcomes, new NoRecordings()),
+                programmes,
+                scheduling,
+                write,
+                events,
+                clock),
             ledger,
             outcomes,
             programmes,

@@ -569,6 +569,19 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.IsType<ServiceTuningDomainService>(scope.ServiceProvider.GetRequiredService<IServiceTuningDirectory>());
     }
 
+    [Fact(DisplayName = "registers the domain services of the reservations and rules, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheReservationsAndRules()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationOutcomeDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationPlanningDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<BroadcastGroupDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleWithdrawalDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleTakingDomainService>());
+    }
+
     [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]
     public void RegistersTheLearningBacklogAlongsideTheOtherHostedServices()
     {

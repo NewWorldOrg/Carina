@@ -25,8 +25,9 @@ public sealed record BroadcastGroupRun(
 /// </remarks>
 public sealed class BroadcastGroupService(
     IReservationRepository reservations,
-    IReservationOutcomeRepository outcomes,
+    ReservationOutcomeDomainService ledger,
     IProgrammeRepository programmes,
+    BroadcastGroupDomainService groups,
     ReservationSchedulingService scheduling,
     IAtomicWrite write,
     IAppEventPublisher events,
@@ -45,13 +46,12 @@ public sealed class BroadcastGroupService(
 
         foreach (Reservation reservation in standing)
         {
-            bool movable = !reservation.IsPinned && reservation.EffectiveStartAt > at;
+            bool movable = reservation.IsYetToBeginAt(at);
 
             if (resolver.Place(reservation.Programme, reservation.EndAt, at) is not { } placed)
             {
                 if (movable
-                    && reservation.BroadcastGroupRole is not BroadcastGroupRole.Standalone
-                    && await programmes.FindAsync(reservation.Programme.Id, cancellationToken) is not null
+                    && await groups.FallsBackToStandingAloneAsync(reservation, cancellationToken)
                     && await RegroupedAsync(reservation, null, BroadcastGroupRole.Standalone, cancellationToken))
                 {
                     regrouped.Add(reservation.Id);
@@ -78,12 +78,12 @@ public sealed class BroadcastGroupService(
 
             foreach (BroadcastTarget sibling in placed.Alongside)
             {
-                if (await reservations.FindByProgrammeAsync(sibling.Reference, cancellationToken) is not null)
+                if (!await groups.NeedsReservingBesideAsync(sibling, cancellationToken))
                 {
                     continue;
                 }
 
-                Reservation planned = Beside(reservation, sibling, at);
+                Reservation planned = reservation.PlanBeside(ReservationId.New(), sibling, at);
 
                 if ((await scheduling.CreateAsync(planned, cancellationToken)).Settled)
                 {
@@ -106,40 +106,37 @@ public sealed class BroadcastGroupService(
         DateTime at,
         CancellationToken cancellationToken)
     {
-        if (own.Programme.Id.Equals(reservation.Programme.Id))
+        BroadcastGroupPlacing placing = await groups.PlacingAsync(reservation, own, cancellationToken);
+
+        bool moved = placing.Move switch
         {
-            return await RegroupedAsync(reservation, own.Key, own.Role, cancellationToken)
-                ? Placing.Regrouped
-                : Placing.AsItWas;
-        }
+            BroadcastGroupMove.Retarget => await RetargetedAsync(reservation, own, at, cancellationToken),
+            BroadcastGroupMove.StepAside => await SteppedAsideAsync(reservation, cancellationToken),
+            _ => await RegroupedAsync(reservation, placing.Key, placing.Role, cancellationToken),
+        };
 
-        Reservation? there = await reservations.FindByProgrammeAsync(own.Reference, cancellationToken);
+        return moved ? Made(placing.Move) : Placing.AsItWas;
+    }
 
-        if (there is null)
-        {
-            return await RetargetedAsync(reservation, own, at, cancellationToken)
-                ? Placing.Retargeted
-                : Placing.AsItWas;
-        }
+    private static Placing Made(BroadcastGroupMove move) => move switch
+    {
+        BroadcastGroupMove.Retarget => Placing.Retargeted,
+        BroadcastGroupMove.StepAside => Placing.SteppedAside,
+        _ => Placing.Regrouped,
+    };
 
-        if (there.RecordingOutcome is not null
-            || there.State is ReservationState.Scheduled or ReservationState.Conflict)
-        {
-            SchedulingRun run = await scheduling.ReviseAsync(
-                reservation,
-                new ReservationRevision
-                {
-                    Move = ReservationMove.Cancel,
-                    Cancellation = ReservationCancellation.SameBroadcast,
-                },
-                cancellationToken);
+    private async Task<bool> SteppedAsideAsync(Reservation reservation, CancellationToken cancellationToken)
+    {
+        SchedulingRun run = await scheduling.ReviseAsync(
+            reservation,
+            new ReservationRevision
+            {
+                Move = ReservationMove.Cancel,
+                Cancellation = ReservationCancellation.SameBroadcast,
+            },
+            cancellationToken);
 
-            return run.Settled ? Placing.SteppedAside : Placing.AsItWas;
-        }
-
-        return await RegroupedAsync(reservation, own.Key, BroadcastGroupRole.MovementSuppressed, cancellationToken)
-            ? Placing.Regrouped
-            : Placing.AsItWas;
+        return run.Settled;
     }
 
     private async Task<bool> RetargetedAsync(
@@ -159,19 +156,14 @@ public sealed class BroadcastGroupService(
                         own.Reference,
                         EpgComparison.EndOf(programme),
                         programme.EndsAt is not null,
-                        Snapshot(programme, at),
+                        ProgrammeSnapshot.Of(programme, at),
                         EpgComparison.Of(reservation, programme, at),
                         own.Key,
                         own.Role);
 
                     await reservations.SaveAllAsync([reservation], token);
 
-                    return await ReservationLedger.WriteOnceAsync(
-                        outcomes,
-                        reservation,
-                        ReservationOutcomeKind.ProgrammeMoved,
-                        at,
-                        token);
+                    return await ledger.RecordOnceAsync(reservation, ReservationOutcomeKind.ProgrammeMoved, at, token);
                 },
                 cancellationToken);
         }
@@ -189,7 +181,7 @@ public sealed class BroadcastGroupService(
         BroadcastGroupRole role,
         CancellationToken cancellationToken)
     {
-        if (Equals(reservation.BroadcastGroupKey, key) && reservation.BroadcastGroupRole == role)
+        if (reservation.IsGroupedAs(key, role))
         {
             return false;
         }
@@ -214,37 +206,6 @@ public sealed class BroadcastGroupService(
 
         return true;
     }
-
-    private static Reservation Beside(Reservation example, BroadcastTarget sibling, DateTime at)
-    {
-        Programme programme = sibling.Programme;
-
-        return Reservation.Plan(
-            ReservationId.New(),
-            sibling.Reference,
-            example.RuleId,
-            example.Priority,
-            programme.StartsAt,
-            EpgComparison.EndOf(programme),
-            programme.EndsAt is not null,
-            example.MarginBefore,
-            example.MarginAfter,
-            Snapshot(programme, at),
-            sibling.Key,
-            sibling.Role,
-            at,
-            example.EncodeWhenRecorded);
-    }
-
-    private static ProgrammeSnapshot Snapshot(Programme programme, DateTime at)
-        => ProgrammeSnapshot.Of(
-            programme.Name,
-            programme.Summary,
-            programme.Items,
-            programme.Genres,
-            at,
-            programme.Audio,
-            programme.Sounds);
 
     private static ReservationWindow Everything(DateTime at)
         => new(at, DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc));

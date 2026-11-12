@@ -165,7 +165,10 @@ public sealed class RuleApplyNowAnswersTheRunItAskedForTests
             services.AddSingleton(new RuleApplicationSettings());
             services.AddScoped<ProgrammeSearchScope>();
             services.AddScoped<RuleMatcher>();
+            services.AddScoped<ReservationOutcomeDomainService>();
             services.AddScoped<ReservationSchedulingService>();
+            services.AddScoped<RuleWithdrawalDomainService>();
+            services.AddScoped<RuleTakingDomainService>();
             services.AddScoped<RuleApplicationService>();
 
             provider = services.BuildServiceProvider();

@@ -148,6 +148,13 @@ public sealed class Programme
     }
 
     /// <summary>
+    /// Whether this programme has not ended at <paramref name="at"/>; one whose end is not announced is taken to run
+    /// for the provisional length a reservation gives it.
+    /// </summary>
+    public bool IsStillToComeAt(DateTime at)
+        => (EndsAt ?? StartsAt + Reservations.Reservation.ProvisionalLengthWhenTheEndIsNotAnnounced) > at;
+
+    /// <summary>
     /// Writes down that this programme was named again by a reading that heard the whole of its
     /// service's announced schedule. No mark means no whole reading has ever named it.
     /// </summary>

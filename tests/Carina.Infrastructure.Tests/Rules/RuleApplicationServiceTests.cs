@@ -965,10 +965,9 @@ public sealed class RuleApplicationServiceTests
                 Rules,
                 Programmes,
                 Reservations,
-                Outcomes,
-                Visits,
-                Epochs,
-                Streams,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
+                new RuleWithdrawalDomainService(Reservations, Streams, Visits, Epochs, applying ?? new FixedClock(Now)),
+                new RuleTakingDomainService(Reservations),
                 new ReservationSchedulingService(
                     Reservations,
                     new NoRecordings(),

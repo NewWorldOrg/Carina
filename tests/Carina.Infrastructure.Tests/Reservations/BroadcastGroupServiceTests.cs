@@ -241,7 +241,15 @@ public sealed class BroadcastGroupServiceTests
             clock);
 
         return new Held(
-            new BroadcastGroupService(ledger, outcomes, programmes, scheduling, write, events, clock),
+            new BroadcastGroupService(
+                ledger,
+                new ReservationOutcomeDomainService(outcomes, new NoRecordings()),
+                programmes,
+                new BroadcastGroupDomainService(ledger, programmes),
+                scheduling,
+                write,
+                events,
+                clock),
             ledger,
             outcomes,
             programmes,

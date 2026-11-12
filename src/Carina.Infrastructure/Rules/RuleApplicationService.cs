@@ -11,15 +11,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Rules;
 
-public enum RuleWithdrawal
-{
-    WhileTheRuleStands = 1,
-
-    WhenTheRuleIsSwitchedOff = 2,
-
-    WhenTheRuleIsDeleted = 3,
-}
-
 public sealed record RuleApplicationRun(
     long Revision,
     int Read,
@@ -52,10 +43,9 @@ public sealed class RuleApplicationService(
     IRuleRepository rules,
     IProgrammeRepository programmes,
     IReservationRepository reservations,
-    IReservationOutcomeRepository outcomes,
-    IStreamVisitRepository visits,
-    ICollectionEpochRepository epochs,
-    IBroadcastStreamDirectory directory,
+    ReservationOutcomeDomainService ledger,
+    RuleWithdrawalDomainService withdrawal,
+    RuleTakingDomainService ruleTaking,
     ReservationSchedulingService scheduling,
     RuleMatcher matcher,
     RuleApplicationSettings settings,
@@ -76,7 +66,7 @@ public sealed class RuleApplicationService(
         ArgumentNullException.ThrowIfNull(ruleId);
 
         DateTime at = Moment();
-        WithdrawalGuard guard = await GuardAsync(cancellationToken);
+        RuleWithdrawalGuard guard = await withdrawal.GuardAsync(settings.Grace, cancellationToken);
 
         return await OnceMoreIfMovedAsync(() => DroppedAsync(ruleId, at, guard, cancellationToken));
     }
@@ -91,36 +81,26 @@ public sealed class RuleApplicationService(
         }
 
         DateTime at = Moment();
-        WithdrawalGuard guard = await GuardAsync(cancellationToken);
+        RuleWithdrawalGuard guard = await withdrawal.GuardAsync(settings.Grace, cancellationToken);
         IReadOnlyList<Reservation> withdrawn =
             await OnceMoreIfMovedAsync(() => DroppedAsync(ruleId, at, guard, cancellationToken));
 
         IReadOnlyList<Reservation> swept = await OnceMoreIfMovedAsync(() => write.AllOrNothingAsync(
             async token =>
             {
-                IReadOnlyList<Reservation> standing = await reservations.ListForRuleAsync(ruleId, token);
-                Reservation[] left =
-                [
-                    .. standing.Where(reservation =>
-                        guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsDeleted, at)),
-                ];
-                Reservation[] kept =
-                [
-                    .. standing.Where(reservation =>
-                        !guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsDeleted, at)),
-                ];
+                RuleRetiring retiring = await withdrawal.RetiringAsync(ruleId, guard, at, token);
 
-                await reservations.WithdrawAsync(left, token);
+                await reservations.WithdrawAsync(retiring.Withdrawn, token);
 
-                foreach (Reservation reservation in kept)
+                foreach (Reservation reservation in retiring.Kept)
                 {
                     reservation.LoseRule();
                 }
 
-                await reservations.SaveAllAsync(kept, token);
+                await reservations.SaveAllAsync(retiring.Kept, token);
                 await rules.RemoveAsync(rule, token);
 
-                return left;
+                return retiring.Withdrawn;
             },
             cancellationToken));
 
@@ -148,14 +128,14 @@ public sealed class RuleApplicationService(
         BroadcastGroupResolver groups = BroadcastGroupResolver.Of(await programmes.ListGroupedAsync(cancellationToken));
         IReadOnlyList<Programme> read = Alongside(carried, groups);
         IReadOnlyList<ProgrammeMatch> guide = ProgrammeSearchMatching.Layered(
-            [.. read.Where(programme => StillToCome(programme, at))],
+            [.. read.Where(programme => programme.IsStillToComeAt(at))],
             []);
 
         IReadOnlyList<Rule> enabled = await rules.ListEnabledByPrecedenceAsync(cancellationToken);
         Rule[] alongside = [.. enabled.Where(rule => !rule.Id.Equals(draft.Id)), draft];
 
         RuleMatchRun run = await matcher.AgainstAsync(alongside, guide, cancellationToken);
-        IReadOnlyList<Reservation> changed = await ChangedByHandAsync(alongside, at, cancellationToken);
+        IReadOnlyList<Reservation> changed = await ruleTaking.ChangedByHandAsync(alongside, at, cancellationToken);
         RuleTaking resolved = RuleMatcher.Resolved(run.Matches, run.Searches, changed, groups, read, at);
         RuleMatch[] taking = [.. resolved.Matches.Where(match => match.Rule.Id.Equals(draft.Id))];
         RuleTaking drafted = RuleMatcher.Resolved(
@@ -168,7 +148,6 @@ public sealed class RuleApplicationService(
 
         List<Reservation> making = [];
         List<Reservation> changingHands = [];
-        HashSet<ProgrammeKey> taken = [.. resolved.Matches.Select(match => Naming(match.Programme))];
 
         foreach (RuleMatch match in taking)
         {
@@ -178,39 +157,33 @@ public sealed class RuleApplicationService(
                 match.Programme.EventId,
                 match.Programme.StartsAt);
 
-            if (await reservations.FindByProgrammeAsync(reference, cancellationToken) is not { } already)
+            if ((await ruleTaking.TakingAsync(reference, at, cancellationToken)).Already is not { } already)
             {
                 making.Add(Planned(match, reference, at));
 
                 continue;
             }
 
-            if (already.IsRuleBorn && !draft.Id.Equals(already.RuleId))
+            if (already.IsHeldByAnotherRuleThan(draft.Id))
             {
                 changingHands.Add(already);
             }
         }
 
-        WithdrawalGuard guard = await GuardAsync(cancellationToken);
-        IReadOnlyList<Reservation> held = await reservations.ListForRuleAsync(draft.Id, cancellationToken);
-        HashSet<ProgrammeKey> standing = StandingFor(taken, held);
-        Reservation[] withdrawing =
-        [
-            .. held
-                .Where(reservation => !standing.Contains(Naming(reservation)))
-                .Where(reservation => guard.Lets(reservation, RuleWithdrawal.WhileTheRuleStands, at)),
-        ];
-        Reservation[] sweeping =
-        [
-            .. held.Where(reservation => guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsDeleted, at)),
-        ];
+        RuleWithdrawalGuard guard = await withdrawal.GuardAsync(settings.Grace, cancellationToken);
+        RuleWithdrawalRehearsal rehearsed = await withdrawal.RehearseAsync(
+            draft.Id,
+            [.. resolved.Matches.Select(match => ListingKey.Of(match.Programme))],
+            guard,
+            at,
+            cancellationToken);
 
         return new RuleRehearsal(
             taking,
             await matcher.ShadowedByAsync(draft, guide, cancellationToken),
             making,
-            withdrawing,
-            sweeping,
+            rehearsed.Withdrawing,
+            rehearsed.Sweeping,
             changingHands,
             await scheduling.PreviewAsync(making, cancellationToken),
             drafted.Moved);
@@ -219,14 +192,10 @@ public sealed class RuleApplicationService(
     private async Task<IReadOnlyList<Reservation>> DroppedAsync(
         RuleId ruleId,
         DateTime at,
-        WithdrawalGuard guard,
+        RuleWithdrawalGuard guard,
         CancellationToken cancellationToken)
     {
-        Reservation[] leaving =
-        [
-            .. (await reservations.ListForRuleAsync(ruleId, cancellationToken))
-                .Where(reservation => guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsSwitchedOff, at)),
-        ];
+        IReadOnlyList<Reservation> leaving = await withdrawal.SwitchedOffAsync(ruleId, guard, at, cancellationToken);
 
         await WithdrawAsync(leaving, cancellationToken);
 
@@ -263,12 +232,12 @@ public sealed class RuleApplicationService(
 
         RuleMatchRun run = await matcher.AgainstAsync(
             enabled,
-            ProgrammeSearchMatching.Layered([.. read.Where(programme => StillToCome(programme, at))], []),
+            ProgrammeSearchMatching.Layered([.. read.Where(programme => programme.IsStillToComeAt(at))], []),
             cancellationToken);
         RuleTaking resolved = RuleMatcher.Resolved(
             run.Matches,
             run.Searches,
-            await ChangedByHandAsync(enabled, at, cancellationToken),
+            await ruleTaking.ChangedByHandAsync(enabled, at, cancellationToken),
             groups,
             read,
             at);
@@ -297,39 +266,6 @@ public sealed class RuleApplicationService(
             clock.GetElapsedTime(began));
     }
 
-    /// <summary>
-    /// The reservations still to come that a rule made and a person has since changed: their priority,
-    /// a margin or whether they are encoded is no longer what the rule asks. The ledger keeps no mark of
-    /// a change, so the values are the only witness, and a rule edited after it made a reservation makes
-    /// that reservation look changed too.
-    /// </summary>
-    private async Task<IReadOnlyList<Reservation>> ChangedByHandAsync(
-        IReadOnlyList<Rule> standing,
-        DateTime at,
-        CancellationToken cancellationToken)
-    {
-        Dictionary<RuleId, Rule> asked = [];
-
-        foreach (Rule rule in standing)
-        {
-            asked.TryAdd(rule.Id, rule);
-        }
-
-        return
-        [
-            .. (await reservations.ListPendingAsync(Everything(at), cancellationToken))
-                .Where(reservation => reservation.RuleId is { } ruleId
-                    && asked.TryGetValue(ruleId, out Rule? rule)
-                    && !AsTheRuleAsks(reservation, rule)),
-        ];
-    }
-
-    private static bool AsTheRuleAsks(Reservation reservation, Rule rule)
-        => reservation.Priority.Equals(rule.Priority)
-            && reservation.MarginBefore.Equals(rule.MarginBefore)
-            && reservation.MarginAfter.Equals(rule.MarginAfter)
-            && reservation.EncodeWhenRecorded == rule.EncodeWhenRecorded;
-
     private async Task<Making> MakeAsync(
         IReadOnlyList<RuleMatch> matches,
         DateTime at,
@@ -347,9 +283,11 @@ public sealed class RuleApplicationService(
                 match.Programme.EventId,
                 match.Programme.StartsAt);
 
-            if (await reservations.FindByProgrammeAsync(reference, cancellationToken) is { } already)
+            RuleProgrammeTaking taken = await ruleTaking.TakingAsync(reference, at, cancellationToken);
+
+            if (taken.Already is { } already)
             {
-                if (await RevivedAsync(already, at, cancellationToken))
+                if (taken.Move is RuleTakingMove.Revive && await RevivedAsync(already, at, cancellationToken))
                 {
                     revived.Add(already);
                 }
@@ -383,13 +321,6 @@ public sealed class RuleApplicationService(
         DateTime at,
         CancellationToken cancellationToken)
     {
-        if (already.Cancellation is not ReservationCancellation.ProgrammeGone
-            || !already.IsRuleBorn
-            || already.EffectiveEndAt <= at)
-        {
-            return false;
-        }
-
         SchedulingRun settled = await scheduling.ReviseAsync(
             already,
             new ReservationRevision { Move = ReservationMove.Restore },
@@ -407,12 +338,7 @@ public sealed class RuleApplicationService(
 
                 await reservations.SaveAllAsync([already], token);
 
-                return await ReservationLedger.WriteOnceAsync(
-                    outcomes,
-                    already,
-                    ReservationOutcomeKind.ProgrammeReturned,
-                    at,
-                    token);
+                return await ledger.RecordOnceAsync(already, ReservationOutcomeKind.ProgrammeReturned, at, token);
             },
             cancellationToken);
 
@@ -428,73 +354,18 @@ public sealed class RuleApplicationService(
         DateTime at,
         CancellationToken cancellationToken)
     {
-        WithdrawalGuard guard = await GuardAsync(cancellationToken);
-        HashSet<RuleId> faulted = run.Faulted.Select(fault => fault.Rule.Id).ToHashSet();
-        HashSet<RuleId> standing = enabled.Where(rule => rule.Enabled).Select(rule => rule.Id).ToHashSet();
-        IReadOnlyList<Reservation> pending = await reservations.ListPendingAsync(Everything(at), cancellationToken);
-        HashSet<ProgrammeKey> kept = StandingFor(resolved.Matches.Select(match => Naming(match.Programme)), pending);
-        HashSet<ProgrammeKey> seen = read.Select(Naming).ToHashSet();
-        List<Reservation> leaving = [];
-
-        foreach (Reservation reservation in pending)
-        {
-            RuleId? ruleId = reservation.RuleId;
-
-            if (ruleId is { } faltered && faulted.Contains(faltered))
-            {
-                continue;
-            }
-
-            bool holds = ruleId is { } held && standing.Contains(held);
-            ProgrammeKey naming = Naming(reservation);
-
-            if (holds && (kept.Contains(naming) || (!sweeping && !seen.Contains(naming))))
-            {
-                continue;
-            }
-
-            if (!guard.Lets(
-                reservation,
-                holds ? RuleWithdrawal.WhileTheRuleStands : RuleWithdrawal.WhenTheRuleIsSwitchedOff,
-                at))
-            {
-                continue;
-            }
-
-            if (holds && await ContinuesARelayAsync(reservation, kept, cancellationToken))
-            {
-                continue;
-            }
-
-            leaving.Add(reservation);
-        }
+        RuleWithdrawalGuard guard = await withdrawal.GuardAsync(settings.Grace, cancellationToken);
+        var pass = new RulePassReading(
+            run.Faulted.Select(fault => fault.Rule.Id).ToHashSet(),
+            enabled.Where(rule => rule.Enabled).Select(rule => rule.Id).ToHashSet(),
+            [.. resolved.Matches.Select(match => ListingKey.Of(match.Programme))],
+            read.Select(ListingKey.Of).ToHashSet(),
+            sweeping);
+        IReadOnlyList<Reservation> leaving = await withdrawal.LeavingAsync(pass, guard, at, cancellationToken);
 
         await WithdrawAsync(leaving, cancellationToken);
 
         return leaving;
-    }
-
-    /// <summary>
-    /// Whether this reservation is a segment of a relayed broadcast another segment of which is being
-    /// recorded, has been recorded, or is still taken by a rule.
-    /// </summary>
-    private async Task<bool> ContinuesARelayAsync(
-        Reservation reservation,
-        HashSet<ProgrammeKey> kept,
-        CancellationToken cancellationToken)
-    {
-        if (reservation.BroadcastGroupRole is not BroadcastGroupRole.RelaySegment
-            || reservation.BroadcastGroupKey is not { } key)
-        {
-            return false;
-        }
-
-        IReadOnlyList<Reservation> segments = await reservations.ListForBroadcastGroupAsync(key, cancellationToken);
-
-        return segments.Any(segment => !segment.Id.Equals(reservation.Id)
-            && (segment.StartedAt is not null
-                || segment.RecordingOutcome is not null
-                || kept.Contains(Naming(segment))));
     }
 
     private async Task WithdrawAsync(IReadOnlyList<Reservation> leaving, CancellationToken cancellationToken)
@@ -509,35 +380,6 @@ public sealed class RuleApplicationService(
         events.Signal(AppEventName.Reservations);
 
         await scheduling.RecalculateAsync(cancellationToken);
-    }
-
-    private async Task<WithdrawalGuard> GuardAsync(CancellationToken cancellationToken)
-    {
-        Dictionary<ServiceKey, int> carriers = [];
-
-        foreach (BroadcastStream stream in await directory.ListAsync(cancellationToken))
-        {
-            foreach (ServiceId service in stream.Services)
-            {
-                carriers[new ServiceKey(stream.NetworkId.Value, service.Value)] = stream.TransportStreamId.Value;
-            }
-        }
-
-        Dictionary<ServiceKey, VisitOutcome> settled = [];
-        CollectionEpoch epoch = await epochs.ReadAsync(Moment(), cancellationToken);
-
-        foreach (StreamVisit visit in await visits.ListAsync(cancellationToken))
-        {
-            if (epoch.GuideDiscardedAt is { } discarded
-                && (visit.LastCompletedAt is not { } completed || completed <= discarded))
-            {
-                continue;
-            }
-
-            settled[new ServiceKey(visit.NetworkId.Value, visit.TransportStreamId.Value)] = visit.Outcome;
-        }
-
-        return new WithdrawalGuard(carriers, settled, settings.Grace);
     }
 
     private async Task<(IReadOnlyList<Programme> Read, long Revision)> ReadAsync(
@@ -607,61 +449,8 @@ public sealed class RuleApplicationService(
         ];
     }
 
-    private static bool StillToCome(Programme programme, DateTime at)
-        => (programme.EndsAt ?? Provisionally(programme.StartsAt)) > at;
-
     private static DateTime Provisionally(DateTime startsAt)
         => startsAt + Reservation.ProvisionalLengthWhenTheEndIsNotAnnounced;
-
-    private static ReservationWindow Everything(DateTime at)
-        => new(at - Margin.Longest, DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc));
-
-    private static ProgrammeKey Naming(Programme programme)
-        => new(
-            programme.NetworkId.Value,
-            programme.ServiceId.Value,
-            programme.EventId.Value,
-            programme.StartsAt);
-
-    private static ProgrammeKey Naming(ProgrammeMatch programme)
-        => new(
-            programme.NetworkId.Value,
-            programme.ServiceId.Value,
-            programme.EventId.Value,
-            programme.StartsAt);
-
-    private static ProgrammeKey Naming(Reservation reservation)
-        => new(
-            reservation.NetworkId.Value,
-            reservation.ServiceId.Value,
-            reservation.EventId.Value,
-            reservation.ProgrammeStartsAt);
-
-    /// <summary>
-    /// Names the reservations that stand for the programmes taken: the one naming a programme's start,
-    /// or, when none does, those of the same broadcast.
-    /// </summary>
-    private static HashSet<ProgrammeKey> StandingFor(IEnumerable<ProgrammeKey> taken, IEnumerable<Reservation> held)
-    {
-        ILookup<BroadcastKey, ProgrammeKey> holding = held.Select(Naming).Distinct().ToLookup(key => key.Broadcast);
-        HashSet<ProgrammeKey> standing = [];
-
-        foreach (ProgrammeKey programme in taken)
-        {
-            IEnumerable<ProgrammeKey> ofTheBroadcast = holding[programme.Broadcast];
-
-            if (ofTheBroadcast.Contains(programme))
-            {
-                standing.Add(programme);
-
-                continue;
-            }
-
-            standing.UnionWith(ofTheBroadcast);
-        }
-
-        return standing;
-    }
 
     private DateTime Moment() => clock.GetUtcNow().UtcDateTime;
 
@@ -669,36 +458,4 @@ public sealed class RuleApplicationService(
         IReadOnlyList<Reservation> Made,
         IReadOnlyList<Reservation> Refused,
         IReadOnlyList<Reservation> Revived);
-
-    private readonly record struct ProgrammeKey(int NetworkId, int ServiceId, int EventId, DateTime StartsAt)
-    {
-        public BroadcastKey Broadcast => new(NetworkId, ServiceId, EventId);
-    }
-
-    private readonly record struct BroadcastKey(int NetworkId, int ServiceId, int EventId);
-
-    private readonly record struct ServiceKey(int NetworkId, int Carried);
-
-    private sealed record WithdrawalGuard(
-        IReadOnlyDictionary<ServiceKey, int> Carriers,
-        IReadOnlyDictionary<ServiceKey, VisitOutcome> Settled,
-        TimeSpan Grace)
-    {
-        public bool Lets(Reservation reservation, RuleWithdrawal occasion, DateTime at)
-            => reservation.IsRuleBorn
-                && reservation.State is ReservationState.Scheduled or ReservationState.Conflict
-                && !reservation.IsPinned
-                && (occasion is RuleWithdrawal.WhenTheRuleIsDeleted || Collected(reservation))
-                && (occasion is not RuleWithdrawal.WhileTheRuleStands
-                    || reservation.EffectiveStartAt - at > Grace);
-
-        private bool Collected(Reservation reservation)
-            => Carriers.TryGetValue(
-                    new ServiceKey(reservation.NetworkId.Value, reservation.ServiceId.Value),
-                    out int carrier)
-                && Settled.TryGetValue(
-                    new ServiceKey(reservation.NetworkId.Value, carrier),
-                    out VisitOutcome outcome)
-                && outcome is VisitOutcome.Complete or VisitOutcome.BasicOnly;
-    }
 }

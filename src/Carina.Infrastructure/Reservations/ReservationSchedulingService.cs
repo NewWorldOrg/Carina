@@ -297,33 +297,9 @@ public sealed class ReservationSchedulingService(
             capacity.Undetermined.Count);
     }
 
-    /// <summary>
-    /// How far the recordings that are already running are actually promised, and the tuner each
-    /// is running on, read against the reservation each of them belongs to.
-    /// </summary>
     private async Task<IReadOnlyDictionary<ReservationId, RecordingHold>> HeldAsync(
         CancellationToken cancellationToken)
-    {
-        Dictionary<ReservationId, RecordingHold> held = [];
-
-        foreach (Recording recording in await recordings.ListInFlightAsync(cancellationToken))
-        {
-            if (recording.ReservationId is not { } reservation)
-            {
-                continue;
-            }
-
-            if (!held.TryGetValue(reservation, out RecordingHold? standing)
-                || recording.ExpectedWindowEnd > standing.Until)
-            {
-                held[reservation] = new RecordingHold(
-                    recording.ExpectedWindowEnd,
-                    recording.TunerDeviceId ?? standing?.Tuner);
-            }
-        }
-
-        return held;
-    }
+        => RecordingHold.Of(await recordings.ListInFlightAsync(cancellationToken));
 
     private static ServiceKey Naming(Reservation reservation)
         => new(reservation.NetworkId.Value, reservation.ServiceId.Value);
@@ -334,8 +310,6 @@ public sealed class ReservationSchedulingService(
     private DateTime Moment() => clock.GetUtcNow().UtcDateTime;
 
     private readonly record struct ServiceKey(int NetworkId, int ServiceId);
-
-    private sealed record RecordingHold(DateTime Until, TunerDeviceId? Tuner);
 
     private sealed record Movement(int Moved, IReadOnlyList<ReservationId> Fell);
 }

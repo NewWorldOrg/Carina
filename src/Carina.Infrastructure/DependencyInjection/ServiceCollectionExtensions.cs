@@ -297,12 +297,17 @@ public static class ServiceCollectionExtensions
         services.AddScoped<StationLogoDomainService>();
         services.AddScoped<IServiceReachSettingsRepository, ServiceReachSettingsRepository>();
         services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
+        services.AddScoped<ReservationOutcomeDomainService>();
+        services.AddScoped<ReservationPlanningDomainService>();
         services.AddScoped<ReservationSchedulingService>();
         services.AddScoped<ReservationOutcomeService>();
         services.AddScoped<ReservationGuideService>();
+        services.AddScoped<BroadcastGroupDomainService>();
         services.AddScoped<BroadcastGroupService>();
         services.AddScoped<RuleMatcher>();
         services.AddScoped<IRuleRepository, RuleRepository>();
+        services.AddScoped<RuleWithdrawalDomainService>();
+        services.AddScoped<RuleTakingDomainService>();
         services.AddScoped<RuleApplicationService>();
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();

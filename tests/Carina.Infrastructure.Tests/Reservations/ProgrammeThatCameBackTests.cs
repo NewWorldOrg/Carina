@@ -217,10 +217,9 @@ public sealed class ProgrammeThatCameBackTests
                 Rules,
                 Programmes,
                 Reservations,
-                Outcomes,
-                new HeldStreamVisits(),
-                new HeldEpochs(),
-                Streams,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
+                new RuleWithdrawalDomainService(Reservations, Streams, new HeldStreamVisits(), new HeldEpochs(), clock),
+                new RuleTakingDomainService(Reservations),
                 Scheduling,
                 new RuleMatcher(new ProgrammeSearchScope(Streams, new CountedServices()), clock),
                 new RuleApplicationSettings(),
@@ -230,7 +229,7 @@ public sealed class ProgrammeThatCameBackTests
 
             Guiding = new ReservationGuideService(
                 Reservations,
-                Outcomes,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 Programmes,
                 Scheduling,
                 Write,

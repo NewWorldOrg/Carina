@@ -70,14 +70,15 @@ internal static class ReservationFactory
         DateTime? acknowledgedAt = null,
         bool receptionUnavailable = false,
         DateTime? receptionUnavailableSince = null,
-        ReservationCancellation? cancellation = null)
+        ReservationCancellation? cancellation = null,
+        RuleId? ruleId = null)
     {
         ProgrammeRef programme = Programme();
 
         return Reservation.Rehydrate(
             ReservationId.New(),
             programme,
-            null,
+            ruleId,
             Priority.Default,
             programme.StartsAt,
             programme.StartsAt.AddHours(1),

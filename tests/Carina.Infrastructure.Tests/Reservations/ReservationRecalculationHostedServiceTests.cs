@@ -690,10 +690,14 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddSingleton(new ReservationOutcomeSettings());
             services.AddScoped<ProgrammeSearchScope>();
             services.AddScoped<RuleMatcher>();
+            services.AddScoped<ReservationOutcomeDomainService>();
             services.AddScoped<ReservationSchedulingService>();
             services.AddScoped<ReservationOutcomeService>();
             services.AddScoped<ReservationGuideService>();
+            services.AddScoped<BroadcastGroupDomainService>();
             services.AddScoped<BroadcastGroupService>();
+            services.AddScoped<RuleWithdrawalDomainService>();
+            services.AddScoped<RuleTakingDomainService>();
             services.AddScoped<RuleApplicationService>();
 
             provider = services.BuildServiceProvider();

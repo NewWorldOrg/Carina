@@ -55,10 +55,9 @@ public sealed class RuleRehearsalScaleTests
             rules,
             programmes,
             reservations,
-            new HeldOutcomes(),
-            new HeldStreamVisits(),
-            new HeldEpochs(),
-            streams,
+            new ReservationOutcomeDomainService(new HeldOutcomes(), new NoRecordings()),
+            new RuleWithdrawalDomainService(reservations, streams, new HeldStreamVisits(), new HeldEpochs(), new FixedClock(Now)),
+            new RuleTakingDomainService(reservations),
             new ReservationSchedulingService(
                 reservations,
                 new NoRecordings(),

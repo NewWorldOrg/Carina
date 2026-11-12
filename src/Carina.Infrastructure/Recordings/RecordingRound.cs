@@ -486,12 +486,7 @@ public sealed class RecordingRound(
         {
             Reported = RecordingStartReading.Of(answer.Problem),
             TunedWith = tunedWith,
-            RecordedInstead =
-            [
-                .. running
-                    .Where(one => one.ReservationId is not null)
-                    .Select(one => one.ReservationId!.Value),
-            ],
+            RecordedInstead = RecordedInstead.AtTheRefusal(running),
         };
     }
 

@@ -62,7 +62,7 @@ public sealed record ReservationDraft(
 public sealed class ReservationService(
     IReservationRepository reservations,
     IReservationOutcomeRepository outcomes,
-    IProgrammeRepository programmes,
+    ReservationPlanningDomainService planning,
     ReservationSchedulingService scheduler,
     IAppEventPublisher events,
     TimeProvider clock)
@@ -96,50 +96,22 @@ public sealed class ReservationService(
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        if (await programmes.FindAsync(draft.Programme, cancellationToken) is not { } programme
-            || programme.StartsAt != draft.ProgrammeStartsAt)
+        ReservationPlanningConsidered considered =
+            await planning.ConsiderAsync(draft.Programme, draft.ProgrammeStartsAt, cancellationToken);
+
+        if (considered.Refusal is { } refusal)
         {
-            return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
-                $"The programme guide holds no {ProgrammeIdText.Of(draft.Programme)} starting at "
-                + $"{draft.ProgrammeStartsAt:O}. An event id is reused, so the start it was asked for is part of "
-                + "naming the broadcast rather than a detail beside it.",
-                ReservationFailure.NoSuchProgramme);
+            return Refused(draft, refusal, considered);
         }
 
-        if (programme.IsShadow)
-        {
-            return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
-                $"Programme {ProgrammeIdText.Of(draft.Programme)} is carried as a shadow of a broadcast that "
-                + "belongs to another service, so it is not the entry to record.",
-                ReservationFailure.ProgrammeIsAShadow);
-        }
-
-        DateTime at = clock.GetUtcNow().UtcDateTime;
-        BroadcastGroupResolver groups = BroadcastGroupResolver.Of(await programmes.ListGroupedAsync(cancellationToken));
-        BroadcastResolution resolution = groups.Resolve(programme, at);
-
-        if (resolution.Exclusion is BroadcastExclusion.Moved && resolution.Targets.Count > 0)
-        {
-            Programme primary = resolution.Targets[0].Programme;
-
-            return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
-                $"Programme {ProgrammeIdText.Of(draft.Programme)} is a listing of a moved broadcast that is "
-                + $"reserved on {ProgrammeIdText.Of(primary.Id)} starting at {primary.StartsAt:O}. Reserve that "
-                + "listing instead, so the broadcast is recorded once.",
-                ReservationFailure.ProgrammeIsAMovedDuplicate);
-        }
-
+        Programme programme = considered.Programme!;
+        BroadcastResolution resolution = considered.Resolution!;
+        DateTime at = considered.At;
         var reference = new ProgrammeRef(
             programme.NetworkId,
             programme.ServiceId,
             programme.EventId,
             programme.StartsAt);
-
-        if (await reservations.FindByProgrammeAsync(reference, cancellationToken) is { } already)
-        {
-            return AlreadyReserved<ReservationSettlement>(already);
-        }
-
         BroadcastTarget? own = resolution.Targets.FirstOrDefault(target => target.Programme.Id.Equals(programme.Id));
         Reservation planned = Planned(draft, programme, own, at);
 
@@ -182,8 +154,7 @@ public sealed class ReservationService(
 
         foreach (BroadcastTarget target in resolution.Targets)
         {
-            if (target.Programme.Id.Equals(asked.Programme.Id)
-                || await reservations.FindByProgrammeAsync(target.Reference, cancellationToken) is not null)
+            if (!await planning.NeedsReservingAlongsideAsync(target, asked.Programme.Id, cancellationToken))
             {
                 continue;
             }
@@ -218,7 +189,7 @@ public sealed class ReservationService(
             programme.EndsAt is not null,
             draft.MarginBefore,
             draft.MarginAfter,
-            Snapshot(programme, at),
+            ProgrammeSnapshot.Of(programme, at),
             target?.Key,
             target?.Role ?? BroadcastGroupRole.Standalone,
             at,
@@ -232,16 +203,9 @@ public sealed class ReservationService(
         ProgrammeId id,
         CancellationToken cancellationToken)
     {
-        if (await programmes.FindAsync(id, cancellationToken) is { } programme)
+        if (await planning.PrimaryOfMovedAsync(id, cancellationToken) is { } primary)
         {
-            BroadcastGroupResolver groups =
-                BroadcastGroupResolver.Of(await programmes.ListGroupedAsync(cancellationToken));
-            BroadcastResolution resolution = groups.Resolve(programme, clock.GetUtcNow().UtcDateTime);
-
-            if (resolution.Exclusion is BroadcastExclusion.Moved && resolution.Targets.Count > 0)
-            {
-                return ServiceResult<Programme, ReservationFailure>.Success(resolution.Targets[0].Programme);
-            }
+            return ServiceResult<Programme, ReservationFailure>.Success(primary);
         }
 
         return ServiceResult<Programme, ReservationFailure>.Failure(
@@ -314,45 +278,32 @@ public sealed class ReservationService(
     private ServiceResult<ReservationSettlement, ReservationFailure>? Refuses(
         Reservation reservation,
         ReservationMove move)
-    {
-        if (reservation.IsPinned)
+        => reservation.RefusalToRevise(move, clock.GetUtcNow().UtcDateTime) switch
         {
-            return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+            null => null,
+            ReservationRevisionRefusal.AlreadyRecording => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
                 $"Reservation {reservation.Id.Value} is being recorded right now. It goes on holding the tuner it "
                 + "was given until the recording ends, so what to change here is the recording rather than the "
                 + "reservation behind it.",
-                ReservationFailure.AlreadyRecording);
-        }
-
-        if (move is ReservationMove.Restore)
-        {
-            if (reservation.State is not ReservationState.Cancelled)
-            {
-                return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
-                    $"Reservation {reservation.Id.Value} stands as {reservation.State}, and restoring brings back "
-                    + "one that was cancelled.",
-                    ReservationFailure.NotCancelled);
-            }
-
-            if (reservation.EffectiveEndAt <= clock.GetUtcNow().UtcDateTime)
-            {
-                return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
-                    $"The window reservation {reservation.Id.Value} was cancelled out of closed at "
-                    + $"{reservation.EffectiveEndAt:O}. Bringing it back would leave a row nothing will ever "
-                    + "record.",
-                    ReservationFailure.AlreadyOver);
-            }
-
-            return null;
-        }
-
-        return reservation.State is ReservationState.Scheduled or ReservationState.Conflict
-            ? null
-            : ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                ReservationFailure.AlreadyRecording),
+            ReservationRevisionRefusal.NotCancelled => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                $"Reservation {reservation.Id.Value} stands as {reservation.State}, and restoring brings back "
+                + "one that was cancelled.",
+                ReservationFailure.NotCancelled),
+            ReservationRevisionRefusal.AlreadyOver => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                $"The window reservation {reservation.Id.Value} was cancelled out of closed at "
+                + $"{reservation.EffectiveEndAt:O}. Bringing it back would leave a row nothing will ever "
+                + "record.",
+                ReservationFailure.AlreadyOver),
+            ReservationRevisionRefusal.NotStanding => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
                 $"Reservation {reservation.Id.Value} stands as {reservation.State}, and only one that is still "
                 + "waiting for its tuner is changed.",
-                ReservationFailure.NotStanding);
-    }
+                ReservationFailure.NotStanding),
+            { } refusal => throw new ArgumentOutOfRangeException(
+                nameof(move),
+                refusal,
+                "A revision is refused for a reason this service words."),
+        };
 
     private async Task<ServiceResult<ReservationSettlement, ReservationFailure>> SettledAsync(
         SchedulingRun run,
@@ -418,15 +369,32 @@ public sealed class ReservationService(
         return held;
     }
 
-    private static ProgrammeSnapshot Snapshot(Programme programme, DateTime at)
-        => ProgrammeSnapshot.Of(
-            programme.Name,
-            programme.Summary,
-            programme.Items,
-            programme.Genres,
-            at,
-            programme.Audio,
-            programme.Sounds);
+    private static ServiceResult<ReservationSettlement, ReservationFailure> Refused(
+        ReservationDraft draft,
+        ReservationPlanningRefusal refusal,
+        ReservationPlanningConsidered considered)
+        => refusal switch
+        {
+            ReservationPlanningRefusal.NoSuchProgramme => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                $"The programme guide holds no {ProgrammeIdText.Of(draft.Programme)} starting at "
+                + $"{draft.ProgrammeStartsAt:O}. An event id is reused, so the start it was asked for is part of "
+                + "naming the broadcast rather than a detail beside it.",
+                ReservationFailure.NoSuchProgramme),
+            ReservationPlanningRefusal.Shadow => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                $"Programme {ProgrammeIdText.Of(draft.Programme)} is carried as a shadow of a broadcast that "
+                + "belongs to another service, so it is not the entry to record.",
+                ReservationFailure.ProgrammeIsAShadow),
+            ReservationPlanningRefusal.MovedDuplicate => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                $"Programme {ProgrammeIdText.Of(draft.Programme)} is a listing of a moved broadcast that is "
+                + $"reserved on {ProgrammeIdText.Of(considered.Primary!.Id)} starting at {considered.Primary.StartsAt:O}. "
+                + "Reserve that listing instead, so the broadcast is recorded once.",
+                ReservationFailure.ProgrammeIsAMovedDuplicate),
+            ReservationPlanningRefusal.AlreadyReserved => AlreadyReserved<ReservationSettlement>(considered.Already!),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(refusal),
+                refusal,
+                "A programme is refused for a reason this service words."),
+        };
 
     private static ServiceResult<T, ReservationFailure> Missing<T>(ReservationId id)
         => ServiceResult<T, ReservationFailure>.Failure(

@@ -216,7 +216,7 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
                 NullLogger<ProgramExtensionFollower>.Instance),
             new RecordingRefusalReporter(
                 new ReservationRepository(context),
-                new ReservationOutcomeRepository(context),
+                new ReservationOutcomeDomainService(new ReservationOutcomeRepository(context), new RecordingRepository(context)),
                 new RememberedTuneReports(),
                 NullLogger<RecordingRefusalReporter>.Instance),
             new RecordingRetries(
