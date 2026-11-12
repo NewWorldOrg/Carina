@@ -54,7 +54,7 @@ public sealed class RecordingRetries(
                 history.FailureClasses,
                 OrphanRecovery.StillOnAir(
                     await GuideSaysAsync(due, cancellationToken),
-                    now < due.EffectiveEndAt - due.MarginAfter),
+                    due.ProgrammeStillOn(now)),
                 history.AttemptsSoFar,
                 history.LastAttemptAt,
                 candidate is { IsInRotation: false },

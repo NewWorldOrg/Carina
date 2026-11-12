@@ -35,6 +35,20 @@ public sealed record RetryAttempt
 
     public IReadOnlyList<RecordingFault> Faults { get; }
 
+    /// <summary>
+    /// What came of an attempt: a recording it began, a refusal the driver answered with and whatever class that
+    /// named, or nothing answered, which is also what a start given up on this side comes to.
+    /// </summary>
+    public static RetryAttempt Of(bool started, bool refusedByTheDriver, RecordingStartFailure? named)
+    {
+        if (started)
+        {
+            return Started;
+        }
+
+        return refusedByTheDriver ? RefusedAgain(named) : Unanswered;
+    }
+
     public static RetryAttempt RefusedAgain(RecordingStartFailure? named)
         => named is null
             ? new RetryAttempt(RetryResult.RefusedAgain, null, [])
