@@ -1,8 +1,13 @@
+using Carina.Infrastructure.Configuration;
+using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Configurations;
+using Carina.Infrastructure.Tests.Auth;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
@@ -80,6 +85,25 @@ public sealed class RepositoryDatabase : IAsyncLifetime
         }
 
         return new CarinaDbContext(builder.Options);
+    }
+
+    public ServiceProvider Infrastructure() => Infrastructure(SealingKeys.Fresh());
+
+    public ServiceProvider Infrastructure(DirectoryInfo sealingKeys)
+    {
+        ArgumentNullException.ThrowIfNull(sealingKeys);
+
+        return new ServiceCollection()
+            .AddLogging()
+            .AddCarinaInfrastructure(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:Carina"] = connectionString,
+                    ["CARINA_DRIVER_SOCKET"] = "/run/carina/driver.sock",
+                    [SealingKeyOptions.DirectoryKey] = sealingKeys.FullName,
+                })
+                .Build())
+            .BuildServiceProvider();
     }
 
     private static string Scratch()

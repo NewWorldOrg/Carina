@@ -12,10 +12,16 @@ if [ "${shard}" -lt 1 ] || [ "${shard}" -gt "${count}" ]; then
   exit 1
 fi
 
-classes="$(grep -rhoE --include='*.cs' \
-  '^[[:space:]]*public[[:space:]]+([a-z]+[[:space:]]+)*class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' \
-  "$(dirname "${FEATURE_PROJECT}")/FeatureTest" \
-  | awk '{ print $NF }' \
+project="$(dirname "${FEATURE_PROJECT}")"
+
+classes="$(for folder in FeatureTest Feature; do
+  if [ -d "${project}/${folder}" ]; then
+    (cd "${project}" && grep -rHoE --include='*.cs' \
+      '^[[:space:]]*public[[:space:]]+([a-z]+[[:space:]]+)*class[[:space:]]+[A-Za-z_][A-Za-z0-9_]*' \
+      "${folder}")
+  fi
+done \
+  | awk '{ folder = $1; sub(/\/[^\/]*$/, "", folder); sub(/^FeatureTest(\/.*)?$/, "FeatureTest", folder); gsub(/\//, ".", folder); print folder "." $NF }' \
   | LC_ALL=C sort -u)"
 
 if [ -z "${classes}" ]; then
@@ -26,10 +32,10 @@ fi
 picked=""
 
 for class in ${classes}; do
-  hash="$(printf '%s' "${class}" | cksum | cut -d ' ' -f 1)"
+  hash="$(printf '%s' "${class##*.}" | cksum | cut -d ' ' -f 1)"
 
   if [ $((hash % count + 1)) -eq "${shard}" ]; then
-    picked="${picked:+${picked}|}FullyQualifiedName~.FeatureTest.${class}."
+    picked="${picked:+${picked}|}FullyQualifiedName~.${class}."
   fi
 done
 
