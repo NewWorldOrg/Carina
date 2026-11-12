@@ -1,6 +1,7 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Infrastructure.Channels;
+using Carina.TestSupport;
 
 using Puppis.Contracts;
 

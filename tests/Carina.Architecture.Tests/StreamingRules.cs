@@ -41,6 +41,7 @@ public static partial class StreamingRules
         "ProgrammeWriter",
         "TunerLedgerService",
         "ScanApplier",
+        "ChannelLineupDomainService",
         "CarinaDbContext",
     ];
 

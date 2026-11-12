@@ -7,6 +7,15 @@ public enum ScanStop
     BecauseTheAppIsStopping = 2,
 }
 
+/// <summary>
+/// How a walk over the targets ended: the driver was replaced under it, it was stopped, it failed for a reason, or
+/// none of these, so it walked through.
+/// </summary>
+public sealed record ScanWalkEnd(bool DriverReplaced, ScanStop? Stopped, string? Failure)
+{
+    public bool WalkedThrough => !DriverReplaced && Stopped is null && Failure is null;
+}
+
 public static class ScanConclusion
 {
     public const string CancelledReason = "the scan was cancelled";
@@ -28,6 +37,33 @@ public static class ScanConclusion
         }
 
         run.Cancel(CancelledReason, at);
+    }
+
+    /// <summary>
+    /// A scan whose driver was replaced is interrupted, before it is stopped, before it fails, and it completes only
+    /// when it walked through.
+    /// </summary>
+    public static void Settle(ScanRun run, ScanWalkEnd end, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(end);
+
+        if (end.DriverReplaced)
+        {
+            run.Interrupt(at);
+        }
+        else if (end.Stopped is { } stop)
+        {
+            Stop(run, stop, at);
+        }
+        else if (end.Failure is { } reason)
+        {
+            run.Fail(reason, at);
+        }
+        else
+        {
+            run.Complete(at);
+        }
     }
 
     public static void Abandon(ScanRun run, DateTime at)

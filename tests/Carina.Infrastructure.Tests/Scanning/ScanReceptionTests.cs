@@ -48,8 +48,7 @@ public sealed class ScanReceptionTests
         Assert.DoesNotContain(outcome.Difference.Services, change => change.ServiceId.Value == SkyServiceId);
 
         await new ScanApplier(
-                harness.Services,
-                harness.Candidates,
+                new ChannelLineupDomainService(harness.Services, harness.Candidates),
                 new UnguardedWrites(),
                 harness.Events,
                 harness.Clock)

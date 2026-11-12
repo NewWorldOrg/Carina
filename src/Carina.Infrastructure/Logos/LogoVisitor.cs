@@ -118,17 +118,7 @@ public sealed class LogoVisitor(IDriverClient driver, LogoSweepSettings settings
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
-        return new LogoVisitResult(Concluded(harvest, interrupted), harvest.Logos, harvest.Links);
-    }
-
-    private static LogoVisitOutcome Concluded(LogoHarvest harvest, bool interrupted)
-    {
-        if (interrupted)
-        {
-            return LogoVisitOutcome.Interrupted;
-        }
-
-        return harvest.Logos.Count > 0 ? LogoVisitOutcome.Collected : LogoVisitOutcome.NothingArrived;
+        return new LogoVisitResult(LogoVisit.OutcomeOf(interrupted, harvest.Logos.Count), harvest.Logos, harvest.Links);
     }
 
     private static void Stop(CancellationTokenSource reading)

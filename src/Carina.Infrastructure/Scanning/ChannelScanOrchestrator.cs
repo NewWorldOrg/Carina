@@ -16,39 +16,36 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
     private readonly IDriverSignals signals;
     private readonly IScanRunRepository runs;
-    private readonly IBroadcastServiceRepository services;
-    private readonly ICandidateChannelRepository candidates;
-    private readonly ISatelliteTransportStreamRepository satelliteStreams;
+    private readonly ChannelRotationDomainService rotation;
+    private readonly ChannelLineupDomainService lineup;
     private readonly IAppEventPublisher events;
     private readonly TimeProvider clock;
     private readonly ScanSettings settings;
     private readonly TunedStreamProbe prober;
     private readonly IDriverClient driver;
-    private readonly ITunerCapacityDirectory capacity;
+    private readonly ScanPlanningDomainService planning;
 
     public ChannelScanOrchestrator(
         IDriverClient driver,
-        ITunerCapacityDirectory capacity,
+        ScanPlanningDomainService planning,
         IDriverSignals signals,
         IScanRunRepository runs,
-        IBroadcastServiceRepository services,
-        ICandidateChannelRepository candidates,
-        ISatelliteTransportStreamRepository satelliteStreams,
+        ChannelRotationDomainService rotation,
+        ChannelLineupDomainService lineup,
         IAppEventPublisher events,
         TimeProvider clock,
         ScanSettings settings)
     {
         ArgumentNullException.ThrowIfNull(driver);
-        ArgumentNullException.ThrowIfNull(capacity);
+        ArgumentNullException.ThrowIfNull(planning);
         ArgumentNullException.ThrowIfNull(settings);
 
         this.driver = driver;
-        this.capacity = capacity;
+        this.planning = planning;
         this.signals = signals;
         this.runs = runs;
-        this.services = services;
-        this.candidates = candidates;
-        this.satelliteStreams = satelliteStreams;
+        this.rotation = rotation;
+        this.lineup = lineup;
         this.events = events;
         this.clock = clock;
         this.settings = settings;
@@ -77,14 +74,12 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                 greeting.Failure ?? "The driver did not answer, so no tuner can be asked to scan.");
         }
 
-        if (await ReceivableAsync(scope, cancellationToken) is not { } walkable)
+        if (await planning.PlanAsync(scope, cancellationToken) is not { } plan)
         {
             return ScanOutcome.NothingATunerCanReceive(
                 $"No tuner in service receives {string.Join(", ", scope.Systems.Select(TuneSystemConverter.WireName))},"
                 + " so there is nothing this scan could walk.");
         }
-
-        IReadOnlyList<TuningParameters> targets = await ScanTargets.WalkAsync(walkable, satelliteStreams, cancellationToken);
 
         ScanRunStart start = await runs.StartAsync(
             ScanRun.Start(ScanRunId.New(), hello.InstanceId, Now),
@@ -106,17 +101,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             }
         });
 
-        return await WalkAsync(run, targets, observer, interruption, cancellationToken);
-    }
-
-    private async Task<ScanScope?> ReceivableAsync(ScanScope scope, CancellationToken cancellationToken)
-    {
-        if (await capacity.ReadAsync(cancellationToken) is not { Undetermined.Count: 0 } known)
-        {
-            return scope;
-        }
-
-        return scope.Within(known.Reachable);
+        return await WalkAsync(run, plan.Targets, observer, interruption, cancellationToken);
     }
 
     private async Task<ScanOutcome> WalkAsync(
@@ -133,7 +118,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         var attempts = new List<ScanRunAttempt>();
         var carried = new Dictionary<TuningParameters, StreamProbe>();
         var probed = new Dictionary<TuningParameters, StreamProbe>();
-        var streamsSeen = new Dictionary<(int Network, int Stream), TuningParameters>();
+        var twins = new SatelliteTwinSlots();
         string? failure = null;
 
         foreach (TuningParameters target in targets)
@@ -175,17 +160,13 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             {
                 probed[target] = probe;
 
-                (int OriginalNetworkId, int TransportStreamId) stream = (description.OriginalNetworkId, description.TransportStreamId);
-
-                if (target.System is TuneSystem.IsdbSBs
-                    && streamsSeen.TryGetValue(stream, out TuningParameters? first))
+                if (twins.TryFindTwin(target, description.OriginalNetworkId, description.TransportStreamId, out TuningParameters? first))
                 {
                     detail = $"This slot is not there: it carries the same stream as"
                         + $" {ScanTargetNames.Of(first)}, so it is proposed once.";
                 }
                 else
                 {
-                    streamsSeen[stream] = target;
                     carried[target] = probe;
                 }
             }
@@ -218,26 +199,24 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         string? failure,
         CancellationToken cancellationToken)
     {
+        ScanWalkEnd end = new(
+            interruption.IsCancellationRequested,
+            cancellationToken.IsCancellationRequested ? observer.Stop : null,
+            failure);
         ScanDifference difference = ScanDifference.Nothing;
 
-        if (interruption.IsCancellationRequested)
+        if (end.WalkedThrough)
         {
-            run.Interrupt(Now);
+            IReadOnlyList<RotationDeparture> departures = await rotation.RecordScanAsync(
+                attempts,
+                Named(probed),
+                settings.Rotation,
+                Now,
+                CancellationToken.None);
+            difference = await lineup.ProposeAsync(Observe(carried), [.. carried.Keys], departures, CancellationToken.None);
         }
-        else if (cancellationToken.IsCancellationRequested)
-        {
-            ScanConclusion.Stop(run, observer.Stop, Now);
-        }
-        else if (failure is { } reason)
-        {
-            run.Fail(reason, Now);
-        }
-        else
-        {
-            IReadOnlyList<RotationDeparture> departures = await TurnTheRotationAsync(attempts, probed);
-            difference = await DifferenceAsync(carried, departures);
-            run.Complete(Now);
-        }
+
+        ScanConclusion.Settle(run, end, Now);
 
         await runs.SaveAsync(run, CancellationToken.None);
         events.Signal(AppEventName.Tuners);
@@ -278,160 +257,15 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         }
     }
 
-    private async Task<IReadOnlyList<RotationDeparture>> TurnTheRotationAsync(
-        IReadOnlyList<ScanRunAttempt> attempts,
+    private static IReadOnlyDictionary<TuningParameters, IReadOnlySet<ServiceId>> Named(
         IReadOnlyDictionary<TuningParameters, StreamProbe> probed)
-    {
-        Dictionary<TuningParameters, ScanRunAttempt> walked =
-            attempts.ToDictionary(attempt => attempt.Tuning, attempt => attempt);
-        var departures = new List<RotationDeparture>();
-        DateTime at = Now;
+        => probed.ToDictionary(
+            entry => entry.Key,
+            entry => (IReadOnlySet<ServiceId>)entry.Value.Description!.Services
+                .Select(service => new ServiceId(service.ServiceId))
+                .ToHashSet());
 
-        foreach (BroadcastService service in await services.ListAsync(CancellationToken.None))
-        {
-            IReadOnlyList<CandidateChannel> stored = await candidates.ListForServiceAsync(
-                service.NetworkId,
-                service.ServiceId,
-                CancellationToken.None);
-
-            foreach (CandidateChannel candidate in stored)
-            {
-                if (!walked.TryGetValue(candidate.Tuning, out ScanRunAttempt? attempt) || SaysNothingOfReception(attempt))
-                {
-                    continue;
-                }
-
-                if (attempt.Outcome is ScanAttemptOutcome.Succeeded
-                    && probed.TryGetValue(candidate.Tuning, out StreamProbe? probe)
-                    && Names(probe, service.ServiceId))
-                {
-                    candidate.RecordTuningSuccess(
-                        probe.Measurement ?? SignalMeasurement.WithLock(at),
-                        at);
-                }
-                else
-                {
-                    RecordTuningFailure(candidate, at, departures);
-                }
-
-                await candidates.SaveAsync(candidate, CancellationToken.None);
-            }
-        }
-
-        return departures;
-    }
-
-    private void RecordTuningFailure(CandidateChannel candidate, DateTime at, List<RotationDeparture> departures)
-    {
-        bool wasInRotation = candidate.IsInRotation;
-
-        candidate.RecordTuningFailure(settings.Rotation, at);
-
-        if (wasInRotation && !candidate.IsInRotation)
-        {
-            departures.Add(new RotationDeparture(
-                candidate.NetworkId,
-                candidate.ServiceId,
-                candidate.Tuning,
-                candidate.ConsecutiveFailures,
-                candidate.NeedsAttentionSince ?? at));
-        }
-    }
-
-    private static bool SaysNothingOfReception(ScanRunAttempt attempt)
-        => attempt.Outcome switch
-        {
-            ScanAttemptOutcome.IncompleteTables => true,
-            ScanAttemptOutcome.UnexpectedStream => attempt.Tuning.TransportStreamId is not { } wanted
-                || wanted.Equals(attempt.ObservedTransportStreamId),
-            _ => false,
-        };
-
-    private async Task<ScanDifference> DifferenceAsync(
-        IReadOnlyDictionary<TuningParameters, StreamProbe> carried,
-        IReadOnlyList<RotationDeparture> departures)
-    {
-        Dictionary<(NetworkId, ServiceId), ObservedService> observed = Observe(carried);
-        HashSet<TuningParameters> reached = carried.Keys.ToHashSet();
-        var changes = new List<ScanServiceChange>();
-
-        foreach (BroadcastService service in await services.ListAsync(CancellationToken.None))
-        {
-            IReadOnlyList<CandidateChannel> stored = await candidates.ListForServiceAsync(
-                service.NetworkId,
-                service.ServiceId,
-                CancellationToken.None);
-            CandidateChannel[] inScope = stored.Where(candidate => reached.Contains(candidate.Tuning)).ToArray();
-            (NetworkId NetworkId, ServiceId ServiceId) key = (service.NetworkId, service.ServiceId);
-
-            if (!observed.Remove(key, out ObservedService? seen))
-            {
-                if (inScope.Length == 0)
-                {
-                    continue;
-                }
-
-                IReadOnlyList<ScanChannelChange> gone = MissingChannels(inScope);
-
-                changes.Add(new ScanServiceChange(
-                    inScope.Length == stored.Count ? ScanChangeKind.Missing : ScanChangeKind.Updated,
-                    service.NetworkId,
-                    service.ServiceId,
-                    service.Name,
-                    service.Category,
-                    gone,
-                    Seen: false));
-
-                continue;
-            }
-
-            ScanChannelChange[] added = seen.Channels
-                .Where(channel => stored.All(candidate => !candidate.Tuning.Equals(channel.Tuning)))
-                .ToArray();
-            ScanChannelChange[] restated = seen.Channels
-                .Where(channel => channel.TransportStreamId is not null
-                    && stored.Any(candidate => candidate.Tuning.Equals(channel.Tuning)
-                        && !channel.TransportStreamId.Equals(candidate.ObservedStreamId)))
-                .ToArray();
-            IReadOnlyList<ScanChannelChange> missing = MissingChannels(inScope
-                .Where(candidate => seen.Channels.All(channel => !channel.Tuning.Equals(candidate.Tuning))));
-            bool described = service.Name != seen.Name || service.Category != seen.Category;
-            bool renumbered = seen.RemoteControlKeyId is not null
-                && service.RemoteControlKeyId != seen.RemoteControlKeyId;
-
-            if (added.Length > 0 || restated.Length > 0 || missing.Count > 0 || described || renumbered)
-            {
-                changes.Add(new ScanServiceChange(
-                    ScanChangeKind.Updated,
-                    service.NetworkId,
-                    service.ServiceId,
-                    seen.Name,
-                    seen.Category,
-                    [.. added, .. restated, .. missing],
-                    Seen: true)
-                {
-                    RemoteControlKeyId = seen.RemoteControlKeyId,
-                });
-            }
-        }
-
-        changes.AddRange(observed.Values.Select(seen => new ScanServiceChange(
-            ScanChangeKind.Added,
-            seen.NetworkId,
-            seen.ServiceId,
-            seen.Name,
-            seen.Category,
-            seen.Channels,
-            Seen: true)
-        {
-            RemoteControlKeyId = seen.RemoteControlKeyId,
-        }));
-
-        return new ScanDifference(changes, departures);
-    }
-
-    private static Dictionary<(NetworkId, ServiceId), ObservedService> Observe(
-        IReadOnlyDictionary<TuningParameters, StreamProbe> carried)
+    private static IReadOnlyList<ScannedService> Observe(IReadOnlyDictionary<TuningParameters, StreamProbe> carried)
     {
         var observed = new Dictionary<(NetworkId, ServiceId), ObservedService>();
 
@@ -477,18 +311,17 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             }
         }
 
-        return observed;
+        return
+        [
+            .. observed.Values.Select(seen => new ScannedService(
+                seen.NetworkId,
+                seen.ServiceId,
+                seen.Name,
+                seen.Category,
+                seen.RemoteControlKeyId,
+                seen.Channels)),
+        ];
     }
-
-    private static IReadOnlyList<ScanChannelChange> MissingChannels(IEnumerable<CandidateChannel> stored)
-        => [.. stored.Select(candidate => new ScanChannelChange(
-            ScanChangeKind.Missing,
-            candidate.Tuning,
-            candidate.Tuning.TransportStreamId,
-            candidate.LastMeasurement))];
-
-    private static bool Names(StreamProbe probe, ServiceId serviceId)
-        => probe.Description!.Services.Any(service => service.ServiceId == serviceId.Value);
 
     private static string Busy(string? detail)
     {

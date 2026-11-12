@@ -1,6 +1,5 @@
 using Carina.Api.Common;
 using Carina.Domain.Channels;
-using Carina.Domain.Driver;
 using Carina.Domain.Events;
 using Carina.Domain.Reservations;
 
@@ -33,7 +32,7 @@ public sealed class ChannelCatalogService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates,
     IStationLogoRepository logos,
-    IDriverClient driver,
+    CandidateChannelDomainService additions,
     ITunerCapacityDirectory capacity,
     IAppEventPublisher events,
     IRecalculationNotice notices,
@@ -105,7 +104,7 @@ public sealed class ChannelCatalogService(
                 CatalogFailure.NoSuchCandidate);
         }
 
-        if (!chosen.NetworkId.Equals(networkId) || !chosen.ServiceId.Equals(serviceId))
+        if (!chosen.BelongsTo(networkId, serviceId))
         {
             return ServiceResult<ServiceWithChannels, CatalogFailure>.Failure(
                 "That candidate channel belongs to another service, and a selection stays inside one.",
@@ -138,28 +137,12 @@ public sealed class ChannelCatalogService(
             return Unknown(networkId, serviceId);
         }
 
-        IReadOnlyList<CandidateChannel> held = await candidates.ListForServiceAsync(networkId, serviceId, cancellationToken);
+        CandidateChannelAdmission admission = await additions.AdmitAsync(networkId, serviceId, tuning, cancellationToken);
 
-        if (held.Any(candidate => candidate.Tuning.Equals(tuning)))
+        if (admission.Added is not { } added)
         {
-            return ServiceResult<ServiceWithChannels, CatalogFailure>.Failure(
-                "This service already carries that channel as a candidate.",
-                CatalogFailure.AlreadyKnown);
+            return Refused(admission, tuning);
         }
-
-        if (await UnreceivableAsync(tuning, cancellationToken) is { } refusal)
-        {
-            return refusal;
-        }
-
-        CandidateChannel added = CandidateChannel.Discover(
-            CandidateChannelId.New(),
-            networkId,
-            serviceId,
-            tuning,
-            clock.GetUtcNow().UtcDateTime);
-
-        added.RequireRevalidation();
 
         await candidates.AddAsync(added, cancellationToken);
         events.Signal(AppEventName.Tuners);
@@ -186,7 +169,7 @@ public sealed class ChannelCatalogService(
                 CatalogFailure.NoSuchCandidate);
         }
 
-        if (!held.NetworkId.Equals(networkId) || !held.ServiceId.Equals(serviceId))
+        if (!held.BelongsTo(networkId, serviceId))
         {
             return ServiceResult<ServiceWithChannels, CatalogFailure>.Failure(
                 "That candidate channel belongs to another service.",
@@ -208,38 +191,24 @@ public sealed class ChannelCatalogService(
             $"No service {networkId.Value}-{serviceId.Value} is held here.",
             CatalogFailure.NoSuchService);
 
-    private async Task<ServiceResult<ServiceWithChannels, CatalogFailure>?> UnreceivableAsync(
-        TuningParameters tuning,
-        CancellationToken cancellationToken)
-    {
-        DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
-
-        if (!tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots))
+    private static ServiceResult<ServiceWithChannels, CatalogFailure> Refused(
+        CandidateChannelAdmission admission,
+        TuningParameters tuning)
+        => admission.Refusal switch
         {
-            return ServiceResult<ServiceWithChannels, CatalogFailure>.Failure(
+            CandidateChannelRefusal.AlreadyHeld => ServiceResult<ServiceWithChannels, CatalogFailure>.Failure(
+                "This service already carries that channel as a candidate.",
+                CatalogFailure.AlreadyKnown),
+            CandidateChannelRefusal.DriverUnreachable => ServiceResult<ServiceWithChannels, CatalogFailure>.Failure(
                 "The driver could not be asked which tuners it holds, so this channel cannot be checked"
                 + " against them; nothing was saved.",
-                CatalogFailure.DriverUnreachable);
-        }
-
-        TunerKind needed = tuning.System is TuneSystem.IsdbT ? TunerKind.Terrestrial : TunerKind.Satellite;
-        TunerKind[] usable = snapshots
-            .Where(tuner => tuner.State is not (TunerState.Disabled or TunerState.Faulted))
-            .Select(tuner => tuner.Kind)
-            .Distinct()
-            .ToArray();
-
-        if (usable.Contains(needed))
-        {
-            return null;
-        }
-
-        return ServiceResult<ServiceWithChannels, CatalogFailure>.Failure(
-            $"A {TuneSystemConverter.WireName(tuning.System)} channel needs a"
-            + $" {TunerKindConverter.WireName(needed)} tuner in service, and this ledger holds"
-            + $" {(usable.Length == 0 ? "none" : string.Join(", ", usable.Select(TunerKindConverter.WireName)))}.",
-            CatalogFailure.NoTunerReceivesIt);
-    }
+                CatalogFailure.DriverUnreachable),
+            _ => ServiceResult<ServiceWithChannels, CatalogFailure>.Failure(
+                $"A {TuneSystemConverter.WireName(tuning.System)} channel needs a"
+                + $" {TunerKindConverter.WireName(admission.Needed)} tuner in service, and this ledger holds"
+                + $" {(admission.InService.Count == 0 ? "none" : string.Join(", ", admission.InService.Select(TunerKindConverter.WireName)))}.",
+                CatalogFailure.NoTunerReceivesIt),
+        };
 
     private static StationLogoStamp? CollectedFor(
         BroadcastService service,

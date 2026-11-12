@@ -113,4 +113,40 @@ public sealed class ScanRunAttemptTests
             At,
             At));
     }
+
+    [Fact(DisplayName = "BR-TD-004: tables that never completed say nothing of whether the channel is received")]
+    public void IncompleteTablesSayNothingOfReception()
+        => Assert.True(Attempt(ScanAttemptOutcome.IncompleteTables).SaysNothingOfReception);
+
+    [Fact(DisplayName = "BR-TD-004: the stream asked for, arriving where another was not expected, says nothing of reception")]
+    public void TheStreamAskedForSaysNothingOfReception()
+        => Assert.True(Attempt(ScanAttemptOutcome.UnexpectedStream, observed: new TransportStreamId(0x40F0)).SaysNothingOfReception);
+
+    [Fact(DisplayName = "BR-TD-004: another stream than the one asked for is a failure to receive it")]
+    public void AnotherStreamThanTheOneAskedForIsAFailureToReceiveIt()
+        => Assert.False(Attempt(ScanAttemptOutcome.UnexpectedStream, observed: new TransportStreamId(0x40F1)).SaysNothingOfReception);
+
+    [Fact(DisplayName = "BR-TD-004: an unexpected stream on a channel that asked for none says nothing of reception")]
+    public void AnUnexpectedStreamWhereNoneWasAskedForSaysNothingOfReception()
+    {
+        ScanRunAttempt attempt = ScanRunAttempt.Rehydrate(
+            ScanRunAttemptId.New(),
+            ScanRunId.New(),
+            TuningParameters.Terrestrial(27),
+            ScanAttemptOutcome.UnexpectedStream,
+            null,
+            new TransportStreamId(0x7FE0),
+            null,
+            At,
+            At.AddSeconds(9));
+
+        Assert.True(attempt.SaysNothingOfReception);
+    }
+
+    [Theory(DisplayName = "BR-TD-004: no lock, a lock without data, and a success each say whether the channel is received")]
+    [InlineData(ScanAttemptOutcome.NoLock)]
+    [InlineData(ScanAttemptOutcome.LockedWithoutData)]
+    [InlineData(ScanAttemptOutcome.Succeeded)]
+    public void TheOtherOutcomesSaySomethingOfReception(ScanAttemptOutcome outcome)
+        => Assert.False(Attempt(outcome).SaysNothingOfReception);
 }

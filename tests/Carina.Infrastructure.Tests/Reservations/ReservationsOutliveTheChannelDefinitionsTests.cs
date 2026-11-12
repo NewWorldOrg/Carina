@@ -161,7 +161,7 @@ public sealed class ReservationsOutliveTheChannelDefinitionsTests(RepositoryData
             new ReservationRepository(context),
             new RecordingRepository(context),
             seating,
-            new ServiceTuningDirectory(
+            new ServiceTuningDomainService(
                 new BroadcastServiceRepository(context),
                 new CandidateChannelRepository(context),
                 seating),

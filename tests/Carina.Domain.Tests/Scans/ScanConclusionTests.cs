@@ -65,4 +65,51 @@ public sealed class ScanConclusionTests
         Assert.Throws<InvalidOperationException>(
             () => ScanConclusion.Stop(run, ScanStop.BecauseTheAppIsStopping, At));
     }
+
+    [Fact(DisplayName = "BR-TS-001: a scan whose driver was replaced is interrupted, whatever else happened to it")]
+    public void AScanWhoseDriverWasReplacedIsInterrupted()
+    {
+        ScanRun run = Running();
+        ScanWalkEnd end = new(DriverReplaced: true, ScanStop.AsRequested, "every tuner was busy");
+
+        ScanConclusion.Settle(run, end, At);
+
+        Assert.False(end.WalkedThrough);
+        Assert.Equal(ScanRunState.Interrupted, run.State);
+    }
+
+    [Fact(DisplayName = "BR-TS-001: a scan that was stopped is stopped before it is failed")]
+    public void AScanThatWasStoppedIsStoppedBeforeItIsFailed()
+    {
+        ScanRun run = Running();
+
+        ScanConclusion.Settle(run, new ScanWalkEnd(false, ScanStop.AsRequested, "every tuner was busy"), At);
+
+        Assert.Equal(ScanRunState.Cancelled, run.State);
+        Assert.Equal(ScanConclusion.CancelledReason, run.Reason);
+    }
+
+    [Fact(DisplayName = "BR-TS-001: a scan that failed for a reason keeps that reason")]
+    public void AScanThatFailedKeepsItsReason()
+    {
+        ScanRun run = Running();
+
+        ScanConclusion.Settle(run, new ScanWalkEnd(false, null, "every tuner was busy"), At);
+
+        Assert.Equal(ScanRunState.Failed, run.State);
+        Assert.Equal("every tuner was busy", run.Reason);
+    }
+
+    [Fact(DisplayName = "BR-TS-001: a scan that walked through completes")]
+    public void AScanThatWalkedThroughCompletes()
+    {
+        ScanRun run = Running();
+        ScanWalkEnd end = new(false, null, null);
+
+        ScanConclusion.Settle(run, end, At);
+
+        Assert.True(end.WalkedThrough);
+        Assert.Equal(ScanRunState.Completed, run.State);
+        Assert.Equal(At, run.FinishedAt);
+    }
 }

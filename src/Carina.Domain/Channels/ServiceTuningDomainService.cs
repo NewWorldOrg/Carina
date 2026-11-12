@@ -1,10 +1,13 @@
-using Carina.Domain.Channels;
-
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Channels;
+namespace Carina.Domain.Channels;
 
-public sealed class ServiceTuningDirectory(
+/// <summary>
+/// Decides where a service is tuned, looking up the service, its selected channel and the tuners in service: it is
+/// refused when the service or its selected channel is missing, when the tuners cannot be read, or when no tuner of
+/// the channel's system is in service, and it is tuned as impaired when only a faulted tuner can take it.
+/// </summary>
+public sealed class ServiceTuningDomainService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates,
     ITunerCapacityDirectory capacity)

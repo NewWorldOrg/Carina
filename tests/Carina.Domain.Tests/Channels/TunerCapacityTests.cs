@@ -248,4 +248,52 @@ public sealed class TunerCapacityTests
         => new(deviceId, BroadcastReception.Of(kind), Faulted: false);
 
     private static TunerCapacity Holding(params TunerSeat[] seats) => new(seats, []);
+
+    [Fact(DisplayName = "BR-TD-010: a tuner the ledger turns off, or the driver reports disabled, holds no seat")]
+    public void ATunerTurnedOffHoldsNoSeat()
+    {
+        TunerCapacity capacity = TunerCapacity.Of(
+            [
+                Entry("adapter0", TunerKind.Terrestrial),
+                Entry("adapter1", TunerKind.Terrestrial) with { Disabled = true },
+                Entry("adapter2", TunerKind.Satellite),
+            ],
+            [new TunerSnapshot("adapter2", TunerKind.Satellite, TunerState.Disabled)]);
+
+        Assert.Equal(1, capacity.SeatCount);
+        Assert.True(capacity.CanServe(TuneSystem.IsdbT));
+        Assert.False(capacity.CanServe(TuneSystem.IsdbSBs));
+        Assert.Empty(capacity.Undetermined);
+    }
+
+    [Fact(DisplayName = "BR-TD-010: a tuner of no known kind is undetermined rather than counted, and the ledger decides what a tuner receives")]
+    public void ATunerOfNoKnownKindIsUndetermined()
+    {
+        TunerCapacity capacity = TunerCapacity.Of(
+            [
+                Entry("adapter2", TunerKind.Terrestrial),
+                Entry("adapter1", TunerKind.Unspecified),
+                Entry("adapter0", TunerKind.Unspecified),
+                Entry("adapter3", TunerKind.Satellite),
+            ],
+            [new TunerSnapshot("adapter3", TunerKind.Terrestrial, TunerState.Idle)]);
+
+        Assert.Equal(["adapter0", "adapter1"], capacity.Undetermined);
+        Assert.Equal(2, capacity.SeatCount);
+        Assert.True(capacity.CanServe(TuneSystem.IsdbSBs));
+    }
+
+    [Fact(DisplayName = "a tuner the driver reports faulted still holds a seat, and is left out of the healthy seats")]
+    public void AFaultedTunerHoldsASeatOutsideTheHealthyOnes()
+    {
+        TunerCapacity capacity = TunerCapacity.Of(
+            [Entry("adapter0", TunerKind.Terrestrial), Entry("adapter1", TunerKind.Terrestrial)],
+            [new TunerSnapshot("adapter1", TunerKind.Terrestrial, TunerState.Faulted)]);
+
+        Assert.Equal(2, capacity.SeatCount);
+        Assert.Equal(1, capacity.Healthy.SeatCount);
+    }
+
+    private static TunerConfigEntry Entry(string deviceId, TunerKind kind)
+        => new() { DeviceId = deviceId, Kind = kind };
 }

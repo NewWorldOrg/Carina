@@ -19,6 +19,38 @@ public sealed class TunerCapacity
 
     public IReadOnlyList<string> Undetermined { get; }
 
+    /// <summary>
+    /// The capacity a ledger gives: a tuner the ledger or the driver has turned off is not counted, one of a kind that
+    /// receives nothing known is undetermined, and one the driver reports faulted is counted as faulted.
+    /// </summary>
+    public static TunerCapacity Of(IReadOnlyList<TunerConfigEntry> ledger, IReadOnlyList<TunerSnapshot> observed)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        ArgumentNullException.ThrowIfNull(observed);
+
+        HashSet<string> faulted = [.. observed.Where(snapshot => snapshot.State is TunerState.Faulted).Select(snapshot => snapshot.DeviceId)];
+        HashSet<string> turnedOff = [.. observed.Where(snapshot => snapshot.State is TunerState.Disabled).Select(snapshot => snapshot.DeviceId)];
+
+        List<TunerSeat> seats = [];
+        List<string> undetermined = [];
+
+        foreach (TunerConfigEntry entry in ledger.Where(entry => !entry.Disabled && !turnedOff.Contains(entry.DeviceId)))
+        {
+            if (BroadcastReception.Of(entry.Kind) is not { Count: > 0 } serves)
+            {
+                undetermined.Add(entry.DeviceId);
+
+                continue;
+            }
+
+            seats.Add(new TunerSeat(entry.DeviceId, serves, faulted.Contains(entry.DeviceId)));
+        }
+
+        return new TunerCapacity(
+            [.. seats.OrderBy(seat => seat.DeviceId, StringComparer.Ordinal)],
+            [.. undetermined.Order(StringComparer.Ordinal)]);
+    }
+
     public int SeatCount => seats.Count;
 
     public IReadOnlySet<TuneSystem> Reachable =>
@@ -91,4 +123,7 @@ public static class BroadcastReception
         TunerKind.Satellite => [TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110],
         _ => [],
     };
+
+    public static TunerKind KindReceiving(TuneSystem system)
+        => system is TuneSystem.IsdbT ? TunerKind.Terrestrial : TunerKind.Satellite;
 }
