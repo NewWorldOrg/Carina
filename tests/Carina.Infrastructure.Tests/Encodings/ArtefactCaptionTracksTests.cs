@@ -48,7 +48,7 @@ public sealed class ArtefactCaptionTracksTests : IDisposable
     {
         EncodeJob job = Awaiting(Spoken());
         reads.Opened(job.OutputRoot, job.ArtefactName!.Value);
-        clock.Turn(ArtefactCaptionTracks.LeftAloneAfterAnOpening - TimeSpan.FromSeconds(1));
+        clock.Turn(ArtefactRewriteDomainService.LeftAloneAfterAnOpening - TimeSpan.FromSeconds(1));
 
         ArtefactCaptioningRound round = await Tracks().CaptionAsync(4, NotBusy, Cancel);
 
@@ -165,8 +165,7 @@ public sealed class ArtefactCaptionTracksTests : IDisposable
             harness.Places,
             harness.Placer,
             harness.Cleaner,
-            reads,
-            clock,
+            new ArtefactRewriteDomainService(reads, clock),
             NullLogger<ArtefactCaptionTracks>.Instance);
 
     private sealed class HeldCaptionTrackWorklist : ICaptionTrackWorklist

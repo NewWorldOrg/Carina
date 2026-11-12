@@ -42,6 +42,13 @@ public sealed class EncodeAutoRun
         return Math.Clamp(machine.Cores, FewestCores, MostCoresAnyMachineHas);
     }
 
+    /// <summary>
+    /// Whether <paramref name="mostCores"/> may be settled as the cores a run takes on <paramref name="machine"/>:
+    /// one at least, and no more than it has.
+    /// </summary>
+    public static bool Fits(int mostCores, MachineSettings machine)
+        => mostCores >= FewestCores && mostCores <= CoresOn(machine);
+
     public static EncodeAutoRun Rehydrate(int id, bool automatically, int mostCores, DateTime updatedAt)
     {
         Counted(mostCores);
@@ -78,6 +85,17 @@ public sealed record EncodeAutoRunStanding(bool Automatically, int MostCores, bo
         return held is null
             ? new EncodeAutoRunStanding(deployed.Automatically, Within(deployed.MostCores, cap), false, null)
             : new EncodeAutoRunStanding(held.Automatically, Within(held.MostCores, cap), true, held.UpdatedAt);
+    }
+
+    /// <summary>
+    /// The cores a run takes on <paramref name="machine"/>: what the auto-run allows, or fewer when that is all the
+    /// machine running it has.
+    /// </summary>
+    public int CoresARunTakes(MachineSettings machine)
+    {
+        ArgumentNullException.ThrowIfNull(machine);
+
+        return Math.Min(MostCores, machine.Cores);
     }
 
     private static int Within(int mostCores, int cap) => Math.Clamp(mostCores, EncodeAutoRun.FewestCores, cap);

@@ -43,7 +43,7 @@ public sealed class EncodeJobRunner(
     ISourceHeadReader heads,
     EncodeChapterChoices choices,
     IEncodeChapterRepository chapters,
-    ICaptionRecords captionRecords,
+    EncodeCaptionTrackDomainService captioning,
     CaptionTrackMux captionTracks,
     MachineSettings programmes,
     EncodeSettings settings,
@@ -153,7 +153,7 @@ public sealed class EncodeJobRunner(
         var timeline = new EncodeTimeline(head.Start!.Value, headSkip, whole.Length, null);
         job.Aligned(timeline);
 
-        int cores = Math.Min((await autoRun.ReadAsync(cancellationToken)).MostCores, programmes.Cores);
+        int cores = (await autoRun.ReadAsync(cancellationToken)).CoresARunTakes(programmes);
 
         EncodeChapterChoice choice = await choices.ReadAsync(recording.Id, cancellationToken);
         string? metadata = await ChosenAsync(job, choice, timeline, cancellationToken);
@@ -338,9 +338,7 @@ public sealed class EncodeJobRunner(
             return run.Work;
         }
 
-        EncodeRate coarser = run.Rate.Coarser();
-
-        if (coarser.On(run.Encoder) == run.Rate.On(run.Encoder))
+        if (!run.Rate.CanGoCoarserOn(run.Encoder))
         {
             logger.LogWarning(
                 "Job {Job} made {Made} bytes, larger than its recording of {Recorded} bytes, at {Rate} on the {Encoder}, the coarsest there is, so it is not made again.",
@@ -365,6 +363,7 @@ public sealed class EncodeJobRunner(
             return run.Work;
         }
 
+        EncodeRate coarser = run.Rate.Coarser();
         job.Remaking();
         await jobs.SaveAsync(job, cancellationToken);
 
@@ -494,8 +493,7 @@ public sealed class EncodeJobRunner(
     /// </summary>
     private async Task CaptionAsync(EncodeJob job, string work, CancellationToken cancellationToken)
     {
-        if (await recordings.FindAsync(job.RecordingId, cancellationToken) is not { CaptionState: CaptionState.Ready, CaptionsMadeAt: { } madeAt }
-            || await captionRecords.ReadAsync(job.RecordingId, cancellationToken) is not { Lines: not null } record)
+        if (await captioning.CaptionsToCarryAsync(job.RecordingId, cancellationToken) is not { Record: { } record, MadeAt: DateTime madeAt })
         {
             logger.LogInformation(
                 "Job {Job} places its artefact with no text track of captions, because the recording's captions with their text are not taken yet; the track is put in once they are.",

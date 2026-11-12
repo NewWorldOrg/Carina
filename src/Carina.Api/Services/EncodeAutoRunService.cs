@@ -43,7 +43,7 @@ public sealed class EncodeAutoRunService(
                 "mostCores: expected how many of this machine's cores a run may take.");
         }
 
-        if (cores < EncodeAutoRun.FewestCores || cores > Cores)
+        if (!EncodeAutoRun.Fits(cores, machine))
         {
             return ServiceResult<EncodeAutoRunReading>.Failure(
                 $"mostCores: expected a whole number of cores from {EncodeAutoRun.FewestCores} to {Cores}, "

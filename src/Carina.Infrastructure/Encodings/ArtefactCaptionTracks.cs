@@ -9,7 +9,7 @@ namespace Carina.Infrastructure.Encodings;
 /// Puts a text track of captions into artefacts already made, one at a time, newest recording first.
 /// </summary>
 /// <remarks>
-/// An artefact somebody opened in the last <see cref="LeftAloneAfterAnOpening"/> is passed over, and so is a
+/// An artefact somebody opened in the last <see cref="ArtefactRewriteDomainService.LeftAloneAfterAnOpening"/> is passed over, and so is a
 /// recording a job of which is waiting or running. The copy with the track put in is made beside the
 /// artefact and checked, and only then, once the artefact is seen to stand, to be the file it was and to be
 /// unopened, does the placer rename the copy over it. Whatever is not renamed is swept with the job's scratch.
@@ -22,12 +22,9 @@ public sealed class ArtefactCaptionTracks(
     EncodePlaces places,
     EncodeArtefactPlacer placer,
     EncodeScratchCleaner cleaner,
-    IArtefactOpenings openings,
-    TimeProvider clock,
+    ArtefactRewriteDomainService rewrites,
     ILogger<ArtefactCaptionTracks> logger) : IArtefactCaptioning
 {
-    public static readonly TimeSpan LeftAloneAfterAnOpening = TimeSpan.FromMinutes(30);
-
     public async Task<ArtefactCaptioningRound> CaptionAsync(
         int atMost,
         Func<CancellationToken, Task<bool>> busy,
@@ -108,7 +105,7 @@ public sealed class ArtefactCaptionTracks(
             return null;
         }
 
-        if (OpenedLately(job) || await records.ReadAsync(job.RecordingId, cancellationToken) is not { Lines: not null } record)
+        if (rewrites.IsLeftAlone(job) || await records.ReadAsync(job.RecordingId, cancellationToken) is not { Lines: not null } record)
         {
             return null;
         }
@@ -153,13 +150,9 @@ public sealed class ArtefactCaptionTracks(
 
         return now.Exists
                && (now.Length, now.LastWriteTimeUtc) == was
-               && !OpenedLately(job)
+               && !rewrites.IsLeftAlone(job)
                && await worklist.StandsWithNothingInHandAsync(job, cancellationToken);
     }
-
-    private bool OpenedLately(EncodeJob job)
-        => openings.LastOpened(job.OutputRoot, job.ArtefactName!.Value) is { } opened
-           && clock.GetUtcNow() - opened < LeftAloneAfterAnOpening;
 
     private async Task<EncodeCaptionTrack?> SettleAsync(
         EncodeJob job,

@@ -228,7 +228,7 @@ public sealed class EncodeDispatch(
         await cleaner.ClearAsync(held, cancellationToken);
 
         if (ended.Status is EncodeJobStatus.Completed
-            && !await AnotherStandsAtItsNameAsync(jobs, ended, cancellationToken))
+            && !await scope.ServiceProvider.GetRequiredService<RecordingEncodeDomainService>().AnotherStandsAtTheNameOfAsync(ended, cancellationToken))
         {
             EncodeScratchFate fate = cleaner.RemoveArtefact(ended);
 
@@ -241,13 +241,6 @@ public sealed class EncodeDispatch(
 
         return held.Status;
     }
-
-    private static async Task<bool> AnotherStandsAtItsNameAsync(
-        IEncodeJobRepository jobs,
-        EncodeJob ended,
-        CancellationToken cancellationToken)
-        => (await jobs.ListForRecordingAsync(ended.RecordingId, cancellationToken))
-            .Any(job => !job.Id.Equals(ended.Id) && job.StandsAsTheArtefact && job.SharesTheArtefactWith(ended));
 
     private static string EndingNotKept(EncodeJob ended)
         => ended.Failure is { } failure

@@ -160,8 +160,7 @@ public sealed class CaptionTrackMaterialTests
             harness.Places,
             harness.Placer,
             harness.Cleaner,
-            new ArtefactOpenings(TimeProvider.System),
-            TimeProvider.System,
+            new ArtefactRewriteDomainService(new ArtefactOpenings(TimeProvider.System), TimeProvider.System),
             NullLogger<ArtefactCaptionTracks>.Instance);
 
     private static IEnumerable<string> Leftovers(EncodeHarness harness)
