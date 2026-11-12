@@ -47,6 +47,9 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
             .AddScoped<IOccupancyReader, OccupancyReader>()
             .AddSingleton<IBusynessReader>(new HeldBusyness(() => new Busyness(false, false, null)))
             .AddSingleton<ISegmentTrainer>(trainer)
+            .AddSingleton<TimeProvider>(clock)
+            .AddScoped<SegmentVersionDomainService>()
+            .AddScoped<SegmentLearningRoundDomainService>()
             .BuildServiceProvider();
     }
 
@@ -96,12 +99,12 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
     [Fact(DisplayName = "BR-CD-004: two rounds on days apart with nothing learning reads changed between them keep one candidate, and the second round is still taken")]
     public async Task TwoRoundsOnUnchangedTablesKeepOneCandidate()
     {
-        HandTurnedClock later = new(new DateTimeOffset(2036, 1, 1, 18, 30, 0, TimeSpan.Zero));
+        clock.Turn(new DateTimeOffset(2036, 1, 1, 18, 30, 0, TimeSpan.Zero) - clock.GetUtcNow());
         trainer.Candidate = SegmentTrainingHarness.Evaluated(0.80, 0.9);
 
-        SegmentTrainingLook first = await Job(later).LookAsync(Cancel);
-        later.Turn(TimeSpan.FromDays(1));
-        SegmentTrainingLook second = await Job(later).LookAsync(Cancel);
+        SegmentTrainingLook first = await Job().LookAsync(Cancel);
+        clock.Turn(TimeSpan.FromDays(1));
+        SegmentTrainingLook second = await Job().LookAsync(Cancel);
 
         Assert.Equal((SegmentTrainingOutcome.Kept, SegmentTrainingOutcome.NothingNew), (first.Round?.Outcome, second.Round?.Outcome));
         Assert.Equal("72", await ScalarAsync($"SELECT string_agg(number::text, ' ') FROM segment_model_version WHERE {Ours} AND number <> 71"));
@@ -141,8 +144,8 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
                 """));
     }
 
-    private SegmentTrainingJob Job(TimeProvider? at = null)
-        => new(provider.GetRequiredService<IServiceScopeFactory>(), SegmentTrainingSettings.Default, at ?? clock, new KeptLines<SegmentTrainingJob>());
+    private SegmentTrainingJob Job()
+        => new(provider.GetRequiredService<IServiceScopeFactory>(), SegmentTrainingSettings.Default, clock, new KeptLines<SegmentTrainingJob>());
 
     private async Task SkippedAsync(int version, DateTime from, int skips, int returned)
     {

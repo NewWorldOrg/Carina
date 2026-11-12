@@ -270,6 +270,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISegmentTrainer, SegmentTrainer>();
         services.AddScoped<ViewerActionIntakeDomainService>();
         services.AddScoped<LearningExtractionRecoveryDomainService>();
+        services.AddScoped<SegmentVersionDomainService>();
+        services.AddScoped<SegmentLearningRoundDomainService>();
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
         services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();

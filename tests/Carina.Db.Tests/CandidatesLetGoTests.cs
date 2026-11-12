@@ -20,6 +20,8 @@ public sealed class CandidatesLetGoTests : IAsyncLifetime
 {
     private const string ScratchDatabase = "carina_candidates_let_go_test";
 
+    private const int Latest = 12;
+
     private const string Profile = "4d5e6f70-8192-4a3b-b4c5-d6e7f8091a2b";
 
     private const string Destination = "5e6f7081-92a3-4b4c-85d6-e7f8091a2b3c";
@@ -163,6 +165,77 @@ public sealed class CandidatesLetGoTests : IAsyncLifetime
         Assert.Equal("1:Retired 3:Active 5:Candidate 6:Candidate", await StatesAsync());
     }
 
+    [Fact(DisplayName = "BR-CS-003: the store names the same versions as named that the rows laid name: a detection, a viewer's skip, the chapters of an encode or a round measuring the version in use, and not a round that only kept it as its candidate")]
+    public async Task TheStoreNamesWhatTheRowsName()
+    {
+        IReadOnlyDictionary<int, bool> named = await LaidAsync();
+
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
+        IReadOnlySet<int> found = await new SegmentModelVersionRepository(context).NamedAmongAsync([.. named.Keys, 99], Cancel);
+
+        Assert.Equal(named.Where(pair => pair.Value).Select(pair => pair.Key).Order(), found.Order());
+    }
+
+    [Fact(DisplayName = "BR-CS-003: the statement that lets go of candidates deletes, among those numbered before the latest, exactly the versions the version itself says learning lets go of, the one just before the latest included and the latest kept")]
+    public async Task TheStatementLetsGoOfWhatEachVersionSays()
+    {
+        IReadOnlyDictionary<int, bool> named = await LaidAsync();
+        IReadOnlyList<SegmentModelVersion> kept;
+
+        await using (CarinaDbContext reading = CarinaDbContextFactory.Create(Scratch()))
+        {
+            kept = await new SegmentModelVersionRepository(reading).ListAsync(Cancel);
+        }
+
+        int[] expected = [.. kept.Where(version => version.IsLetGoBefore(Latest, named[version.Number])).Select(version => version.Number).Order()];
+
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
+        IReadOnlyList<int> letGo = await new SegmentModelVersionRepository(context).LetGoAsync([.. kept.Select(version => version.Number).Where(number => number < Latest)], Cancel);
+
+        Assert.Equal(expected, letGo);
+        Assert.Contains(Latest - 1, letGo);
+        Assert.Equal(expected, SegmentModelVersion.LetGoBefore(kept, Latest, named.Where(pair => pair.Value).Select(pair => pair.Key).ToHashSet()));
+        Assert.Equal(kept.Count - expected.Length, (await StatesAsync()).Split(' ').Length);
+        Assert.Contains($"{Latest}:Candidate", await StatesAsync(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Lays the built-in version in use, a version used before, a candidate built in, and candidates learning made,
+    /// each named by one of the rows that remember versions or by none, the one just before the latest and the latest
+    /// named by none; answers each number and whether something names it.
+    /// </summary>
+    private static async Task<IReadOnlyDictionary<int, bool>> LaidAsync()
+    {
+        await KeepBuiltInAsync(Installed);
+
+        foreach (int number in new[] { 2, 3, 4, 5, 6, 7, Latest - 1, Latest })
+        {
+            await AddAsync(SegmentModelVersion.Learned(number, HandMadeModels.First, Evaluated, Installed.AddDays(number)));
+        }
+
+        await AddAsync(SegmentModelVersion.Rehydrate(8, SegmentModelVersionState.Candidate, false, HandMadeModels.First, Installed.AddDays(8), null, null, null, null, builtIn: true));
+        await AddAsync(SegmentModelVersion.Rehydrate(9, SegmentModelVersionState.Retired, false, HandMadeModels.First, Installed.AddDays(9), Installed.AddDays(9), Installed.AddDays(10), null, null, Evaluated));
+        await ExecuteAsync(Detected(3));
+        await SkippedAsync(4);
+        await ExecuteAsync(Encoded(5));
+        await ExecuteAsync(Round("2026-10-20", candidate: 7, inUseVersion: 6));
+
+        return new Dictionary<int, bool>
+        {
+            [1] = false,
+            [2] = false,
+            [3] = true,
+            [4] = true,
+            [5] = true,
+            [6] = true,
+            [7] = false,
+            [8] = false,
+            [9] = false,
+            [Latest - 1] = false,
+            [Latest] = false,
+        };
+    }
+
     private static string Detected(int version)
         => $"INSERT INTO segment_detection (recording_id, model_version, state, segments, cm_share, snaps, extraction_version, catalog_until, detected_at) VALUES (gen_random_uuid(), {version}, 'NothingFound', '[{{\"startsAtSec\": 0, \"endsAtSec\": 1800, \"kind\": \"Programme\", \"probability\": 0.9}}]', 0, '[]', 2, now(), now())";
 
@@ -218,8 +291,11 @@ public sealed class CandidatesLetGoTests : IAsyncLifetime
     {
         await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
 
-        return await new SegmentModelVersionRepository(context).LetGoOfCandidatesBeforeAsync(latest, Cancel);
+        return await Versions(context).LetGoBeforeAsync(latest, Cancel);
     }
+
+    private static SegmentVersionDomainService Versions(CarinaDbContext context)
+        => new(new SegmentModelVersionRepository(context), new SkipEventRepository(context), TimeProvider.System);
 
     private static async Task ChangeAsync(SegmentVersionChange change, DateTime at)
     {
