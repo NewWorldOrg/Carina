@@ -1,3 +1,4 @@
+using Carina.Api.Services;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
@@ -183,8 +184,7 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             network);
         ProgrammeSearch search = Asked[named](network);
 
-        PaginatedList<ProgrammeMatch> stored = await new ProgrammeSearchRepository(context)
-            .SearchAsync(search, At, Cancel);
+        PaginatedList<ProgrammeMatch> stored = await SearchedAsync(context, search);
         PaginatedList<ProgrammeMatch> read = ProgrammeSearchMatching.Search(
             ProgrammeSearchMatching.Layered(held, kept),
             search,
@@ -204,8 +204,7 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             network);
         ProgrammeSearch search = Ask(network, "100017時");
 
-        PaginatedList<ProgrammeMatch> stored = await new ProgrammeSearchRepository(context)
-            .SearchAsync(search, At, Cancel);
+        PaginatedList<ProgrammeMatch> stored = await SearchedAsync(context, search);
         PaginatedList<ProgrammeMatch> read = ProgrammeSearchMatching.Search(
             ProgrammeSearchMatching.Layered(held, kept),
             search,
@@ -223,24 +222,15 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         await BroadcastAsync(context, network);
-        var repository = new ProgrammeSearchRepository(context);
 
-        PaginatedList<ProgrammeMatch> brandNew = await repository.SearchAsync(
-            Asked["a mark asked for"](network),
-            At,
-            Cancel);
-        PaginatedList<ProgrammeMatch> notAgain = await repository.SearchAsync(
-            Asked["a mark asked for and another left out"](network),
-            At,
-            Cancel);
-        PaginatedList<ProgrammeMatch> both = await repository.SearchAsync(
-            Asked["two marks both of which are needed"](network),
-            At,
-            Cancel);
-        PaginatedList<ProgrammeMatch> archived = await repository.SearchAsync(
-            Asked["a mark in the archive"](network),
-            At,
-            Cancel);
+        PaginatedList<ProgrammeMatch> brandNew = await SearchedAsync(context, Asked["a mark asked for"](network));
+        PaginatedList<ProgrammeMatch> notAgain = await SearchedAsync(
+            context,
+            Asked["a mark asked for and another left out"](network));
+        PaginatedList<ProgrammeMatch> both = await SearchedAsync(
+            context,
+            Asked["two marks both of which are needed"](network));
+        PaginatedList<ProgrammeMatch> archived = await SearchedAsync(context, Asked["a mark in the archive"](network));
 
         Assert.Equal(["\U0001F21Fアニメ", "\U0001F21F\U0001F21Eアニメ"], Spelt(brandNew).Order(StringComparer.Ordinal));
         Assert.Equal(["\U0001F21Fアニメ"], Spelt(notAgain));
@@ -258,11 +248,10 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             network);
         IReadOnlyList<ProgrammeMatch> layered = ProgrammeSearchMatching.Layered(held, kept);
         var answers = new HashSet<string>(StringComparer.Ordinal);
-        var repository = new ProgrammeSearchRepository(context);
 
         foreach (string named in Asked.Keys)
         {
-            PaginatedList<ProgrammeMatch> stored = await repository.SearchAsync(Asked[named](network), At, Cancel);
+            PaginatedList<ProgrammeMatch> stored = await SearchedAsync(context, Asked[named](network));
 
             answers.Add(string.Join('|', Spelt(stored)));
             Assert.Equal(
@@ -273,6 +262,30 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
         Assert.Contains(string.Empty, answers);
         Assert.True(answers.Count >= 12, $"the searches asked here gave only {answers.Count} different answers");
         Assert.Equal(Asked.Count, WhatIsAsked().Count);
+    }
+
+    private static async Task<PaginatedList<ProgrammeMatch>> SearchedAsync(
+        CarinaDbContext context,
+        ProgrammeSearch search)
+    {
+        var guideLeavesOut = new HeldServices();
+
+        guideLeavesOut.Services.AddRange(search.Withheld.Select(service => BroadcastService.Discover(
+            new NetworkId(service.NetworkId),
+            new ServiceId(service.ServiceId),
+            "data",
+            ServiceCategory.Data,
+            At)));
+
+        var screen = new ProgrammeGuideService(
+            new ProgrammeSearchScopeDomainService(new HeldStreams([]), guideLeavesOut),
+            new ProgrammeRepository(context),
+            new ArchivedProgrammeRepository(context),
+            new ProgrammeSearchRepository(context),
+            new HandTurnedClock(new DateTimeOffset(At)));
+
+        return (await screen.SearchAsync(search, Cancel)).Data
+            ?? throw new InvalidOperationException("the search screen answered a search with nothing");
     }
 
     private static string[] Spelt(PaginatedList<ProgrammeMatch> found)
