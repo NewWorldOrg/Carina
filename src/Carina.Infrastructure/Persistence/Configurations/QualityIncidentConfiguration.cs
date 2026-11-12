@@ -113,6 +113,7 @@ public sealed class QualityIncidentConfiguration : IEntityTypeConfiguration<Qual
 
         builder.Ignore(incident => incident.Restated);
         builder.Ignore(incident => incident.HasSettled);
+        builder.Ignore(incident => incident.AwaitsNotice);
 
         builder.HasIndex(incident => incident.DetectedAt)
             .HasFilter("resolved_at IS NULL")
