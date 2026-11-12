@@ -168,6 +168,8 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/IEncodeJobRepository.cs EncodeHold.Unfinished EncodeJob?",
         "/Carina.Domain/Encodings/IRecordingEncodes.cs EncodesErased.FilesRemoved int",
         "/Carina.Domain/Encodings/IRecordingEncodes.cs EncodesErased.Left IReadOnlyList<EncodeFileName>",
+        "/Carina.Domain/Encodings/RecordingEncodeDomainService.cs RecordingEncodeErasure.Ended IReadOnlyList<EncodeJob>",
+        "/Carina.Domain/Encodings/RecordingEncodeDomainService.cs RecordingEncodeErasure.Standing IReadOnlyList<EncodeJob>",
         "/Carina.Domain/Encodings/SourceHeadReading.cs SourceHeadReading.ExitCode int?",
         "/Carina.Domain/Encodings/SourceHeadReading.cs SourceHeadReading.Fault SourceHeadFault?",
         "/Carina.Domain/Encodings/SourceHeadReading.cs SourceHeadReading.FirstPicture TimeSpan?",

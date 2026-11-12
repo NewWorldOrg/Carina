@@ -254,6 +254,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CandidateScoreRound>();
         services.AddScoped<EncodeDefinitionDomainService>();
         services.AddScoped<EncodeQueueDomainService>();
+        services.AddScoped<RecordingEncodeDomainService>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
         services.AddScoped<IRecordingEncodes, RecordingEncodes>();

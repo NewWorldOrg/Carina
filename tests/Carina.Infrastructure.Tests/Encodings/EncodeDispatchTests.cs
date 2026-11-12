@@ -692,6 +692,7 @@ public sealed class EncodeDispatchTests
         var clock = new HandTurnedClock(new DateTimeOffset(Now));
         var services = new ServiceCollection();
         services.AddScoped<IEncodeJobRepository>(_ => held);
+        services.AddScoped<RecordingEncodeDomainService>();
         services.AddScoped(provider => new EncodeRestart(
             held,
             new ScriptedStrays(),
