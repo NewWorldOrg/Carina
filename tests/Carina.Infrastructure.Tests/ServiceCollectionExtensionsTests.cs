@@ -1,5 +1,6 @@
 using Carina.Domain.Auth;
 using Carina.Domain.Base;
+using Carina.Domain.Captions;
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;
 using Carina.Domain.Driver;
@@ -513,7 +514,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Equal(BroadcasterRelaySettings.Default.UserAgent, provider.GetRequiredService<HybridcastRelaySettings>().UserAgent);
     }
 
-    [Fact(DisplayName = "registers the domain services of recordings, each for one scope")]
+    [Fact(DisplayName = "registers the domain services of recordings and their captions, each for one scope")]
     public void RegistersTheDomainServicesOfRecordings()
     {
         using ServiceProvider provider = Build(ValidSettings());
@@ -522,6 +523,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingSettlementDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingDisposalDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CaptionRequeueDomainService>());
     }
 
     [Fact(DisplayName = "registers the follow of recordings being written for their learning data alongside the other hosted services, with what it reaches for")]

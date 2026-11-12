@@ -283,6 +283,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<NotificationDeliveryRound>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<ICaptionWorklist, CaptionWorklist>();
+        services.AddScoped<CaptionRequeueDomainService>();
         services.AddScoped<IDataBroadcastWorklist, DataBroadcastWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();

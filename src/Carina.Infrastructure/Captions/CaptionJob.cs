@@ -105,7 +105,9 @@ public sealed class CaptionJob(
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         ICaptionWorklist worklist = scope.ServiceProvider.GetRequiredService<ICaptionWorklist>();
         IBusynessReader busyness = scope.ServiceProvider.GetRequiredService<IBusynessReader>();
-        Requeued requeued = await RequeueLostAsync(worklist, cancellationToken);
+        CaptionRequeue requeued = await RequeueLostAsync(
+            scope.ServiceProvider.GetRequiredService<CaptionRequeueDomainService>(),
+            cancellationToken);
         IReadOnlyList<OutputRoot> withinReach = [.. mounts.OutputRoots.Select(mounted => mounted.Root)];
         IReadOnlyList<CaptionSubject> awaiting =
             await worklist.AwaitingAsync(withinReach, settings.AtMostAPass, cancellationToken);
@@ -132,7 +134,7 @@ public sealed class CaptionJob(
             tally.Failed,
             outOfReach,
             tally.Yielded,
-            requeued.Count,
+            requeued.Requeued,
             again.Count);
 
         if (pass.Settled > 0 || pass.Requeued > 0)
@@ -201,32 +203,20 @@ public sealed class CaptionJob(
         return among.Length is 0 ? [] : await worklist.ReadyAmongAsync(among, withinReach, atMost, cancellationToken);
     }
 
-    private async Task<Requeued> RequeueLostAsync(ICaptionWorklist worklist, CancellationToken cancellationToken)
+    private async Task<CaptionRequeue> RequeueLostAsync(
+        CaptionRequeueDomainService requeue,
+        CancellationToken cancellationToken)
     {
-        IReadOnlySet<string> shelved = shelf.Shelved();
-        int requeued = 0;
-        List<RecordingId> stillReady = [];
+        CaptionRequeue requeued = await requeue.RequeueLostAsync(cancellationToken);
 
-        foreach (RecordingId id in await worklist.ReadyAsync(cancellationToken))
-        {
-            if (shelved.Contains(id.Wire))
-            {
-                stillReady.Add(id);
-            }
-            else if (await worklist.CaptionAsync(id, CaptionState.Pending, null, cancellationToken))
-            {
-                requeued++;
-            }
-        }
-
-        if (requeued > 0)
+        if (requeued.Requeued > 0)
         {
             logger.LogWarning(
                 "{Lost} recording(s) said their captions were ready and no record of them was on the shelf, so they are taken again.",
-                requeued);
+                requeued.Requeued);
         }
 
-        return new Requeued(requeued, stillReady);
+        return requeued;
     }
 
     private async Task<bool> BusyAsync(IBusynessReader busyness, CancellationToken cancellationToken)
@@ -467,8 +457,6 @@ public sealed class CaptionJob(
 
     private string? Mounted(OutputRoot root)
         => mounts.OutputRoots.FirstOrDefault(candidate => candidate.Root.Equals(root))?.Path;
-
-    private sealed record Requeued(int Count, IReadOnlyList<RecordingId> StillReady);
 
     private sealed record Tally(int Kept = 0, int Absent = 0, int Failed = 0, bool Yielded = false)
     {

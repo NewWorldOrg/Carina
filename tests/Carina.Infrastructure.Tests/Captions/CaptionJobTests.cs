@@ -506,6 +506,8 @@ public sealed class CaptionJobTests : IDisposable
     {
         ServiceCollection services = new();
         services.AddScoped<ICaptionWorklist>(_ => worklist);
+        services.AddScoped<ICaptionRecords>(_ => new CaptionShelf(Settings()));
+        services.AddScoped<CaptionRequeueDomainService>();
         services.AddScoped<IBusynessReader>(_ => new HeldBusyness(() => new Busyness(worklist.BeingRecorded, watching.Anyone, reservationStartsAt)));
         services.AddScoped<IArtefactCaptioning>(_ => captioning);
 

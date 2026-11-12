@@ -94,5 +94,7 @@ public sealed class EncodeCaptionTrackDomainServiceTests
 
         public Task<TimeSpan?> StartsAtAsync(RecordingId id, CancellationToken cancellationToken)
             => throw new NotSupportedException();
+
+        public bool Holds(RecordingId id) => Kept.ContainsKey(id);
     }
 }
