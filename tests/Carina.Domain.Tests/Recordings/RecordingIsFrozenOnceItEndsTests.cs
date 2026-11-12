@@ -22,6 +22,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         nameof(Recording.ThumbnailShowsAnUnfinishedRecording),
         nameof(Recording.LeftScrambled),
         nameof(Recording.Encodability),
+        nameof(Recording.CanBeWatched),
         nameof(Recording.FollowsItsProgramme),
         nameof(Recording.CountedUntil),
         nameof(Recording.IsInterrupted),

@@ -35,7 +35,7 @@ public sealed class PlaybackTicketService(IRecordingDirectory recordings, IPlayb
             return Refused(PlaybackTicketRefusal.NoSuchRecording, $"There is no recording {id.Wire}.");
         }
 
-        if (recording.IsInFlight)
+        if (!recording.CanBeWatched)
         {
             return Refused(
                 PlaybackTicketRefusal.StillBeingWritten,
