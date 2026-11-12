@@ -217,7 +217,7 @@ public sealed class ProgrammeThatCameBackTests
                 Rules,
                 Programmes,
                 Reservations,
-                Outcomes,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 new HeldStreamVisits(),
                 new HeldEpochs(),
                 Streams,
@@ -230,7 +230,7 @@ public sealed class ProgrammeThatCameBackTests
 
             Guiding = new ReservationGuideService(
                 Reservations,
-                Outcomes,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 Programmes,
                 Scheduling,
                 Write,

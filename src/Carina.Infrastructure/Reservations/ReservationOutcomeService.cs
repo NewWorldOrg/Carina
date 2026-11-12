@@ -15,7 +15,7 @@ public sealed class ReservationOutcomeService(
     IReservationRepository reservations,
     IReservationOutcomeRepository outcomes,
     IReservationRecordingContract claims,
-    IRecordingRepository recordings,
+    ReservationOutcomeDomainService ledger,
     IAtomicWrite write,
     ReservationOutcomeSettings settings,
     IAppEventPublisher events,
@@ -33,9 +33,10 @@ public sealed class ReservationOutcomeService(
             return new ReservationOutcomeRun([]);
         }
 
-        IReadOnlyList<Reservation> claimed = Contested(judged) is { } contested
-            ? await reservations.ListClaimedOverAsync(contested, cancellationToken)
-            : [];
+        Reservation[] lost = [.. judged.Where(one => one.Kind is ReservationOutcomeKind.Competing).Select(one => one.Reservation)];
+        IReadOnlyList<Reservation> claimed = lost.Length is 0
+            ? []
+            : await reservations.ListClaimedOverAsync(RecordedInstead.LookedForAcross(lost), cancellationToken);
 
         ReservationOutcomeRun run = await write.AllOrNothingAsync(
             async token =>
@@ -62,9 +63,9 @@ public sealed class ReservationOutcomeService(
                             null,
                             kind is ReservationOutcomeKind.RecordingFailure ? reservation.RecordingOutcome : null,
                             kind is ReservationOutcomeKind.RecordingFailure
-                                ? await WhyItFailedAsync(reservation.Id, token)
+                                ? await ledger.WhyItFailedAsync(reservation.Id, token)
                                 : [],
-                            kind is ReservationOutcomeKind.Competing ? Instead(reservation, claimed) : [],
+                            kind is ReservationOutcomeKind.Competing ? RecordedInstead.Of(reservation, claimed) : [],
                             at),
                         token);
 
@@ -102,21 +103,6 @@ public sealed class ReservationOutcomeService(
         return run;
     }
 
-    private async Task<IReadOnlyList<RecordingFault>> WhyItFailedAsync(
-        ReservationId reservation,
-        CancellationToken cancellationToken)
-    {
-        IReadOnlyList<Recording> written = await recordings.ListForReservationAsync(reservation, cancellationToken);
-
-        return
-        [
-            .. written
-                .SelectMany(recording => recording.OutcomeDetail)
-                .Select(detail => detail.Fault)
-                .Distinct(),
-        ];
-    }
-
     private IReadOnlyList<Judged> Judging(IReadOnlyList<ReservationAwaitingOutcome> awaiting, DateTime at)
         =>
         [
@@ -133,28 +119,6 @@ public sealed class ReservationOutcomeService(
                 .Select(pair => new Judged(pair.Reservation, pair.Kind!.Value))
                 .OrderBy(judged => judged.Reservation.EffectiveStartAt)
                 .ThenBy(judged => judged.Reservation.Id.Value),
-        ];
-
-    private static ReservationWindow? Contested(IReadOnlyList<Judged> judged)
-    {
-        Judged[] lost = [.. judged.Where(one => one.Kind is ReservationOutcomeKind.Competing)];
-
-        return lost.Length is 0
-            ? null
-            : new ReservationWindow(
-                lost.Min(one => one.Reservation.EffectiveStartAt) - Margin.Longest,
-                lost.Max(one => one.Reservation.EffectiveEndAt) + Margin.Longest);
-    }
-
-    private static IReadOnlyList<Guid> Instead(Reservation lost, IReadOnlyList<Reservation> claimed)
-        =>
-        [
-            .. claimed
-                .Where(won => won.EffectiveStartAt < lost.EffectiveEndAt
-                              && lost.EffectiveStartAt < won.EffectiveEndAt)
-                .OrderBy(won => won.EffectiveStartAt)
-                .ThenBy(won => won.Id.Value)
-                .Select(won => won.Id.Value),
         ];
 
     private readonly record struct Judged(Reservation Reservation, ReservationOutcomeKind Kind);

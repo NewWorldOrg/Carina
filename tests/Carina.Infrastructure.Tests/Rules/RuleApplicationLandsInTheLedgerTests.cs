@@ -169,7 +169,7 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
             new RuleRepository(context),
             new ProgrammeRepository(context),
             reservations,
-            new ReservationOutcomeRepository(context),
+            new ReservationOutcomeDomainService(new ReservationOutcomeRepository(context), new RecordingRepository(context)),
             new StreamVisitRepository(context),
             new CollectionEpochRepository(context),
             streams,

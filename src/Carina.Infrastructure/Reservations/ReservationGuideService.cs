@@ -22,7 +22,7 @@ public sealed record GuideRun(
 /// </remarks>
 public sealed class ReservationGuideService(
     IReservationRepository reservations,
-    IReservationOutcomeRepository outcomes,
+    ReservationOutcomeDomainService ledger,
     IProgrammeRepository programmes,
     ReservationSchedulingService scheduling,
     IAtomicWrite write,
@@ -119,12 +119,7 @@ public sealed class ReservationGuideService(
                     touched.Add(reservation);
                     followed.Add(reservation.Id);
 
-                    await ReservationLedger.WriteOnceAsync(
-                        outcomes,
-                        reservation,
-                        ReservationOutcomeKind.ProgrammeMoved,
-                        at,
-                        token);
+                    await ledger.RecordOnceAsync(reservation, ReservationOutcomeKind.ProgrammeMoved, at, token);
                 }
 
                 await reservations.SaveAllAsync(touched, token);
@@ -169,12 +164,7 @@ public sealed class ReservationGuideService(
 
                     await reservations.SaveAllAsync([reservation], token);
 
-                    return await ReservationLedger.WriteOnceAsync(
-                        outcomes,
-                        reservation,
-                        ReservationOutcomeKind.ProgrammeGone,
-                        at,
-                        token);
+                    return await ledger.RecordOnceAsync(reservation, ReservationOutcomeKind.ProgrammeGone, at, token);
                 },
                 cancellationToken);
 

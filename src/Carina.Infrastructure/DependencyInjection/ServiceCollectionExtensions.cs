@@ -292,6 +292,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<StationLogoDomainService>();
         services.AddScoped<IServiceReachSettingsRepository, ServiceReachSettingsRepository>();
         services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
+        services.AddScoped<ReservationOutcomeDomainService>();
         services.AddScoped<ReservationSchedulingService>();
         services.AddScoped<ReservationOutcomeService>();
         services.AddScoped<ReservationGuideService>();

@@ -25,7 +25,7 @@ public sealed record BroadcastGroupRun(
 /// </remarks>
 public sealed class BroadcastGroupService(
     IReservationRepository reservations,
-    IReservationOutcomeRepository outcomes,
+    ReservationOutcomeDomainService ledger,
     IProgrammeRepository programmes,
     ReservationSchedulingService scheduling,
     IAtomicWrite write,
@@ -166,12 +166,7 @@ public sealed class BroadcastGroupService(
 
                     await reservations.SaveAllAsync([reservation], token);
 
-                    return await ReservationLedger.WriteOnceAsync(
-                        outcomes,
-                        reservation,
-                        ReservationOutcomeKind.ProgrammeMoved,
-                        at,
-                        token);
+                    return await ledger.RecordOnceAsync(reservation, ReservationOutcomeKind.ProgrammeMoved, at, token);
                 },
                 cancellationToken);
         }

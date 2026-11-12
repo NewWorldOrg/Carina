@@ -298,7 +298,7 @@ public sealed class RuleSimulcastTests
                 Rules,
                 Programmes,
                 Reservations,
-                Outcomes,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 Visits,
                 Epochs,
                 Streams,

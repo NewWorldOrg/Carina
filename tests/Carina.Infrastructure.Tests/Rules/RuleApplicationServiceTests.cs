@@ -965,7 +965,7 @@ public sealed class RuleApplicationServiceTests
                 Rules,
                 Programmes,
                 Reservations,
-                Outcomes,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 Visits,
                 Epochs,
                 Streams,

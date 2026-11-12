@@ -286,7 +286,7 @@ public sealed class RuleRetirementTests
                 Rules,
                 Programmes,
                 Reservations,
-                Outcomes,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 Visits,
                 new HeldEpochs(),
                 Streams,

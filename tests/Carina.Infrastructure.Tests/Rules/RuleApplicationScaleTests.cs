@@ -56,7 +56,7 @@ public sealed class RuleApplicationScaleTests
             rules,
             programmes,
             reservations,
-            new HeldOutcomes(),
+            new ReservationOutcomeDomainService(new HeldOutcomes(), new NoRecordings()),
             visits,
             new HeldEpochs(),
             streams,

@@ -164,24 +164,22 @@ public sealed class ReservationRecordingArmsTests(MigratedScratchDatabase databa
 
         int eventId = 30000;
 
-        foreach (ReservationState state in States)
+        foreach (Row row in Matrix())
         {
-            foreach ((bool claimed, string? outcome) in Claims)
-            {
-                foreach (TimeSpan airs in Airs)
-                {
-                    foreach (int margin in Margins)
-                    {
-                        await LayAsync(++eventId, state, Tick + airs, claimed, outcome, margin);
-                    }
-                }
-            }
+            await LayAsync(++eventId, row.State, Tick + row.Airs, row.Claimed, row.Outcome, row.Margin);
         }
 
         await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
 
         return await context.Set<Reservation>().AsNoTracking().ToListAsync();
     }
+
+    private static IEnumerable<Row> Matrix()
+        => from state in States
+           from claim in Claims
+           from airs in Airs
+           from margin in Margins
+           select new Row(state, claim.Claimed, claim.Outcome, airs, margin);
 
     private Task LayAsync(int eventId, ReservationState state, DateTime starts, bool claimed, string? outcome, int margin)
         => ExecuteAsync(
@@ -213,4 +211,6 @@ public sealed class ReservationRecordingArmsTests(MigratedScratchDatabase databa
         await using var command = new NpgsqlCommand(sql, connection);
         await command.ExecuteNonQueryAsync();
     }
+
+    private readonly record struct Row(ReservationState State, bool Claimed, string? Outcome, TimeSpan Airs, int Margin);
 }

@@ -8,7 +8,7 @@ namespace Carina.Infrastructure.Recordings;
 
 public sealed class RecordingRefusalReporter(
     IReservationRepository reservations,
-    IReservationOutcomeRepository outcomes,
+    ReservationOutcomeDomainService ledger,
     ITuneFailureReporter tuning,
     ILogger<RecordingRefusalReporter> logger)
 {
@@ -49,16 +49,7 @@ public sealed class RecordingRefusalReporter(
             return;
         }
 
-        IReadOnlyList<ReservationOutcome> already = await outcomes.ListForReservationAsync(
-            reservation.Id,
-            cancellationToken);
-
-        if (already.Any(one => one.Kind == failure.Kind))
-        {
-            return;
-        }
-
-        await outcomes.AddAsync(
+        await ledger.RecordOnceAsync(
             ReservationOutcome.Record(
                 ReservationOutcomeId.New(),
                 reservation,

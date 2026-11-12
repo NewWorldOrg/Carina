@@ -43,7 +43,7 @@ public sealed class RuleApplicationService(
     IRuleRepository rules,
     IProgrammeRepository programmes,
     IReservationRepository reservations,
-    IReservationOutcomeRepository outcomes,
+    ReservationOutcomeDomainService ledger,
     IStreamVisitRepository visits,
     ICollectionEpochRepository epochs,
     IBroadcastStreamDirectory directory,
@@ -390,12 +390,7 @@ public sealed class RuleApplicationService(
 
                 await reservations.SaveAllAsync([already], token);
 
-                return await ReservationLedger.WriteOnceAsync(
-                    outcomes,
-                    already,
-                    ReservationOutcomeKind.ProgrammeReturned,
-                    at,
-                    token);
+                return await ledger.RecordOnceAsync(already, ReservationOutcomeKind.ProgrammeReturned, at, token);
             },
             cancellationToken);
 

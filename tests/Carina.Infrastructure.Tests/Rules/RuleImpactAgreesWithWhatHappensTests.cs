@@ -237,7 +237,7 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
                 Rules,
                 Programmes,
                 Reservations,
-                Outcomes,
+                new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 Visits,
                 new HeldEpochs(),
                 Streams,
