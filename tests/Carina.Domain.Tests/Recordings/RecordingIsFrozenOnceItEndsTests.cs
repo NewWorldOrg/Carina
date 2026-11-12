@@ -51,6 +51,23 @@ public sealed class RecordingIsFrozenOnceItEndsTests
             ["Follows", "IsDueToStop", "IsOver", "KeepsCountingAt", "StoppedWritingAt"],
             Named(Declared(BindingFlags.Public | BindingFlags.Instance).Where(method => !Changes(method))));
 
+    [Fact]
+    public void AskingARecordingAQuestionMovesNothing()
+    {
+        foreach (Recording recording in new[] { RecordingFactory.Started(), Settled() })
+        {
+            IReadOnlyDictionary<string, string> before = Read(recording);
+
+            _ = recording.Follows(new RecordingGap(Later, Later.AddSeconds(3)));
+            _ = recording.IsDueToStop(Later);
+            _ = recording.IsOver(Later);
+            _ = recording.KeepsCountingAt(Later);
+            _ = recording.StoppedWritingAt(Now, Later);
+
+            Assert.Equal(before, Read(recording));
+        }
+    }
+
     private static bool Changes(MethodInfo method) => method.ReturnType == typeof(void);
 
     private static string[] Named(IEnumerable<MethodInfo> methods)
