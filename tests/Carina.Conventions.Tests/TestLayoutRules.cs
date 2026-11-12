@@ -78,7 +78,6 @@ public static class TestLayoutRules
         new("Notifications", "src/Carina.Api/Services/NotificationDestinationService.cs"),
         new("Notifications", "src/Carina.Api/Services/NotificationPushService.cs"),
         new("Notifications", "src/Carina.Api/Services/NotificationRuleService.cs"),
-        new("Notifications", "src/Carina.Db/Migrations/20261110112205_NoticesAreLedgeredAndSentToWebhooks.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261110182416_AProgrammeCanBeWatchedWithoutBeingRecorded.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261112182442_ANoticeCanBeSentToABrowser.cs"),
     ];
