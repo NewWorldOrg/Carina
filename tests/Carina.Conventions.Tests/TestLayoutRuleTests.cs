@@ -14,7 +14,7 @@ public sealed class TestLayoutRuleTests
 
     [Fact(DisplayName = "a test class in the layout is named after what it tests")]
     public void ATestClassInTheLayoutIsNamedAfterWhatItTests()
-        => Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(Repository));
+        => Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(Repository, TestLayoutRules.SourcesOutsideTheFolderOfTheArea));
 
     [Fact(DisplayName = "every action of an area that has feature tests has its feature class")]
     public void EveryActionOfAnAreaWithFeatureClassesHasItsFeatureClass()
@@ -33,14 +33,18 @@ public sealed class TestLayoutRuleTests
         => Assert.Empty(TestLayoutRules.ClassesLeftInTheOldPlace(
             Repository,
             TestLayoutRules.AreasNotYetMoved,
-            TestLayoutRules.ApiFoldersOfAnArea));
+            TestLayoutRules.SourcesOutsideTheFolderOfTheArea));
 
     [Fact(DisplayName = "the list of areas not yet moved names only areas with tests left in an old place and none in the layout")]
     public void TheListOfAreasNotYetMovedNamesOnlyAreasStillToMove()
         => Assert.Empty(TestLayoutRules.AreasWronglyListed(
             Repository,
             TestLayoutRules.AreasNotYetMoved,
-            TestLayoutRules.ApiFoldersOfAnArea));
+            TestLayoutRules.SourcesOutsideTheFolderOfTheArea));
+
+    [Fact(DisplayName = "the list of what an area keeps outside its own folder names only areas and sources that exist")]
+    public void TheListOfSourcesOutsideTheFolderOfTheAreaNamesOnlyWhatExists()
+        => Assert.Empty(TestLayoutRules.SourcesWronglyListed(Repository, TestLayoutRules.SourcesOutsideTheFolderOfTheArea));
 
     [Fact(DisplayName = "the rules have test classes in the layout to bite on")]
     public void TheRulesHaveTestClassesInTheLayoutToBiteOn()
