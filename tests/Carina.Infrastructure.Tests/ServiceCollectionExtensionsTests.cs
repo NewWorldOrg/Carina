@@ -563,6 +563,7 @@ public sealed class ServiceCollectionExtensionsTests
         using IServiceScope scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationOutcomeDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationPlanningDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleWithdrawalDomainService>());
     }
 
