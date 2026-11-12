@@ -18,37 +18,34 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
     private readonly IScanRunRepository runs;
     private readonly IBroadcastServiceRepository services;
     private readonly ICandidateChannelRepository candidates;
-    private readonly ISatelliteTransportStreamRepository satelliteStreams;
     private readonly IAppEventPublisher events;
     private readonly TimeProvider clock;
     private readonly ScanSettings settings;
     private readonly TunedStreamProbe prober;
     private readonly IDriverClient driver;
-    private readonly ITunerCapacityDirectory capacity;
+    private readonly ScanPlanningDomainService planning;
 
     public ChannelScanOrchestrator(
         IDriverClient driver,
-        ITunerCapacityDirectory capacity,
+        ScanPlanningDomainService planning,
         IDriverSignals signals,
         IScanRunRepository runs,
         IBroadcastServiceRepository services,
         ICandidateChannelRepository candidates,
-        ISatelliteTransportStreamRepository satelliteStreams,
         IAppEventPublisher events,
         TimeProvider clock,
         ScanSettings settings)
     {
         ArgumentNullException.ThrowIfNull(driver);
-        ArgumentNullException.ThrowIfNull(capacity);
+        ArgumentNullException.ThrowIfNull(planning);
         ArgumentNullException.ThrowIfNull(settings);
 
         this.driver = driver;
-        this.capacity = capacity;
+        this.planning = planning;
         this.signals = signals;
         this.runs = runs;
         this.services = services;
         this.candidates = candidates;
-        this.satelliteStreams = satelliteStreams;
         this.events = events;
         this.clock = clock;
         this.settings = settings;
@@ -77,14 +74,12 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                 greeting.Failure ?? "The driver did not answer, so no tuner can be asked to scan.");
         }
 
-        if (await ReceivableAsync(scope, cancellationToken) is not { } walkable)
+        if (await planning.PlanAsync(scope, cancellationToken) is not { } plan)
         {
             return ScanOutcome.NothingATunerCanReceive(
                 $"No tuner in service receives {string.Join(", ", scope.Systems.Select(TuneSystemConverter.WireName))},"
                 + " so there is nothing this scan could walk.");
         }
-
-        IReadOnlyList<TuningParameters> targets = await ScanTargets.WalkAsync(walkable, satelliteStreams, cancellationToken);
 
         ScanRunStart start = await runs.StartAsync(
             ScanRun.Start(ScanRunId.New(), hello.InstanceId, Now),
@@ -106,17 +101,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             }
         });
 
-        return await WalkAsync(run, targets, observer, interruption, cancellationToken);
-    }
-
-    private async Task<ScanScope?> ReceivableAsync(ScanScope scope, CancellationToken cancellationToken)
-    {
-        if (await capacity.ReadAsync(cancellationToken) is not { Undetermined.Count: 0 } known)
-        {
-            return scope;
-        }
-
-        return scope.Within(known.Reachable);
+        return await WalkAsync(run, plan.Targets, observer, interruption, cancellationToken);
     }
 
     private async Task<ScanOutcome> WalkAsync(
