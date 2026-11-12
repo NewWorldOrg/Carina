@@ -434,24 +434,28 @@ halves are present, not in this repository.
 A test sits where its kind and the layer of what it tests put it. A feature test
 drives the running application from outside through HTTP, a unit test needs
 neither a database, the HTTP surface nor ffmpeg, and a database test needs a real
-PostgreSQL. `<Area>` is the folder the subject sits in under its own layer:
-directly under `src/Carina.Domain`, `src/Carina.Infrastructure` or
-`src/Carina.Api/Controllers`. A type of the API outside `Controllers` goes under
-the area it serves, and what `src/Carina.Api/Authentication` holds belongs to
-`Auth`.
+PostgreSQL. An area is a folder directly under `src/Carina.Domain`,
+`src/Carina.Infrastructure` or `src/Carina.Api/Controllers`, and a test sits under
+the area whose folder in its own layer declares what it tests. What an area keeps
+outside the folder of its name is listed, folder by folder and file by file, in
+`TestLayoutRules.SourcesOutsideTheFolderOfTheArea` in `Carina.Conventions.Tests`:
+`src/Carina.Api/Authentication` for `Auth`, a service under
+`src/Carina.Api/Services`, a migration. The database project has no area folders,
+so every type and migration of it that a test is named after is on that list. A
+test named after anything else is refused under that area.
 
 | Folder | What is tested there | Class |
 | --- | --- | --- |
-| `Carina.Api.Tests/Feature/<Area>/` | one HTTP action per class; an endpoint or a part of the request pipeline that the start-up code wires in directly gets a class of its own | `<Verb><Entity>ActionTests`, or `<Class>Tests` after the class of the API that `Program.cs` or `Extensions/` names |
-| `Carina.Api.Tests/Unit/App/<Area>/` | an application service, or another type of the API, with stand-in repositories | `<Type>Tests` |
-| `Carina.Api.Tests/DbIntegration/App/<Area>/` | an application service over a real database; business behaviour that passes through no domain service is tested here | `<Name>ServiceTests` |
-| `Carina.Domain.Tests/Unit/<Area>/` | aggregates, value objects, static functions of the domain, and domain services with stand-in repositories | `<Type>Tests` |
-| `Carina.Infrastructure.Tests/DbIntegration/Domain/<Area>/` | a domain service or a repository over a real database; a test that holds SQL equal to an aggregate sits with the domain service or repository whose SQL it is | `<Name>DomainServiceTests`, `<Name>RepositoryTests` |
-| `Carina.Infrastructure.Tests/Unit/Infra/<Area>/`, `DbIntegration/Infra/<Area>/` | what exists in the infrastructure alone: ffmpeg invocations, the driver client, EF configurations, file system adapters | `<Type>Tests` |
-| `Carina.Db.Tests/DbIntegration/Infra/<Area>/`, `Unit/Infra/<Area>/` | the shape of the tables, and the migrations | `<Tables>SchemaTests`, `<Migration>MigrationTests`, `<Type>Tests` |
+| `Carina.Api.Tests/Feature/<Area>/` | one HTTP action per class; an endpoint or a part of the request pipeline that the start-up code wires in directly gets a class of its own | `<Action>Tests` after a class under `Controllers/<Area>/` whose name ends in `Action`, or `<Class>Tests` after a class of the area that `Program.cs` or `Extensions/` names |
+| `Carina.Api.Tests/Unit/App/<Area>/` | an application service, or another type of the API, with stand-in repositories | `<Type>Tests` after a type the API declares for the area |
+| `Carina.Api.Tests/DbIntegration/App/<Area>/` | an application service over a real database; business behaviour that passes through no domain service is tested here | `<Name>ServiceTests` after a service the API declares for the area |
+| `Carina.Domain.Tests/Unit/<Area>/` | aggregates, value objects, static functions of the domain, and domain services with stand-in repositories | `<Type>Tests` after a type of the area's folder in the domain |
+| `Carina.Infrastructure.Tests/DbIntegration/Domain/<Area>/` | a domain service or a repository over a real database; a test that holds SQL equal to an aggregate sits with the domain service or repository whose SQL it is | `<Name>DomainServiceTests` after a domain service of the area, or `<Name>RepositoryTests` after the interface `I<Name>Repository` of the area's folder in the domain |
+| `Carina.Infrastructure.Tests/Unit/Infra/<Area>/`, `DbIntegration/Infra/<Area>/` | what exists in the infrastructure alone: ffmpeg invocations, the driver client, EF configurations, file system adapters | `<Type>Tests` after a type the infrastructure declares for the area |
+| `Carina.Db.Tests/DbIntegration/Infra/<Area>/`, `Unit/Infra/<Area>/` | the shape of the tables, and the migrations | `<Migration>MigrationTests` after a migration listed for the area, `<Type>Tests` after a type listed for the area, or a name that ends in `SchemaTests` |
 
 - A test class is named after what it tests, sits alone in a file of its own name
-  and is in the namespace of its folder. Test methods are named as sentences.
+  and is in the namespace of its folder.
 - The class carries `[Trait("Category", "Feature")]`, `"Unit"` or `"DbIntegration"`
   to match its kind. A class of the scale or the material job carries `"Scale"` or
   `"Material"` instead.
@@ -460,9 +464,9 @@ the area it serves, and what `src/Carina.Api/Authentication` holds belongs to
   asked for as its domain interface and its class is not named at all; a domain
   service is asked for as itself, and so is an application service under
   `DbIntegration/App`.
-- A feature class tests one action, or one class the start-up code names, and
-  every action of an area that has feature classes has its class. No two feature
-  classes share a name.
+- A feature class is named after one action, or one class the start-up code
+  names, and every action of an area that has feature classes has its class. No
+  two feature classes share a name.
 - A file that holds no test, such as a fixture or a stand-in, may sit beside the
   tests that use it.
 - `Carina.Architecture.Tests`, `Carina.Conventions.Tests` and
@@ -474,10 +478,14 @@ under a folder named for the area, or at the root of a test project.
 `TestLayoutRules.AreasNotYetMoved` in `Carina.Conventions.Tests` lists the areas
 still to move. Moving an area means moving every test of it in the four projects
 and taking its name off the list in the same change. `TestLayoutRuleTests` holds
-the bullets above for every class inside the layout. For an area off the list it
-refuses a test left behind: one under the area's old folder, one named after a
-type of the area, an old feature test that speaks only to routes of areas that
-have moved, or one with a namesake in the layout. A class at the root of a project
+the Folder and Class columns of the table and the bullets above for every class
+inside the layout. It cannot read the rest, which is left to the writer and the
+reviewer: the middle column of the table, that a test is of the kind its folder
+says, which tables a `SchemaTests` class reads, and that test methods are named as
+sentences. For an area off the list it refuses a test left behind: one under the
+area's old folder, one named after a type or a migration of the area, an old
+feature test that speaks only to routes of areas that have moved, or one with a
+namesake in the layout. A class at the root of a project
 is tied to its area by those marks alone, so what they miss is caught when the
 list is empty; from then on every test class outside the layout is refused.
 
