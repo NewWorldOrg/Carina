@@ -153,24 +153,12 @@ public sealed class SupplyWatchRound(
         foreach (SupplySilenceFinding finding in opening)
         {
             await incidents.AddAsync(
-                QualityIncident.Detect(
-                    QualityIncidentId.New(),
-                    now,
-                    QualityThresholdKey.SupplySilence,
-                    finding.Subject,
-                    finding.Seconds,
-                    HeldAgainst(finding, applied, now),
-                    silence: finding.Silence),
+                QualityIncident.WentQuiet(QualityIncidentId.New(), finding, applied, now),
                 cancellationToken);
         }
 
         return opening.Count;
     }
-
-    private static Threshold HeldAgainst(SupplySilenceFinding finding, Threshold shared, DateTime now)
-        => finding.Allowed is { } allowed
-            ? Threshold.Provisionally(allowed.TotalSeconds, 0, now)
-            : shared;
 
     private async Task<IReadOnlyList<ThresholdBreach>> BreachesAsync(
         IReadOnlyList<QualityThresholdStanding> levels,
@@ -251,13 +239,8 @@ public sealed class SupplyWatchRound(
         IReadOnlyList<QualityIncident> unsettled = await incidents.ListUnsettledAsync(cancellationToken);
         int notified = 0;
 
-        foreach (QualityIncident incident in unsettled)
+        foreach (QualityIncident incident in unsettled.Where(incident => incident.AwaitsNotice))
         {
-            if (incident.State is not QualityIncidentState.Detected)
-            {
-                continue;
-            }
-
             incident.Notify(now);
 
             await incidents.SaveAsync(incident, cancellationToken);

@@ -158,7 +158,7 @@ public sealed class SignalSampleRound(
 
             if (session.Concluded)
             {
-                measurement.Close(EndOf(measurement, at));
+                measurement.Close(at);
                 closed++;
             }
 
@@ -173,16 +173,13 @@ public sealed class SignalSampleRound(
                 continue;
             }
 
-            gone.Close(EndOf(gone, at));
+            gone.Close(at);
             await measurements.SaveAsync(gone, cancellationToken);
             closed++;
         }
 
         return new SessionTally(measured, closed);
     }
-
-    private static DateTime EndOf(QualitySessionMeasurement measurement, DateTime at)
-        => at < measurement.StartedAt ? measurement.StartedAt : at;
 
     private sealed record Whereabouts(TunerDeviceId Tuner, NetworkId Network, ServiceId Service);
 

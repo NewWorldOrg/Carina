@@ -38,6 +38,11 @@ public sealed class QualityIncident
 
     public bool HasSettled => State is QualityIncidentState.Resolved;
 
+    /// <summary>
+    /// Whether the incident is detected and not yet told about, so the pass that finds it tells of it.
+    /// </summary>
+    public bool AwaitsNotice => State is QualityIncidentState.Detected;
+
     public static QualityIncident Detect(
         QualityIncidentId id,
         DateTime detectedAt,
@@ -61,6 +66,29 @@ public sealed class QualityIncident
             QualityIncidentState.Detected,
             null,
             null);
+
+    /// <summary>
+    /// Opens an incident for a supply that went quiet, held against the allowance of its own when it has one and
+    /// against the threshold every supply shares otherwise.
+    /// </summary>
+    public static QualityIncident WentQuiet(
+        QualityIncidentId id,
+        SupplySilenceFinding finding,
+        Threshold shared,
+        DateTime detectedAt)
+    {
+        ArgumentNullException.ThrowIfNull(finding);
+        ArgumentNullException.ThrowIfNull(shared);
+
+        return Detect(
+            id,
+            detectedAt,
+            QualityThresholdKey.SupplySilence,
+            finding.Subject,
+            finding.Seconds,
+            finding.Allowed is { } allowed ? Threshold.Provisionally(allowed.TotalSeconds, 0, detectedAt) : shared,
+            silence: finding.Silence);
+    }
 
     public static QualityIncident Rehydrate(
         QualityIncidentId id,
@@ -139,7 +167,7 @@ public sealed class QualityIncident
 
     public void Notify(DateTime at)
     {
-        if (State is not QualityIncidentState.Detected)
+        if (!AwaitsNotice)
         {
             throw new InvalidOperationException($"An incident standing at {State} is not one to be told about.");
         }
