@@ -405,6 +405,36 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
         Assert.Equal(1, (await PageAsync(id, page: 1, perPage: 50)).Total);
     }
 
+    [Fact(DisplayName = "BR-LD-009: the findings the store lists are the ones each finding says are listed, a file thrown away on the instant it was found included")]
+    public async Task TheFindingsListedAreTheOnesEachSaysAreListed()
+    {
+        IntegrityCheckId id = IntegrityCheckId.New();
+        IReadOnlyList<IntegrityFinding> matrix =
+        [
+            IntegrityFinding.SizeDisagrees(id, Primary, Id(1), Name, 100, 99, At),
+            IntegrityFinding.FileMissing(id, Primary, Id(3), Name, 100, At),
+            IntegrityFinding.FileEmpty(id, Primary, Id(4), Name, 100, 0, At),
+            IntegrityFinding.EmptyThoughComplete(id, Primary, Id(5), Name, 100, 0, At),
+            IntegrityFinding.ThumbnailMissing(id, new DrawnPicture(Id(6), Pictures, "picture.jpg"), At),
+            IntegrityFinding.NoLedgerRow(id, Primary, "kept.tmp", 64, At),
+            IntegrityFinding.NoLedgerRow(id, Primary, "stays.tmp", 64, At, At.AddMinutes(-5)),
+            Thrown(IntegrityFinding.NoLedgerRow(id, Primary, "on-the-instant.tmp", 64, At, At.AddMinutes(-5)), At),
+            Thrown(IntegrityFinding.NoLedgerRow(id, Primary, "later.tmp", 64, At, At.AddMinutes(-5)), At.AddTicks(10)),
+        ];
+
+        await SaveAsync(IntegrityReport.Of(IntegrityCheck.Rehydrate(id, At, At, 1, 0, 9, 1, 1, 1, 1), matrix));
+
+        Assert.Contains(matrix, finding => finding.IsListed);
+        Assert.Contains(matrix, finding => !finding.IsListed);
+
+        IReadOnlyList<IntegrityFinding> listed = await FindingsAsync(id);
+
+        Assert.Equal(
+            matrix.Where(finding => finding.IsListed).Select(finding => finding.Id.Value).Order().ToArray(),
+            listed.Select(finding => finding.Id.Value).Order().ToArray());
+        Assert.Equal(matrix.Count(finding => finding.IsListed), (await PageAsync(id, page: 1, perPage: 50)).Total);
+    }
+
     [Fact]
     public async Task AFindingAboutARecordingIsNeverWrittenDownAsThrownAway()
     {
@@ -540,5 +570,12 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
         await connection.OpenAsync();
 
         return connection;
+    }
+
+    private static IntegrityFinding Thrown(IntegrityFinding finding, DateTime at)
+    {
+        finding.ThrowAway(at);
+
+        return finding;
     }
 }
