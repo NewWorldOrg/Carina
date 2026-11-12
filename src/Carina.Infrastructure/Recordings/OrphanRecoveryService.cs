@@ -111,7 +111,8 @@ public sealed class OrphanRecoveryService(
             standing is not null,
             OrphanRecovery.StillOnAir(
                 await GuideSaysAsync(recording, cancellationToken),
-                !recording.IsOver(now)));
+                !recording.IsOver(now)),
+            named is { StopReason: SessionStopReason.EndTimeReached });
 
         switch (OrphanRecovery.For(sighting))
         {
@@ -125,7 +126,7 @@ public sealed class OrphanRecoveryService(
 
                 break;
 
-            case OrphanTreatment.MarkWhatWasLeftBehind when ReachedTheEndItWasOpenedWith(named):
+            case OrphanTreatment.LeaveForTheWatch:
                 LeaveForTheWatch(recording);
 
                 break;
@@ -258,9 +259,6 @@ public sealed class OrphanRecoveryService(
             "Recording {Recording} was stopped by the driver at the end it was opened with, so it is left for "
             + "the pass that watches the stream to judge rather than marked for what was left of it.",
             recording.Id.Wire);
-
-    private static bool ReachedTheEndItWasOpenedWith(SessionSnapshot? session)
-        => session is { StopReason: SessionStopReason.EndTimeReached };
 
     private async Task MarkAsync(
         Recording recording,
