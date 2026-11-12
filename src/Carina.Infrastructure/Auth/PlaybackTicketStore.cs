@@ -8,8 +8,6 @@ public sealed class PlaybackTicketStore(TimeProvider clock, PlaybackTicketPolicy
 {
     public const int MostHeldAtOnce = 256;
 
-    public const int MostHeldPerSubject = 8;
-
     private readonly ConcurrentDictionary<string, PlaybackTicket> held = new(StringComparer.Ordinal);
 
     private readonly Lock issuing = new();
@@ -24,7 +22,8 @@ public sealed class PlaybackTicketStore(TimeProvider clock, PlaybackTicketPolicy
         {
             Sweep();
 
-            if (held.Count >= MostHeldAtOnce || HeldFor(subject) >= MostHeldPerSubject)
+            if (held.Count >= MostHeldAtOnce
+                || !PlaybackTicketPolicy.HasRoomFor(subject, held.Select(entry => entry.Value)))
             {
                 return null;
             }
@@ -48,12 +47,10 @@ public sealed class PlaybackTicketStore(TimeProvider clock, PlaybackTicketPolicy
             return null;
         }
 
-        return spent.HasLapsed(Now(), policy) || !spent.Opens(target) ? null : spent;
+        return spent.Spend(target, Now(), policy) ? spent : null;
     }
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
-
-    private int HeldFor(Subject subject) => held.Count(entry => entry.Value.Subject.Equals(subject));
 
     private void Sweep()
     {

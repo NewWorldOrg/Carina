@@ -93,4 +93,42 @@ public sealed class PlaybackGrantTests
             Seven,
             new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Local)));
     }
+
+    [Fact(DisplayName = "BR-PV-002: a subject holding fewer grants than the most forgets none to open another")]
+    public void ASubjectHoldingFewerThanTheMostForgetsNone()
+    {
+        PlaybackGrant[] held = [.. Grants(Watcher, PlaybackGrantPolicy.MostHeldPerSubject - 1)];
+
+        Assert.Null(PlaybackGrantPolicy.TheOneToForgetBeforeOpeningFor(Watcher, held));
+    }
+
+    [Fact(DisplayName = "BR-PV-002: a subject holding eight grants forgets the one opened first to open another")]
+    public void ASubjectHoldingTheMostForgetsTheOneOpenedFirst()
+    {
+        Subject other = new("someone else");
+        PlaybackGrant[] held =
+        [
+            PlaybackGrant.OpenedBy(Unguessable.Issue(), other, Seven, At.AddHours(-1)),
+            .. Grants(Watcher, PlaybackGrantPolicy.MostHeldPerSubject).Reverse(),
+        ];
+
+        PlaybackGrant? forgotten = PlaybackGrantPolicy.TheOneToForgetBeforeOpeningFor(Watcher, held);
+
+        Assert.NotNull(forgotten);
+        Assert.Equal(Watcher, forgotten.Subject);
+        Assert.Equal(At, forgotten.OpenedAt);
+        Assert.Equal(8, PlaybackGrantPolicy.MostHeldPerSubject);
+    }
+
+    [Fact]
+    public void GrantsOfOtherSubjectsDoNotCountTowardsTheMost()
+    {
+        PlaybackGrant[] held = [.. Grants(new Subject("someone else"), PlaybackGrantPolicy.MostHeldPerSubject)];
+
+        Assert.Null(PlaybackGrantPolicy.TheOneToForgetBeforeOpeningFor(Watcher, held));
+    }
+
+    private static IEnumerable<PlaybackGrant> Grants(Subject subject, int count)
+        => Enumerable.Range(0, count)
+            .Select(minute => PlaybackGrant.OpenedBy(Unguessable.Issue(), subject, Seven, At.AddMinutes(minute)));
 }

@@ -8,8 +8,6 @@ public sealed class PlaybackGrantStore(TimeProvider clock, PlaybackGrantPolicy p
 {
     public const int MostHeldAtOnce = 256;
 
-    public const int MostHeldPerSubject = 8;
-
     private readonly ConcurrentDictionary<string, PlaybackGrant> held = new(StringComparer.Ordinal);
 
     private readonly Lock opening = new();
@@ -30,9 +28,13 @@ public sealed class PlaybackGrantStore(TimeProvider clock, PlaybackGrantPolicy p
                 return;
             }
 
-            if (HeldFor(subject) >= MostHeldPerSubject)
+            PlaybackGrant? oldest = PlaybackGrantPolicy.TheOneToForgetBeforeOpeningFor(
+                subject,
+                held.Select(entry => entry.Value));
+
+            if (oldest is not null)
             {
-                ForgetTheOldestOf(subject);
+                held.TryRemove(new KeyValuePair<string, PlaybackGrant>(oldest.Digest, oldest));
             }
 
             PlaybackGrant opened = PlaybackGrant.OpenedBy(carrier, subject, target, Now());
@@ -85,18 +87,6 @@ public sealed class PlaybackGrantStore(TimeProvider clock, PlaybackGrantPolicy p
     }
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
-
-    private int HeldFor(Subject subject) => held.Count(entry => entry.Value.BelongsTo(subject));
-
-    private void ForgetTheOldestOf(Subject subject)
-    {
-        KeyValuePair<string, PlaybackGrant> oldest = held
-            .Where(entry => entry.Value.BelongsTo(subject))
-            .OrderBy(entry => entry.Value.OpenedAt)
-            .First();
-
-        held.TryRemove(oldest);
-    }
 
     private void Sweep()
     {

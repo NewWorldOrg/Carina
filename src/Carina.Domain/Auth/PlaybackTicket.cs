@@ -13,6 +13,8 @@ public sealed record IssuedPlaybackTicket(string InTheClear, DateTime LapsesAt)
 
 public sealed class PlaybackTicket
 {
+    private int spent;
+
     private PlaybackTicket(string digest, Subject subject, PlaybackTarget target, DateTime issuedAt)
     {
         Digest = digest;
@@ -70,4 +72,20 @@ public sealed class PlaybackTicket
     }
 
     public bool Opens(PlaybackTarget target) => Target.Equals(target);
+
+    /// <summary>
+    /// Spends the ticket on <paramref name="target"/> at <paramref name="now"/>: whether it lets the caller in. A
+    /// ticket is spent once, whatever the answer, so every later attempt is refused.
+    /// </summary>
+    public bool Spend(PlaybackTarget target, DateTime now, PlaybackTicketPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (Interlocked.Exchange(ref spent, 1) != 0)
+        {
+            return false;
+        }
+
+        return !HasLapsed(now, policy) && Opens(target);
+    }
 }
