@@ -127,7 +127,7 @@ public sealed class CatalogMatchingJob(
 
         ExtractionChange marked = await records.ChangeAsync(record.RecordingId, found => found.MatchedAsRead(record.UpdatedAt, Now()), cancellationToken);
 
-        await HeardAnewAsync(catalog, matched.Change, cancellationToken);
+        await HeardAnewAsync(services, matched.Change, cancellationToken);
 
         return new CatalogMatchingLook(verdict, matched, marked is ExtractionChange.Written);
     }
@@ -142,7 +142,7 @@ public sealed class CatalogMatchingJob(
         ICatalogRepository catalog = services.GetRequiredService<ICatalogRepository>();
 
         await catalog.KeepAsync(change, cancellationToken);
-        await HeardAnewAsync(catalog, change, cancellationToken);
+        await HeardAnewAsync(services, change, cancellationToken);
 
         return new CatalogMatchingLook(verdict, null, false, entry);
     }
@@ -151,12 +151,12 @@ public sealed class CatalogMatchingJob(
     /// Takes every recording that hears an entry <paramref name="change"/> recast, or a stretch it took for another
     /// kind, as matched again now, so that it waits to be detected again.
     /// </summary>
-    private async Task HeardAnewAsync(ICatalogRepository catalog, CatalogChange change, CancellationToken cancellationToken)
+    private async Task HeardAnewAsync(IServiceProvider services, CatalogChange change, CancellationToken cancellationToken)
     {
-        IReadOnlyList<CatalogOccurrence> heard = change.Recast.Count is 0 ? [] : await catalog.OccurrencesOfAsync(change.Recast, cancellationToken);
+        IReadOnlyList<RecordingId> heard = await services.GetRequiredService<CatalogMatchingDomainService>().HeardAnewAsync(change, cancellationToken);
         DateTime now = Now();
 
-        foreach (RecordingId recording in heard.Concat(change.Overridden).Select(occurrence => occurrence.RecordingId).Distinct())
+        foreach (RecordingId recording in heard)
         {
             await records.ChangeAsync(recording, record => record.CatalogChanged(now), cancellationToken);
         }

@@ -273,6 +273,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SegmentVersionDomainService>();
         services.AddScoped<SegmentLearningRoundDomainService>();
         services.AddScoped<SegmentFiguresDomainService>();
+        services.AddScoped<CatalogMatchingDomainService>();
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
         services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();

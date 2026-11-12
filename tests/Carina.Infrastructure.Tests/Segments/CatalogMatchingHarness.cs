@@ -161,6 +161,7 @@ internal sealed class CatalogMatchingHarness : IDisposable
             .AddSingleton<IRecordingDetectionRepository>(Detections)
             .AddSingleton<ISegmentModelVersionRepository>(Versions)
             .AddSingleton(Lowest)
+            .AddScoped<CatalogMatchingDomainService>()
             .AddScoped<CatalogMatching>()
             .BuildServiceProvider();
 

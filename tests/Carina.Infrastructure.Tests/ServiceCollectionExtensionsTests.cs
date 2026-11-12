@@ -593,6 +593,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentVersionDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentLearningRoundDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentFiguresDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CatalogMatchingDomainService>());
     }
 
     [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]
