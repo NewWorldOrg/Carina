@@ -218,7 +218,7 @@ public sealed class ReservationService(
             programme.EndsAt is not null,
             draft.MarginBefore,
             draft.MarginAfter,
-            Snapshot(programme, at),
+            ProgrammeSnapshot.Of(programme, at),
             target?.Key,
             target?.Role ?? BroadcastGroupRole.Standalone,
             at,
@@ -314,45 +314,32 @@ public sealed class ReservationService(
     private ServiceResult<ReservationSettlement, ReservationFailure>? Refuses(
         Reservation reservation,
         ReservationMove move)
-    {
-        if (reservation.IsPinned)
+        => reservation.RefusalToRevise(move, clock.GetUtcNow().UtcDateTime) switch
         {
-            return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+            null => null,
+            ReservationRevisionRefusal.AlreadyRecording => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
                 $"Reservation {reservation.Id.Value} is being recorded right now. It goes on holding the tuner it "
                 + "was given until the recording ends, so what to change here is the recording rather than the "
                 + "reservation behind it.",
-                ReservationFailure.AlreadyRecording);
-        }
-
-        if (move is ReservationMove.Restore)
-        {
-            if (reservation.State is not ReservationState.Cancelled)
-            {
-                return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
-                    $"Reservation {reservation.Id.Value} stands as {reservation.State}, and restoring brings back "
-                    + "one that was cancelled.",
-                    ReservationFailure.NotCancelled);
-            }
-
-            if (reservation.EffectiveEndAt <= clock.GetUtcNow().UtcDateTime)
-            {
-                return ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
-                    $"The window reservation {reservation.Id.Value} was cancelled out of closed at "
-                    + $"{reservation.EffectiveEndAt:O}. Bringing it back would leave a row nothing will ever "
-                    + "record.",
-                    ReservationFailure.AlreadyOver);
-            }
-
-            return null;
-        }
-
-        return reservation.State is ReservationState.Scheduled or ReservationState.Conflict
-            ? null
-            : ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                ReservationFailure.AlreadyRecording),
+            ReservationRevisionRefusal.NotCancelled => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                $"Reservation {reservation.Id.Value} stands as {reservation.State}, and restoring brings back "
+                + "one that was cancelled.",
+                ReservationFailure.NotCancelled),
+            ReservationRevisionRefusal.AlreadyOver => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
+                $"The window reservation {reservation.Id.Value} was cancelled out of closed at "
+                + $"{reservation.EffectiveEndAt:O}. Bringing it back would leave a row nothing will ever "
+                + "record.",
+                ReservationFailure.AlreadyOver),
+            ReservationRevisionRefusal.NotStanding => ServiceResult<ReservationSettlement, ReservationFailure>.Failure(
                 $"Reservation {reservation.Id.Value} stands as {reservation.State}, and only one that is still "
                 + "waiting for its tuner is changed.",
-                ReservationFailure.NotStanding);
-    }
+                ReservationFailure.NotStanding),
+            { } refusal => throw new ArgumentOutOfRangeException(
+                nameof(move),
+                refusal,
+                "A revision is refused for a reason this service words."),
+        };
 
     private async Task<ServiceResult<ReservationSettlement, ReservationFailure>> SettledAsync(
         SchedulingRun run,
@@ -417,16 +404,6 @@ public sealed class ReservationService(
 
         return held;
     }
-
-    private static ProgrammeSnapshot Snapshot(Programme programme, DateTime at)
-        => ProgrammeSnapshot.Of(
-            programme.Name,
-            programme.Summary,
-            programme.Items,
-            programme.Genres,
-            at,
-            programme.Audio,
-            programme.Sounds);
 
     private static ServiceResult<T, ReservationFailure> Missing<T>(ReservationId id)
         => ServiceResult<T, ReservationFailure>.Failure(

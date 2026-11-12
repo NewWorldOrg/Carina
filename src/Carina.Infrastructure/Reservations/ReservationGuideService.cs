@@ -39,7 +39,7 @@ public sealed class ReservationGuideService(
 
         foreach (Reservation reservation in ahead)
         {
-            if (!NotYetUnderWay(reservation, at))
+            if (!reservation.IsYetToBeginAt(at))
             {
                 continue;
             }
@@ -113,14 +113,7 @@ public sealed class ReservationGuideService(
                         announced.StartsAt,
                         EpgComparison.EndOf(announced),
                         announced.EndsAt is not null,
-                        ProgrammeSnapshot.Of(
-                            announced.Name,
-                            announced.Summary,
-                            announced.Items,
-                            announced.Genres,
-                            at,
-                            announced.Audio,
-                            announced.Sounds),
+                        ProgrammeSnapshot.Of(announced, at),
                         divergences);
 
                     touched.Add(reservation);
@@ -190,9 +183,6 @@ public sealed class ReservationGuideService(
 
         return cancelled;
     }
-
-    private static bool NotYetUnderWay(Reservation reservation, DateTime at)
-        => !reservation.IsPinned && reservation.EffectiveStartAt > at;
 
     private static ReservationWindow Everything(DateTime at)
         => new(at, DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc));

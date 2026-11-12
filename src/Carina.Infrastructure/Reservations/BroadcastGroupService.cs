@@ -45,7 +45,7 @@ public sealed class BroadcastGroupService(
 
         foreach (Reservation reservation in standing)
         {
-            bool movable = !reservation.IsPinned && reservation.EffectiveStartAt > at;
+            bool movable = reservation.IsYetToBeginAt(at);
 
             if (resolver.Place(reservation.Programme, reservation.EndAt, at) is not { } placed)
             {
@@ -83,7 +83,7 @@ public sealed class BroadcastGroupService(
                     continue;
                 }
 
-                Reservation planned = Beside(reservation, sibling, at);
+                Reservation planned = reservation.PlanBeside(ReservationId.New(), sibling, at);
 
                 if ((await scheduling.CreateAsync(planned, cancellationToken)).Settled)
                 {
@@ -159,7 +159,7 @@ public sealed class BroadcastGroupService(
                         own.Reference,
                         EpgComparison.EndOf(programme),
                         programme.EndsAt is not null,
-                        Snapshot(programme, at),
+                        ProgrammeSnapshot.Of(programme, at),
                         EpgComparison.Of(reservation, programme, at),
                         own.Key,
                         own.Role);
@@ -189,7 +189,7 @@ public sealed class BroadcastGroupService(
         BroadcastGroupRole role,
         CancellationToken cancellationToken)
     {
-        if (Equals(reservation.BroadcastGroupKey, key) && reservation.BroadcastGroupRole == role)
+        if (reservation.IsGroupedAs(key, role))
         {
             return false;
         }
@@ -214,37 +214,6 @@ public sealed class BroadcastGroupService(
 
         return true;
     }
-
-    private static Reservation Beside(Reservation example, BroadcastTarget sibling, DateTime at)
-    {
-        Programme programme = sibling.Programme;
-
-        return Reservation.Plan(
-            ReservationId.New(),
-            sibling.Reference,
-            example.RuleId,
-            example.Priority,
-            programme.StartsAt,
-            EpgComparison.EndOf(programme),
-            programme.EndsAt is not null,
-            example.MarginBefore,
-            example.MarginAfter,
-            Snapshot(programme, at),
-            sibling.Key,
-            sibling.Role,
-            at,
-            example.EncodeWhenRecorded);
-    }
-
-    private static ProgrammeSnapshot Snapshot(Programme programme, DateTime at)
-        => ProgrammeSnapshot.Of(
-            programme.Name,
-            programme.Summary,
-            programme.Items,
-            programme.Genres,
-            at,
-            programme.Audio,
-            programme.Sounds);
 
     private static ReservationWindow Everything(DateTime at)
         => new(at, DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc));

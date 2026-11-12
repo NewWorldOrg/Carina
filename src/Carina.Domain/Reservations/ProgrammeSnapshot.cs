@@ -45,6 +45,23 @@ public sealed class ProgrammeSnapshot
 
     public int Sounds { get; }
 
+    /// <summary>
+    /// What the guide says of <paramref name="programme"/> at <paramref name="at"/>, as a reservation keeps it.
+    /// </summary>
+    public static ProgrammeSnapshot Of(Programme programme, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(programme);
+
+        return Of(
+            programme.Name,
+            programme.Summary,
+            programme.Items,
+            programme.Genres,
+            at,
+            programme.Audio,
+            programme.Sounds);
+    }
+
     public static ProgrammeSnapshot Of(
         string name,
         string summary,

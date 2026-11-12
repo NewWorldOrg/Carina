@@ -11,15 +11,6 @@ using Puppis.Contracts;
 
 namespace Carina.Infrastructure.Rules;
 
-public enum RuleWithdrawal
-{
-    WhileTheRuleStands = 1,
-
-    WhenTheRuleIsSwitchedOff = 2,
-
-    WhenTheRuleIsDeleted = 3,
-}
-
 public sealed record RuleApplicationRun(
     long Revision,
     int Read,
@@ -148,7 +139,7 @@ public sealed class RuleApplicationService(
         BroadcastGroupResolver groups = BroadcastGroupResolver.Of(await programmes.ListGroupedAsync(cancellationToken));
         IReadOnlyList<Programme> read = Alongside(carried, groups);
         IReadOnlyList<ProgrammeMatch> guide = ProgrammeSearchMatching.Layered(
-            [.. read.Where(programme => StillToCome(programme, at))],
+            [.. read.Where(programme => programme.IsStillToComeAt(at))],
             []);
 
         IReadOnlyList<Rule> enabled = await rules.ListEnabledByPrecedenceAsync(cancellationToken);
@@ -263,7 +254,7 @@ public sealed class RuleApplicationService(
 
         RuleMatchRun run = await matcher.AgainstAsync(
             enabled,
-            ProgrammeSearchMatching.Layered([.. read.Where(programme => StillToCome(programme, at))], []),
+            ProgrammeSearchMatching.Layered([.. read.Where(programme => programme.IsStillToComeAt(at))], []),
             cancellationToken);
         RuleTaking resolved = RuleMatcher.Resolved(
             run.Matches,
@@ -320,15 +311,9 @@ public sealed class RuleApplicationService(
             .. (await reservations.ListPendingAsync(Everything(at), cancellationToken))
                 .Where(reservation => reservation.RuleId is { } ruleId
                     && asked.TryGetValue(ruleId, out Rule? rule)
-                    && !AsTheRuleAsks(reservation, rule)),
+                    && !reservation.IsAsTheRuleAsks(rule)),
         ];
     }
-
-    private static bool AsTheRuleAsks(Reservation reservation, Rule rule)
-        => reservation.Priority.Equals(rule.Priority)
-            && reservation.MarginBefore.Equals(rule.MarginBefore)
-            && reservation.MarginAfter.Equals(rule.MarginAfter)
-            && reservation.EncodeWhenRecorded == rule.EncodeWhenRecorded;
 
     private async Task<Making> MakeAsync(
         IReadOnlyList<RuleMatch> matches,
@@ -383,9 +368,7 @@ public sealed class RuleApplicationService(
         DateTime at,
         CancellationToken cancellationToken)
     {
-        if (already.Cancellation is not ReservationCancellation.ProgrammeGone
-            || !already.IsRuleBorn
-            || already.EffectiveEndAt <= at)
+        if (!already.MayBeRevivedByRule(at))
         {
             return false;
         }
@@ -607,9 +590,6 @@ public sealed class RuleApplicationService(
         ];
     }
 
-    private static bool StillToCome(Programme programme, DateTime at)
-        => (programme.EndsAt ?? Provisionally(programme.StartsAt)) > at;
-
     private static DateTime Provisionally(DateTime startsAt)
         => startsAt + Reservation.ProvisionalLengthWhenTheEndIsNotAnnounced;
 
@@ -685,12 +665,8 @@ public sealed class RuleApplicationService(
         TimeSpan Grace)
     {
         public bool Lets(Reservation reservation, RuleWithdrawal occasion, DateTime at)
-            => reservation.IsRuleBorn
-                && reservation.State is ReservationState.Scheduled or ReservationState.Conflict
-                && !reservation.IsPinned
-                && (occasion is RuleWithdrawal.WhenTheRuleIsDeleted || Collected(reservation))
-                && (occasion is not RuleWithdrawal.WhileTheRuleStands
-                    || reservation.EffectiveStartAt - at > Grace);
+            => reservation.MayBeWithdrawnByRule(occasion, Grace, at)
+                && (occasion is RuleWithdrawal.WhenTheRuleIsDeleted || Collected(reservation));
 
         private bool Collected(Reservation reservation)
             => Carriers.TryGetValue(

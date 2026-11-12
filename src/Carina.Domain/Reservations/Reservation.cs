@@ -294,6 +294,97 @@ public sealed class Reservation
         };
     }
 
+    /// <summary>
+    /// Why this reservation does not take <paramref name="move"/> at <paramref name="at"/>, or null when it does. A
+    /// reservation being recorded takes nothing; a restore brings back only a cancelled reservation whose window is
+    /// still open; anything else changes only a reservation still waiting for its tuner.
+    /// </summary>
+    public ReservationRevisionRefusal? RefusalToRevise(ReservationMove move, DateTime at)
+    {
+        if (IsPinned)
+        {
+            return ReservationRevisionRefusal.AlreadyRecording;
+        }
+
+        if (move is ReservationMove.Restore)
+        {
+            return RefusalToRestore(at);
+        }
+
+        return State is ReservationState.Scheduled or ReservationState.Conflict
+            ? null
+            : ReservationRevisionRefusal.NotStanding;
+    }
+
+    /// <summary>
+    /// Whether this reservation holds no tuner yet and its window opens after <paramref name="at"/>, so the guide
+    /// and the broadcast groups may still move it.
+    /// </summary>
+    public bool IsYetToBeginAt(DateTime at) => !IsPinned && EffectiveStartAt > at;
+
+    public bool IsGroupedAs(BroadcastGroupKey? key, BroadcastGroupRole role)
+        => Equals(BroadcastGroupKey, key) && BroadcastGroupRole == role;
+
+    /// <summary>
+    /// Plans the reservation of another segment of the broadcast this one belongs to, after this one's example: the
+    /// same rule, priority, margins and wish, on the times and snapshot the guide announces for the segment.
+    /// </summary>
+    public Reservation PlanBeside(ReservationId id, BroadcastTarget sibling, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(sibling);
+
+        Programme programme = sibling.Programme;
+
+        return Plan(
+            id,
+            sibling.Reference,
+            RuleId,
+            Priority,
+            programme.StartsAt,
+            EpgComparison.EndOf(programme),
+            programme.EndsAt is not null,
+            MarginBefore,
+            MarginAfter,
+            ProgrammeSnapshot.Of(programme, at),
+            sibling.Key,
+            sibling.Role,
+            at,
+            EncodeWhenRecorded);
+    }
+
+    /// <summary>
+    /// Whether this reservation carries the priority, margins and wish <paramref name="rule"/> asks for. The ledger
+    /// keeps no mark of a person's change, so a value that differs is the only witness of one.
+    /// </summary>
+    public bool IsAsTheRuleAsks(Rule rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        return Priority.Equals(rule.Priority)
+               && MarginBefore.Equals(rule.MarginBefore)
+               && MarginAfter.Equals(rule.MarginAfter)
+               && EncodeWhenRecorded == rule.EncodeWhenRecorded;
+    }
+
+    /// <summary>
+    /// Whether a rule that takes this broadcast again brings this reservation back: one a rule made and the guide
+    /// took out, whose window is still open. One a person cancelled stays cancelled.
+    /// </summary>
+    public bool MayBeRevivedByRule(DateTime at)
+        => Cancellation is ReservationCancellation.ProgrammeGone && IsRuleBorn && EffectiveEndAt > at;
+
+    /// <summary>
+    /// Whether a rule may take this reservation back on <paramref name="occasion"/>, as far as the reservation
+    /// itself says: one a rule made, secured or contended, not yet recording, and, while the rule still stands,
+    /// starting more than <paramref name="grace"/> after <paramref name="at"/>. Whether the guide of its stream has
+    /// been read whole is asked of the guide, not of the reservation.
+    /// </summary>
+    public bool MayBeWithdrawnByRule(RuleWithdrawal occasion, TimeSpan grace, DateTime at)
+        => IsRuleBorn
+           && State is ReservationState.Scheduled or ReservationState.Conflict
+           && !IsPinned
+           && (occasion is not RuleWithdrawal.WhileTheRuleStands || EffectiveStartAt - at > grace);
+
     public void Secure()
     {
         RefuseUnless(State is ReservationState.Scheduled or ReservationState.Conflict);
@@ -573,6 +664,16 @@ public sealed class Reservation
 
         BroadcastGroupKey = key;
         BroadcastGroupRole = role;
+    }
+
+    private ReservationRevisionRefusal? RefusalToRestore(DateTime at)
+    {
+        if (State is not ReservationState.Cancelled)
+        {
+            return ReservationRevisionRefusal.NotCancelled;
+        }
+
+        return EffectiveEndAt <= at ? ReservationRevisionRefusal.AlreadyOver : null;
     }
 
     private static Margin WholeSecondsBetween(DateTime at, DateTime head)
