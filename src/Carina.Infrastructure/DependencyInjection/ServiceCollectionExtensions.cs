@@ -284,6 +284,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
         services.AddScoped<ITunerCapacityDirectory, TunerCapacityDirectory>();
         services.AddScoped<IServiceTuningDirectory, ServiceTuningDirectory>();
+        services.AddScoped<LiveChannelDomainService>();
         services.AddScoped<IServiceReachSettingsRepository, ServiceReachSettingsRepository>();
         services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
         services.AddScoped<ReservationSchedulingService>();

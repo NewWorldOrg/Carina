@@ -385,4 +385,14 @@ public sealed class CandidateChannelTests
             null,
             At,
             At);
+
+    [Fact(DisplayName = "BR-TD-001: a candidate belongs to the one service it was found for, and to no other")]
+    public void ACandidateBelongsToTheOneServiceItWasFoundFor()
+    {
+        CandidateChannel candidate = Discovered();
+
+        Assert.True(candidate.BelongsTo(new NetworkId(4), new ServiceId(101)));
+        Assert.False(candidate.BelongsTo(new NetworkId(4), new ServiceId(102)));
+        Assert.False(candidate.BelongsTo(new NetworkId(5), new ServiceId(101)));
+    }
 }

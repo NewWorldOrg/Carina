@@ -48,8 +48,7 @@ public sealed record HybridcastStart(IssuedPlaybackTicket Ticket, HybridcastAppl
 /// the relay with; what the frame asks for is relayed only inside the application's boundary.
 /// </summary>
 public sealed partial class DataBroadcastRelayService(
-    IBroadcastServiceRepository services,
-    ICandidateChannelRepository candidates,
+    LiveChannelDomainService channels,
     IBroadcasterRelay relay,
     IConditionalAccessCardReader cards,
     IHybridcastRelay hybridcast,
@@ -329,8 +328,7 @@ public sealed partial class DataBroadcastRelayService(
             return new Refused(CommunicationIsOff, DataBroadcastRelayRefusal.NotAllowed);
         }
 
-        if (await services.FindAsync(network, service, cancellationToken) is not { Category: ServiceCategory.Television }
-            || await candidates.FindSelectedAsync(network, service, cancellationToken) is null)
+        if (await channels.FindAsync(network, service, cancellationToken) is null)
         {
             return new Refused(
                 $"No channel {network.Value}-{service.Value} can be watched live here.",

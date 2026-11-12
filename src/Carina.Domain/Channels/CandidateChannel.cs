@@ -46,6 +46,12 @@ public sealed class CandidateChannel
 
     public bool IsInRotation => RotationState is not RotationState.NeedsAttention;
 
+    /// <summary>
+    /// A candidate is a way to one service, so it is chosen or dropped only through that service.
+    /// </summary>
+    public bool BelongsTo(NetworkId networkId, ServiceId serviceId)
+        => NetworkId.Equals(networkId) && ServiceId.Equals(serviceId);
+
     public static CandidateChannel Discover(
         CandidateChannelId id,
         NetworkId networkId,

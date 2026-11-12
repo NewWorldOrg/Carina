@@ -22,8 +22,7 @@ public sealed record LiveChannelListing(
 }
 
 public sealed class LiveService(
-    IBroadcastServiceRepository services,
-    ICandidateChannelRepository candidates,
+    LiveChannelDomainService channels,
     ILiveSessionLedger sessions,
     ILiveDepartureLedger departures,
     IPlaybackTicketStore tickets,
@@ -86,9 +85,7 @@ public sealed class LiveService(
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(watcher);
 
-        if (await services.FindAsync(network, service, cancellationToken) is not { } held
-            || !Watchable(held)
-            || await candidates.FindSelectedAsync(network, service, cancellationToken) is null)
+        if (await channels.FindAsync(network, service, cancellationToken) is null)
         {
             return ServiceResult<IssuedPlaybackTicket, LiveTicketRefusal>.Failure(
                 $"No channel {network.Value}-{service.Value} can be watched live here.",
@@ -101,8 +98,6 @@ public sealed class LiveService(
                 "Too many playback tickets are outstanding to issue another one now.",
                 LiveTicketRefusal.TooManyOutstanding);
     }
-
-    private static bool Watchable(BroadcastService service) => service.Category is ServiceCategory.Television;
 
     private static IReadOnlyList<LiveChannelListing> Ordered(IReadOnlyList<LiveChannelListing> listed, LiveChannelQuery query)
     {
@@ -130,32 +125,17 @@ public sealed class LiveService(
 
     private async Task<IReadOnlyList<LiveChannelListing>> WatchableAsync(CancellationToken cancellationToken)
     {
-        IReadOnlyList<CandidateChannel> selected = await candidates.ListSelectedAsync(cancellationToken);
+        IReadOnlyList<WatchableChannel> watchable = await channels.ListAsync(cancellationToken);
         IReadOnlyList<LiveSessionView> running = await sessions.RunningAsync(cancellationToken);
-        List<LiveChannelListing> listed = [];
 
-        foreach (BroadcastService service in await services.ListAsync(cancellationToken))
-        {
-            if (!Watchable(service))
-            {
-                continue;
-            }
-
-            CandidateChannel? tuned = selected.FirstOrDefault(candidate =>
-                candidate.NetworkId.Equals(service.NetworkId) && candidate.ServiceId.Equals(service.ServiceId));
-
-            if (tuned is null)
-            {
-                continue;
-            }
-
-            listed.Add(new LiveChannelListing(
-                service,
-                tuned,
+        return
+        [
+            .. watchable.Select(channel => new LiveChannelListing(
+                channel.Service,
+                channel.Selected,
                 [.. running.Where(session =>
-                    session.Key.Network.Equals(service.NetworkId) && session.Key.Service.Equals(service.ServiceId))]));
-        }
-
-        return listed;
+                    session.Key.Network.Equals(channel.Service.NetworkId)
+                    && session.Key.Service.Equals(channel.Service.ServiceId))])),
+        ];
     }
 }
