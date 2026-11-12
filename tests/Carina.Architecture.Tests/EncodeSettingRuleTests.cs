@@ -24,6 +24,8 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeAutoRun.cs EncodeAutoRunStanding.MostCores int",
         "/Carina.Domain/Encodings/EncodeAutoRun.cs EncodeAutoRunStanding.Stored bool",
         "/Carina.Domain/Encodings/EncodeAutoRun.cs EncodeAutoRunStanding.UpdatedAt DateTime?",
+        "/Carina.Domain/Encodings/EncodeCaptionTrackDomainService.cs EncodeCaptions.MadeAt DateTime",
+        "/Carina.Domain/Encodings/EncodeCaptionTrackDomainService.cs EncodeCaptions.Record CaptionRecord",
         "/Carina.Domain/Encodings/EncodeChapter.cs EncodeChapter.EndsAt TimeSpan",
         "/Carina.Domain/Encodings/EncodeChapter.cs EncodeChapter.Id EncodeChapterId",
         "/Carina.Domain/Encodings/EncodeChapter.cs EncodeChapter.JobId EncodeJobId",

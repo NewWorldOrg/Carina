@@ -194,7 +194,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
             harness.HeadReader,
             harness.ChapterChoices,
             harness.Chapters,
-            harness.CaptionShelf,
+            new EncodeCaptionTrackDomainService(new RecordingRepository(context), harness.CaptionShelf),
             harness.CaptionTracks,
             harness.Programmes,
             harness.Settings,

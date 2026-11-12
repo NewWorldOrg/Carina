@@ -43,7 +43,7 @@ public sealed class EncodeJobRunner(
     ISourceHeadReader heads,
     EncodeChapterChoices choices,
     IEncodeChapterRepository chapters,
-    ICaptionRecords captionRecords,
+    EncodeCaptionTrackDomainService captioning,
     CaptionTrackMux captionTracks,
     MachineSettings programmes,
     EncodeSettings settings,
@@ -494,8 +494,7 @@ public sealed class EncodeJobRunner(
     /// </summary>
     private async Task CaptionAsync(EncodeJob job, string work, CancellationToken cancellationToken)
     {
-        if (await recordings.FindAsync(job.RecordingId, cancellationToken) is not { CaptionState: CaptionState.Ready, CaptionsMadeAt: { } madeAt }
-            || await captionRecords.ReadAsync(job.RecordingId, cancellationToken) is not { Lines: not null } record)
+        if (await captioning.CaptionsToCarryAsync(job.RecordingId, cancellationToken) is not { Record: { } record, MadeAt: DateTime madeAt })
         {
             logger.LogInformation(
                 "Job {Job} places its artefact with no text track of captions, because the recording's captions with their text are not taken yet; the track is put in once they are.",

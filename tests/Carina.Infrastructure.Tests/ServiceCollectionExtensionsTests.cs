@@ -551,6 +551,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<EncodeQueueDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingEncodeDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ArtefactRewriteDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<EncodeCaptionTrackDomainService>());
     }
 
     [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]

@@ -17,9 +17,9 @@ public sealed class EncodeRecordingFenceRuleTests
         Assert.Contains("/Carina.Api/Controllers/Encoding/CancelEncodeJobAction.cs", read);
     }
 
-    [Fact(DisplayName = "the one place in the feature that holds the recording port is the run, which only reads it")]
-    public void TheOnePlaceInTheFeatureThatHoldsTheRecordingPortIsTheRun()
+    [Fact(DisplayName = "the places in the feature that hold the recording port are the run and the decision on the text track of captions, which only read it")]
+    public void ThePlacesInTheFeatureThatHoldTheRecordingPortAreTheRunAndTheCaptionTrackDecision()
         => Assert.Equal(
-            ["/Carina.Infrastructure/Encodings/EncodeJobRunner.cs"],
+            ["/Carina.Domain/Encodings/EncodeCaptionTrackDomainService.cs", "/Carina.Infrastructure/Encodings/EncodeJobRunner.cs"],
             EncodeRecordingFenceRules.HoldersOfTheRecordingPort(RepositoryLayout.SourceDirectory));
 }

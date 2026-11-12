@@ -139,7 +139,7 @@ internal sealed class EncodeHarness : IDisposable
         HeadReader,
         ChapterChoices,
         Chapters,
-        CaptionShelf,
+        new EncodeCaptionTrackDomainService(Recordings, CaptionShelf),
         CaptionTracks,
         Programmes,
         Settings,
