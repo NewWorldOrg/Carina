@@ -105,6 +105,68 @@ public sealed class StreamVisit
             reachedTheGoal);
 
     /// <summary>
+    /// The first visit of a stream that tuned. It heard the schedule when it counted any of it, and what it counted
+    /// is the tally.
+    /// </summary>
+    public static StreamVisit Visited(
+        NetworkId networkId,
+        TransportStreamId transportStreamId,
+        VisitOutcome outcome,
+        DateTime at,
+        TimeSpan took,
+        IReadOnlyList<VisitTally> counted,
+        bool reachedTheGoal)
+    {
+        ArgumentNullException.ThrowIfNull(counted);
+
+        StreamVisit visit = Record(
+            networkId,
+            transportStreamId,
+            outcome,
+            at,
+            took,
+            heardTheSchedule: counted.Count > 0,
+            reachedTheGoal: reachedTheGoal);
+
+        visit.Tallied(counted);
+
+        return visit;
+    }
+
+    /// <summary>
+    /// The first visit of a stream that every tuner turned away. It is written down as interrupted.
+    /// </summary>
+    public static StreamVisit TurnedAway(
+        NetworkId networkId,
+        TransportStreamId transportStreamId,
+        DateTime at,
+        TimeSpan took)
+        => Record(networkId, transportStreamId, VisitOutcome.Interrupted, at, took);
+
+    /// <summary>
+    /// A visit that tuned. It heard the schedule when it counted any of it, and what it counted replaces the tally.
+    /// </summary>
+    public void Visited(
+        VisitOutcome outcome,
+        DateTime at,
+        TimeSpan took,
+        IReadOnlyList<VisitTally> counted,
+        bool reachedTheGoal)
+    {
+        ArgumentNullException.ThrowIfNull(counted);
+
+        Record(outcome, at, took, heardTheSchedule: counted.Count > 0, reachedTheGoal: reachedTheGoal);
+        Tallied(counted);
+    }
+
+    /// <summary>
+    /// A visit that every tuner turned away. It is written down as interrupted, and since nothing was tuned the tally
+    /// of the visit before stays.
+    /// </summary>
+    public void TurnedAway(DateTime at, TimeSpan took)
+        => Record(VisitOutcome.Interrupted, at, took);
+
+    /// <summary>
     /// Writes down a visit's outcome; <paramref name="heardTheSchedule"/> says whether the visit
     /// heard any section of the stream's schedule, and <paramref name="reachedTheGoal"/> whether every
     /// service of the stream that holds a guide then reached the wanted coverage.

@@ -9,6 +9,10 @@ public sealed class StreamVisitTests
 
     private static readonly TimeSpan Took = TimeSpan.FromSeconds(30);
 
+    private static readonly NetworkId Network = new(32739);
+
+    private static readonly TransportStreamId Stream = new(32739);
+
     [Theory]
     [InlineData(VisitOutcome.Complete)]
     [InlineData(VisitOutcome.BasicOnly)]
@@ -192,6 +196,76 @@ public sealed class StreamVisitTests
                 VisitOutcome.Complete,
                 At,
                 TimeSpan.FromSeconds(-1)));
+
+    [Fact(DisplayName = "BR-ES-002: a visit that tuned and counted part of the schedule heard it, and what it counted is the tally")]
+    public void AVisitThatCountedPartOfTheScheduleHeardItAndItsCountIsTheTally()
+    {
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
+
+        visit.Visited(VisitOutcome.Incomplete, At.AddHours(1), Took, [Counted(0x50)], reachedTheGoal: true);
+
+        Assert.Equal(2, visit.ConsecutiveIncomplete);
+        Assert.Equal(0, visit.ConsecutiveUnheard);
+        Assert.True(visit.ReachedTheGoal);
+        Assert.Equal([0x50], visit.Tally.Select(counted => counted.TableId));
+    }
+
+    [Fact(DisplayName = "BR-ES-002: a visit that tuned and counted nothing heard none of the schedule")]
+    public void AVisitThatCountedNothingHeardNoneOfTheSchedule()
+    {
+        StreamVisit visit = StreamVisit.Visited(Network, Stream, VisitOutcome.Incomplete, At, Took, [], reachedTheGoal: false);
+
+        visit.Visited(VisitOutcome.NoLock, At.AddHours(1), Took, [], reachedTheGoal: false);
+
+        Assert.Equal(2, visit.ConsecutiveUnheard);
+        Assert.Empty(visit.Tally);
+    }
+
+    [Fact(DisplayName = "BR-ES-002: a first visit that tuned starts its tally with what it counted")]
+    public void AFirstVisitThatTunedStartsItsTallyWithWhatItCounted()
+    {
+        StreamVisit visit = StreamVisit.Visited(
+            Network,
+            Stream,
+            VisitOutcome.Complete,
+            At,
+            Took,
+            [Counted(0x50), Counted(0x58)],
+            reachedTheGoal: true);
+
+        Assert.Equal(At, visit.LastCompletedAt);
+        Assert.True(visit.ReachedTheGoal);
+        Assert.Equal([0x50, 0x58], visit.Tally.Select(counted => counted.TableId));
+    }
+
+    [Fact(DisplayName = "BR-ES-003: a visit every tuner turned away is interrupted and keeps the tally of the visit before")]
+    public void AVisitTurnedAwayIsInterruptedAndKeepsTheTallyOfTheVisitBefore()
+    {
+        StreamVisit visit = StreamVisit.Visited(Network, Stream, VisitOutcome.Incomplete, At, Took, [Counted(0x50)], reachedTheGoal: true);
+
+        visit.TurnedAway(At.AddHours(1), TimeSpan.FromSeconds(2));
+
+        Assert.Equal(VisitOutcome.Interrupted, visit.Outcome);
+        Assert.Equal(At.AddHours(1), visit.LastAttemptedAt);
+        Assert.Equal(2_000, visit.LastDurationMilliseconds);
+        Assert.Equal(1, visit.ConsecutiveIncomplete);
+        Assert.False(visit.ReachedTheGoal);
+        Assert.Equal([0x50], visit.Tally.Select(counted => counted.TableId));
+    }
+
+    [Fact(DisplayName = "BR-ES-003: a stream turned away on its first visit is written down as interrupted")]
+    public void AStreamTurnedAwayOnItsFirstVisitIsInterrupted()
+    {
+        StreamVisit visit = StreamVisit.TurnedAway(Network, Stream, At, Took);
+
+        Assert.Equal(VisitOutcome.Interrupted, visit.Outcome);
+        Assert.Null(visit.LastCompletedAt);
+        Assert.Equal(0, visit.ConsecutiveIncomplete);
+        Assert.Empty(visit.Tally);
+    }
+
+    private static VisitTally Counted(int tableId)
+        => VisitTally.Rehydrate(Network, Stream, new ServiceId(1024), tableId, 0x58, 8, 8, 64, 64, 0);
 
     private static StreamVisit Visit(VisitOutcome outcome)
         => StreamVisit.Record(new NetworkId(32739), new TransportStreamId(32739), outcome, At, Took);
