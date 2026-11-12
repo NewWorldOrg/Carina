@@ -697,6 +697,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddScoped<BroadcastGroupDomainService>();
             services.AddScoped<BroadcastGroupService>();
             services.AddScoped<RuleWithdrawalDomainService>();
+            services.AddScoped<RuleTakingDomainService>();
             services.AddScoped<RuleApplicationService>();
 
             provider = services.BuildServiceProvider();

@@ -176,6 +176,7 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
                 new StreamVisitRepository(context),
                 new CollectionEpochRepository(context),
                 new FixedClock(Now)),
+            new RuleTakingDomainService(reservations),
             new ReservationSchedulingService(
                 reservations,
                 new NoRecordings(),

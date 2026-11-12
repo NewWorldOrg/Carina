@@ -302,6 +302,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RuleMatcher>();
         services.AddScoped<IRuleRepository, RuleRepository>();
         services.AddScoped<RuleWithdrawalDomainService>();
+        services.AddScoped<RuleTakingDomainService>();
         services.AddScoped<RuleApplicationService>();
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();

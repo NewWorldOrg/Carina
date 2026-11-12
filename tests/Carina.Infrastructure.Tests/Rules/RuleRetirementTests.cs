@@ -288,6 +288,7 @@ public sealed class RuleRetirementTests
                 Reservations,
                 new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 new RuleWithdrawalDomainService(Reservations, Streams, Visits, new HeldEpochs(), new FixedClock(Now)),
+                new RuleTakingDomainService(Reservations),
                 new ReservationSchedulingService(
                     Reservations,
                     new NoRecordings(),

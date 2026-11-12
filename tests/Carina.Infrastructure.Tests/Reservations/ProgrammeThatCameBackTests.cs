@@ -219,6 +219,7 @@ public sealed class ProgrammeThatCameBackTests
                 Reservations,
                 new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 new RuleWithdrawalDomainService(Reservations, Streams, new HeldStreamVisits(), new HeldEpochs(), clock),
+                new RuleTakingDomainService(Reservations),
                 Scheduling,
                 new RuleMatcher(new ProgrammeSearchScope(Streams, new CountedServices()), clock),
                 new RuleApplicationSettings(),

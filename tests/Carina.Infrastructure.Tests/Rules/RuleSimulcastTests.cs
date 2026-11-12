@@ -300,6 +300,7 @@ public sealed class RuleSimulcastTests
                 Reservations,
                 new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 new RuleWithdrawalDomainService(Reservations, Streams, Visits, Epochs, new FixedClock(Now)),
+                new RuleTakingDomainService(Reservations),
                 new ReservationSchedulingService(
                     Reservations,
                     new NoRecordings(),

@@ -168,6 +168,7 @@ public sealed class RuleApplyNowAnswersTheRunItAskedForTests
             services.AddScoped<ReservationOutcomeDomainService>();
             services.AddScoped<ReservationSchedulingService>();
             services.AddScoped<RuleWithdrawalDomainService>();
+            services.AddScoped<RuleTakingDomainService>();
             services.AddScoped<RuleApplicationService>();
 
             provider = services.BuildServiceProvider();

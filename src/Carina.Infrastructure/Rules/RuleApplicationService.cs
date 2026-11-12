@@ -45,6 +45,7 @@ public sealed class RuleApplicationService(
     IReservationRepository reservations,
     ReservationOutcomeDomainService ledger,
     RuleWithdrawalDomainService withdrawal,
+    RuleTakingDomainService ruleTaking,
     ReservationSchedulingService scheduling,
     RuleMatcher matcher,
     RuleApplicationSettings settings,
@@ -134,7 +135,7 @@ public sealed class RuleApplicationService(
         Rule[] alongside = [.. enabled.Where(rule => !rule.Id.Equals(draft.Id)), draft];
 
         RuleMatchRun run = await matcher.AgainstAsync(alongside, guide, cancellationToken);
-        IReadOnlyList<Reservation> changed = await ChangedByHandAsync(alongside, at, cancellationToken);
+        IReadOnlyList<Reservation> changed = await ruleTaking.ChangedByHandAsync(alongside, at, cancellationToken);
         RuleTaking resolved = RuleMatcher.Resolved(run.Matches, run.Searches, changed, groups, read, at);
         RuleMatch[] taking = [.. resolved.Matches.Where(match => match.Rule.Id.Equals(draft.Id))];
         RuleTaking drafted = RuleMatcher.Resolved(
@@ -156,14 +157,14 @@ public sealed class RuleApplicationService(
                 match.Programme.EventId,
                 match.Programme.StartsAt);
 
-            if (await reservations.FindByProgrammeAsync(reference, cancellationToken) is not { } already)
+            if ((await ruleTaking.TakingAsync(reference, at, cancellationToken)).Already is not { } already)
             {
                 making.Add(Planned(match, reference, at));
 
                 continue;
             }
 
-            if (already.IsRuleBorn && !draft.Id.Equals(already.RuleId))
+            if (already.IsHeldByAnotherRuleThan(draft.Id))
             {
                 changingHands.Add(already);
             }
@@ -236,7 +237,7 @@ public sealed class RuleApplicationService(
         RuleTaking resolved = RuleMatcher.Resolved(
             run.Matches,
             run.Searches,
-            await ChangedByHandAsync(enabled, at, cancellationToken),
+            await ruleTaking.ChangedByHandAsync(enabled, at, cancellationToken),
             groups,
             read,
             at);
@@ -265,33 +266,6 @@ public sealed class RuleApplicationService(
             clock.GetElapsedTime(began));
     }
 
-    /// <summary>
-    /// The reservations still to come that a rule made and a person has since changed: their priority,
-    /// a margin or whether they are encoded is no longer what the rule asks. The ledger keeps no mark of
-    /// a change, so the values are the only witness, and a rule edited after it made a reservation makes
-    /// that reservation look changed too.
-    /// </summary>
-    private async Task<IReadOnlyList<Reservation>> ChangedByHandAsync(
-        IReadOnlyList<Rule> standing,
-        DateTime at,
-        CancellationToken cancellationToken)
-    {
-        Dictionary<RuleId, Rule> asked = [];
-
-        foreach (Rule rule in standing)
-        {
-            asked.TryAdd(rule.Id, rule);
-        }
-
-        return
-        [
-            .. (await reservations.ListPendingAsync(Everything(at), cancellationToken))
-                .Where(reservation => reservation.RuleId is { } ruleId
-                    && asked.TryGetValue(ruleId, out Rule? rule)
-                    && !reservation.IsAsTheRuleAsks(rule)),
-        ];
-    }
-
     private async Task<Making> MakeAsync(
         IReadOnlyList<RuleMatch> matches,
         DateTime at,
@@ -309,9 +283,11 @@ public sealed class RuleApplicationService(
                 match.Programme.EventId,
                 match.Programme.StartsAt);
 
-            if (await reservations.FindByProgrammeAsync(reference, cancellationToken) is { } already)
+            RuleProgrammeTaking taken = await ruleTaking.TakingAsync(reference, at, cancellationToken);
+
+            if (taken.Already is { } already)
             {
-                if (await RevivedAsync(already, at, cancellationToken))
+                if (taken.Move is RuleTakingMove.Revive && await RevivedAsync(already, at, cancellationToken))
                 {
                     revived.Add(already);
                 }
@@ -345,11 +321,6 @@ public sealed class RuleApplicationService(
         DateTime at,
         CancellationToken cancellationToken)
     {
-        if (!already.MayBeRevivedByRule(at))
-        {
-            return false;
-        }
-
         SchedulingRun settled = await scheduling.ReviseAsync(
             already,
             new ReservationRevision { Move = ReservationMove.Restore },
@@ -480,9 +451,6 @@ public sealed class RuleApplicationService(
 
     private static DateTime Provisionally(DateTime startsAt)
         => startsAt + Reservation.ProvisionalLengthWhenTheEndIsNotAnnounced;
-
-    private static ReservationWindow Everything(DateTime at)
-        => new(at - Margin.Longest, DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc));
 
     private DateTime Moment() => clock.GetUtcNow().UtcDateTime;
 

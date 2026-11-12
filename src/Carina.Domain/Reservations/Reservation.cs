@@ -429,6 +429,17 @@ public sealed class Reservation
     }
 
     /// <summary>
+    /// Whether this reservation was made by a rule other than <paramref name="rule"/>, so that rule taking the
+    /// programme would take it from its maker.
+    /// </summary>
+    public bool IsHeldByAnotherRuleThan(RuleId rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        return IsRuleBorn && !rule.Equals(RuleId);
+    }
+
+    /// <summary>
     /// Whether a rule that takes this broadcast again brings this reservation back: one a rule made and the guide
     /// took out, whose window is still open. One a person cancelled stays cancelled.
     /// </summary>

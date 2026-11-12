@@ -401,6 +401,7 @@ public sealed class RuleRehearsalTests
                 Reservations,
                 new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
                 new RuleWithdrawalDomainService(Reservations, Streams, Visits, new HeldEpochs(), new FixedClock(Now)),
+                new RuleTakingDomainService(Reservations),
                 Scheduling,
                 new RuleMatcher(new ProgrammeSearchScope(Streams, Services), new FixedClock(Now)),
                 new RuleApplicationSettings(),
