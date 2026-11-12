@@ -6,7 +6,7 @@ using Carina.Domain.Migration;
 using Carina.Infrastructure.Migration;
 using Carina.TestSupport;
 
-using static Carina.Infrastructure.Tests.Migration.CarriedMigrationFixtures;
+using static Carina.TestSupport.CarriedMigrationFixtures;
 
 namespace Carina.Infrastructure.Tests.Migration;
 

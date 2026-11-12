@@ -1,25 +1,20 @@
 using System.Globalization;
 
-using Carina.Domain.Base;
 using Carina.Domain.Encodings;
-using Carina.Domain.Migration;
-using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
-using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Migration;
+namespace Carina.Domain.Migration;
 
-public sealed record MigrationCarried(
-    MigrationRoll Roll,
-    MigrationAftermath Aftermath,
-    MigrationRootStanding NewRoot,
-    EncodeUnaskedStanding WhereEncodesGo,
-    MigrationCarryStanding Carrying);
-
-public sealed class MigrationCarriage(
+/// <summary>
+/// Carries what a run judged to be carried into this system. A recording is linked into the new root before its row is
+/// written, arrives recorded in full and is queued for encoding with the one destination and its default profile; a
+/// rule arrives turned off. A run for real stops before it carries anything when <see cref="MigrationPreconditions"/>
+/// says so, and a rehearsal carries nothing and writes nothing.
+/// </summary>
+public sealed class MigrationCarriageDomainService(
     IMigrationCarrier carrier,
     IRecordingRepository recordings,
     IRuleRepository rules,
@@ -51,38 +46,19 @@ public sealed class MigrationCarriage(
             rule => rule.Id.ToString(CultureInfo.InvariantCulture),
             StringComparer.Ordinal);
 
-        Dictionary<long, SourceRecordingFile> named = ledger.RecordingFiles
-            .Where(file => file.Kind is SourceFileKind.AsBroadcast)
-            .ToDictionary(file => file.RecordingId);
+        IReadOnlyDictionary<long, SourceRecordingFile> named = MigrationClassifier.AsBroadcastByRecording(
+            ledger.RecordingFiles);
 
         EncodeUnasked queueing = await QueueingAsync(cancellationToken);
-        MigrationRootStanding standing = await carrier.StandingAsync(cancellationToken);
-        MigrationCarryStanding carrying = await carrier.WouldCarryAsync(cancellationToken);
 
-        if (pass is MigrationPass.ForReal)
+        MigrationPreconditions found = new(
+            await carrier.StandingAsync(cancellationToken),
+            queueing,
+            await carrier.WouldCarryAsync(cancellationToken));
+
+        if (found.Hindering(pass) is { } hindrance)
         {
-            if (standing is not MigrationRootStanding.Empty)
-            {
-                throw new MigrationCarryRefusedException(
-                    $"The new root '{carrier.Into.Value}' is {Said(standing)}, and a run does not add to what is "
-                    + "already there. Empty the ledger, take out of the new root what a run put into it, "
-                    + "and start over. The new root itself stays: live recordings are written into it.");
-            }
-
-            if (!queueing.IsSettled)
-            {
-                throw new MigrationCarryRefusedException(
-                    "What is carried over is encoded, and that needs exactly one destination that is still "
-                    + "offered, whose default profile is still offered. Define one and start over.");
-            }
-
-            if (MigrationFindings.WouldStopARunForReal(MigrationFindings.Of(carrying)))
-            {
-                throw new MigrationCarryRefusedException(
-                    $"A recording is carried by linking it into the new root '{carrier.Into.Value}', and here "
-                    + $"that link {Said(carrying)}. Nothing was carried. A rehearsal says the same thing "
-                    + "without stopping.");
-            }
+            throw new MigrationCarryRefusedException(Said(hindrance, found));
         }
 
         List<MigrationVerdict> settled = [];
@@ -141,10 +117,30 @@ public sealed class MigrationCarriage(
                     recordingsCarried.Concat(rulesCarried.Select(rule => rule.Name))),
                 MigrationRuleConversion.RulesNarrowedByDay(ledger, inReach),
                 MigrationRuleConversion.RulesWithMarkWordsReplaced(ledger, inReach)),
-            standing,
+            found.NewRoot,
             queueing.Standing,
-            carrying);
+            found.Carrying);
     }
+
+    private string Said(MigrationHindrance hindrance, MigrationPreconditions found)
+        => hindrance switch
+        {
+            MigrationHindrance.TheNewRootIsNotEmptyOrNotThere =>
+                $"The new root '{carrier.Into.Value}' is {Said(found.NewRoot)}, and a run does not add to what is "
+                + "already there. Empty the ledger, take out of the new root what a run put into it, "
+                + "and start over. The new root itself stays: live recordings are written into it.",
+            MigrationHindrance.NothingSettlesWhereEncodesGo =>
+                "What is carried over is encoded, and that needs exactly one destination that is still "
+                + "offered, whose default profile is still offered. Define one and start over.",
+            MigrationHindrance.NoLinkCanBeMade =>
+                $"A recording is carried by linking it into the new root '{carrier.Into.Value}', and here "
+                + $"that link {Said(found.Carrying)}. Nothing was carried. A rehearsal says the same thing "
+                + "without stopping.",
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(hindrance),
+                hindrance,
+                "What stops a run for real is one of the things a run knows to name."),
+        };
 
     private static string Said(MigrationRootStanding standing)
         => standing is MigrationRootStanding.Missing ? "not there" : "not empty";
@@ -195,15 +191,7 @@ public sealed class MigrationCarriage(
             return MigrationRuleProposal.Rehydrate(runId, source.Id, null, source.Enabled);
         }
 
-        Rule made = Rule.Draft(
-            RuleId.New(),
-            conversion.Name,
-            query,
-            Priority.Default,
-            false,
-            Margin.None,
-            Margin.None,
-            clock.GetUtcNow().UtcDateTime);
+        Rule made = Rule.CarriedOver(RuleId.New(), conversion.Name, query, clock.GetUtcNow().UtcDateTime);
 
         await rules.AddAsync(made, cancellationToken);
 
@@ -228,12 +216,12 @@ public sealed class MigrationCarriage(
             : throw new MigrationUnclassifiedException(
                 $"Recording '{verdict.Subject}' is to be carried, and the source ledger names no file for it.");
 
-        if (source.Service is not { } service || source.Programme is not { } programme)
+        if (source.Programmed is not { } programme)
         {
             return Instead(verdict, MigrationRefusal.Unidentifiable);
         }
 
-        if (source.EndAt <= source.StartAt)
+        if (!source.LastsAnyTime)
         {
             return Instead(verdict, MigrationRefusal.Inexpressible);
         }
@@ -259,7 +247,15 @@ public sealed class MigrationCarriage(
         }
 
         await recordings.AddAsync(
-            Held(source, service, programme, id, name, verdict.Observed ?? 0),
+            Recording.CarriedOver(
+                id,
+                programme,
+                source.Name,
+                carrier.Into,
+                name,
+                verdict.Observed ?? 0,
+                source.EndAt,
+                clock.GetUtcNow().UtcDateTime),
             cancellationToken);
 
         if (queueing is not { Destination: { } destination, Profile: { } profile })
@@ -280,48 +276,4 @@ public sealed class MigrationCarriage(
 
         return verdict;
     }
-
-    private Recording Held(
-        SourceRecording source,
-        ServiceKey service,
-        EventId programme,
-        RecordingId id,
-        RecordingFileName name,
-        long observed)
-        => Recording.Rehydrate(
-            id,
-            null,
-            new ProgrammeRef(service.Network, service.Service, programme, source.StartAt),
-            carrier.Into,
-            name,
-            observed,
-            clock.GetUtcNow().UtcDateTime,
-            source.StartAt,
-            source.EndAt,
-            source.EndAt,
-            (long)(source.EndAt - source.StartAt).TotalMilliseconds,
-            0,
-            [],
-            source.StartAt,
-            source.EndAt,
-            source.EndAt,
-            RecordingOutcome.Complete,
-            [],
-            DropCounters.Unmeasured,
-            DropTimeline.Unlocated,
-            null,
-            0,
-            null,
-            null,
-            ThumbnailState.Pending,
-            ProgrammeSnapshot.Of(
-                source.Name,
-                string.Empty,
-                [],
-                [],
-                source.StartAt,
-                AudioMode.Undetermined,
-                ProgrammeSnapshot.SoundsUnannounced),
-            null,
-            BroadcastGroupRole.Standalone);
 }

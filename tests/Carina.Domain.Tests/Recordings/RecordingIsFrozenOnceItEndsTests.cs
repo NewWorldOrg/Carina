@@ -92,9 +92,9 @@ public sealed class RecordingIsFrozenOnceItEndsTests
     }
 
     [Fact]
-    public void TheOnlyThingsARecordingOffersWithoutOneAreTheTwoThatMakeOne()
+    public void TheOnlyThingsARecordingOffersWithoutOneAreTheThreeThatMakeOne()
         => Assert.Equal(
-            ["Begin", "Rehydrate"],
+            ["Begin", "CarriedOver", "Rehydrate"],
             Declared(BindingFlags.Public | BindingFlags.Static)
                 .Select(method => method.Name)
                 .Distinct(StringComparer.Ordinal)

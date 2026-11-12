@@ -4,13 +4,13 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
-using Carina.Infrastructure.Migration;
-using Carina.Infrastructure.Tests.Rules;
-using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.TestSupport;
 
-internal static class CarriedMigrationFixtures
+/// <summary>
+/// A source ledger and the things a run carries it into, held in memory for the tests of the migration.
+/// </summary>
+public static class CarriedMigrationFixtures
 {
     public static readonly DateTime Began = new(2026, 9, 8, 3, 0, 0, DateTimeKind.Utc);
 
@@ -71,7 +71,7 @@ internal static class CarriedMigrationFixtures
         => MigrationClassifier.Over(ledger, onDisk, RescannedService.InReach(Rescanned()));
 }
 
-internal sealed class MigrationBench
+public sealed class MigrationBench
 {
     public MigrationBench(TimeProvider clock)
     {
@@ -103,7 +103,7 @@ internal sealed class MigrationBench
 
     public EncodeDestination Destination { get; }
 
-    public HeldRules Rules { get; } = new();
+    public HeldAddedRules Rules { get; } = new();
 
     public HeldEncodeJobs Jobs { get; } = new();
 
@@ -111,16 +111,16 @@ internal sealed class MigrationBench
 
     public HeldEncodeDestinations Destinations { get; } = new();
 
-    public MigrationCarriage Carriage(IMigrationCarrier carrier, IRecordingRepository recordings)
+    public MigrationCarriageDomainService Carriage(IMigrationCarrier carrier, IRecordingRepository recordings)
         => new(carrier, recordings, Rules, Jobs, Destinations, Profiles, Clock);
 }
 
-internal sealed class MigrationJournal
+public sealed class MigrationJournal
 {
     public List<string> Steps { get; } = [];
 }
 
-internal sealed class HeldMigratedRecordings(MigrationJournal journal) : IRecordingRepository
+public sealed class HeldMigratedRecordings(MigrationJournal journal) : IRecordingRepository
 {
     public List<Recording> Written { get; } = [];
 
@@ -158,7 +158,7 @@ internal sealed class HeldMigratedRecordings(MigrationJournal journal) : IRecord
     public Task SaveAsync(Recording recording, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
-internal sealed class ScriptedCarrier(MigrationJournal journal) : IMigrationCarrier
+public sealed class ScriptedCarrier(MigrationJournal journal) : IMigrationCarrier
 {
     private readonly Dictionary<string, MigrationCarry> answers = new(StringComparer.Ordinal);
 
@@ -191,5 +191,39 @@ internal sealed class ScriptedCarrier(MigrationJournal journal) : IMigrationCarr
         Named.Add(name.Value);
 
         return Task.FromResult(answers.GetValueOrDefault(sourcePath, Otherwise));
+    }
+}
+
+public sealed class HeldAddedRules : IRuleRepository
+{
+    public List<Rule> Rules { get; } = [];
+
+    public Task<Rule?> FindAsync(RuleId id, CancellationToken cancellationToken)
+        => Task.FromResult(Rules.FirstOrDefault(rule => rule.Id.Equals(id)));
+
+    public Task<IReadOnlyList<Rule>> ListAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Rule>>([.. Rules]);
+
+    public Task<IReadOnlyList<Rule>> ListEnabledByPrecedenceAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Rule>>([.. Rules.Where(rule => rule.Enabled)]);
+
+    public Task AddAsync(Rule rule, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        Rules.Add(rule);
+
+        return Task.CompletedTask;
+    }
+
+    public Task SaveAsync(Rule rule, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task RemoveAsync(Rule rule, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        Rules.RemoveAll(held => held.Id.Equals(rule.Id));
+
+        return Task.CompletedTask;
     }
 }
