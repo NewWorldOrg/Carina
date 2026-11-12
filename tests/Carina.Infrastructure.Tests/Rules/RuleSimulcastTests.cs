@@ -299,9 +299,7 @@ public sealed class RuleSimulcastTests
                 Programmes,
                 Reservations,
                 new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
-                Visits,
-                Epochs,
-                Streams,
+                new RuleWithdrawalDomainService(Reservations, Streams, Visits, Epochs, new FixedClock(Now)),
                 new ReservationSchedulingService(
                     Reservations,
                     new NoRecordings(),

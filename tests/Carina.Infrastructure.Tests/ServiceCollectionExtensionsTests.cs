@@ -563,6 +563,7 @@ public sealed class ServiceCollectionExtensionsTests
         using IServiceScope scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationOutcomeDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleWithdrawalDomainService>());
     }
 
     [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]

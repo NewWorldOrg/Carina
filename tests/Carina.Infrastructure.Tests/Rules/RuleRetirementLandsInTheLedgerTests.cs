@@ -191,9 +191,7 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
             new ProgrammeRepository(context),
             reservations,
             new ReservationOutcomeDomainService(new ReservationOutcomeRepository(context), new RecordingRepository(context)),
-            new StreamVisitRepository(context),
-            new CollectionEpochRepository(context),
-            streams,
+            new RuleWithdrawalDomainService(reservations, streams, new StreamVisitRepository(context), new CollectionEpochRepository(context), new FixedClock(Now)),
             new ReservationSchedulingService(
                 reservations,
                 new NoRecordings(),

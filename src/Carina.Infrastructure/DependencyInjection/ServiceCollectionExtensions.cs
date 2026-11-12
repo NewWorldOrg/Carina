@@ -299,6 +299,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<BroadcastGroupService>();
         services.AddScoped<RuleMatcher>();
         services.AddScoped<IRuleRepository, RuleRepository>();
+        services.AddScoped<RuleWithdrawalDomainService>();
         services.AddScoped<RuleApplicationService>();
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();
