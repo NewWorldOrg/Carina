@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Reflection;
 
 using Carina.Domain.DataBroadcast;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Tests.Recordings;
@@ -12,6 +13,9 @@ public sealed class RecordingIsFrozenOnceItEndsTests
     private static readonly DateTime Now = RecordingFactory.Now;
 
     private static readonly DateTime Later = RecordingFactory.Now.AddHours(1);
+
+    private static readonly QualityBands Bands =
+        QualityThresholdStanding.Bands(QualityThresholdStanding.Over([], RecordingFactory.Now));
 
     private static readonly HashSet<string> Derived = new(StringComparer.Ordinal)
     {
@@ -28,8 +32,9 @@ public sealed class RecordingIsFrozenOnceItEndsTests
 
         Assert.Equal(
             [
-                "Abort", "Acquire", "Caption", "DataBroadcastAgain", "DataBroadcastFailed", "DataBroadcastTaken", "Descrambled",
-                "Erased", "Extend", "Illustrate", "Interrupt", "Measure", "Missed", "Note", "Resume", "Settle", "Wrote",
+                "Abort", "Acquire", "Caption", "Conclude", "DataBroadcastAgain", "DataBroadcastFailed", "DataBroadcastTaken",
+                "Descrambled", "Erased", "Extend", "FailOnAFullDisk", "Illustrate", "Interrupt", "Measure", "Missed", "Note",
+                "ReachedItsEnd", "Resume", "Settle", "SettleOnWhatWasLeft", "Wrote",
             ],
             offered);
         Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Count(Changes));
@@ -102,6 +107,11 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Throws<InvalidOperationException>(
             () => recording.Settle(RecordingOutcome.Complete, 1, Later));
         Assert.Throws<InvalidOperationException>(() => recording.Wrote(TimeSpan.FromMinutes(1)));
+        Assert.Throws<InvalidOperationException>(() => recording.FailOnAFullDisk(1, Later));
+        Assert.Throws<InvalidOperationException>(() => recording.SettleOnWhatWasLeft(false, 1, Bands, Later));
+        Assert.Throws<InvalidOperationException>(
+            () => recording.Conclude(1, ExpectedBitrate.Terrestrial, Bands, Later));
+        Assert.Throws<InvalidOperationException>(() => recording.ReachedItsEnd(null, Later));
 
         recording.Illustrate(ThumbnailState.Ready);
         recording.Caption(CaptionState.Ready, 4, Later);

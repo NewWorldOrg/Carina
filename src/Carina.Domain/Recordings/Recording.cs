@@ -2,6 +2,7 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Recordings;
@@ -879,6 +880,98 @@ public sealed class Recording
         if (DataBroadcastState is DataBroadcastState.None)
         {
             Keep(DataBroadcast.RecordingEnded(), null);
+        }
+    }
+
+    /// <summary>
+    /// Ends the recording as failed because the disk it is written to has no room left, naming the full disk and what
+    /// the file weighed, if anything did.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void FailOnAFullDisk(long? weighed, DateTime at)
+    {
+        RefuseUnlessInFlight();
+
+        NoteEach(RecordingFaults.OfAFullDisk(weighed), at);
+        Settle(RecordingOutcome.Failed, weighed ?? 0, at);
+    }
+
+    /// <summary>
+    /// Ends a recording nothing was writing on what its file holds, naming why it ended where it did. It is never
+    /// complete.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void SettleOnWhatWasLeft(bool driverIsAnotherInstance, long? weighed, QualityBands bands, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(bands);
+        RefuseUnlessInFlight();
+
+        NoteEach(OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance, weighed, LeftScrambledAs(bands)), at);
+        Settle(OrphanRecovery.WhatIsLeftOf(weighed), weighed ?? 0, at);
+    }
+
+    /// <summary>
+    /// Ends the recording with what the completion judgement makes of its window, the length it wrote, whether this
+    /// side asked it to stop, what its file weighed and what was left scrambled.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void Conclude(long? weighed, ExpectedBitrate bitrate, QualityBands bands, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(bitrate);
+        ArgumentNullException.ThrowIfNull(bands);
+        RefuseUnlessInFlight();
+
+        RecordingVerdict verdict = CompletionEvaluator.Judge(
+            new RecordingEvidence(
+                weighed,
+                Written,
+                ExpectedWindowStart,
+                ExpectedWindowEnd,
+                AbortedAt,
+                LeftScrambledAs(bands)),
+            bitrate,
+            CompletionTolerance.Default);
+
+        foreach (OutcomeDetail detail in verdict.Detail(at))
+        {
+            Note(detail);
+        }
+
+        Settle(verdict.Outcome, weighed ?? 0, at);
+    }
+
+    /// <summary>
+    /// Reads a session the driver ended at the end it was holding as stopped there by this side: at
+    /// <paramref name="endHeld"/>, or at <paramref name="now"/> when it held none or one still to come. A stop already
+    /// written down stands, and an end before the recording began is none it reached.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void ReachedItsEnd(DateTime? endHeld, DateTime now)
+    {
+        RefuseUnlessInFlight();
+
+        if (AbortedAt is not null)
+        {
+            return;
+        }
+
+        DateTime told = endHeld ?? now;
+        DateTime reached = told > now ? now : told;
+
+        if (reached >= StartedAtActual)
+        {
+            Abort(reached);
+        }
+    }
+
+    private QualityLevel LeftScrambledAs(QualityBands bands)
+        => RecordingQuality.Of(Counters, ScrambledPackets, MissedMs, bands).Scrambled;
+
+    private void NoteEach(IReadOnlyList<RecordingFault> faults, DateTime at)
+    {
+        foreach (RecordingFault fault in faults)
+        {
+            Note(new OutcomeDetail(fault, null, string.Empty, at));
         }
     }
 

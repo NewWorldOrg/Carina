@@ -279,16 +279,7 @@ public sealed class OrphanRecoveryService(
             loaded =>
             {
                 last?.LastInto(loaded, now);
-
-                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(
-                             another,
-                             weighed,
-                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, loaded.MissedMs, bands).Scrambled))
-                {
-                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
-                }
-
-                loaded.Settle(outcome, weighed ?? 0, now);
+                loaded.SettleOnWhatWasLeft(another, weighed, bands, now);
 
                 return true;
             },
@@ -327,13 +318,7 @@ public sealed class OrphanRecoveryService(
             loaded =>
             {
                 last?.LastInto(loaded, now);
-
-                foreach (RecordingFault fault in RecordingFaults.OfAFullDisk(weighed))
-                {
-                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
-                }
-
-                loaded.Settle(RecordingOutcome.Failed, weighed ?? 0, now);
+                loaded.FailOnAFullDisk(weighed, now);
 
                 return true;
             },

@@ -183,13 +183,7 @@ public sealed class RecordingStreamSupervisor(
             loaded =>
             {
                 last?.LastInto(loaded, now);
-
-                foreach (RecordingFault fault in RecordingFaults.OfAFullDisk(weighed))
-                {
-                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
-                }
-
-                loaded.Settle(RecordingOutcome.Failed, weighed ?? 0, now);
+                loaded.FailOnAFullDisk(weighed, now);
 
                 return true;
             },
@@ -497,15 +491,7 @@ public sealed class RecordingStreamSupervisor(
                     return false;
                 }
 
-                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(
-                             false,
-                             weighed,
-                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, loaded.MissedMs, bands).Scrambled))
-                {
-                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
-                }
-
-                loaded.Settle(outcome, weighed ?? 0, now);
+                loaded.SettleOnWhatWasLeft(false, weighed, bands, now);
 
                 return true;
             },
@@ -553,31 +539,14 @@ public sealed class RecordingStreamSupervisor(
                     return false;
                 }
 
-                if (TheEndItWasToldAbout(session, loaded, now) is { } reached)
+                if (session.StopReason is SessionStopReason.EndTimeReached)
                 {
-                    loaded.Abort(reached);
+                    loaded.ReachedItsEnd(session.EndsAt?.UtcDateTime, now);
                 }
 
                 last?.LastInto(loaded, now);
-
-                RecordingVerdict verdict = CompletionEvaluator.Judge(
-                    new RecordingEvidence(
-                        weighed,
-                        loaded.Written,
-                        loaded.ExpectedWindowStart,
-                        loaded.ExpectedWindowEnd,
-                        loaded.AbortedAt,
-                        RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, loaded.MissedMs, bands).Scrambled),
-                    bitrate,
-                    CompletionTolerance.Default);
-
-                foreach (OutcomeDetail detail in verdict.Detail(now))
-                {
-                    loaded.Note(detail);
-                }
-
-                loaded.Settle(verdict.Outcome, weighed ?? 0, now);
-                outcome = verdict.Outcome;
+                loaded.Conclude(weighed, bitrate, bands, now);
+                outcome = loaded.Outcome ?? outcome;
 
                 return true;
             },
@@ -596,29 +565,6 @@ public sealed class RecordingStreamSupervisor(
             recording.Id.Wire,
             outcome,
             weighed);
-    }
-
-    /// <summary>
-    /// The end this side asked for, when the driver ended the session because it reached the end it was
-    /// opened with; otherwise null.
-    /// </summary>
-    /// <remarks>
-    /// The moment is the end the driver was holding, as the request named it or as an extension moved
-    /// it. An end this side already wrote down stands, a session that names no end of its own is read at
-    /// <paramref name="now"/>, and one that names an end this recording cannot have reached is left as
-    /// an end nobody asked for.
-    /// </remarks>
-    private static DateTime? TheEndItWasToldAbout(SessionSnapshot session, Recording recording, DateTime now)
-    {
-        if (session.StopReason is not SessionStopReason.EndTimeReached || recording.AbortedAt is not null)
-        {
-            return null;
-        }
-
-        DateTime told = session.EndsAt?.UtcDateTime ?? now;
-        DateTime reached = told > now ? now : told;
-
-        return reached < recording.StartedAtActual ? null : reached;
     }
 
     private async Task<QualityBands> BandsAsync(DateTime now, CancellationToken cancellationToken)
