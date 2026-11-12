@@ -9,21 +9,25 @@ namespace Carina.Infrastructure.Notifications;
 public sealed class PushMessages(PushServerKey key, NoticeLinkBase links, TimeProvider clock)
 {
     /// <summary>
-    /// Whether the server's key is there to sign with. Where it is not, nothing can be sent to any browser.
+    /// The public half of the server's key as browsers subscribe with it, or nothing where the key is not there to
+    /// be read.
     /// </summary>
-    public bool CanSign()
+    public string? PublishedKey()
     {
         try
         {
-            _ = key.PublicKey();
-
-            return true;
+            return key.PublicKey();
         }
         catch (Exception unusable) when (unusable is InvalidOperationException or IOException or UnauthorizedAccessException)
         {
-            return false;
+            return null;
         }
     }
+
+    /// <summary>
+    /// Whether the server's key is there to sign with. Where it is not, nothing can be sent to any browser.
+    /// </summary>
+    public bool CanSign() => PublishedKey() is not null;
 
     public PushMessage Telling(PushSubscription subscription, Notice notice, PushHandling handling)
     {

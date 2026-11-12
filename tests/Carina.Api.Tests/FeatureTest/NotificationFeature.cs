@@ -32,7 +32,19 @@ using EventId = Carina.Domain.Programmes.EventId;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-internal sealed record HeardWebhookCall(string Method, string Target, string Body);
+internal sealed record HeardWebhookCall(string Method, string Target, string Body)
+{
+    public IReadOnlyList<string> Head { get; init; } = [];
+
+    public byte[] Sent { get; init; } = [];
+
+    public string? Said(string header)
+        => Head
+            .Select(line => line.Split(": ", 2))
+            .Where(pair => pair.Length == 2 && string.Equals(pair[0], header, StringComparison.OrdinalIgnoreCase))
+            .Select(pair => pair[1])
+            .FirstOrDefault();
+}
 
 internal sealed class WebhookEnd : IAsyncDisposable
 {
@@ -44,7 +56,7 @@ internal sealed class WebhookEnd : IAsyncDisposable
 
     public WebhookEnd()
     {
-        Certificate = SelfSigned("hooks.slack.com", "discord.com", "discordapp.com");
+        Certificate = SelfSigned("hooks.slack.com", "discord.com", "discordapp.com", "fcm.googleapis.com");
         listener.Start();
         accepting = AcceptAsync();
     }
@@ -125,7 +137,7 @@ internal sealed class WebhookEnd : IAsyncDisposable
                 .FirstOrDefault();
             byte[] body = new byte[length];
             await secured.ReadExactlyAsync(body, stopping.Token);
-            Heard.Enqueue(new HeardWebhookCall(first[0], first[1], Encoding.UTF8.GetString(body)));
+            Heard.Enqueue(new HeardWebhookCall(first[0], first[1], Encoding.UTF8.GetString(body)) { Head = lines, Sent = body });
 
             byte[] answered = Encoding.UTF8.GetBytes(AnswerBody);
             string opening =
@@ -166,8 +178,10 @@ internal sealed class PointedNoticeNetwork(WebhookEnd end) : INoticeNetwork
 
     public bool Distrusts { get; set; }
 
+    public IPAddress Resolved { get; set; } = Public;
+
     public Task<IReadOnlyList<IPAddress>> ResolveAsync(string host, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<IPAddress>>([Public]);
+        => Task.FromResult<IReadOnlyList<IPAddress>>([Resolved]);
 
     public async Task<Stream> ConnectAsync(IPEndPoint endpoint, CancellationToken cancellationToken)
     {
@@ -211,13 +225,27 @@ internal sealed class NotificationFeature : IAsyncDisposable
 
     public const string Watches = "/api/notifications/watches";
 
+    public const string PushKey = "/api/notifications/push/key";
+
+    public const string PushSubscriptions = "/api/notifications/push/subscriptions";
+
+    public const string Screens = "https://screens.example";
+
+    public const string PushEndpoint = "https://fcm.googleapis.com/fcm/send/made-up-registration-qrst";
+
+    public const string OtherPushEndpoint = "https://updates.push.services.mozilla.com/wpush/v2/made-up-registration-uvwx";
+
     public const string Station = "作り物テレビ";
 
     public static readonly DateTime Noon = new(2026, 9, 5, 12, 0, 0, DateTimeKind.Utc);
 
     private readonly TestingWebApplicationFactory factory = new();
 
-    public NotificationFeature(string? publicOrigin = null, RecordedStartup? heard = null, TimeSpan? deadline = null)
+    public NotificationFeature(
+        string? publicOrigin = null,
+        RecordedStartup? heard = null,
+        TimeSpan? deadline = null,
+        Action<IServiceCollection>? also = null)
     {
         Network = new PointedNoticeNetwork(End);
         Built = factory.WithWebHostBuilder(builder =>
@@ -247,6 +275,8 @@ internal sealed class NotificationFeature : IAsyncDisposable
                 {
                     services.AddSingleton<ILoggerProvider>(heard);
                 }
+
+                also?.Invoke(services);
             });
         }).WithTestScheme();
 
@@ -281,7 +311,16 @@ internal sealed class NotificationFeature : IAsyncDisposable
 
     public static string TrialOf(Guid id) => $"{Destinations}/{id}/test";
 
+    public static string SubscriptionOf(Guid id) => $"{PushSubscriptions}/{id}";
+
     public static string RuleOf(Guid id) => $"{Rules}/{id}";
+
+    public static object Subscription(PushReceiver browser, string endpoint = PushEndpoint)
+    {
+        ArgumentNullException.ThrowIfNull(browser);
+
+        return new { endpoint, keys = new { p256dh = browser.KeyAsWritten, auth = browser.SecretAsWritten } };
+    }
 
     public static string WatchOf(Guid id) => $"{Watches}/{id}";
 
@@ -307,6 +346,17 @@ internal sealed class NotificationFeature : IAsyncDisposable
     public async Task<Guid> RegisteredAsync(string name = "居間", string url = SlackUrl)
     {
         (HttpStatusCode status, JsonElement body) = await PostAsync(Destinations, new { name, url });
+
+        Assert.Equal(HttpStatusCode.Created, status);
+
+        return body.GetProperty("data").GetProperty("id").GetGuid();
+    }
+
+    public async Task<Guid> SubscribedAsync(PushReceiver browser, string name = "書斎のブラウザ", string endpoint = PushEndpoint)
+    {
+        (HttpStatusCode status, JsonElement body) = await PostAsync(
+            PushSubscriptions,
+            new { name, endpoint, keys = new { p256dh = browser.KeyAsWritten, auth = browser.SecretAsWritten } });
 
         Assert.Equal(HttpStatusCode.Created, status);
 
