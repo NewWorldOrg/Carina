@@ -132,6 +132,12 @@ public sealed class NotificationDestination
     }
 
     /// <summary>
+    /// Keeps that the address does not open with the keys held. The destination stays on, so that writing the
+    /// address again is all it takes to send to it.
+    /// </summary>
+    public void NoteUnreadable(DateTime at) => NoteFailed(NoticeFailure.Unreadable, at);
+
+    /// <summary>
     /// Keeps that the other end turned one notice down while its address still stands. The destination stays on.
     /// </summary>
     public void NoteTurnedDown(DateTime at)

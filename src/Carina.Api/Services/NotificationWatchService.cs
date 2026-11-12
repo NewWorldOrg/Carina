@@ -62,24 +62,13 @@ public sealed class NotificationWatchService(
             return Failure(UnknownProgramme, NotificationFailure.NoSuchProgramme);
         }
 
-        if (announced.IsShadow)
-        {
-            return Failure(Shadow, NotificationFailure.ProgrammeIsAShadow);
-        }
-
         DateTime now = Now();
-
-        if (now >= announced.StartsAt)
-        {
-            return Failure(Begun, NotificationFailure.AlreadyBegun);
-        }
-
         int leadMinutes = asked.LeadMinutes
             ?? NotificationSettings.LeadMinutesOver(await settings.ReadAsync(cancellationToken));
 
-        if (!NotificationSettings.LeadMinutesOffered.Contains(leadMinutes))
+        if (ProgrammeWatch.RefusalToAsk(announced, leadMinutes, now) is { } refusal)
         {
-            return Failure(BadLead, NotificationFailure.Refused);
+            return Refused(refusal);
         }
 
         BroadcastService? station = await stations.FindAsync(
@@ -116,6 +105,19 @@ public sealed class NotificationWatchService(
 
     private static ServiceResult<ProgrammeWatch, NotificationFailure> Failure(string message, NotificationFailure failure)
         => ServiceResult<ProgrammeWatch, NotificationFailure>.Failure(message, failure);
+
+    private static ServiceResult<ProgrammeWatch, NotificationFailure> Refused(ProgrammeWatchRefusal refusal)
+        => refusal switch
+        {
+            ProgrammeWatchRefusal.NoSuchProgramme => Failure(UnknownProgramme, NotificationFailure.NoSuchProgramme),
+            ProgrammeWatchRefusal.Shadow => Failure(Shadow, NotificationFailure.ProgrammeIsAShadow),
+            ProgrammeWatchRefusal.AlreadyBegun => Failure(Begun, NotificationFailure.AlreadyBegun),
+            ProgrammeWatchRefusal.LeadNotOffered => Failure(BadLead, NotificationFailure.Refused),
+            ProgrammeWatchRefusal.NoDestinationTurnedOn => Failure(NoneTurnedOn, NotificationFailure.NoDestination),
+            ProgrammeWatchRefusal.DestinationsNotTurnedOn => Failure(BadDestinations, NotificationFailure.Refused),
+            ProgrammeWatchRefusal.AlreadyAsked => Failure(Already, NotificationFailure.AlreadyAsked),
+            _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A programme is refused for a reason this service words."),
+        };
 
     private static IReadOnlyList<NotificationDestinationId>? ToldTo(
         IReadOnlyList<Guid>? asked,
@@ -175,18 +177,17 @@ public sealed class NotificationWatchService(
             return Failure(Unknown, NotificationFailure.NoSuchWatch);
         }
 
-        if (held.State is ProgrammeWatchState.Cancelled)
-        {
-            return ServiceResult<ProgrammeWatch, NotificationFailure>.Success(held);
-        }
+        ProgrammeWatchWithdrawal withdrawal = held.Withdraw(Now());
 
-        if (held.State is not ProgrammeWatchState.Waiting)
+        if (withdrawal is ProgrammeWatchWithdrawal.Settled)
         {
             return Failure(Settled, NotificationFailure.NotWaiting);
         }
 
-        held.Cancel(Now());
-        await watches.SaveAsync(held, cancellationToken);
+        if (withdrawal is ProgrammeWatchWithdrawal.Withdrawn)
+        {
+            await watches.SaveAsync(held, cancellationToken);
+        }
 
         return ServiceResult<ProgrammeWatch, NotificationFailure>.Success(held);
     }

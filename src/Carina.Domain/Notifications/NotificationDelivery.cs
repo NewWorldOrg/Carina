@@ -34,6 +34,11 @@ public sealed class NotificationDelivery
 
     public bool IsWaiting => State is NotificationDeliveryState.Queued or NotificationDeliveryState.Failed;
 
+    /// <summary>
+    /// Whether the next attempt has come by <paramref name="at"/>.
+    /// </summary>
+    public bool IsDueAt(DateTime at) => NextAttemptAt is not { } next || next <= at;
+
     public static int Listed(int? perPage) => ListingGuards.Clamped(perPage, MostListed, MostListed);
 
     public static NotificationDelivery Queue(

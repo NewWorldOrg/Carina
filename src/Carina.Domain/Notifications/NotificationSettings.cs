@@ -31,7 +31,7 @@ public sealed class NotificationSettings
             throw new ArgumentOutOfRangeException(nameof(id), id, "The notification settings are one row.");
         }
 
-        if (!LeadMinutesOffered.Contains(notifyLeadMinutes))
+        if (!Offers(notifyLeadMinutes))
         {
             throw new ArgumentOutOfRangeException(
                 nameof(notifyLeadMinutes),
@@ -46,6 +46,8 @@ public sealed class NotificationSettings
             ChangedAt = UtcTimes.Required(changedAt, nameof(changedAt)),
         };
     }
+
+    public static bool Offers(int? minutes) => minutes is { } offered && LeadMinutesOffered.Contains(offered);
 
     public static NotificationSettings Set(int notifyLeadMinutes, DateTime at) => Rehydrate(TheOnlyRow, notifyLeadMinutes, at);
 

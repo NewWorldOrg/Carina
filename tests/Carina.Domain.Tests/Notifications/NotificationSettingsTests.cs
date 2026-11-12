@@ -33,6 +33,21 @@ public sealed class NotificationSettingsTests
         Assert.Equal(10, NotificationSettings.LeadMinutesOver(NotificationSettings.Set(10, At)));
     }
 
+    [Theory(DisplayName = "BR-NT-005: only the minutes offered are offered, and no minutes at all are not")]
+    [InlineData(0, true)]
+    [InlineData(1, true)]
+    [InlineData(3, true)]
+    [InlineData(5, true)]
+    [InlineData(10, true)]
+    [InlineData(-1, false)]
+    [InlineData(2, false)]
+    [InlineData(15, false)]
+    [InlineData(null, false)]
+    public void OnlyTheMinutesOfferedAreOffered(int? minutes, bool offered)
+    {
+        Assert.Equal(offered, NotificationSettings.Offers(minutes));
+    }
+
     [Fact]
     public void TheSettingsAreOneRow()
     {

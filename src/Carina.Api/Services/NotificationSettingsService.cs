@@ -24,7 +24,7 @@ public sealed class NotificationSettingsService(
         int? notifyLeadMinutes,
         CancellationToken cancellationToken)
     {
-        if (notifyLeadMinutes is not { } minutes || !NotificationSettings.LeadMinutesOffered.Contains(minutes))
+        if (notifyLeadMinutes is not { } minutes || !NotificationSettings.Offers(minutes))
         {
             return ServiceResult<NotificationSettingsRead, NotificationFailure>.Failure(BadLead, NotificationFailure.Refused);
         }

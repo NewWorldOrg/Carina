@@ -84,14 +84,14 @@ public sealed class NotificationDeliveryRound(
                 continue;
             }
 
-            if (webhook is null || !destination.Enabled || IsTooOld(row.Notice, now))
+            if (webhook is null || !destination.Enabled || row.Notice.IsTooOldAt(now, settings.TooOldAfter))
             {
                 moved = moved.With(await GiveUpAsync(row, destination, webhook, cancellationToken));
 
                 continue;
             }
 
-            if (resting || row.Delivery.NextAttemptAt > now || !dispatch.HasRoomFor(destination.Id))
+            if (resting || !row.Delivery.IsDueAt(now) || !dispatch.HasRoomFor(destination.Id))
             {
                 continue;
             }
@@ -116,7 +116,7 @@ public sealed class NotificationDeliveryRound(
 
         if (webhook is null)
         {
-            destination.NoteFailed(NoticeFailure.Unreadable, Now());
+            destination.NoteUnreadable(Now());
             await KeepResultAsync(destination, cancellationToken);
             logger.LogWarning(
                 "The address of destination {Destination} does not open with the keys held; nothing is sent to it.",
@@ -279,8 +279,6 @@ public sealed class NotificationDeliveryRound(
 
         return new NotificationDeliveries(0, 0, 1);
     }
-
-    private bool IsTooOld(Notice notice, DateTime now) => notice.OccurredAt < now - settings.TooOldAfter;
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 }

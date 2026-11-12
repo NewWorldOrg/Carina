@@ -27,4 +27,24 @@ public static class NoticeRouting
                 .Distinct(),
         ];
     }
+
+    /// <summary>
+    /// The destinations a notice of a programme asked to be told of goes to: each one it names that is turned on, once,
+    /// in the order the destinations are handed over. The sets of rules play no part.
+    /// </summary>
+    public static IReadOnlyList<NotificationDestinationId> DestinationsFor(
+        ProgrammeWatch watch,
+        IReadOnlyList<NotificationDestination> destinations)
+    {
+        ArgumentNullException.ThrowIfNull(watch);
+        ArgumentNullException.ThrowIfNull(destinations);
+
+        return
+        [
+            .. destinations
+                .Where(destination => destination.Enabled && watch.Destinations.Contains(destination.Id))
+                .Select(destination => destination.Id)
+                .Distinct(),
+        ];
+    }
 }

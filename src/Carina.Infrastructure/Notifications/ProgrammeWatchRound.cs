@@ -142,12 +142,10 @@ public sealed class ProgrammeWatchRound(
             now,
             NoticeWording.Of(ProgrammeWatchNoticeSource.Of(watch, kind, now).Happening(), links),
             now);
-        HashSet<NotificationDestinationId> named = [.. watch.Destinations];
         List<NotificationDelivery> deliveries =
         [
-            .. (await destinations.ListAsync(cancellationToken))
-                .Where(destination => destination.Enabled && named.Contains(destination.Id))
-                .Select(destination => NotificationDelivery.Queue(NotificationDeliveryId.New(), notice.Id, destination.Id, now)),
+            .. NoticeRouting.DestinationsFor(watch, await destinations.ListAsync(cancellationToken))
+                .Select(destination => NotificationDelivery.Queue(NotificationDeliveryId.New(), notice.Id, destination, now)),
         ];
 
         if (!await notices.AddAsync(notice, deliveries, cancellationToken))

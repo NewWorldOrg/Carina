@@ -74,6 +74,12 @@ public sealed class Notice
         };
     }
 
+    /// <summary>
+    /// Whether more than <paramref name="tooOldAfter"/> has passed at <paramref name="at"/> since this happened, so
+    /// that it is no longer worth sending.
+    /// </summary>
+    public bool IsTooOldAt(DateTime at, TimeSpan tooOldAfter) => OccurredAt < at - tooOldAfter;
+
     private static string Worded(string said, int longest, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(said, parameterName);

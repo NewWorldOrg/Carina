@@ -173,6 +173,18 @@ public sealed class NotificationDestinationTests
         Assert.Null(destination.LastFailure);
     }
 
+    [Fact(DisplayName = "BR-ND-012: a destination whose address does not open with the keys held keeps that it is unreadable, and stays on")]
+    public void ADestinationWhoseAddressDoesNotOpenKeepsThatItIsUnreadable()
+    {
+        NotificationDestination destination = Registered();
+
+        destination.NoteUnreadable(At.AddMinutes(1));
+
+        Assert.True(destination.Enabled);
+        Assert.Equal(NoticeFailure.Unreadable, destination.LastFailure);
+        Assert.Equal(At.AddMinutes(1), destination.LastResultAt);
+    }
+
     private static NotificationDestination Registered()
         => NotificationDestination.Register(
             NotificationDestinationId.New(),

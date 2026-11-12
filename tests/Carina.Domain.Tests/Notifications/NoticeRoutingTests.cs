@@ -1,4 +1,6 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
+using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Tests.Notifications;
 
@@ -62,6 +64,30 @@ public sealed class NoticeRoutingTests
         Assert.Empty(NoticeRouting.DestinationsFor(NoticeKind.RecordingStarted, [rule], [first]));
     }
 
+    [Fact(DisplayName = "BR-NS-003, BR-ND-010: a programme asked to be told of goes to each destination it names that is turned on, once")]
+    public void AProgrammeAskedToBeToldOfGoesToTheDestinationsItNamesThatAreOn()
+    {
+        NotificationDestination first = Destination("First");
+        NotificationDestination off = Destination("Off");
+        off.Disable(At);
+        NotificationDestination unnamed = Destination("Unnamed");
+        NotificationDestination last = Destination("Last");
+        ProgrammeWatch watch = Watch(last, off, first, last);
+
+        IReadOnlyList<NotificationDestinationId> routed = NoticeRouting.DestinationsFor(watch, [first, off, unnamed, last]);
+
+        Assert.Equal([first.Id, last.Id], routed);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme whose destinations are all turned off goes nowhere")]
+    public void AProgrammeWhoseDestinationsAreAllOffGoesNowhere()
+    {
+        NotificationDestination off = Destination("Off");
+        off.Disable(At);
+
+        Assert.Empty(NoticeRouting.DestinationsFor(Watch(off), [off]));
+    }
+
     private static NotificationDestination Destination(string name)
         => NotificationDestination.Register(
             NotificationDestinationId.New(),
@@ -69,6 +95,15 @@ public sealed class NoticeRoutingTests
             WebhookTarget.Slack,
             [1, 2, 3],
             "wxyz",
+            At);
+
+    private static ProgrammeWatch Watch(params NotificationDestination[] destinations)
+        => ProgrammeWatch.Ask(
+            ProgrammeWatchId.New(),
+            new ProgrammeId(new NetworkId(32000), new ServiceId(1024), new EventId(4100)),
+            new WatchedBroadcast(At.AddHours(1), At.AddHours(2), "A programme", null),
+            3,
+            [.. destinations.Select(destination => destination.Id)],
             At);
 
     private static NotificationRule Rule(IReadOnlyList<NoticeKind> events, params NotificationDestination[] destinations)
