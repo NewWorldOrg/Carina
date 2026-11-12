@@ -24,6 +24,9 @@ public sealed class ServiceReachSettings
 
     public TimeSpan Silence => TimeSpan.FromHours(HoursOfSilence);
 
+    public static bool Allows(int hoursOfSilence)
+        => hoursOfSilence is >= ShortestHoursOfSilence and <= LongestHoursOfSilence;
+
     public static ServiceReachSettings Default(DateTime at) =>
         Rehydrate(TheOnlyRow, DefaultHoursOfSilence, at);
 

@@ -385,4 +385,91 @@ public sealed class CandidateChannelTests
             null,
             At,
             At);
+
+    [Fact(DisplayName = "BR-TD-001: a candidate belongs to the one service it was found for, and to no other")]
+    public void ACandidateBelongsToTheOneServiceItWasFoundFor()
+    {
+        CandidateChannel candidate = Discovered();
+
+        Assert.True(candidate.BelongsTo(new NetworkId(4), new ServiceId(101)));
+        Assert.False(candidate.BelongsTo(new NetworkId(4), new ServiceId(102)));
+        Assert.False(candidate.BelongsTo(new NetworkId(5), new ServiceId(101)));
+    }
+
+    [Fact(DisplayName = "a candidate added by hand waits to be checked before it is trusted")]
+    public void ACandidateAddedByHandWaitsToBeChecked()
+    {
+        CandidateChannel added = CandidateChannel.AddByHand(
+            CandidateChannelId.New(),
+            new NetworkId(4),
+            new ServiceId(101),
+            TuningParameters.Terrestrial(27),
+            At);
+
+        Assert.True(added.NeedsRevalidation);
+        Assert.False(added.IsSelected);
+        Assert.Equal(At, added.DiscoveredAt);
+    }
+
+    [Fact(DisplayName = "BR-TD-001: a candidate a scan found starts with the stream it saw and, when measured, as received")]
+    public void ACandidateAScanFoundStartsAsTheScanSawIt()
+    {
+        SignalMeasurement measured = SignalMeasurement.WithLock(At, 21_000);
+
+        CandidateChannel found = CandidateChannel.FoundByScan(
+            CandidateChannelId.New(),
+            new NetworkId(4),
+            new ServiceId(101),
+            TuningParameters.Terrestrial(27),
+            new TransportStreamId(32_736),
+            measured,
+            At);
+        CandidateChannel unmeasured = CandidateChannel.FoundByScan(
+            CandidateChannelId.New(),
+            new NetworkId(4),
+            new ServiceId(101),
+            TuningParameters.Terrestrial(28),
+            null,
+            null,
+            At);
+
+        Assert.Equal(new TransportStreamId(32_736), found.ObservedStreamId);
+        Assert.Same(measured, found.LastMeasurement);
+        Assert.False(found.IsSelected);
+        Assert.Null(unmeasured.ObservedStreamId);
+        Assert.Null(unmeasured.LastMeasurement);
+        Assert.Equal(RotationState.Active, unmeasured.RotationState);
+    }
+
+    [Fact(DisplayName = "BR-TD-003: a candidate takes the stream a scan saw only when it is another than the one known")]
+    public void ACandidateTakesAnotherStreamOnly()
+    {
+        CandidateChannel candidate = Discovered();
+        candidate.CarriedBy(new TransportStreamId(32_736));
+
+        Assert.False(candidate.IsRestatedBy(null));
+        Assert.False(candidate.IsRestatedBy(new TransportStreamId(32_736)));
+        Assert.True(candidate.IsRestatedBy(new TransportStreamId(32_737)));
+
+        Assert.False(candidate.Restate(null));
+        Assert.False(candidate.Restate(new TransportStreamId(32_736)));
+        Assert.True(candidate.Restate(new TransportStreamId(32_737)));
+        Assert.Equal(new TransportStreamId(32_737), candidate.ObservedStreamId);
+    }
+
+    [Fact(DisplayName = "BR-TD-001: only a candidate a scan selected with nothing measured counts as chosen blind")]
+    public void OnlyACandidateAScanSelectedUnmeasuredIsChosenBlind()
+    {
+        CandidateChannel blind = Discovered();
+        blind.Select(SelectionSource.Scan, null, At);
+        CandidateChannel measured = Discovered();
+        measured.Select(SelectionSource.Scan, SignalMeasurement.WithLock(At, 21_000), At);
+        CandidateChannel manual = Discovered();
+        manual.Select(SelectionSource.Manual, null, At);
+
+        Assert.True(blind.ChosenBlindByAScan);
+        Assert.False(measured.ChosenBlindByAScan);
+        Assert.False(manual.ChosenBlindByAScan);
+        Assert.False(Discovered().ChosenBlindByAScan);
+    }
 }

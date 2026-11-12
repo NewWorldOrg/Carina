@@ -113,4 +113,25 @@ public sealed class ScanRunTests
         Assert.Throws<ArgumentException>(
             () => ScanRun.Start(ScanRunId.New(), null, new DateTime(2026, 8, 14, 0, 0, 0, DateTimeKind.Local)));
     }
+
+    [Fact(DisplayName = "BR-TS-001: only a completed scan proposes a difference and may be applied")]
+    public void OnlyACompletedScanMayBeApplied()
+    {
+        ScanRun running = Started();
+        ScanRun completed = Started();
+        completed.Complete(At);
+        ScanRun failed = Started();
+        failed.Fail("every tuner was busy", At);
+        ScanRun cancelled = Started();
+        cancelled.Cancel("the scan was cancelled", At);
+        ScanRun interrupted = Started();
+        interrupted.Interrupt(At);
+
+        Assert.Equal(ScanApplyRefusal.StillRunning, running.RefusalToApply());
+        Assert.Null(completed.RefusalToApply());
+        Assert.Equal(ScanApplyRefusal.NeverCompleted, failed.RefusalToApply());
+        Assert.Equal(ScanApplyRefusal.NeverCompleted, cancelled.RefusalToApply());
+        Assert.Equal(ScanApplyRefusal.NeverCompleted, interrupted.RefusalToApply());
+        Assert.Equal([false, true, false, false, false], new[] { running, completed, failed, cancelled, interrupted }.Select(run => run.ProposesADifference));
+    }
 }

@@ -24,7 +24,7 @@ public sealed class ScanApplierTests
     private readonly RecordingAppEvents events = new();
 
     private ScanApplier Applier
-        => new(services, candidates, new UnguardedWrites(), events, new StillClock());
+        => new(new ChannelLineupDomainService(services, candidates), new UnguardedWrites(), events, new StillClock());
 
     private static ScanServiceChange Change(
         ScanChangeKind kind,

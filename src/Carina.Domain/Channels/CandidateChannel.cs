@@ -46,6 +46,12 @@ public sealed class CandidateChannel
 
     public bool IsInRotation => RotationState is not RotationState.NeedsAttention;
 
+    /// <summary>
+    /// A candidate is a way to one service, so it is chosen or dropped only through that service.
+    /// </summary>
+    public bool BelongsTo(NetworkId networkId, ServiceId serviceId)
+        => NetworkId.Equals(networkId) && ServiceId.Equals(serviceId);
+
     public static CandidateChannel Discover(
         CandidateChannelId id,
         NetworkId networkId,
@@ -70,6 +76,47 @@ public sealed class CandidateChannel
             needsAttentionSince: null,
             discoveredAt: at,
             lastSeenAt: at);
+
+    /// <summary>
+    /// A candidate added by hand has not been tuned by anything here, so it waits to be checked before it is trusted.
+    /// </summary>
+    public static CandidateChannel AddByHand(
+        CandidateChannelId id,
+        NetworkId networkId,
+        ServiceId serviceId,
+        TuningParameters tuning,
+        DateTime at)
+    {
+        CandidateChannel added = Discover(id, networkId, serviceId, tuning, at);
+
+        added.RequireRevalidation();
+
+        return added;
+    }
+
+    /// <summary>
+    /// A candidate a scan found starts with the stream it saw, and as received when the scan measured it.
+    /// </summary>
+    public static CandidateChannel FoundByScan(
+        CandidateChannelId id,
+        NetworkId networkId,
+        ServiceId serviceId,
+        TuningParameters tuning,
+        TransportStreamId? observedStreamId,
+        SignalMeasurement? measurement,
+        DateTime at)
+    {
+        CandidateChannel found = Discover(id, networkId, serviceId, tuning, at);
+
+        found.CarriedBy(observedStreamId);
+
+        if (measurement is not null)
+        {
+            found.RecordTuningSuccess(measurement, at);
+        }
+
+        return found;
+    }
 
     public static CandidateChannel Rehydrate(
         CandidateChannelId id,
@@ -143,6 +190,34 @@ public sealed class CandidateChannel
 
         ObservedStreamId = observedStreamId;
     }
+
+    /// <summary>
+    /// Whether a stream seen on this candidate's channel is another than the one it is known to carry; a scan that saw
+    /// no stream says nothing.
+    /// </summary>
+    public bool IsRestatedBy(TransportStreamId? observedStreamId)
+        => observedStreamId is not null && !observedStreamId.Equals(ObservedStreamId);
+
+    /// <summary>
+    /// Takes the stream seen when it is another than the one known, and says whether it did.
+    /// </summary>
+    public bool Restate(TransportStreamId? observedStreamId)
+    {
+        if (!IsRestatedBy(observedStreamId))
+        {
+            return false;
+        }
+
+        ObservedStreamId = observedStreamId;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Selected by a scan with nothing measured to compare it by, so a later scan may choose again.
+    /// </summary>
+    public bool ChosenBlindByAScan
+        => IsSelected && SelectionSource is Channels.SelectionSource.Scan && SelectionMeasurement is null;
 
     public void Select(SelectionSource source, SignalMeasurement? measuredAtSelection, DateTime at)
     {

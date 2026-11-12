@@ -153,4 +153,18 @@ public sealed class BroadcastServiceTests
     private static BroadcastService Discovered()
         => BroadcastService.Discover(
             new NetworkId(4), new ServiceId(101), "Fixture Service", ServiceCategory.Television, At);
+
+    [Theory]
+    [InlineData(ServiceCategory.Television, true)]
+    [InlineData(ServiceCategory.Radio, false)]
+    [InlineData(ServiceCategory.OneSeg, false)]
+    [InlineData(ServiceCategory.Data, false)]
+    [InlineData(ServiceCategory.Temporary, false)]
+    [InlineData(ServiceCategory.Other, false)]
+    public void OnlyATelevisionServiceIsWatchedLive(ServiceCategory category, bool watchable)
+    {
+        BroadcastService service = BroadcastService.Discover(new NetworkId(4), new ServiceId(101), "Fixture Service", category, At);
+
+        Assert.Equal(watchable, service.WatchableLive);
+    }
 }

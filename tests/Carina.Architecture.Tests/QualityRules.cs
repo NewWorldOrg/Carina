@@ -47,6 +47,7 @@ public static partial class QualityRules
         "ISatelliteTransportStreamRepository",
         "IServiceReachSettingsRepository",
         "ScanApplier",
+        "ChannelLineupDomainService",
         "TunerLedgerService",
         "CarinaDbContext",
     ];

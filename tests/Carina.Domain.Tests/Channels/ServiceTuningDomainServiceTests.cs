@@ -1,12 +1,11 @@
 using Carina.Domain.Channels;
-using Carina.Infrastructure.Channels;
 using Carina.TestSupport;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Channels;
+namespace Carina.Domain.Tests.Channels;
 
-public sealed class ServiceTuningDirectoryTests
+public sealed class ServiceTuningDomainServiceTests
 {
     private static readonly DateTime At = new(2026, 8, 26, 12, 0, 0, DateTimeKind.Utc);
 
@@ -230,13 +229,13 @@ public sealed class ServiceTuningDirectoryTests
             : null;
 
         return new Fixture(
-            new ServiceTuningDirectory(services, candidates, new HeldCapacity(capacity)),
+            new ServiceTuningDomainService(services, candidates, new HeldCapacity(capacity)),
             candidates,
             candidate);
     }
 
     private sealed record Fixture(
-        ServiceTuningDirectory Directory,
+        ServiceTuningDomainService Directory,
         HeldCandidates Candidates,
         CandidateChannel Selected);
 

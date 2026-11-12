@@ -34,6 +34,8 @@ public sealed class BroadcastService
     public bool ListedInTheGuide
         => Category is not (ServiceCategory.OneSeg or ServiceCategory.Data);
 
+    public bool WatchableLive => Category is ServiceCategory.Television;
+
     public static BroadcastService Discover(
         NetworkId networkId,
         ServiceId serviceId,

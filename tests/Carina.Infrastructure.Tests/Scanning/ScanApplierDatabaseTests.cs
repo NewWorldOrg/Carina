@@ -151,8 +151,9 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         int arrived = 0;
         var events = new RecordingAppEvents();
         var applier = new ScanApplier(
-            new BroadcastServiceRepository(writing),
-            new RefusingCandidates(new CandidateChannelRepository(writing), () => ++arrived > 1),
+            new ChannelLineupDomainService(
+                new BroadcastServiceRepository(writing),
+                new RefusingCandidates(new CandidateChannelRepository(writing), () => ++arrived > 1)),
             new DatabaseAtomicWrite(writing),
             events,
             new StillClock());
@@ -231,8 +232,9 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         await using CarinaDbContext writing = database.Open();
 
         return await new ScanApplier(
-            new BroadcastServiceRepository(writing),
-            new CandidateChannelRepository(writing),
+            new ChannelLineupDomainService(
+                new BroadcastServiceRepository(writing),
+                new CandidateChannelRepository(writing)),
             new DatabaseAtomicWrite(writing),
             new RecordingAppEvents(),
             new StillClock()).ApplyAsync(difference, [TuneSystem.IsdbT], Cancel);

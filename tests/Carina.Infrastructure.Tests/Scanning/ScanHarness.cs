@@ -114,12 +114,11 @@ public sealed class ScanHarness
 
         Orchestrator = new ChannelScanOrchestrator(
             Driver,
-            Capacity,
+            new ScanPlanningDomainService(Capacity, SatelliteStreams),
             Signals,
             Runs,
-            Services,
-            Candidates,
-            SatelliteStreams,
+            new ChannelRotationDomainService(Services, Candidates),
+            new ChannelLineupDomainService(Services, Candidates),
             Events,
             Clock,
             Settings);

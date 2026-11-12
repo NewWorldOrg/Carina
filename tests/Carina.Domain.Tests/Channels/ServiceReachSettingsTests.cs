@@ -72,4 +72,14 @@ public sealed class ServiceReachSettingsTests
         Assert.Equal(1, ServiceReachSettings.ShortestHoursOfSilence);
         Assert.Equal(720, ServiceReachSettings.LongestHoursOfSilence);
     }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    [InlineData(24, true)]
+    [InlineData(720, true)]
+    [InlineData(721, false)]
+    [InlineData(-1, false)]
+    public void AWaitIsAllowedOnlyInsideTheRange(int hours, bool allowed)
+        => Assert.Equal(allowed, ServiceReachSettings.Allows(hours));
 }
