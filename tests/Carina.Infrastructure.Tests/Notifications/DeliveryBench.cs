@@ -131,8 +131,8 @@ internal sealed class HeldDestinationsOfNotices : INotificationDestinationReposi
 }
 
 /// <summary>
-/// Everything a pass over the waiting notices needs, with a webhook that answers as it is told to and a clock turned
-/// by hand.
+/// Everything a pass over the waiting notices needs, with a webhook or a push service that answers as it is told to
+/// and a clock turned by hand.
 /// </summary>
 internal sealed class DeliveryBench : IAsyncDisposable
 {
@@ -150,6 +150,7 @@ internal sealed class DeliveryBench : IAsyncDisposable
         Settings = settings ?? new NotificationDeliverySettings();
         Rig = new WebhookRig(answer, clock: Deadlines);
         Seal = new WebhookUrlSeal(keys);
+        Push = new PushDesk(keys, Clock);
         Dispatch = new NoticeDispatch(Rig.Line, Settings, Clock);
         Round = RoundThatRemembersNothing();
     }
@@ -163,6 +164,8 @@ internal sealed class DeliveryBench : IAsyncDisposable
     public WebhookRig Rig { get; }
 
     public WebhookUrlSeal Seal { get; }
+
+    public PushDesk Push { get; }
 
     public HeldDeliveries Deliveries { get; } = new();
 
@@ -196,6 +199,19 @@ internal sealed class DeliveryBench : IAsyncDisposable
         return destination;
     }
 
+    public NotificationDestination Browser(PushSubscription subscription, PushSubscriptionSeal? sealedBy = null)
+    {
+        NotificationDestination destination = NotificationDestination.Subscribe(
+            NotificationDestinationId.New(),
+            new NotificationName("A browser"),
+            subscription,
+            (sealedBy ?? Push.Seal).Seal(subscription),
+            Began);
+        Destinations.Destinations.Add(destination);
+
+        return destination;
+    }
+
     public NotificationDestination SealedWithKeysNowLost(WebhookUrl webhook)
         => Destination(webhook, new WebhookUrlSeal(new EphemeralDataProtectionProvider()));
 
@@ -203,15 +219,17 @@ internal sealed class DeliveryBench : IAsyncDisposable
         NotificationDestination destination,
         DateTime? occurredAt = null,
         NoticeKind kind = NoticeKind.RecordingCompleted,
-        string title = "録画が終わりました")
+        string title = "録画が終わりました",
+        Guid? source = null,
+        string? link = null)
     {
         DateTime at = occurredAt ?? Now;
         Notice notice = Notice.Take(
             NoticeId.New(),
             kind,
-            Guid.NewGuid(),
+            source ?? Guid.NewGuid(),
             at,
-            new NoticeWords(title, "作り物の番組\n作り物の局", Link: null),
+            new NoticeWords(title, "作り物の番組\n作り物の局", link),
             at);
         NotificationDelivery delivery = NotificationDelivery.Queue(NotificationDeliveryId.New(), notice.Id, destination.Id, at);
         Deliveries.Rows.Add(new NoticeOnItsWay(delivery, notice));
@@ -225,8 +243,24 @@ internal sealed class DeliveryBench : IAsyncDisposable
     {
         Unwritten = new UnwrittenDeliveries();
 
-        return new NotificationDeliveryRound(Deliveries, Destinations, new NotificationDeliveryDomainService(), Seal, Dispatch, Unwritten, Settings, Clock, Said);
+        return new NotificationDeliveryRound(
+            Deliveries,
+            Destinations,
+            new NotificationDeliveryDomainService(),
+            Seal,
+            Push.Seal,
+            Push.Messages,
+            Push.Handling,
+            Dispatch,
+            Unwritten,
+            Settings,
+            Clock,
+            Said);
     }
 
-    public async ValueTask DisposeAsync() => await Rig.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await Rig.DisposeAsync();
+        Push.Dispose();
+    }
 }

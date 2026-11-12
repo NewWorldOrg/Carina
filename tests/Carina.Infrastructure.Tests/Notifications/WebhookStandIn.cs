@@ -7,6 +7,7 @@ using System.Security.Cryptography.X509Certificates;
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Tests.DataBroadcast;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Notifications;
 
@@ -50,14 +51,16 @@ internal sealed class PointedNoticeNetwork(int port) : INoticeNetwork
 }
 
 /// <summary>
-/// A webhook on the loopback interface that answers as it is told to, the network pointed at it, and a line that
-/// sends over that network.
+/// A webhook or a push service on the loopback interface that answers as it is told to, the network pointed at it,
+/// and a line that sends over that network.
 /// </summary>
 internal sealed class WebhookRig : IAsyncDisposable
 {
     public const string SlackHost = "hooks.slack.com";
 
     public const string DiscordHost = "discord.com";
+
+    public const string PushHost = "fcm.googleapis.com";
 
     public static readonly IPAddress Public = IPAddress.Parse("203.0.113.40");
 
@@ -70,17 +73,21 @@ internal sealed class WebhookRig : IAsyncDisposable
 
     public WebhookRig(Func<HeardRequest, Task<CannedAnswer>> answer, TimeSpan? deadline = null, TimeProvider? clock = null)
     {
-        certificate = BroadcasterServerStandIn.SelfSigned(SlackHost, DiscordHost);
+        certificate = BroadcasterServerStandIn.SelfSigned(SlackHost, DiscordHost, PushHost);
         Server = new BroadcasterServerStandIn(answer, certificate);
         Network = new PointedNoticeNetwork(Server.Port) { Trusted = certificate };
         Network.Names[SlackHost] = [Public];
         Network.Names[DiscordHost] = [Public];
+        Network.Names[PushHost] = [Public];
         Line = new NoticeLine(Network, "Carina/0.0.0-test", clock ?? TimeProvider.System, deadline ?? NoticeLine.UsualDeadline);
     }
 
     public static WebhookUrl Slack { get; } = WebhookUrl.Read($"https://{SlackHost}/services/T0000/B0000/made-up-token-wxyz")!;
 
     public static WebhookUrl Discord { get; } = WebhookUrl.Read($"https://{DiscordHost}/api/webhooks/1234/made-up-token-abcd")!;
+
+    public static PushSubscription Browser(PushReceiver receiver, string registration = "made-up-registration")
+        => PushSubscription.Read($"https://{PushHost}/fcm/send/{registration}", receiver.KeyAsWritten, receiver.SecretAsWritten)!;
 
     public BroadcasterServerStandIn Server { get; }
 

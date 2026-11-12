@@ -25,9 +25,30 @@ public sealed class NoticeDispatch(NoticeLine line, NotificationDeliverySettings
         byte[] payload,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(webhook);
         ArgumentNullException.ThrowIfNull(payload);
+
+        return await InTurnAsync(destination, () => line.SendAsync(webhook, payload, cancellationToken), cancellationToken);
+    }
+
+    public async Task<NoticeAnswer> SendAsync(
+        NotificationDestinationId destination,
+        PushSubscription subscription,
+        PushMessage message,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+        ArgumentNullException.ThrowIfNull(message);
+
+        return await InTurnAsync(destination, () => line.SendAsync(subscription, message, cancellationToken), cancellationToken);
+    }
+
+    private async Task<NoticeAnswer> InTurnAsync(
+        NotificationDestinationId destination,
+        Func<Task<NoticeAnswer>> sent,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
 
         Lane lane = LaneOf(destination);
 
@@ -37,7 +58,7 @@ public sealed class NoticeDispatch(NoticeLine line, NotificationDeliverySettings
         {
             lane.Sending(Now(), settings.Window);
 
-            NoticeAnswer answer = await line.SendAsync(webhook, payload, cancellationToken);
+            NoticeAnswer answer = await sent();
 
             lane.Heard(answer, Now());
 

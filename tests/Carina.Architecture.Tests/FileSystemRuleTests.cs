@@ -51,6 +51,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Machines/MachineCapabilityReader.cs FileMode.",
         "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs DllImport",
         "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs File.Delete",
+        "/Carina.Infrastructure/Notifications/NoticeLine.cs .Encrypt(",
         "/Carina.Infrastructure/Notifications/PushEncryption.cs .CopyTo(",
         "/Carina.Infrastructure/Notifications/PushEncryption.cs .Encrypt(",
         "/Carina.Infrastructure/Notifications/PushServerKey.cs Directory.CreateDirectory",
