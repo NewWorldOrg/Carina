@@ -9,6 +9,7 @@ public sealed class FileSystemRuleSelfCheckTests
     [InlineData("var wipe = System.IO.File.Create;", "File.Create")]
     [InlineData("File . Delete (path);", "File.Delete")]
     [InlineData("File.Move(from, to, true);", "File.Move")]
+    [InlineData("File.CreateHardLink(to, from);", "File.CreateHardLink")]
     [InlineData("File.Replace(a, b, null);", "File.Replace")]
     [InlineData("File.WriteAllBytes(path, bytes);", "File.WriteAllBytes")]
     [InlineData("File.AppendAllText(path, text);", "File.AppendAllText")]

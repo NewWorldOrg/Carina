@@ -28,7 +28,7 @@ public sealed class PushServerKey(IOptions<SealingKeyOptions> keys)
     {
         Kept held = Held();
 
-        using ECDsa signer = ECDsa.Create();
+        using ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         signer.ImportPkcs8PrivateKey(held.Pkcs8, out _);
 
         return $"vapid t={VapidToken.Write(signer, audience, sender, now.Add(TokenLifetime))}, k={held.Published}";
@@ -64,7 +64,7 @@ public sealed class PushServerKey(IOptions<SealingKeyOptions> keys)
 
         try
         {
-            using (StreamWriter writer = new(new FileStream(draft, Private())))
+            using (StreamWriter writer = new(File.Open(draft, Private())))
             {
                 writer.Write(made.ExportPkcs8PrivateKeyPem());
             }
@@ -108,7 +108,7 @@ public sealed class PushServerKey(IOptions<SealingKeyOptions> keys)
     {
         try
         {
-            using ECDsa read = ECDsa.Create();
+            using ECDsa read = ECDsa.Create(ECCurve.NamedCurves.nistP256);
             read.ImportFromPem(File.ReadAllText(file));
             ECParameters parameters = read.ExportParameters(includePrivateParameters: false);
 
