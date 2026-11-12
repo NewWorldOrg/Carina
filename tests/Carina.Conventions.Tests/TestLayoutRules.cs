@@ -75,6 +75,7 @@ public static class TestLayoutRules
         new("Auth", "src/Carina.Db/Migrations/20260929160610_TheClientSecretIsSealed.cs"),
         new("Auth", "src/Carina.Infrastructure/Configuration/AuthOptions.cs"),
         new("Auth", "src/Carina.Infrastructure/Persistence/Repositories/OidcSettingsRepository.cs"),
+        new("Notifications", "src/Carina.Api/Requests/NotificationRequests.cs"),
     ];
 
     /// <summary>
