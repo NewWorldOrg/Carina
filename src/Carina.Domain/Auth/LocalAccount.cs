@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using Carina.Domain.Base;
 
 namespace Carina.Domain.Auth;
@@ -7,6 +9,10 @@ public sealed class LocalAccount
     public const int TheOnlyRow = 1;
 
     public const int LongestUsername = 64;
+
+    public const int ShortestPassword = 12;
+
+    public const int LongestPassword = 256;
 
     private LocalAccount()
     {
@@ -58,6 +64,38 @@ public sealed class LocalAccount
         PasswordHash = passwordHash;
         PasswordChangedAt = at;
     }
+
+    /// <summary>
+    /// Why the password cannot be changed from <paramref name="current"/> to <paramref name="replacement"/>: the
+    /// current password is empty or not this account's, or the replacement is out of length; nothing when it can.
+    /// Nothing is hashed for a current password that is empty.
+    /// </summary>
+    public PasswordChangeRefusal? RefusesToChange(string current, string replacement, IPasswordHasher hasher)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+        ArgumentNullException.ThrowIfNull(hasher);
+
+        if (!IsAPassword(current) || !hasher.Matches(current, PasswordHash))
+        {
+            return PasswordChangeRefusal.WrongPassword;
+        }
+
+        return FitsAsAPassword(replacement) ? null : PasswordChangeRefusal.OutOfLength;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="offered"/> is worth comparing with a stored hash at all: an empty password never is.
+    /// </summary>
+    public static bool IsAPassword([NotNullWhen(true)] string? offered) => !string.IsNullOrEmpty(offered);
+
+    public static bool FitsAsAPassword(string replacement)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        return replacement.Length is >= ShortestPassword and <= LongestPassword;
+    }
+
+    public bool IsSignedInToAs(string username) => string.Equals(Username, username, StringComparison.Ordinal);
 
     public void ReplaceTheHashOfTheSamePassword(PasswordHash passwordHash)
     {

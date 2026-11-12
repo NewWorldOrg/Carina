@@ -1,4 +1,5 @@
 using Carina.Domain.Auth;
+using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Auth;
 
@@ -155,6 +156,70 @@ public sealed class LocalAccountTests
                 Created,
                 Created.AddSeconds(-1)));
     }
+
+    [Fact(DisplayName = "BR-AU-022: an empty password is never worth comparing with the stored hash")]
+    public void AnEmptyPasswordIsNotAPassword()
+    {
+        Assert.False(LocalAccount.IsAPassword(null));
+        Assert.False(LocalAccount.IsAPassword(string.Empty));
+        Assert.True(LocalAccount.IsAPassword(" "));
+    }
+
+    [Theory(DisplayName = "BR-AU-022: a new password is between the shortest and the longest length, both included")]
+    [InlineData(LocalAccount.ShortestPassword - 1, false)]
+    [InlineData(LocalAccount.ShortestPassword, true)]
+    [InlineData(LocalAccount.LongestPassword, true)]
+    [InlineData(LocalAccount.LongestPassword + 1, false)]
+    public void ANewPasswordFitsBetweenTheShortestAndTheLongest(int length, bool fits)
+    {
+        Assert.Equal(fits, LocalAccount.FitsAsAPassword(new string('x', length)));
+    }
+
+    [Fact(DisplayName = "BR-AU-022: the password is not changed from a current one that is not this account's")]
+    public void ThePasswordIsNotChangedFromTheWrongCurrentOne()
+    {
+        var hasher = new QuickPasswordHasher();
+        LocalAccount account = Holding(hasher, "a password long enough");
+
+        Assert.Equal(
+            PasswordChangeRefusal.WrongPassword,
+            account.RefusesToChange("not the password", "a replacement password", hasher));
+    }
+
+    [Fact(DisplayName = "BR-AU-022: an empty current password is refused without anything hashed")]
+    public void AnEmptyCurrentPasswordIsRefusedWithoutAnythingHashed()
+    {
+        var hasher = new CountingPasswordHasher(new QuickPasswordHasher());
+        LocalAccount account = Holding(hasher, "a password long enough");
+        hasher.Reset();
+
+        Assert.Equal(PasswordChangeRefusal.WrongPassword, account.RefusesToChange(string.Empty, "a replacement password", hasher));
+        Assert.Equal(0, hasher.Derivations);
+    }
+
+    [Fact(DisplayName = "BR-AU-022: the current password is checked before the length of the new one")]
+    public void TheCurrentPasswordIsCheckedBeforeTheLengthOfTheNewOne()
+    {
+        var hasher = new QuickPasswordHasher();
+        LocalAccount account = Holding(hasher, "a password long enough");
+
+        Assert.Equal(PasswordChangeRefusal.WrongPassword, account.RefusesToChange("not the password", "short", hasher));
+        Assert.Equal(PasswordChangeRefusal.OutOfLength, account.RefusesToChange("a password long enough", "short", hasher));
+        Assert.Null(account.RefusesToChange("a password long enough", "a replacement password", hasher));
+    }
+
+    [Fact]
+    public void TheAccountIsSignedInToByItsNameExactly()
+    {
+        LocalAccount account = Account();
+
+        Assert.True(account.IsSignedInToAs("carina"));
+        Assert.False(account.IsSignedInToAs("Carina"));
+        Assert.False(account.IsSignedInToAs("carina "));
+    }
+
+    private static LocalAccount Holding(IPasswordHasher hasher, string password)
+        => LocalAccount.Bootstrap("carina", hasher.Hash(password, PasswordHashPolicy.Default), Created);
 
     private static LocalAccount Account() => LocalAccount.Bootstrap("carina", Hash(0x11), Created);
 

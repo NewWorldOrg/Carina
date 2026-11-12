@@ -6,6 +6,7 @@ namespace Carina.Api.Services;
 public sealed class LocalAccountService(
     ILocalAccountRepository accounts,
     IAuthSessionRepository sessions,
+    PasswordChangeDomainService passwords,
     IPlaybackGrantStore grants,
     IHlsKeyRevocation playlists,
     IPasswordHasher hasher,
@@ -18,10 +19,6 @@ public sealed class LocalAccountService(
 
     public const string TheRefusalForTooManyAttempts =
         "Too many sign-in attempts came from here. Wait for the window to pass and try again.";
-
-    public const int ShortestPassword = 12;
-
-    public const int LongestPassword = 256;
 
     private readonly PasswordHash decoy = PasswordHash.Encode(
         hashPolicy,
@@ -72,36 +69,37 @@ public sealed class LocalAccountService(
     {
         ArgumentNullException.ThrowIfNull(change);
 
-        LocalAccount? account = await accounts.FindAsync(cancellationToken);
+        PasswordChangeOutcome outcome = await passwords.ChangeAsync(
+            change.Subject,
+            change.Keep,
+            change.Current,
+            change.Replacement,
+            hashPolicy,
+            cancellationToken);
 
-        if (account is null
-            || string.IsNullOrEmpty(change.Current)
-            || !hasher.Matches(change.Current, account.PasswordHash))
+        switch (outcome.Refusal)
         {
-            return ServiceResult<int, PasswordRefusal>.Failure(
-                "The current password is wrong.",
-                PasswordRefusal.WrongPassword);
+            case PasswordChangeRefusal.WrongPassword:
+                return ServiceResult<int, PasswordRefusal>.Failure(
+                    "The current password is wrong.",
+                    PasswordRefusal.WrongPassword);
+            case PasswordChangeRefusal.OutOfLength:
+                return ServiceResult<int, PasswordRefusal>.Failure(
+                    $"A password is between {LocalAccount.ShortestPassword} and {LocalAccount.LongestPassword} characters long.",
+                    PasswordRefusal.OutOfLength);
         }
 
-        if (change.Replacement.Length < ShortestPassword || change.Replacement.Length > LongestPassword)
+        await accounts.SaveAsync(outcome.Changed!, cancellationToken);
+
+        if (outcome.Ended.Count > 0)
         {
-            return ServiceResult<int, PasswordRefusal>.Failure(
-                $"A password is between {ShortestPassword} and {LongestPassword} characters long.",
-                PasswordRefusal.OutOfLength);
+            await sessions.SaveAllAsync(outcome.Ended, cancellationToken);
         }
-
-        DateTime at = clock.GetUtcNow().UtcDateTime;
-
-        account.ChangePassword(hasher.Hash(change.Replacement, hashPolicy), at);
-
-        await accounts.SaveAsync(account, cancellationToken);
-
-        int ended = await EndEveryOtherSessionAsync(change, at, cancellationToken);
 
         grants.RevokeEverythingOf(change.Subject);
         playlists.RevokeEverythingOf(change.Subject);
 
-        return ServiceResult<int, PasswordRefusal>.Success(ended);
+        return ServiceResult<int, PasswordRefusal>.Success(outcome.Ended.Count);
     }
 
     private async Task RemakeTheStoredHashIfItIsWeakerThanThePolicyAsync(
@@ -123,30 +121,6 @@ public sealed class LocalAccountService(
         catch (Exception)
         {
         }
-    }
-
-    private async Task<int> EndEveryOtherSessionAsync(
-        PasswordChange change,
-        DateTime at,
-        CancellationToken cancellationToken)
-    {
-        IReadOnlyList<AuthSession> held = await sessions.ListAsync(change.Subject, cancellationToken);
-        var ended = new List<AuthSession>();
-
-        foreach (AuthSession session in held)
-        {
-            if (!session.Handle.Equals(change.Keep) && session.Revoke(at))
-            {
-                ended.Add(session);
-            }
-        }
-
-        if (ended.Count > 0)
-        {
-            await sessions.SaveAllAsync(ended, cancellationToken);
-        }
-
-        return ended.Count;
     }
 
     private bool Admits(LocalAccount? account, string username, string password)

@@ -541,6 +541,15 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Same(LearningFollowSettings.Default, provider.GetRequiredService<LearningFollowSettings>());
     }
 
+    [Fact(DisplayName = "registers the domain services of the local account, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheLocalAccount()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<PasswordChangeDomainService>());
+    }
+
     [Fact(DisplayName = "registers the domain services of the notifications, each resolved within a scope")]
     public void RegistersTheDomainServicesOfTheNotifications()
     {
