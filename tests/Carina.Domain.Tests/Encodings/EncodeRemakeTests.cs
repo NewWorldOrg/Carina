@@ -80,4 +80,15 @@ public sealed class EncodeRemakeTests
     [Fact(DisplayName = "a second try that made nothing leaves the first")]
     public void ASecondTryThatMadeNothingLeavesTheFirst()
         => Assert.Equal(EncodeRemake.NoSmallerTheSecondTime, EncodeRemakes.Judge(source: 1_000, first: 1_200, second: null));
+
+    [Fact(DisplayName = "BR-ED2-021: a rate that can still go coarser on the encoder that ran is made again, and one already at the coarsest is not")]
+    public void ARateAtTheCoarsestIsNotMadeAgain()
+    {
+        EncodeRate rate = EncodeRate.Of(Profile(ConstantRateFactor.Coarsest, 30));
+
+        Assert.False(rate.CanGoCoarserOn(EncodeEncoder.Software));
+        Assert.True(rate.CanGoCoarserOn(EncodeEncoder.Vaapi));
+        Assert.True(rate.CanGoCoarserOn(EncodeEncoder.Nvenc));
+        Assert.False(EncodeRate.Of(Profile(30, ConstantQuantiser.Coarsest)).CanGoCoarserOn(EncodeEncoder.Nvenc));
+    }
 }

@@ -70,4 +70,10 @@ public sealed class EncodePlacementTests
     [Fact(DisplayName = "a collision is a failure with that name, never a renumbering")]
     public void ACollisionIsAFailureWithThatName()
         => Assert.Equal(EncodeFailure.DestinationCollision, EncodePlacements.WhatACollisionIsCalled);
+
+    [Theory(DisplayName = "a file at this job's own name from an earlier attempt is kept when it holds something, and an empty one is a collision")]
+    [InlineData(1, true)]
+    [InlineData(0, false)]
+    public void AnEarlierAttemptsFileIsKeptOnlyWhenItHoldsSomething(long bytes, bool kept)
+        => Assert.Equal(kept, EncodePlacements.KeepsAnEarlierAttemptOf(bytes));
 }
