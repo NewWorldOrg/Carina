@@ -2,7 +2,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Events;
 using Carina.Domain.Quality;
-using Carina.Domain.Recordings;
 
 using Microsoft.Extensions.Logging;
 
@@ -19,7 +18,7 @@ public sealed class SupplyWatchRound(
     IQualityThresholdRepository thresholds,
     IQualityIncidentRepository incidents,
     IQualitySupplyReader supply,
-    IQualitySignalSampleRepository samples,
+    SupplyWatchDomainService watch,
     IQualityLedgerReader ledger,
     IQualitySignalReader signals,
     IDriverClient driver,
@@ -112,36 +111,10 @@ public sealed class SupplyWatchRound(
             return new TunerReadings(false, [], []);
         }
 
-        IReadOnlyDictionary<TunerDeviceId, DateTime> latest =
-            await samples.ListLastTakenAsync(cancellationToken);
-        List<SupplyReading> read = [];
-
-        foreach (TunerSnapshot tuner in tuners)
-        {
-            if (tuner.State is TunerState.Disabled
-                || string.IsNullOrWhiteSpace(tuner.DeviceId)
-                || tuner.CurrentSession is not { } session
-                || session.SessionId.IsUnset
-                || session.StartedAt is not { } opened)
-            {
-                continue;
-            }
-
-            DateTime since = opened.UtcDateTime > now ? now : opened.UtcDateTime;
-            var device = new TunerDeviceId(tuner.DeviceId);
-
-            if (latest.TryGetValue(device, out DateTime taken) && taken > since)
-            {
-                since = taken;
-            }
-
-            read.Add(SupplyReading.Of(
-                SupplySilence.SignalSamples,
-                QualitySubject.Of(QualitySubjectKind.Tuner, device.Value),
-                since));
-        }
-
-        return new TunerReadings(true, read, TunerTroubles.Of(tuners));
+        return new TunerReadings(
+            true,
+            await watch.SignalSamplesAsync(tuners, now, cancellationToken),
+            TunerTroubles.Of(tuners));
     }
 
     private async Task<int> OpenAsync(

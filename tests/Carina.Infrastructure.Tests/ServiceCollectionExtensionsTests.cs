@@ -534,6 +534,7 @@ public sealed class ServiceCollectionExtensionsTests
         using IServiceScope scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<QualitySessionMeasuringDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SupplyWatchDomainService>());
     }
 
     [Fact(DisplayName = "registers the follow of recordings being written for their learning data alongside the other hosted services, with what it reaches for")]
