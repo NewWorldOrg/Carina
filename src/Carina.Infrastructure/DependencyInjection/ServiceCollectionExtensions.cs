@@ -252,6 +252,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<QualitySignalRollupRound>();
         services.AddScoped<QualityThresholdMeasureRound>();
         services.AddScoped<CandidateScoreRound>();
+        services.AddScoped<EncodeDefinitionDomainService>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
         services.AddScoped<IRecordingEncodes, RecordingEncodes>();

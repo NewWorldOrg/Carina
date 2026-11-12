@@ -541,6 +541,15 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<NotificationIntakeDomainService>());
     }
 
+    [Fact(DisplayName = "registers the domain services of the encodes, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheEncodes()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<EncodeDefinitionDomainService>());
+    }
+
     [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]
     public void RegistersTheLearningBacklogAlongsideTheOtherHostedServices()
     {
