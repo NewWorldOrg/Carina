@@ -1,7 +1,8 @@
 using Carina.Domain.Notifications;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NotificationNameTests
 {
     [Fact(DisplayName = "BR-NT-003: a name of 64 characters is kept and one of 65 is not")]

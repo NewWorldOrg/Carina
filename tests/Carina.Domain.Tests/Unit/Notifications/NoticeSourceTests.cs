@@ -5,8 +5,9 @@ using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NoticeSourceTests
 {
     private static readonly DateTime Began = new(2026, 11, 9, 12, 0, 0, DateTimeKind.Utc);

@@ -5,8 +5,9 @@ using System.Text;
 
 using Carina.Domain.Notifications;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class PushSubscriptionTests
 {
     private const string Endpoint = "https://fcm.googleapis.com/fcm/send/made-up-registration";

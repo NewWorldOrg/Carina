@@ -2,8 +2,9 @@ using System.Reflection;
 
 using Carina.Domain.Notifications;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class WebhookUrlTests
 {
     private const string OfSlack = "https://hooks.slack.com/services/T0000/B0000/made-up-token-wxyz";

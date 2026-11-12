@@ -2,8 +2,9 @@ using System.Reflection;
 
 using Carina.Domain.Notifications;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NotificationDestinationTests
 {
     private static readonly DateTime At = new(2026, 11, 9, 12, 0, 0, DateTimeKind.Utc);

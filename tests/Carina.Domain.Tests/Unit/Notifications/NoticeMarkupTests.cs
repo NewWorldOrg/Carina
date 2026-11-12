@@ -1,7 +1,8 @@
 using Carina.Domain.Notifications;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NoticeMarkupTests
 {
     private const string Family = "\U0001F468\u200D\U0001F469\u200D\U0001F467";

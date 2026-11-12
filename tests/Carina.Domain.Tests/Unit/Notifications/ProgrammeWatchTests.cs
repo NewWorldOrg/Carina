@@ -2,8 +2,9 @@ using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class ProgrammeWatchTests
 {
     private const string Name = "港町レシピ帖 #15「灯台守のパン」";

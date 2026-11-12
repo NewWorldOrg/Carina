@@ -1,7 +1,8 @@
 using Carina.Domain.Notifications;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NotificationDeliverySettingsTests
 {
     [Fact(DisplayName = "BR-NC-002: a destination is sent thirty notices in sixty seconds at most")]

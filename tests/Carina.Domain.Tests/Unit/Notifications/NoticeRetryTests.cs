@@ -1,7 +1,8 @@
 using Carina.Domain.Notifications;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NoticeRetryTests
 {
     [Theory(DisplayName = "BR-NC-001: the next attempt follows the first failure by 30 seconds, the second by 2 minutes and the third by 10 minutes")]

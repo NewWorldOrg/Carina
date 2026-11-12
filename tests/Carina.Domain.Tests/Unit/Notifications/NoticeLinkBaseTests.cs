@@ -1,7 +1,8 @@
 using Carina.Domain.Notifications;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NoticeLinkBaseTests
 {
     [Fact(DisplayName = "a link is the path of the screen on the origin the screens are reached at")]

@@ -1,7 +1,8 @@
 using Carina.Domain.Notifications;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NoticeTextTests
 {
     [Theory(DisplayName = "BR-ND-002: control characters and bidirectional controls are dropped from what a broadcaster wrote")]

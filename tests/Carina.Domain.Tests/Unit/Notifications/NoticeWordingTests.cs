@@ -5,8 +5,9 @@ using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NoticeWordingTests
 {
     private const string Programme = "港町レシピ帖 #15「灯台守のパン」";

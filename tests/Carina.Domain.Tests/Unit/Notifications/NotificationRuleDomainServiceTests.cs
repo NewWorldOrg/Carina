@@ -1,8 +1,9 @@
 using Carina.Domain.Notifications;
 using Carina.TestSupport;
 
-namespace Carina.Domain.Tests.Notifications;
+namespace Carina.Domain.Tests.Unit.Notifications;
 
+[Trait("Category", "Unit")]
 public sealed class NotificationRuleDomainServiceTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
