@@ -6,7 +6,7 @@ using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
-using Carina.Infrastructure.Tests.Scanning;
+using Carina.Infrastructure.Tests.Fixtures.Clocks;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
