@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
 
-using static Carina.Infrastructure.Tests.Migration.CarriedMigrationFixtures;
+using static Carina.TestSupport.CarriedMigrationFixtures;
 
 namespace Carina.Infrastructure.Tests.Migration;
 
@@ -113,7 +113,7 @@ public sealed class AMigrationThroughTheRealLedgerTests : IDisposable
         return await new MigrationPassage(
             source,
             source,
-            new MigrationCarriage(
+            new MigrationCarriageDomainService(
                 new HardLinkMigrationCarrier(from, into, Root),
                 new RecordingRepository(context),
                 new RuleRepository(context),
