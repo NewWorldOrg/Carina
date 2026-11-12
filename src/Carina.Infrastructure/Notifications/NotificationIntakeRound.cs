@@ -16,41 +16,22 @@ public sealed record NotificationIntake(int Seen, int Taken, int Queued);
 /// same look are written.
 /// </remarks>
 public sealed class NotificationIntakeRound(
-    INoticeSourceReader sources,
+    NotificationIntakeDomainService intake,
     INoticeRepository notices,
     INotificationRuleRepository rules,
     INotificationDestinationRepository destinations,
     NotificationIntakeSettings settings,
     NoticeLinkBase links,
-    TimeProvider clock,
     ILogger<NotificationIntakeRound> logger)
 {
     public async Task<NotificationIntake> TakeAsync(CancellationToken cancellationToken)
     {
-        DateTime now = clock.GetUtcNow().UtcDateTime;
-        DateTime since = now - settings.LooksBack;
+        NoticeHappenings found = await intake.FreshAsync(settings.LooksBack, cancellationToken);
+        DateTime now = found.At;
 
-        List<NoticeHappening> happened =
-        [
-            .. (await sources.SinceAsync(since, cancellationToken))
-                .SelectMany(source => source.Happenings())
-                .Where(happening => happening.OccurredAt >= since && happening.OccurredAt <= now)
-                .OrderBy(happening => happening.OccurredAt),
-        ];
-
-        if (happened.Count is 0)
+        if (found.Fresh.Count is 0)
         {
-            return new NotificationIntake(0, 0, 0);
-        }
-
-        IReadOnlySet<NoticeKey> held = await notices.HeldAmongAsync(
-            [.. happened.Select(happening => happening.SourceId).Distinct()],
-            cancellationToken);
-        List<NoticeHappening> fresh = [.. happened.Where(happening => !held.Contains(happening.Key))];
-
-        if (fresh.Count is 0)
-        {
-            return new NotificationIntake(happened.Count, 0, 0);
+            return new NotificationIntake(found.Seen, 0, 0);
         }
 
         IReadOnlyList<NotificationRule> ruleSets = await rules.ListAsync(cancellationToken);
@@ -58,7 +39,7 @@ public sealed class NotificationIntakeRound(
         int taken = 0;
         int queued = 0;
 
-        foreach (NoticeHappening happening in fresh)
+        foreach (NoticeHappening happening in found.Fresh)
         {
             int? delivered = await TakeAsync(happening, ruleSets, known, now, cancellationToken);
 
@@ -66,7 +47,7 @@ public sealed class NotificationIntakeRound(
             queued += delivered ?? 0;
         }
 
-        return new NotificationIntake(happened.Count, taken, queued);
+        return new NotificationIntake(found.Seen, taken, queued);
     }
 
     private async Task<int?> TakeAsync(

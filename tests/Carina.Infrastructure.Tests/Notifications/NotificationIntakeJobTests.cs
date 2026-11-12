@@ -279,6 +279,7 @@ public sealed class NotificationIntakeJobTests
             services.AddSingleton(Settings());
             services.AddSingleton(NoticeLinkBase.None);
             services.AddSingleton<TimeProvider>(Clock);
+            services.AddScoped<NotificationIntakeDomainService>();
             services.AddScoped<NotificationIntakeRound>();
             services.AddSingleton<ILogger<ProgrammeWatchRound>>(SaidOfWatches);
             services.AddScoped<IProgrammeWatchRepository>(_ => Watches);

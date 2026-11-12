@@ -538,6 +538,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<NotificationRuleDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<NotificationDestinationDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<NotificationDeliveryDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<NotificationIntakeDomainService>());
     }
 
     [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]

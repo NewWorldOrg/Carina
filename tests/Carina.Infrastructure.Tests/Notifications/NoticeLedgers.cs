@@ -56,14 +56,17 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
     public async Task<NotificationIntake> LookAsync(DateTime now, NoticeLinkBase? links = null, long? artefactBytes = null)
     {
         await using CarinaDbContext context = database.Open();
+        NoticeRepository notices = new(context);
         NotificationIntakeRound round = new(
-            new NoticeSourceReader(context, new ArtefactsThatWeigh(artefactBytes)),
-            new NoticeRepository(context),
+            new NotificationIntakeDomainService(
+                new NoticeSourceReader(context, new ArtefactsThatWeigh(artefactBytes)),
+                notices,
+                new StoppedClock(now)),
+            notices,
             new NotificationRuleRepository(context),
             new NotificationDestinationRepository(context),
             new NotificationIntakeSettings(),
             links ?? NoticeLinkBase.None,
-            new StoppedClock(now),
             NullLogger<NotificationIntakeRound>.Instance);
 
         return await round.TakeAsync(Cancel);
