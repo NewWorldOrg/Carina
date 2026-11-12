@@ -131,7 +131,7 @@ public sealed class RecordingStreamSupervisor(
 
         if (standing is Standing.Running && session is { } live)
         {
-            if (ItIsOver(row, now))
+            if (row.IsOver(now))
             {
                 await StandDownAsync(row, live, tally, cancellationToken);
             }
@@ -152,7 +152,7 @@ public sealed class RecordingStreamSupervisor(
             return;
         }
 
-        if (ItIsOver(row, now))
+        if (row.IsOver(now))
         {
             if (session is null)
             {
@@ -183,13 +183,7 @@ public sealed class RecordingStreamSupervisor(
             loaded =>
             {
                 last?.LastInto(loaded, now);
-
-                foreach (RecordingFault fault in RecordingFaults.OfAFullDisk(weighed))
-                {
-                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
-                }
-
-                loaded.Settle(RecordingOutcome.Failed, weighed ?? 0, now);
+                loaded.FailOnAFullDisk(weighed, now);
 
                 return true;
             },
@@ -210,9 +204,6 @@ public sealed class RecordingStreamSupervisor(
             weighed);
     }
 
-    private static bool ItIsOver(Recording recording, DateTime now)
-        => recording.AbortedAt is not null || recording.ExpectedWindowEnd <= now;
-
     private async Task<Recording?> FreshAsync(RecordingId id, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
@@ -227,7 +218,7 @@ public sealed class RecordingStreamSupervisor(
     {
         tally.OutOfTouch++;
 
-        if (ItIsOver(recording, now))
+        if (recording.IsOver(now))
         {
             logger.LogWarning(
                 "Recording {Recording} is over and the driver will not say whether anything is still writing it, "
@@ -316,18 +307,18 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                if (ItIsOver(loaded, now) || now <= AsFarAsItIsCounted(loaded))
+                if (!loaded.KeepsCountingAt(now))
                 {
                     return false;
                 }
 
-                RecordingResumption.Adopt(loaded, session.DeviceId);
+                loaded.Adopt(session.DeviceId);
                 DropCounters countedBefore = loaded.Counters;
                 DropTimeline placedBefore = loaded.Positions;
                 long? scrambledBefore = loaded.ScrambledPackets;
                 long overflowsBefore = loaded.EovfCount;
                 bool wrote = Advance(loaded, opened, now);
-                bool missed = gap is not null && Follows(loaded, gap);
+                bool missed = gap is not null && loaded.Follows(gap);
 
                 if (missed)
                 {
@@ -381,20 +372,20 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                over = ItIsOver(loaded, now);
+                over = loaded.IsOver(now);
 
                 if (over
                     || !RecordingResumption.OpenABreak(
                         loaded,
                         fault,
-                        RecordingResumption.StoppedWritingAt(loaded, lastWritten, now)))
+                        loaded.StoppedWritingAt(lastWritten, now)))
                 {
                     return false;
                 }
 
                 if (tuneFailure is not null && session is not null)
                 {
-                    RecordingResumption.Adopt(loaded, session.DeviceId);
+                    loaded.Adopt(session.DeviceId);
                     loaded.Note(new OutcomeDetail(fault, tuneFailure, string.Empty, now));
                 }
 
@@ -463,7 +454,7 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                RecordingResumption.Adopt(loaded, reopened.DeviceId);
+                loaded.Adopt(reopened.DeviceId);
                 resumed = RecordingResumption.CloseAnyOpenBreak(loaded, at);
 
                 return true;
@@ -495,20 +486,12 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                if (!ItIsOver(loaded, now))
+                if (!loaded.IsOver(now))
                 {
                     return false;
                 }
 
-                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(
-                             false,
-                             weighed,
-                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, loaded.MissedMs, bands).Scrambled))
-                {
-                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
-                }
-
-                loaded.Settle(outcome, weighed ?? 0, now);
+                loaded.SettleOnWhatWasLeft(false, weighed, bands, now);
 
                 return true;
             },
@@ -551,36 +534,19 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                if (!ItIsOver(loaded, now))
+                if (!loaded.IsOver(now))
                 {
                     return false;
                 }
 
-                if (TheEndItWasToldAbout(session, loaded, now) is { } reached)
+                if (session.StopReason is SessionStopReason.EndTimeReached)
                 {
-                    loaded.Abort(reached);
+                    loaded.ReachedItsEnd(session.EndsAt?.UtcDateTime, now);
                 }
 
                 last?.LastInto(loaded, now);
-
-                RecordingVerdict verdict = CompletionEvaluator.Judge(
-                    new RecordingEvidence(
-                        weighed,
-                        loaded.Written,
-                        loaded.ExpectedWindowStart,
-                        loaded.ExpectedWindowEnd,
-                        loaded.AbortedAt,
-                        RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, loaded.MissedMs, bands).Scrambled),
-                    bitrate,
-                    CompletionTolerance.Default);
-
-                foreach (OutcomeDetail detail in verdict.Detail(now))
-                {
-                    loaded.Note(detail);
-                }
-
-                loaded.Settle(verdict.Outcome, weighed ?? 0, now);
-                outcome = verdict.Outcome;
+                loaded.Conclude(weighed, bitrate, bands, now);
+                outcome = loaded.Outcome ?? outcome;
 
                 return true;
             },
@@ -601,37 +567,13 @@ public sealed class RecordingStreamSupervisor(
             weighed);
     }
 
-    /// <summary>
-    /// The end this side asked for, when the driver ended the session because it reached the end it was
-    /// opened with; otherwise null.
-    /// </summary>
-    /// <remarks>
-    /// The moment is the end the driver was holding, as the request named it or as an extension moved
-    /// it. An end this side already wrote down stands, a session that names no end of its own is read at
-    /// <paramref name="now"/>, and one that names an end this recording cannot have reached is left as
-    /// an end nobody asked for.
-    /// </remarks>
-    private static DateTime? TheEndItWasToldAbout(SessionSnapshot session, Recording recording, DateTime now)
-    {
-        if (session.StopReason is not SessionStopReason.EndTimeReached || recording.AbortedAt is not null)
-        {
-            return null;
-        }
-
-        DateTime told = session.EndsAt?.UtcDateTime ?? now;
-        DateTime reached = told > now ? now : told;
-
-        return reached < recording.StartedAtActual ? null : reached;
-    }
-
     private async Task<QualityBands> BandsAsync(DateTime now, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
-        IReadOnlyList<QualityThreshold> held = await scope.ServiceProvider
-            .GetRequiredService<IQualityThresholdRepository>()
-            .ListAsync(cancellationToken);
 
-        return QualityThresholdStanding.Bands(QualityThresholdStanding.Over(held, now));
+        return await scope.ServiceProvider
+            .GetRequiredService<RecordingSettlementDomainService>()
+            .BandsAsync(now, cancellationToken);
     }
 
     private async Task<TuneParams?> TuneOfAsync(Recording recording, CancellationToken cancellationToken)
@@ -653,37 +595,33 @@ public sealed class RecordingStreamSupervisor(
     }
 
     /// <summary>
-    /// Names the rate a recording's weight is judged against: the one measured off the kind its
-    /// selected channel is carried on, or the range every kind falls in when the service or its
-    /// selected channel is gone. Nothing is named for any other refusal that names no channel.
+    /// Names the rate a recording's weight is judged against, or nothing when the catalogue cannot say yet.
     /// </summary>
     private async Task<ExpectedBitrate?> RateOfAsync(Recording recording, CancellationToken cancellationToken)
     {
-        TuningResolution resolution = await ResolveAsync(recording, cancellationToken);
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        SettlementRate rate = await scope.ServiceProvider
+            .GetRequiredService<RecordingSettlementDomainService>()
+            .RateAsync(recording, cancellationToken);
 
-        if (resolution.ChannelTuning is { } tuning)
-        {
-            return ExpectedBitrate.Of(tuning.Typed().Kind);
-        }
-
-        if (resolution.Refusal is not (TuningRefusal.NoSuchService or TuningRefusal.NoSelectedChannel))
+        if (rate.Bitrate is null)
         {
             logger.LogWarning(
                 "Recording {Recording} is over and the catalogue named no channel for its service ({Refusal}), "
                 + "so it is judged on a later pass.",
                 recording.Id.Wire,
-                resolution.Refusal);
-
-            return null;
+                rate.Refusal);
+        }
+        else if (rate.OfEveryKind)
+        {
+            logger.LogWarning(
+                "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so its weight is "
+                + "judged against the range every kind of broadcast falls in.",
+                recording.Id.Wire,
+                rate.Refusal);
         }
 
-        logger.LogWarning(
-            "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so its weight is "
-            + "judged against the range every kind of broadcast falls in.",
-            recording.Id.Wire,
-            resolution.Refusal);
-
-        return ExpectedBitrate.OfAnyKind;
+        return rate.Bitrate;
     }
 
     private async Task<TuningResolution> ResolveAsync(Recording recording, CancellationToken cancellationToken)
@@ -756,20 +694,9 @@ public sealed class RecordingStreamSupervisor(
             ? new RecordingGap(after.UtcDateTime, first.UtcDateTime)
             : null;
 
-    /// <summary>
-    /// Whether a gap is one this recording has not kept yet and that falls after the start and after every gap it
-    /// has kept.
-    /// </summary>
-    private static bool Follows(Recording recording, RecordingGap gap)
-        => gap.From >= recording.StartedAtActual
-           && recording.Gaps.All(kept => kept.Until != gap.Until && gap.From >= kept.Until);
-
-    private static DateTime AsFarAsItIsCounted(Recording recording)
-        => recording.MeasuredUpdatedAt ?? recording.StartedAtActual;
-
     private static bool Advance(Recording recording, DateTime opened, DateTime now)
     {
-        DateTime counted = AsFarAsItIsCounted(recording);
+        DateTime counted = recording.CountedUntil;
         DateTime from = opened > counted ? opened : counted;
 
         if (now <= from)

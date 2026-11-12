@@ -205,6 +205,8 @@ internal sealed class HeldCaptionRecords : ICaptionRecords
 
     public Task<TimeSpan?> StartsAtAsync(RecordingId id, CancellationToken cancellationToken)
         => Task.FromResult(Kept.TryGetValue(id, out CaptionRecord? record) ? record.StartsAt : (TimeSpan?)null);
+
+    public bool Holds(RecordingId id) => Kept.ContainsKey(id);
 }
 
 internal sealed class HeldWatching : IWatching

@@ -9,20 +9,23 @@ public enum OrphanTreatment
     ResumeIntoTheSameFile = 2,
 
     MarkWhatWasLeftBehind = 3,
+
+    LeaveForTheWatch = 4,
 }
 
 /// <summary>
 /// What was seen of one recording the ledger still calls running, at the moment the driver greeted
 /// this side: the driver's boot identity, and the standing read off the session list that instance
-/// answered with.
+/// answered with, including whether the driver ended the recording's session at the end it was opened with.
 /// </summary>
 public readonly record struct OrphanSighting(
     bool DriverIsAnotherInstance,
     bool SessionStands,
-    bool StillOnAir);
+    bool StillOnAir,
+    bool EndedAtItsOpenedEnd = false);
 
 /// <summary>
-/// Decides which of three things is done with a recording nobody was watching.
+/// Decides which of four things is done with a recording nobody was watching.
 /// </summary>
 /// <remarks>
 /// A session of the recording's own name standing on the driver is taken back up, whichever
@@ -40,11 +43,19 @@ public static class OrphanRecovery
     ];
 
     public static OrphanTreatment For(OrphanSighting sighting)
-        => sighting.SessionStands
-            ? OrphanTreatment.ReadoptTheSession
-            : sighting.StillOnAir
-                ? OrphanTreatment.ResumeIntoTheSameFile
-                : OrphanTreatment.MarkWhatWasLeftBehind;
+    {
+        if (sighting.SessionStands)
+        {
+            return OrphanTreatment.ReadoptTheSession;
+        }
+
+        if (sighting.StillOnAir)
+        {
+            return OrphanTreatment.ResumeIntoTheSameFile;
+        }
+
+        return sighting.EndedAtItsOpenedEnd ? OrphanTreatment.LeaveForTheWatch : OrphanTreatment.MarkWhatWasLeftBehind;
+    }
 
     /// <summary>
     /// A broadcast is still on the air while the guide has not withdrawn it and the window this

@@ -1,7 +1,9 @@
 using Carina.Domain.Base;
+using Carina.Domain.Captions;
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Recordings;
@@ -217,7 +219,88 @@ public sealed class Recording
     public bool ThumbnailShowsAnUnfinishedRecording
         => ThumbnailState is ThumbnailState.Ready && Outcome is RecordingOutcome.Truncated;
 
+    /// <summary>
+    /// Whether a picture is to be drawn of the recording: it has ended and its picture is waiting. The thumbnail
+    /// pass skips one that failed rather than drawing it. The query the pass reads in the store says the same.
+    /// </summary>
+    public bool AwaitsAThumbnail => Outcome is not null && ThumbnailState is ThumbnailState.Pending;
+
+    /// <summary>
+    /// Whether the captions are to be taken from the recording's file again: it has ended, and they are waiting, failed
+    /// fewer times in a row than are tried, or were taken before the file was descrambled. The query the caption pass
+    /// reads in the store says the same.
+    /// </summary>
+    public bool AwaitsCaptions
+        => Outcome is not null
+           && (CaptionState is CaptionState.Pending
+               || (CaptionState is CaptionState.Failed && CaptionAttempts < CaptionSettings.TriesAtMost)
+               || DescrambledAt > CaptionsMadeAt);
+
     public TimeSpan Written => TimeSpan.FromMilliseconds(WrittenDurationMs);
+
+    /// <summary>
+    /// Whether the recording is over at <paramref name="now"/>: this side asked it to stop, or the window it holds
+    /// has closed.
+    /// </summary>
+    public bool IsOver(DateTime now) => AbortedAt is not null || ExpectedWindowEnd <= now;
+
+    /// <summary>
+    /// Whether this side is to ask the recording to stop at <paramref name="now"/>: its window has closed and nobody
+    /// has asked yet.
+    /// </summary>
+    public bool IsDueToStop(DateTime now) => AbortedAt is null && ExpectedWindowEnd <= now;
+
+    /// <summary>
+    /// Whether the recording keeps following its programme when the guide moves it: one made for a reservation, which
+    /// names the margin to follow it with, until this side asks it to stop. A window that has closed is still followed,
+    /// because the programme may have run late.
+    /// </summary>
+    public bool FollowsItsProgramme => AbortedAt is null && ReservationId is not null;
+
+    /// <summary>
+    /// The moment the recording is counted as far as: its last count, or the moment it began while nothing has
+    /// counted it.
+    /// </summary>
+    public DateTime CountedUntil => MeasuredUpdatedAt ?? StartedAtActual;
+
+    /// <summary>
+    /// Whether the last break in the recording is still open.
+    /// </summary>
+    public bool IsInterrupted => interruptions.Count > 0 && interruptions[^1].IsOpen;
+
+    /// <summary>
+    /// Whether the recording takes what its session counted at <paramref name="now"/>: it is not over and has not
+    /// been counted that far already.
+    /// </summary>
+    public bool KeepsCountingAt(DateTime now) => !IsOver(now) && now > CountedUntil;
+
+    /// <summary>
+    /// Whether <paramref name="gap"/> is one the recording has not kept yet and falls after its start and after every
+    /// gap it has kept, so that <see cref="Missed"/> keeps it.
+    /// </summary>
+    public bool Follows(RecordingGap gap)
+    {
+        ArgumentNullException.ThrowIfNull(gap);
+
+        return gap.From >= StartedAtActual && gaps.All(kept => kept.Until != gap.Until && gap.From >= kept.Until);
+    }
+
+    /// <summary>
+    /// When the recording stopped being written, for a break noticed at <paramref name="noticed"/>: the last write to
+    /// its file, kept no earlier than the moment it began or last broke off or resumed, or the moment the break was
+    /// noticed when the file says nothing earlier.
+    /// </summary>
+    public DateTime StoppedWritingAt(DateTime? lastWritten, DateTime noticed)
+    {
+        if (lastWritten is not { } written || written >= noticed)
+        {
+            return noticed;
+        }
+
+        DateTime earliest = LatestMoment();
+
+        return written > earliest ? written : earliest;
+    }
 
     public static Recording Begin(
         RecordingId id,
@@ -647,6 +730,21 @@ public sealed class Recording
     /// </exception>
     public void DataBroadcastAgain() => Keep(DueAgain(), null);
 
+    /// <summary>
+    /// Names the tuner the recording is being written on, as a session reports it, unless one is already named or the
+    /// session names none.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void Adopt(string deviceId)
+    {
+        RefuseUnlessInFlight();
+
+        if (TunerDeviceId is null && deviceId is { Length: > 0 })
+        {
+            Acquire(new TunerDeviceId(deviceId));
+        }
+    }
+
     public void Acquire(TunerDeviceId tunerDeviceId)
     {
         ArgumentNullException.ThrowIfNull(tunerDeviceId);
@@ -738,7 +836,7 @@ public sealed class Recording
         RefuseUnlessInFlight();
         RecordingFaults.BreaksARecording(fault);
 
-        if (interruptions.Count > 0 && interruptions[^1].ResumedAt is null)
+        if (IsInterrupted)
         {
             throw new InvalidOperationException("This recording is already interrupted.");
         }
@@ -752,7 +850,7 @@ public sealed class Recording
     {
         RefuseUnlessInFlight();
 
-        if (interruptions.Count is 0 || interruptions[^1].ResumedAt is not null)
+        if (!IsInterrupted)
         {
             throw new InvalidOperationException("This recording was not interrupted.");
         }
@@ -821,6 +919,38 @@ public sealed class Recording
         outcomeDetail.Add(detail);
     }
 
+    /// <summary>
+    /// Writes down once that the programme being recorded announces no end of its own.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void NoteEndUndecided(DateTime at)
+    {
+        RefuseUnlessInFlight();
+
+        if (outcomeDetail.Any(detail => detail.Fault is RecordingFault.EndStillUndecided))
+        {
+            return;
+        }
+
+        Note(new OutcomeDetail(RecordingFault.EndStillUndecided, null, string.Empty, at));
+    }
+
+    /// <summary>
+    /// Takes what the disk was found to hold as the recording began. A recording starts on a disk found short of room
+    /// and says so.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void Prechecked(DiskPrecheckVerdict verdict, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(verdict);
+        RefuseUnlessInFlight();
+
+        if (!verdict.HasRoom)
+        {
+            Note(verdict.Detail(at));
+        }
+    }
+
     public void Abort(DateTime at)
     {
         RefuseUnlessInFlight();
@@ -860,6 +990,98 @@ public sealed class Recording
         if (DataBroadcastState is DataBroadcastState.None)
         {
             Keep(DataBroadcast.RecordingEnded(), null);
+        }
+    }
+
+    /// <summary>
+    /// Ends the recording as failed because the disk it is written to has no room left, naming the full disk and what
+    /// the file weighed, if anything did.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void FailOnAFullDisk(long? weighed, DateTime at)
+    {
+        RefuseUnlessInFlight();
+
+        NoteEach(RecordingFaults.OfAFullDisk(weighed), at);
+        Settle(RecordingOutcome.Failed, weighed ?? 0, at);
+    }
+
+    /// <summary>
+    /// Ends a recording nothing was writing on what its file holds, naming why it ended where it did. It is never
+    /// complete.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void SettleOnWhatWasLeft(bool driverIsAnotherInstance, long? weighed, QualityBands bands, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(bands);
+        RefuseUnlessInFlight();
+
+        NoteEach(OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance, weighed, LeftScrambledAs(bands)), at);
+        Settle(OrphanRecovery.WhatIsLeftOf(weighed), weighed ?? 0, at);
+    }
+
+    /// <summary>
+    /// Ends the recording with what the completion judgement makes of its window, the length it wrote, whether this
+    /// side asked it to stop, what its file weighed and what was left scrambled.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void Conclude(long? weighed, ExpectedBitrate bitrate, QualityBands bands, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(bitrate);
+        ArgumentNullException.ThrowIfNull(bands);
+        RefuseUnlessInFlight();
+
+        RecordingVerdict verdict = CompletionEvaluator.Judge(
+            new RecordingEvidence(
+                weighed,
+                Written,
+                ExpectedWindowStart,
+                ExpectedWindowEnd,
+                AbortedAt,
+                LeftScrambledAs(bands)),
+            bitrate,
+            CompletionTolerance.Default);
+
+        foreach (OutcomeDetail detail in verdict.Detail(at))
+        {
+            Note(detail);
+        }
+
+        Settle(verdict.Outcome, weighed ?? 0, at);
+    }
+
+    /// <summary>
+    /// Reads a session the driver ended at the end it was holding as stopped there by this side: at
+    /// <paramref name="endHeld"/>, or at <paramref name="now"/> when it held none or one still to come. A stop already
+    /// written down stands, and an end before the recording began is none it reached.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void ReachedItsEnd(DateTime? endHeld, DateTime now)
+    {
+        RefuseUnlessInFlight();
+
+        if (AbortedAt is not null)
+        {
+            return;
+        }
+
+        DateTime told = endHeld ?? now;
+        DateTime reached = told > now ? now : told;
+
+        if (reached >= StartedAtActual)
+        {
+            Abort(reached);
+        }
+    }
+
+    private QualityLevel LeftScrambledAs(QualityBands bands)
+        => RecordingQuality.Of(Counters, ScrambledPackets, MissedMs, bands).Scrambled;
+
+    private void NoteEach(IReadOnlyList<RecordingFault> faults, DateTime at)
+    {
+        foreach (RecordingFault fault in faults)
+        {
+            Note(new OutcomeDetail(fault, null, string.Empty, at));
         }
     }
 

@@ -20,16 +20,40 @@ public sealed class OrphanRecoveryTests
         { true, true, true, OrphanTreatment.ReadoptTheSession },
     };
 
+    /// <summary>
+    /// The same sightings of a recording whose session the driver ended at the end it was opened with.
+    /// </summary>
+    public static TheoryData<bool, bool, bool, OrphanTreatment> EverySightingOfOneEndedAtItsOpenedEnd => new()
+    {
+        { false, false, false, OrphanTreatment.LeaveForTheWatch },
+        { false, false, true, OrphanTreatment.ResumeIntoTheSameFile },
+        { false, true, false, OrphanTreatment.ReadoptTheSession },
+        { false, true, true, OrphanTreatment.ReadoptTheSession },
+        { true, false, false, OrphanTreatment.LeaveForTheWatch },
+        { true, false, true, OrphanTreatment.ResumeIntoTheSameFile },
+        { true, true, false, OrphanTreatment.ReadoptTheSession },
+        { true, true, true, OrphanTreatment.ReadoptTheSession },
+    };
+
     public static TheoryData<long?> EverySize => new(null, 0L, 1L, 188L, 64L * 1024 * 1024 * 1024);
 
     [Theory]
     [MemberData(nameof(EverySighting))]
-    public void EverySightingLandsOnOneOfTheThreeThingsThatMayBeDone(
+    public void EverySightingLandsOnOneOfTheThingsThatMayBeDone(
         bool another,
         bool stands,
         bool onAir,
         OrphanTreatment expected)
         => Assert.Equal(expected, OrphanRecovery.For(new OrphanSighting(another, stands, onAir)));
+
+    [Theory(DisplayName = "BR-KS-002: a recording the driver stopped at the end it was opened with is left for the stream watch to judge, unless it is taken back up or carried on")]
+    [MemberData(nameof(EverySightingOfOneEndedAtItsOpenedEnd))]
+    public void ARecordingEndedAtItsOpenedEndIsLeftForTheWatch(
+        bool another,
+        bool stands,
+        bool onAir,
+        OrphanTreatment expected)
+        => Assert.Equal(expected, OrphanRecovery.For(new OrphanSighting(another, stands, onAir, EndedAtItsOpenedEnd: true)));
 
     [Fact]
     public void TheDriverThatIsStillWritingItIsTheOneWhoseSessionIsTakenBackUp()

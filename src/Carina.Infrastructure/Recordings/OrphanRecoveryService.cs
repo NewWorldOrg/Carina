@@ -111,7 +111,8 @@ public sealed class OrphanRecoveryService(
             standing is not null,
             OrphanRecovery.StillOnAir(
                 await GuideSaysAsync(recording, cancellationToken),
-                WindowIsStillOpen(recording, now)));
+                !recording.IsOver(now)),
+            named is { StopReason: SessionStopReason.EndTimeReached });
 
         switch (OrphanRecovery.For(sighting))
         {
@@ -125,7 +126,7 @@ public sealed class OrphanRecoveryService(
 
                 break;
 
-            case OrphanTreatment.MarkWhatWasLeftBehind when ReachedTheEndItWasOpenedWith(named):
+            case OrphanTreatment.LeaveForTheWatch:
                 LeaveForTheWatch(recording);
 
                 break;
@@ -150,7 +151,7 @@ public sealed class OrphanRecoveryService(
             {
                 bool named = loaded.TunerDeviceId is not null;
 
-                RecordingResumption.Adopt(loaded, standing.DeviceId);
+                loaded.Adopt(standing.DeviceId);
 
                 return RecordingResumption.CloseAnyOpenBreak(loaded, now)
                        || (!named && loaded.TunerDeviceId is not null);
@@ -178,7 +179,7 @@ public sealed class OrphanRecoveryService(
             loaded => RecordingResumption.OpenABreak(
                 loaded,
                 fault,
-                RecordingResumption.StoppedWritingAt(loaded, lastWritten, now)),
+                loaded.StoppedWritingAt(lastWritten, now)),
             cancellationToken);
 
         if (await TuneOfAsync(recording, cancellationToken) is not { } tune)
@@ -206,7 +207,7 @@ public sealed class OrphanRecoveryService(
             recording.Id,
             loaded =>
             {
-                RecordingResumption.Adopt(loaded, reopened.DeviceId);
+                loaded.Adopt(reopened.DeviceId);
                 RecordingResumption.CloseAnyOpenBreak(loaded, at);
 
                 return true;
@@ -259,9 +260,6 @@ public sealed class OrphanRecoveryService(
             + "the pass that watches the stream to judge rather than marked for what was left of it.",
             recording.Id.Wire);
 
-    private static bool ReachedTheEndItWasOpenedWith(SessionSnapshot? session)
-        => session is { StopReason: SessionStopReason.EndTimeReached };
-
     private async Task MarkAsync(
         Recording recording,
         bool another,
@@ -279,16 +277,7 @@ public sealed class OrphanRecoveryService(
             loaded =>
             {
                 last?.LastInto(loaded, now);
-
-                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(
-                             another,
-                             weighed,
-                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, loaded.MissedMs, bands).Scrambled))
-                {
-                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
-                }
-
-                loaded.Settle(outcome, weighed ?? 0, now);
+                loaded.SettleOnWhatWasLeft(another, weighed, bands, now);
 
                 return true;
             },
@@ -327,13 +316,7 @@ public sealed class OrphanRecoveryService(
             loaded =>
             {
                 last?.LastInto(loaded, now);
-
-                foreach (RecordingFault fault in RecordingFaults.OfAFullDisk(weighed))
-                {
-                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
-                }
-
-                loaded.Settle(RecordingOutcome.Failed, weighed ?? 0, now);
+                loaded.FailOnAFullDisk(weighed, now);
 
                 return true;
             },
@@ -372,9 +355,6 @@ public sealed class OrphanRecoveryService(
             recovered.LeftOpen);
     }
 
-    private static bool WindowIsStillOpen(Recording recording, DateTime now)
-        => recording.AbortedAt is null && recording.ExpectedWindowEnd > now;
-
     private static SessionSnapshot? SessionOf(IReadOnlyList<SessionSnapshot> sessions, Recording recording)
     {
         SessionId named = RecordingSessions.Named(recording.Id);
@@ -402,11 +382,10 @@ public sealed class OrphanRecoveryService(
     private async Task<QualityBands> BandsAsync(DateTime now, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
-        IReadOnlyList<QualityThreshold> held = await scope.ServiceProvider
-            .GetRequiredService<IQualityThresholdRepository>()
-            .ListAsync(cancellationToken);
 
-        return QualityThresholdStanding.Bands(QualityThresholdStanding.Over(held, now));
+        return await scope.ServiceProvider
+            .GetRequiredService<RecordingSettlementDomainService>()
+            .BandsAsync(now, cancellationToken);
     }
 
     private async Task<GuideStanding> GuideSaysAsync(Recording recording, CancellationToken cancellationToken)

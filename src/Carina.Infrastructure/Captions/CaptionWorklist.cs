@@ -100,6 +100,9 @@ public sealed class CaptionWorklist(CarinaDbContext context, TimeProvider clock)
         return [.. rows.Select(row => new CaptionSubject(row.Id, row.OutputRoot, row.FileName, row.Service))];
     }
 
+    /// <summary>
+    /// <see cref="Recording.AwaitsCaptions"/> as the store answers it, held equal to it by a database test.
+    /// </summary>
     private IQueryable<Recording> Waiting()
         => context.Set<Recording>()
             .AsNoTracking()

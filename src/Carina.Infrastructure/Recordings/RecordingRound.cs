@@ -128,7 +128,7 @@ public sealed class RecordingRound(
 
         foreach (Recording recording in running.ToList())
         {
-            if (recording.ExpectedWindowEnd > now || recording.AbortedAt is not null)
+            if (!recording.IsDueToStop(now))
             {
                 continue;
             }
@@ -176,7 +176,7 @@ public sealed class RecordingRound(
 
             if (resolution.Tuning is not { } tuning)
             {
-                if (now < due.EffectiveStartAt)
+                if (due.IsStillAhead(now))
                 {
                     starting.HeldBack.Add(due.Id);
 
@@ -319,7 +319,7 @@ public sealed class RecordingRound(
 
                 await reservations.ReleaseAsync(due.Id, now, CancellationToken.None);
 
-                if (now < due.EffectiveStartAt)
+                if (due.IsStillAhead(now))
                 {
                     starting.HeldBack.Add(due.Id);
 
@@ -346,10 +346,7 @@ public sealed class RecordingRound(
                 session?.DeviceId is { Length: > 0 } named ? new TunerDeviceId(named) : null,
                 due.EncodeWhenRecorded);
 
-            if (!verdict.HasRoom)
-            {
-                recording.Note(verdict.Detail(now));
-            }
+            recording.Prechecked(verdict, now);
 
             await recordings.AddAsync(recording, cancellationToken);
 
@@ -375,7 +372,7 @@ public sealed class RecordingRound(
                 throw;
             }
 
-            if (abandoned && now < due.EffectiveStartAt)
+            if (abandoned && due.IsStillAhead(now))
             {
                 starting.HeldBack.Add(due.Id);
 
@@ -391,28 +388,9 @@ public sealed class RecordingRound(
     }
 
     private async Task<ProgrammeSnapshot> SoundedAsync(RecordingTick due, CancellationToken cancellationToken)
-    {
-        if (await programmes.FindAsync(due.Programme.Id, cancellationToken) is not { } announced)
-        {
-            return due.Snapshot;
-        }
-
-        AudioMode audio = announced.Audio is AudioMode.Undetermined ? due.Snapshot.Audio : announced.Audio;
-        int sounds = announced.Sounds is ProgrammeSnapshot.SoundsUnannounced
-            ? due.Snapshot.Sounds
-            : announced.Sounds;
-
-        return audio == due.Snapshot.Audio && sounds == due.Snapshot.Sounds
-            ? due.Snapshot
-            : new ProgrammeSnapshot(
-                due.Snapshot.Name,
-                due.Snapshot.Summary,
-                due.Snapshot.Extended,
-                due.Snapshot.Genres,
-                due.Snapshot.CapturedAt,
-                audio,
-                sounds);
-    }
+        => await programmes.FindAsync(due.Programme.Id, cancellationToken) is { } announced
+            ? due.Snapshot.HeardFrom(announced)
+            : due.Snapshot;
 
     private async Task<(SessionStanding Standing, SessionSnapshot? Session)> StandingAsync(
         DriverCall<SessionSnapshot> answer,
@@ -497,18 +475,12 @@ public sealed class RecordingRound(
     /// </summary>
     private static RetryAttempt WhatCameOf(Starting starting, int startedBefore, int refusedBefore)
     {
-        if (starting.Started.Count > startedBefore)
-        {
-            return RetryAttempt.Started;
-        }
+        RecordingRefusal? refused = starting.Refused.Count > refusedBefore ? starting.Refused[^1] : null;
 
-        return starting.Refused.Count > refusedBefore
-               && starting.Refused[^1] is
-               {
-                   Kind: RecordingRefusalKind.DriverRefused or RecordingRefusalKind.TunerContended,
-               } refusal
-            ? RetryAttempt.RefusedAgain(refusal.Reported)
-            : RetryAttempt.Unanswered;
+        return RetryAttempt.Of(
+            starting.Started.Count > startedBefore,
+            refused?.Kind is RecordingRefusalKind.DriverRefused or RecordingRefusalKind.TunerContended,
+            refused?.Reported);
     }
 
     private static RecordingDemand AtTheHeaviestRate(Recording recording)

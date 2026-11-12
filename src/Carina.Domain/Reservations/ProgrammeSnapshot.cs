@@ -62,6 +62,22 @@ public sealed class ProgrammeSnapshot
             programme.Sounds);
     }
 
+    /// <summary>
+    /// This snapshot with the sound <paramref name="announced"/> carries where the guide has announced it, and as it
+    /// was where the guide is still silent. A guide that says nothing new leaves this snapshot itself.
+    /// </summary>
+    public ProgrammeSnapshot HeardFrom(Programme announced)
+    {
+        ArgumentNullException.ThrowIfNull(announced);
+
+        AudioMode audio = announced.Audio is AudioMode.Undetermined ? Audio : announced.Audio;
+        int sounds = announced.Sounds is SoundsUnannounced ? Sounds : announced.Sounds;
+
+        return audio == Audio && sounds == Sounds
+            ? this
+            : new ProgrammeSnapshot(Name, Summary, Extended, Genres, CapturedAt, audio, sounds);
+    }
+
     public static ProgrammeSnapshot Of(
         string name,
         string summary,

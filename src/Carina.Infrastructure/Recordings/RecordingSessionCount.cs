@@ -59,12 +59,12 @@ public sealed record RecordingSessionCount(
     {
         ArgumentNullException.ThrowIfNull(recording);
 
-        if (!CountedAnything || at <= (recording.MeasuredUpdatedAt ?? recording.StartedAtActual))
+        if (!CountedAnything || at <= recording.CountedUntil)
         {
             return;
         }
 
-        RecordingResumption.Adopt(recording, DeviceId);
+        recording.Adopt(DeviceId);
         Into(recording, at);
     }
 

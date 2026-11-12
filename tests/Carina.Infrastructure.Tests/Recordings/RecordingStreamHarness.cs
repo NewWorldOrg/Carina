@@ -552,6 +552,7 @@ internal static class RecordingStreamFixture
         services.AddScoped<IRecordingRepository>(_ => ledger);
         services.AddScoped<IServiceTuningDirectory>(_ => new ResolvedTuning(tuning ?? Terrestrial));
         services.AddScoped<IAnnouncedProgrammes>(_ => guide ?? new HeldProgrammes());
+        services.AddScoped<RecordingSettlementDomainService>();
         services.AddScoped<IQualityThresholdRepository>(_ => thresholds ?? new HeldQualityThresholds());
 
         return new OrphanRecoveryService(
@@ -576,6 +577,7 @@ internal static class RecordingStreamFixture
         var services = new ServiceCollection();
         services.AddScoped<IRecordingRepository>(_ => ledger);
         services.AddScoped<IServiceTuningDirectory>(_ => new ResolvedTuning(tuning ?? Terrestrial));
+        services.AddScoped<RecordingSettlementDomainService>();
         services.AddScoped<IQualityThresholdRepository>(_ => thresholds ?? new HeldQualityThresholds());
 
         return new RecordingStreamSupervisor(
