@@ -21,7 +21,6 @@ public static class TestLayoutRules
     [
         "Base",
         "Captions",
-        "Channels",
         "Collection",
         "Configuration",
         "DataBroadcast",
@@ -47,8 +46,6 @@ public static class TestLayoutRules
         "Recordings",
         "Reservations",
         "Rules",
-        "Scanning",
-        "Scans",
         "Segments",
         "Services",
         "Storage",
