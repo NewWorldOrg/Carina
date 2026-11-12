@@ -1,27 +1,33 @@
 using Carina.Domain.Channels;
-using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Channels;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class StationLogoRepositoryTests(RepositoryDatabase database)
+public sealed class StationLogoRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly DateTime At = new(2026, 9, 5, 0, 0, 0, DateTimeKind.Utc);
     private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact]
     public async Task ALogoComesBackWithEveryByteOfThePictureItWentInWith()
     {
         int network = BroadcastIds.NextNetwork();
         byte[] picture = Picture(2048);
-        await using CarinaDbContext context = database.Open();
-        await new StationLogoRepository(context).AbsorbAsync(Logo(network, picture: picture), Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await Logos(scope).AbsorbAsync(Logo(network, picture: picture), Cancel);
 
-        await using CarinaDbContext reading = database.Open();
-        StationLogo? found = await new StationLogoRepository(reading)
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        StationLogo? found = await Logos(reading)
             .FindAsync(new NetworkId(network), new LogoId(261), Cancel);
 
         Assert.NotNull(found);
@@ -35,14 +41,14 @@ public sealed class StationLogoRepositoryTests(RepositoryDatabase database)
     public async Task ALargerDrawingOfTheSameLogoReplacesTheOneAlreadyKept()
     {
         int network = BroadcastIds.NextNetwork();
-        await using CarinaDbContext context = database.Open();
-        var logos = new StationLogoRepository(context);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        IStationLogoRepository logos = Logos(scope);
         await logos.AbsorbAsync(Logo(network, width: 48, height: 24), Cancel);
 
         await logos.AbsorbAsync(Logo(network, width: 64, height: 36, at: At.AddDays(1)), Cancel);
 
-        await using CarinaDbContext reading = database.Open();
-        StationLogo? found = await new StationLogoRepository(reading)
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        StationLogo? found = await Logos(reading)
             .FindAsync(new NetworkId(network), new LogoId(261), Cancel);
 
         Assert.Equal(64, found!.Width);
@@ -53,14 +59,14 @@ public sealed class StationLogoRepositoryTests(RepositoryDatabase database)
     public async Task ASmallerDrawingOfTheSameLogoLeavesTheOneAlreadyKeptWhereItIs()
     {
         int network = BroadcastIds.NextNetwork();
-        await using CarinaDbContext context = database.Open();
-        var logos = new StationLogoRepository(context);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        IStationLogoRepository logos = Logos(scope);
         await logos.AbsorbAsync(Logo(network, width: 64, height: 36), Cancel);
 
         await logos.AbsorbAsync(Logo(network, width: 48, height: 24, at: At.AddDays(1)), Cancel);
 
-        await using CarinaDbContext reading = database.Open();
-        StationLogo? found = await new StationLogoRepository(reading)
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        StationLogo? found = await Logos(reading)
             .FindAsync(new NetworkId(network), new LogoId(261), Cancel);
 
         Assert.Equal(64, found!.Width);
@@ -71,14 +77,14 @@ public sealed class StationLogoRepositoryTests(RepositoryDatabase database)
     public async Task TheLogoOfAServiceIsFoundThroughTheLogoThatServiceNames()
     {
         int network = BroadcastIds.NextNetwork();
-        await using CarinaDbContext context = database.Open();
-        await new StationLogoRepository(context).AbsorbAsync(Logo(network), Cancel);
-        var services = new BroadcastServiceRepository(context);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await Logos(scope).AbsorbAsync(Logo(network), Cancel);
+        IBroadcastServiceRepository services = Services(scope);
         await services.AddAsync(Naming(network, 1, new LogoId(261)), Cancel);
         await services.AddAsync(Naming(network, 2, new LogoId(261)), Cancel);
 
-        await using CarinaDbContext reading = database.Open();
-        var found = new StationLogoRepository(reading);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IStationLogoRepository found = Logos(reading);
 
         Assert.Equal(
             new LogoId(261),
@@ -92,13 +98,13 @@ public sealed class StationLogoRepositoryTests(RepositoryDatabase database)
     public async Task AServiceThatNamesNoLogoIsAnsweredWithNothingRatherThanSomeoneElsesLogo()
     {
         int network = BroadcastIds.NextNetwork();
-        await using CarinaDbContext context = database.Open();
-        await new StationLogoRepository(context).AbsorbAsync(Logo(network), Cancel);
-        await new BroadcastServiceRepository(context).AddAsync(Naming(network, 1, null), Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await Logos(scope).AbsorbAsync(Logo(network), Cancel);
+        await Services(scope).AddAsync(Naming(network, 1, null), Cancel);
 
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
 
-        Assert.Null(await new StationLogoRepository(reading)
+        Assert.Null(await Logos(reading)
             .OfServiceAsync(new NetworkId(network), new ServiceId(1), Cancel));
     }
 
@@ -106,12 +112,12 @@ public sealed class StationLogoRepositoryTests(RepositoryDatabase database)
     public async Task AServiceThatNamesALogoNobodyHasCollectedYetIsAnsweredWithNothing()
     {
         int network = BroadcastIds.NextNetwork();
-        await using CarinaDbContext context = database.Open();
-        await new BroadcastServiceRepository(context).AddAsync(Naming(network, 1, new LogoId(261)), Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await Services(scope).AddAsync(Naming(network, 1, new LogoId(261)), Cancel);
 
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
 
-        Assert.Null(await new StationLogoRepository(reading)
+        Assert.Null(await Logos(reading)
             .OfServiceAsync(new NetworkId(network), new ServiceId(1), Cancel));
     }
 
@@ -155,4 +161,10 @@ public sealed class StationLogoRepositoryTests(RepositoryDatabase database)
             logoDeclaration: logoId is null
                 ? StationLogoDeclaration.NoPictureIsBroadcast
                 : StationLogoDeclaration.InTheCommonDataTable);
+
+    private static IStationLogoRepository Logos(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IStationLogoRepository>();
+
+    private static IBroadcastServiceRepository Services(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IBroadcastServiceRepository>();
 }
