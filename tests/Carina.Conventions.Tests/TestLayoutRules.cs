@@ -85,7 +85,12 @@ public static class TestLayoutRules
     /// <summary>
     /// The schema tests that are not named after the area alone: the area and the name of the class without its ending.
     /// </summary>
-    public static readonly IReadOnlyList<AreaSchema> SchemasNotNamedAfterTheArea = [];
+    public static readonly IReadOnlyList<AreaSchema> SchemasNotNamedAfterTheArea =
+    [
+        new("Channels", "LogoVisitSchema"),
+        new("Channels", "ServiceReachSchema"),
+        new("Channels", "StationLogoSchema"),
+    ];
 
     private const string ApiTests = "Carina.Api.Tests";
 
