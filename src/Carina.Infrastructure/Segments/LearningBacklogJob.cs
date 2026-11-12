@@ -130,9 +130,9 @@ public sealed class LearningBacklogJob(
 
         foreach (LearningExtraction left in await records.ListAsync(LearningExtractionState.Reading, LearningFollowJob.MostRecoveredAtOnce, cancellationToken))
         {
-            ExtractionChange change = await ChangeReadingAsync(
+            ExtractionChange change = await records.ChangeAsync(
                 left.RecordingId,
-                found => found.Recover(false, ExtractionVersion.Current, Now()),
+                found => found.PutBack(LearningExtractionState.Reading, ExtractionVersion.Current, Now()),
                 cancellationToken);
 
             putBack += change is ExtractionChange.Written ? 1 : 0;
@@ -335,9 +335,9 @@ public sealed class LearningBacklogJob(
             return;
         }
 
-        ExtractionChange change = await ChangeReadingAsync(
+        ExtractionChange change = await records.ChangeAsync(
             ended.Id,
-            found => found.Fail(ExtractionFailure.Other, LeftUnsettled, Now()),
+            found => found.FailLeftReading(ExtractionFailure.Other, LeftUnsettled, Now()),
             cancellationToken);
 
         if (change is ExtractionChange.KeptMoving)
@@ -363,22 +363,6 @@ public sealed class LearningBacklogJob(
         await EndedAsync(running);
         running.Stopping.Dispose();
     }
-
-    private async Task<ExtractionChange> ChangeReadingAsync(RecordingId id, Action<LearningExtraction> change, CancellationToken cancellationToken)
-        => await records.ChangeAsync(
-            id,
-            record =>
-            {
-                if (record.State is not LearningExtractionState.Reading)
-                {
-                    return false;
-                }
-
-                change(record);
-
-                return true;
-            },
-            cancellationToken);
 
     private static async Task EndedAsync(Run running)
         => await running.Task.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);

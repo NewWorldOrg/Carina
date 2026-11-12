@@ -60,7 +60,9 @@ public sealed class LearningFollowJob(
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         ILearningWorklist worklist = scope.ServiceProvider.GetRequiredService<ILearningWorklist>();
-        int putBack = recovered ? 0 : await RecoverAsync(worklist, cancellationToken);
+        int putBack = recovered
+            ? 0
+            : await RecoverAsync(scope.ServiceProvider.GetRequiredService<LearningExtractionRecoveryDomainService>(), cancellationToken);
 
         recovered = true;
 
@@ -111,21 +113,20 @@ public sealed class LearningFollowJob(
         }
     }
 
-    private async Task<int> RecoverAsync(ILearningWorklist worklist, CancellationToken cancellationToken)
+    private async Task<int> RecoverAsync(LearningExtractionRecoveryDomainService recovery, CancellationToken cancellationToken)
     {
         int putBack = 0;
 
         foreach (LearningExtraction left in await records.ListAsync(LearningExtractionState.Following, MostRecoveredAtOnce, cancellationToken))
         {
-            if (await worklist.StandingAsync(left.RecordingId, cancellationToken) is RecordingStanding.InFlight)
+            if (!await recovery.PutsBackAsync(left, cancellationToken))
             {
                 continue;
             }
 
             bool putBackHere = await ChangedAsync(
                 left.RecordingId,
-                LearningExtractionState.Following,
-                record => record.Recover(false, ExtractionVersion.Current, Now()),
+                record => record.PutBack(LearningExtractionState.Following, ExtractionVersion.Current, Now()),
                 cancellationToken);
 
             putBack += putBackHere ? 1 : 0;
@@ -163,49 +164,22 @@ public sealed class LearningFollowJob(
         Recording recording,
         CancellationToken cancellationToken)
     {
-        LearningExtraction? record = await records.FindAsync(recording.Id, cancellationToken);
         DateTime now = Now();
 
-        switch (record?.State)
+        if (await records.FindAsync(recording.Id, cancellationToken) is not null)
         {
-            case null:
-                await records.AddAsync(
-                    LearningExtraction.Following(recording.Id, await CopyAsync(programmeEnds, recording, cancellationToken), ExtractionVersion.Current, now),
-                    cancellationToken);
-
-                return true;
-            case LearningExtractionState.Waiting:
-                return await ChangedAsync(recording.Id, LearningExtractionState.Waiting, found => found.Follow(ExtractionVersion.Current, now), cancellationToken);
-            case LearningExtractionState.Following:
-                return await ChangedAsync(recording.Id, LearningExtractionState.Following, found => found.Recover(true, ExtractionVersion.Current, now), cancellationToken);
-            default:
-                return false;
+            return await ChangedAsync(recording.Id, found => found.FollowFromTheHead(ExtractionVersion.Current, now), cancellationToken);
         }
-    }
 
-    private async Task<bool> ChangedAsync(
-        RecordingId id,
-        LearningExtractionState from,
-        Action<LearningExtraction> change,
-        CancellationToken cancellationToken)
-    {
-        ExtractionChange changed = await records.ChangeAsync(
-            id,
-            record =>
-            {
-                if (record.State != from)
-                {
-                    return false;
-                }
-
-                change(record);
-
-                return true;
-            },
+        await records.AddAsync(
+            LearningExtraction.Following(recording.Id, await CopyAsync(programmeEnds, recording, cancellationToken), ExtractionVersion.Current, now),
             cancellationToken);
 
-        return changed is ExtractionChange.Written;
+        return true;
     }
+
+    private async Task<bool> ChangedAsync(RecordingId id, Func<LearningExtraction, bool> change, CancellationToken cancellationToken)
+        => await records.ChangeAsync(id, change, cancellationToken) is ExtractionChange.Written;
 
     private async Task TellAsync(ILearningWorklist worklist, IReadOnlyList<Recording> recording, CancellationToken cancellationToken)
     {

@@ -60,6 +60,17 @@ public sealed class LearningExtraction
     public bool AwaitsMatching
         => State is LearningExtractionState.Done or LearningExtractionState.Partial && (MatchedAt is null || MatchedAt < UpdatedAt);
 
+    /// <summary>
+    /// Whether the record is matched against the catalog as soon as the follow of its recording comes to its end: it
+    /// was read to the end and waits to be matched.
+    /// </summary>
+    public bool IsMatchedAtOnce => State is LearningExtractionState.Done && AwaitsMatching;
+
+    /// <summary>
+    /// Whether learning learns from the record: some of its recording was read, with a version of the extraction.
+    /// </summary>
+    public bool IsLearnedFrom => ReadThrough > TimeSpan.Zero && Version is not null;
+
     private bool MadeFromAReducedCopy => Version?.Origin is ExtractionOrigin.ReducedCopy;
 
     public static LearningExtraction Following(
@@ -157,6 +168,23 @@ public sealed class LearningExtraction
     }
 
     /// <summary>
+    /// Marks what the record holds as matched at <paramref name="at"/> when the record still stands as it did when it
+    /// was read for the matching, last changed at <paramref name="readAsOf"/>, and waits to be matched; false, changing
+    /// nothing, when it changed meanwhile, so that it is matched again.
+    /// </summary>
+    public bool MatchedAsRead(DateTime readAsOf, DateTime at)
+    {
+        if (!AwaitsMatching || UpdatedAt != readAsOf)
+        {
+            return false;
+        }
+
+        Matched(at);
+
+        return true;
+    }
+
+    /// <summary>
     /// Takes what the record holds as matched again at <paramref name="at"/>, the catalog having changed under it, so
     /// that its detection is made again (<see cref="RecordingDetection.IsAwaited"/>); false, changing nothing, when it
     /// waits to be matched, which has it detected again anyway, or was matched no earlier than that.
@@ -187,6 +215,107 @@ public sealed class LearningExtraction
         DateTime when = Moving(at, "is read", LearningExtractionState.Waiting);
 
         Restart(LearningExtractionState.Reading, version, when);
+    }
+
+    /// <summary>
+    /// Follows from its head, with <paramref name="current"/>, the recording being recorded: a record that waits is
+    /// followed, and one a follow left following when the process stopped is followed again from the head; false,
+    /// changing nothing, for a record in any other state, which is not followed.
+    /// </summary>
+    public bool FollowFromTheHead(ExtractionVersion current, DateTime at)
+    {
+        switch (State)
+        {
+            case LearningExtractionState.Waiting:
+                Follow(current, at);
+
+                return true;
+            case LearningExtractionState.Following:
+                Recover(true, current, at);
+
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Puts a record left <paramref name="leftIn"/>, following or reading, when the process stopped back to wait to be
+    /// read; false, changing nothing, when the record is not in that state.
+    /// </summary>
+    public bool PutBack(LearningExtractionState leftIn, ExtractionVersion current, DateTime at)
+    {
+        if (State != leftIn)
+        {
+            return false;
+        }
+
+        Recover(false, current, at);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Takes the record as failed when a reading ended leaving it reading; false, changing nothing, when it is not
+    /// reading.
+    /// </summary>
+    public bool FailLeftReading(ExtractionFailure failure, string reason, DateTime at)
+    {
+        if (State is not LearningExtractionState.Reading)
+        {
+            return false;
+        }
+
+        Fail(failure, reason, at);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the record stands where a reading that holds it <paramref name="held"/> with <paramref name="version"/>
+    /// last left it, read through <paramref name="readThrough"/> with <paramref name="gaps"/> gaps found, so that the
+    /// reading may write on. A record anyone else moved since is not written over.
+    /// </summary>
+    public bool StandsWhereLeft(LearningExtractionState held, ExtractionVersion version, TimeSpan readThrough, int gaps)
+        => State == held && Equals(Version, version) && ReadThrough == readThrough && Gaps.Count == gaps;
+
+    /// <summary>
+    /// Reads on: takes <paramref name="sound"/> when the record has none yet, the gaps <paramref name="found"/>, and
+    /// <paramref name="reached"/> when it lies further than the record has read.
+    /// </summary>
+    public void ReadOn(ExtractionSound? sound, IReadOnlyList<LearningDataGap> found, TimeSpan reached, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+
+        if (Sound is null && sound is not null)
+        {
+            Opened(sound, at);
+        }
+
+        foreach (LearningDataGap gap in found)
+        {
+            Missed(gap, at);
+        }
+
+        if (reached > ReadThrough)
+        {
+            Reached(reached, at);
+        }
+    }
+
+    /// <summary>
+    /// Settles a reading: done when it came to the end of its recording, partway when it stopped before it.
+    /// </summary>
+    public void Settle(bool readToTheEnd, DateTime at)
+    {
+        if (readToTheEnd)
+        {
+            Finish(at);
+
+            return;
+        }
+
+        FinishPartway(at);
     }
 
     /// <summary>

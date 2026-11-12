@@ -54,7 +54,7 @@ public sealed class CatalogMatchingJob(
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IServiceProvider services = scope.ServiceProvider;
 
-        if (await records.FindAsync(id, cancellationToken) is not { State: LearningExtractionState.Done, AwaitsMatching: true } record)
+        if (await records.FindAsync(id, cancellationToken) is not { IsMatchedAtOnce: true } record)
         {
             return new CatalogMatchingLook(null, null, false);
         }
@@ -125,7 +125,7 @@ public sealed class CatalogMatchingJob(
 
         await catalog.KeepAsync(matched.Change, cancellationToken);
 
-        ExtractionChange marked = await records.ChangeAsync(record.RecordingId, found => Mark(found, record.UpdatedAt), cancellationToken);
+        ExtractionChange marked = await records.ChangeAsync(record.RecordingId, found => found.MatchedAsRead(record.UpdatedAt, Now()), cancellationToken);
 
         await HeardAnewAsync(catalog, matched.Change, cancellationToken);
 
@@ -182,18 +182,6 @@ public sealed class CatalogMatchingJob(
 
             return null;
         }
-    }
-
-    private bool Mark(LearningExtraction record, DateTime matchedAsOf)
-    {
-        if (!record.AwaitsMatching || record.UpdatedAt != matchedAsOf)
-        {
-            return false;
-        }
-
-        record.Matched(Now());
-
-        return true;
     }
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;

@@ -121,7 +121,7 @@ public sealed class SegmentTrainer(
         ILookup<RecordingId, ViewerSeek> sought = (await seeks.ListAsync(chosen, cancellationToken)).ToLookup(seek => seek.RecordingId, seek => seek.Seek());
         List<LearningRecording> recordings = [];
 
-        foreach (LearningExtraction record in (await worklist.RecordsAsync(chosen, cancellationToken)).Where(record => record.ReadThrough > TimeSpan.Zero && record.Version is not null))
+        foreach (LearningExtraction record in (await worklist.RecordsAsync(chosen, cancellationToken)).Where(record => record.IsLearnedFrom))
         {
             if (await ReadAsync(record, active, now, [.. actions[record.RecordingId]], [.. sought[record.RecordingId]], cancellationToken) is { } read)
             {

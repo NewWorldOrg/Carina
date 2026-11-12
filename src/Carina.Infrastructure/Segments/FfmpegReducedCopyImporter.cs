@@ -215,39 +215,12 @@ public sealed class FfmpegReducedCopyImporter(
             copy,
             record =>
             {
-                Placed(record, timeline, through, at);
-                Settled(record, decoded.Whole, at);
+                record.ReadOn(timeline?.Sound, timeline?.RemainingGaps() ?? [], through, at);
+                record.Settle(decoded.Whole, at);
             },
             cancellationToken);
 
         Told(copy, decoded.Whole, through);
-    }
-
-    private static void Placed(LearningExtraction record, LearningDataTimeline? timeline, TimeSpan through, DateTime at)
-    {
-        if (timeline?.Sound is { } sound)
-        {
-            record.Opened(sound, at);
-        }
-
-        foreach (LearningDataGap gap in timeline?.RemainingGaps() ?? [])
-        {
-            record.Missed(gap, at);
-        }
-
-        record.Reached(through, at);
-    }
-
-    private static void Settled(LearningExtraction record, bool whole, DateTime at)
-    {
-        if (whole)
-        {
-            record.Finish(at);
-
-            return;
-        }
-
-        record.FinishPartway(at);
     }
 
     private async Task CaptionAsync(ReducedCopy copy, TimeSpan through, DateTime at, CancellationToken cancellationToken)
@@ -328,7 +301,7 @@ public sealed class FfmpegReducedCopyImporter(
             copy.Id,
             record =>
             {
-                if (!Owns(record))
+                if (!record.StandsWhereLeft(LearningExtractionState.Reading, Reduced, TimeSpan.Zero, 0))
                 {
                     return false;
                 }
@@ -344,12 +317,6 @@ public sealed class FfmpegReducedCopyImporter(
             throw new TakenOverException();
         }
     }
-
-    private static bool Owns(LearningExtraction record)
-        => record.State is LearningExtractionState.Reading
-           && Equals(record.Version, Reduced)
-           && record.ReadThrough == TimeSpan.Zero
-           && record.Gaps.Count is 0;
 
     private void Told(ReducedCopy copy, bool whole, TimeSpan through)
     {
