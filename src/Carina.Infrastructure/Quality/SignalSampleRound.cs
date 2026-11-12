@@ -1,7 +1,5 @@
-using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Quality;
-using Carina.Domain.Recordings;
 
 using Microsoft.Extensions.Logging;
 
@@ -13,9 +11,8 @@ public sealed record SignalSampleTaking(int Taken, int NotTaken, int Unnamed, in
 
 public sealed class SignalSampleRound(
     IDriverClient driver,
-    IBroadcastStreamDirectory streams,
+    QualitySessionMeasuringDomainService measuring,
     IQualitySignalSampleRepository samples,
-    IQualitySessionMeasurementRepository measurements,
     TimeProvider clock,
     ILogger<SignalSampleRound> logger)
 {
@@ -38,150 +35,41 @@ public sealed class SignalSampleRound(
         }
 
         DateTime at = clock.GetUtcNow().UtcDateTime;
-        IReadOnlyList<IntendedStream> intended = await streams.ListIntendedAsync(cancellationToken);
-        List<QualitySignalSample> taking = [];
-        var held = new Dictionary<string, Whereabouts>(StringComparer.Ordinal);
-        int unnamed = 0;
-
-        foreach (TunerSnapshot tuner in tuners)
-        {
-            if (tuner.CurrentSession is not { } session
-                || session.SessionId.IsUnset
-                || session.Tune is not { } tune
-                || string.IsNullOrWhiteSpace(tuner.DeviceId))
-            {
-                continue;
-            }
-
-            if (SignalFiling.StreamFor(intended, tune) is not { } stream)
-            {
-                unnamed++;
-
-                continue;
-            }
-
-            var whereabouts = new Whereabouts(new TunerDeviceId(tuner.DeviceId), stream.NetworkId, stream.Services[0]);
-            held[tuner.DeviceId] = whereabouts;
-
-            taking.Add(SignalSampleIntake.Take(
-                new SignalReadingAsk(
-                    hello.InstanceId,
-                    session.SessionId,
-                    session.Purpose,
-                    whereabouts.Tuner,
-                    whereabouts.Network,
-                    whereabouts.Service,
-                    tuner.SignalQuality,
-                    SignalFiling.ChannelOf(tune)),
-                at));
-        }
+        SignalSampleSources sources = await measuring.LocateAsync(tuners, cancellationToken);
+        List<QualitySignalSample> taking =
+        [
+            .. sources.Sources.Select(source => SignalSampleIntake.Take(source.AskOf(hello.InstanceId), at)),
+        ];
 
         await samples.AddAsync(taking, cancellationToken);
 
-        if (unnamed > 0)
+        if (sources.Unnamed > 0)
         {
             logger.LogWarning(
                 "{Unnamed} session(s) were held on a multiplex no candidate channel names, so what they measured has no channel to be filed under.",
-                unnamed);
+                sources.Unnamed);
         }
 
-        SessionTally tally = await MeasureSessionsAsync(hello, hello.InstanceId, held, at, cancellationToken);
+        QualitySessionTally tally = await MeasureSessionsAsync(hello, sources, at, cancellationToken);
 
         return new SignalSampleTaking(
             taking.Count(sample => sample.Signal.WasTaken),
             taking.Count(sample => !sample.Signal.WasTaken),
-            unnamed,
+            sources.Unnamed,
             tally.Measured,
             tally.Closed);
     }
 
-    private async Task<SessionTally> MeasureSessionsAsync(
+    private async Task<QualitySessionTally> MeasureSessionsAsync(
         DriverHello hello,
-        string instance,
-        IReadOnlyDictionary<string, Whereabouts> held,
+        SignalSampleSources sources,
         DateTime at,
         CancellationToken cancellationToken)
     {
         DriverCall<IReadOnlyList<SessionSnapshot>> listed = await driver.GetActiveSessionsAsync(cancellationToken);
 
-        if (!listed.TryGetValue(out IReadOnlyList<SessionSnapshot>? sessions))
-        {
-            return new SessionTally(0, 0);
-        }
-
-        IReadOnlyList<QualitySessionMeasurement> open = await measurements.ListOpenAsync(cancellationToken);
-        HashSet<SessionId> listedHere = [];
-        int measured = 0;
-        int closed = 0;
-
-        foreach (SessionSnapshot session in sessions)
-        {
-            if (session.Purpose is SessionPurpose.Recording || session.SessionId.IsUnset)
-            {
-                continue;
-            }
-
-            listedHere.Add(session.SessionId);
-
-            QualitySessionMeasurement? measurement =
-                open.FirstOrDefault(row => row.DriverInstanceId == instance && row.Session.Equals(session.SessionId));
-
-            if (measurement is null)
-            {
-                if (session.Concluded || !held.TryGetValue(session.DeviceId, out Whereabouts? whereabouts))
-                {
-                    continue;
-                }
-
-                measurement = await measurements.FindAsync(instance, session.SessionId, cancellationToken)
-                    ?? QualitySessionMeasurement.Open(
-                        instance,
-                        session.SessionId,
-                        session.Purpose,
-                        whereabouts.Tuner,
-                        whereabouts.Network,
-                        whereabouts.Service,
-                        session.StartedAt.UtcDateTime);
-            }
-
-            if (measurement.HasEnded)
-            {
-                continue;
-            }
-
-            RecordingSessionDto counted = RecordingSessionDto.Of(hello, session);
-
-            if (counted is { CcMeasured: true, CcDropped: long dropped, CcTotal: long total })
-            {
-                measurement.Observe(dropped, total, counted.EovfCount, at);
-            }
-
-            if (session.Concluded)
-            {
-                measurement.Close(at);
-                closed++;
-            }
-
-            await measurements.SaveAsync(measurement, cancellationToken);
-            measured++;
-        }
-
-        foreach (QualitySessionMeasurement gone in open)
-        {
-            if (gone.DriverInstanceId == instance && listedHere.Contains(gone.Session))
-            {
-                continue;
-            }
-
-            gone.Close(at);
-            await measurements.SaveAsync(gone, cancellationToken);
-            closed++;
-        }
-
-        return new SessionTally(measured, closed);
+        return listed.TryGetValue(out IReadOnlyList<SessionSnapshot>? sessions)
+            ? await measuring.MeasureAsync(hello, sessions, sources, at, cancellationToken)
+            : new QualitySessionTally(0, 0);
     }
-
-    private sealed record Whereabouts(TunerDeviceId Tuner, NetworkId Network, ServiceId Service);
-
-    private sealed record SessionTally(int Measured, int Closed);
 }
