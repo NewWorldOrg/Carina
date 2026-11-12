@@ -10,20 +10,15 @@ namespace Carina.Infrastructure.Segments;
 public sealed record DetectionInputs(SegmentEvidence Evidence, SegmentContext Context, DateTime CatalogUntil);
 
 /// <summary>
-/// Detects the segments of one recording with one version of the model. It reads the recording's readings;
-/// the catalog's stretches heard in it, each counted as the kind the stretch alone is taken for when that
-/// differs from its entry; the corner outlines of the <see cref="SegmentDetectionSettings.LogoFrom"/> most
-/// recent earlier recordings on its station, with the catalog's stretches heard in them, to learn the station's logo
-/// from; and the earlier episodes of its
-/// series, found among the <see cref="SegmentDetectionSettings.EpisodesAmong"/> most recent earlier recordings on
-/// the station and the recordings sharing the sound of a programme fixture with it, each by the detection the same
-/// version made of it, leaving out one thrown away, with where its programme starts and ends. The counting is done
-/// on the <see cref="LowestPriorityScheduler"/>. Nothing is written here.
+/// Detects the segments of one recording with one version of the model. It reads the recording's readings, and
+/// what the <see cref="SegmentContextDomainService"/> says is known of it besides, among the
+/// <see cref="SegmentDetectionSettings.EpisodesAmong"/> most recent earlier recordings on its station, the logo learned
+/// from the <see cref="SegmentDetectionSettings.LogoFrom"/> most recent of them. The counting is done on the
+/// <see cref="LowestPriorityScheduler"/>. Nothing is written here.
 /// </summary>
 public sealed class SegmentDetecting(
     IDetectionWorklist worklist,
-    ICatalogRepository catalog,
-    IRecordingDetectionRepository detections,
+    SegmentContextDomainService context,
     LowestPriorityScheduler lowest,
     SegmentDetectionSettings settings)
 {
@@ -43,14 +38,11 @@ public sealed class SegmentDetecting(
         RecordingId id = record.RecordingId;
         SeriesMember judged = record.Programme.MemberAs(id);
         IReadOnlyList<LearningDataPart> parts = await worklist.PartsAsync(id, Readings, cancellationToken);
-        IReadOnlyList<CatalogHeard> heard = await HeardAsync(id, cancellationToken);
-        IReadOnlyList<LearningExtraction> earlier = await worklist.EarlierOnTheStationAsync(judged, settings.EpisodesAmong, cancellationToken);
-        IReadOnlyList<RecordedCorners> corners = await CornersAsync(earlier.Take(settings.LogoFrom), cancellationToken);
-        IReadOnlyList<PastEpisode> past = await PastAsync(judged, earlier, modelVersion, cancellationToken);
-        CornerLogo logo = await lowest.Run(() => CornerLogo.Learn(judged, corners), cancellationToken);
+        SegmentSurroundings known = await context.GatherAsync(record, modelVersion, settings.EpisodesAmong, settings.LogoFrom, cancellationToken);
+        CornerLogo logo = await lowest.Run(() => CornerLogo.Learn(judged, known.Corners), cancellationToken);
         SegmentEvidence evidence = await lowest.Run(() => SegmentEvidence.Of(parts, record.ReadThrough), cancellationToken);
 
-        return new DetectionInputs(evidence, SegmentContext.Of(record.Programme, heard, logo, past), at);
+        return new DetectionInputs(evidence, SegmentContext.Of(record.Programme, known.Heard, logo, known.Past), at);
     }
 
     public async Task<RecordingDetection> DetectAsync(
@@ -70,81 +62,4 @@ public sealed class SegmentDetecting(
 
         return RecordingDetection.Of(record.RecordingId, version.Number, detection, extracted.Number, inputs.CatalogUntil, at);
     }
-
-    private async Task<IReadOnlyList<CatalogHeard>> HeardAsync(RecordingId id, CancellationToken cancellationToken)
-        => [.. (await HeardInAsync([id], cancellationToken))[id]];
-
-    private async Task<ILookup<RecordingId, CatalogHeard>> HeardInAsync(IReadOnlyCollection<RecordingId> recordings, CancellationToken cancellationToken)
-    {
-        IReadOnlyList<CatalogOccurrence> occurrences = recordings.Count is 0 ? [] : await catalog.OccurrencesInAsync(recordings, cancellationToken);
-        IReadOnlyList<CatalogEntry> found = occurrences.Count is 0
-            ? []
-            : await catalog.EntriesAsync([.. occurrences.Select(occurrence => occurrence.EntryId).Distinct()], cancellationToken);
-        Dictionary<CatalogEntryId, CatalogEntry> entries = found.ToDictionary(entry => entry.Id);
-
-        return occurrences
-            .Where(occurrence => entries.ContainsKey(occurrence.EntryId))
-            .ToLookup(occurrence => occurrence.RecordingId, occurrence => CatalogHeard.Of(occurrence, entries[occurrence.EntryId]));
-    }
-
-    private async Task<IReadOnlyList<RecordedCorners>> CornersAsync(IEnumerable<LearningExtraction> records, CancellationToken cancellationToken)
-    {
-        LearningExtraction[] read = [.. records.Where(record => record.ReadThrough > TimeSpan.Zero)];
-        ILookup<RecordingId, CatalogHeard> heard = await HeardInAsync([.. read.Select(record => record.RecordingId)], cancellationToken);
-        List<RecordedCorners> corners = [];
-
-        foreach (LearningExtraction record in read)
-        {
-            IReadOnlyList<LearningDataPart> parts = await worklist.PartsAsync(record.RecordingId, [LearningDataKind.CornerOutlines], cancellationToken);
-
-            if (parts.Count is 0)
-            {
-                continue;
-            }
-
-            byte[] outlines = SegmentEvidence.Of(parts, record.ReadThrough).Outlines.ToArray();
-
-            corners.Add(new RecordedCorners(record.Programme.MemberAs(record.RecordingId), outlines, [.. heard[record.RecordingId]]));
-        }
-
-        return corners;
-    }
-
-    private async Task<IReadOnlyList<PastEpisode>> PastAsync(
-        SeriesMember judged,
-        IReadOnlyList<LearningExtraction> earlier,
-        int modelVersion,
-        CancellationToken cancellationToken)
-    {
-        IReadOnlyList<IReadOnlyList<RecordingId>> sharers = await catalog.SoundSharersAsync(cancellationToken);
-        RecordingId[] sharing = [.. sharers.Where(group => group.Contains(judged.RecordingId)).SelectMany(group => group).Distinct()];
-        IReadOnlyList<LearningExtraction> elsewhere = sharing.Length is 0 ? [] : await worklist.RecordsAsync(sharing, cancellationToken);
-        Dictionary<RecordingId, ProgrammeCopy> copies = earlier
-            .Concat(elsewhere.Where(record => record.Programme.RecordingStartedAt < judged.StartedAt))
-            .Where(record => !record.RecordingId.Equals(judged.RecordingId))
-            .DistinctBy(record => record.RecordingId)
-            .ToDictionary(record => record.RecordingId, record => record.Programme);
-        IReadOnlyList<SeriesMember> series = SeriesLinks.SharingSound(sharers).SeriesOf(judged, [.. copies.Select(pair => pair.Value.MemberAs(pair.Key))]);
-
-        if (series.Count is 0)
-        {
-            return [];
-        }
-
-        RecordingId[] members = [.. series.Select(member => member.RecordingId)];
-        Dictionary<RecordingId, RecordingDetection> detected = (await detections.ListAsync(members, modelVersion, cancellationToken))
-            .Where(detection => detection.State is not SegmentDetectionState.Discarded)
-            .ToDictionary(detection => detection.RecordingId);
-
-        return
-        [
-            .. members
-                .Where(detected.ContainsKey)
-                .Select(member => new PastEpisode(member, Starts(copies[member]), Ends(copies[member]), detected[member].Segments)),
-        ];
-    }
-
-    private static TimeSpan Starts(ProgrammeCopy programme) => programme.ProgrammeStartsAt - programme.RecordingStartedAt;
-
-    private static TimeSpan? Ends(ProgrammeCopy programme) => programme.ProgrammeEndsAt - programme.RecordingStartedAt;
 }
