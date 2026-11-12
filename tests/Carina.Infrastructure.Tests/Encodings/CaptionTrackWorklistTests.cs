@@ -141,8 +141,7 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
             harness.Places,
             new EncodeArtefactPlacer(new EncodeJobRepository(context), ledger, harness.Places, harness.Probe, harness.Clock, NullLogger<EncodeArtefactPlacer>.Instance),
             new EncodeScratchCleaner(ledger, harness.Places, harness.Clock, NullLogger<EncodeScratchCleaner>.Instance),
-            new ArtefactOpenings(harness.Clock),
-            harness.Clock,
+            new ArtefactRewriteDomainService(new ArtefactOpenings(harness.Clock), harness.Clock),
             NullLogger<ArtefactCaptionTracks>.Instance);
     }
 

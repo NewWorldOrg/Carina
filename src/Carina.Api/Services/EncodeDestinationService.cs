@@ -16,7 +16,7 @@ namespace Carina.Api.Services;
 public sealed class EncodeDestinationService(
     IEncodeDestinationRepository destinations,
     IEncodeProfileRepository profiles,
-    IEncodeJobRepository jobs,
+    EncodeDefinitionDomainService definitions,
     OutputRootDeclarations declared,
     EncodePlaces places,
     TimeProvider clock)
@@ -84,9 +84,7 @@ public sealed class EncodeDestinationService(
             return Failure<EncodeDestination>(EncodeRefusals.Describe(refusals), EncodingFailure.Refused);
         }
 
-        EncodeHold hold = await jobs.HoldOnDestinationAsync(id, cancellationToken);
-
-        if (hold.Unfinished is { } underway)
+        if (await definitions.UnderwayWithAsync(id, cancellationToken) is { } underway)
         {
             return Failure<EncodeDestination>(
                 EncodeSaying.Underway("Destination", destination.Id.Wire, underway),
@@ -110,41 +108,37 @@ public sealed class EncodeDestinationService(
             return Missing<EncodeDefinitionRemoved>(id);
         }
 
-        if (destination.IsRetired)
+        EncodeDefinitionRemoval removal = await definitions.RemoveAsync(destination, clock.GetUtcNow().UtcDateTime, cancellationToken);
+
+        switch (removal.Fate)
         {
-            return Failure<EncodeDefinitionRemoved>(EncodeSaying.Retired(destination), EncodingFailure.AlreadyRetired);
+            case EncodeDefinitionFate.Deleted:
+                await destinations.RemoveAsync(destination, cancellationToken);
+
+                return Gone(new EncodeDefinitionRemoved(destination.Id.Value, EncodeRemoval.Deleted, null));
+
+            case EncodeDefinitionFate.Retired:
+                await destinations.SaveAsync(destination, cancellationToken);
+
+                return Gone(new EncodeDefinitionRemoved(destination.Id.Value, EncodeRemoval.Retired, destination.RetiredAt));
+
+            default:
+                return Refused<EncodeDefinitionRemoved>(destination, removal);
         }
-
-        EncodeHold hold = await jobs.HoldOnDestinationAsync(id, cancellationToken);
-
-        if (hold.Unfinished is { } underway)
-        {
-            return Failure<EncodeDefinitionRemoved>(
-                EncodeSaying.Underway("Destination", destination.Id.Wire, underway),
-                EncodingFailure.StillInFlight);
-        }
-
-        IReadOnlyList<EncodeDestination> placed = await destinations.ListAsync(cancellationToken);
-
-        if (placed.Count(other => !other.IsRetired) is 1)
-        {
-            return Failure<EncodeDefinitionRemoved>(
-                $"Destination {destination.Id.Wire} is the only one left, and a machine with nowhere to put an artefact encodes nothing; define the one that replaces it first.",
-                EncodingFailure.TheLastOne);
-        }
-
-        if (!hold.Any)
-        {
-            await destinations.RemoveAsync(destination, cancellationToken);
-
-            return Gone(new EncodeDefinitionRemoved(destination.Id.Value, EncodeRemoval.Deleted, null));
-        }
-
-        destination.Retire(clock.GetUtcNow().UtcDateTime);
-        await destinations.SaveAsync(destination, cancellationToken);
-
-        return Gone(new EncodeDefinitionRemoved(destination.Id.Value, EncodeRemoval.Retired, destination.RetiredAt));
     }
+
+    private static ServiceResult<T, EncodingFailure> Refused<T>(EncodeDestination destination, EncodeDefinitionRemoval removal)
+        => removal switch
+        {
+            { Underway: { } underway } => Failure<T>(
+                EncodeSaying.Underway("Destination", destination.Id.Wire, underway),
+                EncodingFailure.StillInFlight),
+            { Refusal: EncodeDefinitionRefusal.TheLastOne } => Failure<T>(
+                $"Destination {destination.Id.Wire} is the only one left, and a machine with nowhere to put an artefact encodes nothing; define the one that replaces it first.",
+                EncodingFailure.TheLastOne),
+            { Refusal: EncodeDefinitionRefusal.AlreadyRetired } => Failure<T>(EncodeSaying.Retired(destination), EncodingFailure.AlreadyRetired),
+            _ => throw new InvalidOperationException($"A removal is refused for one of the reasons named, and this one came to {removal.Refusal}."),
+        };
 
     private async Task<ServiceResult<IReadOnlyList<EncodeRefusal>, EncodingFailure>> WeighedAsync(
         EncodeDestinationDraft draft,

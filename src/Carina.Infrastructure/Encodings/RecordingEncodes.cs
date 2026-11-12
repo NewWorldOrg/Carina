@@ -12,7 +12,7 @@ namespace Carina.Infrastructure.Encodings;
 /// held by a job that did not complete is left alone.
 /// </summary>
 public sealed class RecordingEncodes(
-    IEncodeJobRepository jobs,
+    RecordingEncodeDomainService standing,
     EncodeScratchCleaner cleaner,
     ILogger<RecordingEncodes> logger) : IRecordingEncodes
 {
@@ -20,20 +20,18 @@ public sealed class RecordingEncodes(
     {
         ArgumentNullException.ThrowIfNull(recordingId);
 
-        IReadOnlyList<EncodeJob> held = await jobs.ListForRecordingAsync(recordingId, cancellationToken);
-
-        return held.Any(job => !job.HasEnded);
+        return await standing.AnyUnderWayAsync(recordingId, cancellationToken);
     }
 
     public async Task<EncodesErased> EraseAsync(RecordingId recordingId, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(recordingId);
 
-        IReadOnlyList<EncodeJob> held = await jobs.ListForRecordingAsync(recordingId, cancellationToken);
+        RecordingEncodeErasure erasure = await standing.WhatToEraseAsync(recordingId, cancellationToken);
         int removed = 0;
         List<EncodeFileName> left = [];
 
-        foreach (EncodeJob job in held.Where(job => job.HasEnded))
+        foreach (EncodeJob job in erasure.Ended)
         {
             foreach (EncodeScratchFile scratch in await cleaner.ClearAsync(job, cancellationToken))
             {
@@ -46,11 +44,7 @@ public sealed class RecordingEncodes(
             }
         }
 
-        IEnumerable<EncodeJob> made = held
-            .Where(job => job.StandsAsTheArtefact)
-            .DistinctBy(job => (job.OutputRoot, job.ArtefactName));
-
-        foreach (EncodeJob job in made)
+        foreach (EncodeJob job in erasure.Standing)
         {
             EncodeScratchFate fate = cleaner.RemoveArtefact(job);
             removed += fate is EncodeScratchFate.Removed ? 1 : 0;

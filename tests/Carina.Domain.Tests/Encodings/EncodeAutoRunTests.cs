@@ -108,4 +108,20 @@ public sealed class EncodeAutoRunTests
         => Assert.Equal(
             EncodeAutoRun.FewestCores,
             EncodeAutoRunStanding.Over(null, new EncodeSettings { MostCores = 4 }, new MachineSettings { Cores = 0 }).MostCores);
+
+    [Theory(DisplayName = "the cores a run may take are settled from one up to what this machine has, and no further")]
+    [InlineData(1, true)]
+    [InlineData(6, true)]
+    [InlineData(0, false)]
+    [InlineData(7, false)]
+    public void TheCoresARunMayTakeAreSettledUpToWhatTheMachineHas(int cores, bool fits)
+        => Assert.Equal(fits, EncodeAutoRun.Fits(cores, SixCores));
+
+    [Theory(DisplayName = "a run takes the cores the auto-run allows, or what the machine that runs it has when that is fewer")]
+    [InlineData(4, 6, 4)]
+    [InlineData(4, 2, 2)]
+    public void ARunTakesTheFewerOfTheCapAndTheMachine(int mostCores, int machineCores, int taken)
+        => Assert.Equal(
+            taken,
+            new EncodeAutoRunStanding(true, mostCores, true, Noon).CoresARunTakes(new MachineSettings { Cores = machineCores }));
 }

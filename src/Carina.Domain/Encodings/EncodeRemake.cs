@@ -47,6 +47,12 @@ public sealed record EncodeRate
 
     public int On(EncodeEncoder encoder)
         => EncodeEncoders.OnTheCard(encoder) ? Quantiser.Quantiser : RateFactor.RateFactor;
+
+    /// <summary>
+    /// Whether <see cref="Coarser"/> changes what <paramref name="encoder"/> runs at, which it does not once that is
+    /// already the coarsest.
+    /// </summary>
+    public bool CanGoCoarserOn(EncodeEncoder encoder) => Coarser().On(encoder) != On(encoder);
 }
 
 public static class EncodeRemakes

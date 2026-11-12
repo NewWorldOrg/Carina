@@ -20,6 +20,12 @@ public static class EncodePlacements
 {
     public const EncodeFailure WhatACollisionIsCalled = EncodeFailure.DestinationCollision;
 
+    /// <summary>
+    /// Whether a file of <paramref name="bytes"/> already at this job's own name, left by an earlier attempt, is kept
+    /// as the artefact. An empty one is not what an attempt places, and is a collision.
+    /// </summary>
+    public static bool KeepsAnEarlierAttemptOf(long bytes) => bytes > 0;
+
     public static EncodePlacementVerdict Judge(
         bool somethingIsThere,
         bool thisJobHadAlreadyClaimedTheName,

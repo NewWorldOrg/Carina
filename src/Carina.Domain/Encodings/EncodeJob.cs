@@ -594,6 +594,21 @@ public sealed class EncodeJob
         LetGoOfTheName(at);
     }
 
+    /// <summary>
+    /// Calls the job off at <paramref name="at"/> while it waits or runs; one that has ended stays as it was.
+    /// </summary>
+    public EncodeCallOff CallOff(DateTime at)
+    {
+        if (HasEnded)
+        {
+            return EncodeCallOff.AlreadyOver;
+        }
+
+        Cancel(at);
+
+        return EncodeCallOff.CalledOff;
+    }
+
     public void Cancel(DateTime at)
     {
         if (Status is not (EncodeJobStatus.Queued or EncodeJobStatus.Running))

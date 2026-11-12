@@ -238,5 +238,5 @@ public sealed class RecordingEncodesTests
     }
 
     private static RecordingEncodes Encodes(EncodeHarness harness)
-        => new(harness.Jobs, harness.Cleaner, NullLogger<RecordingEncodes>.Instance);
+        => new(new RecordingEncodeDomainService(harness.Jobs), harness.Cleaner, NullLogger<RecordingEncodes>.Instance);
 }

@@ -113,7 +113,7 @@ public sealed class EncodeArtefactPlacer(
         EncodeFileName candidate,
         CancellationToken cancellationToken)
     {
-        if (new FileInfo(artefact).Length is 0)
+        if (!EncodePlacements.KeepsAnEarlierAttemptOf(new FileInfo(artefact).Length))
         {
             await RefuseAsync(
                 job,

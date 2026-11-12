@@ -15,8 +15,7 @@ public sealed record EncodeDefinitionRemoved(Guid Id, EncodeRemoval Removal, Dat
 
 public sealed class EncodeProfileService(
     IEncodeProfileRepository profiles,
-    IEncodeDestinationRepository destinations,
-    IEncodeJobRepository jobs,
+    EncodeDefinitionDomainService definitions,
     IMachineCapabilityReader machine,
     TimeProvider clock)
 {
@@ -78,9 +77,7 @@ public sealed class EncodeProfileService(
             return Refused(refusals);
         }
 
-        EncodeHold hold = await jobs.HoldOnProfileAsync(id, cancellationToken);
-
-        if (hold.Unfinished is { } underway)
+        if (await definitions.UnderwayWithAsync(id, cancellationToken) is { } underway)
         {
             return Failure<EncodeProfile>(EncodeSaying.Underway("Profile", profile.Id.Wire, underway), EncodingFailure.StillInFlight);
         }
@@ -109,41 +106,35 @@ public sealed class EncodeProfileService(
             return Missing<EncodeDefinitionRemoved>(id);
         }
 
-        if (profile.IsRetired)
+        EncodeDefinitionRemoval removal = await definitions.RemoveAsync(profile, clock.GetUtcNow().UtcDateTime, cancellationToken);
+
+        switch (removal.Fate)
         {
-            return Failure<EncodeDefinitionRemoved>(EncodeSaying.Retired(profile), EncodingFailure.AlreadyRetired);
+            case EncodeDefinitionFate.Deleted:
+                await profiles.RemoveAsync(profile, cancellationToken);
+
+                return Gone(new EncodeDefinitionRemoved(profile.Id.Value, EncodeRemoval.Deleted, null));
+
+            case EncodeDefinitionFate.Retired:
+                await profiles.SaveAsync(profile, cancellationToken);
+
+                return Gone(new EncodeDefinitionRemoved(profile.Id.Value, EncodeRemoval.Retired, profile.RetiredAt));
+
+            default:
+                return Refused<EncodeDefinitionRemoved>(profile, removal);
         }
-
-        EncodeHold hold = await jobs.HoldOnProfileAsync(id, cancellationToken);
-
-        if (hold.Unfinished is { } underway)
-        {
-            return Failure<EncodeDefinitionRemoved>(
-                EncodeSaying.Underway("Profile", profile.Id.Wire, underway),
-                EncodingFailure.StillInFlight);
-        }
-
-        IReadOnlyList<EncodeDestination> placed = await destinations.ListAsync(cancellationToken);
-
-        if (placed.FirstOrDefault(destination => !destination.IsRetired && destination.DefaultProfileId.Equals(id)) is { } naming)
-        {
-            return Failure<EncodeDefinitionRemoved>(
-                $"Profile {profile.Id.Wire} is what destination {naming.Id.Wire} encodes with unless another is asked for; point that destination at another profile first.",
-                EncodingFailure.StillTheDefault);
-        }
-
-        if (!hold.Any)
-        {
-            await profiles.RemoveAsync(profile, cancellationToken);
-
-            return Gone(new EncodeDefinitionRemoved(profile.Id.Value, EncodeRemoval.Deleted, null));
-        }
-
-        profile.Retire(clock.GetUtcNow().UtcDateTime);
-        await profiles.SaveAsync(profile, cancellationToken);
-
-        return Gone(new EncodeDefinitionRemoved(profile.Id.Value, EncodeRemoval.Retired, profile.RetiredAt));
     }
+
+    private static ServiceResult<T, EncodingFailure> Refused<T>(EncodeProfile profile, EncodeDefinitionRemoval removal)
+        => removal switch
+        {
+            { Underway: { } underway } => Failure<T>(EncodeSaying.Underway("Profile", profile.Id.Wire, underway), EncodingFailure.StillInFlight),
+            { NamedBy: { } naming } => Failure<T>(
+                $"Profile {profile.Id.Wire} is what destination {naming.Id.Wire} encodes with unless another is asked for; point that destination at another profile first.",
+                EncodingFailure.StillTheDefault),
+            { Refusal: EncodeDefinitionRefusal.AlreadyRetired } => Failure<T>(EncodeSaying.Retired(profile), EncodingFailure.AlreadyRetired),
+            _ => throw new InvalidOperationException($"A removal is refused for one of the reasons named, and this one came to {removal.Refusal}."),
+        };
 
     private static ServiceResult<EncodeDefinitionRemoved, EncodingFailure> Gone(EncodeDefinitionRemoved removed)
         => ServiceResult<EncodeDefinitionRemoved, EncodingFailure>.Success(removed);

@@ -200,6 +200,15 @@ public sealed class Recording
     public bool IsInFlight => Outcome is null;
 
     /// <summary>
+    /// Whether there is something to encode: a recording still being written is encoded once it has ended, and one
+    /// that failed has nothing to encode.
+    /// </summary>
+    public RecordingEncodability Encodability
+        => IsInFlight ? RecordingEncodability.StillBeingWritten
+            : Outcome is RecordingOutcome.Failed ? RecordingEncodability.Failed
+            : RecordingEncodability.Encodable;
+
+    /// <summary>
     /// Whether the recording ended with <see cref="RecordingFault.ScramblingUnresolved"/> in its outcome
     /// detail and has not been descrambled since.
     /// </summary>
