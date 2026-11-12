@@ -535,6 +535,7 @@ public sealed class ServiceCollectionExtensionsTests
         using IServiceScope scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<PlaybackArtefactDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SourcePlacementDomainService>());
     }
 
     [Fact(DisplayName = "registers the domain services of quality, each for one scope")]

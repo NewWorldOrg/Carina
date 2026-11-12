@@ -15,6 +15,11 @@ public sealed record EncodeTimeline
 
     public static readonly TimeSpan Tolerance = TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// How far apart two readings of where a file's clock began may be and still be readings of the same file.
+    /// </summary>
+    public static readonly TimeSpan ClocksAgreeWithin = TimeSpan.FromMilliseconds(1);
+
     public EncodeTimeline(TimeSpan sourceStart, TimeSpan headSkip, TimeSpan? sourceLength, TimeSpan? artefactLength)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sourceStart, -OneTurnOfTheClock, nameof(sourceStart));
@@ -55,6 +60,12 @@ public sealed record EncodeTimeline
 
     public bool? LengthsAgree
         => Drift is { } drift ? drift.Duration() <= Tolerance : null;
+
+    /// <summary>
+    /// Whether what was taken from a file whose clock began at <paramref name="begins"/> was taken from the file this
+    /// artefact was made from, so that it can be placed over the artefact.
+    /// </summary>
+    public bool WasMadeFromAFileBeginningAt(TimeSpan begins) => (begins - SourceStart).Duration() < ClocksAgreeWithin;
 
     public static bool WithinReach(TimeSpan headSkip) => headSkip >= TimeSpan.Zero && headSkip <= MostHeadSkip;
 

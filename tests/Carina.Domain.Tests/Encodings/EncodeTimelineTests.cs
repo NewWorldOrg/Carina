@@ -88,6 +88,28 @@ public sealed class EncodeTimelineTests
         Assert.Null(timeline.Drift);
         Assert.Null(timeline.LengthsAgree);
     }
+
+    [Fact(DisplayName = "BR-PD-017: what was taken from a file whose clock began less than a millisecond from the artefact's source is placed over the artefact")]
+    public void WhatWasTakenFromTheSameFileIsPlacedOverTheArtefact()
+    {
+        var timeline = new EncodeTimeline(SourceStart, HeadSkip, SourceLength, null);
+        TimeSpan justUnder = EncodeTimeline.ClocksAgreeWithin - TimeSpan.FromTicks(1);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(1), EncodeTimeline.ClocksAgreeWithin);
+        Assert.True(timeline.WasMadeFromAFileBeginningAt(SourceStart));
+        Assert.True(timeline.WasMadeFromAFileBeginningAt(SourceStart + justUnder));
+        Assert.True(timeline.WasMadeFromAFileBeginningAt(SourceStart - justUnder));
+    }
+
+    [Fact(DisplayName = "BR-PD-017: what was taken from a file whose clock began a millisecond or more away is not placed over the artefact")]
+    public void WhatWasTakenFromAFileThatBeganElsewhereIsNotPlaced()
+    {
+        var timeline = new EncodeTimeline(SourceStart, HeadSkip, SourceLength, null);
+
+        Assert.False(timeline.WasMadeFromAFileBeginningAt(SourceStart + EncodeTimeline.ClocksAgreeWithin));
+        Assert.False(timeline.WasMadeFromAFileBeginningAt(SourceStart - EncodeTimeline.ClocksAgreeWithin));
+        Assert.False(timeline.WasMadeFromAFileBeginningAt(SourceStart + HeadSkip));
+    }
 }
 
 public sealed class SourceHeadReadingTests

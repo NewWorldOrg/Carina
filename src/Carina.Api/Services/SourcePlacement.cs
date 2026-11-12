@@ -1,25 +1,14 @@
-using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 
 namespace Carina.Api.Services;
 
 /// <summary>
-/// Where the zero of a source a recording is played from sits on the clock of the recording's file, and how long
-/// that source lasts where it says so.
+/// Places what was taken from a recording's file on the source a playback offer plays, and says in the log when an
+/// artefact was made from a file whose clock began elsewhere.
 /// </summary>
-public sealed record SourceZero(TimeSpan Shift, TimeSpan? Length);
-
-/// <summary>
-/// Places what was taken from a recording's file on the source a playback offer plays: the recording itself
-/// counts its seconds from where the file's own clock begins, an artefact from where the job that made it began
-/// reading plus what it skipped at the head. An artefact made from a file whose clock began elsewhere has nothing
-/// placed on it.
-/// </summary>
-public sealed class SourcePlacement(IEncodeJobRepository jobs, ILogger<SourcePlacement> logger)
+public sealed class SourcePlacement(SourcePlacementDomainService placement, ILogger<SourcePlacement> logger)
 {
-    public static readonly TimeSpan ClocksAgreeWithin = TimeSpan.FromMilliseconds(1);
-
     /// <param name="begins">Where the file's own clock began when <paramref name="taken"/> was taken from it.</param>
     /// <param name="taken">What was taken, named in the plural as the log names it.</param>
     public async Task<SourceZero?> PlaceAsync(
@@ -32,18 +21,9 @@ public sealed class SourcePlacement(IEncodeJobRepository jobs, ILogger<SourcePla
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(offer);
 
-        if (offer.Plan.Transcodes)
-        {
-            return new SourceZero(begins, null);
-        }
+        SourceAlignment alignment = await placement.PlaceAsync(offer.Plan, offer.Artefact, begins, cancellationToken);
 
-        if (offer.Artefact is not { } artefact
-            || await jobs.FindAsync(artefact, cancellationToken) is not { Timeline: { } timeline })
-        {
-            return null;
-        }
-
-        if ((begins - timeline.SourceStart).Duration() >= ClocksAgreeWithin)
+        if (alignment is { Artefact: { } artefact, ArtefactBegan: { } encoded })
         {
             logger.LogWarning(
                 "The {Taken} of recording {Recording} were taken from a file that began at {Kept} s and the "
@@ -52,11 +32,9 @@ public sealed class SourcePlacement(IEncodeJobRepository jobs, ILogger<SourcePla
                 id.Wire,
                 begins.TotalSeconds,
                 artefact.Wire,
-                timeline.SourceStart.TotalSeconds);
-
-            return null;
+                encoded.TotalSeconds);
         }
 
-        return new SourceZero(timeline.CaptionShift, timeline.ArtefactLength);
+        return alignment.Zero;
     }
 }
