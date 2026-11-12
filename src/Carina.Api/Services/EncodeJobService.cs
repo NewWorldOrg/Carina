@@ -37,9 +37,7 @@ public sealed record EncodeJobView(EncodeJob Job, TimeSpan? QuietFor, bool Stall
 /// </remarks>
 public sealed class EncodeJobService(
     IEncodeJobRepository jobs,
-    IEncodeProfileRepository profiles,
-    IEncodeDestinationRepository destinations,
-    IRecordingDirectory recordings,
+    EncodeQueueDomainService queue,
     IStrayProgrammes strays,
     EncodeScratchCleaner cleaner,
     EncodeSettings settings,
@@ -69,79 +67,15 @@ public sealed class EncodeJobService(
     {
         ArgumentNullException.ThrowIfNull(draft);
 
-        if (await destinations.FindAsync(draft.DestinationId, cancellationToken) is not { } destination)
+        EncodeQueueing queueing = await queue.QueueAsync(
+            new EncodeJobAsked(draft.RecordingId, draft.ProfileId, draft.DestinationId, draft.MakeItAgain),
+            Now(),
+            cancellationToken);
+
+        if (queueing.Job is not { } queued)
         {
-            return Failure($"No destination {draft.DestinationId.Wire} is defined.", EncodingFailure.NoSuchDestination);
+            return Refused(draft, queueing);
         }
-
-        if (destination.IsRetired)
-        {
-            return Failure(EncodeSaying.NotOffered(destination), EncodingFailure.AlreadyRetired);
-        }
-
-        EncodeProfileId profileId = draft.ProfileId ?? destination.DefaultProfileId;
-
-        if (await profiles.FindAsync(profileId, cancellationToken) is not { } profile)
-        {
-            return Failure($"No profile {profileId.Wire} is defined.", EncodingFailure.NoSuchProfile);
-        }
-
-        if (profile.IsRetired)
-        {
-            return Failure(EncodeSaying.NotOffered(profile), EncodingFailure.AlreadyRetired);
-        }
-
-        if (await recordings.FindAsync(draft.RecordingId, cancellationToken) is not { } recording)
-        {
-            return Failure($"The ledger holds no recording {draft.RecordingId.Wire}.", EncodingFailure.NoSuchRecording);
-        }
-
-        if (recording.IsInFlight)
-        {
-            return Failure(
-                $"Recording {recording.Id.Wire} is still being written, and is encoded once it has ended.",
-                EncodingFailure.RecordingStillBeingWritten);
-        }
-
-        if (recording.Outcome is RecordingOutcome.Failed)
-        {
-            return Failure(
-                $"Recording {recording.Id.Wire} failed, so there is nothing to encode.",
-                EncodingFailure.RecordingFailed);
-        }
-
-        IReadOnlyList<EncodeJob> earlier = await jobs.ListForRecordingAsync(recording.Id, cancellationToken);
-
-        if (earlier.FirstOrDefault(job => !job.HasEnded) is { } underway)
-        {
-            return Failure(
-                $"Recording {recording.Id.Wire} already has job {underway.Id.Wire} {Standing(underway)}; it is not queued twice.",
-                EncodingFailure.AlreadyInTheQueue);
-        }
-
-        if (!draft.MakeItAgain
-            && earlier.LastOrDefault(job => job.Status is EncodeJobStatus.Completed) is { } made)
-        {
-            return Failure(
-                $"Recording {recording.Id.Wire} was already encoded with profile {made.ProfileId.Wire} by job {made.Id.Wire}, and a recording has one artefact at most unless it is asked for again.",
-                EncodingFailure.AlreadyEncoded);
-        }
-
-        EncodeJob queued = draft.MakeItAgain
-            ? EncodeJob.QueueAgain(
-                EncodeJobId.New(),
-                recording.Id,
-                profile.Id,
-                destination.Id,
-                destination.OutputRoot,
-                Now())
-            : EncodeJob.Queue(
-                EncodeJobId.New(),
-                recording.Id,
-                profile.Id,
-                destination.Id,
-                destination.OutputRoot,
-                Now());
 
         await jobs.AddAsync(queued, cancellationToken);
 
@@ -201,13 +135,12 @@ public sealed class EncodeJobService(
             return Failure($"The ledger holds no job {id.Wire}.", EncodingFailure.NoSuchJob);
         }
 
-        if (job.HasEnded)
+        RunningProgramme? running = job.Programme;
+
+        if (job.CallOff(Now()) is EncodeCallOff.AlreadyOver)
         {
             return Failure($"Job {id.Wire} already ended as {job.Status}, and cannot be called off.", EncodingFailure.AlreadyOver);
         }
-
-        RunningProgramme? running = job.Programme;
-        job.Cancel(Now());
 
         try
         {
@@ -244,6 +177,33 @@ public sealed class EncodeJobService(
             yielding && job.Status is EncodeJobStatus.Queued);
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
+
+    private static ServiceResult<EncodeJobView, EncodingFailure> Refused(EncodeJobDraft draft, EncodeQueueing queueing)
+        => queueing.Refusal switch
+        {
+            EncodeQueueRefusal.NoSuchDestination => Failure(
+                $"No destination {draft.DestinationId.Wire} is defined.",
+                EncodingFailure.NoSuchDestination),
+            EncodeQueueRefusal.DestinationRetired => Failure(EncodeSaying.NotOffered(queueing.Destination!), EncodingFailure.AlreadyRetired),
+            EncodeQueueRefusal.NoSuchProfile => Failure($"No profile {queueing.ProfileId!.Wire} is defined.", EncodingFailure.NoSuchProfile),
+            EncodeQueueRefusal.ProfileRetired => Failure(EncodeSaying.NotOffered(queueing.Profile!), EncodingFailure.AlreadyRetired),
+            EncodeQueueRefusal.NoSuchRecording => Failure(
+                $"The ledger holds no recording {draft.RecordingId.Wire}.",
+                EncodingFailure.NoSuchRecording),
+            EncodeQueueRefusal.RecordingStillBeingWritten => Failure(
+                $"Recording {draft.RecordingId.Wire} is still being written, and is encoded once it has ended.",
+                EncodingFailure.RecordingStillBeingWritten),
+            EncodeQueueRefusal.RecordingFailed => Failure(
+                $"Recording {draft.RecordingId.Wire} failed, so there is nothing to encode.",
+                EncodingFailure.RecordingFailed),
+            EncodeQueueRefusal.AlreadyInTheQueue => Failure(
+                $"Recording {draft.RecordingId.Wire} already has job {queueing.Earlier!.Id.Wire} {Standing(queueing.Earlier)}; it is not queued twice.",
+                EncodingFailure.AlreadyInTheQueue),
+            EncodeQueueRefusal.AlreadyEncoded => Failure(
+                $"Recording {draft.RecordingId.Wire} was already encoded with profile {queueing.Earlier!.ProfileId.Wire} by job {queueing.Earlier.Id.Wire}, and a recording has one artefact at most unless it is asked for again.",
+                EncodingFailure.AlreadyEncoded),
+            _ => throw new InvalidOperationException($"A job is refused for one of the reasons named, and this one came to {queueing.Refusal}."),
+        };
 
     private static string Standing(EncodeJob job)
         => job.Status is EncodeJobStatus.Running ? "running" : "waiting";

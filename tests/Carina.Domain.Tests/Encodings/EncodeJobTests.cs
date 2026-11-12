@@ -21,6 +21,24 @@ public sealed class EncodeJobTests
         EncodeJobStatus.Cancelled,
     ];
 
+    [Fact(DisplayName = "BR-ES-001: a waiting or running job is called off, and one that has ended answers that it is already over and stays as it was")]
+    public void OnlyAJobThatHasNotEndedIsCalledOff()
+    {
+        EncodeJob waiting = Waiting();
+        EncodeJob running = Running();
+        EncodeJob completed = Named();
+        completed.Complete(Ended);
+
+        Assert.Equal(EncodeCallOff.CalledOff, waiting.CallOff(Ended));
+        Assert.Equal(EncodeCallOff.CalledOff, running.CallOff(Ended));
+        Assert.Equal(EncodeCallOff.AlreadyOver, completed.CallOff(Ended.AddMinutes(1)));
+        Assert.Equal(EncodeCallOff.AlreadyOver, waiting.CallOff(Ended.AddMinutes(1)));
+        Assert.Equal(EncodeJobStatus.Cancelled, waiting.Status);
+        Assert.Equal(EncodeJobStatus.Cancelled, running.Status);
+        Assert.Equal(EncodeJobStatus.Completed, completed.Status);
+        Assert.Equal(Ended, waiting.EndedAt);
+    }
+
     private static readonly OutputRoot Primary = new("primary");
 
     private static EncodeJob Waiting()

@@ -248,7 +248,8 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         => typeof(Recording)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(property => property.Name != nameof(Recording.ThumbnailShowsAnUnfinishedRecording)
-                               && property.Name != nameof(Recording.LeftScrambled))
+                               && property.Name != nameof(Recording.LeftScrambled)
+                               && property.Name != nameof(Recording.Encodability))
             .ToDictionary(
                 property => property.Name,
                 property => Rendered(property.GetValue(recording)),
