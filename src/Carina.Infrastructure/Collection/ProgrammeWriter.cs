@@ -50,7 +50,7 @@ public sealed class ProgrammeWriter(
                         }
 
                         gathered[broadcast.Id] = gathered.TryGetValue(broadcast.Id, out ProgrammeBroadcast? seen)
-                            ? Merged(seen, broadcast)
+                            ? seen.MergedWith(broadcast)
                             : broadcast;
                     }
                 }
@@ -82,27 +82,6 @@ public sealed class ProgrammeWriter(
         return written;
     }
 
-    private static ProgrammeBroadcast Merged(ProgrammeBroadcast seen, ProgrammeBroadcast arriving)
-    {
-        ProgrammeBroadcast named = arriving.Name.Length > 0 ? arriving : seen;
-
-        return named with
-        {
-            EndsAt = named.EndsAt ?? seen.EndsAt ?? arriving.EndsAt,
-            Summary = named.Summary.Length > 0 ? named.Summary : seen.Summary.Length > 0 ? seen.Summary : arriving.Summary,
-            Genres = seen.Genres.Count > 0 ? seen.Genres : arriving.Genres,
-            Items = seen.Items.Count > 0 ? seen.Items : arriving.Items,
-            Related = seen.Related.Count > 0 ? seen.Related : arriving.Related,
-            HasSubtitles = seen.HasSubtitles || arriving.HasSubtitles,
-            Audio = seen.Audio is AudioMode.Undetermined ? arriving.Audio : seen.Audio,
-            Sounds = seen.Sounds == 0 ? arriving.Sounds : seen.Sounds,
-            Video = seen.Video is VideoMode.Undetermined ? arriving.Video : seen.Video,
-            Aspect = seen.Aspect is AspectRatio.Undetermined ? arriving.Aspect : seen.Aspect,
-            Running = seen.Running is ProgrammeRunning.Undetermined ? arriving.Running : seen.Running,
-            IsShadow = seen.IsShadow && arriving.IsShadow,
-        };
-    }
-
     private static ProgrammeBroadcast? Read(EventInformationTable table, DescribedEvent carried)
     {
         if (carried.EventId is < EventId.MinValue or > EventId.MaxValue)
@@ -112,9 +91,8 @@ public sealed class ProgrammeWriter(
 
         ShortEventDescription? described = carried.Described;
         ExtendedEventDescription? detailed = carried.Detailed;
-        IReadOnlyList<EventGrouping> groupings = carried.Groupings;
 
-        return new ProgrammeBroadcast(
+        return ProgrammeBroadcast.Announced(
             new ProgrammeId(
                 new NetworkId(table.OriginalNetworkId),
                 new ServiceId(table.ServiceId),
@@ -124,53 +102,35 @@ public sealed class ProgrammeWriter(
             carried.EndsAt?.UtcDateTime,
             described?.Name ?? string.Empty,
             described?.Summary ?? string.Empty,
-            IsShadow(described, groupings))
+            Source(table),
+            Running(carried.Status),
+            [.. Groups(carried.Groupings)]) with
         {
             Genres = [.. carried.Genres.Select(genre => new ProgrammeGenre(genre.Kind, genre.Sort))],
             Items = detailed is null
                 ? []
                 : [.. detailed.Items.Select(item => new ProgrammeItem(item.Heading, item.Text))],
-            Related = [.. Related(table.OriginalNetworkId, table.ServiceId, carried.EventId, groupings)],
             HasSubtitles = carried.DataContents.Any(content => content.CarriesCaptions),
             Audio = AnnouncedAudio.Of(carried.AudioComponents),
             Sounds = AnnouncedAudio.Sounds(carried.AudioComponents),
             Video = AnnouncedVideo.ModeOf(carried.Components),
             Aspect = AnnouncedVideo.AspectOf(carried.Components),
-            Running = table.IsPresentFollowing ? Running(carried.Status) : ProgrammeRunning.Undetermined,
-            Source = Source(table),
         };
     }
 
-    private static bool IsShadow(ShortEventDescription? described, IReadOnlyList<EventGrouping> groupings)
-        => (described is null || described.Name.Length == 0)
-            && groupings.Any(grouping => grouping.Kind is EventGroupKind.Shared);
-
-    private static IEnumerable<RelatedProgramme> Related(
-        int networkId,
-        int serviceId,
-        int eventId,
-        IReadOnlyList<EventGrouping> groupings)
+    private static IEnumerable<AnnouncedEventGroup> Groups(IReadOnlyList<EventGrouping> groupings)
     {
         foreach (EventGrouping grouping in groupings)
         {
-            if (Relation(grouping.Kind) is not { } kind)
+            if (Relation(grouping.Kind) is { } kind)
             {
-                continue;
-            }
-
-            foreach (GroupedEvent carried in grouping.Events)
-            {
-                if (carried.ServiceId == serviceId && carried.EventId == eventId)
-                {
-                    continue;
-                }
-
-                yield return new RelatedProgramme(networkId, carried.ServiceId, carried.EventId, kind);
-            }
-
-            foreach (GroupedEventElsewhere carried in grouping.Elsewhere)
-            {
-                yield return new RelatedProgramme(carried.NetworkId, carried.ServiceId, carried.EventId, kind);
+                yield return new AnnouncedEventGroup(
+                    kind,
+                    [
+                        .. grouping.Events.Select(carried => new AnnouncedEvent(null, carried.ServiceId, carried.EventId)),
+                        .. grouping.Elsewhere.Select(carried =>
+                            new AnnouncedEvent(carried.NetworkId, carried.ServiceId, carried.EventId)),
+                    ]);
             }
         }
     }
