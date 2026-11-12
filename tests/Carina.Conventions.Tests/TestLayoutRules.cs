@@ -40,7 +40,6 @@ public static class TestLayoutRules
         "Machines",
         "Migration",
         "Net",
-        "Notifications",
         "Persistence",
         "Playback",
         "Programmes",
