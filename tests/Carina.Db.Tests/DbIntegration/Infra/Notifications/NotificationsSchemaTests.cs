@@ -3,11 +3,11 @@ using Carina.Infrastructure.Persistence.Configurations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Notifications;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : IClassFixture<MigratedScratchDatabase>
+public sealed class NotificationsSchemaTests(MigratedScratchDatabase database) : IClassFixture<MigratedScratchDatabase>
 {
     private static int lastEvent;
 

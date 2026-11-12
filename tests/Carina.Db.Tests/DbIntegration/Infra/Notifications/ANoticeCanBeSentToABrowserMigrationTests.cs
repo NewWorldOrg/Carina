@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Notifications;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class PushDestinationMigrationTests
+public sealed class ANoticeCanBeSentToABrowserMigrationTests
 {
     private const string ScratchDatabase = "carina_push_destination_migration_test";
 
