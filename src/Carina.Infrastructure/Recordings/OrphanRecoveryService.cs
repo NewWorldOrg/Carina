@@ -111,7 +111,7 @@ public sealed class OrphanRecoveryService(
             standing is not null,
             OrphanRecovery.StillOnAir(
                 await GuideSaysAsync(recording, cancellationToken),
-                WindowIsStillOpen(recording, now)));
+                !recording.IsOver(now)));
 
         switch (OrphanRecovery.For(sighting))
         {
@@ -371,9 +371,6 @@ public sealed class OrphanRecoveryService(
             recovered.Marked,
             recovered.LeftOpen);
     }
-
-    private static bool WindowIsStillOpen(Recording recording, DateTime now)
-        => recording.AbortedAt is null && recording.ExpectedWindowEnd > now;
 
     private static SessionSnapshot? SessionOf(IReadOnlyList<SessionSnapshot> sessions, Recording recording)
     {

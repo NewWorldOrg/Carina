@@ -128,7 +128,7 @@ public sealed class RecordingRound(
 
         foreach (Recording recording in running.ToList())
         {
-            if (recording.ExpectedWindowEnd > now || recording.AbortedAt is not null)
+            if (!recording.IsDueToStop(now))
             {
                 continue;
             }

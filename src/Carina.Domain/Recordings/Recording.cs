@@ -219,6 +219,25 @@ public sealed class Recording
 
     public TimeSpan Written => TimeSpan.FromMilliseconds(WrittenDurationMs);
 
+    /// <summary>
+    /// Whether the recording is over at <paramref name="now"/>: this side asked it to stop, or the window it holds
+    /// has closed.
+    /// </summary>
+    public bool IsOver(DateTime now) => AbortedAt is not null || ExpectedWindowEnd <= now;
+
+    /// <summary>
+    /// Whether this side is to ask the recording to stop at <paramref name="now"/>: its window has closed and nobody
+    /// has asked yet.
+    /// </summary>
+    public bool IsDueToStop(DateTime now) => AbortedAt is null && ExpectedWindowEnd <= now;
+
+    /// <summary>
+    /// Whether the recording keeps following its programme when the guide moves it: one made for a reservation, which
+    /// names the margin to follow it with, until this side asks it to stop. A window that has closed is still followed,
+    /// because the programme may have run late.
+    /// </summary>
+    public bool FollowsItsProgramme => AbortedAt is null && ReservationId is not null;
+
     public static Recording Begin(
         RecordingId id,
         ReservationId? reservationId,

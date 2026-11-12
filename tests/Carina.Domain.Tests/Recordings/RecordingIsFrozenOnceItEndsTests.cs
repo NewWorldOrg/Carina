@@ -13,16 +13,18 @@ public sealed class RecordingIsFrozenOnceItEndsTests
 
     private static readonly DateTime Later = RecordingFactory.Now.AddHours(1);
 
-    [Fact]
-    public void ARecordingOffersTheseAndNothingElse()
+    private static readonly HashSet<string> Derived = new(StringComparer.Ordinal)
     {
-        string[] offered =
-        [
-            .. Declared(BindingFlags.Public | BindingFlags.Instance)
-                .Select(method => method.Name)
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal),
-        ];
+        nameof(Recording.ThumbnailShowsAnUnfinishedRecording),
+        nameof(Recording.LeftScrambled),
+        nameof(Recording.Encodability),
+        nameof(Recording.FollowsItsProgramme),
+    };
+
+    [Fact]
+    public void ARecordingOffersTheseChangesAndNothingElse()
+    {
+        string[] offered = Named(Declared(BindingFlags.Public | BindingFlags.Instance).Where(Changes));
 
         Assert.Equal(
             [
@@ -30,8 +32,25 @@ public sealed class RecordingIsFrozenOnceItEndsTests
                 "Erased", "Extend", "Illustrate", "Interrupt", "Measure", "Missed", "Note", "Resume", "Settle", "Wrote",
             ],
             offered);
-        Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Length);
+        Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Count(Changes));
     }
+
+    [Fact]
+    public void ARecordingAnswersTheseQuestionsAndNothingElse()
+        => Assert.Equal(
+            ["IsDueToStop", "IsOver"],
+            Named(Declared(BindingFlags.Public | BindingFlags.Instance).Where(method => !Changes(method))));
+
+    private static bool Changes(MethodInfo method) => method.ReturnType == typeof(void);
+
+    private static string[] Named(IEnumerable<MethodInfo> methods)
+        =>
+        [
+            .. methods
+                .Select(method => method.Name)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
 
     [Fact]
     public void NothingChangesARecordingFromOutsideItsOwnMethods()
@@ -247,9 +266,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
     private static IReadOnlyDictionary<string, string> Read(Recording recording)
         => typeof(Recording)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(property => property.Name != nameof(Recording.ThumbnailShowsAnUnfinishedRecording)
-                               && property.Name != nameof(Recording.LeftScrambled)
-                               && property.Name != nameof(Recording.Encodability))
+            .Where(property => !Derived.Contains(property.Name))
             .ToDictionary(
                 property => property.Name,
                 property => Rendered(property.GetValue(recording)),

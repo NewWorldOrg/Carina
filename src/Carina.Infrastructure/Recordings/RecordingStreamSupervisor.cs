@@ -131,7 +131,7 @@ public sealed class RecordingStreamSupervisor(
 
         if (standing is Standing.Running && session is { } live)
         {
-            if (ItIsOver(row, now))
+            if (row.IsOver(now))
             {
                 await StandDownAsync(row, live, tally, cancellationToken);
             }
@@ -152,7 +152,7 @@ public sealed class RecordingStreamSupervisor(
             return;
         }
 
-        if (ItIsOver(row, now))
+        if (row.IsOver(now))
         {
             if (session is null)
             {
@@ -210,9 +210,6 @@ public sealed class RecordingStreamSupervisor(
             weighed);
     }
 
-    private static bool ItIsOver(Recording recording, DateTime now)
-        => recording.AbortedAt is not null || recording.ExpectedWindowEnd <= now;
-
     private async Task<Recording?> FreshAsync(RecordingId id, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
@@ -227,7 +224,7 @@ public sealed class RecordingStreamSupervisor(
     {
         tally.OutOfTouch++;
 
-        if (ItIsOver(recording, now))
+        if (recording.IsOver(now))
         {
             logger.LogWarning(
                 "Recording {Recording} is over and the driver will not say whether anything is still writing it, "
@@ -316,7 +313,7 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                if (ItIsOver(loaded, now) || now <= AsFarAsItIsCounted(loaded))
+                if (loaded.IsOver(now) || now <= AsFarAsItIsCounted(loaded))
                 {
                     return false;
                 }
@@ -381,7 +378,7 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                over = ItIsOver(loaded, now);
+                over = loaded.IsOver(now);
 
                 if (over
                     || !RecordingResumption.OpenABreak(
@@ -495,7 +492,7 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                if (!ItIsOver(loaded, now))
+                if (!loaded.IsOver(now))
                 {
                     return false;
                 }
@@ -551,7 +548,7 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                if (!ItIsOver(loaded, now))
+                if (!loaded.IsOver(now))
                 {
                     return false;
                 }

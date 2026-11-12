@@ -45,7 +45,7 @@ public sealed class ProgramExtensionFollower(
 
         foreach (Recording recording in running)
         {
-            if (recording.AbortedAt is not null)
+            if (!recording.FollowsItsProgramme)
             {
                 continue;
             }
