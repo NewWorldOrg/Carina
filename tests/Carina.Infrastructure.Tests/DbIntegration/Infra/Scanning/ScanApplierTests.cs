@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -6,13 +7,15 @@ using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Tests.Fixtures.Clocks;
 using Carina.TestSupport;
 
+using Microsoft.Extensions.DependencyInjection;
+
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Scanning;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Scanning;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
+public sealed class ScanApplierTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private const int PhysicalChannel = 31;
     private const int OtherPhysicalChannel = 33;
@@ -20,6 +23,12 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
     private static readonly DateTime At = StillClock.Now.UtcDateTime;
     private static readonly CancellationToken Cancel = CancellationToken.None;
     private static readonly int[] Services = [1, 2, 3];
+
+    private readonly ServiceProvider container = database.Infrastructure(StandingStill);
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
 
     [Fact]
@@ -41,8 +50,8 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         Assert.Equal(3, applied.ServicesAdded);
         Assert.Equal(3, applied.ChannelsAdded);
 
-        await using CarinaDbContext reading = database.Open();
-        var candidates = new CandidateChannelRepository(reading);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        ICandidateChannelRepository candidates = Candidates(reading);
 
         foreach (int service in Services)
         {
@@ -82,9 +91,9 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         Assert.Equal(3, again.ServicesUpdated);
         Assert.Equal(0, again.ChannelsAdded);
 
-        await using CarinaDbContext reading = database.Open();
-        var services = new BroadcastServiceRepository(reading);
-        var candidates = new CandidateChannelRepository(reading);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IBroadcastServiceRepository services = BroadcastServices(reading);
+        ICandidateChannelRepository candidates = Candidates(reading);
 
         foreach (int service in Services)
         {
@@ -122,9 +131,9 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         Assert.Equal(3, gone.ServicesRemoved);
         Assert.Equal(3, gone.ChannelsRemoved);
 
-        await using CarinaDbContext reading = database.Open();
-        var services = new BroadcastServiceRepository(reading);
-        var candidates = new CandidateChannelRepository(reading);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IBroadcastServiceRepository services = BroadcastServices(reading);
+        ICandidateChannelRepository candidates = Candidates(reading);
 
         foreach (int service in Services)
         {
@@ -148,23 +157,25 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
                 Channel(ScanChangeKind.Added, carrying, SignalMeasurement.WithLock(At, 21_000))))],
             []);
 
-        await using CarinaDbContext writing = database.Open();
         int arrived = 0;
         var events = new RecordingAppEvents();
-        var applier = new ScanApplier(
-            new ChannelLineupDomainService(
-                new BroadcastServiceRepository(writing),
-                new RefusingCandidates(new CandidateChannelRepository(writing), () => ++arrived > 1)),
-            new DatabaseAtomicWrite(writing),
-            events,
-            new StillClock());
+        await using ServiceProvider refusing = database.Infrastructure(replace =>
+        {
+            StandingStill(replace);
+            replace.AddSingleton<IAppEventPublisher>(events);
+            replace.AddScoped<ICandidateChannelRepository>(provider => new RefusingCandidates(
+                new CandidateChannelRepository(provider.GetRequiredService<CarinaDbContext>()),
+                () => ++arrived > 1));
+        });
+        await using AsyncServiceScope writing = refusing.CreateAsyncScope();
+        ScanApplier applier = writing.ServiceProvider.GetRequiredService<ScanApplier>();
 
         await Assert.ThrowsAsync<StoreRefusedException>(
             () => applier.ApplyAsync(difference, [TuneSystem.IsdbT], Cancel));
 
-        await using CarinaDbContext reading = database.Open();
-        var services = new BroadcastServiceRepository(reading);
-        var candidates = new CandidateChannelRepository(reading);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IBroadcastServiceRepository services = BroadcastServices(reading);
+        ICandidateChannelRepository candidates = Candidates(reading);
 
         foreach (int service in Services)
         {
@@ -199,9 +210,9 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
             ],
             []));
 
-        await using (CarinaDbContext measuring = database.Open())
+        await using (AsyncServiceScope measuring = container.CreateAsyncScope())
         {
-            var walked = new CandidateChannelRepository(measuring);
+            ICandidateChannelRepository walked = Candidates(measuring);
 
             foreach (CandidateChannel candidate in await walked.ListForServiceAsync(networkId, serviceId, Cancel))
             {
@@ -217,8 +228,8 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
 
         await ApplyAsync(ScanDifference.Nothing);
 
-        await using CarinaDbContext reading = database.Open();
-        var candidates = new CandidateChannelRepository(reading);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        ICandidateChannelRepository candidates = Candidates(reading);
         CandidateChannel? selected = await candidates.FindSelectedAsync(networkId, serviceId, Cancel);
 
         Assert.Equal(OtherPhysicalChannel, selected?.Tuning.PhysicalChannel);
@@ -230,15 +241,16 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
 
     private async Task<ScanApplication> ApplyAsync(ScanDifference difference)
     {
-        await using CarinaDbContext writing = database.Open();
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
 
-        return await new ScanApplier(
-            new ChannelLineupDomainService(
-                new BroadcastServiceRepository(writing),
-                new CandidateChannelRepository(writing)),
-            new DatabaseAtomicWrite(writing),
-            new RecordingAppEvents(),
-            new StillClock()).ApplyAsync(difference, [TuneSystem.IsdbT], Cancel);
+        return await writing.ServiceProvider.GetRequiredService<ScanApplier>()
+            .ApplyAsync(difference, [TuneSystem.IsdbT], Cancel);
+    }
+
+    private static void StandingStill(IServiceCollection replace)
+    {
+        replace.AddSingleton<TimeProvider>(new StillClock());
+        replace.AddSingleton<IAppEventPublisher>(new RecordingAppEvents());
     }
 
     private static ScanChannelChange Channel(
@@ -262,4 +274,10 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
             ServiceCategory.Television,
             [channel],
             seen);
+
+    private static IBroadcastServiceRepository BroadcastServices(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IBroadcastServiceRepository>();
+
+    private static ICandidateChannelRepository Candidates(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ICandidateChannelRepository>();
 }
