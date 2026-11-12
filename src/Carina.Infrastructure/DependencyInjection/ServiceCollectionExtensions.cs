@@ -268,6 +268,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CatalogMatching>();
         services.AddScoped<SegmentDetecting>();
         services.AddScoped<ISegmentTrainer, SegmentTrainer>();
+        services.AddScoped<ViewerActionIntakeDomainService>();
         services.AddScoped<CaptionTrackMux>();
         services.AddScoped<ICaptionTrackWorklist, CaptionTrackWorklist>();
         services.AddScoped<IArtefactCaptioning, ArtefactCaptionTracks>();

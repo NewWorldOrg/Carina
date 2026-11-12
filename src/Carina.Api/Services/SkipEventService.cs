@@ -26,8 +26,7 @@ public sealed record SentSkip(ViewerActionKind? Event, SegmentKind? Kind, double
 /// </summary>
 public sealed class SkipEventService(
     IRecordingDirectory recordings,
-    ISegmentModelVersionRepository versions,
-    ISkipEventRepository skips,
+    ViewerActionIntakeDomainService intake,
     TimeProvider clock)
 {
     public async Task<ServiceResult<SkipEvent, SkipEventFailure>> TakeAsync(RecordingId id, SentSkip sent, CancellationToken cancellationToken)
@@ -45,14 +44,14 @@ public sealed class SkipEventService(
             return Failure(Unread(sent, recording.Written), SkipEventFailure.Unreadable);
         }
 
-        if (sent.ModelVersion is { } number && await versions.FindAsync(number, cancellationToken) is null)
+        if (!await intake.IsOfferedByAVersionKeptAsync(sent.ModelVersion, cancellationToken))
         {
             return Failure("modelVersion: expected the number of a version of the model, or null for a chapter an encode marked.", SkipEventFailure.Unreadable);
         }
 
         SkipEvent skip = SkipEvent.Of(id, new ViewerAction(clock.GetUtcNow().UtcDateTime, read.Action, read.Kind, read.From, read.To, sent.ModelVersion));
 
-        return await skips.TakeAsync(skip, cancellationToken)
+        return await intake.TakeAsync(skip, cancellationToken)
             ? ServiceResult<SkipEvent, SkipEventFailure>.Success(skip)
             : Failure($"Recording {id.Wire} takes at most {SkipEvent.MostAnHour} skip events an hour.", SkipEventFailure.TooMany);
     }
