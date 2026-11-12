@@ -121,6 +121,45 @@ public sealed class ChannelRotationDomainServiceTests
         Assert.False(leaving.IsInRotation);
     }
 
+    [Fact(DisplayName = "BR-ES-002: a candidate a guide visit could not tune with counts the failure")]
+    public async Task ACandidateAGuideVisitCouldNotTuneWithCountsTheFailure()
+    {
+        CandidateChannel candidate = Held(101, TuningParameters.Terrestrial(27));
+
+        bool told = await Rotation.RecordTuneFailureAsync(candidate.Id, Backoff, At, Cancel);
+
+        Assert.True(told);
+        Assert.Equal(1, candidate.ConsecutiveFailures);
+        Assert.Equal(RotationState.BackingOff, candidate.RotationState);
+        Assert.Equal(At.AddMinutes(1), candidate.NextAttemptAt);
+        Assert.Equal(1, candidates.Saves);
+    }
+
+    [Fact(DisplayName = "BR-ES-002: a candidate a guide visit reached is back in the rotation, keeping the signal a scan measured")]
+    public async Task ACandidateAGuideVisitReachedIsBackInTheRotation()
+    {
+        CandidateChannel candidate = Held(101, TuningParameters.Terrestrial(27));
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At.AddHours(-2), 36_000), At.AddHours(-2));
+        candidate.RecordTuningFailure(Backoff, At.AddHours(-1));
+
+        bool told = await Rotation.RecordTuneReachedAsync(candidate.Id, At, Cancel);
+
+        Assert.True(told);
+        Assert.Equal(0, candidate.ConsecutiveFailures);
+        Assert.Equal(RotationState.Active, candidate.RotationState);
+        Assert.Equal(At, candidate.LastSeenAt);
+        Assert.Equal(36_000, candidate.LastMeasurement?.CnrMilliDecibels);
+        Assert.Equal(1, candidates.Saves);
+    }
+
+    [Fact(DisplayName = "BR-ES-002: a candidate that is gone is told nothing")]
+    public async Task ACandidateThatIsGoneIsToldNothing()
+    {
+        Assert.False(await Rotation.RecordTuneFailureAsync(CandidateChannelId.New(), Backoff, At, Cancel));
+        Assert.False(await Rotation.RecordTuneReachedAsync(CandidateChannelId.New(), At, Cancel));
+        Assert.Equal(0, candidates.Saves);
+    }
+
     private CandidateChannel Held(int serviceId, TuningParameters tuning)
     {
         if (!services.Services.Any(service => service.ServiceId.Equals(new ServiceId(serviceId))))

@@ -180,19 +180,17 @@ public sealed class CollectionRound(
 
         DateTime at = clock.GetUtcNow().UtcDateTime;
 
-        if (CollectionBackOff.IsWorthReportingToTheTuner(outcome))
+        switch (CollectionBackOff.ReportToTheTuner(outcome))
         {
-            await tuning.ReportFailureAsync(candidateChannelId, at, abort);
+            case TunerReport.Failed:
+                await tuning.ReportFailureAsync(candidateChannelId, at, abort);
 
-            return;
+                break;
+            case TunerReport.Reached:
+                await tuning.ReportReachedAsync(candidateChannelId, at, abort);
+
+                break;
         }
-
-        if (outcome is VisitOutcome.Interrupted)
-        {
-            return;
-        }
-
-        await tuning.ReportReachedAsync(candidateChannelId, at, abort);
     }
 
     private void NoticeWhatTheStreamDeclared(BroadcastStream stream, VisitResult visit)

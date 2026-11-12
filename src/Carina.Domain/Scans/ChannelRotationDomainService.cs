@@ -3,8 +3,8 @@ using Carina.Domain.Channels;
 namespace Carina.Domain.Scans;
 
 /// <summary>
-/// Records on each candidate channel held what a scan learnt of its reception, and which candidates that took out of
-/// the rotation.
+/// Records on each candidate channel held what a scan or another tuning learnt of its reception, and which candidates
+/// a scan took out of the rotation.
 /// </summary>
 public sealed class ChannelRotationDomainService(
     IBroadcastServiceRepository services,
@@ -57,6 +57,53 @@ public sealed class ChannelRotationDomainService(
         }
 
         return departures;
+    }
+
+    /// <summary>
+    /// A tuning outside a scan that failed counts against the candidate it tuned with. Answers false when that
+    /// candidate is gone.
+    /// </summary>
+    public Task<bool> RecordTuneFailureAsync(
+        CandidateChannelId candidateChannelId,
+        RotationBackoff backoff,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(backoff);
+
+        return TellAsync(candidateChannelId, candidate => candidate.RecordTuningFailure(backoff, at), cancellationToken);
+    }
+
+    /// <summary>
+    /// A tuning outside a scan that reached the candidate it tuned with takes it back into the rotation with a lock
+    /// and nothing measured, so the signal a scan measured stays. Answers false when that candidate is gone.
+    /// </summary>
+    public Task<bool> RecordTuneReachedAsync(
+        CandidateChannelId candidateChannelId,
+        DateTime at,
+        CancellationToken cancellationToken)
+        => TellAsync(
+            candidateChannelId,
+            candidate => candidate.RecordTuningSuccess(SignalMeasurement.WithLock(at), at),
+            cancellationToken);
+
+    private async Task<bool> TellAsync(
+        CandidateChannelId candidateChannelId,
+        Action<CandidateChannel> tell,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(candidateChannelId);
+
+        if (await candidates.FindAsync(candidateChannelId, cancellationToken) is not { } candidate)
+        {
+            return false;
+        }
+
+        tell(candidate);
+
+        await candidates.SaveAsync(candidate, cancellationToken);
+
+        return true;
     }
 
     private static bool Received(

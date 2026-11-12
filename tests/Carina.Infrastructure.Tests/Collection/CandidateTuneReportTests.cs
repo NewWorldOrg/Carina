@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Scans;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Scanning;
 using Carina.TestSupport;
@@ -14,7 +15,10 @@ public sealed class CandidateTuneReportTests
     private readonly HeldCandidates candidates = new();
 
     private CandidateTuneFailureReporter Reporter
-        => new(candidates, ScanSettings.Default, NullLogger<CandidateTuneFailureReporter>.Instance);
+        => new(
+            new ChannelRotationDomainService(new HeldServices(), candidates),
+            ScanSettings.Default,
+            NullLogger<CandidateTuneFailureReporter>.Instance);
 
     [Fact]
     public async Task ACollectionVisitDoesNotEraseTheCarrierToNoiseAScanRead()
