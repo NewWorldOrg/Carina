@@ -95,6 +95,9 @@ internal sealed class HeldDestinationsOfNotices : INotificationDestinationReposi
     public Task<NotificationDestination?> FindAsync(NotificationDestinationId id, CancellationToken cancellationToken)
         => Task.FromResult(Destinations.SingleOrDefault(destination => destination.Id.Equals(id)));
 
+    public Task<NotificationDestination?> FindByEndpointHashAsync(string endpointHash, CancellationToken cancellationToken)
+        => Task.FromResult(Destinations.SingleOrDefault(destination => destination.EndpointHash == endpointHash));
+
     public Task<IReadOnlyList<NotificationDestination>> ListAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<NotificationDestination>>([.. Destinations]);
 

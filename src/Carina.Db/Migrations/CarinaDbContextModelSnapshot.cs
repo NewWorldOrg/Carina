@@ -1716,6 +1716,11 @@ namespace Carina.Db.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("enabled");
 
+                    b.Property<string>("EndpointHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("endpoint_hash");
+
                     b.Property<string>("LastFailure")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
@@ -1751,15 +1756,21 @@ namespace Carina.Db.Migrations
                     b.HasKey("Id")
                         .HasName("pk_notification_destination");
 
+                    b.HasIndex("EndpointHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_notification_destination_endpoint_hash");
+
                     b.ToTable("notification_destination", null, t =>
                         {
+                            t.HasCheckConstraint("ck_notification_destination_endpoint_hash", "(target = 'Push') = (endpoint_hash IS NOT NULL)\nAND (endpoint_hash IS NULL OR endpoint_hash ~ '^[0-9a-f]{64}$')");
+
                             t.HasCheckConstraint("ck_notification_destination_last_failure", "(last_failure IS NULL OR last_failure IN ('TimedOut', 'RateLimited', 'ServerFailed', 'Unreachable', 'Rejected', 'DestinationDisabled', 'Unreadable', 'TooOld', 'TlsFailed'))\nAND (last_failure IS NULL OR last_result_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_notification_destination_name", "btrim(name) = name AND length(name) > 0");
 
                             t.HasCheckConstraint("ck_notification_destination_sealed_url", "octet_length(sealed_url) BETWEEN 1 AND 4096");
 
-                            t.HasCheckConstraint("ck_notification_destination_target", "target IN ('Slack', 'Discord')");
+                            t.HasCheckConstraint("ck_notification_destination_target", "target IN ('Slack', 'Discord', 'Push')");
 
                             t.HasCheckConstraint("ck_notification_destination_url_tail", "length(url_tail) = 4");
                         });

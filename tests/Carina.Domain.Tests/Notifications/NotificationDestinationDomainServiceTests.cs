@@ -1,3 +1,6 @@
+using System.Buffers.Text;
+using System.Security.Cryptography;
+
 using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
@@ -46,6 +49,129 @@ public sealed class NotificationDestinationDomainServiceTests
         rules.Rules.Add(NotificationRule.Usual(NotificationRuleId.New(), held.Id, At));
 
         Assert.Null(await Service.UsualRuleForAsync(Unheld(), Cancel));
+    }
+
+    [Fact(DisplayName = "D-9: the first browser, with no destination and no set of rules held, comes with the usual set of rules told to it")]
+    public async Task TheFirstBrowserComesWithTheUsualSetOfRules()
+    {
+        PushSubscription subscription = Subscription("first");
+
+        PushEnrolment enrolment = await Service.EnrolAsync(new NotificationName("A browser"), subscription, [4, 5, 6], At, Cancel);
+
+        Assert.True(enrolment.Added);
+        Assert.Equal(WebhookTarget.Push, enrolment.Destination.Target);
+        Assert.Equal("A browser", enrolment.Destination.Name.Value);
+        Assert.Equal(subscription.Fingerprint, enrolment.Destination.EndpointHash);
+        Assert.Equal([4, 5, 6], enrolment.Destination.SealedUrl);
+        Assert.True(enrolment.Destination.Enabled);
+        Assert.NotNull(enrolment.Usual);
+        Assert.Equal([enrolment.Destination.Id], enrolment.Usual.Destinations);
+    }
+
+    [Fact(DisplayName = "D-9: a browser registered beside another destination comes with no set of rules")]
+    public async Task ALaterBrowserComesWithNoSetOfRules()
+    {
+        destinations.Destinations.Add(Unheld());
+
+        PushEnrolment enrolment = await Service.EnrolAsync(new NotificationName("A browser"), Subscription("first"), [4, 5, 6], At, Cancel);
+
+        Assert.True(enrolment.Added);
+        Assert.Null(enrolment.Usual);
+    }
+
+    [Fact(DisplayName = "BR-ND-015: a browser registered again under the same endpoint stays one row, which takes the subscription and keeps its name and whether it is on")]
+    public async Task ABrowserRegisteredAgainStaysOneRow()
+    {
+        NotificationDestination held = Browser("first", [4, 5, 6]);
+        held.Disable(At.AddMinutes(1));
+        held.NoteTurnedDown(At.AddMinutes(2));
+        destinations.Destinations.Add(held);
+        PushSubscription again = PushSubscription.Read(Subscription("first").EndpointAsWritten, OtherKey(), OtherSecret)!;
+
+        PushEnrolment enrolment = await Service.EnrolAsync(new NotificationName("Another name"), again, [7, 8], At.AddHours(1), Cancel);
+
+        Assert.False(enrolment.Added);
+        Assert.Null(enrolment.Usual);
+        Assert.Same(held, enrolment.Destination);
+        Assert.Equal("A browser", held.Name.Value);
+        Assert.False(held.Enabled);
+        Assert.Equal([7, 8], held.SealedUrl);
+        Assert.Equal(again.Fingerprint, held.EndpointHash);
+        Assert.Null(held.LastFailure);
+        Assert.Equal(At.AddHours(1), held.ChangedAt);
+    }
+
+    [Fact(DisplayName = "BR-ND-015: a browser registered again when it is the only destination and no set of rules is held makes no set of rules")]
+    public async Task ABrowserRegisteredAgainMakesNoSetOfRules()
+    {
+        destinations.Destinations.Add(Browser("first", [4, 5, 6]));
+
+        PushEnrolment enrolment = await Service.EnrolAsync(new NotificationName("A browser"), Subscription("first"), [7, 8], At.AddHours(1), Cancel);
+
+        Assert.False(enrolment.Added);
+        Assert.Null(enrolment.Usual);
+    }
+
+    [Fact(DisplayName = "BR-ND-015: the browser of a row takes another subscription and keeps its name and whether it is on")]
+    public async Task TheBrowserOfARowTakesAnotherSubscription()
+    {
+        NotificationDestination held = Browser("first", [4, 5, 6]);
+        destinations.Destinations.Add(held);
+        PushSubscription other = Subscription("second");
+
+        PushReplacement replacement = await Service.ReplaceAsync(held.Id, other, [7, 8], At.AddHours(1), Cancel);
+
+        Assert.Null(replacement.Refusal);
+        Assert.Same(held, replacement.Destination);
+        Assert.Equal(other.Fingerprint, held.EndpointHash);
+        Assert.Equal([7, 8], held.SealedUrl);
+        Assert.Equal("A browser", held.Name.Value);
+        Assert.True(held.Enabled);
+    }
+
+    [Fact(DisplayName = "BR-ND-015: the browser of a row takes the same endpoint again with other keys")]
+    public async Task TheBrowserOfARowTakesTheSameEndpointAgain()
+    {
+        NotificationDestination held = Browser("first", [4, 5, 6]);
+        destinations.Destinations.Add(held);
+        PushSubscription again = PushSubscription.Read(Subscription("first").EndpointAsWritten, OtherKey(), OtherSecret)!;
+
+        PushReplacement replacement = await Service.ReplaceAsync(held.Id, again, [7, 8], At.AddHours(1), Cancel);
+
+        Assert.Null(replacement.Refusal);
+        Assert.Equal([7, 8], held.SealedUrl);
+    }
+
+    [Fact(DisplayName = "BR-ND-015: the browser of a row does not take an endpoint another row is held under")]
+    public async Task TheBrowserOfARowDoesNotTakeAnEndpointAnotherRowIsHeldUnder()
+    {
+        NotificationDestination held = Browser("first", [4, 5, 6]);
+        NotificationDestination other = Browser("second", [1, 1]);
+        destinations.Destinations.Add(held);
+        destinations.Destinations.Add(other);
+
+        PushReplacement replacement = await Service.ReplaceAsync(held.Id, Subscription("second"), [7, 8], At.AddHours(1), Cancel);
+
+        Assert.Equal(PushReplacementRefusal.HeldByAnother, replacement.Refusal);
+        Assert.Null(replacement.Destination);
+        Assert.Equal([4, 5, 6], held.SealedUrl);
+        Assert.Equal(Subscription("first").Fingerprint, held.EndpointHash);
+        Assert.Equal([1, 1], other.SealedUrl);
+    }
+
+    [Fact(DisplayName = "BR-ND-015: a row that is not held, or is a webhook, takes no subscription")]
+    public async Task ARowThatIsNotABrowserTakesNoSubscription()
+    {
+        NotificationDestination webhook = Unheld();
+        destinations.Destinations.Add(webhook);
+
+        PushReplacement unknown = await Service.ReplaceAsync(NotificationDestinationId.New(), Subscription("first"), [7, 8], At, Cancel);
+        PushReplacement notABrowser = await Service.ReplaceAsync(webhook.Id, Subscription("first"), [7, 8], At, Cancel);
+
+        Assert.Equal(PushReplacementRefusal.NoSuchBrowser, unknown.Refusal);
+        Assert.Equal(PushReplacementRefusal.NoSuchBrowser, notABrowser.Refusal);
+        Assert.Equal(WebhookTarget.Slack, webhook.Target);
+        Assert.Equal([1, 2, 3], webhook.SealedUrl);
     }
 
     [Fact(DisplayName = "BR-NS-002: a destination turned off gives up the deliveries that wait for it, and no other")]
@@ -103,6 +229,30 @@ public sealed class NotificationDestinationDomainServiceTests
         Assert.Equal([shared.Id, alone.Id], retired.NoLongerTelling.Select(watch => watch.Id));
         Assert.Equal([kept], retired.NoLongerTelling[0].Destinations);
         Assert.Equal(ProgrammeWatchState.Cancelled, retired.NoLongerTelling[1].State);
+    }
+
+    private const string OtherSecret = "AAECAwQFBgcICQoLDA0ODw";
+
+    private static NotificationDestination Browser(string registration, byte[] sealedSubscription)
+        => NotificationDestination.Subscribe(
+            NotificationDestinationId.New(),
+            new NotificationName("A browser"),
+            Subscription(registration),
+            sealedSubscription,
+            At);
+
+    private static PushSubscription Subscription(string registration)
+        => PushSubscription.Read(
+            $"https://fcm.googleapis.com/fcm/send/made-up-{registration}",
+            "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+            "BTBZMqHH6r4Tts7J_aSIgg")!;
+
+    private static string OtherKey()
+    {
+        using ECDiffieHellman pair = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        ECParameters parameters = pair.ExportParameters(includePrivateParameters: false);
+
+        return Base64Url.EncodeToString([0x04, .. parameters.Q.X!, .. parameters.Q.Y!]);
     }
 
     private static NotificationDestination Unheld()

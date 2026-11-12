@@ -16,6 +16,16 @@ public sealed class NotificationDestinationRepository(CarinaDbContext context) :
             .SingleOrDefaultAsync(destination => destination.Id == id, cancellationToken);
     }
 
+    public async Task<NotificationDestination?> FindByEndpointHashAsync(
+        string endpointHash,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(endpointHash);
+
+        return await context.Set<NotificationDestination>()
+            .SingleOrDefaultAsync(destination => destination.EndpointHash == endpointHash, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<NotificationDestination>> ListAsync(CancellationToken cancellationToken)
         => await context.Set<NotificationDestination>()
             .OrderBy(destination => destination.CreatedAt)

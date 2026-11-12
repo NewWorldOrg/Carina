@@ -4,6 +4,11 @@ public interface INotificationDestinationRepository
 {
     Task<NotificationDestination?> FindAsync(NotificationDestinationId id, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The browser held under the hash of this endpoint, if there is one.
+    /// </summary>
+    Task<NotificationDestination?> FindByEndpointHashAsync(string endpointHash, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<NotificationDestination>> ListAsync(CancellationToken cancellationToken);
 
     Task AddAsync(NotificationDestination destination, CancellationToken cancellationToken);
