@@ -2,27 +2,15 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Api.Services;
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Auth;
 
-public sealed class OidcConfigEndpointTests
+[Trait("Category", "Feature")]
+public sealed class PutOidcConfigActionTests
 {
-    [Fact]
-    public async Task AnInstallationWithNoProviderSaysWhichRedirectUriToRegisterFirst()
-    {
-        await using OidcProbe probe = OidcProbe.OverHttp();
-
-        JsonElement config = await ReadAsync(probe);
-
-        Assert.False(config.GetProperty("configured").GetBoolean());
-        Assert.Equal("http://localhost/api/auth/oidc/callback", config.GetProperty("redirectUri").GetString());
-        Assert.True(config.GetProperty("admitsEveryone").GetBoolean());
-        Assert.False(config.GetProperty("secretHeld").GetBoolean());
-        Assert.False(config.GetProperty("secretLost").GetBoolean());
-    }
-
     [Fact]
     public async Task SavingAProviderChecksTheDiscoveryDocumentAnswersBeforeAnythingIsKept()
     {
@@ -61,25 +49,6 @@ public sealed class OidcConfigEndpointTests
         Assert.Equal(["operators"], Strings(config, "allowedGroups"));
         Assert.Equal(["example.test"], Strings(config, "allowedHostedDomains"));
         Assert.Equal(OnTheWire(OidcReach.Reachable), config.GetProperty("reach").GetString());
-    }
-
-    [Fact]
-    public async Task TheSecretGoesInAndNeverComesBackOut()
-    {
-        await using OidcProbe probe = OidcProbe.OverHttp();
-
-        await SaveAsync(probe, new
-        {
-            discoveryUrl = MockIdentityProvider.DiscoveryUrl,
-            clientId = "carina",
-            clientSecret = OidcProbe.Secret,
-        });
-
-        using HttpResponseMessage read = await probe.ReadConfigAsync();
-        string body = await read.Content.ReadAsStringAsync();
-
-        Assert.DoesNotContain(OidcProbe.Secret, body, StringComparison.Ordinal);
-        Assert.True(JsonDocument.Parse(body).RootElement.GetProperty("data").GetProperty("secretHeld").GetBoolean());
     }
 
     [Fact]
@@ -122,19 +91,6 @@ public sealed class OidcConfigEndpointTests
             OidcConfigService.AFirstSaveCarriesItsSecret,
             await saved.Content.ReadAsStringAsync(),
             StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task ASecretThatCanNoLongerBeOpenedIsSaidToBeLostWhileTheRestOfTheFormStays()
-    {
-        await using OidcProbe probe = OidcProbe.OverHttp().WithTheSecretLost();
-
-        JsonElement config = await ReadAsync(probe);
-
-        Assert.True(config.GetProperty("secretLost").GetBoolean());
-        Assert.False(config.GetProperty("secretHeld").GetBoolean());
-        Assert.False(config.GetProperty("configured").GetBoolean());
-        Assert.Equal(MockIdentityProvider.DiscoveryUrl, config.GetProperty("discoveryUrl").GetString());
     }
 
     [Fact]
@@ -238,13 +194,6 @@ public sealed class OidcConfigEndpointTests
         Assert.Equal("restrictionInvalid", await RefusalAsync(saved));
     }
 
-    private static async Task<string?> RefusalAsync(HttpResponseMessage refused)
-    {
-        using JsonDocument body = JsonDocument.Parse(await refused.Content.ReadAsStringAsync());
-
-        return body.RootElement.GetProperty("data").GetProperty("refusal").GetString();
-    }
-
     [Fact]
     public async Task ClearingTheFormLeavesTheInstallationOnItsLocalAccount()
     {
@@ -257,43 +206,11 @@ public sealed class OidcConfigEndpointTests
         Assert.Equal(OnTheWire(OidcReach.NotConfigured), cleared.GetProperty("reach").GetString());
     }
 
-    [Fact]
-    public async Task ASavedProviderThatStopsAnsweringIsSurfacedAsDegradedWithoutTakingTheAppDown()
+    private static async Task<string?> RefusalAsync(HttpResponseMessage refused)
     {
-        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
-        probe.Idp.Reachable = false;
+        using JsonDocument body = JsonDocument.Parse(await refused.Content.ReadAsStringAsync());
 
-        using HttpResponseMessage started = await probe.StartAsync();
-        using HttpResponseMessage health = await probe.Client.GetAsync(new Uri("/api/health", UriKind.Relative));
-        JsonElement told = JsonDocument.Parse(await health.Content.ReadAsStringAsync()).RootElement;
-
-        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
-        Assert.Equal(HealthView.Alive, told.GetProperty("status").GetString());
-        Assert.Equal([HealthView.TheIdentityProvider], Strings(told, "degraded"));
-    }
-
-    [Fact]
-    public async Task AProviderThatAnswersLeavesHealthWithNothingDegradedToReport()
-    {
-        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
-
-        using HttpResponseMessage started = await probe.StartAsync();
-        using HttpResponseMessage health = await probe.Client.GetAsync(new Uri("/api/health", UriKind.Relative));
-        JsonElement told = JsonDocument.Parse(await health.Content.ReadAsStringAsync()).RootElement;
-
-        Assert.Equal(HealthView.Alive, told.GetProperty("status").GetString());
-        Assert.Empty(Strings(told, "degraded"));
-    }
-
-    [Fact]
-    public async Task ReadingTheConfigurationNeedsTheCallerToHaveSignedIn()
-    {
-        await using OidcProbe probe = OidcProbe.OverHttp();
-
-        using HttpResponseMessage read = await probe.Client.GetAsync(
-            new Uri("/api/auth/oidc-config", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.Unauthorized, read.StatusCode);
+        return body.RootElement.GetProperty("data").GetProperty("refusal").GetString();
     }
 
     private static string OnTheWire(OidcReach reach)
@@ -301,15 +218,6 @@ public sealed class OidcConfigEndpointTests
 
     private static string[] Strings(JsonElement element, string name)
         => [.. element.GetProperty(name).EnumerateArray().Select(entry => entry.GetString()!)];
-
-    private static async Task<JsonElement> ReadAsync(OidcProbe probe)
-    {
-        using HttpResponseMessage read = await probe.ReadConfigAsync();
-
-        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
-
-        return JsonDocument.Parse(await read.Content.ReadAsStringAsync()).RootElement.GetProperty("data").Clone();
-    }
 
     private static async Task<JsonElement> SaveAsync(OidcProbe probe, object body)
     {

@@ -3,6 +3,9 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
+using Carina.Api.Tests.Unit;
+
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -14,40 +17,88 @@ using Microsoft.Net.Http.Headers;
 
 using SameSiteMode = Microsoft.AspNetCore.Http.SameSiteMode;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Auth;
 
-internal sealed class CookieAppendingHandler(
-    IOptionsMonitor<AuthenticationSchemeOptions> options,
-    ILoggerFactory logger,
-    UrlEncoder encoder
-) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
-{
-    public const string SchemeName = "CookieProbe";
-
-    public const string CookieName = "carina-probe";
-
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
-        Response.Cookies.Append(
-            CookieName,
-            "issued",
-            new CookieOptions
-            {
-                SameSite = SameSiteMode.None,
-                HttpOnly = false,
-                Path = "/",
-            });
-
-        return Task.FromResult(AuthenticateResult.NoResult());
-    }
-}
-
-public sealed class StateChangingRequestTests(TestingWebApplicationFactory factory)
+[Trait("Category", "Feature")]
+public sealed class StateChangingRequestMiddlewareTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
+    private const int TheStateChangingSurfacesThisRepositoryHadWhenTheSweepWasWritten = 36;
+
+    private const string Elsewhere = "https://elsewhere.example";
+
     private static readonly Uri Restart = new("/api/driver/restart", UriKind.Relative);
 
     private static readonly Uri Status = new("/api/driver/status", UriKind.Relative);
+
+    [Fact]
+    public async Task BrLa002EveryStateChangingSurfaceRefusesARequestNamingNoOrigin()
+    {
+        await SweepAsync(
+            (surface, client) => SendingAsync(client, surface, origin: null, BodyOrdinarilySentTo(surface)),
+            (surface, status) => status == HttpStatusCode.Forbidden
+                ? null
+                : $"{surface} answered {(int)status} to a request naming no origin");
+    }
+
+    [Fact]
+    public async Task BrLa002EveryStateChangingSurfaceRefusesARequestNamingAnotherOrigin()
+    {
+        await SweepAsync(
+            (surface, client) => SendingAsync(client, surface, Elsewhere, BodyOrdinarilySentTo(surface)),
+            (surface, status) => status == HttpStatusCode.Forbidden
+                ? null
+                : $"{surface} answered {(int)status} to a request naming another origin");
+    }
+
+    [Fact]
+    public async Task BrLa002EveryStateChangingSurfaceRefusesABodyAFormCouldHavePosted()
+    {
+        await SweepAsync(
+            (surface, client) => SendingAsync(client, surface, Here(client), Form()),
+            (surface, status) => status == HttpStatusCode.UnsupportedMediaType
+                ? null
+                : $"{surface} answered {(int)status} to a form body");
+    }
+
+    [Fact]
+    public async Task BrLa002EverySurfaceAskedForAJsonBodyRefusesARequestCarryingNone()
+    {
+        await SweepAsync(
+            (surface, client) => SendingAsync(client, surface, Here(client), content: null),
+            (surface, status) =>
+            {
+                bool asksForJson = EndpointRules.GuardsRequiredBy(surface.Method, carriesABody: false)
+                    .Contains(StateChangeGuard.JsonBody);
+
+                if (asksForJson && status != HttpStatusCode.UnsupportedMediaType)
+                {
+                    return $"{surface} answered {(int)status} to a request carrying no content type";
+                }
+
+                if (!asksForJson && status is HttpStatusCode.UnsupportedMediaType or HttpStatusCode.Forbidden)
+                {
+                    return $"{surface} answered {(int)status} to a bodiless request that named this origin";
+                }
+
+                return null;
+            });
+    }
+
+    [Fact]
+    public void TheSweepReadsTheSameGuardTableForEveryMethodItSends()
+    {
+        IReadOnlyList<RoutedSurface> changing = [.. Inventory().Where(ChangesState)];
+
+        Assert.True(
+            changing.Count >= TheStateChangingSurfacesThisRepositoryHadWhenTheSweepWasWritten,
+            $"the sweep read {changing.Count} surfaces, which is fewer than it was written against");
+        Assert.All(
+            changing,
+            surface => Assert.Contains(
+                StateChangeGuard.Origin,
+                EndpointRules.GuardsRequiredBy(surface.Method, carriesABody: false)));
+    }
 
     [Fact]
     public async Task ARequestFromThisOriginCarryingJsonReachesTheEndpoint()
@@ -172,28 +223,67 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 
-    [Fact]
-    public async Task ACookieLeavesWithSameSiteLaxAndOutOfReachOfScripts()
+    private async Task SweepAsync(
+        Func<RoutedSurface, HttpClient, Task<HttpResponseMessage>> asking,
+        Func<RoutedSurface, HttpStatusCode, string?> judging)
     {
-        WebApplicationFactory<Program> probed = factory.WithWebHostBuilder(builder =>
-            builder.ConfigureTestServices(services =>
-                services
-                    .AddAuthentication(CookieAppendingHandler.SchemeName)
-                    .AddScheme<AuthenticationSchemeOptions, CookieAppendingHandler>(
-                        CookieAppendingHandler.SchemeName,
-                        _ => { })));
-        using HttpClient client = probed.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
+        client.DefaultRequestHeaders.Remove(HeaderNames.Origin);
+        var wrong = new List<string>();
+        int asked = 0;
 
-        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/health", UriKind.Relative));
-        string cookie = Assert.Single(response.Headers.GetValues(HeaderNames.SetCookie));
+        foreach (RoutedSurface surface in Inventory().Where(ChangesState))
+        {
+            using HttpResponseMessage response = await asking(surface, client);
 
-        Assert.StartsWith(CookieAppendingHandler.CookieName, cookie, StringComparison.Ordinal);
-        Assert.Contains("samesite=lax", cookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("samesite=none", cookie, StringComparison.OrdinalIgnoreCase);
+            asked++;
+
+            if (judging(surface, response.StatusCode) is { } complaint)
+            {
+                wrong.Add(complaint);
+            }
+        }
+
+        Assert.Empty(wrong);
+        Assert.True(
+            asked >= TheStateChangingSurfacesThisRepositoryHadWhenTheSweepWasWritten,
+            $"the sweep asked {asked} surfaces, which is fewer than it was written against");
     }
 
+    private static bool ChangesState(RoutedSurface surface)
+        => !surface.OpenToTheFrame && EndpointRules.GuardsRequiredBy(surface.Method, carriesABody: false).Count > 0;
+
+    private static async Task<HttpResponseMessage> SendingAsync(
+        HttpClient client,
+        RoutedSurface surface,
+        string? origin,
+        HttpContent? content)
+    {
+        using var asking = new HttpRequestMessage(
+            new HttpMethod(surface.Method),
+            new Uri(RouteInventory.SamplePath(surface.Pattern), UriKind.Relative))
+        {
+            Content = content,
+        };
+
+        if (origin is not null)
+        {
+            asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, origin);
+        }
+
+        return await client.SendAsync(asking, HttpCompletionOption.ResponseHeadersRead);
+    }
+
+    private static string Here(HttpClient client) => client.BaseAddress!.GetLeftPart(UriPartial.Authority);
+
+    private static HttpContent? BodyOrdinarilySentTo(RoutedSurface surface)
+        => HttpMethods.IsDelete(surface.Method) ? null : Json();
+
     private static StringContent Json() => new("{}", Encoding.UTF8, "application/json");
+
+    private static StringContent Form() => new("anything=1", Encoding.UTF8, "application/x-www-form-urlencoded");
+
+    private IReadOnlyList<RoutedSurface> Inventory() => RouteInventory.Of(factory);
 
     private static async Task<HttpResponseMessage> SendingAsync(
         HttpClient client,

@@ -1,12 +1,14 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Auth;
 
-public sealed class SignInOptionsEndpointTests
+[Trait("Category", "Feature")]
+public sealed class GetSignInOptionsActionTests
 {
     [Fact]
     public async Task TheSignInScreenIsToldThereIsOnlyTheLocalAccountBeforeAnyProviderIsSet()
@@ -57,25 +59,6 @@ public sealed class SignInOptionsEndpointTests
 
         Assert.True(options.GetProperty("identityProvider").GetBoolean());
         Assert.Equal(OnTheWire(OidcReach.OutOfReach), options.GetProperty("reach").GetString());
-    }
-
-    [Fact]
-    public async Task TheLocalAccountStillOpensASessionWhileTheProviderIsOutOfReach()
-    {
-        await using OidcProbe probe = OidcProbe.OverHttp().Configured().WithALocalAccount();
-        probe.Idp.Reachable = false;
-
-        using HttpResponseMessage signedIn = await probe.LogInAsync();
-        using HttpResponseMessage named = await probe.Client.GetAsync(
-            new Uri("/api/auth/me", UriKind.Relative));
-        using var body = JsonDocument.Parse(await named.Content.ReadAsStringAsync());
-
-        Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, named.StatusCode);
-        Assert.Equal(
-            FirstCredentials.Username,
-            body.RootElement.GetProperty("data").GetProperty("subject").GetString());
-        Assert.Equal("local", body.RootElement.GetProperty("data").GetProperty("method").GetString());
     }
 
     [Fact]

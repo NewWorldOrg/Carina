@@ -1,74 +1,169 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 
 using Carina.Api.Authentication;
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Auth;
+using Carina.Infrastructure.Auth;
 using Carina.TestSupport;
 
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Auth;
 
-public sealed class OidcSignInTests
+[Trait("Category", "Feature")]
+public sealed class CompleteOidcLoginActionTests
 {
-    [Fact]
-    public async Task TheRedirectToTheProviderAsksForACodeBoundToAStateANonceAndADigestedVerifier()
+    private const string Caller = "203.0.113.77";
+
+    private readonly RecordedStartup log = new();
+
+    [Fact(DisplayName = "BR-AU-021: the redirect that hands out the session cookie on the way back from the provider is not to be stored")]
+    public async Task BrAu021TheRedirectThatHandsOutTheSessionCookieOnTheWayBackIsNotToBeStored()
     {
         await using OidcProbe probe = OidcProbe.OverHttp().Configured();
 
-        Uri authorize = await probe.AuthorizeUriAsync();
-        Dictionary<string, StringValues> asked = QueryHelpers.ParseQuery(authorize.Query);
+        using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner"));
 
-        Assert.Equal($"{MockIdentityProvider.Issuer}{MockIdentityProvider.AuthorizePath}", authorize.GetLeftPart(UriPartial.Path));
-        Assert.Equal("code", asked["response_type"]);
-        Assert.Equal(probe.Idp.ClientId, asked["client_id"]);
-        Assert.Equal("http://localhost/api/auth/oidc/callback", asked["redirect_uri"]);
-        Assert.Contains("openid", asked["scope"].ToString(), StringComparison.Ordinal);
-        Assert.Equal(PkceChallenge.Method, asked["code_challenge_method"]);
-        Assert.Equal(Unguessable.Length, asked["state"].ToString().Length);
-        Assert.Equal(Unguessable.Length, asked["nonce"].ToString().Length);
-        Assert.NotEmpty(asked["code_challenge"].ToString());
+        Assert.True(arrived.Headers.Contains("Set-Cookie"));
+        Assert.True(NeverStored(arrived));
     }
 
-    [Fact(DisplayName = "BR-AU-021: the address of the provider is handed over escaped, with no raw space in it")]
-    public async Task BrAu021TheAddressOfTheProviderIsHandedOverEscaped()
+    [Fact(DisplayName = "BR-AU-021: the redirect that refuses the way back from the provider is not to be stored")]
+    public async Task BrAu021TheRedirectThatRefusesTheWayBackIsNotToBeStored()
     {
         await using OidcProbe probe = OidcProbe.OverHttp().Configured();
 
-        using HttpResponseMessage started = await probe.StartAsync();
-        string handed = Assert.Single(started.Headers.NonValidated[HeaderNames.Location]);
+        using HttpResponseMessage arrived = await probe.CallbackAsync(Unguessable.Issue(), "a code nobody issued");
 
-        Assert.DoesNotContain(" ", handed, StringComparison.Ordinal);
-        Assert.Contains("scope=openid%20profile%20email", handed, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Found, arrived.StatusCode);
+        Assert.True(NeverStored(arrived));
     }
 
     [Fact]
-    public async Task TwoStartsNeverShareAStateANonceOrAChallenge()
+    public async Task WithNobodyNamedEveryoneTheTenantCanSignInThroughIsLetIn()
     {
         await using OidcProbe probe = OidcProbe.OverHttp().Configured();
 
-        Dictionary<string, StringValues> first = QueryHelpers.ParseQuery((await probe.AuthorizeUriAsync()).Query);
-        Dictionary<string, StringValues> second = QueryHelpers.ParseQuery((await probe.AuthorizeUriAsync()).Query);
+        using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("a-stranger"));
 
-        Assert.NotEqual(first["state"], second["state"]);
-        Assert.NotEqual(first["nonce"], second["nonce"]);
-        Assert.NotEqual(first["code_challenge"], second["code_challenge"]);
+        Assert.Single(probe.Sessions.Sessions);
     }
 
     [Fact]
-    public async Task TheHandshakeIsMarkedByACookieTheScriptOnThePageCannotRead()
+    public async Task AMemberOfAnAllowedGroupIsLetIn()
     {
-        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured(allowedGroups: ["operators"]);
 
-        using HttpResponseMessage started = await probe.StartAsync();
-        string mark = started.Headers.GetValues(HeaderNames.SetCookie)
-            .Single(cookie => cookie.StartsWith(OidcHandshake.MarkName, StringComparison.Ordinal));
+        using HttpResponseMessage arrived = await probe.SignInAsync(
+            new MockIdentityUser("owner") { Groups = ["strangers", "operators"] });
 
-        Assert.Contains("httponly", mark, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("samesite=lax", mark, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("path=/", mark, StringComparison.OrdinalIgnoreCase);
+        Assert.Single(probe.Sessions.Sessions);
+    }
+
+    [Fact]
+    public async Task SomebodyInNoneOfTheAllowedGroupsIsKeptOut()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured(allowedGroups: ["operators"]);
+
+        using HttpResponseMessage arrived = await probe.SignInAsync(
+            new MockIdentityUser("a-stranger") { Groups = ["strangers"] });
+
+        Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SomebodyWhoseGroupsOverflowedOutOfTheTokenIsKeptOutRatherThanFetchedForElsewhere()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured(allowedGroups: ["operators"]);
+
+        using HttpResponseMessage arrived = await probe.SignInAsync(
+            new MockIdentityUser("owner") { GroupsOverflowed = true });
+
+        Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(probe.Idp.Visits, visit => visit.EndsWith("/groups", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AnOverflowIsNoObstacleWhereTheInstallationDecidesByHostedDomain()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured(allowedHostedDomains: ["example.test"]);
+
+        using HttpResponseMessage arrived = await probe.SignInAsync(
+            new MockIdentityUser("owner") { GroupsOverflowed = true, HostedDomain = "example.test" });
+
+        Assert.Single(probe.Sessions.Sessions);
+    }
+
+    [Fact]
+    public async Task AnAccountFromTheAllowedHostedDomainIsLetInWhereNoGroupsAreEverIssued()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured(allowedHostedDomains: ["example.test"]);
+
+        using HttpResponseMessage arrived = await probe.SignInAsync(
+            new MockIdentityUser("owner") { HostedDomain = "example.test" });
+
+        Assert.Single(probe.Sessions.Sessions);
+    }
+
+    [Fact]
+    public async Task AnAccountFromAnotherHostedDomainIsKeptOut()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured(allowedHostedDomains: ["example.test"]);
+
+        using HttpResponseMessage arrived = await probe.SignInAsync(
+            new MockIdentityUser("a-stranger") { HostedDomain = "elsewhere.test" });
+
+        Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AConsumerAccountCarryingNoHostedDomainIsKeptOut()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured(allowedHostedDomains: ["example.test"]);
+
+        using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("a-stranger"));
+
+        Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SomebodyKeptOutIsToldNoMoreThanSomebodyWhoseTokenNeverVerified()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured(allowedGroups: ["operators"]);
+
+        using HttpResponseMessage kept = await probe.SignInAsync(
+            new MockIdentityUser("a-stranger") { Groups = ["strangers"] });
+
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            kept.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -405,41 +500,138 @@ public sealed class OidcSignInTests
     }
 
     [Fact]
-    public async Task SigningOutNeverReachesTheProviderBecauseItWouldSignTheOperatorOutOfEverythingElse()
+    public async Task TheProviderIsSentOneRedirectUriHoweverEachHalfOfTheHandshakeArrived()
     {
-        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
-
-        using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner"));
-        using HttpResponseMessage away = await probe.Client.PostAsync(
-            new Uri("/api/auth/logout", UriKind.Relative),
-            AuthProbe.Json());
-
-        Assert.Equal(HttpStatusCode.NoContent, away.StatusCode);
-        Assert.False(probe.Idp.WasVisited(MockIdentityProvider.SignOutPath));
-        Assert.Empty(probe.Sessions.Sessions);
-    }
-
-    [Fact]
-    public async Task WithNoProviderConfiguredTheCallerIsSentBackToTheLocalFormRatherThanNowhere()
-    {
-        await using OidcProbe probe = OidcProbe.OverHttp();
-
-        using HttpResponseMessage started = await probe.StartAsync("/settings");
-
-        Assert.Equal(HttpStatusCode.Found, started.StatusCode);
-        Assert.StartsWith(LoginRedirect.Path, started.Headers.Location!.ToString(), StringComparison.Ordinal);
-        Assert.Contains(LoginRedirect.TheIdentityProviderFailed, started.Headers.Location!.ToString(), StringComparison.Ordinal);
-        Assert.Contains("%2Fsettings", started.Headers.Location!.ToString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task WithTheProviderOutOfReachTheCallerIsSentBackToTheLocalForm()
-    {
-        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
-        probe.Idp.Reachable = false;
+        await using PublicOriginProbe probe =
+            PublicOriginProbe.Named(PublicOriginProbe.PublicAddress).Configured();
 
         using HttpResponseMessage started = await probe.StartAsync();
+        var authorize = new Uri(started.Headers.Location!.ToString());
+        string code = probe.Idp.Authorize(authorize, new MockIdentityUser("someone"));
 
-        Assert.Contains(LoginRedirect.TheIdentityProviderFailed, started.Headers.Location!.ToString(), StringComparison.Ordinal);
+        using HttpResponseMessage back = await probe.CallbackFromInsideAsync(
+            MockIdentityProvider.StateOf(authorize),
+            code,
+            started.Headers.GetValues("Set-Cookie").First().Split(';')[0]);
+
+        Assert.Single(probe.Sessions.Sessions);
+        Assert.Equal(AuthMethod.Oidc, probe.Sessions.Sessions[0].Method);
     }
+
+    [Fact(DisplayName = "BR-AU-020: setting out for the provider and coming back with a session are each written down")]
+    public async Task BrAu020SettingOutForTheProviderAndComingBackAreEachWrittenDown()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp(Heard).Configured();
+
+        using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner"));
+
+        IReadOnlyList<SaidLine> written = Written();
+
+        Assert.Equal(
+            [
+                nameof(SignInMoment.TheWayToTheProviderWasOpened),
+                nameof(SignInMoment.TheWayBackFromTheProviderOpenedASession),
+            ],
+            written.Select(said => said.Only("Moment")));
+        Assert.Equal(SignInRecord.Absent, written[0].Only("HandshakeCookie"));
+        Assert.Equal(SignInRecord.Carried, written[1].Only("HandshakeCookie"));
+        Assert.Equal(nameof(AuthMethod.Oidc), written[1].Only("SignInMethod"));
+    }
+
+    [Fact(DisplayName = "BR-AU-020: a way back that is refused is written down once, as a warning, with why")]
+    public async Task BrAu020AWayBackThatIsRefusedIsWrittenDownOnceWithWhy()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp(Heard).Configured();
+
+        Uri authorize = await probe.AuthorizeUriAsync();
+        string code = probe.Idp.Authorize(authorize, new MockIdentityUser("owner"));
+
+        using HttpClient another = probe.Relaying("seen=before");
+        using HttpResponseMessage arrived = await probe.CallbackAsync(
+            MockIdentityProvider.StateOf(authorize),
+            code,
+            another);
+
+        SaidLine said = Assert.Single(log.By<SignInRecord>(LogLevel.Warning));
+
+        Assert.Empty(log.By<Carina.Api.Services.OidcLoginService>());
+        Assert.Equal(nameof(SignInMoment.TheWayBackFromTheProviderWasRefused), said.Only("Moment"));
+        Assert.Equal(nameof(OidcRefusal.TheHandshakeBelongsToAnotherBrowser), said.Only("Reason"));
+        Assert.Equal(SignInRecord.Absent, said.Only("HandshakeCookie"));
+    }
+
+    [Fact(DisplayName = "BR-AU-020: nothing a sign-in through the provider carries or hands out is in any line: not the state, the code, the mark, the cookie, the subject or the mail address")]
+    public async Task BrAu020NothingASignInThroughTheProviderCarriesOrHandsOutIsInAnyLine()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp(Heard).Configured();
+        var owner = new MockIdentityUser("the-subject-at-the-provider")
+        {
+            Email = "owner@example.test",
+            Name = "The Owner Themself",
+        };
+
+        using HttpResponseMessage started = await probe.StartAsync("/library?shelf=a-shelf-in-the-query");
+        var authorize = new Uri(started.Headers.Location!.ToString());
+        Dictionary<string, StringValues> asked = QueryHelpers.ParseQuery(authorize.Query);
+        string mark = CookieIn(started, OidcHandshake.MarkName);
+        string code = probe.Idp.Authorize(authorize, owner);
+
+        using HttpResponseMessage arrived = await probe.CallbackAsync(asked["state"], code);
+        string cookie = CookieIn(arrived, SessionCookie.Name);
+
+        using HttpResponseMessage again = await probe.CallbackAsync(asked["state"], code);
+
+        Assert.Equal(3, Written().Count);
+        NothingSays(
+            log.Everything,
+            asked["state"].ToString(),
+            asked["nonce"].ToString(),
+            asked["code_challenge"].ToString(),
+            code,
+            mark,
+            cookie,
+            SessionHandle.Of(new SessionId(cookie)).Value,
+            OidcProbe.Secret,
+            owner.Email,
+            owner.Name,
+            "a-shelf-in-the-query");
+        NothingSays(Written(), owner.Subject, Caller);
+    }
+
+    private static bool NeverStored(HttpResponseMessage response)
+        => response.Headers.CacheControl?.NoStore is true;
+
+    private static void NothingSays(IReadOnlyList<SaidLine> lines, params string[] values)
+    {
+        Assert.NotEmpty(lines);
+
+        foreach (SaidLine line in lines)
+        {
+            foreach (string value in values)
+            {
+                Assert.False(string.IsNullOrEmpty(value));
+                Assert.DoesNotContain(value, line.Text, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain(
+                    line.Values,
+                    held => held.Value?.ToString()?.Contains(value, StringComparison.OrdinalIgnoreCase) is true);
+            }
+        }
+    }
+
+    private static string CookieIn(HttpResponseMessage response, string name)
+    {
+        string handed = Assert.Single(
+            response.Headers.GetValues(HeaderNames.SetCookie),
+            cookie => cookie.StartsWith($"{name}=", StringComparison.Ordinal));
+
+        return handed[$"{name}=".Length..handed.IndexOf(';', StringComparison.Ordinal)];
+    }
+
+    private void Heard(IServiceCollection services)
+    {
+        services.AddSingleton<ILoggerProvider>(log);
+        services.AddSingleton<IStartupFilter>(new ArrivingFrom(IPAddress.Parse(Caller)));
+    }
+
+    private IReadOnlyList<SaidLine> Written() => log.By<SignInRecord>();
 }
