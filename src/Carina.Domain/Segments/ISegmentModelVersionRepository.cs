@@ -2,7 +2,7 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// Where the versions of the model are kept. A version is removed from it only as learning lets go of the candidates
-/// it did not take (<see cref="LetGoOfCandidatesBeforeAsync"/>), and a number once given is never given again.
+/// it did not take (<see cref="LetGoAsync"/>), and a number once given is never given again.
 /// </summary>
 public interface ISegmentModelVersionRepository
 {

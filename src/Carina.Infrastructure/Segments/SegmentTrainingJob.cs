@@ -46,7 +46,7 @@ public sealed record SegmentTrainingLook(SpareTimeVerdict? Verdict, SegmentTrain
 /// <see cref="SegmentRollback"/> says so; then, when <see cref="SegmentLearningRound.HasNews"/> finds something
 /// learning reads changed since the last round that kept a candidate, learns a candidate beside the version in use
 /// and keeps it as a candidate, unless no recording was judged, when there was nothing to learn from; lets go of the
-/// candidates before it that were never used (<see cref="ISegmentModelVersionRepository.LetGoOfCandidatesBeforeAsync"/>),
+/// candidates before it that were never used (<see cref="SegmentVersionDomainService.LetGoBeforeAsync"/>),
 /// the round keeping the candidate's figures so that what it says outlasts it; and puts it in
 /// use when <see cref="SegmentAdoption"/> says so, no version was rolled
 /// back from in the days <see cref="SegmentAdoption.AfterRollbacks"/> holds candidates out, and the version in use
