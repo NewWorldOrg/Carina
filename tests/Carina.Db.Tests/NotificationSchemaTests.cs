@@ -51,7 +51,7 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
 
     [Theory(DisplayName = "the migrated notification tables hold these columns and no others")]
     [InlineData(Event, "body id kind link occurred_at source_id taken_at title tone")]
-    [InlineData(Destination, "changed_at created_at enabled id last_failure last_result_at name sealed_url target url_tail")]
+    [InlineData(Destination, "changed_at created_at enabled endpoint_hash id last_failure last_result_at name sealed_url target url_tail")]
     [InlineData(Rule, "changed_at created_at destinations enabled events id name")]
     [InlineData(Delivery, "attempts destination_id event_id id last_failure next_attempt_at queued_at sent_at state")]
     [InlineData(Settings, "changed_at id notify_lead_minutes")]
@@ -78,6 +78,23 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
                 SELECT string_agg(attname || ':' || format_type(atttypid, atttypmod), ' ' ORDER BY attname)
                 FROM pg_attribute
                 WHERE attrelid = '{Destination}'::regclass AND attname LIKE '%url%'
+                """));
+    }
+
+    [Fact(DisplayName = "BR-NA-003: beside the sealed bytes a destination keeps of a browser only 64 characters of a hash of where it is reached")]
+    public async Task TheDestinationKeepsOfABrowserOnlyAHash()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "endpoint_hash:character varying(64) last_failure:character varying(32) name:character varying(64) target:character varying(32) url_tail:character varying(4)",
+            await ScalarAsync(
+                connection,
+                $"""
+                SELECT string_agg(attname || ':' || format_type(atttypid, atttypmod), ' ' ORDER BY attname)
+                FROM pg_attribute
+                WHERE attrelid = '{Destination}'::regclass AND attnum > 0 AND NOT attisdropped
+                  AND format_type(atttypid, atttypmod) LIKE 'character%'
                 """));
     }
 
@@ -233,7 +250,12 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await RunAsync(connection, ADestination(Guid.NewGuid(), $"'A destination', '{target}', '\\x01'::bytea, 'wxyz', NULL, NULL"));
+        await RunAsync(
+            connection,
+            ADestination(
+                Guid.NewGuid(),
+                $"'A destination', '{target}', '\\x01'::bytea, 'wxyz', NULL, NULL",
+                target == nameof(WebhookTarget.Push) ? AHash('a') : "NULL"));
     }
 
     [Theory(DisplayName = "BR-NT-003: a destination holds a trimmed name, a known target, sealed bytes, four closing characters and a failure only beside its moment")]
@@ -252,6 +274,45 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         await HoldsOrIsRefusedAsync(connection, ADestination(Guid.NewGuid(), values), refusedBy);
+    }
+
+    [Theory(DisplayName = "BR-ND-015: a browser holds 64 lowercase hex characters of a hash, and nothing else holds one")]
+    [InlineData("Push", "'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'", null)]
+    [InlineData("Slack", "NULL", null)]
+    [InlineData("Push", "NULL", NotificationDestinationConfiguration.EndpointHashCheck)]
+    [InlineData("Slack", "'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'", NotificationDestinationConfiguration.EndpointHashCheck)]
+    [InlineData("Discord", "'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'", NotificationDestinationConfiguration.EndpointHashCheck)]
+    [InlineData("Push", "'0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef'", NotificationDestinationConfiguration.EndpointHashCheck)]
+    [InlineData("Push", "'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde'", NotificationDestinationConfiguration.EndpointHashCheck)]
+    [InlineData("Push", "'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg'", NotificationDestinationConfiguration.EndpointHashCheck)]
+    [InlineData("Push", "''", NotificationDestinationConfiguration.EndpointHashCheck)]
+    public async Task ABrowserHoldsAHashAndNothingElseDoes(string target, string hash, string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await HoldsOrIsRefusedAsync(
+            connection,
+            ADestination(Guid.NewGuid(), $"'A destination', '{target}', '\\x01'::bytea, 'wxyz', NULL, NULL", hash),
+            refusedBy);
+    }
+
+    [Fact(DisplayName = "BR-ND-015: one browser is kept in one row, and any number of webhooks beside it")]
+    public async Task OneBrowserIsKeptInOneRow()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        const string Browser = "'A browser', 'Push', '\\x01'::bytea, 'bbbb', NULL, NULL";
+        const string Webhook = "'A webhook', 'Slack', '\\x01'::bytea, 'wxyz', NULL, NULL";
+        await RunAsync(connection, ADestination(Guid.NewGuid(), Browser, AHash('b')));
+        await RunAsync(connection, ADestination(Guid.NewGuid(), Browser, AHash('c')));
+        await RunAsync(connection, ADestination(Guid.NewGuid(), Webhook));
+        await RunAsync(connection, ADestination(Guid.NewGuid(), Webhook));
+
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
+            () => RunAsync(connection, ADestination(Guid.NewGuid(), Browser, AHash('b'))));
+
+        Assert.Equal(
+            (PostgresErrorCodes.UniqueViolation, NotificationDestinationConfiguration.EndpointHashIndexName),
+            (refused.SqlState, refused.ConstraintName));
     }
 
     [Theory(DisplayName = "BR-NT-004: a rule set holds events out of the vocabulary alone, none of them if it likes, and at least one destination")]
@@ -418,8 +479,11 @@ public sealed class NotificationSchemaTests(MigratedScratchDatabase database) : 
     private static int NextEvent()
         => Interlocked.Increment(ref lastEvent);
 
-    private static string ADestination(Guid id, string values)
-        => $"INSERT INTO {Destination} (id, enabled, created_at, changed_at, name, target, sealed_url, url_tail, last_result_at, last_failure) VALUES ('{id}', TRUE, {At}, {At}, {values})";
+    private static string ADestination(Guid id, string values, string hash = "NULL")
+        => $"INSERT INTO {Destination} (id, enabled, created_at, changed_at, name, target, sealed_url, url_tail, last_result_at, last_failure, endpoint_hash) VALUES ('{id}', TRUE, {At}, {At}, {values}, {hash})";
+
+    private static string AHash(char filling)
+        => $"'{new string(filling, NotificationDestination.EndpointHashLength)}'";
 
     private static string ADelivery(Guid notice, Guid destination, string standing)
         => $"INSERT INTO {Delivery} (id, event_id, destination_id, queued_at, state, attempts, next_attempt_at, sent_at, last_failure) VALUES ('{Guid.NewGuid()}', '{notice}', '{destination}', {At}, {standing})";

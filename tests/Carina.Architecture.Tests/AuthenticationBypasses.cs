@@ -48,6 +48,13 @@ public static class AuthenticationBypasses
         ".AddressAsWritten",
     ];
 
+    public static IReadOnlyList<string> PushSubscriptionAsWritten { get; } =
+    [
+        ".EndpointAsWritten",
+        ".KeyAsWritten",
+        ".SecretAsWritten",
+    ];
+
     public static IReadOnlyList<string> ReadingTheAuthorizationHeader { get; } =
     [
         "Headers.Authorization",

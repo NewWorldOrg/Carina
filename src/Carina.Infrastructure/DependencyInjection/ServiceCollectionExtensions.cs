@@ -251,6 +251,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<NotificationDestinationDomainService>();
         services.AddScoped<NotificationDeliveryDomainService>();
         services.AddScoped<NotificationIntakeDomainService>();
+        services.AddScoped<PushHandlingDomainService>();
         services.AddScoped<QualitySessionMeasuringDomainService>();
         services.AddScoped<SupplyWatchDomainService>();
         services.AddScoped<SignalSampleRound>();
@@ -469,6 +470,9 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<TimeProvider>(),
             NoticeLine.UsualDeadline));
         services.TryAddSingleton<WebhookUrlSeal>();
+        services.TryAddSingleton<PushSubscriptionSeal>();
+        services.TryAddSingleton<PushServerKey>();
+        services.TryAddSingleton<PushMessages>();
         services.TryAddSingleton<NoticeDispatch>();
         services.TryAddSingleton<UnwrittenDeliveries>();
         services.TryAddSingleton<EncodeQueueTurn>();

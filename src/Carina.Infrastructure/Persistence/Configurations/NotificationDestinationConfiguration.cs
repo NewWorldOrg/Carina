@@ -19,6 +19,10 @@ public sealed class NotificationDestinationConfiguration : IEntityTypeConfigurat
 
     public const string LastFailureCheck = "ck_notification_destination_last_failure";
 
+    public const string EndpointHashCheck = "ck_notification_destination_endpoint_hash";
+
+    public const string EndpointHashIndexName = "ux_notification_destination_endpoint_hash";
+
     public void Configure(EntityTypeBuilder<NotificationDestination> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -36,6 +40,12 @@ public sealed class NotificationDestinationConfiguration : IEntityTypeConfigurat
                 $"""
                 (last_failure IS NULL OR last_failure IN ({NotificationVocabulary.Of<NoticeFailure>()}))
                 AND (last_failure IS NULL OR last_result_at IS NOT NULL)
+                """);
+            table.HasCheckConstraint(
+                EndpointHashCheck,
+                $$"""
+                (target = '{{nameof(WebhookTarget.Push)}}') = (endpoint_hash IS NOT NULL)
+                AND (endpoint_hash IS NULL OR endpoint_hash ~ '^[0-9a-f]{{{NotificationDestination.EndpointHashLength}}}$')
                 """);
         });
 
@@ -62,6 +72,13 @@ public sealed class NotificationDestinationConfiguration : IEntityTypeConfigurat
         builder.Property(destination => destination.UrlTail)
             .HasMaxLength(NotificationDestination.UrlTailLength)
             .IsRequired();
+
+        builder.Property(destination => destination.EndpointHash)
+            .HasMaxLength(NotificationDestination.EndpointHashLength);
+
+        builder.HasIndex(destination => destination.EndpointHash)
+            .IsUnique()
+            .HasDatabaseName(EndpointHashIndexName);
 
         builder.Property(destination => destination.Enabled).IsRequired();
 

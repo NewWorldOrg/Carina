@@ -27,4 +27,8 @@ public enum NotificationFailure
     NotWaiting = 12,
 
     ProgrammeIsAShadow = 13,
+
+    NoPublicOrigin = 14,
+
+    HeldByAnother = 15,
 }

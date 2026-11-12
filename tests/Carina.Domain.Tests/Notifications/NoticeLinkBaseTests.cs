@@ -20,6 +20,18 @@ public sealed class NoticeLinkBaseTests
         Assert.Null(NoticeLinkBase.None.To("/settings/quality"));
     }
 
+    [Theory(DisplayName = "the origin is written as the scheme, the host and a port that is not the usual one, with no slash after them")]
+    [InlineData("https://screens.example", "https://screens.example")]
+    [InlineData("https://screens.example/", "https://screens.example")]
+    [InlineData("https://screens.example:443", "https://screens.example")]
+    [InlineData("https://screens.example:8443/", "https://screens.example:8443")]
+    [InlineData("http://screens.example", "http://screens.example")]
+    public void TheOriginIsWrittenWithNothingAfterIt(string reachedAt, string origin)
+    {
+        Assert.Equal(origin, NoticeLinkBase.At(new Uri(reachedAt)).Origin);
+        Assert.Null(NoticeLinkBase.None.Origin);
+    }
+
     [Theory(DisplayName = "the screens are reached at an http or https origin and nothing after it")]
     [InlineData("ftp://screens.example")]
     [InlineData("https://screens.example/under")]

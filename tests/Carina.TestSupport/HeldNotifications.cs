@@ -10,6 +10,10 @@ public sealed class HeldNotificationDestinations : INotificationDestinationRepos
     public Task<NotificationDestination?> FindAsync(NotificationDestinationId id, CancellationToken cancellationToken)
         => Task.FromResult(Destinations.FirstOrDefault(destination => destination.Id.Equals(id)));
 
+    public Task<NotificationDestination?> FindByEndpointHashAsync(string endpointHash, CancellationToken cancellationToken)
+        => Task.FromResult(
+            Destinations.FirstOrDefault(destination => string.Equals(destination.EndpointHash, endpointHash, StringComparison.Ordinal)));
+
     public Task<IReadOnlyList<NotificationDestination>> ListAsync(CancellationToken cancellationToken)
     {
         IReadOnlyList<NotificationDestination> listed = [.. Destinations.OrderBy(destination => destination.CreatedAt)];

@@ -17,6 +17,11 @@ public sealed class NoticeLinkBase
 
     public bool IsKnown => origin is not null;
 
+    /// <summary>
+    /// The origin as it is written to another service: the scheme, the host and the port, with nothing after them.
+    /// </summary>
+    public string? Origin => origin?.GetLeftPart(UriPartial.Authority);
+
     public static NoticeLinkBase At(Uri origin)
     {
         ArgumentNullException.ThrowIfNull(origin);

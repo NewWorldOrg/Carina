@@ -51,6 +51,15 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Machines/MachineCapabilityReader.cs FileMode.",
         "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs DllImport",
         "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs File.Delete",
+        "/Carina.Infrastructure/Notifications/NoticeLine.cs .Encrypt(",
+        "/Carina.Infrastructure/Notifications/PushEncryption.cs .CopyTo(",
+        "/Carina.Infrastructure/Notifications/PushEncryption.cs .Encrypt(",
+        "/Carina.Infrastructure/Notifications/PushServerKey.cs Directory.CreateDirectory",
+        "/Carina.Infrastructure/Notifications/PushServerKey.cs File.CreateHardLink",
+        "/Carina.Infrastructure/Notifications/PushServerKey.cs File.Delete",
+        "/Carina.Infrastructure/Notifications/PushServerKey.cs File.Move",
+        "/Carina.Infrastructure/Notifications/PushServerKey.cs File.Open",
+        "/Carina.Infrastructure/Notifications/PushServerKey.cs FileMode.",
         "/Carina.Infrastructure/Programmes/ProgrammeSearchQuery.cs .Replace(",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
         "/Carina.Infrastructure/Scanning/TableHarvest.cs .CopyTo(",
@@ -122,6 +131,36 @@ public sealed class FileSystemRuleTests
                 "/Carina.Infrastructure/Machines/AnotherProgramme.cs ProcessStartInfo",
             ],
             Inventory.Where(entry => entry.Contains("Process", StringComparison.Ordinal)).ToArray());
+    }
+
+    [Fact(DisplayName = "the one file the notifications write is the Web Push server key, made as a draft only its owner reads and put in place without ever replacing a key already there")]
+    public void TheOneFileTheNotificationsWriteIsTheWebPushServerKey()
+    {
+        Assert.Equal(
+            [
+                "/Carina.Infrastructure/Notifications/PushServerKey.cs Directory.CreateDirectory",
+                "/Carina.Infrastructure/Notifications/PushServerKey.cs File.CreateHardLink",
+                "/Carina.Infrastructure/Notifications/PushServerKey.cs File.Delete",
+                "/Carina.Infrastructure/Notifications/PushServerKey.cs File.Move",
+                "/Carina.Infrastructure/Notifications/PushServerKey.cs File.Open",
+                "/Carina.Infrastructure/Notifications/PushServerKey.cs FileMode.",
+            ],
+            Inventory
+                .Where(entry => entry.Contains("/Notifications/", StringComparison.Ordinal))
+                .Where(OpensSomething)
+                .Where(entry => !entry.EndsWith(".Encrypt(", StringComparison.Ordinal))
+                .ToArray());
+
+        string source = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Notifications",
+            "PushServerKey.cs"));
+
+        Assert.Contains("Mode = FileMode.CreateNew", source, StringComparison.Ordinal);
+        Assert.Contains("File.Delete(draft);", source, StringComparison.Ordinal);
+        Assert.Contains("File.Move(draft, file, overwrite: false);", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("overwrite: true", source, StringComparison.Ordinal);
     }
 
     [Fact]

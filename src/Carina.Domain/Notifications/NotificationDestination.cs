@@ -4,13 +4,16 @@ namespace Carina.Domain.Notifications;
 
 /// <summary>
 /// Where notices are sent: a webhook of one of the kinds this ledger knows, held as the sealed bytes of its address and
-/// the last characters of it for telling one from another.
+/// the last characters of it for telling one from another; or a browser, held as the sealed bytes of its push
+/// subscription and the SHA-256 of its endpoint, which is what tells one browser from another.
 /// </summary>
 public sealed class NotificationDestination
 {
     public const int UrlTailLength = 4;
 
     public const int LargestSealedUrl = 4096;
+
+    public const int EndpointHashLength = 64;
 
     private NotificationDestination()
     {
@@ -25,6 +28,8 @@ public sealed class NotificationDestination
     public byte[] SealedUrl { get; private set; } = [];
 
     public string UrlTail { get; private set; } = string.Empty;
+
+    public string? EndpointHash { get; private set; }
 
     public bool Enabled { get; private set; }
 
@@ -43,7 +48,33 @@ public sealed class NotificationDestination
         byte[] sealedUrl,
         string urlTail,
         DateTime at)
-        => Rehydrate(id, name, target, sealedUrl, urlTail, enabled: true, null, null, at, at);
+        => Rehydrate(id, name, target, sealedUrl, urlTail, null, enabled: true, null, null, at, at);
+
+    /// <summary>
+    /// A browser to send to, held by the sealed bytes of its subscription and the hash of its endpoint.
+    /// </summary>
+    public static NotificationDestination Subscribe(
+        NotificationDestinationId id,
+        NotificationName name,
+        PushSubscription subscription,
+        byte[] sealedSubscription,
+        DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+
+        return Rehydrate(
+            id,
+            name,
+            WebhookTarget.Push,
+            sealedSubscription,
+            subscription.Tail,
+            subscription.Fingerprint,
+            enabled: true,
+            null,
+            null,
+            at,
+            at);
+    }
 
     public static NotificationDestination Rehydrate(
         NotificationDestinationId id,
@@ -51,6 +82,7 @@ public sealed class NotificationDestination
         WebhookTarget target,
         byte[] sealedUrl,
         string urlTail,
+        string? endpointHash,
         bool enabled,
         DateTime? lastResultAt,
         NoticeFailure? lastFailure,
@@ -72,6 +104,7 @@ public sealed class NotificationDestination
             Target = Named(target),
             SealedUrl = ValidatedSeal(sealedUrl),
             UrlTail = ValidatedTail(urlTail),
+            EndpointHash = ValidatedHash(target, endpointHash),
             Enabled = enabled,
             LastResultAt = UtcTimes.Optional(lastResultAt, nameof(lastResultAt)),
             LastFailure = lastFailure is { } failure ? NoticeFailures.Named(failure) : null,
@@ -90,9 +123,35 @@ public sealed class NotificationDestination
 
     public void PointAt(WebhookTarget target, byte[] sealedUrl, string urlTail, DateTime at)
     {
+        if (Target is WebhookTarget.Push || target is WebhookTarget.Push)
+        {
+            throw new InvalidOperationException("A browser is not pointed at an address, and a webhook does not become a browser.");
+        }
+
         Target = Named(target);
         SealedUrl = ValidatedSeal(sealedUrl);
         UrlTail = ValidatedTail(urlTail);
+        ChangedAt = UtcTimes.Required(at, nameof(at));
+        LastResultAt = null;
+        LastFailure = null;
+    }
+
+    /// <summary>
+    /// Takes another subscription of the same browser in place of the one held, and forgets what came of the last
+    /// send to the old one. The name, and whether it is turned on, stay.
+    /// </summary>
+    public void Resubscribe(PushSubscription subscription, byte[] sealedSubscription, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+
+        if (Target is not WebhookTarget.Push)
+        {
+            throw new InvalidOperationException("Only a browser takes a subscription.");
+        }
+
+        SealedUrl = ValidatedSeal(sealedSubscription);
+        UrlTail = ValidatedTail(subscription.Tail);
+        EndpointHash = ValidatedHash(Target, subscription.Fingerprint);
         ChangedAt = UtcTimes.Required(at, nameof(at));
         LastResultAt = null;
         LastFailure = null;
@@ -164,6 +223,27 @@ public sealed class NotificationDestination
 
         return [.. sealedUrl];
     }
+
+    private static string? ValidatedHash(WebhookTarget target, string? endpointHash)
+    {
+        if (target is not WebhookTarget.Push)
+        {
+            return endpointHash is null
+                ? null
+                : throw new ArgumentException("Only a browser is held with the hash of its endpoint.", nameof(endpointHash));
+        }
+
+        if (endpointHash is null || endpointHash.Length != EndpointHashLength || !endpointHash.All(IsLowerHex))
+        {
+            throw new ArgumentException(
+                $"A browser is held with the SHA-256 of its endpoint, {EndpointHashLength} characters of lowercase hex.",
+                nameof(endpointHash));
+        }
+
+        return endpointHash;
+    }
+
+    private static bool IsLowerHex(char letter) => letter is (>= '0' and <= '9') or (>= 'a' and <= 'f');
 
     private static string ValidatedTail(string urlTail)
     {

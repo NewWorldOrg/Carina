@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
+using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,8 @@ public sealed class NotificationGuardTests
         { "POST", NotificationFeature.Watches },
         { "DELETE", OneWatch },
         { "PUT", NotificationFeature.Settings },
+        { "POST", NotificationFeature.PushSubscriptions },
+        { "PUT", $"{NotificationFeature.PushSubscriptions}/00000000-0000-0000-0000-000000000001" },
     };
 
     public static TheoryData<string, string> Reads => new()
@@ -46,6 +49,7 @@ public sealed class NotificationGuardTests
         { "GET", NotificationFeature.Watches },
         { "GET", $"{NotificationFeature.Deliveries}?destinationId=00000000-0000-0000-0000-000000000001" },
         { "GET", NotificationFeature.Settings },
+        { "GET", NotificationFeature.PushKey },
     };
 
     [Theory(DisplayName = "BR-NA-001: A caller who has not signed in is refused by every endpoint of the notifications")]
@@ -223,6 +227,115 @@ public sealed class NotificationGuardTests
             Assert.DoesNotContain(letters, tried.GetRawText(), StringComparison.Ordinal);
             Assert.DoesNotContain(letters, listed.GetRawText(), StringComparison.Ordinal);
             Assert.DoesNotContain(letters, delivered.GetRawText(), StringComparison.Ordinal);
+        });
+    }
+
+    [Fact(DisplayName = "BR-NA-003: No line of the log carries a browser's endpoint or its keys even at the finest level, and no answer does")]
+    public async Task NeitherTheLogNorAnAnswerCarriesWhatABrowserSubscribed()
+    {
+        RecordedStartup heard = new();
+        await using NotificationFeature feature = new(publicOrigin: NotificationFeature.Screens, heard: heard);
+        using PushReceiver browser = new();
+        using PushReceiver renewed = new();
+        string[] letters =
+        [
+            "made-up-registration",
+            browser.KeyAsWritten,
+            browser.SecretAsWritten,
+            renewed.KeyAsWritten,
+            renewed.SecretAsWritten,
+        ];
+        List<string> answered = [];
+
+        Guid id = await feature.SubscribedAsync(browser);
+        answered.Add(Said(await feature.PostAsync(
+            NotificationFeature.PushSubscriptions,
+            new
+            {
+                name = "書斎のブラウザ",
+                endpoint = "https://fcm.googleapis.com.elsewhere.example/made-up-registration-wxyz",
+                keys = new { p256dh = browser.KeyAsWritten, auth = browser.SecretAsWritten },
+            })));
+        answered.Add(Said(await feature.PostAsync(
+            NotificationFeature.PushSubscriptions,
+            new
+            {
+                name = "書斎のブラウザ",
+                endpoint = NotificationFeature.OtherPushEndpoint,
+                keys = new { p256dh = browser.KeyAsWritten, auth = browser.KeyAsWritten },
+            })));
+        answered.Add(Said(await feature.PutAsync(NotificationFeature.SubscriptionOf(id), NotificationFeature.Subscription(renewed))));
+        answered.Add(Said(await feature.PatchAsync(NotificationFeature.OneOf(id), new { url = NotificationFeature.PushEndpoint })));
+        answered.Add(Said(await feature.GetAsync(NotificationFeature.Destinations)));
+        answered.Add(Said(await feature.GetAsync(NotificationFeature.PushKey)));
+        feature.End.Status = 201;
+        answered.Add(Said(await feature.PostAsync(NotificationFeature.TrialOf(id))));
+
+        feature.Clock.Now = feature.Clock.Now.AddSeconds(61);
+        feature.End.Status = 500;
+        feature.End.AnswerBody = "{\"message\":\"https://fcm.googleapis.com/fcm/send/made-up-registration-qrst\"}";
+        feature.Waiting(id);
+        NotificationDeliveries failed = await feature.PassAsync();
+
+        feature.Clock.Now = feature.Clock.Now.AddMinutes(1);
+        feature.End.Status = 201;
+        feature.End.AnswerBody = string.Empty;
+        NotificationDeliveries sent = await feature.PassAsync();
+
+        feature.End.Status = 410;
+        feature.Waiting(id);
+        NotificationDeliveries refused = await feature.PassAsync();
+
+        answered.Add(Said(await feature.GetAsync($"{NotificationFeature.Deliveries}?destinationId={id}")));
+        answered.Add(Said(await feature.GetAsync(NotificationFeature.Destinations)));
+        answered.Add(Said(await feature.DeleteAsync(NotificationFeature.OneOf(id))));
+
+        Assert.Equal(1, failed.Failed);
+        Assert.Equal(1, sent.Sent);
+        Assert.Equal(1, refused.GivenUp);
+        Assert.Equal(4, feature.End.Heard.Count);
+        Assert.All(feature.End.Heard, call => Assert.Equal("/fcm/send/made-up-registration-qrst", call.Target));
+        Assert.Contains(heard.Everything, line => line.Level is LogLevel.Trace or LogLevel.Debug);
+        Assert.Contains(heard.Everything, line => line.Category.StartsWith("Carina.Infrastructure.Notifications", StringComparison.Ordinal));
+        Assert.All(letters, written =>
+        {
+            Assert.DoesNotContain(heard.Everything, line => Carries(line, written));
+            Assert.DoesNotContain(answered, answer => answer.Contains(written, StringComparison.Ordinal));
+        });
+    }
+
+    [Theory(DisplayName = "BR-NA-003: No line of the log, with what was thrown, carries a browser's endpoint or its keys when a send times out, cannot connect or fails on TLS")]
+    [InlineData("timedOut")]
+    [InlineData("unreachable")]
+    [InlineData("tlsFailed")]
+    public async Task NeitherTheLogNorAnAnswerCarriesWhatABrowserSubscribedWhenTheLineFails(string failure)
+    {
+        RecordedStartup heard = new();
+        await using NotificationFeature feature = new(publicOrigin: NotificationFeature.Screens, heard: heard, deadline: TimeSpan.FromMilliseconds(200));
+        using PushReceiver browser = new();
+        Guid id = await feature.SubscribedAsync(browser);
+        feature.Network.Stalls = failure == "timedOut";
+        feature.Network.Refuses = failure == "unreachable";
+        feature.Network.Distrusts = failure == "tlsFailed";
+
+        (HttpStatusCode status, JsonElement tried) = await feature.PostAsync(NotificationFeature.TrialOf(id));
+        feature.Waiting(id);
+        NotificationDeliveries passed = await feature.PassAsync();
+        (_, JsonElement listed) = await feature.GetAsync(NotificationFeature.Destinations);
+        (_, JsonElement delivered) = await feature.GetAsync($"{NotificationFeature.Deliveries}?destinationId={id}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(failure, tried.GetProperty("data").GetProperty("failure").GetString());
+        Assert.Equal(new NotificationDeliveries(0, 1, 0), passed);
+        Assert.Equal(failure, listed.GetProperty("data").GetProperty("items")[0].GetProperty("lastFailure").GetString());
+        Assert.Empty(feature.End.Heard);
+        Assert.Contains(heard.Everything, line => line.Category.StartsWith("Carina.Infrastructure.Notifications", StringComparison.Ordinal));
+        Assert.All((string[])["made-up-registration", browser.KeyAsWritten, browser.SecretAsWritten], written =>
+        {
+            Assert.DoesNotContain(heard.Everything, line => Carries(line, written));
+            Assert.DoesNotContain(written, tried.GetRawText(), StringComparison.Ordinal);
+            Assert.DoesNotContain(written, listed.GetRawText(), StringComparison.Ordinal);
+            Assert.DoesNotContain(written, delivered.GetRawText(), StringComparison.Ordinal);
         });
     }
 
