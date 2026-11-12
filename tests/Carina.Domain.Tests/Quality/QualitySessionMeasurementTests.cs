@@ -88,13 +88,45 @@ public sealed class QualitySessionMeasurementTests
         Assert.Equal(750_000, measurement.CcTotalPackets);
     }
 
-    [Fact]
-    public void ASessionDoesNotEndBeforeItStarts()
+    [Fact(DisplayName = "BR-QD-005: a session closed at a time that reads earlier than its start ends at its start")]
+    public void ASessionClosedEarlierThanItsStartEndsAtItsStart()
     {
         QualitySessionMeasurement measurement = Open(SessionPurpose.Survey);
 
-        Assert.Throws<ArgumentException>(() => measurement.Close(Started.AddMinutes(-1)));
+        measurement.Close(Started.AddTicks(-10));
+
+        Assert.Equal(Started, measurement.EndedAt);
     }
+
+    [Theory(DisplayName = "BR-QD-005: a session closed on the instant it started, or after, ends at the time given")]
+    [InlineData(0)]
+    [InlineData(10)]
+    public void ASessionClosedNoEarlierThanItsStartEndsAtTheTimeGiven(long ticksAfterTheStart)
+    {
+        QualitySessionMeasurement measurement = Open(SessionPurpose.Survey);
+
+        measurement.Close(Started.AddTicks(ticksAfterTheStart));
+
+        Assert.Equal(Started.AddTicks(ticksAfterTheStart), measurement.EndedAt);
+        Assert.True(measurement.HasEnded);
+    }
+
+    [Fact]
+    public void ARowThatSaysASessionEndedBeforeItStartedIsRefused()
+        => Assert.Throws<ArgumentException>(() => QualitySessionMeasurement.Rehydrate(
+            "driver-7",
+            SessionId.Parse("survey-1"),
+            SessionPurpose.Survey,
+            new TunerDeviceId("adapter0"),
+            new NetworkId(32736),
+            new ServiceId(1024),
+            Started,
+            Started.AddMinutes(-1),
+            false,
+            null,
+            null,
+            0,
+            null));
 
     private static QualitySessionMeasurement Open(SessionPurpose purpose)
         => QualitySessionMeasurement.Open(

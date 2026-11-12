@@ -2,7 +2,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Events;
 using Carina.Domain.Quality;
-using Carina.Domain.Recordings;
 
 using Microsoft.Extensions.Logging;
 
@@ -19,7 +18,7 @@ public sealed class SupplyWatchRound(
     IQualityThresholdRepository thresholds,
     IQualityIncidentRepository incidents,
     IQualitySupplyReader supply,
-    IQualitySignalSampleRepository samples,
+    SupplyWatchDomainService watch,
     IQualityLedgerReader ledger,
     IQualitySignalReader signals,
     IDriverClient driver,
@@ -112,36 +111,10 @@ public sealed class SupplyWatchRound(
             return new TunerReadings(false, [], []);
         }
 
-        IReadOnlyDictionary<TunerDeviceId, DateTime> latest =
-            await samples.ListLastTakenAsync(cancellationToken);
-        List<SupplyReading> read = [];
-
-        foreach (TunerSnapshot tuner in tuners)
-        {
-            if (tuner.State is TunerState.Disabled
-                || string.IsNullOrWhiteSpace(tuner.DeviceId)
-                || tuner.CurrentSession is not { } session
-                || session.SessionId.IsUnset
-                || session.StartedAt is not { } opened)
-            {
-                continue;
-            }
-
-            DateTime since = opened.UtcDateTime > now ? now : opened.UtcDateTime;
-            var device = new TunerDeviceId(tuner.DeviceId);
-
-            if (latest.TryGetValue(device, out DateTime taken) && taken > since)
-            {
-                since = taken;
-            }
-
-            read.Add(SupplyReading.Of(
-                SupplySilence.SignalSamples,
-                QualitySubject.Of(QualitySubjectKind.Tuner, device.Value),
-                since));
-        }
-
-        return new TunerReadings(true, read, TunerTroubles.Of(tuners));
+        return new TunerReadings(
+            true,
+            await watch.SignalSamplesAsync(tuners, now, cancellationToken),
+            TunerTroubles.Of(tuners));
     }
 
     private async Task<int> OpenAsync(
@@ -153,24 +126,12 @@ public sealed class SupplyWatchRound(
         foreach (SupplySilenceFinding finding in opening)
         {
             await incidents.AddAsync(
-                QualityIncident.Detect(
-                    QualityIncidentId.New(),
-                    now,
-                    QualityThresholdKey.SupplySilence,
-                    finding.Subject,
-                    finding.Seconds,
-                    HeldAgainst(finding, applied, now),
-                    silence: finding.Silence),
+                QualityIncident.WentQuiet(QualityIncidentId.New(), finding, applied, now),
                 cancellationToken);
         }
 
         return opening.Count;
     }
-
-    private static Threshold HeldAgainst(SupplySilenceFinding finding, Threshold shared, DateTime now)
-        => finding.Allowed is { } allowed
-            ? Threshold.Provisionally(allowed.TotalSeconds, 0, now)
-            : shared;
 
     private async Task<IReadOnlyList<ThresholdBreach>> BreachesAsync(
         IReadOnlyList<QualityThresholdStanding> levels,
@@ -251,13 +212,8 @@ public sealed class SupplyWatchRound(
         IReadOnlyList<QualityIncident> unsettled = await incidents.ListUnsettledAsync(cancellationToken);
         int notified = 0;
 
-        foreach (QualityIncident incident in unsettled)
+        foreach (QualityIncident incident in unsettled.Where(incident => incident.AwaitsNotice))
         {
-            if (incident.State is not QualityIncidentState.Detected)
-            {
-                continue;
-            }
-
             incident.Notify(now);
 
             await incidents.SaveAsync(incident, cancellationToken);
