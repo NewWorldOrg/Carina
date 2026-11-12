@@ -23,42 +23,17 @@ public sealed class RecordingLedger(CarinaDbContext context) : IRecordingLedger
                 recording.ThumbnailState))
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(Read)];
+        return
+        [
+            .. rows.Select(row => LedgerFile.Of(
+                row.Id,
+                row.OutputRoot,
+                row.FileName,
+                row.Outcome,
+                row.FileSizeObserved,
+                row.ThumbnailState)),
+        ];
     }
-
-    private static LedgerFile Read(Row row)
-    {
-        if (row.Outcome is not { } outcome)
-        {
-            return LedgerFile.StillWriting(row.Id, row.OutputRoot, row.FileName);
-        }
-
-        if (row.FileSizeObserved is not { } observed)
-        {
-            throw new InvalidOperationException(
-                $"Recording {row.Id.Wire} ended {outcome} without a size read off the disk.");
-        }
-
-        return LedgerFile.Ended(
-            row.Id,
-            row.OutputRoot,
-            row.FileName,
-            Claimed(outcome),
-            observed,
-            row.ThumbnailState is ThumbnailState.Ready);
-    }
-
-    private static LedgerClaim Claimed(RecordingOutcome outcome)
-        => outcome switch
-        {
-            RecordingOutcome.Complete => LedgerClaim.EverythingLanded,
-            RecordingOutcome.Truncated => LedgerClaim.SomethingLanded,
-            RecordingOutcome.Failed => LedgerClaim.NothingLanded,
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(outcome),
-                outcome,
-                "A recording ends in one of three ways."),
-        };
 
     private sealed record Row(
         RecordingId Id,
