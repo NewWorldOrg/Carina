@@ -547,6 +547,7 @@ public sealed class ServiceCollectionExtensionsTests
         using ServiceProvider provider = Build(ValidSettings());
         using IServiceScope scope = provider.CreateScope();
 
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<LocalLoginDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<PasswordChangeDomainService>());
     }
 

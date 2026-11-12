@@ -6,11 +6,11 @@ namespace Carina.Api.Services;
 public sealed class LocalAccountService(
     ILocalAccountRepository accounts,
     IAuthSessionRepository sessions,
+    LocalLoginDomainService logins,
     PasswordChangeDomainService passwords,
     IPlaybackGrantStore grants,
     IHlsKeyRevocation playlists,
     IPasswordHasher hasher,
-    ILoginThrottle throttle,
     PasswordHashPolicy hashPolicy,
     SessionPolicy sessionPolicy,
     TimeProvider clock)
@@ -20,36 +20,34 @@ public sealed class LocalAccountService(
     public const string TheRefusalForTooManyAttempts =
         "Too many sign-in attempts came from here. Wait for the window to pass and try again.";
 
-    private readonly PasswordHash decoy = PasswordHash.Encode(
-        hashPolicy,
-        new byte[hashPolicy.SaltLength],
-        new byte[hashPolicy.DigestLength]);
-
     public async Task<ServiceResult<LoginOutcome>> LogInAsync(
         LoginAttempt attempt,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(attempt);
 
-        if (throttle.TakeTry(attempt.Caller) is { } until)
+        LocalLogin login = await logins.TryAsync(
+            attempt.Caller,
+            attempt.Username,
+            attempt.Password,
+            hashPolicy,
+            cancellationToken);
+
+        if (login.HeldOffUntil is { } until)
         {
             return ServiceResult<LoginOutcome>.Success(
                 LoginOutcome.HeldOff(until, sessionPolicy.AbsoluteLifetime));
         }
 
-        LocalAccount? account = await accounts.FindAsync(cancellationToken);
-
-        if (!Admits(account, attempt.Username, attempt.Password))
+        if (login.Admitted is not { } account)
         {
             return ServiceResult<LoginOutcome>.Success(LoginOutcome.Refused(sessionPolicy.AbsoluteLifetime));
         }
 
-        throttle.Passed(attempt.Caller);
-
         SessionId cookie = SessionId.Issue();
         AuthSession session = AuthSession.Start(
             cookie,
-            new Subject(account!.Username),
+            new Subject(account.Username),
             account.Username,
             AuthMethod.Local,
             attempt.DeviceLabel,
@@ -121,19 +119,5 @@ public sealed class LocalAccountService(
         catch (Exception)
         {
         }
-    }
-
-    private bool Admits(LocalAccount? account, string username, string password)
-    {
-        if (string.IsNullOrEmpty(password))
-        {
-            return false;
-        }
-
-        bool digestsAgree = hasher.Matches(password, account?.PasswordHash ?? decoy);
-
-        return account is not null
-            && digestsAgree
-            && string.Equals(account.Username, username, StringComparison.Ordinal);
     }
 }
