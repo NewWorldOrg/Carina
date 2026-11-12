@@ -98,8 +98,8 @@ for project in ${projects}; do
   fi
 done
 
-LC_ALL=C sort -u -o "${held}/every-test" "${held}/every-test"
-LC_ALL=C sort -u -o "${held}/selected-by-a-job" "${held}/selected-by-a-job"
+LC_ALL=C sort -o "${held}/every-test" "${held}/every-test"
+LC_ALL=C sort -o "${held}/selected-by-a-job" "${held}/selected-by-a-job"
 
 if [ ! -s "${held}/selected-by-a-job" ]; then
   echo "the filters between them selected nothing, so every test there is would be reported below" >&2
@@ -114,4 +114,12 @@ if [ -n "${unselected}" ]; then
   exit 1
 fi
 
-echo "$(wc -l < "${held}/every-test") tests across $(echo "${projects}" | wc -l) test projects on disk, every one of them selected by a job."
+selected_twice="$(LC_ALL=C comm -13 "${held}/every-test" "${held}/selected-by-a-job")"
+
+if [ -n "${selected_twice}" ]; then
+  echo "more than one job's filter selects these tests, so they run where they do not belong as well:" >&2
+  echo "${selected_twice}" >&2
+  exit 1
+fi
+
+echo "$(wc -l < "${held}/every-test") tests across $(echo "${projects}" | wc -l) test projects on disk, every one of them selected by exactly one job."

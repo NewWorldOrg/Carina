@@ -17,7 +17,7 @@ public sealed class TestLayoutRuleTests
         => Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(Repository));
 
     [Fact(DisplayName = "every action of an area that has feature tests has its feature class")]
-    public void EveryActionOfAnAreaWithFeatureTestsHasItsFeatureClass()
+    public void EveryActionOfAnAreaWithFeatureClassesHasItsFeatureClass()
         => Assert.Empty(TestLayoutRules.ActionsWithoutAFeatureClass(Repository));
 
     [Fact(DisplayName = "no two feature classes share a subject")]

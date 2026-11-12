@@ -419,7 +419,7 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
-    public void DetectsAnActionWithoutAFeatureClassInAnAreaThatHasFeatureTests()
+    public void DetectsAnActionWithoutAFeatureClassInAnAreaThatHasFeatureClasses()
     {
         using SourceTree tree = new();
         tree.Declare($"{Controllers}/Auth/LogInAction.cs");
@@ -449,7 +449,7 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
-    public void LetsOffTheActionsOfAnAreaWithoutFeatureTestsInTheLayout()
+    public void LetsOffTheActionsOfAnAreaWithoutFeatureClassesInTheLayout()
     {
         using SourceTree tree = new();
         tree.Declare($"{Controllers}/Auth/LogInAction.cs");
@@ -616,7 +616,7 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
-    public void DetectsAnOldFeatureTestThatSpeaksOnlyToRoutesOfAreasThatHaveMoved()
+    public void DetectsAnOldTestOfTheHttpSurfaceThatSpeaksOnlyToRoutesOfAreasThatHaveMoved()
     {
         using SourceTree tree = new();
         DeclareAuthAndRecordings(tree);
