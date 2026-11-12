@@ -100,6 +100,31 @@ public sealed class NotificationRule
         ChangedAt = UtcTimes.Required(at, nameof(at));
     }
 
+    /// <summary>
+    /// Stops sending to a destination being removed. A set of rules that does not name it is left alone, and one it is
+    /// the last destination of is left as it is, to be removed with it.
+    /// </summary>
+    public NotificationRuleNarrowing StopSendingTo(NotificationDestinationId destination, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+
+        if (!Destinations.Contains(destination))
+        {
+            return NotificationRuleNarrowing.NotNamed;
+        }
+
+        IReadOnlyList<NotificationDestinationId> left = [.. Destinations.Where(named => !named.Equals(destination))];
+
+        if (left.Count is 0)
+        {
+            return NotificationRuleNarrowing.LeftWithNone;
+        }
+
+        Tell(Events, left, at);
+
+        return NotificationRuleNarrowing.Narrowed;
+    }
+
     public void Enable(DateTime at)
     {
         Enabled = true;

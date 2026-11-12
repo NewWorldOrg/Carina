@@ -51,6 +51,23 @@ public sealed class NoticeTests
         Assert.Equal(tone, NoticeTones.Of(kind));
     }
 
+    [Theory(DisplayName = "BR-NS-001: a notice is too old to send once more than the given time has passed since it happened")]
+    [InlineData(0, false)]
+    [InlineData(3600, false)]
+    [InlineData(3601, true)]
+    public void ANoticeIsTooOldOnceTheTimeHasPassed(int secondsAfter, bool tooOld)
+    {
+        Notice notice = Notice.Take(
+            NoticeId.New(),
+            NoticeKind.RecordingFailed,
+            Guid.NewGuid(),
+            At,
+            new NoticeWords("A title", "A body", null),
+            At);
+
+        Assert.Equal(tooOld, notice.IsTooOldAt(At.AddSeconds(secondsAfter), TimeSpan.FromHours(1)));
+    }
+
     [Fact]
     public void EveryKindHasATone()
     {

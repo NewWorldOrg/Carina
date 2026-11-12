@@ -22,6 +22,7 @@ public sealed class NotificationDestinationService(
     INotificationRuleRepository rules,
     INotificationDeliveryRepository deliveries,
     IProgrammeWatchRepository watches,
+    NotificationDestinationDomainService retiring,
     IAtomicWrite writes,
     WebhookUrlSeal seal,
     NoticeDispatch dispatch,
@@ -77,13 +78,13 @@ public sealed class NotificationDestinationService(
             {
                 await rules.TakeTurnAsync(inner);
 
-                bool first = await IsNothingHeldAsync(inner);
+                NotificationRule? usual = await retiring.UsualRuleForAsync(destination, inner);
 
                 await destinations.AddAsync(destination, inner);
 
-                if (first)
+                if (usual is not null)
                 {
-                    await rules.AddAsync(NotificationRule.Usual(NotificationRuleId.New(), destination.Id, destination.CreatedAt), inner);
+                    await rules.AddAsync(usual, inner);
                 }
 
                 return true;
@@ -130,7 +131,7 @@ public sealed class NotificationDestinationService(
 
                 if (change.Enabled is false)
                 {
-                    await GiveUpWhatWaitsForAsync(id, inner);
+                    await SaveAllAsync(await retiring.GiveUpWhatWaitsForAsync(id, inner), inner);
                 }
 
                 return true;
@@ -163,12 +164,7 @@ public sealed class NotificationDestinationService(
             {
                 await rules.TakeTurnAsync(inner);
 
-                foreach (NotificationRule rule in await rules.ListAsync(inner))
-                {
-                    await TakeOutOfAsync(rule, id, now, inner);
-                }
-
-                await StopTellingAsync(id, now, inner);
+                await KeepAsync(await retiring.RetireAsync(id, now, inner), inner);
                 await destinations.RemoveAsync(held, inner);
 
                 return true;
@@ -237,53 +233,29 @@ public sealed class NotificationDestinationService(
         }
     }
 
-    private async Task<bool> IsNothingHeldAsync(CancellationToken cancellationToken)
+    private async Task SaveAllAsync(IReadOnlyList<NotificationDelivery> givenUp, CancellationToken cancellationToken)
     {
-        IReadOnlyList<NotificationDestination> heldDestinations = await destinations.ListAsync(cancellationToken);
-        IReadOnlyList<NotificationRule> heldRules = await rules.ListAsync(cancellationToken);
-
-        return heldDestinations.Count is 0 && heldRules.Count is 0;
-    }
-
-    private async Task GiveUpWhatWaitsForAsync(NotificationDestinationId id, CancellationToken cancellationToken)
-    {
-        IReadOnlyList<NoticeOnItsWay> waiting = await deliveries.WaitingAsync(cancellationToken);
-
-        foreach (NoticeOnItsWay row in waiting.Where(row => row.Delivery.DestinationId.Equals(id)))
+        foreach (NotificationDelivery delivery in givenUp)
         {
-            row.Delivery.GiveUp(NoticeFailure.DestinationDisabled);
-            await deliveries.SaveAsync(row.Delivery, cancellationToken);
+            await deliveries.SaveAsync(delivery, cancellationToken);
         }
     }
 
-    private async Task TakeOutOfAsync(NotificationRule rule, NotificationDestinationId id, DateTime now, CancellationToken cancellationToken)
+    private async Task KeepAsync(NotificationDestinationRetirement retired, CancellationToken cancellationToken)
     {
-        if (!rule.Destinations.Contains(id))
-        {
-            return;
-        }
-
-        IReadOnlyList<NotificationDestinationId> left = [.. rule.Destinations.Where(destination => !destination.Equals(id))];
-
-        if (left.Count is 0)
+        foreach (NotificationRule rule in retired.Emptied)
         {
             await rules.RemoveAsync(rule, cancellationToken);
-
-            return;
         }
 
-        rule.Tell(rule.Events, left, now);
-        await rules.SaveAsync(rule, cancellationToken);
-    }
-
-    private async Task StopTellingAsync(NotificationDestinationId id, DateTime now, CancellationToken cancellationToken)
-    {
-        foreach (ProgrammeWatch watch in await watches.ListFollowedAsync(now, cancellationToken))
+        foreach (NotificationRule rule in retired.Narrowed)
         {
-            if (watch.StopTelling(id, now))
-            {
-                await watches.SaveAsync(watch, cancellationToken);
-            }
+            await rules.SaveAsync(rule, cancellationToken);
+        }
+
+        foreach (ProgrammeWatch watch in retired.NoLongerTelling)
+        {
+            await watches.SaveAsync(watch, cancellationToken);
         }
     }
 

@@ -299,6 +299,86 @@ public sealed class ProgrammeWatchTests
         Assert.Equal(Starts, Read(ProgrammeWatchState.Notified, Starts, [First]).NotifiedAt);
     }
 
+    [Fact(DisplayName = "BR-NT-007: a programme of the guide that has not begun is asked for at a lead offered")]
+    public void AProgrammeThatHasNotBegunIsAskedForAtALeadOffered()
+    {
+        Assert.Null(ProgrammeWatch.RefusalToAsk(Guide(isShadow: false), 3, Asked));
+        Assert.Null(ProgrammeWatch.RefusalToAsk(Guide(isShadow: false), 0, Starts.AddTicks(-1)));
+    }
+
+    [Fact(DisplayName = "BR-NT-007: a programme carried as the shadow of another service's broadcast is not asked for")]
+    public void AShadowProgrammeIsNotAskedFor()
+    {
+        Assert.Equal(ProgrammeWatchRefusal.Shadow, ProgrammeWatch.RefusalToAsk(Guide(isShadow: true), 3, Asked));
+        Assert.Equal(ProgrammeWatchRefusal.Shadow, ProgrammeWatch.RefusalToAsk(Guide(isShadow: true), 2, Starts));
+    }
+
+    [Theory(DisplayName = "BR-NT-007: a programme that has begun is not asked for, whatever the lead")]
+    [InlineData(0, 3)]
+    [InlineData(1, 3)]
+    [InlineData(3600, 2)]
+    public void ABegunProgrammeIsNotAskedFor(int secondsAfterTheStart, int leadMinutes)
+    {
+        Assert.Equal(
+            ProgrammeWatchRefusal.AlreadyBegun,
+            ProgrammeWatch.RefusalToAsk(Guide(isShadow: false), leadMinutes, Starts.AddSeconds(secondsAfterTheStart)));
+    }
+
+    [Theory(DisplayName = "BR-NT-005: a programme is not asked for at a lead that is not offered")]
+    [InlineData(-1)]
+    [InlineData(2)]
+    [InlineData(15)]
+    public void AProgrammeIsNotAskedForAtALeadNotOffered(int leadMinutes)
+    {
+        Assert.Equal(ProgrammeWatchRefusal.LeadNotOffered, ProgrammeWatch.RefusalToAsk(Guide(isShadow: false), leadMinutes, Asked));
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a waiting programme is withdrawn and cancelled")]
+    public void AWaitingProgrammeIsWithdrawn()
+    {
+        ProgrammeWatch watch = Waiting(3);
+
+        Assert.Equal(ProgrammeWatchWithdrawal.Withdrawn, watch.Withdraw(Asked.AddMinutes(1)));
+        Assert.Equal(ProgrammeWatchState.Cancelled, watch.State);
+        Assert.Equal(Asked.AddMinutes(1), watch.ChangedAt);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme already cancelled is withdrawn again as it stands")]
+    public void ACancelledProgrammeIsWithdrawnAsItStands()
+    {
+        ProgrammeWatch watch = Waiting(3);
+        watch.Cancel(Asked);
+
+        Assert.Equal(ProgrammeWatchWithdrawal.AlreadyWithdrawn, watch.Withdraw(Asked.AddMinutes(1)));
+        Assert.Equal(ProgrammeWatchState.Cancelled, watch.State);
+        Assert.Equal(Asked, watch.ChangedAt);
+    }
+
+    [Fact(DisplayName = "BR-NS-003: a programme told of or skipped is not withdrawn")]
+    public void ASettledProgrammeIsNotWithdrawn()
+    {
+        ProgrammeWatch notified = Waiting(3);
+        notified.Notify(Starts.AddMinutes(-3));
+        ProgrammeWatch skipped = Waiting(3);
+        skipped.Skip(Ends);
+
+        Assert.Equal(ProgrammeWatchWithdrawal.Settled, notified.Withdraw(Starts));
+        Assert.Equal(ProgrammeWatchWithdrawal.Settled, skipped.Withdraw(Ends));
+        Assert.Equal(ProgrammeWatchState.Notified, notified.State);
+        Assert.Equal(ProgrammeWatchState.Skipped, skipped.State);
+    }
+
+    private static Programme Guide(bool isShadow)
+        => Programme.Rehydrate(
+            Watched,
+            new TransportStreamId(32000),
+            Starts,
+            Ends,
+            Name,
+            string.Empty,
+            isShadow,
+            Asked);
+
     private static ProgrammeWatch Waiting(int leadMinutes)
         => ProgrammeWatch.Ask(ProgrammeWatchId.New(), Watched, Announced, leadMinutes, [First], Asked);
 

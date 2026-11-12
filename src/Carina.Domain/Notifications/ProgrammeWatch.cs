@@ -76,6 +76,27 @@ public sealed class ProgrammeWatch
         return Rehydrate(id, programme, announced, leadMinutes, destinations, ProgrammeWatchState.Waiting, null, null, at, at);
     }
 
+    /// <summary>
+    /// Why a programme of the guide may not be asked to be told of at <paramref name="leadMinutes"/> minutes before it
+    /// begins, judged at <paramref name="at"/>, or nothing when it may.
+    /// </summary>
+    public static ProgrammeWatchRefusal? RefusalToAsk(Programme announced, int leadMinutes, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(announced);
+
+        if (announced.IsShadow)
+        {
+            return ProgrammeWatchRefusal.Shadow;
+        }
+
+        if (at >= announced.StartsAt)
+        {
+            return ProgrammeWatchRefusal.AlreadyBegun;
+        }
+
+        return NotificationSettings.Offers(leadMinutes) ? null : ProgrammeWatchRefusal.LeadNotOffered;
+    }
+
     public static ProgrammeWatch Rehydrate(
         ProgrammeWatchId id,
         ProgrammeId programme,
@@ -92,7 +113,7 @@ public sealed class ProgrammeWatch
         ArgumentNullException.ThrowIfNull(programme);
         ArgumentNullException.ThrowIfNull(announced);
 
-        if (!NotificationSettings.LeadMinutesOffered.Contains(leadMinutes))
+        if (!NotificationSettings.Offers(leadMinutes))
         {
             throw new ArgumentOutOfRangeException(
                 nameof(leadMinutes),
@@ -199,6 +220,25 @@ public sealed class ProgrammeWatch
     public void Skip(DateTime at) => Settle(ProgrammeWatchState.Skipped, at);
 
     public void Cancel(DateTime at) => Settle(ProgrammeWatchState.Cancelled, at);
+
+    /// <summary>
+    /// Withdraws a programme somebody no longer wants to be told of. One that waits is cancelled, one already
+    /// cancelled is left as it stands, and one told of or skipped is not withdrawn.
+    /// </summary>
+    public ProgrammeWatchWithdrawal Withdraw(DateTime at)
+    {
+        switch (State)
+        {
+            case ProgrammeWatchState.Cancelled:
+                return ProgrammeWatchWithdrawal.AlreadyWithdrawn;
+            case ProgrammeWatchState.Waiting:
+                Cancel(at);
+
+                return ProgrammeWatchWithdrawal.Withdrawn;
+            default:
+                return ProgrammeWatchWithdrawal.Settled;
+        }
+    }
 
     /// <summary>
     /// Stops telling one destination of a programme that still waits. Left with none, it is cancelled.

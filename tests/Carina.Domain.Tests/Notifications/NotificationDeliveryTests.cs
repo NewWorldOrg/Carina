@@ -139,6 +139,18 @@ public sealed class NotificationDeliveryTests
         Assert.Throws<InvalidOperationException>(() => givenUp.Fail(NoticeFailure.ServerFailed, At));
     }
 
+    [Fact(DisplayName = "BR-NS-001, BR-NC-001: a delivery is due from its next attempt on, and not before")]
+    public void ADeliveryIsDueFromItsNextAttemptOn()
+    {
+        NotificationDelivery delivery = Queued();
+        delivery.Fail(NoticeFailure.ServerFailed, At);
+
+        Assert.True(Queued().IsDueAt(At));
+        Assert.False(delivery.IsDueAt(At.AddSeconds(29)));
+        Assert.True(delivery.IsDueAt(At.AddSeconds(30)));
+        Assert.True(delivery.IsDueAt(At.AddMinutes(5)));
+    }
+
     [Fact(DisplayName = "a delivery is not read back standing where its own fields do not put it")]
     public void ADeliveryIsNotReadBackStandingWhereItsFieldsDoNotPutIt()
     {

@@ -119,6 +119,36 @@ public sealed class NotificationRuleTests
         Assert.Equal(At.AddHours(2), rule.ChangedAt);
     }
 
+    [Fact(DisplayName = "BR-NT-004: a destination taken out of a set of rules leaves the others it sends to")]
+    public void ADestinationTakenOutLeavesTheOthers()
+    {
+        NotificationDestinationId first = NotificationDestinationId.New();
+        NotificationDestinationId second = NotificationDestinationId.New();
+        NotificationRule rule = NotificationRule.Define(
+            NotificationRuleId.New(),
+            new NotificationName("Failures"),
+            [NoticeKind.RecordingFailed],
+            [first, second],
+            At);
+
+        Assert.Equal(NotificationRuleNarrowing.Narrowed, rule.StopSendingTo(first, At.AddHours(1)));
+        Assert.Equal([second], rule.Destinations);
+        Assert.Equal([NoticeKind.RecordingFailed], rule.Events);
+        Assert.Equal(At.AddHours(1), rule.ChangedAt);
+    }
+
+    [Fact(DisplayName = "BR-NT-004: a set of rules left with no destination is to be removed, and one that does not name it is left alone")]
+    public void ASetOfRulesLeftWithNoDestinationIsToBeRemoved()
+    {
+        NotificationRule rule = Rule([NoticeKind.RecordingFailed]);
+        NotificationDestinationId only = rule.Destinations[0];
+
+        Assert.Equal(NotificationRuleNarrowing.NotNamed, rule.StopSendingTo(NotificationDestinationId.New(), At.AddHours(1)));
+        Assert.Equal(NotificationRuleNarrowing.LeftWithNone, rule.StopSendingTo(only, At.AddHours(2)));
+        Assert.Equal([only], rule.Destinations);
+        Assert.Equal(At, rule.ChangedAt);
+    }
+
     private static NotificationRule Rule(IReadOnlyList<NoticeKind> events)
         => NotificationRule.Define(
             NotificationRuleId.New(),
