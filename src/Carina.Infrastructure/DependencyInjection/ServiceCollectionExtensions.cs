@@ -469,6 +469,7 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<TimeProvider>(),
             NoticeLine.UsualDeadline));
         services.TryAddSingleton<WebhookUrlSeal>();
+        services.TryAddSingleton<PushServerKey>();
         services.TryAddSingleton<NoticeDispatch>();
         services.TryAddSingleton<UnwrittenDeliveries>();
         services.TryAddSingleton<EncodeQueueTurn>();
