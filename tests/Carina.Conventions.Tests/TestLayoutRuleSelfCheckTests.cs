@@ -909,6 +909,24 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAnOldTestThatImportsTheTestsOfAnAreaThatHasMoved()
+    {
+        using SourceTree tree = new();
+        DeclareAuthAndRecordings(tree);
+        tree.Write(
+            $"{ApiTests}/FeatureTest/PushRoundTests.cs",
+            "using Carina.Api.Tests.Feature.Auth;\n\n" + Source("Carina.Api.Tests.FeatureTest", "PushRoundTests", TestLayoutRules.Feature));
+        tree.Write(
+            $"{ApiTests}/FeatureTest/RecordingRoundTests.cs",
+            "using Carina.Api.Tests.Feature.Recordings;\nusing Carina.Infrastructure.Tests.Auth;\n\n"
+            + Source("Carina.Api.Tests.FeatureTest", "RecordingRoundTests", TestLayoutRules.Feature));
+
+        Assert.Equal(
+            ["/tests/Carina.Api.Tests/FeatureTest/PushRoundTests.cs:6 PushRoundTests imports the tests of Auth, which has moved"],
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
+    }
+
+    [Fact]
     public void DetectsATestClassInAFlatOldPlaceWithANamesakeInTheLayout()
     {
         using SourceTree tree = new();

@@ -745,6 +745,25 @@ public sealed class NotificationDeliveryRoundTests : IDisposable
         Assert.Equal(DeliveryBench.Began.AddSeconds(45), delivery.NextAttemptAt);
     }
 
+    [Theory(DisplayName = "BR-NS-002: A push service that says the subscription is gone turns the browser's row off, and one that fails is tried again later with the row left on")]
+    [InlineData(404, false, 0, 1)]
+    [InlineData(410, false, 0, 1)]
+    [InlineData(500, true, 1, 0)]
+    [InlineData(429, true, 1, 0)]
+    public async Task APushServiceThatSaysTheSubscriptionIsGoneTurnsTheRowOff(int answered, bool staysOn, int failed, int givenUp)
+    {
+        await using DeliveryBench bench = new(_ => CannedAnswer.Of(answered, []));
+        NotificationDestination destination = bench.Browser(WebhookRig.Browser(receiver));
+        bench.Waiting(destination);
+
+        NotificationDeliveries passed = await bench.PassAsync();
+
+        Assert.Equal(failed, passed.Failed);
+        Assert.Equal(givenUp, passed.GivenUp);
+        Assert.Single(bench.Rig.Server.Heard);
+        Assert.Equal(staysOn, destination.Enabled);
+    }
+
     [Fact(DisplayName = "BR-ND-012: a browser whose subscription does not open with the keys held is not sent to, and says so, and stays on")]
     public async Task ASubscriptionThatDoesNotOpenIsNotSentTo()
     {
