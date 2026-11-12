@@ -11,6 +11,7 @@ using System.Text;
 using System.Text.Json;
 
 using Carina.Api.Authentication;
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
@@ -30,7 +31,7 @@ using Microsoft.Net.Http.Headers;
 
 using EventId = Carina.Domain.Programmes.EventId;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Notifications;
 
 internal sealed record HeardWebhookCall(string Method, string Target, string Body)
 {

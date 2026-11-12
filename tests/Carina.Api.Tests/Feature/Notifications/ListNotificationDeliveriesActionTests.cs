@@ -1,12 +1,28 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 
 using Carina.Domain.Notifications;
+using Carina.Infrastructure.Notifications;
+using Carina.TestSupport;
 
-namespace Carina.Api.Tests.FeatureTest;
+using Microsoft.Extensions.Options;
 
-public sealed class NotificationDeliveryEndpointTests
+namespace Carina.Api.Tests.Feature.Notifications;
+
+[Trait("Category", "Feature")]
+public sealed class ListNotificationDeliveriesActionTests
 {
+    [Theory(DisplayName = "BR-NA-001: A caller who has not signed in is refused by every endpoint of the notifications")]
+    [InlineData("GET", $"{NotificationFeature.Deliveries}?destinationId=00000000-0000-0000-0000-000000000001")]
+    public async Task ACallerWhoHasNotSignedInIsRefused(string method, string path)
+        => await NotificationGuard.ACallerWhoHasNotSignedInIsRefusedAsync(method, path);
+
+    [Theory(DisplayName = "BR-NA-002: A read from another origin is left alone")]
+    [InlineData("GET", $"{NotificationFeature.Deliveries}?destinationId=00000000-0000-0000-0000-000000000001")]
+    public async Task AReadFromAnotherOriginIsLeftAlone(string method, string path)
+        => await NotificationGuard.AReadFromAnotherOriginIsLeftAloneAsync(method, path);
+
     [Fact(DisplayName = "FR: The latest deliveries of one destination are answered newest first with when, what, the state and the word for the failure")]
     public async Task TheLatestDeliveriesOfOneDestinationAreAnsweredNewestFirst()
     {
@@ -107,5 +123,46 @@ public sealed class NotificationDeliveryEndpointTests
         Assert.DoesNotContain("url", text, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact(DisplayName = "D-11: A notice goes to a browser encrypted, naming the notice and the screen to open, and the delivery is recorded as sent")]
+    public async Task ANoticeGoesToABrowserEncrypted()
+    {
+        await using NotificationFeature feature = new(NotificationFeature.Screens);
+        using PushReceiver browser = new();
+        Guid id = await feature.SubscribedAsync(browser);
+        feature.End.Status = 201;
+        NoticeOnItsWay waiting = feature.Waiting(id);
+
+        NotificationDeliveries passed = await feature.PassAsync();
+        (HttpStatusCode status, JsonElement record) = await feature.GetAsync($"{NotificationFeature.Deliveries}?destinationId={id}");
+
+        Assert.Equal(1, passed.Sent);
+        HeardWebhookCall heard = Assert.Single(feature.End.Heard);
+        Assert.Equal("86400", heard.Said("TTL"));
+        Assert.Equal("normal", heard.Said("Urgency"));
+        Assert.True(VapidReading.Of(heard.Said("Authorization")!).Signed);
+        using JsonDocument said = JsonDocument.Parse(browser.Open(heard.Sent));
+        Assert.Equal("録画に失敗しました", said.RootElement.GetProperty("title").GetString());
+        Assert.Equal("作り物の番組", said.RootElement.GetProperty("body").GetString());
+        Assert.Equal("/", said.RootElement.GetProperty("path").GetString());
+        Assert.Equal(waiting.Notice.Id.Value, said.RootElement.GetProperty("id").GetGuid());
+        Assert.Equal(HttpStatusCode.OK, status);
+        AssertNothingOf(browser, record.GetRawText());
+        Assert.DoesNotContain("fcm.googleapis.com", record.GetRawText(), StringComparison.Ordinal);
+        NotificationDestination held = Assert.Single(feature.HeldDestinations.Destinations);
+        Assert.NotNull(held.LastResultAt);
+        Assert.Null(held.LastFailure);
+    }
+
     private static string Of(Guid destination) => $"{NotificationFeature.Deliveries}?destinationId={destination}";
+
+    private static void AssertNothingOf(PushReceiver browser, string text)
+    {
+        Assert.DoesNotContain("made-up-registration", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("googleapis", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("mozilla", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(browser.KeyAsWritten, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(browser.SecretAsWritten, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("p256dh", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("endpoint", text, StringComparison.OrdinalIgnoreCase);
+    }
 }

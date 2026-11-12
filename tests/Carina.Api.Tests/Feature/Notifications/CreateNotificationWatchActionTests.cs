@@ -5,9 +5,10 @@ using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Notifications;
 
-public sealed class NotificationWatchEndpointTests
+[Trait("Category", "Feature")]
+public sealed class CreateNotificationWatchActionTests
 {
     private static readonly DateTime Starts = NotificationFeature.Noon.AddHours(2);
 
@@ -19,6 +20,26 @@ public sealed class NotificationWatchEndpointTests
         "hooks.slack.com",
         "discord.com",
     ];
+
+    [Theory(DisplayName = "BR-NA-001: A caller who has not signed in is refused by every endpoint of the notifications")]
+    [InlineData("POST", NotificationFeature.Watches)]
+    public async Task ACallerWhoHasNotSignedInIsRefused(string method, string path)
+        => await NotificationGuard.ACallerWhoHasNotSignedInIsRefusedAsync(method, path);
+
+    [Theory(DisplayName = "BR-NA-002: A write that names no origin is refused")]
+    [InlineData("POST", NotificationFeature.Watches)]
+    public async Task AWriteNamingNoOriginIsRefused(string method, string path)
+        => await NotificationGuard.AWriteNamingNoOriginIsRefusedAsync(method, path);
+
+    [Theory(DisplayName = "BR-NA-002: A write that names another origin is refused")]
+    [InlineData("POST", NotificationFeature.Watches)]
+    public async Task AWriteNamingAnotherOriginIsRefused(string method, string path)
+        => await NotificationGuard.AWriteNamingAnotherOriginIsRefusedAsync(method, path);
+
+    [Theory(DisplayName = "BR-NA-002: A write that carries a form and not JSON is refused")]
+    [InlineData("POST", NotificationFeature.Watches)]
+    public async Task AWriteCarryingAFormIsRefused(string method, string path)
+        => await NotificationGuard.AWriteCarryingAFormIsRefusedAsync(method, path);
 
     [Fact(DisplayName = "BR-NT-007: A programme that has not begun is asked to be told of, with the usual minutes and every destination that is turned on")]
     public async Task AProgrammeIsAskedToBeToldOfWithTheUsualMinutesAndEveryDestinationTurnedOn()
@@ -346,108 +367,6 @@ public sealed class NotificationWatchEndpointTests
         ProgrammeWatch held = Assert.Single(feature.HeldWatches.Watches);
         Assert.Equal(Starts, held.StartsAt);
         Assert.Equal(ProgrammeWatchState.Waiting, held.State);
-    }
-
-    [Fact(DisplayName = "BR-NS-003: The programmes asked to be told of are listed with their states, the earliest start first")]
-    public async Task TheProgrammesAskedAreListedTheEarliestFirst()
-    {
-        await using NotificationFeature feature = new();
-        await feature.RegisteredAsync();
-        Guid later = await feature.AskedAsync(feature.Announced(4002, Starts.AddHours(3), "作り物の番組 その二"), Starts.AddHours(3));
-        Guid sooner = await feature.AskedAsync(feature.Announced(4001, Starts), Starts);
-        Guid withdrawn = await feature.AskedAsync(feature.Announced(4003, Starts.AddHours(1), "作り物の番組 その三"), Starts.AddHours(1));
-        await feature.DeleteAsync(NotificationFeature.WatchOf(withdrawn));
-
-        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(NotificationFeature.Watches);
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        JsonElement[] items = [.. body.GetProperty("data").GetProperty("items").EnumerateArray()];
-        Assert.Equal([sooner, withdrawn, later], items.Select(item => item.GetProperty("id").GetGuid()));
-        Assert.Equal(["waiting", "cancelled", "waiting"], items.Select(item => item.GetProperty("state").GetString()));
-        Assert.Equal("作り物の番組 その二", items[2].GetProperty("programmeName").GetString());
-    }
-
-    [Fact(DisplayName = "BR-NS-003: A programme that waits is withdrawn, and withdrawing it again changes nothing")]
-    public async Task AProgrammeThatWaitsIsWithdrawn()
-    {
-        await using NotificationFeature feature = new();
-        await feature.RegisteredAsync();
-        Guid id = await feature.AskedAsync(feature.Announced(4001, Starts), Starts);
-        feature.Clock.Now = NotificationFeature.Noon.AddMinutes(5);
-
-        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync(NotificationFeature.WatchOf(id));
-        feature.Clock.Now = NotificationFeature.Noon.AddMinutes(9);
-        (HttpStatusCode again, JsonElement repeated) = await feature.DeleteAsync(NotificationFeature.WatchOf(id));
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(id, body.GetProperty("data").GetProperty("id").GetGuid());
-        Assert.Equal("cancelled", body.GetProperty("data").GetProperty("state").GetString());
-        Assert.Equal(NotificationFeature.Noon.AddMinutes(5), body.GetProperty("data").GetProperty("changedAt").GetDateTime());
-        Assert.Equal(HttpStatusCode.OK, again);
-        Assert.Equal(NotificationFeature.Noon.AddMinutes(5), repeated.GetProperty("data").GetProperty("changedAt").GetDateTime());
-        ProgrammeWatch held = Assert.Single(feature.HeldWatches.Watches);
-        Assert.Equal(ProgrammeWatchState.Cancelled, held.State);
-    }
-
-    [Theory(DisplayName = "BR-NS-003: A programme already told of, or let go by, is not withdrawn")]
-    [InlineData(ProgrammeWatchState.Notified)]
-    [InlineData(ProgrammeWatchState.Skipped)]
-    public async Task AProgrammeAlreadySettledIsNotWithdrawn(ProgrammeWatchState state)
-    {
-        await using NotificationFeature feature = new();
-        Guid livingRoom = await feature.RegisteredAsync();
-        ProgrammeWatch settled = Settled(feature, 4001, Starts, state, livingRoom);
-        feature.HeldWatches.Watches.Add(settled);
-
-        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync(NotificationFeature.WatchOf(settled.Id.Value));
-
-        Assert.Equal(HttpStatusCode.Conflict, status);
-        Assert.False(body.GetProperty("status").GetBoolean());
-        Assert.Equal(state, Assert.Single(feature.HeldWatches.Watches).State);
-    }
-
-    [Fact(DisplayName = "BR-ND-013: Removing a destination takes it out of the programmes that wait, withdraws one left with nowhere to send, and leaves the ones told of as they were")]
-    public async Task RemovingADestinationTakesItOutOfTheProgrammesThatWait()
-    {
-        await using NotificationFeature feature = new();
-        Guid livingRoom = await feature.RegisteredAsync();
-        Guid study = await feature.RegisteredAsync("書斎", NotificationFeature.DiscordUrl);
-        Guid both = await feature.AskedAsync(feature.Announced(4001, Starts), Starts);
-        string alone = feature.Announced(4002, Starts.AddHours(1), "作り物の番組 その二");
-        (_, JsonElement asked) = await feature.PostAsync(
-            NotificationFeature.Watches,
-            new { programme = alone, programmeStartsAt = Starts.AddHours(1), destinations = new[] { livingRoom } });
-        Guid only = asked.GetProperty("data").GetProperty("id").GetGuid();
-        ProgrammeWatch told = Settled(feature, 4003, NotificationFeature.Noon.AddMinutes(2), ProgrammeWatchState.Notified, livingRoom);
-        feature.HeldWatches.Watches.Add(told);
-        feature.Clock.Now = NotificationFeature.Noon.AddMinutes(5);
-
-        (HttpStatusCode status, _) = await feature.DeleteAsync(NotificationFeature.OneOf(livingRoom));
-        (_, JsonElement body) = await feature.GetAsync(NotificationFeature.Watches);
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Dictionary<Guid, JsonElement> rows = body.GetProperty("data").GetProperty("items").EnumerateArray()
-            .ToDictionary(item => item.GetProperty("id").GetGuid());
-        Assert.Equal("waiting", rows[both].GetProperty("state").GetString());
-        Assert.Equal([study], Ids(rows[both].GetProperty("destinations")));
-        Assert.Equal(NotificationFeature.Noon.AddMinutes(5), rows[both].GetProperty("changedAt").GetDateTime());
-        Assert.Equal("cancelled", rows[only].GetProperty("state").GetString());
-        Assert.Empty(Ids(rows[only].GetProperty("destinations")));
-        Assert.Equal("notified", rows[told.Id.Value].GetProperty("state").GetString());
-        Assert.Equal([livingRoom], Ids(rows[told.Id.Value].GetProperty("destinations")));
-        Assert.Empty(feature.HeldDeliveries.Rows);
-    }
-
-    [Fact(DisplayName = "BR-NS-003: A programme nobody asked to be told of is not found, and an id of all zeroes is refused")]
-    public async Task AProgrammeNobodyAskedForIsNotFound()
-    {
-        await using NotificationFeature feature = new();
-
-        (HttpStatusCode unknown, _) = await feature.DeleteAsync(NotificationFeature.WatchOf(Guid.NewGuid()));
-        (HttpStatusCode zeroes, _) = await feature.DeleteAsync(NotificationFeature.WatchOf(Guid.Empty));
-
-        Assert.Equal(HttpStatusCode.NotFound, unknown);
-        Assert.Equal(HttpStatusCode.BadRequest, zeroes);
     }
 
     [Fact(DisplayName = "BR-NA-003: No answer about a programme asked to be told of carries the address of a destination")]
