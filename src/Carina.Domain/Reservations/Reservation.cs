@@ -100,6 +100,12 @@ public sealed class Reservation
 
     public bool IsRuleBorn => RuleId is not null;
 
+    /// <summary>
+    /// Whether the recorder may claim this reservation: one secured that nothing has claimed yet. A contended
+    /// reservation does not start recording when its window opens. The claim statement in the store says the same.
+    /// </summary>
+    public bool IsReadyToBeClaimed => !IsPinned && State is ReservationState.Scheduled;
+
     public ReservationStanding Standing => RecordingOutcome switch
     {
         Recordings.RecordingOutcome.Complete => ReservationStanding.Complete,
@@ -292,6 +298,62 @@ public sealed class Reservation
                 UtcTimes.Optional(receptionUnavailableSince, nameof(receptionUnavailableSince)),
             CreatedAt = UtcTimes.Required(createdAt, nameof(createdAt)),
         };
+    }
+
+    /// <summary>
+    /// Whether the recorder is to hold this reservation at <paramref name="at"/>, preparing <paramref name="ahead"/>
+    /// before its window opens: one being recorded until its recording ends, or one secured whose window has opened by
+    /// then and not yet closed. The query the recorder reads in the store says the same.
+    /// </summary>
+    public bool IsDueAt(DateTime at, TimeSpan ahead)
+        => RecordingOutcome is null
+           && (IsPinned
+               || (State is ReservationState.Scheduled && EffectiveStartAt <= at + ahead && at < EffectiveEndAt));
+
+    /// <summary>
+    /// Whether the claim made at <paramref name="claimedAt"/> may be given back: only by the start that made it, and
+    /// never once a recording came of it. The release statement in the store says the same.
+    /// </summary>
+    public bool MayBeReleasedFrom(DateTime claimedAt) => StartedAt == claimedAt && RecordingOutcome is null;
+
+    /// <summary>
+    /// Whether this reservation is still waiting within <paramref name="window"/>: secured or contended with no
+    /// recording outcome, and either claimed or meeting the window. The query in the store says the same.
+    /// </summary>
+    public bool IsPendingWithin(ReservationWindow window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        return RecordingOutcome is null
+               && State is ReservationState.Scheduled or ReservationState.Conflict
+               && (IsPinned || (EndAt >= window.From && StartAt <= window.To));
+    }
+
+    /// <summary>
+    /// What asking to throw this reservation away at <paramref name="at"/> comes to: a reservation a recording came of
+    /// goes with that recording, one claimed and still turning into a recording waits for it, and one still to be
+    /// recorded is cancelled rather than thrown away. The delete statement in the store says the same.
+    /// </summary>
+    public ReservationDiscard Discarding(bool aRecordingCameOfIt, DateTime at)
+    {
+        if (aRecordingCameOfIt)
+        {
+            return ReservationDiscard.RecordingCameOfIt;
+        }
+
+        if (RecordingOutcome is not null)
+        {
+            return ReservationDiscard.Discarded;
+        }
+
+        if (IsPinned)
+        {
+            return ReservationDiscard.TurningIntoARecording;
+        }
+
+        return State is ReservationState.Scheduled or ReservationState.Conflict && EffectiveEndAt > at
+            ? ReservationDiscard.StillToBeRecorded
+            : ReservationDiscard.Discarded;
     }
 
     /// <summary>
