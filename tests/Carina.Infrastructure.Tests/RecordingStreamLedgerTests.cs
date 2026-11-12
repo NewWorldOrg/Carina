@@ -243,6 +243,7 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
             once,
             collide));
         services.AddScoped<IServiceTuningDirectory>(_ => new ResolvedTuning(Terrestrial));
+        services.AddScoped<RecordingSettlementDomainService>();
         services.AddScoped<IQualityThresholdRepository>(provider =>
             new QualityThresholdRepository(provider.GetRequiredService<CarinaDbContext>()));
 

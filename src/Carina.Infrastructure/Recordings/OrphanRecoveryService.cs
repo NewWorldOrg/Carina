@@ -382,11 +382,10 @@ public sealed class OrphanRecoveryService(
     private async Task<QualityBands> BandsAsync(DateTime now, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
-        IReadOnlyList<QualityThreshold> held = await scope.ServiceProvider
-            .GetRequiredService<IQualityThresholdRepository>()
-            .ListAsync(cancellationToken);
 
-        return QualityThresholdStanding.Bands(QualityThresholdStanding.Over(held, now));
+        return await scope.ServiceProvider
+            .GetRequiredService<RecordingSettlementDomainService>()
+            .BandsAsync(now, cancellationToken);
     }
 
     private async Task<GuideStanding> GuideSaysAsync(Recording recording, CancellationToken cancellationToken)

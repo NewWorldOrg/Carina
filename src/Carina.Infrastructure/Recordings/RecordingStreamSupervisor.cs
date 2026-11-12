@@ -570,11 +570,10 @@ public sealed class RecordingStreamSupervisor(
     private async Task<QualityBands> BandsAsync(DateTime now, CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
-        IReadOnlyList<QualityThreshold> held = await scope.ServiceProvider
-            .GetRequiredService<IQualityThresholdRepository>()
-            .ListAsync(cancellationToken);
 
-        return QualityThresholdStanding.Bands(QualityThresholdStanding.Over(held, now));
+        return await scope.ServiceProvider
+            .GetRequiredService<RecordingSettlementDomainService>()
+            .BandsAsync(now, cancellationToken);
     }
 
     private async Task<TuneParams?> TuneOfAsync(Recording recording, CancellationToken cancellationToken)
@@ -596,37 +595,33 @@ public sealed class RecordingStreamSupervisor(
     }
 
     /// <summary>
-    /// Names the rate a recording's weight is judged against: the one measured off the kind its
-    /// selected channel is carried on, or the range every kind falls in when the service or its
-    /// selected channel is gone. Nothing is named for any other refusal that names no channel.
+    /// Names the rate a recording's weight is judged against, or nothing when the catalogue cannot say yet.
     /// </summary>
     private async Task<ExpectedBitrate?> RateOfAsync(Recording recording, CancellationToken cancellationToken)
     {
-        TuningResolution resolution = await ResolveAsync(recording, cancellationToken);
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        SettlementRate rate = await scope.ServiceProvider
+            .GetRequiredService<RecordingSettlementDomainService>()
+            .RateAsync(recording, cancellationToken);
 
-        if (resolution.ChannelTuning is { } tuning)
-        {
-            return ExpectedBitrate.Of(tuning.Typed().Kind);
-        }
-
-        if (resolution.Refusal is not (TuningRefusal.NoSuchService or TuningRefusal.NoSelectedChannel))
+        if (rate.Bitrate is null)
         {
             logger.LogWarning(
                 "Recording {Recording} is over and the catalogue named no channel for its service ({Refusal}), "
                 + "so it is judged on a later pass.",
                 recording.Id.Wire,
-                resolution.Refusal);
-
-            return null;
+                rate.Refusal);
+        }
+        else if (rate.OfEveryKind)
+        {
+            logger.LogWarning(
+                "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so its weight is "
+                + "judged against the range every kind of broadcast falls in.",
+                recording.Id.Wire,
+                rate.Refusal);
         }
 
-        logger.LogWarning(
-            "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so its weight is "
-            + "judged against the range every kind of broadcast falls in.",
-            recording.Id.Wire,
-            resolution.Refusal);
-
-        return ExpectedBitrate.OfAnyKind;
+        return rate.Bitrate;
     }
 
     private async Task<TuningResolution> ResolveAsync(Recording recording, CancellationToken cancellationToken)

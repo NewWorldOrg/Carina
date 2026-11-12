@@ -525,6 +525,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.IsType<FfmpegLearningFollower>(provider.GetRequiredService<ILearningFollower>());
         Assert.IsType<LearningWorklist>(scope.ServiceProvider.GetRequiredService<ILearningWorklist>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingSettlementDomainService>());
         Assert.Same(LearningFollowSettings.Default, provider.GetRequiredService<LearningFollowSettings>());
     }
 
