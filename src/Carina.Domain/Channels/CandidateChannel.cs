@@ -77,6 +77,23 @@ public sealed class CandidateChannel
             discoveredAt: at,
             lastSeenAt: at);
 
+    /// <summary>
+    /// A candidate added by hand has not been tuned by anything here, so it waits to be checked before it is trusted.
+    /// </summary>
+    public static CandidateChannel AddByHand(
+        CandidateChannelId id,
+        NetworkId networkId,
+        ServiceId serviceId,
+        TuningParameters tuning,
+        DateTime at)
+    {
+        CandidateChannel added = Discover(id, networkId, serviceId, tuning, at);
+
+        added.RequireRevalidation();
+
+        return added;
+    }
+
     public static CandidateChannel Rehydrate(
         CandidateChannelId id,
         NetworkId networkId,

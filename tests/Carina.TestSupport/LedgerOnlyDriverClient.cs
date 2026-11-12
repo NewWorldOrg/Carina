@@ -2,9 +2,9 @@ using Carina.Domain.Driver;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Channels;
+namespace Carina.TestSupport;
 
-internal sealed class LedgerOnlyDriverClient : IDriverClient
+public sealed class LedgerOnlyDriverClient : IDriverClient
 {
     public DriverCall<TunerLedgerDto> Ledger { get; set; } =
         DriverCall<TunerLedgerDto>.Reached(new TunerLedgerDto());

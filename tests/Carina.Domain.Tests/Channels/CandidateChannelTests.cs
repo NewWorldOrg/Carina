@@ -395,4 +395,19 @@ public sealed class CandidateChannelTests
         Assert.False(candidate.BelongsTo(new NetworkId(4), new ServiceId(102)));
         Assert.False(candidate.BelongsTo(new NetworkId(5), new ServiceId(101)));
     }
+
+    [Fact(DisplayName = "a candidate added by hand waits to be checked before it is trusted")]
+    public void ACandidateAddedByHandWaitsToBeChecked()
+    {
+        CandidateChannel added = CandidateChannel.AddByHand(
+            CandidateChannelId.New(),
+            new NetworkId(4),
+            new ServiceId(101),
+            TuningParameters.Terrestrial(27),
+            At);
+
+        Assert.True(added.NeedsRevalidation);
+        Assert.False(added.IsSelected);
+        Assert.Equal(At, added.DiscoveredAt);
+    }
 }

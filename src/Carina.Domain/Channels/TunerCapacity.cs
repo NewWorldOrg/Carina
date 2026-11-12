@@ -91,4 +91,7 @@ public static class BroadcastReception
         TunerKind.Satellite => [TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110],
         _ => [],
     };
+
+    public static TunerKind KindReceiving(TuneSystem system)
+        => system is TuneSystem.IsdbT ? TunerKind.Terrestrial : TunerKind.Satellite;
 }
