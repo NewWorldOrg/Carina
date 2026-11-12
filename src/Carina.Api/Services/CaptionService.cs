@@ -1,5 +1,6 @@
 using Carina.Api.Common;
 using Carina.Domain.Captions;
+using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 
 namespace Carina.Api.Services;

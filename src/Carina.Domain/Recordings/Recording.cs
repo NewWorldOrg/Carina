@@ -202,6 +202,12 @@ public sealed class Recording
     public bool IsInFlight => Outcome is null;
 
     /// <summary>
+    /// Whether the recording can be watched from its file: it has ended, so the file is whole. One still being
+    /// written gets no ticket for an external player and keeps no position it was watched to.
+    /// </summary>
+    public bool CanBeWatched => !IsInFlight;
+
+    /// <summary>
     /// Whether there is something to encode: a recording still being written is encoded once it has ended, and one
     /// that failed has nothing to encode.
     /// </summary>

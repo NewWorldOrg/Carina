@@ -32,8 +32,7 @@ public sealed record PlaybackOffer(
 public sealed class PlaybackService(
     IRecordingDirectory recordings,
     IPlaybackFileStore files,
-    IEncodeJobRepository jobs,
-    IEncodeProfileRepository profiles,
+    PlaybackArtefactDomainService artefacts,
     IArtefactOpenings reads,
     IArtefactCodecReader codecs,
     ILogger<PlaybackService> logger)
@@ -128,43 +127,28 @@ public sealed class PlaybackService(
         RecordingId id,
         CancellationToken cancellationToken)
     {
-        EncodeJob[] made =
-        [
-            .. (await jobs.ListForRecordingAsync(id, cancellationToken))
-                .Where(job => job.StandsAsTheArtefact)
-                .OrderByDescending(job => job.EndedAt)
-                .ThenByDescending(job => job.QueuedAt),
-        ];
+        PlaybackArtefacts offered = await artefacts.OfferedAsync(id, cancellationToken);
 
-        if (made.Length is 0)
+        foreach (EncodeJob job in offered.WithoutAProfile)
         {
-            return EncodedArtefacts.None;
+            logger.LogInformation(
+                "The artefact job {Job} made of recording {Recording} names a profile that is not defined, "
+                + "so it is left out of what playback is offered.",
+                job.Id.Wire,
+                id.Wire);
         }
 
-        IReadOnlyList<EncodeProfile> defined = await profiles.ListAsync(cancellationToken);
         List<EncodedArtefact> found = [];
 
-        foreach (EncodeJob job in made)
+        foreach ((EncodeJob job, EncodeCodec profileSays) in offered.Offered)
         {
-            EncodeProfile? asked = defined.FirstOrDefault(profile => profile.Id.Equals(job.ProfileId));
             RecordingFileName artefact = new(job.ArtefactName!.Value);
             PlaybackFileSearch onDisk = files.Find(job.OutputRoot, artefact);
-
-            if (asked is null)
-            {
-                logger.LogInformation(
-                    "The artefact job {Job} made of recording {Recording} names a profile that is not defined, "
-                    + "so it is left out of what playback is offered.",
-                    job.Id.Wire,
-                    id.Wire);
-
-                continue;
-            }
 
             found.Add(new EncodedArtefact(
                 job,
                 new ArtefactOnDisk(job.OutputRoot, artefact),
-                asked.Codec,
+                profileSays,
                 onDisk,
                 await ReadAsync(job, onDisk, cancellationToken)));
         }
@@ -218,8 +202,6 @@ public sealed class PlaybackService(
 
     private sealed record EncodedArtefacts(IReadOnlyList<EncodedArtefact> Found)
     {
-        public static readonly EncodedArtefacts None = new([]);
-
         public IReadOnlyList<PlaybackFileSearch> PlayedBy(PlaybackAudience audience)
             => [.. Found.Where(artefact => audience.Plays(artefact.Reading, artefact.ProfileSays)).Select(artefact => artefact.OnDisk)];
 

@@ -200,6 +200,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeWorkLedger, EncodeWorkLedger>();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
         services.AddScoped<IPlaybackPositionRepository, PlaybackPositionRepository>();
+        services.AddScoped<PlaybackArtefactDomainService>();
+        services.AddScoped<SourcePlacementDomainService>();
         services.AddScoped<ILearningExtractionRepository, LearningExtractionRepository>();
         services.AddScoped<ILearningDataRepository, LearningDataRepository>();
         services.AddScoped<ILearningDataAmountReader, LearningDataAmountReader>();

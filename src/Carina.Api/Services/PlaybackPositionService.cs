@@ -41,7 +41,7 @@ public sealed class PlaybackPositionService(
             return Refused($"There is no recording {id.Wire}.", PlaybackPositionRefusal.NoSuchRecording);
         }
 
-        if (recording.IsInFlight)
+        if (!recording.CanBeWatched)
         {
             return Refused(
                 $"Recording {id.Wire} is still being written, so there is no watching of it to remember.",
