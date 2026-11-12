@@ -236,6 +236,24 @@ public sealed class Recording
                || (CaptionState is CaptionState.Failed && CaptionAttempts < CaptionSettings.TriesAtMost)
                || DescrambledAt > CaptionsMadeAt);
 
+    /// <summary>
+    /// Whether the data broadcast is to be taken from the recording's file: it has ended and its record is coming. The
+    /// query the data broadcast pass reads in the store says the same.
+    /// </summary>
+    public bool AwaitsItsDataBroadcast => Outcome is not null && DataBroadcastState is DataBroadcastState.Coming;
+
+    /// <summary>
+    /// Whether the recording ended with its record of the data broadcast never put to coming, as one that ended while
+    /// a process that did not know the record was running. The query that puts such records to coming says the same.
+    /// </summary>
+    public bool DataBroadcastNeverCameDue => Outcome is not null && DataBroadcastState is DataBroadcastState.None;
+
+    /// <summary>
+    /// Whether the record of the data broadcast failed with tries left, so it is put to coming again. The query that
+    /// puts such records to coming says the same.
+    /// </summary>
+    public bool DataBroadcastIsDueAgain => DataBroadcast.IsRetryDue;
+
     public TimeSpan Written => TimeSpan.FromMilliseconds(WrittenDurationMs);
 
     /// <summary>

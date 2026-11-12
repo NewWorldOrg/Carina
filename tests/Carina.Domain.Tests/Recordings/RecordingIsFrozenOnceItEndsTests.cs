@@ -27,6 +27,9 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         nameof(Recording.IsInterrupted),
         nameof(Recording.AwaitsAThumbnail),
         nameof(Recording.AwaitsCaptions),
+        nameof(Recording.AwaitsItsDataBroadcast),
+        nameof(Recording.DataBroadcastNeverCameDue),
+        nameof(Recording.DataBroadcastIsDueAgain),
     };
 
     [Fact]
