@@ -1,7 +1,8 @@
 using Carina.Domain.Auth;
 
-namespace Carina.Domain.Tests.Auth;
+namespace Carina.Domain.Tests.Unit.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class PlaybackGrantTests
 {
     private static readonly DateTime At = new(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);

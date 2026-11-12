@@ -1,8 +1,9 @@
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 
-namespace Carina.Domain.Tests.Auth;
+namespace Carina.Domain.Tests.Unit.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class LocalAccountProvisioningDomainServiceTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

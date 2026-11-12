@@ -1,7 +1,8 @@
 using Carina.Domain.Auth;
 
-namespace Carina.Domain.Tests.Auth;
+namespace Carina.Domain.Tests.Unit.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class PasswordHashTests
 {
     private static readonly byte[] Salt =

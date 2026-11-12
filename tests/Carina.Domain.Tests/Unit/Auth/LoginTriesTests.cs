@@ -1,7 +1,8 @@
 using Carina.Domain.Auth;
 
-namespace Carina.Domain.Tests.Auth;
+namespace Carina.Domain.Tests.Unit.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class LoginTriesTests
 {
     private static readonly LoginRatePolicy Policy = new(3, TimeSpan.FromMinutes(5));

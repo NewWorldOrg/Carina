@@ -1,8 +1,9 @@
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 
-namespace Carina.Domain.Tests.Auth;
+namespace Carina.Domain.Tests.Unit.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class LocalAccountTests
 {
     private static readonly DateTime Created = new(2026, 8, 19, 9, 0, 0, DateTimeKind.Utc);

@@ -1,7 +1,8 @@
 using Carina.Domain.Auth;
 
-namespace Carina.Domain.Tests.Auth;
+namespace Carina.Domain.Tests.Unit.Auth;
 
+[Trait("Category", "Unit")]
 public sealed class OidcClaimsTests
 {
     private static readonly DateTime At = new(2026, 8, 19, 9, 0, 0, DateTimeKind.Utc);
