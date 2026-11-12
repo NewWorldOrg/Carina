@@ -71,6 +71,34 @@ public sealed class EncodeScratchFile
 
     public bool IsOwedARemoval => RemovedAt is null || Fate is EncodeScratchFate.CouldNotBeRemoved;
 
+    /// <summary>
+    /// Whether a file of this kind is written to put a caption track into, or to write the chapters of, an artefact
+    /// already made, which the encode work still claims after its job has ended.
+    /// </summary>
+    public static bool IsWorkOnAStandingArtefact(EncodeScratchKind kind)
+        => kind is EncodeScratchKind.Captions
+            or EncodeScratchKind.CaptionedWork
+            or EncodeScratchKind.Chapters
+            or EncodeScratchKind.ChapteredWork;
+
+    /// <summary>
+    /// Whether encode work claims the file while its job stands as <paramref name="job"/>: it has not been removed, and
+    /// the job is still in hand or the file is work on an artefact already made. The query the integrity check reads in
+    /// the store says the same.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="job"/> is not the job that wrote the file.</exception>
+    public bool IsClaimedWhile(EncodeJob job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+
+        if (!job.Id.Equals(JobId))
+        {
+            throw new ArgumentException("A scratch file is claimed or not by the job that wrote it.", nameof(job));
+        }
+
+        return RemovedAt is null && (!job.HasEnded || IsWorkOnAStandingArtefact(Kind));
+    }
+
     public static EncodeScratchFile Record(
         EncodeScratchFileId id,
         EncodeJobId jobId,

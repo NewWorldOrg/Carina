@@ -33,6 +33,12 @@ public sealed class IntegrityFinding
 
     public DateTime? ThrownAwayAt { get; private set; }
 
+    /// <summary>
+    /// Whether the finding is listed among what its check found: one whose file has been thrown away is not. The query
+    /// that lists the findings in the store says the same.
+    /// </summary>
+    public bool IsListed => ThrownAwayAt is null;
+
     public static IntegrityFinding Rehydrate(
         IntegrityFindingId id,
         IntegrityCheckId checkId,

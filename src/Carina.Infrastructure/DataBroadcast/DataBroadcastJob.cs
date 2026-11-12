@@ -108,7 +108,9 @@ public sealed class DataBroadcastJob(
             return Finished(DataBroadcastPass.YieldedBeforeReadingAnything(caughtUp));
         }
 
-        int requeued = caughtUp + await worklist.RetryFailedAsync(cancellationToken) + await RequeueLostAsync(worklist, cancellationToken);
+        int requeued = caughtUp
+                       + await worklist.RetryFailedAsync(cancellationToken)
+                       + await RequeueLostAsync(scope.ServiceProvider.GetRequiredService<DataBroadcastRequeueDomainService>(), cancellationToken);
         IReadOnlyList<OutputRoot> withinReach = [.. mounts.OutputRoots.Select(mounted => mounted.Root)];
         IReadOnlyList<DataBroadcastSubject> awaiting = await worklist.AwaitingAsync(withinReach, settings.AtMostAPass, cancellationToken);
         int outOfReach = await worklist.WaitingOutOfReachAsync(withinReach, cancellationToken);
@@ -159,18 +161,9 @@ public sealed class DataBroadcastJob(
         return pass;
     }
 
-    private async Task<int> RequeueLostAsync(IDataBroadcastWorklist worklist, CancellationToken cancellationToken)
+    private async Task<int> RequeueLostAsync(DataBroadcastRequeueDomainService requeue, CancellationToken cancellationToken)
     {
-        IReadOnlySet<string> shelved = shelf.Shelved();
-        int requeued = 0;
-
-        foreach (RecordingId id in await worklist.MadeAsync(cancellationToken))
-        {
-            if (!shelved.Contains(id.Wire) && await worklist.LostAsync(id, cancellationToken))
-            {
-                requeued++;
-            }
-        }
+        int requeued = await requeue.RequeueLostAsync(cancellationToken);
 
         if (requeued > 0)
         {

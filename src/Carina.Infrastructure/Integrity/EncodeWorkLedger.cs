@@ -21,10 +21,7 @@ public sealed class EncodeWorkLedger(CarinaDbContext context) : IEncodeWorkLedge
 
     private static readonly IReadOnlyList<EncodeScratchKind> WorkOnAStandingArtefact =
     [
-        EncodeScratchKind.Captions,
-        EncodeScratchKind.CaptionedWork,
-        EncodeScratchKind.Chapters,
-        EncodeScratchKind.ChapteredWork,
+        .. Enum.GetValues<EncodeScratchKind>().Where(EncodeScratchFile.IsWorkOnAStandingArtefact),
     ];
 
     public async Task<IReadOnlyList<DeclaredFile>> ListAsync(CancellationToken cancellationToken)

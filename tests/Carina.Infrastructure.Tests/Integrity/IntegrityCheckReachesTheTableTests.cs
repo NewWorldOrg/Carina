@@ -131,9 +131,12 @@ public sealed class IntegrityCheckReachesTheTableTests(RepositoryDatabase databa
             OutputRoots = [new StorageRootPath(Primary, mountedAt)],
         };
 
+        IWrittenFileSurvey written = new HeldPlaces();
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => ledger);
         services.AddScoped<IEncodeWorkLedger>(_ => new HeldEncodeWork());
+        services.AddSingleton(written);
+        services.AddScoped<IntegrityClaimDomainService>();
         services.AddScoped(_ => database.Open());
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
 
@@ -141,7 +144,7 @@ public sealed class IntegrityCheckReachesTheTableTests(RepositoryDatabase databa
         using var job = new IntegrityCheckJob(
             provider.GetRequiredService<IServiceScopeFactory>(),
             new LocalRecordingFileSurvey(settings, NullLogger<LocalRecordingFileSurvey>.Instance),
-            new HeldPlaces(),
+            written,
             settings,
             new StoppedClock(Now),
             NullLogger<IntegrityCheckJob>.Instance);

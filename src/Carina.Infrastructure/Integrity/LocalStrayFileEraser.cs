@@ -45,7 +45,7 @@ public sealed class LocalStrayFileEraser(
 
         RootListing listing = await places.ListAsync(finding.Root, cancellationToken);
 
-        if (!listing.Reachable || listing.Files.Count is 0)
+        if (listing.LooksUnmounted)
         {
             return StrayFileErasure.Refused(
                 StrayErasureFault.RootOutOfReach,
@@ -58,7 +58,7 @@ public sealed class LocalStrayFileEraser(
             return StrayFileErasure.Refused(StrayErasureFault.FileChanged, Changed(finding, change), change);
         }
 
-        if (ChangedJustNow(new FileInfo(full), finding) is { } now)
+        if (StrayFileDisposal.Change(finding, AsItIsNow(new FileInfo(full), finding.Path)) is { } now)
         {
             return StrayFileErasure.Refused(StrayErasureFault.FileChanged, Changed(finding, now), now);
         }
@@ -136,22 +136,8 @@ public sealed class LocalStrayFileEraser(
         }
     }
 
-    private static StrayFileChange? ChangedJustNow(FileInfo file, IntegrityFinding finding)
-    {
-        if (!file.Exists)
-        {
-            return StrayFileChange.Gone;
-        }
-
-        if (file.Length != finding.ObservedSize)
-        {
-            return StrayFileChange.Resized;
-        }
-
-        return StrayFileStamp.Truncated(file.LastWriteTimeUtc) == finding.LastWrittenAt
-            ? null
-            : StrayFileChange.Rewritten;
-    }
+    private static StoredFile? AsItIsNow(FileInfo file, string path)
+        => file.Exists ? new StoredFile(path, file.Length, file.LastWriteTimeUtc) : null;
 
     private static string Changed(IntegrityFinding finding, StrayFileChange change) => change switch
     {

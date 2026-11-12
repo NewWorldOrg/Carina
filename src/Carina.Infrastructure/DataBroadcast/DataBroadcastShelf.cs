@@ -89,25 +89,6 @@ public sealed class DataBroadcastShelf(CaptionSettings settings) : IDataBroadcas
 
     public void Forget(RecordingId id) => Unlink(Kept(id));
 
-    /// <summary>
-    /// The recordings a record is kept for: the names on the shelf whose file begins as a record does, so that an
-    /// empty or broken file is no record.
-    /// </summary>
-    public IReadOnlySet<string> Shelved()
-    {
-        if (settings.WrittenTo is not { } shelf || !Directory.Exists(shelf))
-        {
-            return new HashSet<string>(StringComparer.Ordinal);
-        }
-
-        return Directory.EnumerateFiles(shelf, "*" + Extension)
-            .Select(Path.GetFileName)
-            .OfType<string>()
-            .Where(name => name.EndsWith(Extension, StringComparison.Ordinal) && HeadsARecord(Path.Combine(shelf, name)))
-            .Select(name => name[..^Extension.Length])
-            .ToHashSet(StringComparer.Ordinal);
-    }
-
     public string? PathOf(RecordingId id)
     {
         ArgumentNullException.ThrowIfNull(id);

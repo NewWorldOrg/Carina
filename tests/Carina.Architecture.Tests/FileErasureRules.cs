@@ -20,6 +20,7 @@ public static partial class FileErasureRules
     [
         "/Carina.Api/Controllers/Recordings/DeleteIntegrityFindingAction.cs",
         "/Carina.Api/Services/IntegrityService.cs",
+        "/Carina.Domain/Integrity/IntegrityClaimDomainService.cs",
         "/Carina.Domain/Integrity/StrayFileDisposal.cs",
         "/Carina.Infrastructure/Integrity/DriverStrayFileEraser.cs",
     ];

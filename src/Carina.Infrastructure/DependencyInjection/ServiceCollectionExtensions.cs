@@ -198,6 +198,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IRecordingLedger, RecordingLedger>();
         services.AddScoped<IEncodeWorkLedger, EncodeWorkLedger>();
+        services.AddScoped<IntegrityClaimDomainService>();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
         services.AddScoped<IPlaybackPositionRepository, PlaybackPositionRepository>();
         services.AddScoped<PlaybackArtefactDomainService>();
@@ -298,6 +299,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICaptionWorklist, CaptionWorklist>();
         services.AddScoped<CaptionRequeueDomainService>();
         services.AddScoped<IDataBroadcastWorklist, DataBroadcastWorklist>();
+        services.AddScoped<DataBroadcastRequeueDomainService>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDomainService>();

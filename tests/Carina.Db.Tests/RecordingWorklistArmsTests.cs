@@ -1,11 +1,13 @@
 using Carina.Domain.Base;
 using Carina.Domain.Captions;
 using Carina.Domain.Channels;
+using Carina.Domain.DataBroadcast;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Captions;
+using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Thumbnails;
@@ -17,10 +19,11 @@ using Npgsql;
 namespace Carina.Db.Tests;
 
 /// <summary>
-/// The queries the thumbnail pass, the caption pass and the throwing away of a recording run in the store, held to the
-/// recording's own answer for the same rows. A matrix of recordings in every standing of their picture and their
-/// captions goes through both, with captions taken on the very instant the file was descrambled and one microsecond
-/// either side of it.
+/// The queries the thumbnail pass, the caption pass, the data broadcast pass and the throwing away of a recording run in
+/// the store, held to the recording's own answer for the same rows. A matrix of recordings in every standing of their
+/// picture, their captions and the record of their data broadcast goes through both, with captions taken on the very
+/// instant the file was descrambled and one microsecond either side of it, and a record that failed on its last try
+/// and on the one before it.
 /// </summary>
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -97,11 +100,63 @@ public sealed class RecordingWorklistArmsTests(MigratedScratchDatabase database)
         }
     }
 
+    [Fact(DisplayName = "BR-BS-001: the recordings the data broadcast pass reads as waiting, puts to coming once ended and tries again are the ones each recording says so of, on the last try and the one before it")]
+    public async Task TheRecordingsTheDataBroadcastPassMovesAreTheOnesEachSaysSoOf()
+    {
+        IReadOnlyList<Recording> laid = await LaidAsync(DataBroadcastShapes());
+
+        await using (NpgsqlConnection connection = await database.OpenAsync())
+        {
+            Guid[] behind = [.. laid.Where(recording => recording.AwaitsItsDataBroadcast && recording.DataBroadcastAttempts == 0)
+                .Where((_, index) => index % 3 == 0)
+                .Select(recording => recording.Id.Value)];
+            await using var forgetting = new NpgsqlCommand(
+                "UPDATE recording SET data_broadcast_state = 'None' WHERE id = ANY(@ids)",
+                connection);
+            forgetting.Parameters.AddWithValue("ids", behind);
+            await forgetting.ExecuteNonQueryAsync();
+        }
+
+        IReadOnlyList<Recording> matrix = await ReadAllAsync();
+
+        Assert.Contains(matrix, recording => recording.AwaitsItsDataBroadcast);
+        Assert.Contains(matrix, recording => recording.DataBroadcastNeverCameDue);
+        Assert.Contains(matrix, recording => recording.DataBroadcastIsDueAgain);
+        Assert.Contains(matrix, recording => recording.DataBroadcastAttempts == DataBroadcastProgress.TriesAtMost);
+        Assert.Contains(matrix, recording => recording is { IsInFlight: true, DataBroadcastState: DataBroadcastState.None });
+
+        await using (CarinaDbContext context = Context())
+        {
+            var worklist = new DataBroadcastWorklist(context, TimeProvider.System);
+
+            IReadOnlyList<DataBroadcastSubject> within = await worklist.AwaitingAsync([Bulk], 1_000, CancellationToken.None);
+            int beyond = await worklist.WaitingOutOfReachAsync([Bulk], CancellationToken.None);
+
+            Assert.Equal(
+                Ids(matrix.Where(recording => recording.AwaitsItsDataBroadcast && recording.OutputRoot.Equals(Bulk))),
+                Ids(within.Select(subject => subject.Id)));
+            Assert.Equal(matrix.Count(recording => recording.AwaitsItsDataBroadcast && recording.OutputRoot.Equals(Spare)), beyond);
+            Assert.Equal(matrix.Count(recording => recording.DataBroadcastNeverCameDue), await worklist.CatchUpEndedAsync(CancellationToken.None));
+            Assert.Equal(matrix.Count(recording => recording.DataBroadcastIsDueAgain), await worklist.RetryFailedAsync(CancellationToken.None));
+        }
+
+        Guid[] moved = Ids(matrix.Where(recording => recording.DataBroadcastNeverCameDue || recording.DataBroadcastIsDueAgain));
+        IReadOnlyList<Recording> after = await ReadAllAsync();
+
+        Assert.Equal(
+            Ids(matrix.Where(recording => recording.AwaitsItsDataBroadcast).Select(recording => recording.Id)).Concat(moved).Order().ToArray(),
+            Ids(after.Where(recording => recording.AwaitsItsDataBroadcast)));
+    }
+
     /// <summary>
     /// Lays the matrix on an empty ledger and reads it back, so both arms judge the instants the store keeps.
     /// </summary>
-    private async Task<IReadOnlyList<Recording>> LaidAsync()
+    private Task<IReadOnlyList<Recording>> LaidAsync() => LaidAsync(Shapes());
+
+    private async Task<IReadOnlyList<Recording>> LaidAsync(IEnumerable<Func<Recording, Recording>> shapes)
     {
+        Func<Recording, Recording>[] laid = [.. shapes];
+
         await using (NpgsqlConnection connection = await database.OpenAsync())
         {
             await using var clearing = new NpgsqlCommand("TRUNCATE recording CASCADE", connection);
@@ -114,7 +169,7 @@ public sealed class RecordingWorklistArmsTests(MigratedScratchDatabase database)
 
             foreach (OutputRoot root in new[] { Bulk, Spare })
             {
-                foreach (Func<Recording, Recording> shape in Shapes())
+                foreach (Func<Recording, Recording> shape in laid)
                 {
                     context.Add(shape(Started(root, ++eventId)));
                 }
@@ -123,6 +178,13 @@ public sealed class RecordingWorklistArmsTests(MigratedScratchDatabase database)
             await context.SaveChangesAsync();
         }
 
+        await using CarinaDbContext reading = Context();
+
+        return await reading.Set<Recording>().AsNoTracking().ToListAsync();
+    }
+
+    private async Task<IReadOnlyList<Recording>> ReadAllAsync()
+    {
         await using CarinaDbContext reading = Context();
 
         return await reading.Set<Recording>().AsNoTracking().ToListAsync();
@@ -161,6 +223,73 @@ public sealed class RecordingWorklistArmsTests(MigratedScratchDatabase database)
             Microsecond,
             CaptionState.Failed);
         yield return recording => Settled(recording, RecordingOutcome.Truncated, scrambled: true);
+    }
+
+    private static IEnumerable<Func<Recording, Recording>> DataBroadcastShapes()
+    {
+        yield return recording => recording;
+
+        foreach (RecordingOutcome outcome in new[] { RecordingOutcome.Truncated, RecordingOutcome.Failed })
+        {
+            yield return recording => Settled(recording, outcome);
+            yield return recording => Settled(recording, outcome);
+            yield return recording => Settled(recording, outcome);
+        }
+
+        yield return recording => TakenData(Settled(recording, RecordingOutcome.Truncated), 0);
+        yield return recording => TakenData(Settled(recording, RecordingOutcome.Truncated), 36);
+        yield return recording => Again(TakenData(Settled(recording, RecordingOutcome.Truncated), 36));
+
+        for (int failed = 1; failed <= DataBroadcastProgress.TriesAtMost; failed++)
+        {
+            int times = failed;
+
+            yield return recording => FailedData(Settled(recording, RecordingOutcome.Truncated), times);
+        }
+
+        for (int failed = 1; failed < DataBroadcastProgress.TriesAtMost; failed++)
+        {
+            int times = failed;
+
+            yield return recording => Again(FailedData(Settled(recording, RecordingOutcome.Truncated), times));
+        }
+
+        yield return recording =>
+        {
+            Recording taken = TakenData(Settled(recording, RecordingOutcome.Truncated, scrambled: true), 36);
+            taken.Descrambled(Taken.AddHours(1));
+
+            return taken;
+        };
+    }
+
+    private static Recording TakenData(Recording recording, int modules)
+    {
+        recording.DataBroadcastTaken(modules, Taken);
+
+        return recording;
+    }
+
+    private static Recording FailedData(Recording recording, int times)
+    {
+        for (int failed = 1; failed <= times; failed++)
+        {
+            if (failed > 1)
+            {
+                recording.DataBroadcastAgain();
+            }
+
+            recording.DataBroadcastFailed(Taken.AddMinutes(failed));
+        }
+
+        return recording;
+    }
+
+    private static Recording Again(Recording recording)
+    {
+        recording.DataBroadcastAgain();
+
+        return recording;
     }
 
     /// <summary>

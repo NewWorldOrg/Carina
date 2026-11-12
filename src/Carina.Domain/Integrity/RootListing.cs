@@ -44,6 +44,12 @@ public sealed class RootListing
 
     public StoragePlace Place { get; }
 
+    /// <summary>
+    /// Whether the place cannot be told from one whose mount has gone: it could not be read, or holds nothing at all.
+    /// Nothing under such a place is removed.
+    /// </summary>
+    public bool LooksUnmounted => !Reachable || Files.Count is 0;
+
     public static RootListing Of(
         OutputRoot root,
         IReadOnlyList<StoredFile> files,

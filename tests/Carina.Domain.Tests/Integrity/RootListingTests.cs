@@ -52,6 +52,14 @@ public sealed class RootListingTests
         Assert.Equal("primary", listing.Root.Value);
     }
 
+    [Fact(DisplayName = "BR-KD-025: a place that could not be read, or holds nothing at all, looks like one whose mount has gone")]
+    public void APlaceUnreadOrEmptyLooksUnmounted()
+    {
+        Assert.True(RootListing.OutOfReach(Primary).LooksUnmounted);
+        Assert.True(Empty(Primary).LooksUnmounted);
+        Assert.False(Holding(Primary, ("one.m2ts", 0)).LooksUnmounted);
+    }
+
     [Fact]
     public void OnePathListedTwiceIsRefused()
     {

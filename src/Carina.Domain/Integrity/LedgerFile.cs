@@ -59,6 +59,35 @@ public sealed record LedgerFile
     /// </summary>
     public bool ThumbnailDrawn { get; }
 
+    /// <summary>
+    /// What a recording's row says of its file: still being written while it has no outcome, and otherwise what its
+    /// outcome says landed, the size read off the disk as it ended and whether the row says its picture is ready.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording ended without a size read off the disk.</exception>
+    public static LedgerFile Of(
+        RecordingId id,
+        OutputRoot root,
+        RecordingFileName fileName,
+        RecordingOutcome? outcome,
+        long? sizeObserved,
+        ThumbnailState thumbnail)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        if (outcome is not { } ended)
+        {
+            return StillWriting(id, root, fileName);
+        }
+
+        if (sizeObserved is not { } observed)
+        {
+            throw new InvalidOperationException(
+                $"Recording {id.Wire} ended {ended} without a size read off the disk.");
+        }
+
+        return Ended(id, root, fileName, Claimed(ended), observed, thumbnail is ThumbnailState.Ready);
+    }
+
     public static LedgerFile StillWriting(RecordingId id, OutputRoot root, RecordingFileName fileName)
         => new(id, root, fileName, null, null, false);
 
@@ -70,4 +99,16 @@ public sealed record LedgerFile
         long sizeObserved,
         bool thumbnailDrawn = false)
         => new(id, root, fileName, claim, sizeObserved, thumbnailDrawn);
+
+    private static LedgerClaim Claimed(RecordingOutcome outcome)
+        => outcome switch
+        {
+            RecordingOutcome.Complete => LedgerClaim.EverythingLanded,
+            RecordingOutcome.Truncated => LedgerClaim.SomethingLanded,
+            RecordingOutcome.Failed => LedgerClaim.NothingLanded,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(outcome),
+                outcome,
+                "A recording ends in one of three ways."),
+        };
 }

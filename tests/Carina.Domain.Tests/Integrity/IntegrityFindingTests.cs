@@ -207,4 +207,16 @@ public sealed class IntegrityFindingTests
         Assert.Throws<ArgumentNullException>(
             () => IntegrityFinding.Rehydrate(null!, Check, IntegrityFault.NoLedgerRow, Primary, "a", null, null, 1, At));
     }
+
+    [Fact(DisplayName = "BR-LD-009: a finding is listed until the file it names is thrown away, and not after")]
+    public void AFindingIsListedUntilItsFileIsThrownAway()
+    {
+        IntegrityFinding finding = IntegrityFinding.NoLedgerRow(Check, Primary, "leftover.tmp", 64, At, At.AddMinutes(-5));
+
+        Assert.True(finding.IsListed);
+
+        finding.ThrowAway(At);
+
+        Assert.False(finding.IsListed);
+    }
 }

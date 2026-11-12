@@ -40,9 +40,7 @@ public sealed class IntegrityServiceTests
         var service = new IntegrityService(
             sweeps,
             checks,
-            new NoLedgerRows(),
-            new NoDeclaredFiles(),
-            new NoWrittenPlaces(),
+            new IntegrityClaimDomainService(new NoLedgerRows(), new NoDeclaredFiles(), new NoWrittenPlaces()),
             new EraserThatCancelsTheCaller(callerGaveUp),
             new FindingDisposals(),
             new IntegritySettings(),
