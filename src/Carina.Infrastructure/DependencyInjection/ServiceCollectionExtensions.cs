@@ -244,6 +244,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ProgrammeWatchDomainService>();
         services.AddScoped<NotificationRuleDomainService>();
         services.AddScoped<NotificationDestinationDomainService>();
+        services.AddScoped<NotificationDeliveryDomainService>();
         services.AddScoped<SignalSampleRound>();
         services.AddScoped<SupplyWatchRound>();
         services.TryAddSingleton<ISupplyStandingBoard, SupplyStandingBoard>();

@@ -171,6 +171,7 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
             NotificationDeliveryRound round = new(
                 new NotificationDeliveryRepository(passing),
                 new NotificationDestinationRepository(passing),
+                new NotificationDeliveryDomainService(),
                 seal,
                 new NoticeDispatch(rig.Line, settings, clock),
                 new UnwrittenDeliveries(),
@@ -235,6 +236,7 @@ public sealed class NotificationDeliveryLedgerTests(RepositoryDatabase database)
             NotificationDeliveryRound round = new(
                 new NotificationDeliveryRepository(passing),
                 new NotificationDestinationRepository(passing),
+                new NotificationDeliveryDomainService(),
                 seal,
                 new NoticeDispatch(rig.Line, settings, clock),
                 unwritten,

@@ -222,7 +222,7 @@ internal sealed class DeliveryBench : IAsyncDisposable
     {
         Unwritten = new UnwrittenDeliveries();
 
-        return new NotificationDeliveryRound(Deliveries, Destinations, Seal, Dispatch, Unwritten, Settings, Clock, Said);
+        return new NotificationDeliveryRound(Deliveries, Destinations, new NotificationDeliveryDomainService(), Seal, Dispatch, Unwritten, Settings, Clock, Said);
     }
 
     public async ValueTask DisposeAsync() => await Rig.DisposeAsync();

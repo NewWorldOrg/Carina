@@ -31,6 +31,7 @@ public sealed record NotificationDeliveries(int Sent, int Failed, int GivenUp)
 public sealed class NotificationDeliveryRound(
     INotificationDeliveryRepository deliveries,
     INotificationDestinationRepository destinations,
+    NotificationDeliveryDomainService settlement,
     WebhookUrlSeal seal,
     NoticeDispatch dispatch,
     UnwrittenDeliveries unwritten,
@@ -84,14 +85,14 @@ public sealed class NotificationDeliveryRound(
                 continue;
             }
 
-            if (webhook is null || !destination.Enabled || row.Notice.IsTooOldAt(now, settings.TooOldAfter))
+            if (settlement.ReasonToGiveUp(row, destination, webhook is not null, now, settings.TooOldAfter) is { } reason)
             {
-                moved = moved.With(await GiveUpAsync(row, destination, webhook, cancellationToken));
+                moved = moved.With(await GiveUpAsync(row.Delivery, reason, cancellationToken));
 
                 continue;
             }
 
-            if (resting || !row.Delivery.IsDueAt(now) || !dispatch.HasRoomFor(destination.Id))
+            if (webhook is null || resting || !row.Delivery.IsDueAt(now) || !dispatch.HasRoomFor(destination.Id))
             {
                 continue;
             }
@@ -127,25 +128,13 @@ public sealed class NotificationDeliveryRound(
     }
 
     private async Task<NotificationDeliveries> GiveUpAsync(
-        NoticeOnItsWay row,
-        NotificationDestination destination,
-        WebhookUrl? webhook,
+        NotificationDelivery delivery,
+        NoticeFailure reason,
         CancellationToken cancellationToken)
     {
-        NoticeFailure reason = NoticeFailure.TooOld;
+        delivery.GiveUp(reason);
 
-        if (!destination.Enabled)
-        {
-            reason = NoticeFailure.DestinationDisabled;
-        }
-        else if (webhook is null)
-        {
-            reason = NoticeFailure.Unreadable;
-        }
-
-        row.Delivery.GiveUp(reason);
-
-        return await IsWrittenAsync(row.Delivery, cancellationToken)
+        return await IsWrittenAsync(delivery, cancellationToken)
             ? new NotificationDeliveries(0, 0, 1)
             : NotificationDeliveries.None;
     }
@@ -215,7 +204,8 @@ public sealed class NotificationDeliveryRound(
             NoticePayload.For(destination.Target, row.Notice),
             cancellationToken);
         DateTime at = Now();
-        NotificationDeliveries came = Settle(row.Delivery, destination, answer, at);
+        NotificationDeliveries came = Counted(
+            settlement.Settle(row.Delivery, destination, answer.Failure, answer.AddressGone, answer.Asked, at));
 
         if (!await IsWrittenAsync(row.Delivery, cancellationToken) && answer.Failure is null)
         {
@@ -244,41 +234,14 @@ public sealed class NotificationDeliveryRound(
         return came;
     }
 
-    private static NotificationDeliveries Settle(
-        NotificationDelivery delivery,
-        NotificationDestination destination,
-        NoticeAnswer answer,
-        DateTime at)
-    {
-        if (answer.Failure is not { } failure)
+    private static NotificationDeliveries Counted(NoticeSettlement settled)
+        => settled switch
         {
-            delivery.Deliver(at);
-            destination.NoteDelivered(at);
-
-            return new NotificationDeliveries(1, 0, 0);
-        }
-
-        if (NoticeFailures.IsWorthAnotherTry(failure))
-        {
-            delivery.Fail(failure, at, answer.Asked);
-            destination.NoteFailed(failure, at);
-
-            return delivery.IsWaiting ? new NotificationDeliveries(0, 1, 0) : new NotificationDeliveries(0, 1, 1);
-        }
-
-        delivery.GiveUp(failure);
-
-        if (answer.AddressGone)
-        {
-            destination.NoteFailed(failure, at);
-        }
-        else
-        {
-            destination.NoteTurnedDown(at);
-        }
-
-        return new NotificationDeliveries(0, 0, 1);
-    }
+            NoticeSettlement.Sent => new NotificationDeliveries(1, 0, 0),
+            NoticeSettlement.FailedToTryAgain => new NotificationDeliveries(0, 1, 0),
+            NoticeSettlement.FailedForGood => new NotificationDeliveries(0, 1, 1),
+            _ => new NotificationDeliveries(0, 0, 1),
+        };
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 }
