@@ -265,7 +265,11 @@ public static class TestLayoutRules
 
     public static IReadOnlyList<string> SubjectsBuiltByHand(Reading reading)
         => Offences(
-            InTheLayout(reading).Where(file => file.Seat.Place! is { Kind: DbIntegration, Subject: Subject.DomainPort or Subject.AppService }),
+            InTheLayout(reading).Where(file => file.Seat.Place! is
+            {
+                Kind: DbIntegration,
+                Subject: Subject.DomainPort or Subject.AppService or Subject.InfrastructureType,
+            }),
             HandBuilding);
 
     public static IReadOnlyList<string> ClassesLeftInTheOldPlace(
@@ -509,7 +513,8 @@ public static class TestLayoutRules
         string subject = SubjectOf(type.Name);
         string taken = file.Seat.Place!.Subject == Subject.DomainPort ? PortOf(subject) : subject;
 
-        if (!file.Resolved.Contains(taken))
+        if (!file.Resolved.Contains(taken)
+            && !(file.Seat.Place!.Subject == Subject.InfrastructureType && file.Composed.Contains(taken)))
         {
             yield return $"does not take {taken} from the container";
         }
@@ -660,6 +665,10 @@ public static class TestLayoutRules
             Identifiers(file.Root).ToHashSet(StringComparer.Ordinal),
             file.Root.DescendantNodes().OfType<GenericNameSyntax>()
                 .Where(name => name.Identifier.ValueText == "GetRequiredService" && name.TypeArgumentList.Arguments.Count == 1)
+                .Select(name => Simple(name.TypeArgumentList.Arguments[0]))
+                .ToHashSet(StringComparer.Ordinal),
+            file.Root.DescendantNodes().OfType<GenericNameSyntax>()
+                .Where(name => name.Identifier.ValueText == "CreateInstance" && name.TypeArgumentList.Arguments.Count == 1)
                 .Select(name => Simple(name.TypeArgumentList.Arguments[0]))
                 .ToHashSet(StringComparer.Ordinal),
             file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().Select(Created).ToHashSet(StringComparer.Ordinal),
@@ -898,6 +907,7 @@ public static class TestLayoutRules
         IReadOnlyList<TestClass> Classes,
         IReadOnlySet<string> Identifiers,
         IReadOnlySet<string> Resolved,
+        IReadOnlySet<string> Composed,
         IReadOnlySet<string> Created,
         IReadOnlyList<string> ApiPaths);
 

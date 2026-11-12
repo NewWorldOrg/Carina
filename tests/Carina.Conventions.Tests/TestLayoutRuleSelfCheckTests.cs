@@ -760,6 +760,37 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAnInfrastructureTypeBuiltByHandOverADatabase()
+    {
+        using SourceTree tree = new();
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs",
+            TestLayoutRules.DbIntegration,
+            "LocalAccountBootstrap bootstrap = new LocalAccountBootstrap(accounts);");
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs:4 LocalAccountBootstrapTests builds LocalAccountBootstrap by hand",
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs:4 LocalAccountBootstrapTests does not take LocalAccountBootstrap from the container",
+            ],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void DetectsADomainServiceComposedRatherThanTakenFromTheContainer()
+    {
+        using SourceTree tree = new();
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Domain/Auth/SessionExpiryDomainServiceTests.cs",
+            TestLayoutRules.DbIntegration,
+            "SessionExpiryDomainService service = ActivatorUtilities.CreateInstance<SessionExpiryDomainService>(services);");
+
+        Assert.Equal(
+            ["/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionExpiryDomainServiceTests.cs:4 SessionExpiryDomainServiceTests does not take SessionExpiryDomainService from the container"],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
     public void LetsOffASubjectTakenFromTheContainerAndASubjectBuiltByHandWhereNoContainerIsAsked()
     {
         using SourceTree tree = new();
@@ -782,6 +813,14 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Test(
             $"{InfrastructureTests}/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs",
             TestLayoutRules.DbIntegration,
+            "LocalAccountBootstrap bootstrap = ActivatorUtilities.CreateInstance<LocalAccountBootstrap>(services, log);");
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/AuthUpkeepJobTests.cs",
+            TestLayoutRules.DbIntegration,
+            "AuthUpkeepJob job = scope.ServiceProvider.GetRequiredService<AuthUpkeepJob>();");
+        tree.Test(
+            $"{InfrastructureTests}/Unit/Infra/Auth/LocalAccountBootstrapTests.cs",
+            TestLayoutRules.Unit,
             "LocalAccountBootstrap bootstrap = new LocalAccountBootstrap(accounts);");
         tree.Test(
             $"{InfrastructureTests}/Auth/AuthSessionRepositoryTests.cs",

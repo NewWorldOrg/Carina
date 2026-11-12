@@ -10,6 +10,7 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Notifications;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Notifications;
 
@@ -35,12 +36,12 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             now,
             [NoticeKind.RecordingStarted, NoticeKind.RecordingCompleted],
             [destination]);
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-20));
         await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Complete, now.AddMinutes(-1));
 
-        NotificationIntake first = await ledgers.LookAsync(now);
-        NotificationIntake second = await ledgers.LookAsync(now + BetweenLooks);
+        NotificationIntake first = await LookAsync(now);
+        NotificationIntake second = await LookAsync(now + BetweenLooks);
 
         Assert.Equal(2, first.Taken);
         Assert.Equal(2, first.Queued);
@@ -65,9 +66,10 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             NotificationDestinationId.New(),
             now);
 
-        await using CarinaDbContext context = database.Open();
+        await using ServiceProvider services = database.Infrastructure();
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
         await Assert.ThrowsAsync<DbUpdateException>(
-            () => new NoticeRepository(context).AddAsync(notice, [nowhere], Cancel));
+            () => scope.ServiceProvider.GetRequiredService<INoticeRepository>().AddAsync(notice, [nowhere], Cancel));
 
         Assert.Empty(await ledgers.NoticesOfAsync(source));
     }
@@ -151,8 +153,8 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             recordingOutcome: RecordingOutcome.Failed,
             faults: [RecordingFault.ShortOfTheWindow]);
 
-        await ledgers.LookAsync(now);
-        await ledgers.LookAsync(now + BetweenLooks);
+        await LookAsync(now);
+        await LookAsync(now + BetweenLooks);
 
         Assert.Equal([NoticeKind.RecordingStarted], await ledgers.KindsOfAsync(recording.Value));
         Assert.Equal([NoticeKind.ReservationMissed], await ledgers.KindsOfAsync(reservation.Value));
@@ -172,8 +174,8 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             recordingOutcome: RecordingOutcome.Truncated,
             faults: [RecordingFault.ShortOfTheWindow]);
 
-        await ledgers.LookAsync(now);
-        await ledgers.LookAsync(now + BetweenLooks);
+        await LookAsync(now);
+        await LookAsync(now + BetweenLooks);
 
         Assert.Equal(
             [NoticeKind.RecordingStarted, NoticeKind.RecordingTruncated],
@@ -196,8 +198,8 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             recordingOutcome: RecordingOutcome.Complete,
             faults: [RecordingFault.ScramblingUnresolved]);
 
-        await ledgers.LookAsync(now);
-        await ledgers.LookAsync(now + BetweenLooks);
+        await LookAsync(now);
+        await LookAsync(now + BetweenLooks);
 
         Assert.Equal([NoticeKind.RecordingStarted], await ledgers.KindsOfAsync(recording.Value));
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(reservation.Value));
@@ -212,8 +214,8 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-20));
         await ledgers.RecordingEndedScrambledAsync(recording, now.AddMinutes(-5));
 
-        await ledgers.LookAsync(now);
-        await ledgers.LookAsync(now + BetweenLooks);
+        await LookAsync(now);
+        await LookAsync(now + BetweenLooks);
 
         IReadOnlyList<Notice> notices = await ledgers.NoticesOfAsync(recording.Value);
         Assert.Equal([NoticeKind.RecordingStarted, NoticeKind.RecordingFailed], notices.Select(notice => notice.Kind));
@@ -232,13 +234,13 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             recordingOutcome: RecordingOutcome.Failed,
             faults: [RecordingFault.ShortOfTheWindow]);
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
         await ledgers.OutcomeAsync(
             ReservationOutcomeKind.GaveUpRetrying,
             now.AddSeconds(5),
             reservation,
             gaveUpBecause: RetryGiveUp.BroadcastOver);
-        await ledgers.LookAsync(now + BetweenLooks);
+        await LookAsync(now + BetweenLooks);
 
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(reservation.Value));
         Assert.Equal(NoticeKind.ReservationMissed, notice.Kind);
@@ -257,7 +259,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             reservation,
             gaveUpBecause: RetryGiveUp.BroadcastOver);
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(reservation.Value));
         Assert.Contains("取り逃し", notice.Body, StringComparison.Ordinal);
@@ -274,9 +276,9 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             reservation,
             gaveUpBecause: RetryGiveUp.BroadcastOver);
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
         await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, now.AddMinutes(-4), reservation);
-        NotificationIntake later = await ledgers.LookAsync(now + BetweenLooks);
+        NotificationIntake later = await LookAsync(now + BetweenLooks);
 
         Assert.Equal(0, later.Taken);
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(reservation.Value));
@@ -290,7 +292,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-20));
         await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Failed, now.AddMinutes(-5));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         Assert.Equal(
             [NoticeKind.RecordingStarted, NoticeKind.RecordingFailed],
@@ -314,7 +316,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         ReservationId missed = ReservationId.New();
         await ledgers.OutcomeAsync(ReservationOutcomeKind.Missed, now.AddMinutes(-3), missed);
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         Assert.Empty(await ledgers.NoticesOfAsync(retried.Value));
         Assert.Empty(await ledgers.NoticesOfAsync(untuned.Value));
@@ -328,16 +330,16 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         DateTime now = await ADayOfItsOwnAsync(7);
         QualityIncidentId incident = await ledgers.ReceptionFellAsync(now.AddMinutes(-2));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
         await ledgers.ShownOnTheScreenAsync(incident, now.AddSeconds(5));
-        await ledgers.LookAsync(now + BetweenLooks);
-        await ledgers.LookAsync(now.AddMinutes(10));
+        await LookAsync(now + BetweenLooks);
+        await LookAsync(now.AddMinutes(10));
 
         Assert.Equal([NoticeKind.QualityIncidentDetected], await ledgers.KindsOfAsync(incident.Value));
 
         await ledgers.ReceptionCameBackAsync(incident, now.AddMinutes(11));
-        await ledgers.LookAsync(now.AddMinutes(11) + BetweenLooks);
-        await ledgers.LookAsync(now.AddMinutes(12));
+        await LookAsync(now.AddMinutes(11) + BetweenLooks);
+        await LookAsync(now.AddMinutes(12));
 
         Assert.Equal(
             [NoticeKind.QualityIncidentDetected, NoticeKind.QualityIncidentResolved],
@@ -350,9 +352,9 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         DateTime now = await ADayOfItsOwnAsync(8);
         QualityIncidentId incident = await ledgers.TunerFailedToLockAsync(now.AddMinutes(-2));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
         await ledgers.ReceptionCameBackAsync(incident, now.AddMinutes(1));
-        await ledgers.LookAsync(now.AddMinutes(1) + BetweenLooks);
+        await LookAsync(now.AddMinutes(1) + BetweenLooks);
 
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(incident.Value));
         Assert.Equal(NoticeKind.DeviceDisconnected, notice.Kind);
@@ -371,7 +373,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         await ledgers.RuleAsync("Off", now, [NoticeKind.RecordingStarted], [silenced], enabled: false);
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-1));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         NotificationDelivery delivery = Assert.Single(
             await ledgers.DeliveriesOfAsync(recording.Value, NoticeKind.RecordingStarted));
@@ -390,7 +392,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-20));
         await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Complete, now.AddMinutes(-1));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         Assert.Empty(await ledgers.DeliveriesOfAsync(recording.Value, NoticeKind.RecordingStarted));
         Assert.Single(await ledgers.DeliveriesOfAsync(recording.Value, NoticeKind.RecordingCompleted));
@@ -405,7 +407,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         RecordingId lately = await ledgers.RecordingBeganAsync(now.AddMinutes(-120));
         await ledgers.RecordingEndedAsync(lately, RecordingOutcome.Complete, now.AddMinutes(-29));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         Assert.Empty(await ledgers.NoticesOfAsync(longAgo.Value));
         Assert.Equal([NoticeKind.RecordingCompleted], await ledgers.KindsOfAsync(lately.Value));
@@ -435,7 +437,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         QualityIncidentId fellOnTheEdge = await ledgers.ReceptionFellAsync(edge);
         QualityIncidentId fellPastTheEdge = await ledgers.ReceptionFellAsync(pastTheEdge);
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
         await ledgers.ReceptionCameBackAsync(fellOnTheEdge, now);
         await ledgers.ReceptionCameBackAsync(fellPastTheEdge, now);
 
@@ -466,13 +468,13 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         await ledgers.EncodeFailedAsync(failedAhead, ahead);
         QualityIncidentId fellAhead = await ledgers.ReceptionFellAsync(ahead);
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
         string[] endedNowAtFirst = [.. (await ledgers.KindsOfAsync(endedNow.Value)).Select(kind => kind.ToString())];
         int aheadAtFirst = (await ledgers.NoticesOfAsync(endedAhead.Value)).Count
             + (await ledgers.NoticesOfAsync(missedAhead.Value)).Count
             + (await ledgers.NoticesOfAsync(failedAhead.Value)).Count
             + (await ledgers.NoticesOfAsync(fellAhead.Value)).Count;
-        await ledgers.LookAsync(ahead);
+        await LookAsync(ahead);
         await ledgers.ReceptionCameBackAsync(fellAhead, ahead.AddMinutes(1));
 
         Assert.Equal([nameof(NoticeKind.RecordingCompleted)], endedNowAtFirst);
@@ -487,11 +489,11 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
     public async Task ARecordingThatBeganAndEndedBetweenTwoLooksIsToldOfTwiceInTheOneLook()
     {
         DateTime now = await ADayOfItsOwnAsync(12);
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddSeconds(2));
         await ledgers.RecordingEndedAsync(recording, RecordingOutcome.Truncated, now.AddSeconds(10));
 
-        await ledgers.LookAsync(now + BetweenLooks);
+        await LookAsync(now + BetweenLooks);
 
         Assert.Equal(
             [NoticeKind.RecordingStarted, NoticeKind.RecordingTruncated],
@@ -506,9 +508,9 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         EncodeJobId job = await ledgers.EncodeIsQueuedAsync(encoded, now.AddMinutes(-40));
         RecordingId later = await ledgers.RecordingBeganAsync(now.AddMinutes(-1));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
         await ledgers.EncodeStartedAsync(job, now.AddMinutes(-5));
-        await ledgers.LookAsync(now + BetweenLooks);
+        await LookAsync(now + BetweenLooks);
 
         Assert.Equal([NoticeKind.RecordingStarted], await ledgers.KindsOfAsync(later.Value));
         Notice started = Assert.Single(await ledgers.NoticesOfAsync(job.Value));
@@ -524,7 +526,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         await ledgers.StationIsNamedAsync(now);
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-10));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(recording.Value));
         Assert.Equal("録画を始めました", notice.Title);
@@ -543,7 +545,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         DateTime now = await ADayOfItsOwnAsync(15);
         RecordingId recording = await ledgers.RecordingBeganAsync(now.AddMinutes(-10));
 
-        await ledgers.LookAsync(now, NoticeLinkBase.At(new Uri("https://screens.example")));
+        await LookAsync(now, NoticeLinkBase.At(new Uri("https://screens.example")));
 
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(recording.Value));
         Assert.Equal($"https://screens.example/recordings/{recording.Value:N}", notice.Link);
@@ -560,7 +562,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
             recordedInstead: [winner.Value]);
         ReservationOutcomeId moved = await ledgers.OutcomeAsync(ReservationOutcomeKind.ProgrammeMoved, now.AddMinutes(-3));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         Notice lost = Assert.Single(await ledgers.NoticesOfAsync(competing.Value));
         Assert.Equal(NoticeKind.ReservationCompeting, lost.Kind);
@@ -578,7 +580,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         await ledgers.EncodeStartedAsync(job, now.AddMinutes(-4));
         await ledgers.EncodeFailedAsync(job, now.AddMinutes(-2));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         IReadOnlyList<Notice> notices = await ledgers.NoticesOfAsync(job.Value);
         Assert.Equal([NoticeKind.EncodeStarted, NoticeKind.EncodeFailed], notices.Select(notice => notice.Kind));
@@ -598,7 +600,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         await ledgers.EncodeStartedAsync(job, now.AddMinutes(-4));
         await ledgers.EncodeCompletedAsync(job, now.AddMinutes(-2));
 
-        await ledgers.LookAsync(now, artefactBytes: 300_000);
+        await LookAsync(now, artefactBytes: 300_000);
 
         IReadOnlyList<Notice> notices = await ledgers.NoticesOfAsync(job.Value);
         Assert.Equal([NoticeKind.EncodeStarted, NoticeKind.EncodeCompleted], notices.Select(notice => notice.Kind));
@@ -617,7 +619,7 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         await ledgers.EncodeStartedAsync(job, now.AddMinutes(-4));
         await ledgers.EncodeCompletedAsync(job, now.AddMinutes(-2));
 
-        await ledgers.LookAsync(now);
+        await LookAsync(now);
 
         Notice completed = (await ledgers.NoticesOfAsync(job.Value))[^1];
         Assert.Equal(NoticeKind.EncodeCompleted, completed.Kind);
@@ -641,5 +643,28 @@ public sealed class NotificationIntakeRoundTests(RepositoryDatabase database)
         await ledgers.EmptyTheNoticesAsync();
 
         return Epoch.AddDays(day);
+    }
+
+    private async Task<NotificationIntake> LookAsync(DateTime now, NoticeLinkBase? links = null, long? artefactBytes = null)
+    {
+        await using ServiceProvider services = database.Infrastructure(replace =>
+        {
+            replace.AddSingleton<TimeProvider>(new StoppedClock(now));
+            replace.AddSingleton(links ?? NoticeLinkBase.None);
+            replace.AddSingleton<IEncodeArtefactWeigher>(new ArtefactsThatWeigh(artefactBytes));
+        });
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+
+        return await scope.ServiceProvider.GetRequiredService<NotificationIntakeRound>().TakeAsync(Cancel);
+    }
+
+    private sealed class ArtefactsThatWeigh(long? bytes) : IEncodeArtefactWeigher
+    {
+        public long? Weigh(OutputRoot root, EncodeFileName name) => bytes;
+    }
+
+    private sealed class StoppedClock(DateTime at) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => new(at);
     }
 }

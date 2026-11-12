@@ -7,8 +7,11 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Notifications;
 using Carina.Infrastructure.Tests.Reservations;
 using Carina.Infrastructure.Tests.Thumbnails;
+using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using WatchedProgrammes = Carina.Infrastructure.Tests.Notifications.WatchedProgrammes;
 
@@ -37,7 +40,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
     {
         (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
 
-        NotificationIntake look = await watched.LookAsync(Starts.AddMinutes(-Lead).AddSeconds(-1));
+        NotificationIntake look = await LookAsync(Starts.AddMinutes(-Lead).AddSeconds(-1));
 
         Assert.Equal(0, look.Taken);
         Assert.Equal(ProgrammeWatchState.Waiting, (await watched.RowAsync(watch)).State);
@@ -50,7 +53,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         (ProgrammeWatchId watch, NotificationDestinationId destination) = await AskedOfADestinationAsync();
         DateTime now = Starts.AddMinutes(-Lead);
 
-        NotificationIntake look = await watched.LookAsync(now);
+        NotificationIntake look = await LookAsync(now);
 
         ProgrammeWatch row = await watched.RowAsync(watch);
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
@@ -71,10 +74,10 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         NotificationDestinationId destination = await ledgers.DestinationAsync("Somewhere", Asked);
         ProgrammeWatchId watch = await watched.AskedAsync(await watched.AnnouncedAsync(Starts, Asked), Asked, 0, destination);
 
-        NotificationIntake before = await watched.LookAsync(Starts.AddSeconds(-1));
+        NotificationIntake before = await LookAsync(Starts.AddSeconds(-1));
         ProgrammeWatch waiting = await watched.RowAsync(watch);
         IReadOnlyList<Notice> nothing = await ledgers.NoticesOfAsync(watch.Value);
-        NotificationIntake atTheStart = await watched.LookAsync(Starts);
+        NotificationIntake atTheStart = await LookAsync(Starts);
 
         ProgrammeWatch row = await watched.RowAsync(watch);
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
@@ -98,7 +101,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         (ProgrammeWatchId watch, NotificationDestinationId destination) = await AskedOfADestinationAsync();
         DateTime now = Starts.AddMinutes(10);
 
-        await watched.LookAsync(now);
+        await LookAsync(now);
 
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
         Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
@@ -112,7 +115,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
     {
         (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
 
-        NotificationIntake look = await watched.LookAsync(Starts + WatchedProgrammes.Length);
+        NotificationIntake look = await LookAsync(Starts + WatchedProgrammes.Length);
 
         ProgrammeWatch row = await watched.RowAsync(watch);
         Assert.Equal(0, look.Taken);
@@ -130,8 +133,8 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, destination);
         await watched.DroppedAsync(programme, Asked.AddMinutes(20));
 
-        await watched.LookAsync(Asked.AddMinutes(21));
-        NotificationIntake again = await watched.LookAsync(Asked.AddMinutes(21) + BetweenLooks);
+        await LookAsync(Asked.AddMinutes(21));
+        NotificationIntake again = await LookAsync(Asked.AddMinutes(21) + BetweenLooks);
 
         Notice notice = Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
         Assert.Equal(0, again.Seen);
@@ -150,9 +153,9 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         DateTime later = Starts.AddMinutes(30);
         await watched.MovedAsync(programme, later, Asked.AddMinutes(20));
 
-        NotificationIntake atTheOldTime = await watched.LookAsync(Starts.AddMinutes(-Lead));
+        NotificationIntake atTheOldTime = await LookAsync(Starts.AddMinutes(-Lead));
         ProgrammeWatch followed = await watched.RowAsync(watch);
-        NotificationIntake atTheNewTime = await watched.LookAsync(later.AddMinutes(-Lead));
+        NotificationIntake atTheNewTime = await LookAsync(later.AddMinutes(-Lead));
 
         Assert.Equal(0, atTheOldTime.Taken);
         Assert.Equal(ProgrammeWatchState.Waiting, followed.State);
@@ -170,12 +173,12 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
         ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, destination);
         DateTime told = Starts.AddMinutes(-Lead);
-        await watched.LookAsync(told);
+        await LookAsync(told);
         DateTime later = Starts.AddMinutes(30);
         await watched.MovedAsync(programme, later, told.AddSeconds(5));
 
-        NotificationIntake first = await watched.LookAsync(told + BetweenLooks);
-        NotificationIntake second = await watched.LookAsync(told + BetweenLooks + BetweenLooks);
+        NotificationIntake first = await LookAsync(told + BetweenLooks);
+        NotificationIntake second = await LookAsync(told + BetweenLooks + BetweenLooks);
 
         ProgrammeWatch row = await watched.RowAsync(watch);
         Assert.Equal(1, first.Taken);
@@ -197,11 +200,11 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
         ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, destination);
         DateTime told = Starts.AddMinutes(-Lead);
-        await watched.LookAsync(told);
+        await LookAsync(told);
         await watched.DroppedAsync(programme, told.AddSeconds(5));
 
-        await watched.LookAsync(told + BetweenLooks);
-        NotificationIntake again = await watched.LookAsync(told + BetweenLooks + BetweenLooks);
+        await LookAsync(told + BetweenLooks);
+        NotificationIntake again = await LookAsync(told + BetweenLooks + BetweenLooks);
 
         Assert.Equal(0, again.Taken);
         Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
@@ -215,9 +218,9 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
     {
         (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
         DateTime now = Starts.AddMinutes(-Lead);
-        await watched.LookAsync(now);
+        await LookAsync(now);
 
-        NotificationIntake again = await watched.LookAsync(now + BetweenLooks);
+        NotificationIntake again = await LookAsync(now + BetweenLooks);
 
         Assert.Equal(new NotificationIntake(1, 0, 0), again);
         Assert.Single(await ledgers.NoticesOfAsync(watch.Value));
@@ -235,7 +238,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         ProgrammeId programme = await watched.AnnouncedAsync(Starts, Asked);
         ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, asked, switchedOff);
 
-        NotificationIntake look = await watched.LookAsync(Starts.AddMinutes(-Lead));
+        NotificationIntake look = await LookAsync(Starts.AddMinutes(-Lead));
 
         Assert.Equal(1, look.Queued);
         Assert.Equal(asked, Assert.Single(await ledgers.DeliveriesOfAsync(watch.Value, NoticeKind.ProgrammeStarting)).DestinationId);
@@ -248,7 +251,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         await ledgers.SwitchedOffAsync(destination, Asked.AddMinutes(10));
         DateTime now = Starts.AddMinutes(-Lead);
 
-        NotificationIntake look = await watched.LookAsync(now);
+        NotificationIntake look = await LookAsync(now);
 
         ProgrammeWatch row = await watched.RowAsync(watch);
         Assert.Equal(new NotificationIntake(1, 1, 0), look);
@@ -265,13 +268,13 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
         DateTime now = Starts.AddMinutes(-Lead);
 
-        NotificationIntake failed = await watched.LookAsync(now, held => new NoticesThatCannotBeWritten(held));
+        NotificationIntake failed = await LookAsync(now, held => new NoticesThatCannotBeWritten(held));
 
         Assert.Equal(0, failed.Taken);
         Assert.Equal(ProgrammeWatchState.Waiting, (await watched.RowAsync(watch)).State);
         Assert.Empty(await ledgers.NoticesOfAsync(watch.Value));
 
-        NotificationIntake next = await watched.LookAsync(now + BetweenLooks);
+        NotificationIntake next = await LookAsync(now + BetweenLooks);
 
         Assert.Equal(1, next.Taken);
         Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
@@ -290,7 +293,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
             destination);
         HeardOf<ProgrammeWatchRound> heard = new();
 
-        NotificationIntake look = await watched.LookAsync(
+        NotificationIntake look = await LookAsync(
             Starts.AddMinutes(1 - Lead),
             held => new NoticesThatCannotBeWritten(held, refused.Value),
             heard);
@@ -310,7 +313,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
         DateTime now = Starts.AddMinutes(-Lead);
 
-        NotificationIntake look = await watched.LookAsync(
+        NotificationIntake look = await LookAsync(
             now,
             held => new NoticesReadAfter(held, () => watched.WithdrawnAsync(watch, now)));
 
@@ -325,7 +328,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         (ProgrammeWatchId watch, NotificationDestinationId destination) = await AskedOfADestinationAsync();
         DateTime now = Starts.AddMinutes(-Lead);
 
-        NotificationIntake look = await watched.LookAsync(
+        NotificationIntake look = await LookAsync(
             now,
             held => new NoticesReadAfter(held, () => watched.DestinationRemovedAsync(destination, now)));
 
@@ -342,7 +345,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         int before = await ReservationsAsync();
         (ProgrammeWatchId watch, _) = await AskedOfADestinationAsync();
 
-        await watched.LookAsync(Starts.AddMinutes(-Lead));
+        await LookAsync(Starts.AddMinutes(-Lead));
 
         Assert.Equal(ProgrammeWatchState.Notified, (await watched.RowAsync(watch)).State);
         Assert.Equal(before, await ReservationsAsync());
@@ -357,7 +360,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
         Reservation reserved = await ReservedAsync(programme);
         ProgrammeWatchId watch = await watched.AskedAsync(programme, Asked, Lead, destination);
 
-        NotificationIntake look = await watched.LookAsync(Starts.AddMinutes(-Lead));
+        NotificationIntake look = await LookAsync(Starts.AddMinutes(-Lead));
 
         Reservation kept = await ReservationAsync(reserved.Id);
         Assert.Equal(new NotificationIntake(1, 1, 1), look);
@@ -368,6 +371,36 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
             (kept.State, kept.Programme, kept.StartAt, kept.EndAt));
     }
 
+    private async Task<NotificationIntake> LookAsync(
+        DateTime now,
+        Func<INoticeRepository, INoticeRepository>? notices = null,
+        ILogger<ProgrammeWatchRound>? logger = null)
+    {
+        await using ServiceProvider services = database.Infrastructure(replace =>
+        {
+            replace.AddSingleton<TimeProvider>(new HandTurnedClock(new DateTimeOffset(now)));
+
+            if (logger is not null)
+            {
+                replace.AddSingleton(logger);
+            }
+
+            if (notices is not null)
+            {
+                ServiceDescriptor held = replace.Last(descriptor => descriptor.ServiceType == typeof(INoticeRepository));
+                Type implementation = held.ImplementationType
+                    ?? throw new InvalidOperationException("The notices are not registered by their class, so they cannot be wrapped.");
+                replace.Add(ServiceDescriptor.Describe(
+                    typeof(INoticeRepository),
+                    provider => notices((INoticeRepository)ActivatorUtilities.CreateInstance(provider, implementation)),
+                    held.Lifetime));
+            }
+        });
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+
+        return await scope.ServiceProvider.GetRequiredService<ProgrammeWatchRound>().TakeAsync(Cancel);
+    }
+
     private async Task<Reservation> ReservedAsync(ProgrammeId programme)
     {
         Reservation reservation = ReservationFixtures.Planned(
@@ -375,17 +408,19 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
             endAt: Starts + WatchedProgrammes.Length,
             snapshot: ReservationFixtures.Snapshot(WatchedProgrammes.ProgrammeName));
 
-        await using CarinaDbContext context = database.Open();
-        await new ReservationRepository(context).AddAsync(reservation, Cancel);
+        await using ServiceProvider services = database.Infrastructure();
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IReservationRepository>().AddAsync(reservation, Cancel);
 
         return reservation;
     }
 
     private async Task<Reservation> ReservationAsync(ReservationId id)
     {
-        await using CarinaDbContext context = database.Open();
+        await using ServiceProvider services = database.Infrastructure();
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
 
-        return Assert.IsType<Reservation>(await new ReservationRepository(context).FindAsync(id, Cancel));
+        return Assert.IsType<Reservation>(await scope.ServiceProvider.GetRequiredService<IReservationRepository>().FindAsync(id, Cancel));
     }
 
     private async Task<(ProgrammeWatchId Watch, NotificationDestinationId Destination)> AskedOfADestinationAsync()

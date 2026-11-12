@@ -86,28 +86,6 @@ internal sealed class WatchedProgrammes(RepositoryDatabase database)
         return watch.Id;
     }
 
-    public async Task<NotificationIntake> LookAsync(
-        DateTime now,
-        Func<INoticeRepository, INoticeRepository>? notices = null,
-        ILogger<ProgrammeWatchRound>? logger = null)
-    {
-        await using CarinaDbContext context = database.Open();
-        NoticeRepository held = new(context);
-        ProgrammeWatchRound round = new(
-            new ProgrammeWatchRepository(context),
-            new ProgrammeRepository(context),
-            new BroadcastServiceRepository(context),
-            notices is null ? held : notices(held),
-            new NotificationRuleRepository(context),
-            new NotificationDestinationRepository(context),
-            new DatabaseAtomicWrite(context),
-            NoticeLinkBase.None,
-            new HandTurnedClock(new DateTimeOffset(now)),
-            logger ?? NullLogger<ProgrammeWatchRound>.Instance);
-
-        return await round.TakeAsync(Cancel);
-    }
-
     public async Task WithdrawnAsync(ProgrammeWatchId id, DateTime at)
     {
         await using CarinaDbContext context = database.Open();

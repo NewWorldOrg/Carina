@@ -52,10 +52,7 @@ public sealed class LocalAccountBootstrapTests(RepositoryDatabase database) : IA
     }
 
     private Task EnsureAsync(RecordedLog log, AsyncServiceScope scope)
-        => new LocalAccountBootstrap(
-                services.GetRequiredService<IServiceScopeFactory>(),
-                services.GetRequiredService<PasswordHashPolicy>(),
-                log)
+        => ActivatorUtilities.CreateInstance<LocalAccountBootstrap>(services, log)
             .EnsureAnAccountExistsAsync(
                 scope.ServiceProvider.GetRequiredService<LocalAccountProvisioningDomainService>(),
                 Accounts(scope),

@@ -53,25 +53,6 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
         await context.Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
     }
 
-    public async Task<NotificationIntake> LookAsync(DateTime now, NoticeLinkBase? links = null, long? artefactBytes = null)
-    {
-        await using CarinaDbContext context = database.Open();
-        NoticeRepository notices = new(context);
-        NotificationIntakeRound round = new(
-            new NotificationIntakeDomainService(
-                new NoticeSourceReader(context, new ArtefactsThatWeigh(artefactBytes)),
-                notices,
-                new StoppedClock(now)),
-            notices,
-            new NotificationRuleRepository(context),
-            new NotificationDestinationRepository(context),
-            new NotificationIntakeSettings(),
-            links ?? NoticeLinkBase.None,
-            NullLogger<NotificationIntakeRound>.Instance);
-
-        return await round.TakeAsync(Cancel);
-    }
-
     public async Task<IReadOnlyList<Notice>> NoticesOfAsync(Guid sourceId)
     {
         await using CarinaDbContext context = database.Open();
@@ -377,15 +358,5 @@ internal sealed class NoticeLedgers(RepositoryDatabase database)
 
         turn(incident);
         await new QualityIncidentRepository(context).SaveAsync(incident, Cancel);
-    }
-
-    private sealed class ArtefactsThatWeigh(long? bytes) : IEncodeArtefactWeigher
-    {
-        public long? Weigh(OutputRoot root, EncodeFileName name) => bytes;
-    }
-
-    private sealed class StoppedClock(DateTime at) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => new(at);
     }
 }

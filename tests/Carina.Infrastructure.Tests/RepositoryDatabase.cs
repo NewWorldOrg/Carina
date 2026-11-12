@@ -89,11 +89,20 @@ public sealed class RepositoryDatabase : IAsyncLifetime
 
     public ServiceProvider Infrastructure() => Infrastructure(SealingKeys.Fresh());
 
-    public ServiceProvider Infrastructure(DirectoryInfo sealingKeys)
+    public ServiceProvider Infrastructure(DirectoryInfo sealingKeys) => Infrastructure(sealingKeys, _ => { });
+
+    /// <summary>
+    /// The container the infrastructure builds over the scratch database, with what <paramref name="replace"/>
+    /// registers last standing in for what the infrastructure registered.
+    /// </summary>
+    public ServiceProvider Infrastructure(Action<IServiceCollection> replace) => Infrastructure(SealingKeys.Fresh(), replace);
+
+    public ServiceProvider Infrastructure(DirectoryInfo sealingKeys, Action<IServiceCollection> replace)
     {
         ArgumentNullException.ThrowIfNull(sealingKeys);
+        ArgumentNullException.ThrowIfNull(replace);
 
-        return new ServiceCollection()
+        IServiceCollection services = new ServiceCollection()
             .AddLogging()
             .AddCarinaInfrastructure(new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
@@ -102,8 +111,10 @@ public sealed class RepositoryDatabase : IAsyncLifetime
                     ["CARINA_DRIVER_SOCKET"] = "/run/carina/driver.sock",
                     [SealingKeyOptions.DirectoryKey] = sealingKeys.FullName,
                 })
-                .Build())
-            .BuildServiceProvider();
+                .Build());
+        replace(services);
+
+        return services.BuildServiceProvider();
     }
 
     private static string Scratch()
