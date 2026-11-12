@@ -564,6 +564,7 @@ public sealed class ServiceCollectionExtensionsTests
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationOutcomeDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationPlanningDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<BroadcastGroupDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleWithdrawalDomainService>());
     }
 

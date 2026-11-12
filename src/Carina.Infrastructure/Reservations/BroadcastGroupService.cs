@@ -27,6 +27,7 @@ public sealed class BroadcastGroupService(
     IReservationRepository reservations,
     ReservationOutcomeDomainService ledger,
     IProgrammeRepository programmes,
+    BroadcastGroupDomainService groups,
     ReservationSchedulingService scheduling,
     IAtomicWrite write,
     IAppEventPublisher events,
@@ -50,8 +51,7 @@ public sealed class BroadcastGroupService(
             if (resolver.Place(reservation.Programme, reservation.EndAt, at) is not { } placed)
             {
                 if (movable
-                    && reservation.BroadcastGroupRole is not BroadcastGroupRole.Standalone
-                    && await programmes.FindAsync(reservation.Programme.Id, cancellationToken) is not null
+                    && await groups.FallsBackToStandingAloneAsync(reservation, cancellationToken)
                     && await RegroupedAsync(reservation, null, BroadcastGroupRole.Standalone, cancellationToken))
                 {
                     regrouped.Add(reservation.Id);
@@ -78,7 +78,7 @@ public sealed class BroadcastGroupService(
 
             foreach (BroadcastTarget sibling in placed.Alongside)
             {
-                if (await reservations.FindByProgrammeAsync(sibling.Reference, cancellationToken) is not null)
+                if (!await groups.NeedsReservingBesideAsync(sibling, cancellationToken))
                 {
                     continue;
                 }
@@ -106,40 +106,37 @@ public sealed class BroadcastGroupService(
         DateTime at,
         CancellationToken cancellationToken)
     {
-        if (own.Programme.Id.Equals(reservation.Programme.Id))
+        BroadcastGroupPlacing placing = await groups.PlacingAsync(reservation, own, cancellationToken);
+
+        bool moved = placing.Move switch
         {
-            return await RegroupedAsync(reservation, own.Key, own.Role, cancellationToken)
-                ? Placing.Regrouped
-                : Placing.AsItWas;
-        }
+            BroadcastGroupMove.Retarget => await RetargetedAsync(reservation, own, at, cancellationToken),
+            BroadcastGroupMove.StepAside => await SteppedAsideAsync(reservation, cancellationToken),
+            _ => await RegroupedAsync(reservation, placing.Key, placing.Role, cancellationToken),
+        };
 
-        Reservation? there = await reservations.FindByProgrammeAsync(own.Reference, cancellationToken);
+        return moved ? Made(placing.Move) : Placing.AsItWas;
+    }
 
-        if (there is null)
-        {
-            return await RetargetedAsync(reservation, own, at, cancellationToken)
-                ? Placing.Retargeted
-                : Placing.AsItWas;
-        }
+    private static Placing Made(BroadcastGroupMove move) => move switch
+    {
+        BroadcastGroupMove.Retarget => Placing.Retargeted,
+        BroadcastGroupMove.StepAside => Placing.SteppedAside,
+        _ => Placing.Regrouped,
+    };
 
-        if (there.RecordingOutcome is not null
-            || there.State is ReservationState.Scheduled or ReservationState.Conflict)
-        {
-            SchedulingRun run = await scheduling.ReviseAsync(
-                reservation,
-                new ReservationRevision
-                {
-                    Move = ReservationMove.Cancel,
-                    Cancellation = ReservationCancellation.SameBroadcast,
-                },
-                cancellationToken);
+    private async Task<bool> SteppedAsideAsync(Reservation reservation, CancellationToken cancellationToken)
+    {
+        SchedulingRun run = await scheduling.ReviseAsync(
+            reservation,
+            new ReservationRevision
+            {
+                Move = ReservationMove.Cancel,
+                Cancellation = ReservationCancellation.SameBroadcast,
+            },
+            cancellationToken);
 
-            return run.Settled ? Placing.SteppedAside : Placing.AsItWas;
-        }
-
-        return await RegroupedAsync(reservation, own.Key, BroadcastGroupRole.MovementSuppressed, cancellationToken)
-            ? Placing.Regrouped
-            : Placing.AsItWas;
+        return run.Settled;
     }
 
     private async Task<bool> RetargetedAsync(

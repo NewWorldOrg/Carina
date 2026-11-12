@@ -20,7 +20,11 @@ internal sealed class RefusalLedger
     public HeldCandidates Candidates { get; } = new();
 
     public RecordingRefusalReporter Reporter
-        => new(Reservations, new ReservationOutcomeDomainService(Outcomes, new NoRecordings()), Tuning, NullLogger<RecordingRefusalReporter>.Instance);
+        => new(
+            Reservations,
+            new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
+            Tuning,
+            NullLogger<RecordingRefusalReporter>.Instance);
 
     public RecordingRetries Retries(
         IAnnouncedProgrammes programmes,

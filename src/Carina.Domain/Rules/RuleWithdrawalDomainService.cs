@@ -203,7 +203,9 @@ public sealed class RuleWithdrawalDomainService(
             return false;
         }
 
-        if (!guard.Lets(reservation, holds ? RuleWithdrawal.WhileTheRuleStands : RuleWithdrawal.WhenTheRuleIsSwitchedOff, at))
+        RuleWithdrawal occasion = holds ? RuleWithdrawal.WhileTheRuleStands : RuleWithdrawal.WhenTheRuleIsSwitchedOff;
+
+        if (!guard.Lets(reservation, occasion, at))
         {
             return false;
         }

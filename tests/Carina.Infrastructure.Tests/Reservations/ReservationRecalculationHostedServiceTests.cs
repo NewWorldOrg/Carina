@@ -694,6 +694,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddScoped<ReservationSchedulingService>();
             services.AddScoped<ReservationOutcomeService>();
             services.AddScoped<ReservationGuideService>();
+            services.AddScoped<BroadcastGroupDomainService>();
             services.AddScoped<BroadcastGroupService>();
             services.AddScoped<RuleWithdrawalDomainService>();
             services.AddScoped<RuleApplicationService>();

@@ -33,7 +33,10 @@ public sealed class ReservationOutcomeService(
             return new ReservationOutcomeRun([]);
         }
 
-        Reservation[] lost = [.. judged.Where(one => one.Kind is ReservationOutcomeKind.Competing).Select(one => one.Reservation)];
+        Reservation[] lost =
+        [
+            .. judged.Where(one => one.Kind is ReservationOutcomeKind.Competing).Select(one => one.Reservation),
+        ];
         IReadOnlyList<Reservation> claimed = lost.Length is 0
             ? []
             : await reservations.ListClaimedOverAsync(RecordedInstead.LookedForAcross(lost), cancellationToken);

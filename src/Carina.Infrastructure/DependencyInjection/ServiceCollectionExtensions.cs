@@ -297,6 +297,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ReservationSchedulingService>();
         services.AddScoped<ReservationOutcomeService>();
         services.AddScoped<ReservationGuideService>();
+        services.AddScoped<BroadcastGroupDomainService>();
         services.AddScoped<BroadcastGroupService>();
         services.AddScoped<RuleMatcher>();
         services.AddScoped<IRuleRepository, RuleRepository>();

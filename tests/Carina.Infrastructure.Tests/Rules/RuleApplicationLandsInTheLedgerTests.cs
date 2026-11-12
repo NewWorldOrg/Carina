@@ -170,7 +170,12 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
             new ProgrammeRepository(context),
             reservations,
             new ReservationOutcomeDomainService(new ReservationOutcomeRepository(context), new RecordingRepository(context)),
-            new RuleWithdrawalDomainService(reservations, streams, new StreamVisitRepository(context), new CollectionEpochRepository(context), new FixedClock(Now)),
+            new RuleWithdrawalDomainService(
+                reservations,
+                streams,
+                new StreamVisitRepository(context),
+                new CollectionEpochRepository(context),
+                new FixedClock(Now)),
             new ReservationSchedulingService(
                 reservations,
                 new NoRecordings(),
