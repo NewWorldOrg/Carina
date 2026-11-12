@@ -15,7 +15,7 @@ public sealed record NotificationRuleChange(
 /// </summary>
 public sealed class NotificationRuleService(
     INotificationRuleRepository rules,
-    INotificationDestinationRepository destinations,
+    NotificationRuleDomainService defining,
     IAtomicWrite writes,
     TimeProvider clock)
 {
@@ -48,7 +48,7 @@ public sealed class NotificationRuleService(
             return Failure<NotificationRule>(BadEvents, NotificationFailure.Refused);
         }
 
-        if (await RegisteredAsync(asked.Destinations, cancellationToken) is not { } sentTo)
+        if (await defining.SentToAsync(asked.Destinations, cancellationToken) is not { } sentTo)
         {
             return Failure<NotificationRule>(BadDestinations, NotificationFailure.Refused);
         }
@@ -66,9 +66,7 @@ public sealed class NotificationRuleService(
             {
                 await rules.TakeTurnAsync(inner);
 
-                IReadOnlyList<NotificationRule> held = await rules.ListAsync(inner);
-
-                if (held.Count >= NotificationRule.MostRules)
+                if (!await defining.HasRoomForAnotherAsync(inner))
                 {
                     return false;
                 }
@@ -101,7 +99,7 @@ public sealed class NotificationRuleService(
         IReadOnlyList<NoticeKind>? events = change.Events is null ? held.Events : Kinds(change.Events);
         IReadOnlyList<NotificationDestinationId>? sentTo = change.Destinations is null
             ? held.Destinations
-            : await RegisteredAsync(change.Destinations, cancellationToken);
+            : await defining.SentToAsync(change.Destinations, cancellationToken);
 
         if (named is null)
         {
@@ -173,21 +171,6 @@ public sealed class NotificationRuleService(
         {
             held.Disable(now);
         }
-    }
-
-    private async Task<IReadOnlyList<NotificationDestinationId>?> RegisteredAsync(
-        IReadOnlyList<Guid>? asked,
-        CancellationToken cancellationToken)
-    {
-        if (asked is null || asked.Count is 0)
-        {
-            return null;
-        }
-
-        IReadOnlyList<NotificationDestination> held = await destinations.ListAsync(cancellationToken);
-        HashSet<Guid> registered = [.. held.Select(destination => destination.Id.Value)];
-
-        return asked.All(registered.Contains) ? [.. asked.Distinct().Select(id => new NotificationDestinationId(id))] : null;
     }
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;

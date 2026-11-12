@@ -217,7 +217,7 @@ public sealed class NotificationWritesTests(MigratedScratchDatabase database) : 
                     new NoticeTrials(Settings, clock),
                     NoticeLinkBase.None,
                     clock),
-                new NotificationRuleService(rules, destinations, writes, clock)));
+                new NotificationRuleService(rules, new NotificationRuleDomainService(rules, destinations), writes, clock)));
     }
 
     private async Task WaitsItsTurnAsync<T>(Func<Task<T>> write)
