@@ -326,6 +326,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<LogoVisitor>();
         services.AddScoped<LogoWriter>();
         services.AddScoped<LogoRound>();
+        services.AddScoped<ProgrammeArchivingDomainService>();
         services.AddScoped<ArchiveTransfer>();
 
         services.AddSingleton(TimeProvider.System);
