@@ -248,15 +248,18 @@ public sealed class NoRecordingIsEverDeletedTests
             OutputRoots = [new StorageRootPath(Primary, recordings.Root)],
         };
 
+        IWrittenFileSurvey written = new HeldPlaces();
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => ledger);
         services.AddScoped<IEncodeWorkLedger>(_ => new HeldEncodeWork());
+        services.AddSingleton(written);
+        services.AddScoped<IntegrityClaimDomainService>();
         services.AddScoped<IIntegrityCheckRepository>(_ => checks);
 
         return new IntegrityCheckJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             new LocalRecordingFileSurvey(settings, NullLogger<LocalRecordingFileSurvey>.Instance),
-            new HeldPlaces(),
+            written,
             settings,
             new StoppedClock(Now),
             NullLogger<IntegrityCheckJob>.Instance);

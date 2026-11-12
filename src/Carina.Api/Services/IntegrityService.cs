@@ -14,9 +14,7 @@ public sealed record FindingThrownAway(IntegrityFinding Finding, bool FileRemove
 public sealed class IntegrityService(
     IntegrityCheckJob sweeps,
     IIntegrityCheckRepository checks,
-    IRecordingLedger ledger,
-    IEncodeWorkLedger encodeWork,
-    IWrittenFileSurvey written,
+    IntegrityClaimDomainService claims,
     IStrayFileEraser strays,
     FindingDisposals disposals,
     IntegritySettings settings,
@@ -94,10 +92,7 @@ public sealed class IntegrityService(
                 FindingDisposalFailure.OneIsAlreadyBeingThrownAway);
         }
 
-        IReadOnlyList<LedgerFile> rows = await ledger.ListAsync(cancellationToken);
-        IReadOnlyList<DeclaredFile> declared = written.Claimed(rows, await encodeWork.ListAsync(cancellationToken));
-
-        if (StrayFileDisposal.Claimed(finding, rows, declared))
+        if (await claims.ClaimsAsync(finding, cancellationToken))
         {
             return Refused(
                 $"'{finding.Path}' under '{finding.Root.Value}' is claimed now by a recording, its thumbnail or "

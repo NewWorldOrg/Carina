@@ -165,15 +165,18 @@ public sealed class NamesTheDiskAllowsTests
             BetweenSweeps = TimeSpan.FromMinutes(1),
         };
 
+        IWrittenFileSurvey written = new HeldPlaces();
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => new HeldLedger());
         services.AddScoped<IEncodeWorkLedger>(_ => new HeldEncodeWork());
+        services.AddSingleton(written);
+        services.AddScoped<IntegrityClaimDomainService>();
         services.AddScoped<IIntegrityCheckRepository>(_ => checks);
 
         return new IntegrityCheckJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             new LocalRecordingFileSurvey(settings, NullLogger<LocalRecordingFileSurvey>.Instance),
-            new HeldPlaces(),
+            written,
             settings,
             clock,
             NullLogger<IntegrityCheckJob>.Instance);

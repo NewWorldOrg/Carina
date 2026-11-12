@@ -304,15 +304,18 @@ public sealed class IntegrityCheckJobTests
         HeldEncodeWork? working = null,
         HeldPlaces? places = null)
     {
+        IWrittenFileSurvey written = places ?? new HeldPlaces();
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => ledger);
         services.AddScoped<IEncodeWorkLedger>(_ => working ?? new HeldEncodeWork());
+        services.AddSingleton(written);
+        services.AddScoped<IntegrityClaimDomainService>();
         services.AddScoped<IIntegrityCheckRepository>(_ => checks);
 
         return new IntegrityCheckJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             survey,
-            places ?? new HeldPlaces(),
+            written,
             settings ?? new IntegritySettings
             {
                 OutputRoots = [new StorageRootPath(Primary, "/srv/recordings")],

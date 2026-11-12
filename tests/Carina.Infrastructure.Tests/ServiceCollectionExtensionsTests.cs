@@ -528,6 +528,15 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<DataBroadcastRequeueDomainService>());
     }
 
+    [Fact(DisplayName = "registers the domain service of the integrity check for one scope")]
+    public void RegistersTheDomainServiceOfTheIntegrityCheck()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IntegrityClaimDomainService>());
+    }
+
     [Fact(DisplayName = "registers the domain services of quality, each for one scope")]
     public void RegistersTheDomainServicesOfQuality()
     {

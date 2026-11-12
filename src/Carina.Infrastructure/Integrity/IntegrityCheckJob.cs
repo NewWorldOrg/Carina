@@ -102,13 +102,10 @@ public sealed class IntegrityCheckJob(
         DateTime startedAt = clock.GetUtcNow().UtcDateTime;
 
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
-        IReadOnlyList<LedgerFile> ledger = await scope.ServiceProvider
-            .GetRequiredService<IRecordingLedger>()
-            .ListAsync(cancellationToken);
-
-        IReadOnlyList<DeclaredFile> declared = written.Claimed(
-            ledger,
-            await scope.ServiceProvider.GetRequiredService<IEncodeWorkLedger>().ListAsync(cancellationToken));
+        IntegrityClaims claims = await scope.ServiceProvider
+            .GetRequiredService<IntegrityClaimDomainService>()
+            .ReadAsync(cancellationToken);
+        IReadOnlyList<LedgerFile> ledger = claims.Ledger;
 
         IReadOnlyList<OutputRoot> roots = await survey.RootsAsync(cancellationToken);
         List<RootListing> listings = [];
@@ -128,7 +125,7 @@ public sealed class IntegrityCheckJob(
         IntegrityReport swept = IntegrityScan.Compare(
             id,
             ledger,
-            declared,
+            claims.Declared,
             listings,
             startedAt,
             clock.GetUtcNow().UtcDateTime,
