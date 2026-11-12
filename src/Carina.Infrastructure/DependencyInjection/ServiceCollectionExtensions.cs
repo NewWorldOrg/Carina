@@ -289,6 +289,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ScanPlanningDomainService>();
         services.AddScoped<ChannelRotationDomainService>();
         services.AddScoped<ChannelLineupDomainService>();
+        services.AddScoped<StationLogoDomainService>();
         services.AddScoped<IServiceReachSettingsRepository, ServiceReachSettingsRepository>();
         services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
         services.AddScoped<ReservationSchedulingService>();

@@ -7,6 +7,7 @@ public sealed record LogosWritten(int Pictures, int Stations, int NoPicture);
 public sealed class LogoWriter(
     IStationLogoRepository logos,
     IBroadcastServiceRepository services,
+    StationLogoDomainService links,
     TimeProvider clock)
 {
     public async Task<LogosWritten> WriteAsync(LogoVisitResult visit, CancellationToken cancellationToken)
@@ -37,19 +38,11 @@ public sealed class LogoWriter(
 
         foreach (HarvestedLogoLink link in visit.Links)
         {
-            if (await services.FindAsync(
+            if (await links.LinkAsync(
                     new NetworkId(link.NetworkId),
                     new ServiceId(link.ServiceId),
+                    link.LogoId is { } named ? new LogoId(named) : null,
                     cancellationToken) is not { } service)
-            {
-                continue;
-            }
-
-            bool moved = link.LogoId is { } named
-                ? service.NamesTheLogo(new LogoId(named))
-                : service.BroadcastsNoLogo();
-
-            if (!moved)
             {
                 continue;
             }

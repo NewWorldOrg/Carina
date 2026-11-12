@@ -336,6 +336,7 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
         services.AddScoped(scope => new LogoWriter(
             scope.GetRequiredService<IStationLogoRepository>(),
             scope.GetRequiredService<IBroadcastServiceRepository>(),
+            new StationLogoDomainService(scope.GetRequiredService<IBroadcastServiceRepository>()),
             TimeProvider.System));
         services.AddScoped<LogoRound>();
         services.AddSingleton<IDriverClient>(driver);
