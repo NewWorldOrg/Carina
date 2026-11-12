@@ -72,6 +72,23 @@ public sealed class ReservationRecordingArmsTests(MigratedScratchDatabase databa
         }
     }
 
+    [Fact(DisplayName = "BR-RS-001: on the instant a window opens, as far ahead as the recorder prepares, and on the instant it closes, the store and each reservation say the same")]
+    public async Task OnTheEdgesOfEveryWindowTheStoreAndEachReservationSayTheSame()
+    {
+        IReadOnlyList<Reservation> matrix = await LaidAsync();
+
+        foreach ((DateTime at, TimeSpan ahead) in Edges(matrix))
+        {
+            await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+            IReadOnlyList<RecordingTick> due =
+                await new ReservationRecordingContract(context).DueAtAsync(at, ahead, CancellationToken.None);
+
+            Assert.Equal(
+                Ids(matrix.Where(reservation => reservation.IsDueAt(at, ahead))),
+                Ids(due.Select(tick => tick.Id)));
+        }
+    }
+
     [Fact(DisplayName = "BR-RS-001: the claim the store grants is the one each reservation says it is ready for, so a contended reservation never starts")]
     public async Task TheClaimTheStoreGrantsIsTheOneEachReservationIsReadyFor()
     {
@@ -127,6 +144,57 @@ public sealed class ReservationRecordingArmsTests(MigratedScratchDatabase databa
         }
     }
 
+    [Fact(DisplayName = "BR-RS-001: on the instant a reservation starts or ends, the store lists as pending what each reservation says is pending")]
+    public async Task OnTheEdgesOfEveryWindowTheStoreListsWhatEachSaysIsPending()
+    {
+        IReadOnlyList<Reservation> matrix = await LaidAsync();
+        DateTime earliest = Tick.AddDays(-1);
+        DateTime latest = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
+        ReservationWindow[] windows =
+        [
+            .. matrix
+                .SelectMany(reservation => new ReservationWindow[]
+                {
+                    new(reservation.EndAt, latest),
+                    new(reservation.EndAt.AddSeconds(1), latest),
+                    new(earliest, reservation.StartAt),
+                    new(earliest, reservation.StartAt.AddSeconds(-1)),
+                })
+                .Distinct(),
+        ];
+
+        foreach (ReservationWindow window in windows)
+        {
+            await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+            IReadOnlyList<Reservation> pending =
+                await new ReservationRepository(context).ListPendingAsync(window, CancellationToken.None);
+
+            Assert.Equal(
+                Ids(matrix.Where(reservation => reservation.IsPendingWithin(window))),
+                Ids(pending.Select(reservation => reservation.Id)));
+        }
+    }
+
+    [Fact(DisplayName = "BR-RS-001: a second before a reservation's window closes and on the instant it closes, the store throws it away as the reservation says")]
+    public async Task OnTheCloseOfEveryWindowTheStoreThrowsAwayAsEachSays()
+    {
+        IReadOnlyList<Reservation> matrix = await LaidAsync();
+
+        foreach (Reservation reservation in matrix)
+        {
+            DateTime before = reservation.EffectiveEndAt.AddSeconds(-1);
+
+            if (reservation.Discarding(false, before) is not ReservationDiscard.Discarded)
+            {
+                Assert.Equal(reservation.Discarding(false, before), await DiscardAsync(reservation.Id, before));
+            }
+
+            Assert.Equal(
+                reservation.Discarding(false, reservation.EffectiveEndAt),
+                await DiscardAsync(reservation.Id, reservation.EffectiveEndAt));
+        }
+    }
+
     [Fact(DisplayName = "BR-RS-001: what the store does with a reservation asked to be thrown away is what the reservation says it comes to")]
     public async Task WhatTheStoreDoesWithAReservationThrownAwayIsWhatItSaysItComesTo()
     {
@@ -140,6 +208,33 @@ public sealed class ReservationRecordingArmsTests(MigratedScratchDatabase databa
                 reservation.Discarding(false, Tick),
                 await new ReservationRepository(context).DiscardAsync(reservation.Id, Tick, CancellationToken.None));
         }
+    }
+
+    /// <summary>
+    /// Every instant a window of the matrix opens, looked at from as far ahead as the recorder prepares, and every
+    /// instant one closes, each with the second before it.
+    /// </summary>
+    private static IReadOnlyList<(DateTime At, TimeSpan Ahead)> Edges(IReadOnlyList<Reservation> matrix)
+    {
+        IEnumerable<(DateTime At, TimeSpan Ahead)> opening =
+            from reservation in matrix
+            from ahead in Ahead
+            from at in new[] { reservation.EffectiveStartAt - ahead, reservation.EffectiveStartAt - ahead - TimeSpan.FromSeconds(1) }
+            select (at, ahead);
+        IEnumerable<(DateTime At, TimeSpan Ahead)> closing =
+            from reservation in matrix
+            from ahead in Ahead
+            from at in new[] { reservation.EffectiveEndAt, reservation.EffectiveEndAt - TimeSpan.FromSeconds(1) }
+            select (at, ahead);
+
+        return [.. opening.Concat(closing).Distinct()];
+    }
+
+    private async Task<ReservationDiscard> DiscardAsync(ReservationId id, DateTime at)
+    {
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+
+        return await new ReservationRepository(context).DiscardAsync(id, at, CancellationToken.None);
     }
 
     private static IReadOnlyList<Guid> Ids(IEnumerable<Reservation> reservations)
