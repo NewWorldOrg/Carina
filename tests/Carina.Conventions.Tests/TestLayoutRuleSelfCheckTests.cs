@@ -21,6 +21,8 @@ public sealed class TestLayoutRuleSelfCheckTests
         new("Auth", "src/Carina.Db/Migrations/20260101000000_SessionsAreKeptAsHashes.cs"),
     ];
 
+    private static readonly IReadOnlyList<TestLayoutRules.AreaSchema> Schemas = [new("Auth", "SessionSchema")];
+
     [Fact]
     public void ListsOnlyTheFilesThatHoldATestClassInAFolderOfTheLayout()
     {
@@ -242,34 +244,120 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
-    public void DetectsAFeatureClassNamedAfterNoActionOfItsAreaAndNoClassTheStartUpCodeNames()
+    public void DetectsAFeatureClassNamedAfterNoActionOfItsAreaAndNoClassThatServesRequests()
     {
         using SourceTree tree = new();
         tree.Declare($"{Controllers}/Recordings/GetRecordingAction.cs");
         tree.Declare("src/Carina.Api/Authentication/DeviceLabel.cs");
-        tree.Write("src/Carina.Api/Program.cs", "builder.Services.AddSingleton<SessionCookiePolicy>();");
+        tree.Write("src/Carina.Api/Program.cs", "app.UseCookiePolicy(SessionCookiePolicy.Options);");
         tree.Test($"{ApiTests}/Feature/Auth/DeviceLabelTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Feature/Auth/GetRecordingActionTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Feature/Auth/SignInJourneyTests.cs", TestLayoutRules.Feature);
 
         Assert.Equal(
             [
-                "/tests/Carina.Api.Tests/Feature/Auth/DeviceLabelTests.cs:4 DeviceLabelTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code names",
-                "/tests/Carina.Api.Tests/Feature/Auth/GetRecordingActionTests.cs:4 GetRecordingActionTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code names",
-                "/tests/Carina.Api.Tests/Feature/Auth/SignInJourneyTests.cs:4 SignInJourneyTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code names",
+                "/tests/Carina.Api.Tests/Feature/Auth/DeviceLabelTests.cs:4 DeviceLabelTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+                "/tests/Carina.Api.Tests/Feature/Auth/GetRecordingActionTests.cs:4 GetRecordingActionTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+                "/tests/Carina.Api.Tests/Feature/Auth/SignInJourneyTests.cs:4 SignInJourneyTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
             ],
-            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
-    public void LetsOffAFeatureClassNamedAfterAnActionOfItsAreaOrAClassTheStartUpCodeNames()
+    public void LetsOffAFeatureClassNamedAfterAnActionOfItsAreaOrAClassThatServesRequests()
     {
         using SourceTree tree = new();
         tree.Declare($"{Controllers}/Auth/LogInAction.cs");
+        tree.Declare($"{Controllers}/Auth/SessionFilter.cs");
+        tree.Declare("src/Carina.Api/Authentication/SessionCookiePolicy.cs");
+        tree.Declare("src/Carina.Api/Authentication/DefaultDenyAuthenticationMiddleware.cs");
+        tree.Declare("src/Carina.Api/Authentication/StateChangingRequestMiddleware.cs");
+        tree.Declare("src/Carina.Api/Authentication/SessionAuthenticationHandler.cs");
+        tree.Declare("src/Carina.Api/Authentication/SignInStream.cs");
+        tree.Declare("src/Carina.Api/Authentication/SignInTicketFilter.cs");
+        tree.Write(
+            "src/Carina.Api/Program.cs",
+            """
+            builder.Services.AddControllers(options => options.Filters.Add<SessionFilter>());
+            builder.Services
+                .AddAuthentication(SessionAuthenticationHandler.SchemeName)
+                .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(SessionAuthenticationHandler.SchemeName, _ => { });
+            app.UseCookiePolicy(SessionCookiePolicy.Options);
+            app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
+            app.UseSessions();
+            app.MapGet(SignInStream.Path, (HttpContext context, AuthSessionService sessions) => SignInStream.Invoke(context, sessions))
+                .AddEndpointFilter<SignInTicketFilter>();
+            """);
+        tree.Write(
+            "src/Carina.Api/Extensions/ApplicationBuilderExtensions.cs",
+            """
+            namespace Carina.Api.Extensions;
+
+            public static class ApplicationBuilderExtensions
+            {
+                public static void UseSessions(this IApplicationBuilder app)
+                    => app.UseMiddleware<StateChangingRequestMiddleware>();
+            }
+            """);
+        tree.Test($"{ApiTests}/Feature/Auth/LogInActionTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SessionFilterTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SessionCookiePolicyTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/DefaultDenyAuthenticationMiddlewareTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/StateChangingRequestMiddlewareTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SessionAuthenticationHandlerTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SignInStreamTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SignInTicketFilterTests.cs", TestLayoutRules.Feature);
+
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void DetectsAFeatureClassNamedAfterAClassAnEndpointOnlyMentions()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Api/Services/AuthSessionService.cs");
+        tree.Declare("src/Carina.Api/Authentication/SignInStream.cs");
+        tree.Declare("src/Carina.Api/Authentication/SignInSurfaces.cs");
+        tree.Declare("src/Carina.Api/Authentication/SignInNames.cs");
+        tree.Declare("src/Carina.Api/Authentication/SignInView.cs");
+        tree.Declare("src/Carina.Api/Authentication/SignInClock.cs");
+        tree.Write(
+            "src/Carina.Api/Program.cs",
+            """
+            app.MapMethods(
+                    SignInStream.Path,
+                    SignInSurfaces.Methods,
+                    (HttpContext context, AuthSessionService sessions, SignInClock clock) => SignInStream.Invoke(context, sessions, clock.Now()))
+                .WithName(SignInNames.TheStream)
+                .Produces<SignInView>();
+            """);
+        tree.Test($"{ApiTests}/Feature/Auth/AuthSessionServiceTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SignInClockTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SignInNamesTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SignInStreamTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SignInSurfacesTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/SignInViewTests.cs", TestLayoutRules.Feature);
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Api.Tests/Feature/Auth/AuthSessionServiceTests.cs:4 AuthSessionServiceTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+                "/tests/Carina.Api.Tests/Feature/Auth/SignInClockTests.cs:4 SignInClockTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+                "/tests/Carina.Api.Tests/Feature/Auth/SignInNamesTests.cs:4 SignInNamesTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+                "/tests/Carina.Api.Tests/Feature/Auth/SignInSurfacesTests.cs:4 SignInSurfacesTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+                "/tests/Carina.Api.Tests/Feature/Auth/SignInViewTests.cs:4 SignInViewTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+            ],
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void DetectsAFeatureClassNamedAfterAClassTheStartUpCodeOnlyRegisters()
+    {
+        using SourceTree tree = new();
+        tree.Declare($"{Controllers}/Auth/LogInAction.cs");
+        tree.Declare("src/Carina.Api/Services/AuthSessionService.cs");
         tree.Declare("src/Carina.Api/Authentication/SessionCookiePolicy.cs");
         tree.Declare("src/Carina.Api/Authentication/TrustedProxyDiagnosis.cs");
-        tree.Declare($"{Controllers}/Auth/SessionFilter.cs");
-        tree.Write("src/Carina.Api/Program.cs", "builder.Services.AddSingleton<SessionCookiePolicy>(); builder.Services.AddScoped<SessionFilter>();");
+        tree.Write("src/Carina.Api/Program.cs", "builder.Services.AddSingleton<SessionCookiePolicy>();");
         tree.Write(
             "src/Carina.Api/Extensions/ServiceCollectionExtensions.cs",
             """
@@ -277,16 +365,24 @@ public sealed class TestLayoutRuleSelfCheckTests
 
             public static class ServiceCollectionExtensions
             {
-                public static void AddDiagnosis(this IServiceCollection services)
-                    => services.AddHostedService<TrustedProxyDiagnosis>();
+                public static void AddSessions(this IServiceCollection services)
+                {
+                    services.AddScoped<AuthSessionService>();
+                    services.AddHostedService<TrustedProxyDiagnosis>();
+                }
             }
             """);
-        tree.Test($"{ApiTests}/Feature/Auth/LogInActionTests.cs", TestLayoutRules.Feature);
+        tree.Test($"{ApiTests}/Feature/Auth/AuthSessionServiceTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Feature/Auth/SessionCookiePolicyTests.cs", TestLayoutRules.Feature);
-        tree.Test($"{ApiTests}/Feature/Auth/SessionFilterTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Feature/Auth/TrustedProxyDiagnosisTests.cs", TestLayoutRules.Feature);
 
-        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+        Assert.Equal(
+            [
+                "/tests/Carina.Api.Tests/Feature/Auth/AuthSessionServiceTests.cs:4 AuthSessionServiceTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+                "/tests/Carina.Api.Tests/Feature/Auth/SessionCookiePolicyTests.cs:4 SessionCookiePolicyTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+                "/tests/Carina.Api.Tests/Feature/Auth/TrustedProxyDiagnosisTests.cs:4 TrustedProxyDiagnosisTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+            ],
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -302,10 +398,10 @@ public sealed class TestLayoutRuleSelfCheckTests
 
         Assert.Equal(
             [
-                "/tests/Carina.Api.Tests/Feature/Auth/AuthViewsTests.cs:4 AuthViewsTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code names",
-                "/tests/Carina.Api.Tests/Feature/Auth/LogInRequestTests.cs:4 LogInRequestTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code names",
+                "/tests/Carina.Api.Tests/Feature/Auth/AuthViewsTests.cs:4 AuthViewsTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
+                "/tests/Carina.Api.Tests/Feature/Auth/LogInRequestTests.cs:4 LogInRequestTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
             ],
-            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -323,7 +419,7 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Declare("src/Carina.Api/Recording/RecordingSweep.cs");
         tree.Declare("src/Carina.Db/CarryArguments.cs");
         tree.Declare("src/Carina.Db/Migrations/20260102000000_ChannelsAreNumbered.cs");
-        tree.Write("src/Carina.Api/Program.cs", "builder.Services.AddHostedService<RecordingSweep>();");
+        tree.Write("src/Carina.Api/Program.cs", "app.UseMiddleware<RecordingSweep>();");
         tree.Test($"{ApiTests}/Feature/Auth/RecordingSweepTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Unit/App/Auth/RecordingViewsTests.cs", TestLayoutRules.Unit);
         tree.Test($"{ApiTests}/Unit/App/Auth/RecordingServiceTests.cs", TestLayoutRules.Unit);
@@ -340,19 +436,19 @@ public sealed class TestLayoutRuleSelfCheckTests
         Assert.Equal(
             [
                 "/tests/Carina.Api.Tests/DbIntegration/App/Auth/RecordingServiceTests.cs:4 RecordingServiceTests is named after no service the API declares for Auth",
-                "/tests/Carina.Api.Tests/Feature/Auth/RecordingSweepTests.cs:4 RecordingSweepTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code names",
+                "/tests/Carina.Api.Tests/Feature/Auth/RecordingSweepTests.cs:4 RecordingSweepTests is named after nothing the API maps for Auth: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
                 "/tests/Carina.Api.Tests/Unit/App/Auth/RecordingServiceTests.cs:4 RecordingServiceTests is named after nothing the API declares for Auth",
                 "/tests/Carina.Api.Tests/Unit/App/Auth/RecordingViewsTests.cs:4 RecordingViewsTests is named after nothing the API declares for Auth",
                 "/tests/Carina.Api.Tests/Unit/App/Recordings/AuthSessionServiceTests.cs:4 AuthSessionServiceTests is named after nothing the API declares for Recordings",
-                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/ChannelsAreNumberedMigrationTests.cs:4 ChannelsAreNumberedMigrationTests is named after nothing the database project declares for Auth: no type, no migration, no schema",
-                "/tests/Carina.Db.Tests/Unit/Infra/Auth/CarryArgumentsTests.cs:4 CarryArgumentsTests is named after nothing the database project declares for Auth: no type, no migration, no schema",
+                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/ChannelsAreNumberedMigrationTests.cs:4 ChannelsAreNumberedMigrationTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
+                "/tests/Carina.Db.Tests/Unit/Infra/Auth/CarryArgumentsTests.cs:4 CarryArgumentsTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
                 "/tests/Carina.Domain.Tests/Unit/Auth/ChannelTests.cs:4 ChannelTests is named after nothing the domain declares for Auth",
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/ChannelLineUpDomainServiceTests.cs:4 ChannelLineUpDomainServiceTests is named after nothing the domain declares for Auth: no repository behind its interface, no domain service",
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/ChannelRepositoryTests.cs:4 ChannelRepositoryTests is named after nothing the domain declares for Auth: no repository behind its interface, no domain service",
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/ChannelFileTests.cs:4 ChannelFileTests is named after nothing the infrastructure declares for Auth",
                 "/tests/Carina.Infrastructure.Tests/Unit/Infra/Auth/ChannelFileTests.cs:4 ChannelFileTests is named after nothing the infrastructure declares for Auth",
             ],
-            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -372,7 +468,7 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Api.Tests/DbIntegration/App/Auth/LogInActionTests.cs:4 LogInActionTests is named after no service the API declares for Auth",
                 "/tests/Carina.Api.Tests/DbIntegration/App/Auth/SessionCookiePolicyTests.cs:4 SessionCookiePolicyTests is named after no service the API declares for Auth",
             ],
-            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -396,7 +492,7 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/AuthSessionServiceTests.cs:4 AuthSessionServiceTests is named after nothing the infrastructure declares for Auth",
                 "/tests/Carina.Infrastructure.Tests/Unit/Infra/Auth/OidcSettingsTests.cs:4 OidcSettingsTests is named after nothing the infrastructure declares for Auth",
             ],
-            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -412,7 +508,7 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Domain.Tests/Unit/Auth/OidcSettings.cs:4 OidcSettings is named after nothing the domain declares for Auth",
                 "/tests/Carina.Domain.Tests/Unit/Auth/OidcSettingsChecks.cs:4 OidcSettingsChecks is named after nothing the domain declares for Auth",
             ],
-            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -444,7 +540,7 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/PasswordHasherTests.cs", TestLayoutRules.Unit);
         tree.Test($"{DomainTests}/Recordings/NothingAtAllTests.cs", TestLayoutRules.Unit);
 
-        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -464,7 +560,7 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionClockTests.cs:4 SessionClockTests is named after nothing the domain declares for Auth: no repository behind its interface, no domain service",
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionExpiryDomainServiceTests.cs:4 SessionExpiryDomainServiceTests is named after nothing the domain declares for Auth: no repository behind its interface, no domain service",
             ],
-            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -477,7 +573,7 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Test($"{InfrastructureTests}/DbIntegration/Domain/Auth/AuthSessionRepositoryTests.cs", TestLayoutRules.DbIntegration);
         tree.Test($"{InfrastructureTests}/DbIntegration/Domain/Auth/SessionExpiryDomainServiceTests.cs", TestLayoutRules.DbIntegration);
 
-        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -494,25 +590,47 @@ public sealed class TestLayoutRuleSelfCheckTests
 
         Assert.Equal(
             [
-                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/DesignerMigrationTests.cs:4 DesignerMigrationTests is named after nothing the database project declares for Auth: no type, no migration, no schema",
-                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/SessionTableTests.cs:4 SessionTableTests is named after nothing the database project declares for Auth: no type, no migration, no schema",
-                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/SessionsAreHashedMigrationTests.cs:4 SessionsAreHashedMigrationTests is named after nothing the database project declares for Auth: no type, no migration, no schema",
-                "/tests/Carina.Db.Tests/Unit/Infra/Auth/SessionsAreKeptAsHashesTests.cs:4 SessionsAreKeptAsHashesTests is named after nothing the database project declares for Auth: no type, no migration, no schema",
+                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/DesignerMigrationTests.cs:4 DesignerMigrationTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
+                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/SessionTableTests.cs:4 SessionTableTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
+                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/SessionsAreHashedMigrationTests.cs:4 SessionsAreHashedMigrationTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
+                "/tests/Carina.Db.Tests/Unit/Infra/Auth/SessionsAreKeptAsHashesTests.cs:4 SessionsAreKeptAsHashesTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
             ],
-            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
-    public void LetsOffADatabaseProjectTestNamedAfterATypeAMigrationOrASchema()
+    public void LetsOffADatabaseProjectTestNamedAfterATypeAMigrationTheSchemaOfItsAreaOrASchemaListedForIt()
     {
         using SourceTree tree = new();
         tree.Declare("src/Carina.Db/MigrationLock.cs");
         tree.Declare("src/Carina.Db/Migrations/20260101000000_SessionsAreKeptAsHashes.cs");
         tree.Test($"{DbTests}/DbIntegration/Infra/Auth/AuthSchemaTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{DbTests}/DbIntegration/Infra/Auth/SessionSchemaTests.cs", TestLayoutRules.DbIntegration);
         tree.Test($"{DbTests}/DbIntegration/Infra/Auth/SessionsAreKeptAsHashesMigrationTests.cs", TestLayoutRules.DbIntegration);
         tree.Test($"{DbTests}/Unit/Infra/Auth/MigrationLockTests.cs", TestLayoutRules.Unit);
 
-        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere));
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void DetectsADatabaseProjectTestNamedAfterTheSchemaOfAnotherAreaOrOfNoArea()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Domain/Auth/OidcSettings.cs");
+        tree.Declare("src/Carina.Domain/Recordings/Recording.cs");
+        tree.Test($"{DbTests}/DbIntegration/Infra/Auth/RecordingsSchemaTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{DbTests}/DbIntegration/Infra/Auth/RecordingSchemaTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{DbTests}/DbIntegration/Infra/Auth/SchemaTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{DbTests}/DbIntegration/Infra/Recordings/SessionSchemaTests.cs", TestLayoutRules.DbIntegration);
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/RecordingSchemaTests.cs:4 RecordingSchemaTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
+                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/RecordingsSchemaTests.cs:4 RecordingsSchemaTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
+                "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/SchemaTests.cs:4 SchemaTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
+                "/tests/Carina.Db.Tests/DbIntegration/Infra/Recordings/SessionSchemaTests.cs:4 SessionSchemaTests is named after nothing the database project declares for Recordings: no type, no migration, no schema of the area",
+            ],
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
 
     [Fact]
@@ -687,7 +805,7 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Domain.Tests/Auth/OidcSettingsTests.cs:4 OidcSettingsTests is under the old folder Auth, which is not listed as yet to move",
                 "/tests/Carina.Infrastructure.Tests/Auth/Sessions/SessionStoreTests.cs:4 SessionStoreTests is under the old folder Auth, which is not listed as yet to move",
             ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere));
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }
 
     [Fact]
@@ -698,6 +816,7 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Test($"{ApiTests}/FeatureTest/LogInActionTests.cs", TestLayoutRules.Feature);
         tree.Test($"{ApiTests}/Unit/SessionCookiePolicyTests.cs", TestLayoutRules.Unit);
         tree.Test($"{DbTests}/AuthSchemaTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{DbTests}/SessionSchemaTests.cs", TestLayoutRules.DbIntegration);
         tree.Test($"{DomainTests}/OidcSettingsTests.cs", TestLayoutRules.Unit);
         tree.Test($"{InfrastructureTests}/AuthSessionRepositoryTests.cs", TestLayoutRules.DbIntegration);
 
@@ -706,10 +825,11 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Api.Tests/FeatureTest/LogInActionTests.cs:4 LogInActionTests is named after a type of Auth, which has moved",
                 "/tests/Carina.Api.Tests/Unit/SessionCookiePolicyTests.cs:4 SessionCookiePolicyTests is named after a type of Auth, which has moved",
                 "/tests/Carina.Db.Tests/AuthSchemaTests.cs:4 AuthSchemaTests is named after a type of Auth, which has moved",
+                "/tests/Carina.Db.Tests/SessionSchemaTests.cs:4 SessionSchemaTests is named after a type of Auth, which has moved",
                 "/tests/Carina.Domain.Tests/OidcSettingsTests.cs:4 OidcSettingsTests is named after a type of Auth, which has moved",
                 "/tests/Carina.Infrastructure.Tests/AuthSessionRepositoryTests.cs:4 AuthSessionRepositoryTests is named after a type of Auth, which has moved",
             ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere));
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }
 
     [Fact]
@@ -731,7 +851,7 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Db.Tests/MigrationLockTests.cs:4 MigrationLockTests is named after a type of Auth, which has moved",
                 "/tests/Carina.Db.Tests/SessionsAreKeptAsHashesMigrationTests.cs:4 SessionsAreKeptAsHashesMigrationTests is named after a type of Auth, which has moved",
             ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere));
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }
 
     [Fact]
@@ -746,7 +866,7 @@ public sealed class TestLayoutRuleSelfCheckTests
 
         Assert.Equal(
             ["/tests/Carina.Api.Tests/FeatureTest/SignInJourneyTests.cs:4 SignInJourneyTests speaks only to routes of areas that have moved"],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere));
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }
 
     [Fact]
@@ -759,7 +879,7 @@ public sealed class TestLayoutRuleSelfCheckTests
 
         Assert.Equal(
             ["/tests/Carina.Api.Tests/Unit/DeviceLabelTests.cs:4 DeviceLabelTests has a namesake in the layout"],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere));
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }
 
     [Fact]
@@ -775,7 +895,7 @@ public sealed class TestLayoutRuleSelfCheckTests
 
         Assert.Equal(
             ["/tests/Carina.Api.Tests/FeatureTest/LogInActionTests.cs:4 LogInActionTests is named after a type of Auth, which has moved"],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere));
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }
 
     [Fact]
@@ -801,7 +921,7 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Test($"{ApiTests}/Unit/App/Auth/DeviceLabelTests.cs", TestLayoutRules.Unit);
         tree.Test($"{InfrastructureTests}/DeviceLabelTests.cs", TestLayoutRules.Unit);
 
-        Assert.Empty(TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere));
+        Assert.Empty(TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }
 
     [Fact]
@@ -814,6 +934,7 @@ public sealed class TestLayoutRuleSelfCheckTests
         Assert.Empty(TestLayoutRules.ClassesLeftInTheOldPlace(
             TestLayoutRules.Read(tree.Root),
             ["Persistence", "Recordings"],
+            [],
             []));
     }
 
@@ -833,7 +954,7 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Domain.Tests/ClockTests.cs:4 ClockTests is outside the layout, and no area is left to move",
                 "/tests/Carina.Domain.Tests/Recordings/RecordingTests.cs:4 RecordingTests is under the old folder Recordings, which is not listed as yet to move",
             ],
-            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), [], Elsewhere));
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), [], Elsewhere, Schemas));
     }
 
     [Fact]
@@ -853,7 +974,7 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "Nowhere is no area of the product code",
                 "Quality has no test left in an old place",
             ],
-            TestLayoutRules.AreasWronglyListed(TestLayoutRules.Read(tree.Root), ["Auth", "Nowhere", "Quality", "Recordings"], Elsewhere));
+            TestLayoutRules.AreasWronglyListed(TestLayoutRules.Read(tree.Root), ["Auth", "Nowhere", "Quality", "Recordings"], Elsewhere, Schemas));
     }
 
     [Fact]
@@ -885,7 +1006,8 @@ public sealed class TestLayoutRuleSelfCheckTests
         Assert.Empty(TestLayoutRules.AreasWronglyListed(
             TestLayoutRules.Read(tree.Root),
             ["Auth", "Channels", "Live", "Quality", "Recordings"],
-            Elsewhere));
+            Elsewhere,
+            Schemas));
     }
 
     [Fact]
@@ -926,6 +1048,51 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Declare("src/Carina.Db/Migrations/20260101000000_SessionsAreKeptAsHashes.cs");
 
         Assert.Empty(TestLayoutRules.SourcesWronglyListed(TestLayoutRules.Read(tree.Root), Elsewhere));
+    }
+
+    [Fact]
+    public void DetectsASchemaListedForNoAreaUnderANameThatNeedsNoListingOrThatNoTestClassBears()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Domain/Auth/OidcSettings.cs");
+        tree.Declare("src/Carina.Domain/Recordings/Recording.cs");
+        tree.Test($"{DbTests}/DbIntegration/Infra/Auth/AuthSchemaTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{DbTests}/DbIntegration/Infra/Auth/RecordingsSchemaTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{DbTests}/DbIntegration/Infra/Auth/SessionSchemaTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{DbTests}/DbIntegration/Infra/Auth/SessionTableTests.cs", TestLayoutRules.DbIntegration);
+        tree.Test($"{InfrastructureTests}/DbIntegration/Infra/Auth/TokenSchemaTests.cs", TestLayoutRules.DbIntegration);
+
+        Assert.Equal(
+            [
+                "AuthSchema is listed for Auth, which needs no listing for its own name",
+                "GoneSchema is listed for Auth but the database test project has no class GoneSchemaTests",
+                "RecordingsSchema is listed for Auth but is named after Recordings",
+                "SessionSchema is listed for Nowhere, which is no area of the product code",
+                "SessionSchema is listed more than once",
+                "SessionTable is listed for Auth but does not end in Schema",
+                "TokenSchema is listed for Auth but the database test project has no class TokenSchemaTests",
+            ],
+            TestLayoutRules.SchemasWronglyListed(
+                TestLayoutRules.Read(tree.Root),
+                [
+                    new("Nowhere", "SessionSchema"),
+                    new("Auth", "SessionTable"),
+                    new("Auth", "AuthSchema"),
+                    new("Auth", "RecordingsSchema"),
+                    new("Auth", "GoneSchema"),
+                    new("Auth", "TokenSchema"),
+                    new("Auth", "SessionSchema"),
+                ]));
+    }
+
+    [Fact]
+    public void LetsOffASchemaListedForAnAreaUnderANameATestClassOfTheDatabaseProjectBears()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Domain/Auth/OidcSettings.cs");
+        tree.Test($"{DbTests}/DbIntegration/Infra/Auth/SessionSchemaTests.cs", TestLayoutRules.DbIntegration);
+
+        Assert.Empty(TestLayoutRules.SchemasWronglyListed(TestLayoutRules.Read(tree.Root), Schemas));
     }
 
     private static void DeclareAuthAndRecordings(SourceTree tree)

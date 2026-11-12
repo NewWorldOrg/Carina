@@ -77,6 +77,11 @@ public static class TestLayoutRules
         new("Auth", "src/Carina.Infrastructure/Persistence/Repositories/OidcSettingsRepository.cs"),
     ];
 
+    /// <summary>
+    /// The schema tests that are not named after the area alone: the area and the name of the class without its ending.
+    /// </summary>
+    public static readonly IReadOnlyList<AreaSchema> SchemasNotNamedAfterTheArea = [];
+
     private const string ApiTests = "Carina.Api.Tests";
 
     private const string DomainTests = "Carina.Domain.Tests";
@@ -110,6 +115,18 @@ public static class TestLayoutRules
     private const string Schema = "Schema";
 
     private const string Hole = "*";
+
+    private const string MiddlewareCall = "Use";
+
+    private const string EndpointCall = "Map";
+
+    private const string SchemeCall = "AddScheme";
+
+    private const string FilterCall = "Add";
+
+    private const string EndpointFilterCall = "AddEndpointFilter";
+
+    private const string Filters = "Filters";
 
     private static readonly Layer ApiLayer = new(ApiSource, Controllers);
 
@@ -175,7 +192,7 @@ public static class TestLayoutRules
                     .Select(declaration => new Declared(declaration.Identifier.ValueText, file.Relative)))
                 .ToLookup(declared => declared.Name, declared => declared.Relative, StringComparer.Ordinal),
             migrations,
-            product.Where(file => IsStartUp(file.Relative)).SelectMany(file => Identifiers(file.Root)).ToHashSet(StringComparer.Ordinal),
+            product.Where(file => IsStartUp(file.Relative)).SelectMany(file => ServingRequests(file.Root)).ToHashSet(StringComparer.Ordinal),
             product
                 .Where(file => file.Relative.StartsWith(Controllers, StringComparison.Ordinal))
                 .SelectMany(file => Routes(file, constants))
@@ -204,8 +221,14 @@ public static class TestLayoutRules
             ? []
             : [$"is a {file.Seat.Place!.Kind} test but carries {Carried(type)}"]);
 
-    public static IReadOnlyList<string> ClassesNamedAfterNothing(Reading reading, IReadOnlyList<AreaSource> elsewhere)
-        => Offences(InTheLayout(reading), (file, type) => IsNamedAfterItsSubject(reading, file, type, elsewhere)
+    public static IReadOnlyList<string> ClassesServingRequests(Reading reading)
+        => reading.ServingRequests.Order(StringComparer.Ordinal).ToArray();
+
+    public static IReadOnlyList<string> ClassesNamedAfterNothing(
+        Reading reading,
+        IReadOnlyList<AreaSource> elsewhere,
+        IReadOnlyList<AreaSchema> schemas)
+        => Offences(InTheLayout(reading), (file, type) => IsNamedAfterItsSubject(reading, file, type, new Listed(elsewhere, schemas))
             ? []
             : [$"is named after {Missing(file.Seat.Place!.Subject, file.Seat.Area)}"]);
 
@@ -242,18 +265,20 @@ public static class TestLayoutRules
     public static IReadOnlyList<string> ClassesLeftInTheOldPlace(
         Reading reading,
         IReadOnlyCollection<string> notYetMoved,
-        IReadOnlyList<AreaSource> elsewhere)
+        IReadOnlyList<AreaSource> elsewhere,
+        IReadOnlyList<AreaSchema> schemas)
         => Offences(
             reading.Tests.Where(file => file.Seat.Standing is Standing.InAnOldFolder or Standing.InAFlatOldPlace),
-            (file, type) => Ties(reading, file, type, notYetMoved, elsewhere).Take(1));
+            (file, type) => Ties(reading, file, type, notYetMoved, new Listed(elsewhere, schemas)).Take(1));
 
     public static IReadOnlyList<string> AreasWronglyListed(
         Reading reading,
         IReadOnlyCollection<string> notYetMoved,
-        IReadOnlyList<AreaSource> elsewhere)
+        IReadOnlyList<AreaSource> elsewhere,
+        IReadOnlyList<AreaSchema> schemas)
     {
         HashSet<string> inTheLayout = InTheLayout(reading).Select(file => file.Seat.Area).ToHashSet(StringComparer.Ordinal);
-        HashSet<string> inTheOldPlace = AreasWithSomethingLeft(reading, elsewhere).ToHashSet(StringComparer.Ordinal);
+        HashSet<string> inTheOldPlace = AreasWithSomethingLeft(reading, new Listed(elsewhere, schemas)).ToHashSet(StringComparer.Ordinal);
 
         return notYetMoved
             .SelectMany(area => WrongListings(area, reading.Areas, inTheLayout, inTheOldPlace))
@@ -304,14 +329,53 @@ public static class TestLayoutRules
         }
     }
 
-    private static IEnumerable<string> AreasWithSomethingLeft(Reading reading, IReadOnlyList<AreaSource> elsewhere)
+    public static IReadOnlyList<string> SchemasWronglyListed(Reading reading, IReadOnlyList<AreaSchema> schemas)
+        => schemas
+            .SelectMany(schema => WrongSchemas(reading, schema))
+            .Concat(schemas
+                .GroupBy(schema => schema.Name, StringComparer.Ordinal)
+                .Where(listings => listings.Count() > 1)
+                .Select(listings => $"{listings.Key} is listed more than once"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    private static IEnumerable<string> WrongSchemas(Reading reading, AreaSchema schema)
+    {
+        if (!reading.Areas.Contains(schema.Area))
+        {
+            yield return $"{schema.Name} is listed for {schema.Area}, which is no area of the product code";
+        }
+
+        if (!schema.Name.EndsWith(Schema, StringComparison.Ordinal))
+        {
+            yield return $"{schema.Name} is listed for {schema.Area} but does not end in {Schema}";
+        }
+
+        foreach (string named in reading.Areas.Where(area => string.Equals(schema.Name, area + Schema, StringComparison.Ordinal)))
+        {
+            yield return string.Equals(named, schema.Area, StringComparison.Ordinal)
+                ? $"{schema.Name} is listed for {schema.Area}, which needs no listing for its own name"
+                : $"{schema.Name} is listed for {schema.Area} but is named after {named}";
+        }
+
+        if (!reading.Tests.Any(file => IsTheSchemaTestOf(file, schema)))
+        {
+            yield return $"{schema.Name} is listed for {schema.Area} but the database test project has no class {schema.Name}{Suffix}";
+        }
+    }
+
+    private static bool IsTheSchemaTestOf(TestFile file, AreaSchema schema)
+        => string.Equals(file.Project, DbTests, StringComparison.Ordinal)
+           && file.Classes.Any(type => string.Equals(type.Name, schema.Name + Suffix, StringComparison.Ordinal));
+
+    private static IEnumerable<string> AreasWithSomethingLeft(Reading reading, Listed listed)
     {
         TestFile[] flat = reading.Tests.Where(file => file.Seat.Standing == Standing.InAFlatOldPlace).ToArray();
 
         return reading.Tests
             .Where(file => file.Seat.Standing == Standing.InAnOldFolder)
             .Select(file => file.Seat.Area)
-            .Concat(flat.SelectMany(file => file.Classes.SelectMany(type => AreasOf(reading, SubjectOf(type.Name), elsewhere))))
+            .Concat(flat.SelectMany(file => file.Classes.SelectMany(type => AreasOf(reading, SubjectOf(type.Name), listed))))
             .Concat(reading.Routes
                 .Where(route => flat.Any(file => IsAnOldFeatureTest(file) && file.ApiPaths.Any(path => Reaches(path, route.Template))))
                 .Select(route => route.Area));
@@ -355,8 +419,9 @@ public static class TestLayoutRules
     private static string Carried(TestClass type)
         => type.Categories.Count == 0 ? "no category" : string.Join(", ", type.Categories);
 
-    private static bool IsNamedAfterItsSubject(Reading reading, TestFile file, TestClass type, IReadOnlyList<AreaSource> elsewhere)
+    private static bool IsNamedAfterItsSubject(Reading reading, TestFile file, TestClass type, Listed listed)
     {
+        IReadOnlyList<AreaSource> elsewhere = listed.Sources;
         string subject = SubjectOf(type.Name);
         string area = file.Seat.Area;
 
@@ -367,26 +432,26 @@ public static class TestLayoutRules
 
         return file.Seat.Place!.Subject switch
         {
-            Subject.Endpoint => IsAnActionOf(reading, subject, area) || IsNamedByTheStartUp(reading, subject, area, elsewhere),
+            Subject.Endpoint => IsAnActionOf(reading, subject, area) || ServesRequests(reading, subject, area, elsewhere),
             Subject.ApiType => IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere),
             Subject.AppService => subject.EndsWith(Service, StringComparison.Ordinal) && IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere),
             Subject.DomainType => IsDeclaredFor(reading, subject, area, DomainLayer, elsewhere),
             Subject.DomainPort => IsBehindTheDomain(subject) && IsDeclaredFor(reading, PortOf(subject), area, DomainLayer, elsewhere),
             Subject.InfrastructureType => IsDeclaredFor(reading, subject, area, InfrastructureLayer, elsewhere),
-            _ => IsOfTheDatabaseProject(reading, subject, area, elsewhere),
+            _ => IsOfTheDatabaseProject(reading, subject, area, listed),
         };
     }
 
     private static string Missing(Subject subject, string area)
         => subject switch
         {
-            Subject.Endpoint => $"nothing the API maps for {area}: no action of the area, no class of the area the start-up code names",
+            Subject.Endpoint => $"nothing the API maps for {area}: no action of the area, no class of the area the start-up code puts in the request pipeline or maps an endpoint to",
             Subject.ApiType => $"nothing the API declares for {area}",
             Subject.AppService => $"no service the API declares for {area}",
             Subject.DomainType => $"nothing the domain declares for {area}",
             Subject.DomainPort => $"nothing the domain declares for {area}: no repository behind its interface, no domain service",
             Subject.InfrastructureType => $"nothing the infrastructure declares for {area}",
-            _ => $"nothing the database project declares for {area}: no type, no migration, no schema",
+            _ => $"nothing the database project declares for {area}: no type, no migration, no schema of the area",
         };
 
     private static bool IsAnActionOf(Reading reading, string subject, string area)
@@ -396,14 +461,16 @@ public static class TestLayoutRules
     private static bool IsBehindTheDomain(string subject)
         => subject.EndsWith(Repository, StringComparison.Ordinal) || subject.EndsWith(DomainServiceRules.Suffix, StringComparison.Ordinal);
 
-    private static bool IsNamedByTheStartUp(Reading reading, string subject, string area, IReadOnlyList<AreaSource> elsewhere)
-        => reading.NamedByTheStartUp.Contains(subject) && IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere);
+    private static bool ServesRequests(Reading reading, string subject, string area, IReadOnlyList<AreaSource> elsewhere)
+        => reading.ServingRequests.Contains(subject) && IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere);
 
-    private static bool IsOfTheDatabaseProject(Reading reading, string subject, string area, IReadOnlyList<AreaSource> elsewhere)
-        => subject.EndsWith(Schema, StringComparison.Ordinal)
+    private static bool IsOfTheDatabaseProject(Reading reading, string subject, string area, Listed listed)
+        => string.Equals(subject, area + Schema, StringComparison.Ordinal)
+           || listed.Schemas.Any(schema => string.Equals(schema.Area, area, StringComparison.Ordinal)
+                                           && string.Equals(schema.Name, subject, StringComparison.Ordinal))
            || reading.Types[subject]
                .Concat(reading.Migrations[MigrationOf(subject)])
-               .Any(relative => relative.StartsWith(DbSource, StringComparison.Ordinal) && IsListedFor(relative, area, elsewhere));
+               .Any(relative => relative.StartsWith(DbSource, StringComparison.Ordinal) && IsListedFor(relative, area, listed.Sources));
 
     private static bool IsDeclaredFor(Reading reading, string name, string area, Layer layer, IReadOnlyList<AreaSource> elsewhere)
         => reading.Types[name].Any(relative => relative.StartsWith($"{layer.Areas}{area}/", StringComparison.Ordinal)
@@ -457,7 +524,7 @@ public static class TestLayoutRules
         TestFile file,
         TestClass type,
         IReadOnlyCollection<string> notYetMoved,
-        IReadOnlyList<AreaSource> elsewhere)
+        Listed listed)
     {
         if (file.Seat.Standing == Standing.InAnOldFolder)
         {
@@ -471,7 +538,7 @@ public static class TestLayoutRules
             return ["is outside the layout, and no area is left to move"];
         }
 
-        return AreasOf(reading, SubjectOf(type.Name), elsewhere)
+        return AreasOf(reading, SubjectOf(type.Name), listed)
             .Where(area => !notYetMoved.Contains(area))
             .Order(StringComparer.Ordinal)
             .Select(area => $"is named after a type of {area}, which has moved")
@@ -479,15 +546,16 @@ public static class TestLayoutRules
             .Concat(HasANamesakeInTheLayout(reading, file, type) ? ["has a namesake in the layout"] : []);
     }
 
-    private static IEnumerable<string> AreasOf(Reading reading, string subject, IReadOnlyList<AreaSource> elsewhere)
+    private static IEnumerable<string> AreasOf(Reading reading, string subject, Listed listed)
         => subject.Length == 0
             ? []
             : reading.Types[subject]
                 .Concat(reading.Types["I" + subject])
                 .Concat(reading.Migrations[MigrationOf(subject)])
-                .Select(relative => AreaOf(relative, elsewhere))
+                .Select(relative => AreaOf(relative, listed.Sources))
                 .Where(area => area.Length > 0)
                 .Concat(reading.Areas.Where(area => string.Equals(subject, area + Schema, StringComparison.Ordinal)))
+                .Concat(listed.Schemas.Where(schema => string.Equals(schema.Name, subject, StringComparison.Ordinal)).Select(schema => schema.Area))
                 .Distinct(StringComparer.Ordinal);
 
     private static string AreaOf(string relative, IReadOnlyList<AreaSource> elsewhere)
@@ -662,6 +730,64 @@ public static class TestLayoutRules
             .Where(template => template.Length > 0)
             .Select(template => new Route(ControllerArea(file.Relative), template));
 
+    private static IEnumerable<string> ServingRequests(SyntaxNode root)
+        => root.DescendantNodes().OfType<InvocationExpressionSyntax>().SelectMany(ServingRequests).Where(name => name.Length > 0);
+
+    private static IEnumerable<string> ServingRequests(InvocationExpressionSyntax call)
+    {
+        SimpleNameSyntax? method = call.Expression switch
+        {
+            MemberAccessExpressionSyntax access => access.Name,
+            SimpleNameSyntax simple => simple,
+            _ => null,
+        };
+        string name = method?.Identifier.ValueText ?? string.Empty;
+        IEnumerable<string> generic = method is GenericNameSyntax named ? named.TypeArgumentList.Arguments.Select(Simple) : [];
+        IEnumerable<ExpressionSyntax> arguments = call.ArgumentList.Arguments.Select(argument => argument.Expression);
+
+        if (name.StartsWith(MiddlewareCall, StringComparison.Ordinal) || IsAFilterCall(call, name))
+        {
+            return generic.Concat(arguments.Select(Named));
+        }
+
+        if (name.StartsWith(EndpointCall, StringComparison.Ordinal))
+        {
+            return generic.Concat(arguments.OfType<LambdaExpressionSyntax>().Select(Handler));
+        }
+
+        return string.Equals(name, SchemeCall, StringComparison.Ordinal) ? generic.TakeLast(1) : [];
+    }
+
+    private static bool IsAFilterCall(InvocationExpressionSyntax call, string name)
+        => string.Equals(name, EndpointFilterCall, StringComparison.Ordinal)
+           || (name.StartsWith(FilterCall, StringComparison.Ordinal)
+               && call.Expression is MemberAccessExpressionSyntax { Expression: ExpressionSyntax owner }
+               && string.Equals(Simple(owner is MemberAccessExpressionSyntax access ? access.Name : owner), Filters, StringComparison.Ordinal));
+
+    private static string Named(ExpressionSyntax argument)
+        => argument switch
+        {
+            MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax owner } => owner.Identifier.ValueText,
+            TypeOfExpressionSyntax asked => Simple(asked.Type),
+            ObjectCreationExpressionSyntax created => Simple(created.Type),
+            _ => string.Empty,
+        };
+
+    private static string Handler(LambdaExpressionSyntax lambda)
+    {
+        IEnumerable<ParameterSyntax> parameters = lambda switch
+        {
+            ParenthesizedLambdaExpressionSyntax several => several.ParameterList.Parameters,
+            SimpleLambdaExpressionSyntax one => [one.Parameter],
+            _ => [],
+        };
+
+        return lambda.ExpressionBody is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax owner } }
+               && !parameters.Any(parameter => string.Equals(parameter.Identifier.ValueText, owner.Identifier.ValueText, StringComparison.Ordinal))
+            ? owner.Identifier.ValueText
+            : string.Empty;
+    }
+
     private static bool IsStartUp(string relative)
         => string.Equals(relative, ApiSource + "Program.cs", StringComparison.Ordinal)
            || relative.StartsWith(ApiSource + "Extensions/", StringComparison.Ordinal);
@@ -716,7 +842,7 @@ public static class TestLayoutRules
             IReadOnlySet<string> sources,
             ILookup<string, string> types,
             ILookup<string, string> migrations,
-            IReadOnlySet<string> namedByTheStartUp,
+            IReadOnlySet<string> servingRequests,
             IReadOnlyList<Route> routes,
             IReadOnlySet<string> areas,
             IReadOnlyList<TestFile> tests)
@@ -724,7 +850,7 @@ public static class TestLayoutRules
             Sources = sources;
             Types = types;
             Migrations = migrations;
-            NamedByTheStartUp = namedByTheStartUp;
+            ServingRequests = servingRequests;
             Routes = routes;
             Areas = areas;
             Tests = tests;
@@ -736,7 +862,7 @@ public static class TestLayoutRules
 
         internal ILookup<string, string> Migrations { get; }
 
-        internal IReadOnlySet<string> NamedByTheStartUp { get; }
+        internal IReadOnlySet<string> ServingRequests { get; }
 
         internal IReadOnlyList<Route> Routes { get; }
 
@@ -753,6 +879,9 @@ public static class TestLayoutRules
                 ? relative.StartsWith("/" + Location, StringComparison.Ordinal)
                 : string.Equals(relative, "/" + Location, StringComparison.Ordinal);
     }
+
+    /// <summary>A schema test of an area whose name is not the area's own: <c>Name</c> is the class name without <c>Tests</c>.</summary>
+    public sealed record AreaSchema(string Area, string Name);
 
     internal sealed record TestFile(
         string Relative,
@@ -779,6 +908,8 @@ public static class TestLayoutRules
     }
 
     internal readonly record struct Route(string Area, string Template);
+
+    private readonly record struct Listed(IReadOnlyList<AreaSource> Sources, IReadOnlyList<AreaSchema> Schemas);
 
     private readonly record struct Layer(string Source, string Areas);
 

@@ -14,7 +14,10 @@ public sealed class TestLayoutRuleTests
 
     [Fact(DisplayName = "a test class in the layout is named after what it tests")]
     public void ATestClassInTheLayoutIsNamedAfterWhatItTests()
-        => Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(Repository, TestLayoutRules.SourcesOutsideTheFolderOfTheArea));
+        => Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(
+            Repository,
+            TestLayoutRules.SourcesOutsideTheFolderOfTheArea,
+            TestLayoutRules.SchemasNotNamedAfterTheArea));
 
     [Fact(DisplayName = "every action of an area that has feature tests has its feature class")]
     public void EveryActionOfAnAreaWithFeatureClassesHasItsFeatureClass()
@@ -33,18 +36,39 @@ public sealed class TestLayoutRuleTests
         => Assert.Empty(TestLayoutRules.ClassesLeftInTheOldPlace(
             Repository,
             TestLayoutRules.AreasNotYetMoved,
-            TestLayoutRules.SourcesOutsideTheFolderOfTheArea));
+            TestLayoutRules.SourcesOutsideTheFolderOfTheArea,
+            TestLayoutRules.SchemasNotNamedAfterTheArea));
 
     [Fact(DisplayName = "the list of areas not yet moved names only areas with tests left in an old place and none in the layout")]
     public void TheListOfAreasNotYetMovedNamesOnlyAreasStillToMove()
         => Assert.Empty(TestLayoutRules.AreasWronglyListed(
             Repository,
             TestLayoutRules.AreasNotYetMoved,
-            TestLayoutRules.SourcesOutsideTheFolderOfTheArea));
+            TestLayoutRules.SourcesOutsideTheFolderOfTheArea,
+            TestLayoutRules.SchemasNotNamedAfterTheArea));
 
     [Fact(DisplayName = "the list of what an area keeps outside its own folder names only areas and sources that exist")]
     public void TheListOfSourcesOutsideTheFolderOfTheAreaNamesOnlyWhatExists()
         => Assert.Empty(TestLayoutRules.SourcesWronglyListed(Repository, TestLayoutRules.SourcesOutsideTheFolderOfTheArea));
+
+    [Fact(DisplayName = "the list of schema tests not named after the area names only areas and test classes that exist")]
+    public void TheListOfSchemasNotNamedAfterTheAreaNamesOnlyWhatExists()
+        => Assert.Empty(TestLayoutRules.SchemasWronglyListed(Repository, TestLayoutRules.SchemasNotNamedAfterTheArea));
+
+    [Fact(DisplayName = "the start-up code is read for what it puts in the request pipeline or maps an endpoint to, not for what it registers")]
+    public void TheStartUpCodeIsReadForWhatServesRequestsNotForWhatItRegisters()
+    {
+        IReadOnlyList<string> classes = TestLayoutRules.ClassesServingRequests(Repository);
+
+        Assert.Contains("DefaultDenyAuthenticationMiddleware", classes);
+        Assert.Contains("SessionAuthenticationHandler", classes);
+        Assert.Contains("SessionCookiePolicy", classes);
+        Assert.Contains("AppEventStream", classes);
+        Assert.Contains("RecordingHlsDelivery", classes);
+        Assert.DoesNotContain("AuthSessionService", classes);
+        Assert.DoesNotContain("TrustedProxyDiagnosis", classes);
+        Assert.DoesNotContain("PlaybackService", classes);
+    }
 
     [Fact(DisplayName = "the rules have test classes in the layout to bite on")]
     public void TheRulesHaveTestClassesInTheLayoutToBiteOn()
