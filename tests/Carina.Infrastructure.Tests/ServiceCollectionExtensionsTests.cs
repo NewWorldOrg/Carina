@@ -9,6 +9,7 @@ using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Machines;
 using Carina.Domain.Migration;
+using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -525,6 +526,15 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.IsType<LearningWorklist>(scope.ServiceProvider.GetRequiredService<ILearningWorklist>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>());
         Assert.Same(LearningFollowSettings.Default, provider.GetRequiredService<LearningFollowSettings>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of the notifications, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheNotifications()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeWatchDomainService>());
     }
 
     [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]

@@ -1,6 +1,5 @@
 using Carina.Api.Common;
 using Carina.Domain.Base;
-using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
 
@@ -18,10 +17,7 @@ public sealed record ProgrammeWatchAsked(
 /// </summary>
 public sealed class NotificationWatchService(
     IProgrammeWatchRepository watches,
-    IProgrammeRepository programmes,
-    IBroadcastServiceRepository stations,
-    INotificationDestinationRepository destinations,
-    INotificationSettingsRepository settings,
+    ProgrammeWatchDomainService watching,
     INotificationRuleRepository rules,
     IAtomicWrite writes,
     TimeProvider clock)
@@ -55,34 +51,23 @@ public sealed class NotificationWatchService(
     {
         ArgumentNullException.ThrowIfNull(asked);
 
-        Programme? announced = await programmes.FindAsync(asked.Programme, cancellationToken);
-
-        if (announced is null || announced.StartsAt != asked.ProgrammeStartsAt)
-        {
-            return Failure(UnknownProgramme, NotificationFailure.NoSuchProgramme);
-        }
-
-        DateTime now = Now();
-        int leadMinutes = asked.LeadMinutes
-            ?? NotificationSettings.LeadMinutesOver(await settings.ReadAsync(cancellationToken));
-
-        if (ProgrammeWatch.RefusalToAsk(announced, leadMinutes, now) is { } refusal)
-        {
-            return Refused(refusal);
-        }
-
-        BroadcastService? station = await stations.FindAsync(
-            asked.Programme.NetworkId,
-            asked.Programme.ServiceId,
+        ProgrammeWatchConsidered considered = await watching.ConsiderAsync(
+            asked.Programme,
+            asked.ProgrammeStartsAt,
+            asked.LeadMinutes,
             cancellationToken);
-        WatchedBroadcast broadcast = WatchedBroadcast.Of(announced, station?.Name);
+
+        if (considered.Candidate is not { } candidate)
+        {
+            return Refused(considered.Refusal ?? ProgrammeWatchRefusal.NoSuchProgramme);
+        }
 
         return await writes.AllOrNothingAsync(
             async inner =>
             {
                 await rules.TakeTurnAsync(inner);
 
-                return await AskInTurnAsync(asked, broadcast, leadMinutes, now, inner);
+                return await AskInTurnAsync(candidate, asked.Destinations, inner);
             },
             cancellationToken);
     }
@@ -119,50 +104,23 @@ public sealed class NotificationWatchService(
             _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A programme is refused for a reason this service words."),
         };
 
-    private static IReadOnlyList<NotificationDestinationId>? ToldTo(
-        IReadOnlyList<Guid>? asked,
-        IReadOnlyList<NotificationDestination> held)
-    {
-        IReadOnlyList<Guid> turnedOn = [.. held.Where(destination => destination.Enabled).Select(destination => destination.Id.Value)];
-        IReadOnlyList<Guid> named = asked ?? turnedOn;
-
-        return named.Count > 0 && named.All(turnedOn.Contains)
-            ? [.. named.Distinct().Select(id => new NotificationDestinationId(id))]
-            : null;
-    }
-
     private async Task<ServiceResult<ProgrammeWatch, NotificationFailure>> AskInTurnAsync(
-        ProgrammeWatchAsked asked,
-        WatchedBroadcast broadcast,
-        int leadMinutes,
-        DateTime now,
+        ProgrammeWatchCandidate candidate,
+        IReadOnlyList<Guid>? destinations,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<NotificationDestination> held = await destinations.ListAsync(cancellationToken);
+        ProgrammeWatchPlaced placed = await watching.PlaceAsync(candidate, destinations, cancellationToken);
 
-        if (asked.Destinations is null && !held.Any(destination => destination.Enabled))
+        if (placed.Watch is not { } watch)
         {
-            return Failure(NoneTurnedOn, NotificationFailure.NoDestination);
+            return Refused(placed.Refusal ?? ProgrammeWatchRefusal.AlreadyAsked);
         }
 
-        if (ToldTo(asked.Destinations, held) is not { } toldTo)
+        if (placed.Replaced is { } replaced)
         {
-            return Failure(BadDestinations, NotificationFailure.Refused);
+            await watches.RemoveAsync(replaced, cancellationToken);
         }
 
-        ProgrammeWatch? before = await watches.FindOfAsync(asked.Programme, cancellationToken);
-
-        if (before is not null && before.StandsAt(now))
-        {
-            return Failure(Already, NotificationFailure.AlreadyAsked);
-        }
-
-        if (before is not null)
-        {
-            await watches.RemoveAsync(before, cancellationToken);
-        }
-
-        ProgrammeWatch watch = ProgrammeWatch.Ask(ProgrammeWatchId.New(), asked.Programme, broadcast, leadMinutes, toldTo, now);
         await watches.AddAsync(watch, cancellationToken);
 
         return ServiceResult<ProgrammeWatch, NotificationFailure>.Success(watch);
