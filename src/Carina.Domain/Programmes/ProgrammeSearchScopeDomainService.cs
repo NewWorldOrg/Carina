@@ -1,9 +1,8 @@
 using Carina.Domain.Channels;
-using Carina.Domain.Programmes;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Programmes;
+namespace Carina.Domain.Programmes;
 
 public sealed record ProgrammeSearchBounds(
     IReadOnlyList<BroadcastStream> Streams,
@@ -45,7 +44,12 @@ public sealed record ProgrammeSearchBounds(
         ];
 }
 
-public sealed class ProgrammeSearchScope(
+/// <summary>
+/// Decides which services the guide and a search cover: the services carried on a stream the guide is collected from,
+/// less those the guide does not list. A search that names a broadcast type covers the services of that type's
+/// streams only.
+/// </summary>
+public sealed class ProgrammeSearchScopeDomainService(
     IBroadcastStreamDirectory directory,
     IBroadcastServiceRepository catalogue)
 {

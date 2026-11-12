@@ -5,7 +5,6 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
-using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Tests.Collection;
@@ -688,7 +687,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddSingleton(RollingHorizon.Default);
             services.AddSingleton(new RuleApplicationSettings());
             services.AddSingleton(new ReservationOutcomeSettings());
-            services.AddScoped<ProgrammeSearchScope>();
+            services.AddScoped<ProgrammeSearchScopeDomainService>();
             services.AddScoped<RuleMatcher>();
             services.AddScoped<ReservationOutcomeDomainService>();
             services.AddScoped<ReservationSchedulingService>();

@@ -32,7 +32,7 @@ public sealed record RuleMatchRun(
         new Dictionary<RuleId, ProgrammeSearch>();
 }
 
-public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
+public sealed class RuleMatcher(ProgrammeSearchScopeDomainService scope, TimeProvider clock)
 {
     public static IReadOnlyList<Rule> InPrecedence(IEnumerable<Rule> rules)
     {

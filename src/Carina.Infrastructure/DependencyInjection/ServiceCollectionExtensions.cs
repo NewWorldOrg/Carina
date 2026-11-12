@@ -38,7 +38,6 @@ using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Playback;
-using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Quality;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
@@ -187,7 +186,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProgrammeRepository, ProgrammeRepository>();
         services.AddScoped<IAnnouncedProgrammes>(provider => provider.GetRequiredService<IProgrammeRepository>());
         services.AddScoped<IProgrammeSearchRepository, ProgrammeSearchRepository>();
-        services.AddScoped<ProgrammeSearchScope>();
+        services.AddScoped<ProgrammeSearchScopeDomainService>();
         services.AddScoped<IStreamVisitRepository, StreamVisitRepository>();
         services.AddScoped<ICollectionEpochRepository, CollectionEpochRepository>();
         services.AddScoped<IArchivedProgrammeRepository, ArchivedProgrammeRepository>();

@@ -4,7 +4,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
-using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Tests.Reservations;
@@ -68,7 +67,7 @@ public sealed class RuleApplicationScaleTests
                 RollingHorizon.Default,
                 new SilentEvents(),
                 new FixedClock(Now)),
-            new RuleMatcher(new ProgrammeSearchScope(streams, catalogue), new FixedClock(Now)),
+            new RuleMatcher(new ProgrammeSearchScopeDomainService(streams, catalogue), new FixedClock(Now)),
             new RuleApplicationSettings { Rows = 5_000 },
             write,
             new SilentEvents(),

@@ -3,7 +3,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
-using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Tests.Reservations;
@@ -310,7 +309,7 @@ public sealed class RuleSimulcastTests
                     RollingHorizon.Default,
                     new SilentEvents(),
                     new FixedClock(Now)),
-                new RuleMatcher(new ProgrammeSearchScope(Streams, new CountedServices()), new FixedClock(Now)),
+                new RuleMatcher(new ProgrammeSearchScopeDomainService(Streams, new CountedServices()), new FixedClock(Now)),
                 new RuleApplicationSettings(),
                 Write,
                 new SilentEvents(),

@@ -6,7 +6,6 @@ using Carina.Api.Common;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
-using Carina.Infrastructure.Programmes;
 
 using Puppis.Contracts;
 
@@ -19,7 +18,7 @@ public sealed record GuidePage(
     string ETag);
 
 public sealed class ProgrammeGuideService(
-    ProgrammeSearchScope scope,
+    ProgrammeSearchScopeDomainService scope,
     IProgrammeRepository programmes,
     IArchivedProgrammeRepository archive,
     IProgrammeSearchRepository searches,
