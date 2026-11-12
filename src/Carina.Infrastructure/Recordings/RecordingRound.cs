@@ -346,10 +346,7 @@ public sealed class RecordingRound(
                 session?.DeviceId is { Length: > 0 } named ? new TunerDeviceId(named) : null,
                 due.EncodeWhenRecorded);
 
-            if (!verdict.HasRoom)
-            {
-                recording.Note(verdict.Detail(now));
-            }
+            recording.Prechecked(verdict, now);
 
             await recordings.AddAsync(recording, cancellationToken);
 

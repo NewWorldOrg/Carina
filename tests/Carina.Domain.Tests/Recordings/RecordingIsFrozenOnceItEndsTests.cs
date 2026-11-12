@@ -23,6 +23,8 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         nameof(Recording.LeftScrambled),
         nameof(Recording.Encodability),
         nameof(Recording.FollowsItsProgramme),
+        nameof(Recording.CountedUntil),
+        nameof(Recording.IsInterrupted),
     };
 
     [Fact]
@@ -32,9 +34,10 @@ public sealed class RecordingIsFrozenOnceItEndsTests
 
         Assert.Equal(
             [
-                "Abort", "Acquire", "Caption", "Conclude", "DataBroadcastAgain", "DataBroadcastFailed", "DataBroadcastTaken",
-                "Descrambled", "Erased", "Extend", "FailOnAFullDisk", "Illustrate", "Interrupt", "Measure", "Missed", "Note",
-                "ReachedItsEnd", "Resume", "Settle", "SettleOnWhatWasLeft", "Wrote",
+                "Abort", "Acquire", "Adopt", "Caption", "Conclude", "DataBroadcastAgain", "DataBroadcastFailed",
+                "DataBroadcastTaken", "Descrambled", "Erased", "Extend", "FailOnAFullDisk", "Illustrate", "Interrupt", "Measure",
+                "Missed", "Note", "NoteEndUndecided", "Prechecked", "ReachedItsEnd", "Resume", "Settle", "SettleOnWhatWasLeft",
+                "Wrote",
             ],
             offered);
         Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Count(Changes));
@@ -43,7 +46,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
     [Fact]
     public void ARecordingAnswersTheseQuestionsAndNothingElse()
         => Assert.Equal(
-            ["IsDueToStop", "IsOver"],
+            ["Follows", "IsDueToStop", "IsOver", "KeepsCountingAt", "StoppedWritingAt"],
             Named(Declared(BindingFlags.Public | BindingFlags.Instance).Where(method => !Changes(method))));
 
     private static bool Changes(MethodInfo method) => method.ReturnType == typeof(void);
@@ -112,6 +115,11 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Throws<InvalidOperationException>(
             () => recording.Conclude(1, ExpectedBitrate.Terrestrial, Bands, Later));
         Assert.Throws<InvalidOperationException>(() => recording.ReachedItsEnd(null, Later));
+        Assert.Throws<InvalidOperationException>(() => recording.Adopt("pt3-4"));
+        Assert.Throws<InvalidOperationException>(() => recording.NoteEndUndecided(Later));
+        Assert.Throws<InvalidOperationException>(() => recording.Prechecked(
+            DiskPrecheckVerdict.Of(DiskShortfall.NoRoomLeft, 1, 0, 1),
+            Later));
 
         recording.Illustrate(ThumbnailState.Ready);
         recording.Caption(CaptionState.Ready, 4, Later);

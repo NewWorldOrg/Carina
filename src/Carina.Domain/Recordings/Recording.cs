@@ -239,6 +239,51 @@ public sealed class Recording
     /// </summary>
     public bool FollowsItsProgramme => AbortedAt is null && ReservationId is not null;
 
+    /// <summary>
+    /// The moment the recording is counted as far as: its last count, or the moment it began while nothing has
+    /// counted it.
+    /// </summary>
+    public DateTime CountedUntil => MeasuredUpdatedAt ?? StartedAtActual;
+
+    /// <summary>
+    /// Whether the last break in the recording is still open.
+    /// </summary>
+    public bool IsInterrupted => interruptions.Count > 0 && interruptions[^1].IsOpen;
+
+    /// <summary>
+    /// Whether the recording takes what its session counted at <paramref name="now"/>: it is not over and has not
+    /// been counted that far already.
+    /// </summary>
+    public bool KeepsCountingAt(DateTime now) => !IsOver(now) && now > CountedUntil;
+
+    /// <summary>
+    /// Whether <paramref name="gap"/> is one the recording has not kept yet and falls after its start and after every
+    /// gap it has kept, so that <see cref="Missed"/> keeps it.
+    /// </summary>
+    public bool Follows(RecordingGap gap)
+    {
+        ArgumentNullException.ThrowIfNull(gap);
+
+        return gap.From >= StartedAtActual && gaps.All(kept => kept.Until != gap.Until && gap.From >= kept.Until);
+    }
+
+    /// <summary>
+    /// When the recording stopped being written, for a break noticed at <paramref name="noticed"/>: the last write to
+    /// its file, kept no earlier than the moment it began or last broke off or resumed, or the moment the break was
+    /// noticed when the file says nothing earlier.
+    /// </summary>
+    public DateTime StoppedWritingAt(DateTime? lastWritten, DateTime noticed)
+    {
+        if (lastWritten is not { } written || written >= noticed)
+        {
+            return noticed;
+        }
+
+        DateTime earliest = LatestMoment();
+
+        return written > earliest ? written : earliest;
+    }
+
     public static Recording Begin(
         RecordingId id,
         ReservationId? reservationId,
@@ -667,6 +712,21 @@ public sealed class Recording
     /// </exception>
     public void DataBroadcastAgain() => Keep(DueAgain(), null);
 
+    /// <summary>
+    /// Names the tuner the recording is being written on, as a session reports it, unless one is already named or the
+    /// session names none.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void Adopt(string deviceId)
+    {
+        RefuseUnlessInFlight();
+
+        if (TunerDeviceId is null && deviceId is { Length: > 0 })
+        {
+            Acquire(new TunerDeviceId(deviceId));
+        }
+    }
+
     public void Acquire(TunerDeviceId tunerDeviceId)
     {
         ArgumentNullException.ThrowIfNull(tunerDeviceId);
@@ -758,7 +818,7 @@ public sealed class Recording
         RefuseUnlessInFlight();
         RecordingFaults.BreaksARecording(fault);
 
-        if (interruptions.Count > 0 && interruptions[^1].ResumedAt is null)
+        if (IsInterrupted)
         {
             throw new InvalidOperationException("This recording is already interrupted.");
         }
@@ -772,7 +832,7 @@ public sealed class Recording
     {
         RefuseUnlessInFlight();
 
-        if (interruptions.Count is 0 || interruptions[^1].ResumedAt is not null)
+        if (!IsInterrupted)
         {
             throw new InvalidOperationException("This recording was not interrupted.");
         }
@@ -839,6 +899,38 @@ public sealed class Recording
         RefuseAReasonBeforeTheRecordingBegan([detail], StartedAtActual);
 
         outcomeDetail.Add(detail);
+    }
+
+    /// <summary>
+    /// Writes down once that the programme being recorded announces no end of its own.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void NoteEndUndecided(DateTime at)
+    {
+        RefuseUnlessInFlight();
+
+        if (outcomeDetail.Any(detail => detail.Fault is RecordingFault.EndStillUndecided))
+        {
+            return;
+        }
+
+        Note(new OutcomeDetail(RecordingFault.EndStillUndecided, null, string.Empty, at));
+    }
+
+    /// <summary>
+    /// Takes what the disk was found to hold as the recording began. A recording starts on a disk found short of room
+    /// and says so.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The recording already ended.</exception>
+    public void Prechecked(DiskPrecheckVerdict verdict, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(verdict);
+        RefuseUnlessInFlight();
+
+        if (!verdict.HasRoom)
+        {
+            Note(verdict.Detail(at));
+        }
     }
 
     public void Abort(DateTime at)

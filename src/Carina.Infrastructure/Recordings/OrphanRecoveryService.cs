@@ -150,7 +150,7 @@ public sealed class OrphanRecoveryService(
             {
                 bool named = loaded.TunerDeviceId is not null;
 
-                RecordingResumption.Adopt(loaded, standing.DeviceId);
+                loaded.Adopt(standing.DeviceId);
 
                 return RecordingResumption.CloseAnyOpenBreak(loaded, now)
                        || (!named && loaded.TunerDeviceId is not null);
@@ -178,7 +178,7 @@ public sealed class OrphanRecoveryService(
             loaded => RecordingResumption.OpenABreak(
                 loaded,
                 fault,
-                RecordingResumption.StoppedWritingAt(loaded, lastWritten, now)),
+                loaded.StoppedWritingAt(lastWritten, now)),
             cancellationToken);
 
         if (await TuneOfAsync(recording, cancellationToken) is not { } tune)
@@ -206,7 +206,7 @@ public sealed class OrphanRecoveryService(
             recording.Id,
             loaded =>
             {
-                RecordingResumption.Adopt(loaded, reopened.DeviceId);
+                loaded.Adopt(reopened.DeviceId);
                 RecordingResumption.CloseAnyOpenBreak(loaded, at);
 
                 return true;

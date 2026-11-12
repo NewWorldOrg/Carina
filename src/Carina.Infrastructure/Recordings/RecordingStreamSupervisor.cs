@@ -307,18 +307,18 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                if (loaded.IsOver(now) || now <= AsFarAsItIsCounted(loaded))
+                if (!loaded.KeepsCountingAt(now))
                 {
                     return false;
                 }
 
-                RecordingResumption.Adopt(loaded, session.DeviceId);
+                loaded.Adopt(session.DeviceId);
                 DropCounters countedBefore = loaded.Counters;
                 DropTimeline placedBefore = loaded.Positions;
                 long? scrambledBefore = loaded.ScrambledPackets;
                 long overflowsBefore = loaded.EovfCount;
                 bool wrote = Advance(loaded, opened, now);
-                bool missed = gap is not null && Follows(loaded, gap);
+                bool missed = gap is not null && loaded.Follows(gap);
 
                 if (missed)
                 {
@@ -378,14 +378,14 @@ public sealed class RecordingStreamSupervisor(
                     || !RecordingResumption.OpenABreak(
                         loaded,
                         fault,
-                        RecordingResumption.StoppedWritingAt(loaded, lastWritten, now)))
+                        loaded.StoppedWritingAt(lastWritten, now)))
                 {
                     return false;
                 }
 
                 if (tuneFailure is not null && session is not null)
                 {
-                    RecordingResumption.Adopt(loaded, session.DeviceId);
+                    loaded.Adopt(session.DeviceId);
                     loaded.Note(new OutcomeDetail(fault, tuneFailure, string.Empty, now));
                 }
 
@@ -454,7 +454,7 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                RecordingResumption.Adopt(loaded, reopened.DeviceId);
+                loaded.Adopt(reopened.DeviceId);
                 resumed = RecordingResumption.CloseAnyOpenBreak(loaded, at);
 
                 return true;
@@ -699,20 +699,9 @@ public sealed class RecordingStreamSupervisor(
             ? new RecordingGap(after.UtcDateTime, first.UtcDateTime)
             : null;
 
-    /// <summary>
-    /// Whether a gap is one this recording has not kept yet and that falls after the start and after every gap it
-    /// has kept.
-    /// </summary>
-    private static bool Follows(Recording recording, RecordingGap gap)
-        => gap.From >= recording.StartedAtActual
-           && recording.Gaps.All(kept => kept.Until != gap.Until && gap.From >= kept.Until);
-
-    private static DateTime AsFarAsItIsCounted(Recording recording)
-        => recording.MeasuredUpdatedAt ?? recording.StartedAtActual;
-
     private static bool Advance(Recording recording, DateTime opened, DateTime now)
     {
-        DateTime counted = AsFarAsItIsCounted(recording);
+        DateTime counted = recording.CountedUntil;
         DateTime from = opened > counted ? opened : counted;
 
         if (now <= from)

@@ -162,9 +162,9 @@ public sealed class ProgramExtensionFollower(
 
         recording.Extend(granted);
 
-        if (move.EndUndecided && !SaysTheEndWasUndecided(recording))
+        if (move.EndUndecided)
         {
-            recording.Note(new OutcomeDetail(RecordingFault.EndStillUndecided, null, string.Empty, now));
+            recording.NoteEndUndecided(now);
         }
 
         await recordings.SaveAsync(recording, cancellationToken);
@@ -179,9 +179,6 @@ public sealed class ProgramExtensionFollower(
 
         return new RecordingFollowed(recording.Id, granted, move.EndUndecided);
     }
-
-    private static bool SaysTheEndWasUndecided(Recording recording)
-        => recording.OutcomeDetail.Any(detail => detail.Fault is RecordingFault.EndStillUndecided);
 
     private static TimeSpan? MarginOf(Recording recording, IReadOnlyList<RecordingTick> reservations)
     {
