@@ -2,17 +2,14 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Notifications;
-using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
-using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Reservations;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 
 using Npgsql;
 

@@ -3,7 +3,6 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Notifications;
 using Carina.Infrastructure.Tests.Reservations;
 using Carina.Infrastructure.Tests.Thumbnails;

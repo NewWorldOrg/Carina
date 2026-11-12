@@ -1,11 +1,8 @@
-using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
-using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
-using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
