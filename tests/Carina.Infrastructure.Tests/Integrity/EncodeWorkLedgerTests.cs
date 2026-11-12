@@ -216,6 +216,82 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database) : IAsyncL
         Assert.Empty(await ReadAsync());
     }
 
+    [Fact(DisplayName = "BR-KD-025: the files the store says encode work claims are the ones each job and each scratch file says are claimed")]
+    public async Task TheFilesTheStoreDeclaresAreTheOnesEachJobAndScratchFileSaysAreClaimed()
+    {
+        Recording held = await RecordedAsync();
+        EncodeJob running = await QueuedAsync();
+        await MoveAsync(running, started => started.Start(Started));
+        EncodeJob failed = await QueuedAsync();
+        await MoveAsync(failed, failing =>
+        {
+            failing.Start(Started);
+            failing.Fail(EncodeFailure.SourceMissing, "the recording is not where the ledger says", Ended);
+        });
+        EncodeJob cancelled = await QueuedAsync(held.Id);
+        await MoveAsync(cancelled, called => called.Cancel(Ended));
+        EncodeJob older = await CompletedAsync(await QueuedAsync(held.Id));
+        EncodeJob newer = await CompletedAsync(await QueuedAsync(held.Id));
+        await MoveAsync(older, replaced => replaced.Replaced(newer, Ended.AddMinutes(1)));
+        EncodeJob orphaned = await CompletedAsync(await QueuedAsync());
+        EncodeJob[] jobs = [await QueuedAsync(), running, failed, cancelled, older, newer, orphaned];
+
+        foreach (EncodeJob job in jobs)
+        {
+            foreach (EncodeScratchKind kind in Enum.GetValues<EncodeScratchKind>())
+            {
+                await WritingAsync(job, kind);
+            }
+
+            foreach (EncodeScratchFate fate in new[] { EncodeScratchFate.Removed, EncodeScratchFate.CouldNotBeRemoved })
+            {
+                await SettledAsync(await WritingAsync(job, EncodeScratchKind.Captions), fate);
+            }
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        Dictionary<EncodeJobId, EncodeJob> byId = await reading.Set<EncodeJob>().AsNoTracking().ToDictionaryAsync(job => job.Id, Cancel);
+        List<EncodeScratchFile> scratch = await reading.Set<EncodeScratchFile>().AsNoTracking().ToListAsync(Cancel);
+        HashSet<RecordingId> recordings = [.. await reading.Set<Recording>().AsNoTracking().Select(recording => recording.Id).ToListAsync(Cancel)];
+
+        IEnumerable<DeclaredFile> claimedScratch = scratch
+            .Where(file => file.IsClaimedWhile(byId[file.JobId]))
+            .Select(file => new DeclaredFile(file.OutputRoot, file.FileName.Value));
+        IEnumerable<DeclaredFile> claimedArtefacts = byId.Values
+            .Where(job => job.ClaimsItsArtefact(recordings.Contains(job.RecordingId)))
+            .Select(job => new DeclaredFile(job.OutputRoot, job.ArtefactItMakes.Value));
+        DeclaredFile[] expected = [.. claimedScratch.Concat(claimedArtefacts).Distinct().OrderBy(file => file.Path, StringComparer.Ordinal)];
+
+        Assert.Contains(scratch, file => !file.IsClaimedWhile(byId[file.JobId]));
+        Assert.Contains(byId.Values, job => !job.ClaimsItsArtefact(recordings.Contains(job.RecordingId)));
+        Assert.Equal(expected, await ReadAsync());
+    }
+
+    private async Task<EncodeScratchFile> WritingAsync(EncodeJob job, EncodeScratchKind kind)
+    {
+        EncodeScratchFileId id = EncodeScratchFileId.New();
+        EncodeScratchFile scratch = EncodeScratchFile.Record(
+            id,
+            job.Id,
+            kind,
+            Primary,
+            EncodeFileName.Chaptered(job.RecordingId, job.Id, job.Attempt, id),
+            Queued);
+
+        await using CarinaDbContext writing = database.Open();
+        await new EncodeScratchLedger(writing).RecordAsync(scratch, Cancel);
+
+        return scratch;
+    }
+
+    private async Task SettledAsync(EncodeScratchFile scratch, EncodeScratchFate fate)
+    {
+        scratch.Settle(fate, Ended);
+
+        await using CarinaDbContext writing = database.Open();
+        await new EncodeScratchLedger(writing).SaveAsync(scratch, Cancel);
+    }
+
     private async Task<IReadOnlyList<DeclaredFile>> ReadAsync()
     {
         await using CarinaDbContext reading = database.Open();

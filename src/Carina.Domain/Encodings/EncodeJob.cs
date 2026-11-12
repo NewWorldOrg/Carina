@@ -101,6 +101,13 @@ public sealed class EncodeJob
     public EncodeStanding Standing => EncodeStandings.Of(Status);
 
     /// <summary>
+    /// Whether the job claims the artefact it makes: while it is still in hand, and once it has completed while its
+    /// artefact stands for a recording the ledger still holds. The query the integrity check reads in the store says the
+    /// same.
+    /// </summary>
+    public bool ClaimsItsArtefact(bool recordingHeld) => !HasEnded || (StandsAsTheArtefact && recordingHeld);
+
+    /// <summary>
     /// The artefact this job makes: the name it holds once it has named one, and before that the name
     /// it will be held to.
     /// </summary>
