@@ -353,6 +353,63 @@ public sealed class Recording
             broadcastGroupRole,
             encodeWhenRecorded: encodeWhenRecorded);
 
+    /// <summary>
+    /// A recording carried over from the recording system being replaced, written in full over the times that system
+    /// recorded it: the programme's start to <paramref name="endAt"/>. It holds no reservation, no tuner and no count of
+    /// what was dropped, and the title is the only part of the programme it keeps.
+    /// </summary>
+    public static Recording CarriedOver(
+        RecordingId id,
+        ProgrammeRef programme,
+        string name,
+        OutputRoot outputRoot,
+        RecordingFileName fileName,
+        long fileSizeObserved,
+        DateTime endAt,
+        DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(programme);
+
+        DateTime startAt = programme.StartsAt;
+
+        return Rehydrate(
+            id,
+            null,
+            programme,
+            outputRoot,
+            fileName,
+            fileSizeObserved,
+            at,
+            startAt,
+            endAt,
+            endAt,
+            (long)(endAt - startAt).TotalMilliseconds,
+            0,
+            [],
+            startAt,
+            endAt,
+            endAt,
+            RecordingOutcome.Complete,
+            [],
+            DropCounters.Unmeasured,
+            DropTimeline.Unlocated,
+            null,
+            0,
+            null,
+            null,
+            ThumbnailState.Pending,
+            ProgrammeSnapshot.Of(
+                name,
+                string.Empty,
+                [],
+                [],
+                startAt,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
+            null,
+            BroadcastGroupRole.Standalone);
+    }
+
     public static Recording Rehydrate(
         RecordingId id,
         ReservationId? reservationId,

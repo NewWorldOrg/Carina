@@ -157,7 +157,7 @@ public static class DbEntryPoint
             MigrationPassage passage = new(
                 new MigrationSourceLedgerReader(new MySqlMigrationSourceConnection(source)),
                 new LocalMigrationSourceDirectory(carry.From),
-                new MigrationCarriage(
+                new MigrationCarriageDomainService(
                     new HardLinkMigrationCarrier(carry.From, carry.Into, root),
                     new RecordingRepository(context),
                     new RuleRepository(context),

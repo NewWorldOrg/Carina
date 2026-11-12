@@ -2,14 +2,13 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
-using Carina.Infrastructure.Migration;
 using Carina.TestSupport;
 
-using static Carina.Infrastructure.Tests.Migration.CarriedMigrationFixtures;
+using static Carina.TestSupport.CarriedMigrationFixtures;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Domain.Tests.Migration;
 
-public sealed class MigrationCarriageTests
+public sealed class MigrationCarriageDomainServiceTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
@@ -25,7 +24,7 @@ public sealed class MigrationCarriageTests
 
     private readonly HeldMigratedRecordings recordings;
 
-    public MigrationCarriageTests()
+    public MigrationCarriageDomainServiceTests()
     {
         bench = new MigrationBench(clock);
         journal = bench.Journal;

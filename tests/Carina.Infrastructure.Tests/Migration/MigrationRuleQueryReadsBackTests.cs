@@ -6,7 +6,7 @@ using Carina.Infrastructure.Programmes;
 
 using Puppis.Contracts;
 
-using static Carina.Infrastructure.Tests.Migration.CarriedMigrationFixtures;
+using static Carina.TestSupport.CarriedMigrationFixtures;
 
 namespace Carina.Infrastructure.Tests.Migration;
 

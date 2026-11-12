@@ -13,7 +13,7 @@ public static class MigrationClassifier
 
         string subject = Numbered(recording.Id);
 
-        if (recording.Service is null || recording.Programme is null)
+        if (recording.Programmed is null)
         {
             return MigrationVerdict.Refuse(
                 MigrationPopulation.Recordings,
@@ -52,6 +52,17 @@ public static class MigrationClassifier
                 MigrationPopulation.Recordings,
                 subject,
                 MigrationRefusal.ReallyEmpty,
+                recording.Name,
+                asBroadcast.SizeRecorded,
+                onDisk.SizeBytes);
+        }
+
+        if (!recording.LastsAnyTime)
+        {
+            return MigrationVerdict.Refuse(
+                MigrationPopulation.Recordings,
+                subject,
+                MigrationRefusal.Inexpressible,
                 recording.Name,
                 asBroadcast.SizeRecorded,
                 onDisk.SizeBytes);
@@ -174,7 +185,7 @@ public static class MigrationClassifier
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(inReach);
 
-        Dictionary<long, SourceRecordingFile> asBroadcast = AsBroadcastByRecording(ledger.RecordingFiles);
+        IReadOnlyDictionary<long, SourceRecordingFile> asBroadcast = AsBroadcastByRecording(ledger.RecordingFiles);
         Dictionary<string, SourceRecordingFile> claims = ClaimsByPath(ledger.RecordingFiles);
         Dictionary<string, SourceFile> onDisk = OnDisk(files);
 
@@ -229,9 +240,14 @@ public static class MigrationClassifier
         string note)
         => MigrationVerdict.Refuse(population, subject, refusal, note, null, null);
 
-    private static Dictionary<long, SourceRecordingFile> AsBroadcastByRecording(
+    /// <summary>
+    /// The file each recording is carried from: the one the source system kept as broadcast, never an encoded copy.
+    /// </summary>
+    public static IReadOnlyDictionary<long, SourceRecordingFile> AsBroadcastByRecording(
         IReadOnlyList<SourceRecordingFile> rows)
     {
+        ArgumentNullException.ThrowIfNull(rows);
+
         Dictionary<long, SourceRecordingFile> found = [];
 
         foreach (SourceRecordingFile row in rows)

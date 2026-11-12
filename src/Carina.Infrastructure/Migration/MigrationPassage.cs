@@ -5,7 +5,7 @@ namespace Carina.Infrastructure.Migration;
 public sealed class MigrationPassage(
     IMigrationSourceLedger source,
     IMigrationSourceDirectory directory,
-    MigrationCarriage carriage,
+    MigrationCarriageDomainService carriage,
     IMigrationRecordRepository records,
     IMigrationLease lease,
     TimeProvider clock)
