@@ -777,6 +777,20 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAnInfrastructureTypeComposedWithStandInsHandedOverByHand()
+    {
+        using SourceTree tree = new();
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs",
+            TestLayoutRules.DbIntegration,
+            "OidcSettingsRepository settings = ActivatorUtilities.CreateInstance<OidcSettingsRepository>(scope.ServiceProvider, standIn);");
+
+        Assert.Equal(
+            ["/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs:4 OidcSettingsRepositoryTests does not take OidcSettingsRepository from the container"],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
     public void DetectsADomainServiceComposedRatherThanTakenFromTheContainer()
     {
         using SourceTree tree = new();
@@ -811,9 +825,13 @@ public sealed class TestLayoutRuleSelfCheckTests
             TestLayoutRules.Unit,
             "AuthSessionService service = new(sessions);");
         tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs",
+            TestLayoutRules.DbIntegration,
+            "OidcSettingsRepository settings = ActivatorUtilities.CreateInstance<OidcSettingsRepository>(scope.ServiceProvider);");
+        tree.Test(
             $"{InfrastructureTests}/DbIntegration/Infra/Auth/LocalAccountBootstrapTests.cs",
             TestLayoutRules.DbIntegration,
-            "LocalAccountBootstrap bootstrap = ActivatorUtilities.CreateInstance<LocalAccountBootstrap>(services, log);");
+            "LocalAccountBootstrap bootstrap = services.GetServices<IHostedService>().OfType<LocalAccountBootstrap>().Single();");
         tree.Test(
             $"{InfrastructureTests}/DbIntegration/Infra/Auth/AuthUpkeepJobTests.cs",
             TestLayoutRules.DbIntegration,

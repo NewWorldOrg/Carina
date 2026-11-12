@@ -581,6 +581,17 @@ public static class TestLayoutRules
             _ => string.Empty,
         };
 
+    private static bool IsAHostedServiceFromTheContainer(GenericNameSyntax name)
+        => name.Identifier.ValueText == "OfType"
+           && name.Parent is MemberAccessExpressionSyntax { Expression: InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax hosted } } }
+           && hosted.Identifier.ValueText == "GetServices"
+           && hosted.TypeArgumentList.Arguments is [TypeSyntax service]
+           && Simple(service) == "IHostedService";
+
+    private static bool IsCalledWithTheProviderAlone(GenericNameSyntax name)
+        => (name.Parent is MemberAccessExpressionSyntax access && access.Name == name ? access.Parent : name.Parent)
+            is InvocationExpressionSyntax { ArgumentList.Arguments.Count: 1 };
+
     private static IEnumerable<string> ImportedAreas(TestFile file)
         => file.Imports
             .Select(space => space.Split('.'))
@@ -681,11 +692,14 @@ public static class TestLayoutRules
                 .Select(directive => directive.Name!.ToString())
                 .ToHashSet(StringComparer.Ordinal),
             file.Root.DescendantNodes().OfType<GenericNameSyntax>()
-                .Where(name => name.Identifier.ValueText == "GetRequiredService" && name.TypeArgumentList.Arguments.Count == 1)
+                .Where(name => name.TypeArgumentList.Arguments.Count == 1
+                               && (name.Identifier.ValueText == "GetRequiredService" || IsAHostedServiceFromTheContainer(name)))
                 .Select(name => Simple(name.TypeArgumentList.Arguments[0]))
                 .ToHashSet(StringComparer.Ordinal),
             file.Root.DescendantNodes().OfType<GenericNameSyntax>()
-                .Where(name => name.Identifier.ValueText == "CreateInstance" && name.TypeArgumentList.Arguments.Count == 1)
+                .Where(name => name.Identifier.ValueText == "CreateInstance"
+                               && name.TypeArgumentList.Arguments.Count == 1
+                               && IsCalledWithTheProviderAlone(name))
                 .Select(name => Simple(name.TypeArgumentList.Arguments[0]))
                 .ToHashSet(StringComparer.Ordinal),
             file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().Select(Created).ToHashSet(StringComparer.Ordinal),
