@@ -106,7 +106,9 @@ public sealed partial class DataBroadcastRelayService(
         string uri,
         CancellationToken cancellationToken)
     {
-        if (await RefusedAsync(network, service, allowed, hybridcastAllowed, cancellationToken) is { } refused)
+        DataBroadcastLine line = new(allowed, hybridcastAllowed);
+
+        if (await RefusedAsync(network, service, line.RefusesApplications, cancellationToken) is { } refused)
         {
             return ServiceResult<RelayedAit, DataBroadcastRelayRefusal>.Failure(refused.Said, refused.Refusal);
         }
@@ -132,7 +134,9 @@ public sealed partial class DataBroadcastRelayService(
         ArgumentNullException.ThrowIfNull(viewer);
         ArgumentNullException.ThrowIfNull(ask);
 
-        if (await RefusedAsync(network, service, allowed, hybridcastAllowed, cancellationToken) is { } refused)
+        DataBroadcastLine line = new(allowed, hybridcastAllowed);
+
+        if (await RefusedAsync(network, service, line.RefusesApplications, cancellationToken) is { } refused)
         {
             return ServiceResult<HybridcastStart, DataBroadcastRelayRefusal>.Failure(refused.Said, refused.Refusal);
         }
@@ -248,15 +252,17 @@ public sealed partial class DataBroadcastRelayService(
         bool handed,
         CancellationToken cancellationToken)
     {
-        if (await RefusedAsync(network, service, allowed, cancellationToken) is { } refused)
+        DataBroadcastLine line = new(allowed, HandsTheReceiverId: handed);
+
+        if (await RefusedAsync(network, service, line.RefusesTheBroadcaster, cancellationToken) is { } refused)
         {
             return ServiceResult<ConditionalAccessCardDto, DataBroadcastRelayRefusal>.Failure(refused.Said, refused.Refusal);
         }
 
-        if (!handed)
+        if (line.RefusesTheReceiverId is { } kept)
         {
             return ServiceResult<ConditionalAccessCardDto, DataBroadcastRelayRefusal>.Failure(
-                ReceiverIdIsKept,
+                Said(kept),
                 DataBroadcastRelayRefusal.NotAllowed);
         }
 
@@ -285,7 +291,9 @@ public sealed partial class DataBroadcastRelayService(
         string charset,
         CancellationToken cancellationToken)
     {
-        if (await RefusedAsync(network, service, allowed, cancellationToken) is { } refused)
+        DataBroadcastLine line = new(allowed);
+
+        if (await RefusedAsync(network, service, line.RefusesTheBroadcaster, cancellationToken) is { } refused)
         {
             return ServiceResult<RelayedText, DataBroadcastRelayRefusal>.Failure(refused.Said, refused.Refusal);
         }
@@ -302,7 +310,9 @@ public sealed partial class DataBroadcastRelayService(
         string uri,
         CancellationToken cancellationToken)
     {
-        if (await RefusedAsync(network, service, allowed, cancellationToken) is { } refused)
+        DataBroadcastLine line = new(allowed);
+
+        if (await RefusedAsync(network, service, line.RefusesTheBroadcaster, cancellationToken) is { } refused)
         {
             return ServiceResult<RelayedResource, DataBroadcastRelayRefusal>.Failure(refused.Said, refused.Refusal);
         }
@@ -314,18 +324,26 @@ public sealed partial class DataBroadcastRelayService(
 
     private static string ChannelOf(NetworkId network, ServiceId service) => $"{network.Value}-{service.Value}";
 
+    private static string Said(DataBroadcastLineRefusal refusal) => refusal switch
+    {
+        DataBroadcastLineRefusal.CommunicationIsOff => CommunicationIsOff,
+        DataBroadcastLineRefusal.HybridcastIsOff => HybridcastIsOff,
+        DataBroadcastLineRefusal.ReceiverIdIsKept => ReceiverIdIsKept,
+        _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A line is refused in one of the ways this type holds."),
+    };
+
     private async Task<Refused?> RefusedAsync(
         NetworkId network,
         ServiceId service,
-        bool allowed,
+        DataBroadcastLineRefusal? line,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(service);
 
-        if (!allowed)
+        if (line is { } refusal)
         {
-            return new Refused(CommunicationIsOff, DataBroadcastRelayRefusal.NotAllowed);
+            return new Refused(Said(refusal), DataBroadcastRelayRefusal.NotAllowed);
         }
 
         if (await channels.FindAsync(network, service, cancellationToken) is null)
@@ -340,21 +358,6 @@ public sealed partial class DataBroadcastRelayService(
 
     [GeneratedRegex("^/[A-Za-z0-9._~/-]{1,255}$")]
     private static partial Regex ReceiverScriptPath();
-
-    private async Task<Refused?> RefusedAsync(
-        NetworkId network,
-        ServiceId service,
-        bool allowed,
-        bool hybridcastAllowed,
-        CancellationToken cancellationToken)
-    {
-        if (allowed && !hybridcastAllowed)
-        {
-            return new Refused(HybridcastIsOff, DataBroadcastRelayRefusal.NotAllowed);
-        }
-
-        return await RefusedAsync(network, service, allowed, cancellationToken);
-    }
 
     private sealed record Refused(string Said, DataBroadcastRelayRefusal Refusal);
 }
