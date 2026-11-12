@@ -1,8 +1,9 @@
 using Carina.BroadcastTestSupport;
 using Carina.Infrastructure.Scanning;
 
-namespace Carina.Infrastructure.Tests.Scanning;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Scanning;
 
+[Trait("Category", "Unit")]
 public sealed class TableHarvestTests
 {
     [Fact]

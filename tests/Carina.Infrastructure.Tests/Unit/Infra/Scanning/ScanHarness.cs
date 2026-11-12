@@ -9,7 +9,7 @@ using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Infrastructure.Tests.Scanning;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Scanning;
 
 public sealed class ScanHarness
 {

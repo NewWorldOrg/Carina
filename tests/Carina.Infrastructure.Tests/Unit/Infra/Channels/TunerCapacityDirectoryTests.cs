@@ -5,8 +5,9 @@ using Carina.TestSupport;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Channels;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Channels;
 
+[Trait("Category", "Unit")]
 public sealed class TunerCapacityDirectoryTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
