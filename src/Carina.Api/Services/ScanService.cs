@@ -85,18 +85,15 @@ public sealed class ScanService(
             return Missing<ScanApplication>(id);
         }
 
-        if (run.IsRunning)
+        if (run.RefusalToApply() is { } refusal)
         {
-            return ServiceResult<ScanApplication, ScanFailure>.Failure(
-                "This scan is still walking; its difference is not settled yet.",
-                ScanFailure.StillRunning);
-        }
-
-        if (run.State is not ScanRunState.Completed)
-        {
-            return ServiceResult<ScanApplication, ScanFailure>.Failure(
-                $"A scan that ended as {run.State} writes nothing; only a completed one can be applied.",
-                ScanFailure.NeverCompleted);
+            return refusal is ScanApplyRefusal.StillRunning
+                ? ServiceResult<ScanApplication, ScanFailure>.Failure(
+                    "This scan is still walking; its difference is not settled yet.",
+                    ScanFailure.StillRunning)
+                : ServiceResult<ScanApplication, ScanFailure>.Failure(
+                    $"A scan that ended as {run.State} writes nothing; only a completed one can be applied.",
+                    ScanFailure.NeverCompleted);
         }
 
         ProposalClaim claim = runner.ClaimProposal(id);

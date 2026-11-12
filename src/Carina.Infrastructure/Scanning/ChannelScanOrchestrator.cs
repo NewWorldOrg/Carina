@@ -218,26 +218,19 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         string? failure,
         CancellationToken cancellationToken)
     {
+        ScanWalkEnd end = new(
+            interruption.IsCancellationRequested,
+            cancellationToken.IsCancellationRequested ? observer.Stop : null,
+            failure);
         ScanDifference difference = ScanDifference.Nothing;
 
-        if (interruption.IsCancellationRequested)
-        {
-            run.Interrupt(Now);
-        }
-        else if (cancellationToken.IsCancellationRequested)
-        {
-            ScanConclusion.Stop(run, observer.Stop, Now);
-        }
-        else if (failure is { } reason)
-        {
-            run.Fail(reason, Now);
-        }
-        else
+        if (end.WalkedThrough)
         {
             IReadOnlyList<RotationDeparture> departures = await TurnTheRotationAsync(attempts, probed);
             difference = await DifferenceAsync(carried, departures);
-            run.Complete(Now);
         }
+
+        ScanConclusion.Settle(run, end, Now);
 
         await runs.SaveAsync(run, CancellationToken.None);
         events.Signal(AppEventName.Tuners);
@@ -296,7 +289,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
             foreach (CandidateChannel candidate in stored)
             {
-                if (!walked.TryGetValue(candidate.Tuning, out ScanRunAttempt? attempt) || SaysNothingOfReception(attempt))
+                if (!walked.TryGetValue(candidate.Tuning, out ScanRunAttempt? attempt) || attempt.SaysNothingOfReception)
                 {
                     continue;
                 }
@@ -337,15 +330,6 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                 candidate.NeedsAttentionSince ?? at));
         }
     }
-
-    private static bool SaysNothingOfReception(ScanRunAttempt attempt)
-        => attempt.Outcome switch
-        {
-            ScanAttemptOutcome.IncompleteTables => true,
-            ScanAttemptOutcome.UnexpectedStream => attempt.Tuning.TransportStreamId is not { } wanted
-                || wanted.Equals(attempt.ObservedTransportStreamId),
-            _ => false,
-        };
 
     private async Task<ScanDifference> DifferenceAsync(
         IReadOnlyDictionary<TuningParameters, StreamProbe> carried,

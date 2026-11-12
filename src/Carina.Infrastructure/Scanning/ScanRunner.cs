@@ -327,7 +327,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
 
     private void Remember(ScanOutcome outcome)
     {
-        if (outcome.Run is not { State: ScanRunState.Completed } run)
+        if (outcome.Run is not { ProposesADifference: true } run)
         {
             return;
         }

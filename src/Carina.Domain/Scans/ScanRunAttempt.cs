@@ -31,6 +31,19 @@ public sealed class ScanRunAttempt
 
     public bool Failed => Outcome is not ScanAttemptOutcome.Succeeded;
 
+    /// <summary>
+    /// Tables that never completed, or a stream other than the one expected when no particular one was asked for or
+    /// the one asked for arrived, say nothing of whether the channel can be received.
+    /// </summary>
+    public bool SaysNothingOfReception
+        => Outcome switch
+        {
+            ScanAttemptOutcome.IncompleteTables => true,
+            ScanAttemptOutcome.UnexpectedStream => Tuning.TransportStreamId is not { } wanted
+                || wanted.Equals(ObservedTransportStreamId),
+            _ => false,
+        };
+
     public static ScanRunAttempt Rehydrate(
         ScanRunAttemptId id,
         ScanRunId scanRunId,
