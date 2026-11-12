@@ -13,6 +13,8 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgrammeSearchRepository
 {
+    private const string ByCodePoint = "C";
+
     public async Task<PaginatedList<ProgrammeMatch>> SearchAsync(
         ProgrammeSearch search,
         DateTime now,
@@ -98,8 +100,8 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
         int total = await found.CountAsync(cancellationToken);
         IOrderedQueryable<ProgrammeMatch> ordered = (search.Sort, search.Descending) switch
         {
-            (ProgrammeSort.Name, false) => found.OrderBy(match => match.Name),
-            (ProgrammeSort.Name, true) => found.OrderByDescending(match => match.Name),
+            (ProgrammeSort.Name, false) => found.OrderBy(match => EF.Functions.Collate(match.Name, ByCodePoint)),
+            (ProgrammeSort.Name, true) => found.OrderByDescending(match => EF.Functions.Collate(match.Name, ByCodePoint)),
             (_, true) => found.OrderByDescending(match => match.StartsAt),
             _ => found.OrderBy(match => match.StartsAt),
         };
