@@ -1,7 +1,12 @@
+extern alias db;
+
 using Carina.Api.Authentication;
 using Carina.Api.Tests.FeatureTest;
+using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Configurations;
+using Carina.Infrastructure.Persistence.Repositories;
+
+using db::Carina.Db;
 
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -15,11 +20,14 @@ using Npgsql;
 namespace Carina.Api.Tests.DbIntegration;
 
 /// <summary>
-/// A scratch PostgreSQL database made from the model of the application, and the application raised over it
-/// with no background work, so a test can take an application service from the container the application builds.
+/// A scratch PostgreSQL database made by every migration, with the built-in version of the model kept as the
+/// application keeps it when it starts, and the application raised over it with no background work, so a test can
+/// take an application service from the container the application builds.
 /// </summary>
 public sealed class AppDatabase : IAsyncLifetime
 {
+    public static readonly DateTime Installed = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+
     private const string ScratchDatabase = "carina_app_service_test";
 
     private const string ConnectionStringVariable = "CARINA_DB_CONNECTION";
@@ -28,40 +36,13 @@ public sealed class AppDatabase : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await using (CarinaDbContext dropping = Open())
-        {
-            await dropping.Database.EnsureDeletedAsync();
-        }
-
-        string maintenance = new NpgsqlConnectionStringBuilder(ConnectionString) { Database = "postgres" }.ConnectionString;
-
-        await using (NpgsqlConnection server = new(maintenance))
-        {
-            await server.OpenAsync();
-
-            await using NpgsqlCommand creating = new($"CREATE DATABASE {ScratchDatabase}", server);
-            await creating.ExecuteNonQueryAsync();
-        }
-
-        await RunAsync(RecordingGuards.Functions);
-
-        await using (CarinaDbContext context = Open())
-        {
-            await context.Database.EnsureCreatedAsync();
-        }
-
-        await RunAsync(RecordingGuards.Projection, RecordingGuards.Immutability);
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(ConnectionString);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.MigrateAsync();
+        await new SegmentModelVersionRepository(context).KeepBuiltInAsync(SegmentModel.BuiltIn, Installed, CancellationToken.None);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
-
-    public CarinaDbContext Open()
-    {
-        DbContextOptionsBuilder<CarinaDbContext> builder = new();
-        builder.UseCarinaDatabase(ConnectionString);
-
-        return new CarinaDbContext(builder.Options);
-    }
 
     public async Task<NpgsqlConnection> OpenConnectionAsync()
     {
@@ -93,17 +74,6 @@ public sealed class AppDatabase : IAsyncLifetime
         });
 
         return new RaisedApplication(root, built);
-    }
-
-    private async Task RunAsync(params string[] statements)
-    {
-        await using NpgsqlConnection scratch = await OpenConnectionAsync();
-
-        foreach (string sql in statements)
-        {
-            await using NpgsqlCommand running = new(sql, scratch);
-            await running.ExecuteNonQueryAsync();
-        }
     }
 
     private static string Scratch()
