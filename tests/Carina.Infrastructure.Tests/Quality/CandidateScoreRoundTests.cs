@@ -1,7 +1,6 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
-using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Quality;
 using Carina.TestSupport;
 
@@ -100,7 +99,7 @@ public sealed class CandidateScoreRoundTests
         TimeSpan? over = null)
         => new(
             candidates,
-            new BroadcastStreamDirectory(candidates),
+            new BroadcastStreamDomainService(candidates),
             signals,
             new QualitySignalSettings { EvaluateCandidatesOver = over ?? TimeSpan.FromDays(7) },
             new StoppedClock(At));

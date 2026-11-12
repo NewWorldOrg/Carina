@@ -135,6 +135,16 @@ public sealed class CollectionBackOffTests
     public void OnlyAFailureToTuneIsTheTunersBusiness(VisitOutcome outcome, bool reported)
         => Assert.Equal(reported, CollectionBackOff.IsWorthReportingToTheTuner(outcome));
 
+    [Theory(DisplayName = "BR-ES-002: a visit that could not tune is a failure of the candidate, an interruption says nothing, and the rest reached it")]
+    [InlineData(VisitOutcome.NoLock, TunerReport.Failed)]
+    [InlineData(VisitOutcome.NoBytes, TunerReport.Failed)]
+    [InlineData(VisitOutcome.Interrupted, TunerReport.Nothing)]
+    [InlineData(VisitOutcome.Incomplete, TunerReport.Reached)]
+    [InlineData(VisitOutcome.BasicOnly, TunerReport.Reached)]
+    [InlineData(VisitOutcome.Complete, TunerReport.Reached)]
+    public void WhatAVisitTellsTheCandidateItTunedWith(VisitOutcome outcome, TunerReport report)
+        => Assert.Equal(report, CollectionBackOff.ReportToTheTuner(outcome));
+
     [Fact]
     public void AStreamNeverVisitedIsDue()
         => Assert.True(CollectionBackOff.IsDue(null, At, Settings));

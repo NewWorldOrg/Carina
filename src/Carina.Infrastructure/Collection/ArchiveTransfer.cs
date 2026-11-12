@@ -8,38 +8,27 @@ namespace Carina.Infrastructure.Collection;
 public sealed record Transferred(int Kept, int Discarded, int Forgotten);
 
 public sealed class ArchiveTransfer(
-    IProgrammeRepository programmes,
-    IArchivedProgrammeRepository archive,
+    ProgrammeArchivingDomainService archiving,
     IAtomicWrite writes,
     CollectionSettings settings,
     TimeProvider clock,
     ILogger<ArchiveTransfer> logger)
 {
-    public const int MostPerRun = 5_000;
-
     public async Task<Transferred> RunAsync(CancellationToken cancellationToken)
     {
         DateTime now = clock.GetUtcNow().UtcDateTime;
-        DateTime ended = now - settings.KeepEndedProgrammes;
-        IReadOnlyList<EndedProgramme> leaving = await programmes.ListEndedBeforeAsync(
-            ended,
-            MostPerRun,
-            cancellationToken);
-        ArchivedProgramme[] keeping =
-        [
-            .. leaving.Select(ended => ArchivedProgramme.Of(ended, now)).OfType<ArchivedProgramme>(),
-        ];
+        IReadOnlyList<EndedProgramme> leaving = await archiving.ListLeavingAsync(settings, now, cancellationToken);
         Transferred moved = leaving.Count == 0
             ? new Transferred(0, 0, 0)
             : await writes.AllOrNothingAsync(
-                async token => new Transferred(
-                    await archive.KeepAsync(keeping, token),
-                    await programmes.ForgetAsync([.. leaving.Select(ended => ended.Programme)], token),
-                    0),
+                async token =>
+                {
+                    ProgrammesArchived archived = await archiving.ArchiveAsync(leaving, now, token);
+
+                    return new Transferred(archived.Kept, archived.Discarded, 0);
+                },
                 cancellationToken);
-        int forgotten = settings.ArchiveRetention is { } retention
-            ? await archive.ForgetBeforeAsync(now - retention, cancellationToken)
-            : 0;
+        int forgotten = await archiving.ForgetExpiredAsync(settings, now, cancellationToken);
 
         if (moved.Kept > 0 || forgotten > 0)
         {

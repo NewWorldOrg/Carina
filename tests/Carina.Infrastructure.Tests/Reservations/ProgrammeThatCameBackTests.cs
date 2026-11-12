@@ -3,7 +3,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
-using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Tests.Rules;
@@ -221,7 +220,7 @@ public sealed class ProgrammeThatCameBackTests
                 new RuleWithdrawalDomainService(Reservations, Streams, new HeldStreamVisits(), new HeldEpochs(), clock),
                 new RuleTakingDomainService(Reservations),
                 Scheduling,
-                new RuleMatcher(new ProgrammeSearchScope(Streams, new CountedServices()), clock),
+                new RuleMatcher(new ProgrammeSearchScopeDomainService(Streams, new CountedServices()), clock),
                 new RuleApplicationSettings(),
                 Write,
                 new SilentEvents(),

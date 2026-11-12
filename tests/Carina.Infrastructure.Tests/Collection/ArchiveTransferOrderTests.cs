@@ -57,8 +57,7 @@ public sealed class ArchiveTransferOrderTests
 
     private static ArchiveTransfer Transfer(HeldProgrammes programmes, IArchivedProgrammeRepository archive)
         => new(
-            programmes,
-            archive,
+            new ProgrammeArchivingDomainService(programmes, archive),
             new UnguardedWrites(),
             new CollectionSettings(),
             new FixedClock(Now),

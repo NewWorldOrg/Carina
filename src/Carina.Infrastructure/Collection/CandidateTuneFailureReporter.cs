@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Scans;
 using Carina.Infrastructure.Scanning;
 
 using Microsoft.Extensions.Logging;
@@ -6,47 +7,28 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Collection;
 
 public sealed class CandidateTuneFailureReporter(
-    ICandidateChannelRepository candidates,
+    ChannelRotationDomainService rotation,
     ScanSettings settings,
     ILogger<CandidateTuneFailureReporter> logger) : ITuneFailureReporter
 {
-    public Task ReportFailureAsync(
+    public async Task ReportFailureAsync(
         CandidateChannelId candidateChannelId,
         DateTime at,
         CancellationToken cancellationToken)
-        => TellAsync(
-            candidateChannelId,
-            candidate => candidate.RecordTuningFailure(settings.Rotation, at),
-            cancellationToken);
+        => Told(await rotation.RecordTuneFailureAsync(candidateChannelId, settings.Rotation, at, cancellationToken));
 
-    public Task ReportReachedAsync(
+    public async Task ReportReachedAsync(
         CandidateChannelId candidateChannelId,
         DateTime at,
         CancellationToken cancellationToken)
-        => TellAsync(
-            candidateChannelId,
-            candidate => candidate.RecordTuningSuccess(SignalMeasurement.WithLock(at), at),
-            cancellationToken);
+        => Told(await rotation.RecordTuneReachedAsync(candidateChannelId, at, cancellationToken));
 
-    private async Task TellAsync(
-        CandidateChannelId candidateChannelId,
-        Action<CandidateChannel> tell,
-        CancellationToken cancellationToken)
+    private void Told(bool told)
     {
-        ArgumentNullException.ThrowIfNull(candidateChannelId);
-
-        CandidateChannel? candidate = await candidates.FindAsync(candidateChannelId, cancellationToken);
-
-        if (candidate is null)
+        if (!told)
         {
             logger.LogDebug(
                 "The candidate a collection visit tuned with is gone; there is nobody to tell.");
-
-            return;
         }
-
-        tell(candidate);
-
-        await candidates.SaveAsync(candidate, cancellationToken);
     }
 }

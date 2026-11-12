@@ -5,7 +5,6 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
-using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Tests.Reservations;
@@ -207,7 +206,7 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
                 RollingHorizon.Default,
                 new SilentEvents(),
                 new FixedClock(Now)),
-            new RuleMatcher(new ProgrammeSearchScope(streams, new HeldServices()), new FixedClock(Now)),
+            new RuleMatcher(new ProgrammeSearchScopeDomainService(streams, new HeldServices()), new FixedClock(Now)),
             new RuleApplicationSettings(),
             new DatabaseAtomicWrite(context),
             new SilentEvents(),

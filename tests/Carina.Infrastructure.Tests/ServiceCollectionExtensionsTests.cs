@@ -201,7 +201,7 @@ public sealed class ServiceCollectionExtensionsTests
         using ServiceProvider provider = Build(ValidSettings());
         using IServiceScope scope = provider.CreateScope();
 
-        Assert.IsType<BroadcastStreamDirectory>(
+        Assert.IsType<BroadcastStreamDomainService>(
             scope.ServiceProvider.GetRequiredService<IBroadcastStreamDirectory>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<CollectionRound>());
     }

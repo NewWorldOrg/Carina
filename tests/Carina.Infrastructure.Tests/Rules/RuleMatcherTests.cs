@@ -2,7 +2,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
-using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Tests.Reservations;
 using Carina.TestSupport;
@@ -256,7 +255,7 @@ public sealed class RuleMatcherTests
         var catalogue = new HeldServices();
         catalogue.Services.Add(Service(Listed, ServiceCategory.Television));
         catalogue.Services.Add(Service(Unlisted, ServiceCategory.OneSeg));
-        var matcher = new RuleMatcher(new ProgrammeSearchScope(streams, catalogue), new FixedClock(At));
+        var matcher = new RuleMatcher(new ProgrammeSearchScopeDomainService(streams, catalogue), new FixedClock(At));
 
         RuleMatchRun run = await matcher.AgainstAsync(
             [Written("keyword=hill", 10, 1)],
@@ -314,7 +313,7 @@ public sealed class RuleMatcherTests
         => [.. run.Matches.Select(match => match.Programme.Name).Order(StringComparer.Ordinal)];
 
     private static RuleMatcher Matcher(HeldStreams streams)
-        => new(new ProgrammeSearchScope(streams, new HeldServices()), new FixedClock(At));
+        => new(new ProgrammeSearchScopeDomainService(streams, new HeldServices()), new FixedClock(At));
 
     [Fact]
     public async Task ARuleThatNarrowsToOneDayLeavesTheOtherDaysWhereTheyAre()

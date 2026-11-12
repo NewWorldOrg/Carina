@@ -1,13 +1,12 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
-using Carina.Infrastructure.Programmes;
 using Carina.TestSupport;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Domain.Tests.Programmes;
 
-public sealed class ProgrammeSearchScopeTests
+public sealed class ProgrammeSearchScopeDomainServiceTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);
 
@@ -16,7 +15,7 @@ public sealed class ProgrammeSearchScopeTests
     [Fact]
     public async Task ABroadcastTypeBecomesTheServicesThatTypeCarries()
     {
-        ProgrammeSearchScope scope = Scope(Terrestrial(4, 1049), Satellite(4, 1032));
+        ProgrammeSearchScopeDomainService scope = Scope(Terrestrial(4, 1049), Satellite(4, 1032));
 
         ProgrammeSearch bound = await scope.BoundAsync(Asking(TuneSystem.IsdbT), Cancel);
 
@@ -27,7 +26,7 @@ public sealed class ProgrammeSearchScopeTests
     [Fact]
     public async Task ABroadcastTypeThatCarriesNothingNamesNoServiceRatherThanEveryService()
     {
-        ProgrammeSearchScope scope = Scope(Terrestrial(4, 1049));
+        ProgrammeSearchScopeDomainService scope = Scope(Terrestrial(4, 1049));
 
         ProgrammeSearch bound = await scope.BoundAsync(Asking(TuneSystem.IsdbSCs110), Cancel);
 
@@ -38,7 +37,7 @@ public sealed class ProgrammeSearchScopeTests
     [Fact]
     public async Task WhatTheGuideDoesNotListIsLeftOutOfASearchThatNamesNoBroadcastType()
     {
-        ProgrammeSearchScope scope = Scope(
+        ProgrammeSearchScopeDomainService scope = Scope(
             [Terrestrial(4, 1049)],
             Listed(4, 1049),
             Unlisted(4, 1032));
@@ -52,7 +51,7 @@ public sealed class ProgrammeSearchScopeTests
     [Fact]
     public async Task WhatTheGuideDoesNotListIsLeftOutOfTheServicesABroadcastTypeCarriesToo()
     {
-        ProgrammeSearchScope scope = Scope(
+        ProgrammeSearchScopeDomainService scope = Scope(
             [Terrestrial(4, 1049, 1032)],
             Listed(4, 1049),
             Unlisted(4, 1032));
@@ -65,7 +64,7 @@ public sealed class ProgrammeSearchScopeTests
     [Fact]
     public async Task TheStreamsOneBroadcastTypeCarriesLeaveOutWhatTheGuideDoesNotList()
     {
-        ProgrammeSearchScope scope = Scope(
+        ProgrammeSearchScopeDomainService scope = Scope(
             [Terrestrial(4, 1049, 1032), Satellite(4, 1040)],
             Unlisted(4, 1032));
 
@@ -81,17 +80,17 @@ public sealed class ProgrammeSearchScopeTests
             null,
             conditions: new ProgrammeConditions { System = system })!;
 
-    private static ProgrammeSearchScope Scope(params BroadcastStream[] streams)
+    private static ProgrammeSearchScopeDomainService Scope(params BroadcastStream[] streams)
         => Scope(streams, []);
 
-    private static ProgrammeSearchScope Scope(
+    private static ProgrammeSearchScopeDomainService Scope(
         IReadOnlyList<BroadcastStream> streams,
         params BroadcastService[] services)
     {
         var catalogue = new HeldServices();
         catalogue.Services.AddRange(services);
 
-        return new ProgrammeSearchScope(new HeldStreams(streams), catalogue);
+        return new ProgrammeSearchScopeDomainService(new HeldStreams(streams), catalogue);
     }
 
     private static BroadcastService Listed(int network, int service)

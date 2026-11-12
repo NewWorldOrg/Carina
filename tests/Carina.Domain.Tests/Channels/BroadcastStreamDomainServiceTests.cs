@@ -1,10 +1,9 @@
 using Carina.Domain.Channels;
-using Carina.Infrastructure.Collection;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Collection;
+namespace Carina.Domain.Tests.Channels;
 
-public sealed class BroadcastStreamDirectoryTests
+public sealed class BroadcastStreamDomainServiceTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 0, 0, 0, DateTimeKind.Utc);
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -17,7 +16,7 @@ public sealed class BroadcastStreamDirectoryTests
         await held.AddAsync(Selected(4, 101, 22, 32_736), Cancel);
         await held.AddAsync(Selected(4, 102, 22, 32_736), Cancel);
 
-        IReadOnlyList<BroadcastStream> streams = await new BroadcastStreamDirectory(held).ListAsync(Cancel);
+        IReadOnlyList<BroadcastStream> streams = await new BroadcastStreamDomainService(held).ListAsync(Cancel);
 
         BroadcastStream only = Assert.Single(streams);
 
@@ -33,7 +32,7 @@ public sealed class BroadcastStreamDirectoryTests
         await held.AddAsync(Selected(4, 101, 22, 32_736), Cancel);
         await held.AddAsync(Selected(4, 201, 24, 32_737), Cancel);
 
-        IReadOnlyList<BroadcastStream> streams = await new BroadcastStreamDirectory(held).ListAsync(Cancel);
+        IReadOnlyList<BroadcastStream> streams = await new BroadcastStreamDomainService(held).ListAsync(Cancel);
 
         Assert.Equal([32_736, 32_737], streams.Select(stream => stream.TransportStreamId.Value));
     }
@@ -45,7 +44,7 @@ public sealed class BroadcastStreamDirectoryTests
 
         await held.AddAsync(Selected(4, 101, 22, null), Cancel);
 
-        Assert.Empty(await new BroadcastStreamDirectory(held).ListAsync(Cancel));
+        Assert.Empty(await new BroadcastStreamDomainService(held).ListAsync(Cancel));
     }
 
     [Fact]
@@ -63,7 +62,7 @@ public sealed class BroadcastStreamDirectoryTests
 
         await held.AddAsync(spare, Cancel);
 
-        Assert.Empty(await new BroadcastStreamDirectory(held).ListAsync(Cancel));
+        Assert.Empty(await new BroadcastStreamDomainService(held).ListAsync(Cancel));
     }
 
     [Fact]
@@ -79,7 +78,7 @@ public sealed class BroadcastStreamDirectoryTests
 
         await held.AddAsync(troubled, Cancel);
 
-        Assert.Empty(await new BroadcastStreamDirectory(held).ListAsync(Cancel));
+        Assert.Empty(await new BroadcastStreamDomainService(held).ListAsync(Cancel));
     }
 
     [Fact]
@@ -96,7 +95,7 @@ public sealed class BroadcastStreamDirectoryTests
         await held.AddAsync(troubled, Cancel);
         await held.AddAsync(Selected(4, 102, 23, 32_736), Cancel);
 
-        BroadcastStream only = Assert.Single(await new BroadcastStreamDirectory(held).ListAsync(Cancel));
+        BroadcastStream only = Assert.Single(await new BroadcastStreamDomainService(held).ListAsync(Cancel));
 
         Assert.Equal(23, only.Tuning.PhysicalChannel);
         Assert.Equal([101, 102], only.Services.Select(service => service.Value));
@@ -112,7 +111,7 @@ public sealed class BroadcastStreamDirectoryTests
 
         await held.AddAsync(unreached, Cancel);
 
-        IntendedStream only = Assert.Single(await new BroadcastStreamDirectory(held).ListIntendedAsync(Cancel));
+        IntendedStream only = Assert.Single(await new BroadcastStreamDomainService(held).ListIntendedAsync(Cancel));
 
         Assert.Null(only.TransportStreamId);
         Assert.Equal(RotationState.BackingOff, only.Reach.State);
@@ -129,7 +128,7 @@ public sealed class BroadcastStreamDirectoryTests
         await held.AddAsync(Selected(4, 101, 22, null), Cancel);
         await held.AddAsync(Selected(4, 102, 24, null), Cancel);
 
-        IReadOnlyList<IntendedStream> intended = await new BroadcastStreamDirectory(held).ListIntendedAsync(Cancel);
+        IReadOnlyList<IntendedStream> intended = await new BroadcastStreamDomainService(held).ListIntendedAsync(Cancel);
 
         Assert.Equal([22, 24], intended.Select(stream => stream.Tuning.PhysicalChannel));
     }
@@ -145,7 +144,7 @@ public sealed class BroadcastStreamDirectoryTests
         await held.AddAsync(troubled, Cancel);
         await held.AddAsync(Selected(4, 102, 23, 32_736), Cancel);
 
-        IntendedStream only = Assert.Single(await new BroadcastStreamDirectory(held).ListIntendedAsync(Cancel));
+        IntendedStream only = Assert.Single(await new BroadcastStreamDomainService(held).ListIntendedAsync(Cancel));
 
         Assert.Equal(RotationState.Active, only.Reach.State);
         Assert.Equal(new TransportStreamId(32_736), only.TransportStreamId);
@@ -164,7 +163,7 @@ public sealed class BroadcastStreamDirectoryTests
 
         await held.AddAsync(troubled, Cancel);
 
-        var directory = new BroadcastStreamDirectory(held);
+        var directory = new BroadcastStreamDomainService(held);
 
         Assert.Empty(await directory.ListAsync(Cancel));
 
@@ -182,7 +181,7 @@ public sealed class BroadcastStreamDirectoryTests
         await held.AddAsync(Measured(Selected(4, 101, 22, 32_736), 12_000), Cancel);
         await held.AddAsync(Measured(Selected(4, 102, 24, 32_736), 29_000), Cancel);
 
-        BroadcastStream only = Assert.Single(await new BroadcastStreamDirectory(held).ListAsync(Cancel));
+        BroadcastStream only = Assert.Single(await new BroadcastStreamDomainService(held).ListAsync(Cancel));
 
         Assert.Equal(24, only.Tuning.PhysicalChannel);
     }
@@ -196,7 +195,7 @@ public sealed class BroadcastStreamDirectoryTests
         await held.AddAsync(Measured(Selected(4, 102, 24, 32_736), 29_000), Cancel);
 
         IntendedStream only = Assert.Single(
-            await new BroadcastStreamDirectory(held).ListIntendedAsync(Cancel));
+            await new BroadcastStreamDomainService(held).ListIntendedAsync(Cancel));
 
         Assert.Equal(24, only.Tuning.PhysicalChannel);
     }
@@ -212,7 +211,7 @@ public sealed class BroadcastStreamDirectoryTests
         await held.AddAsync(unlocked, Cancel);
         await held.AddAsync(Measured(Selected(4, 102, 24, 32_736), 8_000), Cancel);
 
-        BroadcastStream only = Assert.Single(await new BroadcastStreamDirectory(held).ListAsync(Cancel));
+        BroadcastStream only = Assert.Single(await new BroadcastStreamDomainService(held).ListAsync(Cancel));
 
         Assert.Equal(24, only.Tuning.PhysicalChannel);
     }

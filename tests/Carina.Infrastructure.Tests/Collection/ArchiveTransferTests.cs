@@ -119,17 +119,17 @@ public sealed class ArchiveTransferTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
 
         await Empty(context);
-        await AddMany(context, network, ArchiveTransfer.MostPerRun);
+        await AddMany(context, network, ProgrammeArchivingDomainService.MostPerRun);
 
         Transferred moved = await Transfer(context).RunAsync(Cancel);
 
-        Assert.Equal(ArchiveTransfer.MostPerRun, moved.Kept);
-        Assert.Equal(ArchiveTransfer.MostPerRun, moved.Discarded);
+        Assert.Equal(ProgrammeArchivingDomainService.MostPerRun, moved.Kept);
+        Assert.Equal(ProgrammeArchivingDomainService.MostPerRun, moved.Discarded);
 
         await using CarinaDbContext reading = database.Open();
 
         Assert.Equal(0, await reading.Set<Programme>().CountAsync(Cancel));
-        Assert.Equal(ArchiveTransfer.MostPerRun, await reading.Set<ArchivedProgramme>().CountAsync(Cancel));
+        Assert.Equal(ProgrammeArchivingDomainService.MostPerRun, await reading.Set<ArchivedProgramme>().CountAsync(Cancel));
     }
 
     [Fact]
@@ -139,17 +139,17 @@ public sealed class ArchiveTransferTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
 
         await Empty(context);
-        await AddMany(context, network, ArchiveTransfer.MostPerRun + 1);
+        await AddMany(context, network, ProgrammeArchivingDomainService.MostPerRun + 1);
 
         Transferred first = await Transfer(context).RunAsync(Cancel);
 
-        Assert.Equal(ArchiveTransfer.MostPerRun, first.Kept);
-        Assert.Equal(ArchiveTransfer.MostPerRun, first.Discarded);
+        Assert.Equal(ProgrammeArchivingDomainService.MostPerRun, first.Kept);
+        Assert.Equal(ProgrammeArchivingDomainService.MostPerRun, first.Discarded);
 
         await using CarinaDbContext again = database.Open();
 
         Assert.Equal(1, await again.Set<Programme>().CountAsync(Cancel));
-        Assert.Equal(ArchiveTransfer.MostPerRun, await again.Set<ArchivedProgramme>().CountAsync(Cancel));
+        Assert.Equal(ProgrammeArchivingDomainService.MostPerRun, await again.Set<ArchivedProgramme>().CountAsync(Cancel));
 
         Transferred second = await Transfer(again).RunAsync(Cancel);
 
@@ -159,7 +159,7 @@ public sealed class ArchiveTransferTests(RepositoryDatabase database)
         await using CarinaDbContext reading = database.Open();
 
         Assert.Equal(0, await reading.Set<Programme>().CountAsync(Cancel));
-        Assert.Equal(ArchiveTransfer.MostPerRun + 1, await reading.Set<ArchivedProgramme>().CountAsync(Cancel));
+        Assert.Equal(ProgrammeArchivingDomainService.MostPerRun + 1, await reading.Set<ArchivedProgramme>().CountAsync(Cancel));
     }
 
     [Fact]
@@ -214,8 +214,9 @@ public sealed class ArchiveTransferTests(RepositoryDatabase database)
         await Add(context, network, 1, Now.AddDays(-3));
 
         var transfer = new ArchiveTransfer(
-            new StubbornProgrammes(new ProgrammeRepository(context)),
-            new ArchivedProgrammeRepository(context),
+            new ProgrammeArchivingDomainService(
+                new StubbornProgrammes(new ProgrammeRepository(context)),
+                new ArchivedProgrammeRepository(context)),
             new DatabaseAtomicWrite(context),
             new CollectionSettings(),
             new FixedClock(Now),
@@ -304,8 +305,9 @@ public sealed class ArchiveTransferTests(RepositoryDatabase database)
 
     private static async Task MoveAsync(CarinaDbContext context, DateTime at)
         => await new ArchiveTransfer(
-            new ProgrammeRepository(context),
-            new ArchivedProgrammeRepository(context),
+            new ProgrammeArchivingDomainService(
+                new ProgrammeRepository(context),
+                new ArchivedProgrammeRepository(context)),
             new DatabaseAtomicWrite(context),
             new CollectionSettings(),
             new FixedClock(at),
@@ -406,8 +408,9 @@ public sealed class ArchiveTransferTests(RepositoryDatabase database)
 
     private static ArchiveTransfer Transfer(CarinaDbContext context, CollectionSettings? settings = null)
         => new(
-            new ProgrammeRepository(context),
-            new ArchivedProgrammeRepository(context),
+            new ProgrammeArchivingDomainService(
+                new ProgrammeRepository(context),
+                new ArchivedProgrammeRepository(context)),
             new DatabaseAtomicWrite(context),
             settings ?? new CollectionSettings(),
             new FixedClock(Now),

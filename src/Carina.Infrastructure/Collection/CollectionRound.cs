@@ -180,19 +180,17 @@ public sealed class CollectionRound(
 
         DateTime at = clock.GetUtcNow().UtcDateTime;
 
-        if (CollectionBackOff.IsWorthReportingToTheTuner(outcome))
+        switch (CollectionBackOff.ReportToTheTuner(outcome))
         {
-            await tuning.ReportFailureAsync(candidateChannelId, at, abort);
+            case TunerReport.Failed:
+                await tuning.ReportFailureAsync(candidateChannelId, at, abort);
 
-            return;
+                break;
+            case TunerReport.Reached:
+                await tuning.ReportReachedAsync(candidateChannelId, at, abort);
+
+                break;
         }
-
-        if (outcome is VisitOutcome.Interrupted)
-        {
-            return;
-        }
-
-        await tuning.ReportReachedAsync(candidateChannelId, at, abort);
     }
 
     private void NoticeWhatTheStreamDeclared(BroadcastStream stream, VisitResult visit)
@@ -263,38 +261,39 @@ public sealed class CollectionRound(
     {
         DateTime at = clock.GetUtcNow().UtcDateTime;
         IReadOnlyList<VisitTally> counted = TallyOf(stream, visit);
-        bool heard = counted.Count > 0;
-        bool reached = heard && await ReachedTheGoalAsync(stream, at, abort);
+        bool reached = counted.Count > 0 && await ReachedTheGoalAsync(stream, at, abort);
         StreamVisit? held = await visits.FindAsync(stream.NetworkId, stream.TransportStreamId, abort);
 
+        await visits.SaveAsync(Written(stream, held, visit, at, took, counted, reached), abort);
+        events.Signal(AppEventName.EpgCollection);
+    }
+
+    private static StreamVisit Written(
+        BroadcastStream stream,
+        StreamVisit? held,
+        VisitResult visit,
+        DateTime at,
+        TimeSpan took,
+        IReadOnlyList<VisitTally> counted,
+        bool reached)
+    {
         if (held is null)
         {
-            StreamVisit first = StreamVisit.Record(
-                stream.NetworkId,
-                stream.TransportStreamId,
-                visit.Outcome,
-                at,
-                took,
-                heardTheSchedule: heard,
-                reachedTheGoal: reached);
-
-            first.Tallied(counted);
-
-            await visits.SaveAsync(first, abort);
-            events.Signal(AppEventName.EpgCollection);
-
-            return;
+            return visit.WorthWaitingOut
+                ? StreamVisit.TurnedAway(stream.NetworkId, stream.TransportStreamId, at, took)
+                : StreamVisit.Visited(stream.NetworkId, stream.TransportStreamId, visit.Outcome, at, took, counted, reached);
         }
 
-        held.Record(visit.Outcome, at, took, heardTheSchedule: heard, reachedTheGoal: reached);
-
-        if (!visit.WorthWaitingOut)
+        if (visit.WorthWaitingOut)
         {
-            held.Tallied(counted);
+            held.TurnedAway(at, took);
+        }
+        else
+        {
+            held.Visited(visit.Outcome, at, took, counted, reached);
         }
 
-        await visits.SaveAsync(held, abort);
-        events.Signal(AppEventName.EpgCollection);
+        return held;
     }
 
     private async Task<bool> ReachedTheGoalAsync(BroadcastStream stream, DateTime at, CancellationToken abort)
