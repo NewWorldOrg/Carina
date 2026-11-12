@@ -99,6 +99,9 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
             RecordingGap.SeamsIn(recording.StartedAtActual, recording.Gaps));
     }
 
+    /// <summary>
+    /// <see cref="Recording.AwaitsAThumbnail"/> as the store answers it, held equal to it by a database test.
+    /// </summary>
     private IQueryable<Recording> Waiting()
         => context.Set<Recording>()
             .AsNoTracking()

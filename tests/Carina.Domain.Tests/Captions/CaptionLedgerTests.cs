@@ -67,7 +67,7 @@ public sealed class CaptionLedgerTests
 
         recording.Descrambled(Later.AddHours(1));
 
-        Assert.True(CaptionLedger.Awaited(recording));
+        Assert.True(recording.AwaitsCaptions);
         Assert.Equal(CaptionStanding.Coming, CaptionLedger.StandingOf(recording, kept: true));
     }
 
@@ -79,7 +79,7 @@ public sealed class CaptionLedgerTests
 
         recording.Caption(CaptionState.Ready, 3, Later.AddHours(1));
 
-        Assert.False(CaptionLedger.Awaited(recording));
+        Assert.False(recording.AwaitsCaptions);
     }
 
     private static Recording Ended(bool scrambled = false)

@@ -1,4 +1,5 @@
 using Carina.Domain.Base;
+using Carina.Domain.Captions;
 using Carina.Domain.Channels;
 using Carina.Domain.DataBroadcast;
 using Carina.Domain.Programmes;
@@ -217,6 +218,23 @@ public sealed class Recording
 
     public bool ThumbnailShowsAnUnfinishedRecording
         => ThumbnailState is ThumbnailState.Ready && Outcome is RecordingOutcome.Truncated;
+
+    /// <summary>
+    /// Whether a picture is to be drawn of the recording: it has ended and its picture is waiting. The thumbnail
+    /// pass skips one that failed rather than drawing it. The query the pass reads in the store says the same.
+    /// </summary>
+    public bool AwaitsAThumbnail => Outcome is not null && ThumbnailState is ThumbnailState.Pending;
+
+    /// <summary>
+    /// Whether the captions are to be taken from the recording's file again: it has ended, and they are waiting, failed
+    /// fewer times in a row than are tried, or were taken before the file was descrambled. The query the caption pass
+    /// reads in the store says the same.
+    /// </summary>
+    public bool AwaitsCaptions
+        => Outcome is not null
+           && (CaptionState is CaptionState.Pending
+               || (CaptionState is CaptionState.Failed && CaptionAttempts < CaptionSettings.TriesAtMost)
+               || DescrambledAt > CaptionsMadeAt);
 
     public TimeSpan Written => TimeSpan.FromMilliseconds(WrittenDurationMs);
 
