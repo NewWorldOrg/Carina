@@ -39,7 +39,7 @@ public sealed record ChapterRewriteRound(
 /// </summary>
 /// <remarks>
 /// An artefact whose chapters still agree is written down as standing for the detection and left as it is.
-/// One opened in the last <see cref="ArtefactCaptionTracks.LeftAloneAfterAnOpening"/>, one not where the ledger
+/// One opened in the last <see cref="ArtefactRewriteDomainService.LeftAloneAfterAnOpening"/>, one not where the ledger
 /// says, one written again within a day, and one whose room holds less than the artefact's size are passed
 /// over. The copy is made beside the artefact and checked, and only once the machine is still spare and the
 /// artefact is seen to stand, to be the file it was and to be unopened, does the placer rename the copy over
@@ -55,7 +55,7 @@ public sealed class ArtefactChapterRewrites(
     EncodePlaces places,
     EncodeArtefactPlacer placer,
     EncodeScratchCleaner cleaner,
-    IArtefactOpenings openings,
+    ArtefactRewriteDomainService rewrites,
     IFreeSpaceReader room,
     TimeProvider clock,
     ILogger<ArtefactChapterRewrites> logger)
@@ -194,7 +194,7 @@ public sealed class ArtefactChapterRewrites(
         FileInfo before = new(artefact);
         (long Bytes, DateTime WrittenAt) was = (before.Length, before.LastWriteTimeUtc);
 
-        if (OpenedLately(job) || !RoomFor(job, was.Bytes))
+        if (rewrites.IsLeftAlone(job) || !RoomFor(job, was.Bytes))
         {
             return ChapterRewriteOutcome.PassedOver;
         }
@@ -279,13 +279,9 @@ public sealed class ArtefactChapterRewrites(
 
         return now.Exists
                && (now.Length, now.LastWriteTimeUtc) == was
-               && !OpenedLately(job)
+               && !rewrites.IsLeftAlone(job)
                && await standing.StandsWithNothingInHandAsync(job, cancellationToken);
     }
-
-    private bool OpenedLately(EncodeJob job)
-        => openings.LastOpened(job.OutputRoot, job.ArtefactName!.Value) is { } opened
-           && clock.GetUtcNow() - opened < ArtefactCaptionTracks.LeftAloneAfterAnOpening;
 
     private string? Where(EncodeJob job)
         => job.ArtefactName is { } name && places.WhereTheArtefactGoes(job.OutputRoot) is { } shelf ? Path.Combine(shelf, name.Value) : null;

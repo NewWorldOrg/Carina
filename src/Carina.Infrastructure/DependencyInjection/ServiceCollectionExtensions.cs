@@ -255,6 +255,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeDefinitionDomainService>();
         services.AddScoped<EncodeQueueDomainService>();
         services.AddScoped<RecordingEncodeDomainService>();
+        services.AddScoped<ArtefactRewriteDomainService>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
         services.AddScoped<IRecordingEncodes, RecordingEncodes>();

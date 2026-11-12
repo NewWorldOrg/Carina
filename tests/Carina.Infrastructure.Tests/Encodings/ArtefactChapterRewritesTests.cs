@@ -67,7 +67,7 @@ public sealed class ArtefactChapterRewritesTests : IDisposable
         EncodeJob job = harness.Stood(Recorded, APod, TheArtefact);
         harness.Awaiting(job, SegmentDetectionState.Marked, null, Moved());
         harness.Openings.Opened(job.OutputRoot, job.ArtefactName!.Value);
-        ((HandTurnedClock)harness.Encodes.Clock).Turn(ArtefactCaptionTracks.LeftAloneAfterAnOpening - TimeSpan.FromSeconds(1));
+        ((HandTurnedClock)harness.Encodes.Clock).Turn(ArtefactRewriteDomainService.LeftAloneAfterAnOpening - TimeSpan.FromSeconds(1));
 
         ChapterRewriteRound round = await harness.Rewrites.RewriteAsync(1, 4, [], Spare, Cancel);
 

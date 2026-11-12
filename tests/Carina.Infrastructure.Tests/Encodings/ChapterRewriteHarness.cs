@@ -44,7 +44,7 @@ internal sealed class ChapterRewriteHarness : IDisposable
         Encodes.Places,
         Encodes.Placer,
         Encodes.Cleaner,
-        Openings,
+        new ArtefactRewriteDomainService(Openings, Encodes.Clock),
         Room,
         Encodes.Clock,
         Log);
