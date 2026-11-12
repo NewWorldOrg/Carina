@@ -332,7 +332,7 @@ public sealed class DataBroadcastJobTests : IDisposable
         CaptionSettings chosen = settings ?? Settings();
 
         return new DataBroadcastJob(
-            Scopes(),
+            Scopes(chosen),
             taker,
             new DataBroadcastShelf(chosen),
             chosen,
@@ -343,11 +343,13 @@ public sealed class DataBroadcastJobTests : IDisposable
             NullLogger<DataBroadcastJob>.Instance);
     }
 
-    private IServiceScopeFactory Scopes()
+    private IServiceScopeFactory Scopes(CaptionSettings settings)
     {
         ServiceCollection services = new();
         services.AddScoped<IDataBroadcastWorklist>(_ => worklist);
         services.AddScoped<IBusynessReader>(_ => busyness);
+        services.AddSingleton<IDataBroadcastRecords>(new DataBroadcastShelf(settings));
+        services.AddScoped<DataBroadcastRequeueDomainService>();
 
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }

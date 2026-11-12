@@ -515,7 +515,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Equal(BroadcasterRelaySettings.Default.UserAgent, provider.GetRequiredService<HybridcastRelaySettings>().UserAgent);
     }
 
-    [Fact(DisplayName = "registers the domain services of recordings and their captions, each for one scope")]
+    [Fact(DisplayName = "registers the domain services of recordings, their captions and their data broadcasts, each for one scope")]
     public void RegistersTheDomainServicesOfRecordings()
     {
         using ServiceProvider provider = Build(ValidSettings());
@@ -525,6 +525,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingSettlementDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingDisposalDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<CaptionRequeueDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<DataBroadcastRequeueDomainService>());
     }
 
     [Fact(DisplayName = "registers the domain services of quality, each for one scope")]

@@ -296,6 +296,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICaptionWorklist, CaptionWorklist>();
         services.AddScoped<CaptionRequeueDomainService>();
         services.AddScoped<IDataBroadcastWorklist, DataBroadcastWorklist>();
+        services.AddScoped<DataBroadcastRequeueDomainService>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDomainService>();
