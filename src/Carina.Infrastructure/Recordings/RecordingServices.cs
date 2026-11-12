@@ -19,6 +19,7 @@ public static class RecordingServices
         services.AddScoped<IRecordingTitles, InFlightRecordingTitles>();
         services.AddScoped<ProgrammeEndDomainService>();
         services.AddScoped<RecordingSettlementDomainService>();
+        services.AddScoped<RecordingDisposalDomainService>();
         services.AddScoped<IBusynessReader, BusynessReader>();
         services.AddScoped<ProgramExtensionFollower>();
         services.TryAddSingleton<EndsAlreadyAsked>();

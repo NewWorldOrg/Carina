@@ -513,6 +513,17 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Equal(BroadcasterRelaySettings.Default.UserAgent, provider.GetRequiredService<HybridcastRelaySettings>().UserAgent);
     }
 
+    [Fact(DisplayName = "registers the domain services of recordings, each for one scope")]
+    public void RegistersTheDomainServicesOfRecordings()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingSettlementDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingDisposalDomainService>());
+    }
+
     [Fact(DisplayName = "registers the follow of recordings being written for their learning data alongside the other hosted services, with what it reaches for")]
     public void RegistersTheLearningFollowAlongsideTheOtherHostedServices()
     {
@@ -525,7 +536,6 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.IsType<FfmpegLearningFollower>(provider.GetRequiredService<ILearningFollower>());
         Assert.IsType<LearningWorklist>(scope.ServiceProvider.GetRequiredService<ILearningWorklist>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ProgrammeEndDomainService>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingSettlementDomainService>());
         Assert.Same(LearningFollowSettings.Default, provider.GetRequiredService<LearningFollowSettings>());
     }
 

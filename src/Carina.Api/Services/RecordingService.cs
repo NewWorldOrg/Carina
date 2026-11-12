@@ -128,6 +128,7 @@ public sealed class RecordingService(
     IThumbnailRemaker thumbnails,
     IRecordingFileEraser eraser,
     IRecordingEncodes encodes,
+    RecordingDisposalDomainService disposal,
     IPlaybackPositionRepository positions,
     RecordingDeletions deletions,
     IAppEventPublisher events,
@@ -338,24 +339,11 @@ public sealed class RecordingService(
     {
         ArgumentNullException.ThrowIfNull(id);
 
-        if (await recordings.FindAsync(id, cancellationToken) is not { } recording)
-        {
-            return Missing<RecordingDiscarded>(id);
-        }
+        RecordingDisposal weighed = await disposal.WeighAsync(id, cancellationToken);
 
-        if (recording.IsInFlight)
+        if (weighed.Recording is not { } recording)
         {
-            return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
-                $"Recording {id.Wire} is still being written, so it is stopped before it is thrown away.",
-                RecordingFailure.StillRecording);
-        }
-
-        if (await encodes.AnyUnderWayAsync(id, cancellationToken))
-        {
-            return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
-                $"Recording {id.Wire} has an encode waiting or running, so that is called off before the recording "
-                + "is thrown away.",
-                RecordingFailure.BeingEncoded);
+            return Kept<RecordingDiscarded>(id, weighed.Refusal);
         }
 
         using IDisposable? turn = deletions.Begin(id);
@@ -380,7 +368,7 @@ public sealed class RecordingService(
 
             if (erasure.EverythingIsGone)
             {
-                if (await encodes.AnyUnderWayAsync(id, asking.Token))
+                if (!await disposal.RowMayGoAsync(id, asking.Token))
                 {
                     return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
                         $"Recording {id.Wire} is off the disk, and an encode of it was queued while it was being "
@@ -490,6 +478,19 @@ public sealed class RecordingService(
             fault,
             "An erasure that failed says which way it failed."),
     };
+
+    private static ServiceResult<T, RecordingFailure> Kept<T>(RecordingId id, RecordingDisposalRefusal? refusal)
+        => refusal switch
+        {
+            RecordingDisposalRefusal.StillBeingWritten => ServiceResult<T, RecordingFailure>.Failure(
+                $"Recording {id.Wire} is still being written, so it is stopped before it is thrown away.",
+                RecordingFailure.StillRecording),
+            RecordingDisposalRefusal.BeingEncoded => ServiceResult<T, RecordingFailure>.Failure(
+                $"Recording {id.Wire} has an encode waiting or running, so that is called off before the recording "
+                + "is thrown away.",
+                RecordingFailure.BeingEncoded),
+            _ => Missing<T>(id),
+        };
 
     private static ServiceResult<T, RecordingFailure> Missing<T>(RecordingId id)
         => ServiceResult<T, RecordingFailure>.Failure(
