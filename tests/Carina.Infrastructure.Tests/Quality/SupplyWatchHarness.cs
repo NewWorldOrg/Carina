@@ -56,7 +56,7 @@ internal sealed class SupplyWatchHarness
             Thresholds,
             Incidents,
             Supply,
-            Samples,
+            new SupplyWatchDomainService(Samples),
             Ledger,
             signals,
             Driver,

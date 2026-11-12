@@ -11,6 +11,8 @@ public sealed class QualityIncidentTests
 
     private static readonly Threshold Applied = Threshold.Provisionally(0.0002, observations: 0, Detected);
 
+    private static readonly QualitySubject Tuner = QualitySubject.Of(QualitySubjectKind.Tuner, "adapter3.frontend0");
+
     [Fact(DisplayName = "the threshold an incident was judged against is kept as it stood then")]
     public void TheThresholdAnIncidentWasJudgedAgainstIsKeptAsItStoodThen()
     {
@@ -32,6 +34,60 @@ public sealed class QualityIncidentTests
         Assert.Equal(Later, incident.NotifiedAt);
         Assert.False(incident.HasSettled);
         Assert.Throws<InvalidOperationException>(() => incident.Notify(Later.AddMinutes(1)));
+    }
+
+    [Fact(DisplayName = "BR-QS-002: only an incident detected and not yet told about awaits its notice")]
+    public void OnlyADetectedIncidentAwaitsItsNotice()
+    {
+        QualityIncident detected = Detect();
+        QualityIncident notified = Detect();
+        notified.Notify(Later);
+        QualityIncident resolved = Detect();
+        resolved.Resolve(Later);
+
+        Assert.True(detected.AwaitsNotice);
+        Assert.False(notified.AwaitsNotice);
+        Assert.False(resolved.AwaitsNotice);
+    }
+
+    [Fact(DisplayName = "BR-QD-007: a supply that went quiet is held against the threshold every supply shares when it has no allowance of its own")]
+    public void AQuietSupplyIsHeldAgainstTheSharedThreshold()
+    {
+        Threshold shared = Threshold.Provisionally(300, observations: 0, Detected.AddDays(-1));
+
+        QualityIncident incident = QualityIncident.WentQuiet(
+            QualityIncidentId.New(),
+            SupplySilenceFinding.Of(SupplySilence.SignalSamples, Tuner, TimeSpan.FromSeconds(420)),
+            shared,
+            Detected);
+
+        Assert.Same(shared, incident.Applied);
+        Assert.Equal(QualityThresholdKey.SupplySilence, incident.Breached);
+        Assert.Equal(SupplySilence.SignalSamples, incident.Silence);
+        Assert.Equal(Tuner, incident.Subject);
+        Assert.Equal(420, incident.Observed);
+        Assert.Equal(Detected, incident.DetectedAt);
+        Assert.True(incident.AwaitsNotice);
+    }
+
+    [Fact(DisplayName = "BR-QD-007: a supply with an allowance of its own is held against that allowance rather than the shared threshold")]
+    public void AQuietSupplyWithItsOwnAllowanceIsHeldAgainstIt()
+    {
+        QualityIncident incident = QualityIncident.WentQuiet(
+            QualityIncidentId.New(),
+            SupplySilenceFinding.Of(
+                SupplySilence.GuideVisits,
+                QualitySubject.TheGuideLedger,
+                TimeSpan.FromMinutes(50),
+                TimeSpan.FromMinutes(39.5)),
+            Threshold.Provisionally(300, observations: 0, Detected.AddDays(-1)),
+            Detected);
+
+        Assert.Equal(2370, incident.Applied.Current);
+        Assert.Equal(2370, incident.Applied.Default);
+        Assert.True(incident.Applied.Provisional);
+        Assert.Equal(0, incident.Applied.Observations);
+        Assert.Equal(Detected, incident.Applied.UpdatedAt);
     }
 
     [Fact(DisplayName = "an incident only ever stands detected, told about, or resolved")]

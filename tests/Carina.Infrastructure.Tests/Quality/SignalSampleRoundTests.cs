@@ -318,16 +318,17 @@ public sealed class SignalSampleRoundTests
         DateTime? at = null)
         => new(
             driver,
-            streams ?? new HeldStreams(
-            [
-                new BroadcastStream(
-                    new NetworkId(32736),
-                    new TransportStreamId(32736),
-                    Terrestrial,
-                    [new ServiceId(1024), new ServiceId(1025)]),
-            ]),
+            new QualitySessionMeasuringDomainService(
+                streams ?? new HeldStreams(
+                [
+                    new BroadcastStream(
+                        new NetworkId(32736),
+                        new TransportStreamId(32736),
+                        Terrestrial,
+                        [new ServiceId(1024), new ServiceId(1025)]),
+                ]),
+                measurements ?? new HeldQualitySessionMeasurements()),
             samples,
-            measurements ?? new HeldQualitySessionMeasurements(),
             new HandTurnedClock(at ?? Noon),
             NullLogger<SignalSampleRound>.Instance);
 

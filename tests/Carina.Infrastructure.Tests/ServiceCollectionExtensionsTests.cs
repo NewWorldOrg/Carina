@@ -12,6 +12,7 @@ using Carina.Domain.Machines;
 using Carina.Domain.Migration;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
@@ -524,6 +525,16 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingSettlementDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingDisposalDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<CaptionRequeueDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of quality, each for one scope")]
+    public void RegistersTheDomainServicesOfQuality()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<QualitySessionMeasuringDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SupplyWatchDomainService>());
     }
 
     [Fact(DisplayName = "registers the follow of recordings being written for their learning data alongside the other hosted services, with what it reaches for")]
