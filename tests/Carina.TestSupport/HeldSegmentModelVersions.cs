@@ -74,9 +74,12 @@ public sealed class HeldSegmentModelVersions : ISegmentModelVersionRepository
         return Task.FromResult(candidate);
     }
 
-    public Task<IReadOnlyList<int>> LetGoOfCandidatesBeforeAsync(int latest, CancellationToken cancellationToken)
+    public Task<IReadOnlySet<int>> NamedAmongAsync(IReadOnlyCollection<int> numbers, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlySet<int>>(numbers.Where(Named.Contains).ToHashSet());
+
+    public Task<IReadOnlyList<int>> LetGoAsync(IReadOnlyCollection<int> numbers, CancellationToken cancellationToken)
     {
-        int[] letGo = [.. SegmentModelVersion.LetGoBefore(Kept, latest).Where(number => !Named.Contains(number))];
+        int[] letGo = [.. Kept.Where(version => numbers.Contains(version.Number) && version.IsLetGoBefore(int.MaxValue, Named.Contains(version.Number))).Select(version => version.Number).Order()];
 
         Others.RemoveAll(version => letGo.Contains(version.Number));
         LetGo.AddRange(letGo);

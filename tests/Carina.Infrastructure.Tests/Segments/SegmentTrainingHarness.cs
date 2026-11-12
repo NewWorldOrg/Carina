@@ -110,6 +110,9 @@ internal sealed class SegmentTrainingHarness : IDisposable
             .AddSingleton<ISegmentLearningRoundRepository>(Rounds)
             .AddSingleton<ILearningMaterialChanges>(Changes)
             .AddSingleton<ISegmentTrainer>(Trainer)
+            .AddSingleton<TimeProvider>(Clock)
+            .AddScoped<SegmentVersionDomainService>()
+            .AddScoped<SegmentLearningRoundDomainService>()
             .BuildServiceProvider();
     }
 

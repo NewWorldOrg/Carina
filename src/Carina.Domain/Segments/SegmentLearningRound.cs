@@ -71,6 +71,12 @@ public sealed class SegmentLearningRound
         EvaluationEvidence? candidateEvidence = null)
         => Rehydrate(day, takenAt, candidate, outcome, verdict, inUseMetrics, inUseVersion, candidateMetrics, candidateEvidence);
 
+    /// <summary>
+    /// Whether a round that came to <paramref name="outcome"/> is kept as finished: every round but one that stopped
+    /// partway, which throws what it learned away and is taken again in spare time the same day.
+    /// </summary>
+    public static bool IsKept(SegmentTrainingOutcome outcome) => outcome is not SegmentTrainingOutcome.Stopped;
+
     public static SegmentLearningRound Rehydrate(
         DateOnly day,
         DateTime takenAt,
@@ -99,7 +105,7 @@ public sealed class SegmentLearningRound
             throw new ArgumentOutOfRangeException(nameof(inUseVersion), inUseVersion, "A version is numbered from the first.");
         }
 
-        if (outcome is SegmentTrainingOutcome.Stopped)
+        if (outcome is SegmentTrainingOutcome given && !IsKept(given))
         {
             throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "A round that stopped partway is taken again, not kept as finished.");
         }

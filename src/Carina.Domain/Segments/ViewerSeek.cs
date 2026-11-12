@@ -53,7 +53,7 @@ public sealed record ViewerSeek
             throw new ArgumentOutOfRangeException(nameof(from), from, "A seek names moments no earlier than the recording's own zero.");
         }
 
-        if (action is SeekAction.Forward ? to <= from : to >= from)
+        if (!GoesItsWay(action, from, to))
         {
             throw new ArgumentException("A seek forward lands later than where it started, and coming back earlier.", nameof(to));
         }
@@ -74,4 +74,10 @@ public sealed record ViewerSeek
     public TimeSpan From { get; }
 
     public TimeSpan To { get; }
+
+    /// <summary>
+    /// Whether a seek <paramref name="action"/> from <paramref name="from"/> to <paramref name="to"/> goes its way:
+    /// later going forward, earlier coming back.
+    /// </summary>
+    public static bool GoesItsWay(SeekAction action, TimeSpan from, TimeSpan to) => action is SeekAction.Forward ? to > from : to < from;
 }

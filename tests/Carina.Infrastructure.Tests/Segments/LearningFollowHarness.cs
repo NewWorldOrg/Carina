@@ -130,6 +130,7 @@ internal sealed class LearningFollowHarness : IDisposable
             .AddSingleton<IAnnouncedProgrammes>(Programmes)
             .AddSingleton<IReservationRepository>(Reservations)
             .AddScoped<ProgrammeEndDomainService>()
+            .AddScoped<LearningExtractionRecoveryDomainService>()
             .BuildServiceProvider();
 
         Store = new LearningRecords(provider.GetRequiredService<IServiceScopeFactory>());

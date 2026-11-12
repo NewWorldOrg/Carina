@@ -37,6 +37,23 @@ public sealed class SeekEvent
     public ViewerSeek Seek() => new(HappenedAt, Event, Means, From, To);
 
     /// <summary>
+    /// Whether a seek of the same recording that happened at <paramref name="other"/> counts towards the
+    /// <see cref="MostAnHour"/> this one is taken beside: it happened later than <see cref="Within"/> before this one.
+    /// </summary>
+    public bool CountsWith(DateTime other) => other > HappenedAt - Within;
+
+    /// <summary>
+    /// Whether this seek is taken beside those of its recording that happened at <paramref name="kept"/>: fewer than
+    /// <see cref="MostAnHour"/> of them count with it (<see cref="CountsWith"/>).
+    /// </summary>
+    public bool IsTakenBeside(IEnumerable<DateTime> kept)
+    {
+        ArgumentNullException.ThrowIfNull(kept);
+
+        return kept.Count(CountsWith) < MostAnHour;
+    }
+
+    /// <summary>
     /// The event, not yet kept, of <paramref name="seek"/> on the recording.
     /// </summary>
     public static SeekEvent Of(RecordingId recordingId, ViewerSeek seek)

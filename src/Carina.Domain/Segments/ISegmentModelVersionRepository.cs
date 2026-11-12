@@ -2,7 +2,7 @@ namespace Carina.Domain.Segments;
 
 /// <summary>
 /// Where the versions of the model are kept. A version is removed from it only as learning lets go of the candidates
-/// it did not take (<see cref="LetGoOfCandidatesBeforeAsync"/>), and a number once given is never given again.
+/// it did not take (<see cref="LetGoAsync"/>), and a number once given is never given again.
 /// </summary>
 public interface ISegmentModelVersionRepository
 {
@@ -29,13 +29,18 @@ public interface ISegmentModelVersionRepository
     Task<SegmentModelVersion> AddCandidateAsync(SegmentModel model, SegmentEvaluation evaluation, DateTime trainedAt, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Lets go of the candidates learning did not take once it has kept the candidate numbered
-    /// <paramref name="latest"/>, once no other change is being made: those
-    /// <see cref="SegmentModelVersion.LetGoBefore"/> names that no detection, viewer's skip, chapters of an encode or
-    /// round of learning measuring the version in use names. Answers the numbers let go, the lowest first; the
-    /// numbers of the versions kept do not move.
+    /// The numbers among <paramref name="numbers"/> that a detection, a viewer's skip, the chapters of an encode or a
+    /// round of learning measuring the version in use names.
     /// </summary>
-    Task<IReadOnlyList<int>> LetGoOfCandidatesBeforeAsync(int latest, CancellationToken cancellationToken);
+    Task<IReadOnlySet<int>> NamedAmongAsync(IReadOnlyCollection<int> numbers, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Lets go, once no other change is being made, of the versions numbered <paramref name="numbers"/> that are still
+    /// as <see cref="SegmentModelVersion.IsLetGoBefore"/> lets go of them: candidates learning made that nobody put in
+    /// use or chose by hand, and that nothing names. Answers the numbers let go, the lowest first; the numbers of the
+    /// versions kept do not move.
+    /// </summary>
+    Task<IReadOnlyList<int>> LetGoAsync(IReadOnlyCollection<int> numbers, CancellationToken cancellationToken);
 
     /// <summary>
     /// Keeps <paramref name="builtIn"/>, the built-in version of this release, at <paramref name="at"/> as

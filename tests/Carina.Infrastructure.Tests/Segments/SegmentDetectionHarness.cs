@@ -118,6 +118,7 @@ internal sealed class SegmentDetectionHarness : IDisposable
             .AddSingleton<IRecordingDetectionRepository>(Detections)
             .AddSingleton(Lowest)
             .AddSingleton(SegmentDetectionSettings.Default)
+            .AddScoped<SegmentContextDomainService>()
             .AddScoped<SegmentDetecting>()
             .BuildServiceProvider();
 

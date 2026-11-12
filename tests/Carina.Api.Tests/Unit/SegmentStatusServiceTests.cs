@@ -174,15 +174,15 @@ public sealed class SegmentStatusServiceTests
 
     private async Task<SegmentStatus> ReadAsync()
     {
+        HandTurnedClock clock = new(new DateTimeOffset(Now));
         SegmentStatusService service = new(
             new HeldLearningDataAmount(),
             new HeldCatalogCounts(),
             versions,
             new HeldSegmentSettings(),
-            skips,
-            new HeldCatalogEvidence(),
+            new SegmentFiguresDomainService(rounds, skips, new HeldCatalogEvidence(), clock),
             rounds,
-            new HandTurnedClock(new DateTimeOffset(Now)));
+            clock);
 
         ServiceResult<SegmentStatus> result = await service.ReadAsync(CancellationToken.None);
 

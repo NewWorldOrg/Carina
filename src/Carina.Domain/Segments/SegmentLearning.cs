@@ -4,7 +4,14 @@ namespace Carina.Domain.Segments;
 /// What one round of learning made: the candidate, how it did, how the version in use did on the same
 /// recordings, and whether the candidate takes its place.
 /// </summary>
-public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Evaluation, SegmentEvaluation InUse, AdoptionVerdict Verdict);
+public sealed record SegmentLearned(SegmentModel Candidate, SegmentEvaluation Evaluation, SegmentEvaluation InUse, AdoptionVerdict Verdict)
+{
+    /// <summary>
+    /// Whether the candidate is kept: it was judged on at least one recording. A candidate judged on none had nothing
+    /// to learn from.
+    /// </summary>
+    public bool IsKept => Evaluation.Evidence.Recordings is not 0;
+}
 
 /// <summary>
 /// Learns a candidate from every recording handed over and judges it on those the catalog is sure of something in

@@ -46,7 +46,7 @@ public sealed record SegmentTrainingLook(SpareTimeVerdict? Verdict, SegmentTrain
 /// <see cref="SegmentRollback"/> says so; then, when <see cref="SegmentLearningRound.HasNews"/> finds something
 /// learning reads changed since the last round that kept a candidate, learns a candidate beside the version in use
 /// and keeps it as a candidate, unless no recording was judged, when there was nothing to learn from; lets go of the
-/// candidates before it that were never used (<see cref="ISegmentModelVersionRepository.LetGoOfCandidatesBeforeAsync"/>),
+/// candidates before it that were never used (<see cref="SegmentVersionDomainService.LetGoBeforeAsync"/>),
 /// the round keeping the candidate's figures so that what it says outlasts it; and puts it in
 /// use when <see cref="SegmentAdoption"/> says so, no version was rolled
 /// back from in the days <see cref="SegmentAdoption.AfterRollbacks"/> holds candidates out, and the version in use
@@ -68,7 +68,7 @@ public sealed class SegmentTrainingJob(
         DateTime now = Now();
         DateOnly day = SegmentLearningRound.DayOf(now);
 
-        if (await turns.TakenAsync(day, cancellationToken))
+        if (!await holding.ServiceProvider.GetRequiredService<SegmentLearningRoundDomainService>().IsDueAsync(day, cancellationToken))
         {
             return new SegmentTrainingLook(null, null);
         }
@@ -85,7 +85,7 @@ public sealed class SegmentTrainingJob(
         IServiceProvider services = scope.ServiceProvider;
         ISegmentLearningRoundRepository rounds = services.GetRequiredService<ISegmentLearningRoundRepository>();
 
-        if (turn is null || await rounds.TakenAsync(day, cancellationToken))
+        if (turn is null || !await services.GetRequiredService<SegmentLearningRoundDomainService>().IsDueAsync(day, cancellationToken))
         {
             return new SegmentTrainingLook(null, null);
         }
@@ -142,7 +142,7 @@ public sealed class SegmentTrainingJob(
             throw;
         }
 
-        if (made.Outcome is not SegmentTrainingOutcome.Stopped)
+        if (SegmentLearningRound.IsKept(made.Outcome))
         {
             await rounds.TakeAsync(
                 SegmentLearningRound.Ended(
@@ -175,16 +175,10 @@ public sealed class SegmentTrainingJob(
 
     private async Task<SegmentTrainingRound> RoundAsync(IServiceProvider services, DateOnly day, DateTime started, CancellationToken cancellationToken)
     {
-        ISegmentModelVersionRepository versions = services.GetRequiredService<ISegmentModelVersionRepository>();
-        SegmentRollback? rollback = await RollbackAsync(services, versions, started, cancellationToken);
-        SegmentModelVersion active = rollback is null
-            ? await versions.ActiveAsync(cancellationToken)
-            : await versions.ChangeAsync(SegmentVersionChange.GoingBack(rollback), Now(), cancellationToken)
-              ?? throw new InvalidOperationException("The version gone back to is no longer kept.");
+        SegmentVersionDomainService versions = services.GetRequiredService<SegmentVersionDomainService>();
+        (SegmentRollback? rollback, SegmentModelVersion active) = await versions.RollBackWhenDueAsync(started, cancellationToken);
 
-        if (!SegmentLearningRound.HasNews(
-                await services.GetRequiredService<ISegmentLearningRoundRepository>().LastLearnedAsync(cancellationToken),
-                await services.GetRequiredService<ILearningMaterialChanges>().LastChangedAsync(cancellationToken)))
+        if (!await services.GetRequiredService<SegmentLearningRoundDomainService>().HasNewsAsync(cancellationToken))
         {
             return new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.NothingNew, null, null, active);
         }
@@ -205,14 +199,12 @@ public sealed class SegmentTrainingJob(
             return new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.Stopped, null, null, active) { StoppedBy = stoppedBy };
         }
 
-        if (trained.Learned is not { } learned || learned.Evaluation.Evidence.Recordings is 0)
+        if (trained.Learned is not { IsKept: true } learned)
         {
             return new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.NothingToLearnFrom, null, null, active);
         }
 
-        SegmentModelVersion candidate = await versions.AddCandidateAsync(learned.Candidate, learned.Evaluation, Now(), cancellationToken);
-        IReadOnlyList<int> letGo = await versions.LetGoOfCandidatesBeforeAsync(candidate.Number, cancellationToken);
-        AdoptionVerdict verdict = SegmentAdoption.AfterRollbacks(learned.Verdict, await versions.ListAsync(cancellationToken), Now());
+        (SegmentModelVersion candidate, IReadOnlyList<int> letGo, AdoptionVerdict verdict) = await versions.KeepCandidateAsync(learned, cancellationToken);
 
         SegmentTrainingRound decided = verdict switch
         {
@@ -224,50 +216,18 @@ public sealed class SegmentTrainingJob(
         return decided with { InUseMetrics = learned.InUse.Metrics, InUseVersion = active.Number, LetGo = letGo };
     }
 
-    /// <summary>
-    /// Puts the candidate in use unless the version in use is no longer the one it was judged against, or has been
-    /// chosen by hand since.
-    /// </summary>
-    private async Task<SegmentTrainingRound> AdoptAsync(
-        ISegmentModelVersionRepository versions,
+    private static async Task<SegmentTrainingRound> AdoptAsync(
+        SegmentVersionDomainService versions,
         DateOnly day,
         SegmentRollback? rollback,
         SegmentModelVersion candidate,
         SegmentModelVersion judgedAgainst,
         CancellationToken cancellationToken)
     {
-        SegmentModelVersion inUse = await versions.ActiveAsync(cancellationToken);
+        (bool adopted, SegmentModelVersion inUse) = await versions.AdoptAsync(candidate, judgedAgainst, cancellationToken);
+        SegmentTrainingOutcome outcome = adopted ? SegmentTrainingOutcome.Adopted : SegmentTrainingOutcome.InUseChangedMeanwhile;
 
-        if (inUse.Number != judgedAgainst.Number || inUse.ByHand)
-        {
-            return new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.InUseChangedMeanwhile, candidate, AdoptionVerdict.Adopted, inUse);
-        }
-
-        SegmentModelVersion adopted = await versions.ChangeAsync(SegmentVersionChange.Adopting(candidate.Number), Now(), cancellationToken)
-                                      ?? throw new InvalidOperationException("The candidate just kept is no longer kept.");
-
-        return new SegmentTrainingRound(day, rollback, SegmentTrainingOutcome.Adopted, candidate, AdoptionVerdict.Adopted, adopted);
-    }
-
-    private static async Task<SegmentRollback?> RollbackAsync(
-        IServiceProvider services,
-        ISegmentModelVersionRepository versions,
-        DateTime now,
-        CancellationToken cancellationToken)
-    {
-        IReadOnlyList<SegmentModelVersion> kept = await versions.ListAsync(cancellationToken);
-        SegmentModelVersion active = kept.Single(version => version.State is SegmentModelVersionState.Active);
-
-        if (SegmentRollback.Previous(kept) is not { } previous || SegmentRollback.Spans(active, now) is not { } spans)
-        {
-            return null;
-        }
-
-        ISkipEventRepository skips = services.GetRequiredService<ISkipEventRepository>();
-        SkipReturns since = await skips.ReturnsAsync(active.Number, spans.From, spans.Until, cancellationToken);
-        SkipReturns before = await skips.ReturnsAsync(previous.Number, spans.BeforeFrom, spans.BeforeUntil, cancellationToken);
-
-        return SegmentRollback.Judge(active, previous, since, before, now);
+        return new SegmentTrainingRound(day, rollback, outcome, candidate, AdoptionVerdict.Adopted, inUse);
     }
 
     private async Task OnceAsync(CancellationToken stoppingToken)

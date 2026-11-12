@@ -91,22 +91,49 @@ public sealed class SegmentModelVersionRepository(CarinaDbContext context) : ISe
         return candidate;
     }
 
-    /// <summary>
-    /// Deletes, in one statement under the writers' lock, the candidates the domain names that nothing names, checking
-    /// again as it deletes that each is still a candidate learning made and nobody put in use or chose.
-    /// </summary>
-    public async Task<IReadOnlyList<int>> LetGoOfCandidatesBeforeAsync(int latest, CancellationToken cancellationToken)
+    public async Task<IReadOnlySet<int>> NamedAmongAsync(IReadOnlyCollection<int> numbers, CancellationToken cancellationToken)
     {
-        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-        await context.Database.ExecuteSqlRawAsync(TakeTurnSql, cancellationToken);
+        ArgumentNullException.ThrowIfNull(numbers);
 
-        int[] named = [.. SegmentModelVersion.LetGoBefore(await ListAsync(cancellationToken), latest)];
+        if (numbers.Count is 0)
+        {
+            return new HashSet<int>();
+        }
 
-        if (named.Length is 0)
+        int[] asked = [.. numbers];
+        List<int> named = await context.Database
+            .SqlQuery<int>(
+                $"""
+                SELECT asked.number AS "Value"
+                FROM unnest({asked}) AS asked(number)
+                WHERE EXISTS (SELECT 1 FROM segment_detection WHERE model_version = asked.number)
+                   OR EXISTS (SELECT 1 FROM segment_skip_event WHERE model_version = asked.number)
+                   OR EXISTS (SELECT 1 FROM encode_job WHERE chapters_model_version = asked.number)
+                   OR EXISTS (SELECT 1 FROM segment_learning_round WHERE in_use_version = asked.number)
+                """)
+            .ToListAsync(cancellationToken);
+
+        return named.ToHashSet();
+    }
+
+    /// <summary>
+    /// Deletes, in one statement under the writers' lock, the versions named that are still candidates learning made
+    /// that nobody put in use or chose and that nothing names, the statement holding again what
+    /// <see cref="SegmentModelVersion.IsLetGoBefore"/> says of them for a change made since the domain read them.
+    /// </summary>
+    public async Task<IReadOnlyList<int>> LetGoAsync(IReadOnlyCollection<int> numbers, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(numbers);
+
+        if (numbers.Count is 0)
         {
             return [];
         }
 
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(TakeTurnSql, cancellationToken);
+
+        int[] named = [.. numbers];
         string candidate = nameof(SegmentModelVersionState.Candidate);
         List<int> letGo = await context.Database
             .SqlQuery<int>(

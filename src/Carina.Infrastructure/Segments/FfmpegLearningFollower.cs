@@ -394,7 +394,7 @@ public sealed class FfmpegLearningFollower(
             follow,
             timeline?.PlacedThrough ?? TimeSpan.Zero,
             timeline?.RemainingGaps() ?? [],
-            whole ? (record, at) => record.Finish(at) : (record, at) => record.FinishPartway(at),
+            (record, at) => record.Settle(whole, at),
             cancellationToken);
 
         Told(follow, decoded, whole);
@@ -516,26 +516,12 @@ public sealed class FfmpegLearningFollower(
             Action<LearningExtraction, DateTime>? settle,
             DateTime at)
         {
-            if (!Owns(record))
+            if (!record.StandsWhereLeft(Recording.Held, Recording.Version, Through, gaps))
             {
                 return false;
             }
 
-            if (record.Sound is null && sound is not null)
-            {
-                record.Opened(sound, at);
-            }
-
-            foreach (LearningDataGap gap in found)
-            {
-                record.Missed(gap, at);
-            }
-
-            if (reached > record.ReadThrough)
-            {
-                record.Reached(reached, at);
-            }
-
+            record.ReadOn(sound, found, reached, at);
             settle?.Invoke(record, at);
 
             return true;
@@ -546,12 +532,6 @@ public sealed class FfmpegLearningFollower(
             Through = reached > Through ? reached : Through;
             gaps += found;
         }
-
-        private bool Owns(LearningExtraction record)
-            => record.State == Recording.Held
-               && Equals(record.Version, Recording.Version)
-               && record.ReadThrough == Through
-               && record.Gaps.Count == gaps;
     }
 
     private sealed class Handover : IMatroskaSink

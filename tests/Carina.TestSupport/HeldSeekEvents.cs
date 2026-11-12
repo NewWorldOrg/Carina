@@ -30,9 +30,7 @@ public sealed class HeldSeekEvents : ISeekEventRepository
 
         lock (gate)
         {
-            DateTime since = seek.HappenedAt - SeekEvent.Within;
-
-            if (taken.Count(kept => kept.RecordingId.Equals(seek.RecordingId) && kept.HappenedAt > since) >= SeekEvent.MostAnHour)
+            if (!seek.IsTakenBeside(taken.Where(kept => kept.RecordingId.Equals(seek.RecordingId)).Select(kept => kept.HappenedAt)))
             {
                 return Task.FromResult(false);
             }

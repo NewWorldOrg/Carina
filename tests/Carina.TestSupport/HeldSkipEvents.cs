@@ -30,9 +30,7 @@ public sealed class HeldSkipEvents : ISkipEventRepository
 
         lock (gate)
         {
-            DateTime since = skip.HappenedAt - SkipEvent.Within;
-
-            if (taken.Count(kept => kept.RecordingId.Equals(skip.RecordingId) && kept.HappenedAt > since) >= SkipEvent.MostAnHour)
+            if (!skip.IsTakenBeside(taken.Where(kept => kept.RecordingId.Equals(skip.RecordingId)).Select(kept => kept.HappenedAt)))
             {
                 return Task.FromResult(false);
             }

@@ -82,6 +82,15 @@ public sealed class SegmentModelVersion
 
     private bool NeverUsed => State is SegmentModelVersionState.Candidate && AdoptedAt is null && ChosenByHandAt is null;
 
+    /// <summary>
+    /// Whether learning lets go of this version once it has kept the candidate numbered <paramref name="latest"/>: a
+    /// candidate numbered before it that learning made, never put in use nor chosen by hand, and that nothing that
+    /// remembers versions names (<paramref name="named"/>). The latest candidate stays until the next one is kept, so
+    /// that it can still be chosen by hand; a version built in, the version in use and the versions used before always
+    /// stay.
+    /// </summary>
+    public bool IsLetGoBefore(int latest, bool named) => Number < latest && NeverUsed && !BuiltIn && !named;
+
     public static SegmentModelVersion Rehydrate(
         int number,
         SegmentModelVersionState state,
@@ -167,19 +176,27 @@ public sealed class SegmentModelVersion
 
     /// <summary>
     /// The numbers of the versions among <paramref name="kept"/> learning lets go of once it has kept the candidate
-    /// numbered <paramref name="latest"/>: every candidate numbered before it that learning made and that was never
-    /// put in use nor chosen by hand. The latest candidate stays until the next one is kept, so that it can still be
-    /// chosen by hand; a version built in, the version in use and the versions used before always stay. Whether
-    /// anything else still names one of them is for the store to say.
+    /// numbered <paramref name="latest"/>, before asking what else names them: every candidate numbered before it that
+    /// learning made and that was never put in use nor chosen by hand (<see cref="IsLetGoBefore"/>).
     /// </summary>
     public static IReadOnlyList<int> LetGoBefore(IReadOnlyList<SegmentModelVersion> kept, int latest)
+        => LetGoBefore(kept, latest, new HashSet<int>());
+
+    /// <summary>
+    /// The numbers of the versions among <paramref name="kept"/> learning lets go of once it has kept the candidate
+    /// numbered <paramref name="latest"/>, the lowest first, when the numbers in <paramref name="named"/> are those a
+    /// detection, a viewer's skip, the chapters of an encode or a round of learning measuring the version in use names
+    /// (<see cref="IsLetGoBefore"/>).
+    /// </summary>
+    public static IReadOnlyList<int> LetGoBefore(IReadOnlyList<SegmentModelVersion> kept, int latest, IReadOnlySet<int> named)
     {
         ArgumentNullException.ThrowIfNull(kept);
+        ArgumentNullException.ThrowIfNull(named);
 
         return
         [
             .. kept
-                .Where(version => version.Number < latest && version.NeverUsed && !version.BuiltIn)
+                .Where(version => version.IsLetGoBefore(latest, named.Contains(version.Number)))
                 .Select(version => version.Number)
                 .Order(),
         ];

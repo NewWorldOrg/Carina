@@ -25,7 +25,7 @@ public sealed record SentSeek(SeekAction? Event, SeekMeans? Means, double? FromS
 /// </summary>
 public sealed class SeekEventService(
     IRecordingDirectory recordings,
-    ISeekEventRepository seeks,
+    ViewerActionIntakeDomainService intake,
     TimeProvider clock)
 {
     public async Task<ServiceResult<SeekEvent, SeekEventFailure>> TakeAsync(RecordingId id, SentSeek sent, CancellationToken cancellationToken)
@@ -45,7 +45,7 @@ public sealed class SeekEventService(
 
         SeekEvent seek = SeekEvent.Of(id, new ViewerSeek(clock.GetUtcNow().UtcDateTime, read.Action, read.Means, read.From, read.To));
 
-        return await seeks.TakeAsync(seek, cancellationToken)
+        return await intake.TakeAsync(seek, cancellationToken)
             ? ServiceResult<SeekEvent, SeekEventFailure>.Success(seek)
             : Failure($"Recording {id.Wire} takes at most {SeekEvent.MostAnHour} seeks an hour.", SeekEventFailure.TooMany);
     }
@@ -54,11 +54,9 @@ public sealed class SeekEventService(
         => sent is { Event: { } action, Means: { } means, FromSec: { } from, ToSec: { } to }
            && SkipEvent.Moment(from, written) is { } starts
            && SkipEvent.Moment(to, written) is { } ends
-           && GoesItsWay(action, starts, ends)
+           && ViewerSeek.GoesItsWay(action, starts, ends)
             ? new ReadSeek(action, means, starts, ends)
             : null;
-
-    private static bool GoesItsWay(SeekAction action, TimeSpan from, TimeSpan to) => action is SeekAction.Forward ? to > from : to < from;
 
     private static string Unread(SentSeek sent, TimeSpan written)
     {
