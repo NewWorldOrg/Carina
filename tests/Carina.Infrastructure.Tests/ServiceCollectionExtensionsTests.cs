@@ -11,6 +11,7 @@ using Carina.Domain.Integrity;
 using Carina.Domain.Machines;
 using Carina.Domain.Migration;
 using Carina.Domain.Notifications;
+using Carina.Domain.Playback;
 using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
@@ -525,6 +526,15 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingSettlementDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingDisposalDomainService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<CaptionRequeueDomainService>());
+    }
+
+    [Fact(DisplayName = "registers the domain services of playback, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfPlayback()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<PlaybackArtefactDomainService>());
     }
 
     [Fact(DisplayName = "registers the domain services of quality, each for one scope")]
