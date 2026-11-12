@@ -1,7 +1,7 @@
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Integrity;
-using Carina.Infrastructure.Tests.Scanning;
+using Carina.Infrastructure.Tests.Fixtures.Clocks;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;

@@ -1,6 +1,7 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Scanning;
+using Carina.Infrastructure.Tests.Fixtures.Clocks;
 using Carina.TestSupport;
 
 using Puppis.Contracts;

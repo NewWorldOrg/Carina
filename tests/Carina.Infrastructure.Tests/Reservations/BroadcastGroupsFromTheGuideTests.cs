@@ -5,7 +5,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Collection;
-using Carina.Infrastructure.Tests.Scanning;
+using Carina.Infrastructure.Tests.Fixtures.Clocks;
 using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Reservations;

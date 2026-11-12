@@ -3,6 +3,7 @@ using Carina.Domain.Scans;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Scanning;
+using Carina.Infrastructure.Tests.Fixtures.Clocks;
 using Carina.TestSupport;
 
 using Puppis.Contracts;
