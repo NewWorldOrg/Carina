@@ -582,6 +582,19 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleTakingDomainService>());
     }
 
+    [Fact(DisplayName = "registers the domain services of CM, OP and ED detection, each resolved within a scope")]
+    public void RegistersTheDomainServicesOfTheSegments()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ViewerActionIntakeDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<LearningExtractionRecoveryDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentVersionDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentLearningRoundDomainService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SegmentFiguresDomainService>());
+    }
+
     [Fact(DisplayName = "registers the reading of recordings that have ended for their learning data alongside the other hosted services, with what it reaches for")]
     public void RegistersTheLearningBacklogAlongsideTheOtherHostedServices()
     {

@@ -30,8 +30,7 @@ public sealed class SegmentStatusService(
     ICatalogCountsReader catalog,
     ISegmentModelVersionRepository versions,
     ISegmentSettingsRepository settings,
-    ISkipEventRepository skips,
-    ICatalogEvidenceReader evidence,
+    SegmentFiguresDomainService figures,
     ISegmentLearningRoundRepository rounds,
     TimeProvider clock)
 {
@@ -47,25 +46,11 @@ public sealed class SegmentStatusService(
             await learningData.ReadAsync(cancellationToken),
             await catalog.ReadAsync(cancellationToken),
             active,
-            await MetricsAsync(active, cancellationToken),
-            kept.FirstOrDefault(version => version.Evidence is not null)?.Evidence ?? await evidence.ReadAsync(cancellationToken),
+            await figures.InUseAsync(active, cancellationToken),
+            await figures.EvidenceAsync(kept, cancellationToken),
             kept,
             last,
             kept.FirstOrDefault(version => version.Number == last?.Candidate),
             SegmentLearningRound.NextNotBefore(now, await rounds.TakenAsync(SegmentLearningRound.DayOf(now), cancellationToken))));
-    }
-
-    private async Task<SegmentMetrics?> MetricsAsync(SegmentModelVersion active, CancellationToken cancellationToken)
-    {
-        SegmentMetrics? measured = active.Metrics ?? (await rounds.LatestMeasuredAsync(active.Number, cancellationToken))?.InUseMetrics;
-
-        if (measured is not { } evaluated)
-        {
-            return null;
-        }
-
-        DateTime now = clock.GetUtcNow().UtcDateTime;
-
-        return evaluated.WithReturns(await skips.ReturnsAsync(active.Number, now - SegmentLearning.ReturnsOver, now, cancellationToken));
     }
 }
