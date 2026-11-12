@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 
 using Carina.Api.Authentication;
-using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Auth;
 using Carina.Infrastructure.Auth;
 using Carina.TestSupport;
@@ -12,10 +11,9 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Api.Tests.Feature.Auth;
+namespace Carina.Api.Tests.FeatureTest;
 
-[Trait("Category", "Feature")]
-public sealed class TrustedProxyDiagnosisTests
+public sealed class FirstStartTests
 {
     [Fact]
     public async Task AnAppTrustingNoProxySaysSoAtStartupRatherThanAtTheFirstFailedSignIn()
