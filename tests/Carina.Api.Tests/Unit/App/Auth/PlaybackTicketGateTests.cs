@@ -1,4 +1,3 @@
-using System.Text;
 
 using Carina.Api.Authentication;
 using Carina.Domain.Auth;
@@ -356,7 +355,7 @@ public sealed class PlaybackTicketGateTests
 
         public int? StatusAtTheFirstByte { get; private set; }
 
-        public string Written => Encoding.UTF8.GetString(written.ToArray());
+        public string Written => System.Text.Encoding.UTF8.GetString(written.ToArray());
 
         public override bool CanRead => false;
 

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
 
 namespace Carina.Api.Tests.Feature.Notifications;
@@ -51,7 +50,7 @@ internal static class NotificationGuard
     public static async Task AWriteCarryingAFormIsRefusedAsync(string method, string path)
     {
         await using NotificationFeature feature = new();
-        using StringContent form = new("name=anything", Encoding.UTF8, "application/x-www-form-urlencoded");
+        using StringContent form = new("name=anything", System.Text.Encoding.UTF8, "application/x-www-form-urlencoded");
 
         using HttpResponseMessage response = await SendingAsync(feature.Client, method, path, form);
 
@@ -69,7 +68,7 @@ internal static class NotificationGuard
         Assert.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
     }
 
-    private static StringContent Json() => new("{}", Encoding.UTF8, "application/json");
+    private static StringContent Json() => new("{}", System.Text.Encoding.UTF8, "application/json");
 
     private static async Task<HttpResponseMessage> SendingAsync(HttpClient client, string method, string path, HttpContent? content)
     {

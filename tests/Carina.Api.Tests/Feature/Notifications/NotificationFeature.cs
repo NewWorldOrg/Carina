@@ -138,12 +138,12 @@ internal sealed class WebhookEnd : IAsyncDisposable
                 .FirstOrDefault();
             byte[] body = new byte[length];
             await secured.ReadExactlyAsync(body, stopping.Token);
-            Heard.Enqueue(new HeardWebhookCall(first[0], first[1], Encoding.UTF8.GetString(body)) { Head = lines, Sent = body });
+            Heard.Enqueue(new HeardWebhookCall(first[0], first[1], System.Text.Encoding.UTF8.GetString(body)) { Head = lines, Sent = body });
 
-            byte[] answered = Encoding.UTF8.GetBytes(AnswerBody);
+            byte[] answered = System.Text.Encoding.UTF8.GetBytes(AnswerBody);
             string opening =
                 $"HTTP/1.1 {Status} Answered\r\nConnection: close\r\nContent-Length: {answered.Length}\r\n{AnswerHeaders}\r\n";
-            await secured.WriteAsync(Encoding.ASCII.GetBytes(opening), stopping.Token);
+            await secured.WriteAsync(System.Text.Encoding.ASCII.GetBytes(opening), stopping.Token);
             await secured.WriteAsync(answered, stopping.Token);
             await secured.FlushAsync(stopping.Token);
         }

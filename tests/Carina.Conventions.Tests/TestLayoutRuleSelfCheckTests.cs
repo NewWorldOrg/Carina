@@ -443,8 +443,8 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Db.Tests/DbIntegration/Infra/Auth/ChannelsAreNumberedMigrationTests.cs:4 ChannelsAreNumberedMigrationTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
                 "/tests/Carina.Db.Tests/Unit/Infra/Auth/CarryArgumentsTests.cs:4 CarryArgumentsTests is named after nothing the database project declares for Auth: no type, no migration, no schema of the area",
                 "/tests/Carina.Domain.Tests/Unit/Auth/ChannelTests.cs:4 ChannelTests is named after nothing the domain declares for Auth",
-                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/ChannelLineUpDomainServiceTests.cs:4 ChannelLineUpDomainServiceTests is named after nothing the domain declares for Auth: no repository behind its interface, no domain service",
-                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/ChannelRepositoryTests.cs:4 ChannelRepositoryTests is named after nothing the domain declares for Auth: no repository behind its interface, no domain service",
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/ChannelLineUpDomainServiceTests.cs:4 ChannelLineUpDomainServiceTests is named after nothing the domain declares for Auth: nothing behind an interface of its name, no domain service",
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/ChannelRepositoryTests.cs:4 ChannelRepositoryTests is named after nothing the domain declares for Auth: nothing behind an interface of its name, no domain service",
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/ChannelFileTests.cs:4 ChannelFileTests is named after nothing the infrastructure declares for Auth",
                 "/tests/Carina.Infrastructure.Tests/Unit/Infra/Auth/ChannelFileTests.cs:4 ChannelFileTests is named after nothing the infrastructure declares for Auth",
             ],
@@ -544,6 +544,38 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAScaleOrMaterialClassNamedAfterNothingWithItsKind()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Domain/Auth/SessionToken.cs");
+        tree.Declare("src/Carina.Infrastructure/Auth/PasswordHasher.cs");
+        tree.Test($"{DomainTests}/Unit/Auth/SessionTokenTests.cs", "Scale");
+        tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/HashingMaterialTests.cs", "Material");
+        tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/PasswordHasherScaleTests.cs", "Material");
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Domain.Tests/Unit/Auth/SessionTokenTests.cs:4 SessionTokenTests is named after nothing the domain declares for Auth",
+                "/tests/Carina.Infrastructure.Tests/Unit/Infra/Auth/HashingMaterialTests.cs:4 HashingMaterialTests is named after nothing the infrastructure declares for Auth",
+                "/tests/Carina.Infrastructure.Tests/Unit/Infra/Auth/PasswordHasherScaleTests.cs:4 PasswordHasherScaleTests is named after nothing the infrastructure declares for Auth",
+            ],
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void LetsOffAScaleOrMaterialClassNamedAfterATypeOfItsLayerAndItsKind()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Domain/Auth/SessionToken.cs");
+        tree.Declare("src/Carina.Infrastructure/Auth/PasswordHasher.cs");
+        tree.Test($"{DomainTests}/Unit/Auth/SessionTokenScaleTests.cs", "Scale");
+        tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/PasswordHasherMaterialTests.cs", "Material");
+        tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/PasswordHasherTests.cs", TestLayoutRules.Unit);
+
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
     public void DetectsATestOverADatabaseNamedAfterNoRepositoryBehindADomainInterfaceAndNoDomainService()
     {
         using SourceTree tree = new();
@@ -556,9 +588,9 @@ public sealed class TestLayoutRuleSelfCheckTests
 
         Assert.Equal(
             [
-                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/AuthSessionRepositoryTests.cs:4 AuthSessionRepositoryTests is named after nothing the domain declares for Auth: no repository behind its interface, no domain service",
-                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionClockTests.cs:4 SessionClockTests is named after nothing the domain declares for Auth: no repository behind its interface, no domain service",
-                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionExpiryDomainServiceTests.cs:4 SessionExpiryDomainServiceTests is named after nothing the domain declares for Auth: no repository behind its interface, no domain service",
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/AuthSessionRepositoryTests.cs:4 AuthSessionRepositoryTests is named after nothing the domain declares for Auth: nothing behind an interface of its name, no domain service",
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionClockTests.cs:4 SessionClockTests is named after nothing the domain declares for Auth: nothing behind an interface of its name, no domain service",
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionExpiryDomainServiceTests.cs:4 SessionExpiryDomainServiceTests is named after nothing the domain declares for Auth: nothing behind an interface of its name, no domain service",
             ],
             TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
     }
@@ -805,6 +837,76 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsATypeBehindADomainInterfaceBuiltWithCreateInstanceOverADatabase()
+    {
+        using SourceTree tree = new();
+        DeclareBehindTheDomain(tree);
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs",
+            TestLayoutRules.DbIntegration,
+            "OidcSettingsRepository settings = ActivatorUtilities.CreateInstance<OidcSettingsRepository>(scope.ServiceProvider);");
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/ClientSecretSealTests.cs",
+            TestLayoutRules.DbIntegration,
+            "ClientSecretSeal seal = ActivatorUtilities.CreateInstance<ClientSecretSeal>(scope.ServiceProvider); OidcSettingsRepository settings = ActivatorUtilities.CreateInstance<OidcSettingsRepository>(scope.ServiceProvider, seal);");
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/ClientSecretSealTests.cs:4 ClientSecretSealTests builds OidcSettingsRepository with CreateInstance although the container gives it as IOidcSettingsRepository",
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs:4 OidcSettingsRepositoryTests builds OidcSettingsRepository with CreateInstance although the container gives it as IOidcSettingsRepository",
+                "/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs:4 OidcSettingsRepositoryTests does not take OidcSettingsRepository from the container",
+            ],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void LetsOffATypeBehindADomainInterfaceTakenThroughItAndATypeBehindNoneBuiltWithCreateInstance()
+    {
+        using SourceTree tree = new();
+        DeclareBehindTheDomain(tree);
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs",
+            TestLayoutRules.DbIntegration,
+            "OidcSettingsRepository settings = Assert.IsType<OidcSettingsRepository>(scope.ServiceProvider.GetRequiredService<IOidcSettingsRepository>());");
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/ClientSecretSealTests.cs",
+            TestLayoutRules.DbIntegration,
+            "ClientSecretSeal seal = ActivatorUtilities.CreateInstance<ClientSecretSeal>(scope.ServiceProvider);");
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Domain/Auth/SessionClockTests.cs",
+            TestLayoutRules.DbIntegration,
+            "ISessionClock clock = scope.ServiceProvider.GetRequiredService<ISessionClock>();");
+
+        Assert.Empty(TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void DetectsATypeNarrowedFromAnInterfaceItDoesNotImplementOrNarrowedWithoutTheContainer()
+    {
+        using SourceTree tree = new();
+        DeclareBehindTheDomain(tree);
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs",
+            TestLayoutRules.DbIntegration,
+            "OidcSettingsRepository settings = Assert.IsType<OidcSettingsRepository>(scope.ServiceProvider.GetRequiredService<ISessionClock>());");
+
+        Assert.Equal(
+            ["/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/OidcSettingsRepositoryTests.cs:4 OidcSettingsRepositoryTests does not take OidcSettingsRepository from the container"],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void LetsOffATestOverADatabaseNamedAfterATypeOfTheInfrastructureBehindADomainInterfaceOfItsName()
+    {
+        using SourceTree tree = new();
+        DeclareBehindTheDomain(tree);
+
+        tree.Test($"{InfrastructureTests}/DbIntegration/Domain/Auth/SessionClockTests.cs", TestLayoutRules.DbIntegration);
+
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
     public void LetsOffASubjectTakenFromTheContainerAndASubjectBuiltByHandWhereNoContainerIsAsked()
     {
         using SourceTree tree = new();
@@ -885,6 +987,23 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Db.Tests/SessionSchemaTests.cs:4 SessionSchemaTests is named after a type of Auth, which has moved",
                 "/tests/Carina.Domain.Tests/OidcSettingsTests.cs:4 OidcSettingsTests is named after a type of Auth, which has moved",
                 "/tests/Carina.Infrastructure.Tests/AuthSessionRepositoryTests.cs:4 AuthSessionRepositoryTests is named after a type of Auth, which has moved",
+            ],
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void DetectsAScaleOrMaterialClassInAFlatOldPlaceNamedAfterATypeOfAnAreaThatHasMoved()
+    {
+        using SourceTree tree = new();
+        DeclareAuthAndRecordings(tree);
+        tree.Test($"{DomainTests}/OidcSettingsScaleTests.cs", "Scale");
+        tree.Test($"{InfrastructureTests}/AuthSessionRepositoryMaterialTests.cs", "Material");
+        tree.Test($"{InfrastructureTests}/AuthSessionRepositoryScaleTests.cs", "Material");
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Domain.Tests/OidcSettingsScaleTests.cs:4 OidcSettingsScaleTests is named after a type of Auth, which has moved",
+                "/tests/Carina.Infrastructure.Tests/AuthSessionRepositoryMaterialTests.cs:4 AuthSessionRepositoryMaterialTests is named after a type of Auth, which has moved",
             ],
             TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }
@@ -1168,6 +1287,17 @@ public sealed class TestLayoutRuleSelfCheckTests
         tree.Test($"{DbTests}/DbIntegration/Infra/Auth/SessionSchemaTests.cs", TestLayoutRules.DbIntegration);
 
         Assert.Empty(TestLayoutRules.SchemasWronglyListed(TestLayoutRules.Read(tree.Root), Schemas));
+    }
+
+    private static void DeclareBehindTheDomain(SourceTree tree)
+    {
+        tree.Write("src/Carina.Domain/Auth/IOidcSettingsRepository.cs", "namespace Carina.Domain.Auth;\n\npublic interface IOidcSettingsRepository { }\n");
+        tree.Write("src/Carina.Domain/Auth/ISessionClock.cs", "namespace Carina.Domain.Auth;\n\npublic interface ISessionClock { }\n");
+        tree.Write(
+            "src/Carina.Infrastructure/Persistence/Repositories/OidcSettingsRepository.cs",
+            "namespace Carina.Infrastructure.Persistence.Repositories;\n\npublic sealed class OidcSettingsRepository : Carina.Domain.Auth.IOidcSettingsRepository { }\n");
+        tree.Write("src/Carina.Infrastructure/Auth/SessionClock.cs", "namespace Carina.Infrastructure.Auth;\n\npublic sealed class SessionClock : ISessionClock { }\n");
+        tree.Declare("src/Carina.Infrastructure/Auth/ClientSecretSeal.cs");
     }
 
     private static void DeclareAuthAndRecordings(SourceTree tree)

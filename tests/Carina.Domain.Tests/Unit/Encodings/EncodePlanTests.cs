@@ -1,0 +1,204 @@
+using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
+
+namespace Carina.Domain.Tests.Unit.Encodings;
+
+[Trait("Category", "Unit")]
+public sealed class EncodePlanTests
+{
+    private static readonly DateTime At = new(2026, 9, 5, 3, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>
+    /// A machine whose ffmpeg is built with libx264 and VA-API and without libx265, so H.265 exists on
+    /// the card alone.
+    /// </summary>
+    private static MachineCapabilities AsThisMachineIs => MachineCapabilities.Of(
+        CardStanding.Usable,
+        [
+            Faculty.EncodeH264OnTheProcessor,
+            Faculty.EncodeH264OnTheCard,
+            Faculty.EncodeH265OnTheCard,
+            Faculty.DecodeAribCaptions,
+        ],
+        string.Empty);
+
+    private static MachineCapabilities WithNoCard => MachineCapabilities.Of(
+        CardStanding.NodeMissing,
+        [Faculty.EncodeH264OnTheProcessor, Faculty.DecodeAribCaptions],
+        "no render node was handed to this container");
+
+    [Fact(DisplayName = "what was asked for is what runs when this machine can do it")]
+    public void WhatWasAskedForIsWhatRunsWhenThisMachineCanDoIt()
+    {
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, CardKind.Vaapi, AsThisMachineIs);
+
+        Assert.True(plan.CanRun);
+        Assert.Equal(EncodeEncoder.Vaapi, plan.Encoder);
+        Assert.Null(plan.Swerved);
+        Assert.Null(plan.Refused);
+    }
+
+    [Fact(DisplayName = "a card that is out of reach is not a refusal, it is the processor instead")]
+    public void ACardThatIsOutOfReachIsNotARefusalItIsTheProcessorInstead()
+    {
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, CardKind.Vaapi, WithNoCard);
+
+        Assert.True(plan.CanRun);
+        Assert.Equal(EncodeEncoder.Software, plan.Encoder);
+        Assert.Equal(EncodeSwerve.TheCardIsOutOfReach, plan.Swerved);
+        Assert.Contains("no render node", plan.Note, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "a build with no libx265 sends H.265 to the card rather than failing it")]
+    public void ABuildWithNoSoftwareH265SendsItToTheCard()
+    {
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, CardKind.Vaapi, AsThisMachineIs);
+
+        Assert.True(plan.CanRun);
+        Assert.Equal(EncodeEncoder.Vaapi, plan.Encoder);
+        Assert.Equal(EncodeSwerve.TheProcessorCannotDoThisCodec, plan.Swerved);
+    }
+
+    [Fact(DisplayName = "a codec neither the processor nor the card can do is the one thing that refuses")]
+    public void ACodecNeitherSideCanDoIsTheOneThingThatRefuses()
+    {
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, CardKind.Vaapi, WithNoCard);
+
+        Assert.False(plan.CanRun);
+        Assert.Null(plan.Encoder);
+        Assert.Equal(EncodeFailure.CapabilityUnavailable, plan.Refused);
+        Assert.NotEmpty(plan.Note);
+    }
+
+    [Fact(DisplayName = "a card that cannot do the codec falls to the processor, not to a refusal")]
+    public void ACardThatCannotDoTheCodecFallsToTheProcessor()
+    {
+        MachineCapabilities cardWithoutH265 = MachineCapabilities.Of(
+            CardStanding.Usable,
+            [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH265OnTheProcessor, Faculty.EncodeH264OnTheCard],
+            string.Empty);
+
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, CardKind.Vaapi, cardWithoutH265);
+
+        Assert.True(plan.CanRun);
+        Assert.Equal(EncodeEncoder.Software, plan.Encoder);
+        Assert.Equal(EncodeSwerve.TheCardCannotDoThisCodec, plan.Swerved);
+    }
+
+    [Fact(DisplayName = "a card that is there and a codec neither side can do still refuses")]
+    public void ACardThatIsThereAndACodecNeitherSideCanDoStillRefuses()
+    {
+        MachineCapabilities neitherDoesH265 = MachineCapabilities.Of(
+            CardStanding.Usable,
+            [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard],
+            string.Empty);
+
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, CardKind.Vaapi, neitherDoesH265);
+
+        Assert.False(plan.CanRun);
+        Assert.Equal(EncodeFailure.CapabilityUnavailable, plan.Refused);
+    }
+
+    [Fact(DisplayName = "the card is not asked for when the processor was, and can do it")]
+    public void TheCardIsNotAskedForWhenTheProcessorWasAndCanDoIt()
+    {
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Software, CardKind.Vaapi, AsThisMachineIs);
+
+        Assert.Equal(EncodeEncoder.Software, plan.Encoder);
+        Assert.Null(plan.Swerved);
+    }
+
+    [Fact(DisplayName = "an NVIDIA card that works runs what asked for it, and one out of reach is the processor instead")]
+    public void AnNvidiaCardThatWorksRunsWhatAskedForIt()
+    {
+        EncodePlan onTheCard = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Nvenc, CardKind.Nvenc, AsThisMachineIs);
+        EncodePlan outOfReach = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Nvenc, CardKind.Nvenc, WithNoCard);
+
+        Assert.Equal(EncodeEncoder.Nvenc, onTheCard.Encoder);
+        Assert.Null(onTheCard.Swerved);
+        Assert.Equal(EncodeEncoder.Software, outOfReach.Encoder);
+        Assert.Equal(EncodeSwerve.TheCardIsOutOfReach, outOfReach.Swerved);
+    }
+
+    [Fact(DisplayName = "a build with no libx265 sends H.265 to whichever card this machine has")]
+    public void ABuildWithNoSoftwareH265SendsItToTheCardThisMachineHas()
+    {
+        EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, CardKind.Nvenc, AsThisMachineIs);
+
+        Assert.Equal(EncodeEncoder.Nvenc, plan.Encoder);
+        Assert.Equal(EncodeSwerve.TheProcessorCannotDoThisCodec, plan.Swerved);
+    }
+
+    [Fact(DisplayName = "a card this machine does not have is not something to swerve from or to")]
+    public void ACardThisMachineDoesNotHaveIsRefused()
+    {
+        Assert.Throws<ArgumentException>(() => EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, CardKind.Nvenc, AsThisMachineIs));
+        Assert.Throws<ArgumentException>(() => EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Nvenc, CardKind.Vaapi, AsThisMachineIs));
+        Assert.Throws<ArgumentOutOfRangeException>(() => EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Software, (CardKind)9, AsThisMachineIs));
+    }
+
+    [Fact]
+    public void ASwerveNamesWhereItSwervedToAndWhy()
+    {
+        EncodePlan plan = EncodePlan.Swerving(EncodeEncoder.Software, EncodeSwerve.TheCardIsOutOfReach, "gone");
+
+        Assert.Equal(EncodeEncoder.Software, plan.Encoder);
+        Assert.Equal(EncodeSwerve.TheCardIsOutOfReach, plan.Swerved);
+        Assert.Null(plan.Refused);
+        Assert.True(plan.CanRun);
+    }
+
+    [Fact]
+    public void APlanThatRefusesNamesNoEncoderToRunOn()
+    {
+        EncodePlan plan = EncodePlan.NothingHereCanDoIt("neither side has it");
+
+        Assert.False(plan.CanRun);
+        Assert.Null(plan.Encoder);
+        Assert.Null(plan.Swerved);
+        Assert.Equal(EncodeFailure.CapabilityUnavailable, plan.Refused);
+    }
+
+    [Fact]
+    public void WhatAPlanSaysNamesNoPathOnThisMachine()
+    {
+        EncodePlan plan = EncodePlan.Swerving(
+            EncodeEncoder.Software,
+            EncodeSwerve.TheCardIsOutOfReach,
+            "could not open /dev/dri/renderD128");
+
+        Assert.NotEmpty(plan.Note);
+        Assert.DoesNotContain('/', plan.Note);
+    }
+
+    [Fact]
+    public void AnEncoderNobodyOffersIsNotSomethingToSwerveTo()
+        => Assert.Throws<ArgumentOutOfRangeException>(
+            () => EncodePlan.Swerving((EncodeEncoder)9, EncodeSwerve.TheCardIsOutOfReach, string.Empty));
+
+    [Fact]
+    public void AReasonNobodyNamedIsNotAReasonToSwerve()
+        => Assert.Throws<ArgumentOutOfRangeException>(
+            () => EncodePlan.Swerving(EncodeEncoder.Software, (EncodeSwerve)9, string.Empty));
+
+    [Fact]
+    public void APlanSwervesForOneOfThreeReasons()
+        => Assert.Equal(
+            [
+                EncodeSwerve.TheCardIsOutOfReach,
+                EncodeSwerve.TheCardCannotDoThisCodec,
+                EncodeSwerve.TheProcessorCannotDoThisCodec,
+            ],
+            Enum.GetValues<EncodeSwerve>());
+
+    private static EncodeProfile Profile(EncodeCodec codec)
+        => EncodeProfile.Define(
+            EncodeProfileId.New(),
+            new EncodeLabel("Standard"),
+            codec,
+            EncodeResolution.AsSource,
+            Deinterlace.EveryFrame,
+            new ConstantRateFactor(22),
+            new ConstantQuantiser(24),
+            At);
+}

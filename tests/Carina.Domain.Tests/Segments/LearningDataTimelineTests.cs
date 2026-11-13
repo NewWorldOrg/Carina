@@ -1,6 +1,4 @@
-using Carina.Domain.Encodings;
 using Carina.Domain.Segments;
-using Carina.Domain.Tests.Encodings;
 
 namespace Carina.Domain.Tests.Segments;
 

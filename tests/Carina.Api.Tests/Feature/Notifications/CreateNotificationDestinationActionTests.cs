@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
 
 using Carina.Api.Tests.FeatureTest;
@@ -159,7 +158,7 @@ public sealed class CreateNotificationDestinationActionTests
         await feature.RegisteredAsync();
 
         NotificationDestination held = Assert.Single(feature.HeldDestinations.Destinations);
-        Assert.DoesNotContain(NotificationFeature.Secret, Encoding.Latin1.GetString(held.SealedUrl), StringComparison.Ordinal);
+        Assert.DoesNotContain(NotificationFeature.Secret, System.Text.Encoding.Latin1.GetString(held.SealedUrl), StringComparison.Ordinal);
         Assert.Equal("wxyz", held.UrlTail);
     }
 

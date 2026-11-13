@@ -1,6 +1,5 @@
 using System.Net;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 using Carina.Domain.Notifications;
@@ -92,7 +91,7 @@ public sealed class ListNotificationDestinationsActionTests
         Assert.Empty(feature.End.Heard);
     }
 
-    private static string HashOf(string endpoint) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(endpoint)));
+    private static string HashOf(string endpoint) => Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(endpoint)));
 
     private static void AssertNothingOf(PushReceiver browser, string text)
     {

@@ -1,6 +1,5 @@
 using System.Net;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 using Carina.Domain.Notifications;
@@ -147,7 +146,7 @@ public sealed class ReplacePushSubscriptionActionTests
         Assert.Equal(HashOf(NotificationFeature.PushEndpoint), Assert.Single(feature.HeldDestinations.Destinations).EndpointHash);
     }
 
-    private static string HashOf(string endpoint) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(endpoint)));
+    private static string HashOf(string endpoint) => Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(endpoint)));
 
     private static PushSubscription Opened(NotificationFeature feature, NotificationDestination held)
         => feature.Built.Services.GetRequiredService<PushSubscriptionSeal>().Open(held.SealedUrl)!;

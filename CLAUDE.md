@@ -470,7 +470,7 @@ test named after anything else is refused under that area.
 | `Carina.Api.Tests/Unit/App/<Area>/` | an application service, or another type of the API, with stand-in repositories | `<Type>Tests` after a type the API declares for the area |
 | `Carina.Api.Tests/DbIntegration/App/<Area>/` | an application service over a real database; business behaviour that passes through no domain service is tested here | `<Name>ServiceTests` after a service the API declares for the area |
 | `Carina.Domain.Tests/Unit/<Area>/` | aggregates, value objects, static functions of the domain, and domain services with stand-in repositories | `<Type>Tests` after a type of the area's folder in the domain |
-| `Carina.Infrastructure.Tests/DbIntegration/Domain/<Area>/` | a domain service or a repository over a real database; a test that holds SQL equal to an aggregate sits with the domain service or repository whose SQL it is | `<Name>DomainServiceTests` after a domain service of the area, or `<Name>RepositoryTests` after the interface `I<Name>Repository` of the area's folder in the domain |
+| `Carina.Infrastructure.Tests/DbIntegration/Domain/<Area>/` | a domain service, or a repository or another type behind a domain interface, over a real database; a test that holds SQL equal to an aggregate sits with the domain service or repository whose SQL it is | `<Name>DomainServiceTests` after a domain service of the area, or `<Name>Tests` after an interface `I<Name>` of the area's folder in the domain, where `<Name>` ends in `Repository` or is a class of the infrastructure that implements it |
 | `Carina.Infrastructure.Tests/Unit/Infra/<Area>/`, `DbIntegration/Infra/<Area>/` | what exists in the infrastructure alone: ffmpeg invocations, the driver client, EF configurations, file system adapters | `<Type>Tests` after a type the infrastructure declares for the area |
 | `Carina.Db.Tests/DbIntegration/Infra/<Area>/`, `Unit/Infra/<Area>/` | the shape of the tables, and the migrations | `<Migration>MigrationTests` after a migration listed for the area, `<Type>Tests` after a type listed for the area, `<Area>SchemaTests`, or a `…SchemaTests` name listed for the area |
 
@@ -478,12 +478,17 @@ test named after anything else is refused under that area.
   and is in the namespace of its folder.
 - The class carries `[Trait("Category", "Feature")]`, `"Unit"` or `"DbIntegration"`
   to match its kind. A class of the scale or the material job carries `"Scale"` or
-  `"Material"` instead.
+  `"Material"` instead, and is named `<Type>ScaleTests` or `<Type>MaterialTests`
+  after what it tests, so that it can sit beside the unit class of the same type.
 - A test over a real database takes its subject from the container the application
-  builds, never from a constructor. Under `DbIntegration/Domain` a repository is
-  asked for as its domain interface and its class is not named at all; a domain
-  service is asked for as itself, and so is an application service under
-  `DbIntegration/App`.
+  builds, never from a constructor. Under `DbIntegration/Domain` a repository, or
+  another type of the infrastructure behind a domain interface of its own name, is
+  asked for as that interface and its class is not named at all; a domain service
+  is asked for as itself, and so is an application service under
+  `DbIntegration/App`. A type that implements an interface declared under
+  `src/Carina.Domain` is always asked for through that interface, never built with
+  `ActivatorUtilities.CreateInstance`; where a test needs a member only the class
+  has, it narrows what the container gives with `Assert.IsType`.
 - A feature class is named after one action, or one class the start-up code puts
   in the request pipeline or maps an endpoint to, and every action of an area that
   has feature classes has its class. No two feature classes share a name.
@@ -513,7 +518,7 @@ Five filters divide the suite, and CI runs one job per filter:
 
 | Filter | What it selects |
 | --- | --- |
-| under a `Unit` folder, or nothing more specific | everything that needs neither a database, the HTTP surface nor ffmpeg |
+| under a `Unit` folder and of neither the scale nor the material job, or nothing more specific | everything that needs neither a database, the HTTP surface nor ffmpeg |
 | `Category=Feature` or a `FeatureTest` name | the tests that drive the application through its HTTP surface, split by class into shards |
 | `Category=DbIntegration` or a `DbIntegration` name | the tests that need a real PostgreSQL |
 | `Category=Material` | the tests that write a synthetic broadcast with ffmpeg and read it back |
