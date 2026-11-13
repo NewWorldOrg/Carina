@@ -20,7 +20,6 @@ public static class TestLayoutRules
     public static readonly IReadOnlyList<string> AreasNotYetMoved =
     [
         "Base",
-        "Captions",
         "Collection",
         "Configuration",
         "DataBroadcast",
@@ -34,12 +33,9 @@ public static class TestLayoutRules
         "Machines",
         "Net",
         "Persistence",
-        "Playback",
         "Services",
-        "Streaming",
         "Tuners",
         "Version",
-        "Viewing",
     ];
 
     /// <summary>
@@ -129,6 +125,7 @@ public static class TestLayoutRules
         new("Segments", "SegmentLearningRoundSchema"),
         new("Segments", "SegmentSettingsSchema"),
         new("Segments", "SkipEventSchema"),
+        new("Viewing", "PlaybackPositionSchema"),
     ];
 
     private const string ApiTests = "Carina.Api.Tests";
