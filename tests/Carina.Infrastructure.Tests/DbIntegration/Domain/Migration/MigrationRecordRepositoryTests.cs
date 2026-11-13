@@ -1,24 +1,28 @@
 using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
-using Carina.Infrastructure.Migration;
-using Carina.Infrastructure.Persistence;
 
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Migration;
 
-[Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
+public sealed class MigrationRecordRepositoryTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
     private static readonly DateTime At = new(2026, 9, 8, 3, 0, 0, DateTimeKind.Utc);
 
     private static readonly MigrationSourceName Source = new("the recording system being replaced");
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact]
     public async Task ARunComesBackWithEverythingItSaidAndEverythingItLeftBehind()
@@ -364,19 +368,19 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task SavingNoReportAtAllIsRefused()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => new MigrationRecordRepository(context).SaveAsync(null!, Cancel));
+            () => RecordsIn(scope).SaveAsync(null!, Cancel));
     }
 
     [Fact]
     public async Task ReadingNoRunAtAllIsRefused()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => new MigrationRecordRepository(context).ReadAsync(null!, Cancel));
+            () => RecordsIn(scope).ReadAsync(null!, Cancel));
     }
 
     [Fact]
@@ -512,10 +516,10 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task APageOfLinesBelongingToNoRunIsRefused()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => new MigrationRecordRepository(context).ListDetailsAsync(
+            () => RecordsIn(scope).ListDetailsAsync(
                 null!,
                 MigrationDetailQuery.For(1, 1)!,
                 Cancel));
@@ -524,10 +528,10 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task APageNobodyAskedForIsRefused()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => new MigrationRecordRepository(context).ListDetailsAsync(
+            () => RecordsIn(scope).ListDetailsAsync(
                 MigrationRunId.New(),
                 null!,
                 Cancel));
@@ -607,49 +611,45 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
         return (long)(await asking.ExecuteScalarAsync())!;
     }
 
-    private async Task<NpgsqlConnection> OpenAsync()
-    {
-        await using CarinaDbContext context = database.Open();
-        NpgsqlConnection connection = new(context.Database.GetConnectionString());
-        await connection.OpenAsync();
-
-        return connection;
-    }
+    private Task<NpgsqlConnection> OpenAsync() => database.OpenAsync();
 
     private async Task SaveAsync(MigrationReport report)
     {
-        await using CarinaDbContext context = database.Open();
-        await new MigrationRecordRepository(context).SaveAsync(report, Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await RecordsIn(scope).SaveAsync(report, Cancel);
     }
 
     private async Task<MigrationRun?> LatestAsync()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new MigrationRecordRepository(context).LatestAsync(Cancel);
+        return await RecordsIn(scope).LatestAsync(Cancel);
     }
 
     private async Task<MigrationReport?> ReadAsync(MigrationRunId id)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new MigrationRecordRepository(context).ReadAsync(id, Cancel);
+        return await RecordsIn(scope).ReadAsync(id, Cancel);
     }
 
     private async Task<MigrationRecordSummary?> SummariseAsync()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new MigrationRecordRepository(context).SummariseAsync(Cancel);
+        return await RecordsIn(scope).SummariseAsync(Cancel);
     }
 
     private async Task<PaginatedList<MigrationDetail>> ListDetailsAsync(MigrationRunId id, int page, int perPage)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new MigrationRecordRepository(context).ListDetailsAsync(
+        return await RecordsIn(scope).ListDetailsAsync(
             id,
             MigrationDetailQuery.For(page, perPage)!,
             Cancel);
     }
+
+    private static IMigrationRecordRepository RecordsIn(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IMigrationRecordRepository>();
 }
