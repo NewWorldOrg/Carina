@@ -525,7 +525,7 @@ Five filters divide the suite, and CI runs one job per filter:
 | --- | --- |
 | under a `Unit` folder and of neither the scale nor the material job, or nothing more specific | everything that needs neither a database, the HTTP surface nor ffmpeg |
 | `Category=Feature` or a `FeatureTest` name | the tests that drive the application through its HTTP surface, split by class into shards |
-| `Category=DbIntegration` or a `DbIntegration` name | the tests that need a real PostgreSQL |
+| `Category=DbIntegration`, or a `DbIntegration` name and of neither the scale nor the material job | the tests that need a real PostgreSQL |
 | `Category=Material` | the tests that write a synthetic broadcast with ffmpeg and read it back |
 | `Category=Scale` | the measurements at archive and schedule scale |
 
