@@ -4,6 +4,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
@@ -12,8 +13,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Recordings;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
 
+[Trait("Category", "Unit")]
 public sealed class DriverRecordingFileEraserTests : IDisposable
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

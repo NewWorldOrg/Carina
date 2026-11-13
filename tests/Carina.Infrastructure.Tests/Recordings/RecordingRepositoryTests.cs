@@ -8,7 +8,7 @@ using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Carina.Infrastructure.Tests.Recordings;
+namespace Carina.Infrastructure.Tests.Fixtures.Recordings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]

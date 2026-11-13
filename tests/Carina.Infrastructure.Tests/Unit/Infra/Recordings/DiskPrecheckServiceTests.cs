@@ -1,12 +1,14 @@
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.TestSupport;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
 
+[Trait("Category", "Unit")]
 public sealed class DiskPrecheckServiceTests
 {
     private static readonly DateTime Noon = new(2026, 8, 26, 12, 0, 0, DateTimeKind.Utc);

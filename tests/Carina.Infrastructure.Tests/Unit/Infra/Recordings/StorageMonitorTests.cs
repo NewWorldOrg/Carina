@@ -1,11 +1,13 @@
 using Carina.Domain.Driver;
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.TestSupport;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
 
+[Trait("Category", "Unit")]
 public sealed class StorageMonitorTests
 {
     private static readonly TimeSpan Rest = TimeSpan.FromMinutes(1);

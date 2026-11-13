@@ -7,7 +7,7 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Recordings;
-using Carina.Infrastructure.Tests.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +18,7 @@ using Npgsql;
 
 using Puppis.Contracts;
 
-using static Carina.Infrastructure.Tests.Recordings.RecordingStreamFixture;
+using static Carina.Infrastructure.Tests.Fixtures.Recordings.RecordingStreamFixture;
 
 namespace Carina.Infrastructure.Tests;
 

@@ -1,6 +1,5 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
-using Carina.Domain.Driver;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -8,9 +7,7 @@ using Carina.Domain.Rules;
 using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
-using Puppis.Contracts;
-
-namespace Carina.Infrastructure.Tests.Recordings;
+namespace Carina.Infrastructure.Tests.Fixtures.Recordings;
 
 internal sealed class HeldRecordings : IRecordingRepository
 {

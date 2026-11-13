@@ -8,7 +8,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Thumbnails;
 
-namespace Carina.Infrastructure.Tests.Thumbnails;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Thumbnails;
 
 /// <summary>
 /// Pictures taken out of a synthetic broadcast that was cut in the middle of a key frame and carried on in the
@@ -16,7 +16,7 @@ namespace Carina.Infrastructure.Tests.Thumbnails;
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
-public sealed class SeamPictureMaterialTests : IDisposable
+public sealed class FfmpegThumbnailRendererMaterialTests : IDisposable
 {
     private const int PacketSize = 188;
 

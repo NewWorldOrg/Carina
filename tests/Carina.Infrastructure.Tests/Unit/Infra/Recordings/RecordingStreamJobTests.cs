@@ -2,16 +2,18 @@ using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-using static Carina.Infrastructure.Tests.Recordings.RecordingStreamFixture;
+using static Carina.Infrastructure.Tests.Fixtures.Recordings.RecordingStreamFixture;
 
-namespace Carina.Infrastructure.Tests.Recordings;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
 
+[Trait("Category", "Unit")]
 public sealed class RecordingStreamJobTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

@@ -18,7 +18,7 @@ using Puppis.Contracts;
 
 using EventId = Carina.Domain.Programmes.EventId;
 
-namespace Carina.Infrastructure.Tests.Recordings;
+namespace Carina.Infrastructure.Tests.Fixtures.Recordings;
 
 internal sealed class StreamLedger : IRecordingRepository
 {

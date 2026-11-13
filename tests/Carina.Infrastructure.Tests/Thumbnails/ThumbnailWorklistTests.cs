@@ -7,7 +7,7 @@ using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Thumbnails;
 
-namespace Carina.Infrastructure.Tests.Thumbnails;
+namespace Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]

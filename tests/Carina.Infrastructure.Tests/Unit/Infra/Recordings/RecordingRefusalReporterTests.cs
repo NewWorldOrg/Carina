@@ -3,16 +3,20 @@ using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-using static Carina.Infrastructure.Tests.Recordings.RecordingTickFixture;
+using static Carina.Infrastructure.Tests.Fixtures.Recordings.RecordingTickFixture;
 
-namespace Carina.Infrastructure.Tests.Recordings;
+using HeldRecordings = Carina.Infrastructure.Tests.Fixtures.Recordings.HeldRecordings;
 
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
+
+[Trait("Category", "Unit")]
 public sealed class RecordingRefusalReporterTests
 {
     public static TheoryData<string> WhatTheLedgerHasNoClassFor =>

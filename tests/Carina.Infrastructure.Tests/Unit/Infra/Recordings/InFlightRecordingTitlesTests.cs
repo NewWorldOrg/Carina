@@ -4,11 +4,13 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Recordings;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
 
+[Trait("Category", "Unit")]
 public sealed class InFlightRecordingTitlesTests
 {
     private static readonly DateTime Noon = new(2026, 11, 1, 3, 0, 0, DateTimeKind.Utc);

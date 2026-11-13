@@ -5,8 +5,8 @@ using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.Infrastructure.Tests.Integrity;
-using Carina.Infrastructure.Tests.Thumbnails;
 using Carina.TestSupport;
 
 using Puppis.Contracts;

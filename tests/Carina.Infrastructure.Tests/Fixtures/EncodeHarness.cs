@@ -11,8 +11,8 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Captions;
 using Carina.Infrastructure.Encodings;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.Infrastructure.Tests.Integrity;
-using Carina.Infrastructure.Tests.Thumbnails;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;

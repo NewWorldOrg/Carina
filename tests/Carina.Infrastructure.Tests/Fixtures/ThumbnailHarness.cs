@@ -5,7 +5,7 @@ using Carina.Domain.Thumbnails;
 
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Infrastructure.Tests.Thumbnails;
+namespace Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 
 internal sealed record Illustrated(RecordingId Id, ThumbnailState State, ThumbnailFault? Fault);
 

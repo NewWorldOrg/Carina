@@ -7,7 +7,7 @@ using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Infrastructure.Tests.Recordings;
+namespace Carina.Infrastructure.Tests.Fixtures.Recordings;
 
 internal sealed class RefusalLedger
 {

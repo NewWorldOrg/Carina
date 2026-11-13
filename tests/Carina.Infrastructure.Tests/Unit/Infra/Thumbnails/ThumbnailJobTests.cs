@@ -3,6 +3,7 @@ using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Tests.Fixtures.Clocks;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
@@ -11,8 +12,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Infrastructure.Tests.Thumbnails;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Thumbnails;
 
+[Trait("Category", "Unit")]
 public sealed class ThumbnailJobTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

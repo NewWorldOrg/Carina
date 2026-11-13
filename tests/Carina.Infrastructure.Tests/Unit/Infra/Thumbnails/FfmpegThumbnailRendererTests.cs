@@ -6,8 +6,9 @@ using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Thumbnails;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Thumbnails;
 
+[Trait("Category", "Unit")]
 public sealed class FfmpegThumbnailRendererTests : IDisposable
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

@@ -1,7 +1,9 @@
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 
-namespace Carina.Infrastructure.Tests.Recordings;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
 
+[Trait("Category", "Unit")]
 public sealed class RecordingWatchSettingsTests
 {
     [Fact]

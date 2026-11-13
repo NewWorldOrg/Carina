@@ -1,7 +1,8 @@
 using Carina.Infrastructure.Thumbnails;
 
-namespace Carina.Infrastructure.Tests.Thumbnails;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Thumbnails;
 
+[Trait("Category", "Unit")]
 public sealed class ThumbnailPassTests
 {
     [Fact]

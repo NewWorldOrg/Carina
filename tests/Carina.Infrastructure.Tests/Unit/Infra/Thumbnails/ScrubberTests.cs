@@ -5,11 +5,13 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Thumbnails;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Thumbnails;
 
+[Trait("Category", "Unit")]
 public sealed class ScrubberTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

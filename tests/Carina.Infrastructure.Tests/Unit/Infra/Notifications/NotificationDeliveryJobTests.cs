@@ -3,8 +3,8 @@ using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Tests.DataBroadcast;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.Infrastructure.Tests.Notifications;
-using Carina.Infrastructure.Tests.Thumbnails;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;

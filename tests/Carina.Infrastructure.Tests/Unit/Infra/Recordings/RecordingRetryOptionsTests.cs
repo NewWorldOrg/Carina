@@ -1,11 +1,13 @@
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Configuration;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 
 using Microsoft.Extensions.Configuration;
 
-namespace Carina.Infrastructure.Tests.Recordings;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
 
-public sealed class RecordingRetrySettingsTests
+[Trait("Category", "Unit")]
+public sealed class RecordingRetryOptionsTests
 {
     [Fact]
     public void ConfigurationThatSaysNothingLeavesTheRetryAsItComes()

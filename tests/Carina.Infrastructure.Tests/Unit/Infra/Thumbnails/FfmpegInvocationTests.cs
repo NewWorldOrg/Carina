@@ -4,8 +4,9 @@ using Carina.Domain.Channels;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Thumbnails;
 
-namespace Carina.Infrastructure.Tests.Thumbnails;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Thumbnails;
 
+[Trait("Category", "Unit")]
 public sealed class FfmpegInvocationTests
 {
     private const int StepsFromPerfect = 3;
