@@ -62,7 +62,7 @@ public sealed class RuleApplicationServiceScaleTests
             new ReservationSchedulingService(
                 reservations,
                 new NoRecordings(),
-                new HeldSeating(Seats()),
+                new HeldSeating(OneSeat()),
                 new TuningByService { Otherwise = Tunable() },
                 write,
                 RollingHorizon.Default,
@@ -90,7 +90,7 @@ public sealed class RuleApplicationServiceScaleTests
     [Fact]
     public async Task ARehearsalAtTheSizeTheGuideActuallyReachesReadsTheChannelsAWholeRunAtATime()
     {
-        var streams = new CountedStreams([TerrestrialForRehearsal()]);
+        var streams = new CountedStreams([Terrestrial()]);
         var catalogue = new CountedServices();
         var rules = new HeldRules();
         var programmes = new HeldProgrammes();
@@ -99,7 +99,7 @@ public sealed class RuleApplicationServiceScaleTests
 
         for (int identifier = 1; identifier <= Rules; identifier++)
         {
-            rules.Rules.Add(WrittenForRehearsal(identifier, $"keyword=river&genre={identifier % 16}"));
+            rules.Rules.Add(Written(identifier, $"keyword=river&genre={identifier % 16}"));
         }
 
         for (int carried = 1; carried <= Programmes; carried++)
@@ -117,7 +117,7 @@ public sealed class RuleApplicationServiceScaleTests
             new ReservationSchedulingService(
                 reservations,
                 new NoRecordings(),
-                new HeldSeating(SeatsForRehearsal()),
+                new HeldSeating(EightSeats()),
                 new TuningByService { Otherwise = Tunable() },
                 write,
                 RollingHorizon.Default,
@@ -130,7 +130,7 @@ public sealed class RuleApplicationServiceScaleTests
             new FixedClock(Now));
 
         Stopwatch watch = Stopwatch.StartNew();
-        RuleRehearsal? rehearsed = await rehearsing.RehearsedAsync(WrittenForRehearsal(0xffff, "keyword=hill"), Cancel);
+        RuleRehearsal? rehearsed = await rehearsing.RehearsedAsync(Written(0xffff, "keyword=hill"), Cancel);
         watch.Stop();
 
         Assert.NotNull(rehearsed);
@@ -172,7 +172,7 @@ public sealed class RuleApplicationServiceScaleTests
             Now,
             revision: carried);
 
-    private static TunerCapacity Seats()
+    private static TunerCapacity OneSeat()
         => new([new TunerSeat("first", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)], []);
 
     private static TuningResolution Tunable()
@@ -188,7 +188,7 @@ public sealed class RuleApplicationServiceScaleTests
             TuningParameters.Terrestrial(27),
             [.. Enumerable.Range(0, Services).Select(service => new ServiceId(1024 + service))]);
 
-    private static Rule WrittenForRehearsal(int identifier, string query)
+    private static Rule Written(int identifier, string query)
         => Rule.Draft(
             new RuleId(new Guid($"{identifier:x8}-0000-0000-0000-000000000000")),
             $"rule {identifier}",
@@ -199,18 +199,11 @@ public sealed class RuleApplicationServiceScaleTests
             Margin.None,
             Now.AddDays(-30));
 
-    private static TunerCapacity SeatsForRehearsal()
+    private static TunerCapacity EightSeats()
         => new(
             [
                 .. Enumerable.Range(0, 8).Select(index =>
                     new TunerSeat($"seat{index}", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)),
             ],
             []);
-
-    private static BroadcastStream TerrestrialForRehearsal()
-        => new(
-            new NetworkId(Network),
-            new TransportStreamId(Carried),
-            TuningParameters.Terrestrial(27),
-            [.. Enumerable.Range(0, Services).Select(index => new ServiceId(1024 + index))]);
 }

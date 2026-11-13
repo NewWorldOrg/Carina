@@ -33,9 +33,9 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
 
     private const int Listed = 3049;
 
-    private static readonly DateTime AheadForRetirement = Now.AddDays(24);
+    private static readonly DateTime FurtherAhead = Now.AddDays(24);
 
-    private const int ListedForRetirement = 3149;
+    private const int ListedElsewhere = 3149;
 
     private readonly List<ServiceProvider> standingIn = [];
 
@@ -68,7 +68,7 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
         await VisitedAsync(VisitOutcome.Complete);
         await AddAsync(rule);
 
-        await using (AsyncServiceScope scope = StandingIn())
+        await using (AsyncServiceScope scope = StandingInTunedToTheListedService())
         {
             RuleApplicationRun run = await Applying(scope).EverythingAsync(Cancel);
 
@@ -97,7 +97,7 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
 
         Assert.NotNull(await FindAsync(vanished));
 
-        await using (AsyncServiceScope scope = StandingIn())
+        await using (AsyncServiceScope scope = StandingInTunedToTheListedService())
         {
             RuleApplicationRun run = await Applying(scope).EverythingAsync(Cancel);
 
@@ -117,7 +117,7 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
         await AddAsync(rule);
         await AddAsync(standing);
 
-        await using (AsyncServiceScope scope = StandingIn())
+        await using (AsyncServiceScope scope = StandingInTunedToTheListedService())
         {
             RuleApplicationRun run = await Applying(scope).EverythingAsync(Cancel);
 
@@ -137,7 +137,7 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
         await AddAsync(rule);
         await AddAsync(standing);
 
-        await using (AsyncServiceScope scope = StandingIn())
+        await using (AsyncServiceScope scope = StandingInTunedToTheListedService())
         {
             IReadOnlyList<Reservation> dropped = await Applying(scope).DroppedAsync(rule.Id, Cancel);
 
@@ -166,7 +166,7 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
         await AddAsync(rule);
         await AddAsync(standing);
 
-        await using (AsyncServiceScope scope = StandingIn())
+        await using (AsyncServiceScope scope = StandingInTunedToTheListedService())
         {
             RuleApplicationRun run = await Applying(scope).EverythingAsync(Cancel);
 
@@ -187,8 +187,8 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
     [Fact]
     public async Task RetiringARuleLeavesNoStandingReservationBehindThatNothingOwnsAnyMore()
     {
-        Rule going = WrittenForRetirement(0x71);
-        Rule staying = WrittenForRetirement(0x72);
+        Rule going = Written(0x71, "keyword=upland");
+        Rule staying = Written(0x72, "keyword=upland");
         await AddAsync(going);
         await AddAsync(staying);
 
@@ -197,15 +197,15 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
         Reservation cancelled = await StandingAsync(9203, going.Id, ReservationState.Cancelled);
         Reservation another = await StandingAsync(9204, staying.Id);
 
-        await using (AsyncServiceScope scope = StandingInForRetirement())
+        await using (AsyncServiceScope scope = StandingInWithEveryServiceTunable())
         {
             Assert.NotNull(await Applying(scope).RetiredAsync(going.Id, Cancel));
         }
 
-        Assert.Null(await FindAsyncForRetirement(standing.Id));
-        Assert.NotNull(await FindAsyncForRetirement(recording.Id));
-        Assert.NotNull(await FindAsyncForRetirement(cancelled.Id));
-        Assert.Equal(staying.Id, (await FindAsyncForRetirement(another.Id))!.RuleId);
+        Assert.Null(await FindAsync(standing.Id));
+        Assert.NotNull(await FindAsync(recording.Id));
+        Assert.NotNull(await FindAsync(cancelled.Id));
+        Assert.Equal(staying.Id, (await FindAsync(another.Id))!.RuleId);
         Assert.Empty(await OrphanedAndStandingAmongAsync(standing, recording, cancelled, another));
         Assert.Null(await ReadRuleAsync(going.Id));
         Assert.NotNull(await ReadRuleAsync(staying.Id));
@@ -214,18 +214,18 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
     [Fact]
     public async Task WhatIsKeptWhenTheRuleGoesIsLetGoOfItBeforeTheRuleIsTakenAway()
     {
-        Rule going = WrittenForRetirement(0x78);
+        Rule going = Written(0x78, "keyword=upland");
         await AddAsync(going);
         Reservation recording = await ClaimedAsync(await StandingAsync(9211, going.Id));
         Reservation cancelled = await StandingAsync(9212, going.Id, ReservationState.Cancelled);
 
-        await using (AsyncServiceScope scope = StandingInForRetirement())
+        await using (AsyncServiceScope scope = StandingInWithEveryServiceTunable())
         {
             Assert.NotNull(await Applying(scope).RetiredAsync(going.Id, Cancel));
         }
 
-        Reservation? kept = await FindAsyncForRetirement(recording.Id);
-        Reservation? held = await FindAsyncForRetirement(cancelled.Id);
+        Reservation? kept = await FindAsync(recording.Id);
+        Reservation? held = await FindAsync(cancelled.Id);
 
         Assert.NotNull(kept);
         Assert.Null(kept.RuleId);
@@ -239,11 +239,11 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
     [Fact]
     public async Task RetiringARuleWhoseReservationChangedElsewhereAfterItWasReadStillTakesItAway()
     {
-        Rule going = WrittenForRetirement(0x76);
+        Rule going = Written(0x76, "keyword=upland");
         await AddAsync(going);
         Reservation standing = await StandingAsync(9241, going.Id);
 
-        await using (AsyncServiceScope scope = StandingInForRetirement())
+        await using (AsyncServiceScope scope = StandingInWithEveryServiceTunable())
         {
             await Reservations(scope).FindAsync(standing.Id, Cancel);
             await ChangedElsewhereAsync(standing.Id);
@@ -251,19 +251,19 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
             Assert.NotNull(await Applying(scope).RetiredAsync(going.Id, Cancel));
         }
 
-        Assert.Null(await FindAsyncForRetirement(standing.Id));
+        Assert.Null(await FindAsync(standing.Id));
         Assert.Null(await ReadRuleAsync(going.Id));
     }
 
     [Fact]
     public async Task SwitchingARuleOffWhenItsReservationChangedElsewhereAfterItWasReadStillPullsItBack()
     {
-        Rule going = WrittenForRetirement(0x77);
+        Rule going = Written(0x77, "keyword=upland");
         await AddAsync(going);
         Reservation standing = await StandingAsync(9251, going.Id);
-        await VisitedAsyncForRetirement();
+        await VisitedAsync(VisitOutcome.Complete);
 
-        await using (AsyncServiceScope scope = StandingInForRetirement())
+        await using (AsyncServiceScope scope = StandingInWithEveryServiceTunable())
         {
             await Reservations(scope).FindAsync(standing.Id, Cancel);
             await ChangedElsewhereAsync(standing.Id);
@@ -273,35 +273,35 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
             Assert.Equal([standing.Id], dropped.Select(reservation => reservation.Id));
         }
 
-        Assert.Null(await FindAsyncForRetirement(standing.Id));
+        Assert.Null(await FindAsync(standing.Id));
     }
 
     [Fact]
     public async Task ARuleThatIsNotThereLeavesTheLedgerAsItWas()
     {
-        Rule staying = WrittenForRetirement(0x74);
+        Rule staying = Written(0x74, "keyword=upland");
         await AddAsync(staying);
         Reservation standing = await StandingAsync(9221, staying.Id);
 
-        await using (AsyncServiceScope scope = StandingInForRetirement())
+        await using (AsyncServiceScope scope = StandingInWithEveryServiceTunable())
         {
             Assert.Null(await Applying(scope).RetiredAsync(
                 new RuleId(new Guid("000000ff-0000-0000-0000-000000000000")),
                 Cancel));
         }
 
-        Assert.Equal(staying.Id, (await FindAsyncForRetirement(standing.Id))!.RuleId);
+        Assert.Equal(staying.Id, (await FindAsync(standing.Id))!.RuleId);
         Assert.NotNull(await ReadRuleAsync(staying.Id));
     }
 
-    private AsyncServiceScope StandingIn()
+    private AsyncServiceScope StandingInTunedToTheListedService()
     {
         TuningByService tuning = new();
         tuning.Answer(Listed, TuningParameters.Terrestrial(41));
 
         ServiceProvider standing = database.Infrastructure(replace =>
         {
-            replace.AddSingleton<IBroadcastStreamDirectory>(new HeldStreams([Terrestrial()]));
+            replace.AddSingleton<IBroadcastStreamDirectory>(new HeldStreams([Terrestrial(Listed)]));
             replace.AddSingleton<IBroadcastServiceRepository>(new HeldServices());
             replace.AddSingleton<IRecordingRepository>(new NoRecordings());
             replace.AddSingleton<ITunerCapacityDirectory>(new HeldSeating(Seats()));
@@ -424,12 +424,12 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
             ],
             []);
 
-    private static BroadcastStream Terrestrial()
+    private static BroadcastStream Terrestrial(int listed)
         => new(
             new NetworkId(Network),
             new TransportStreamId(Carried),
             TuningParameters.Terrestrial(41),
-            [new ServiceId(Listed)]);
+            [new ServiceId(listed)]);
 
     private static CarinaDbContext Context(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
@@ -462,13 +462,13 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
             .ToListAsync(Cancel);
     }
 
-    private AsyncServiceScope StandingInForRetirement()
+    private AsyncServiceScope StandingInWithEveryServiceTunable()
     {
         TuningByService tuning = new() { Otherwise = Tunable() };
 
         ServiceProvider standing = database.Infrastructure(replace =>
         {
-            replace.AddSingleton<IBroadcastStreamDirectory>(new HeldStreams([TerrestrialForRetirement()]));
+            replace.AddSingleton<IBroadcastStreamDirectory>(new HeldStreams([Terrestrial(ListedElsewhere)]));
             replace.AddSingleton<IBroadcastServiceRepository>(new HeldServices());
             replace.AddSingleton<IRecordingRepository>(new NoRecordings());
             replace.AddSingleton<ITunerCapacityDirectory>(new HeldSeating(Seats()));
@@ -498,12 +498,12 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
         RuleId ruleId,
         ReservationState state = ReservationState.Scheduled)
     {
-        DateTime opens = AheadForRetirement.AddHours(carried % 32);
+        DateTime opens = FurtherAhead.AddHours(carried % 32);
         Reservation reservation = Reservation.Rehydrate(
             ReservationId.New(),
             new ProgrammeRef(
                 new NetworkId(Network),
-                new ServiceId(ListedForRetirement),
+                new ServiceId(ListedElsewhere),
                 new EventId(carried),
                 opens),
             ruleId,
@@ -550,20 +550,7 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
         await repository.SaveAllAsync([found], Cancel);
     }
 
-    private async Task VisitedAsyncForRetirement()
-    {
-        await using AsyncServiceScope scope = container.CreateAsyncScope();
-        await Visits(scope).SaveAsync(
-            StreamVisit.Record(
-                new NetworkId(Network),
-                new TransportStreamId(Carried),
-                VisitOutcome.Complete,
-                Now.AddHours(-1),
-                TimeSpan.FromSeconds(30)),
-            Cancel);
-    }
-
-    private async Task<Reservation?> FindAsyncForRetirement(ReservationId id)
+    private async Task<Reservation?> FindAsync(ReservationId id)
     {
         await using AsyncServiceScope scope = container.CreateAsyncScope();
 
@@ -577,29 +564,11 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
         return await Rules(scope).FindAsync(id, Cancel);
     }
 
-    private static Rule WrittenForRetirement(int identifier)
-        => Rule.Draft(
-            new RuleId(new Guid($"{identifier:x8}-0000-0000-0000-000000000000")),
-            $"rule {identifier:x}",
-            new RuleQuery("keyword=upland"),
-            Priority.Default,
-            true,
-            Margin.None,
-            Margin.None,
-            Now.AddDays(-30));
-
     private static TuningResolution Tunable()
         => TuningResolution.Tunable(
             new CandidateChannelId(Guid.NewGuid()),
             TuningParameters.Terrestrial(41),
             impaired: false);
-
-    private static BroadcastStream TerrestrialForRetirement()
-        => new(
-            new NetworkId(Network),
-            new TransportStreamId(Carried),
-            TuningParameters.Terrestrial(41),
-            [new ServiceId(ListedForRetirement)]);
 
     private static IReservationRecordingContract Contract(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IReservationRecordingContract>();

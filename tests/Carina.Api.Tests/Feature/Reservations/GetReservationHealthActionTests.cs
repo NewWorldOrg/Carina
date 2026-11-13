@@ -66,8 +66,8 @@ public sealed class GetReservationHealthActionTests
         feature.Announced(4001);
         feature.Announced(4002, serviceId: 1032);
 
-        await feature.PostAsync("/api/reservations", AskingForTheSurface(4001));
-        await feature.PostAsync("/api/reservations", AskingForTheSurface(4002, serviceId: 1032));
+        await feature.PostAsync("/api/reservations", AskingWithoutPriority(4001));
+        await feature.PostAsync("/api/reservations", AskingWithoutPriority(4002, serviceId: 1032));
 
         (_, JsonElement health) = await feature.GetAsync("/api/reservations/health");
         JsonElement counted = health.GetProperty("data");
@@ -94,7 +94,7 @@ public sealed class GetReservationHealthActionTests
             [new TunerSeat(Seat, BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)],
             [NotPlacedYet]);
 
-    private static object AskingForTheSurface(int eventId, int serviceId = 1024)
+    private static object AskingWithoutPriority(int eventId, int serviceId = 1024)
         => new
         {
             programme = $"{ReservationFeature.Network}-{serviceId}-{eventId}",

@@ -39,7 +39,7 @@ public sealed class ReservationRecordingContractTests(MigratedRepositoryDatabase
         (true, "Failed"),
     ];
 
-    private static readonly TimeSpan[] AirsForTheMatrix =
+    private static readonly TimeSpan[] MatrixStarts =
     [
         TimeSpan.FromHours(-2),
         TimeSpan.FromMinutes(-10),
@@ -705,7 +705,7 @@ public sealed class ReservationRecordingContractTests(MigratedRepositoryDatabase
     private static IEnumerable<Row> Matrix()
         => from state in States
            from claim in Claims
-           from airs in AirsForTheMatrix
+           from airs in MatrixStarts
            from margin in Margins
            select new Row(state, claim.Claimed, claim.Outcome, airs, margin);
 

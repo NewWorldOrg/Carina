@@ -30,7 +30,7 @@ public sealed class RuleApplicationServiceTests
 
     private const int Alongside = 1040;
 
-    private const int NetworkForSimulcast = 9001;
+    private const int SharedStreamNetwork = 9001;
 
     private const int Main = 901;
 
@@ -42,13 +42,13 @@ public sealed class RuleApplicationServiceTests
 
     private const int Event = 77;
 
-    private static readonly DateTime NowForImpact = new(2026, 8, 31, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime NowAWeekLater = new(2026, 8, 31, 12, 0, 0, DateTimeKind.Utc);
 
     private static readonly TimeSpan LongEnoughToTellAStallFromAWait = TimeSpan.FromSeconds(30);
 
     private const int Taken = 1;
 
-    private const int BesideForAReturn = 2;
+    private const int BesideEvent = 2;
 
     [Fact]
     public async Task ARuleMakesAReservationForTheProgrammeItTakesAndNotForTheOneItLeaves()
@@ -894,8 +894,8 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task ADraftSaysWhatItWouldTakeWithoutWritingAnything()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
-        world.Guide(BroadcastForRehearsal(1, "hill walking"), BroadcastForRehearsal(2, "river fishing"));
+        WorldOfSeats world = WorldOfSeats.Of();
+        world.Guide(BroadcastInTurn(1, "hill walking"), BroadcastInTurn(2, "river fishing"));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
 
@@ -909,8 +909,8 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task ADraftWhoseConditionsAreAllEmptyIsNotRehearsedAtAll()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
-        world.Guide(BroadcastForRehearsal(1, "hill walking"));
+        WorldOfSeats world = WorldOfSeats.Of();
+        world.Guide(BroadcastInTurn(1, "hill walking"));
 
         Assert.Null(await world.Applying.RehearsedAsync(Draft("sort=Name"), Cancel));
     }
@@ -918,7 +918,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task AnUnsavedDraftIsWeighedAgainstTheReservationsThatAlreadyStand()
     {
-        WorldForRehearsal world = Crowded(seats: 1);
+        WorldOfSeats world = Crowded(seats: 1);
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
 
@@ -931,7 +931,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task TheSameDraftClashesWithNothingWhenThereIsASeatForItAsWell()
     {
-        WorldForRehearsal world = Crowded(seats: 2);
+        WorldOfSeats world = Crowded(seats: 2);
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
 
@@ -944,7 +944,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task WhatAlreadyStandsClashesWithNothingUntilTheDraftIsWeighedBesideIt()
     {
-        WorldForRehearsal world = Crowded(seats: 1);
+        WorldOfSeats world = Crowded(seats: 1);
 
         SchedulingRun without = await world.Scheduling.PreviewAsync([], Cancel);
 
@@ -954,10 +954,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task ABroadcastCarriedAsAShadowIsCountedOutRatherThanTaken()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
+        WorldOfSeats world = WorldOfSeats.Of();
         world.Guide(
-            BroadcastForRehearsal(1, "hill walking"),
-            BroadcastForRehearsal(2, "hill walking", Alongside, shadow: true));
+            BroadcastInTurn(1, "hill walking"),
+            BroadcastInTurn(2, "hill walking", Alongside, shadow: true));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
 
@@ -969,8 +969,8 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task NothingIsCountedOutWhenNoBroadcastIsCarriedAsAShadow()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
-        world.Guide(BroadcastForRehearsal(1, "hill walking"), BroadcastForRehearsal(2, "hill climbing", Alongside));
+        WorldOfSeats world = WorldOfSeats.Of();
+        world.Guide(BroadcastInTurn(1, "hill walking"), BroadcastInTurn(2, "hill climbing", Alongside));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
 
@@ -982,10 +982,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task BrRd010AListingAMovedBroadcastSuppressesIsCountedOutAndThePrimaryIsTakenInstead()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
+        WorldOfSeats world = WorldOfSeats.Of();
         world.Guide(
-            LinkedForRehearsal(1, "hill walking", Listed, Now.AddHours(3), related: [new RelatedProgramme(Network, Alongside, 2, RelationKind.Moved)]),
-            LinkedForRehearsal(2, "hill walking", Alongside, Now.AddHours(3), running: ProgrammeRunning.Running));
+            Linked(Listed, 1, "hill walking", Now.AddHours(3), related: [new RelatedProgramme(Network, Alongside, 2, RelationKind.Moved)]),
+            Linked(Alongside, 2, "hill walking", Now.AddHours(3), running: ProgrammeRunning.Running));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
 
@@ -998,10 +998,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task BrRd010ADraftTakingOneSegmentOfARelayIsShownTakingEverySegment()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
+        WorldOfSeats world = WorldOfSeats.Of();
         world.Guide(
-            LinkedForRehearsal(1, "hill walking", Listed, Now.AddHours(3), related: [new RelatedProgramme(Network, Alongside, 2, RelationKind.Relayed)]),
-            LinkedForRehearsal(2, "continued", Alongside, Now.AddHours(4)));
+            Linked(Listed, 1, "hill walking", Now.AddHours(3), related: [new RelatedProgramme(Network, Alongside, 2, RelationKind.Relayed)]),
+            Linked(Alongside, 2, "continued", Now.AddHours(4)));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
 
@@ -1014,10 +1014,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task AProgrammeAlreadyReservedIsNotCountedAsOneMoreToMake()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
-        Programme already = BroadcastForRehearsal(1, "hill walking");
-        world.Guide(already, BroadcastForRehearsal(2, "hillside"));
-        world.Reservations.Standing(StandingForRehearsal(already, ruleId: RuleId.New()));
+        WorldOfSeats world = WorldOfSeats.Of();
+        Programme already = BroadcastInTurn(1, "hill walking");
+        world.Guide(already, BroadcastInTurn(2, "hillside"));
+        world.Reservations.Standing(Standing(already, ReservationState.Scheduled, RuleId.New()));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
 
@@ -1030,10 +1030,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task WhatSomebodyBookedByHandIsNotCountedAsChangingHands()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
-        Programme already = BroadcastForRehearsal(1, "hill walking");
+        WorldOfSeats world = WorldOfSeats.Of();
+        Programme already = BroadcastInTurn(1, "hill walking");
         world.Guide(already);
-        world.Reservations.Standing(StandingForRehearsal(already));
+        world.Reservations.Standing(Standing(already, ReservationState.Scheduled, null));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
 
@@ -1046,12 +1046,12 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task WhatTheDraftItselfAlreadyReservedIsNotCountedAsChangingHands()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
+        WorldOfSeats world = WorldOfSeats.Of();
         Rule draft = Draft("keyword=hill");
         world.Rules.Rules.Add(draft);
-        Programme already = BroadcastForRehearsal(1, "hill walking");
+        Programme already = BroadcastInTurn(1, "hill walking");
         world.Guide(already);
-        world.Reservations.Standing(StandingForRehearsal(already, ruleId: draft.Id));
+        world.Reservations.Standing(Standing(already, ReservationState.Scheduled, draft.Id));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(draft, Cancel);
 
@@ -1064,12 +1064,12 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task WhatTheDraftNoLongerTakesIsCountedAsComingBack()
     {
-        WorldForRehearsal world = Collected();
+        WorldOfSeats world = CollectedWorldOfSeats();
         Rule saved = Draft("keyword=hill");
         world.Rules.Rules.Add(saved);
-        Programme leaving = BroadcastForRehearsal(1, "hill walking");
-        world.Guide(leaving, BroadcastForRehearsal(2, "river fishing"));
-        world.Reservations.Standing(StandingForRehearsal(leaving, ruleId: saved.Id));
+        Programme leaving = BroadcastInTurn(1, "hill walking");
+        world.Guide(leaving, BroadcastInTurn(2, "river fishing"));
+        world.Reservations.Standing(Standing(leaving, ReservationState.Scheduled, saved.Id));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(
             Draft("keyword=river", identifier: saved.Id),
@@ -1083,7 +1083,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task ARuleThatComesFirstKeepsWhatTheDraftWouldOtherwiseTake()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
+        WorldOfSeats world = WorldOfSeats.Of();
         world.Rules.Rules.Add(Rule.Draft(
             new RuleId(new Guid("00000009-0000-0000-0000-000000000000")),
             "ahead of the draft",
@@ -1093,7 +1093,7 @@ public sealed class RuleApplicationServiceTests
             Margin.None,
             Margin.None,
             Now.AddDays(-30)));
-        world.Guide(BroadcastForRehearsal(1, "hill walking"));
+        world.Guide(BroadcastInTurn(1, "hill walking"));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(
             Draft("keyword=hill", priority: 10),
@@ -1107,7 +1107,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task ADraftThatComesFirstTakesItFromTheRuleBehindIt()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
+        WorldOfSeats world = WorldOfSeats.Of();
         world.Rules.Rules.Add(Rule.Draft(
             new RuleId(new Guid("00000009-0000-0000-0000-000000000000")),
             "behind the draft",
@@ -1117,7 +1117,7 @@ public sealed class RuleApplicationServiceTests
             Margin.None,
             Margin.None,
             Now.AddDays(-30)));
-        world.Guide(BroadcastForRehearsal(1, "hill walking"));
+        world.Guide(BroadcastInTurn(1, "hill walking"));
 
         RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(
             Draft("keyword=hill", priority: 90),
@@ -1131,12 +1131,12 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task RetiringARuleTakesTheReservationsItMadeWithIt()
     {
-        WorldForRetirement world = CollectedForRetirement();
-        Rule rule = WrittenForRetirement();
+        OneSeatWorld world = CollectedOneSeatWorld();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
         world.Reservations.Standing(
-            StandingForRetirement(BroadcastForRetirement(1), ReservationState.Scheduled, rule.Id),
-            StandingForRetirement(BroadcastForRetirement(2), ReservationState.Conflict, rule.Id));
+            Standing(BroadcastInTurn(1, "hill walking"), ReservationState.Scheduled, rule.Id),
+            Standing(BroadcastInTurn(2, "hill walking"), ReservationState.Conflict, rule.Id));
 
         RuleRetirement? retired = await world.Applying.RetiredAsync(rule.Id, Cancel);
 
@@ -1149,10 +1149,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task AStandingReservationNoCollectionVouchesForStillGoesWhenTheRuleItselfGoes()
     {
-        WorldForRetirement world = WorldForRetirement.Of();
-        Rule rule = WrittenForRetirement();
+        OneSeatWorld world = OneSeatWorld.Of();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
-        world.Reservations.Standing(StandingForRetirement(BroadcastForRetirement(1), ReservationState.Scheduled, rule.Id));
+        world.Reservations.Standing(Standing(BroadcastInTurn(1, "hill walking"), ReservationState.Scheduled, rule.Id));
 
         IReadOnlyList<Reservation> held = await world.Applying.DroppedAsync(rule.Id, Cancel);
         RuleRetirement? retired = await world.Applying.RetiredAsync(rule.Id, Cancel);
@@ -1166,10 +1166,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task WhatTheGuardLetsGoIsWithdrawnRatherThanSwept()
     {
-        WorldForRetirement world = CollectedForRetirement();
-        Rule rule = WrittenForRetirement();
+        OneSeatWorld world = CollectedOneSeatWorld();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
-        world.Reservations.Standing(StandingForRetirement(BroadcastForRetirement(1), ReservationState.Scheduled, rule.Id));
+        world.Reservations.Standing(Standing(BroadcastInTurn(1, "hill walking"), ReservationState.Scheduled, rule.Id));
 
         RuleRetirement? retired = await world.Applying.RetiredAsync(rule.Id, Cancel);
 
@@ -1181,14 +1181,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task RetiringARuleLeavesTheReservationThatIsBeingRecorded()
     {
-        WorldForRetirement world = CollectedForRetirement();
-        Rule rule = WrittenForRetirement();
+        OneSeatWorld world = CollectedOneSeatWorld();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
-        Reservation recording = StandingForRetirement(
-            BroadcastForRetirement(1),
-            ReservationState.Scheduled,
-            rule.Id,
-            startedAt: Now.AddMinutes(-5));
+        Reservation recording = Standing(BroadcastInTurn(1, "hill walking"), ReservationState.Scheduled, rule.Id, startedAt: Now.AddMinutes(-5));
         world.Reservations.Standing(recording);
 
         RuleRetirement? retired = await world.Applying.RetiredAsync(rule.Id, Cancel);
@@ -1200,10 +1196,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task RetiringARuleLeavesTheReservationSomebodyCancelled()
     {
-        WorldForRetirement world = CollectedForRetirement();
-        Rule rule = WrittenForRetirement();
+        OneSeatWorld world = CollectedOneSeatWorld();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
-        Reservation cancelled = StandingForRetirement(BroadcastForRetirement(1), ReservationState.Cancelled, rule.Id);
+        Reservation cancelled = Standing(BroadcastInTurn(1, "hill walking"), ReservationState.Cancelled, rule.Id);
         world.Reservations.Standing(cancelled);
 
         RuleRetirement? retired = await world.Applying.RetiredAsync(rule.Id, Cancel);
@@ -1215,13 +1211,13 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task RetiringARuleLeavesWhatSomebodyBookedByHandAndWhatAnotherRuleMade()
     {
-        WorldForRetirement world = CollectedForRetirement();
-        Rule rule = WrittenForRetirement();
-        Rule beside = WrittenForRetirement(identifier: 2);
+        OneSeatWorld world = CollectedOneSeatWorld();
+        Rule rule = Written("keyword=hill");
+        Rule beside = Written("keyword=hill", identifier: 2);
         world.Rules.Rules.Add(rule);
         world.Rules.Rules.Add(beside);
-        Reservation byHand = StandingForRetirement(BroadcastForRetirement(1), ReservationState.Scheduled, null);
-        Reservation byAnother = StandingForRetirement(BroadcastForRetirement(2), ReservationState.Scheduled, beside.Id);
+        Reservation byHand = Standing(BroadcastInTurn(1, "hill walking"), ReservationState.Scheduled, null);
+        Reservation byAnother = Standing(BroadcastInTurn(2, "hill walking"), ReservationState.Scheduled, beside.Id);
         world.Reservations.Standing(byHand, byAnother);
 
         RuleRetirement? retired = await world.Applying.RetiredAsync(rule.Id, Cancel);
@@ -1236,10 +1232,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task RetiringARuleThatIsNotThereSaysSoAndTouchesNothing()
     {
-        WorldForRetirement world = CollectedForRetirement();
-        Rule rule = WrittenForRetirement();
+        OneSeatWorld world = CollectedOneSeatWorld();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
-        Reservation standing = StandingForRetirement(BroadcastForRetirement(1), ReservationState.Scheduled, rule.Id);
+        Reservation standing = Standing(BroadcastInTurn(1, "hill walking"), ReservationState.Scheduled, rule.Id);
         world.Reservations.Standing(standing);
 
         RuleRetirement? retired = await world.Applying.RetiredAsync(
@@ -1255,10 +1251,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task WhatGoesWithTheRuleGoesInOneTransactionWithIt()
     {
-        WorldForRetirement world = CollectedForRetirement();
-        Rule rule = WrittenForRetirement();
+        OneSeatWorld world = CollectedOneSeatWorld();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
-        world.Reservations.Standing(StandingForRetirement(BroadcastForRetirement(1), ReservationState.Scheduled, rule.Id));
+        world.Reservations.Standing(Standing(BroadcastInTurn(1, "hill walking"), ReservationState.Scheduled, rule.Id));
 
         await world.Applying.RetiredAsync(rule.Id, Cancel);
 
@@ -1270,10 +1266,10 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task WhatTheSweepTookMakesRoomThatIsSettledOnTheTunersAgain()
     {
-        WorldForRetirement world = WorldForRetirement.Of();
-        Rule rule = WrittenForRetirement();
+        OneSeatWorld world = OneSeatWorld.Of();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
-        world.Reservations.Standing(StandingForRetirement(BroadcastForRetirement(1), ReservationState.Scheduled, rule.Id));
+        world.Reservations.Standing(Standing(BroadcastInTurn(1, "hill walking"), ReservationState.Scheduled, rule.Id));
 
         RuleRetirement? retired = await world.Applying.RetiredAsync(rule.Id, Cancel);
 
@@ -1285,8 +1281,8 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task ARuleThatMadeNothingIsRetiredWithoutSettlingTheTunersAgain()
     {
-        WorldForRetirement world = WorldForRetirement.Of();
-        Rule rule = WrittenForRetirement();
+        OneSeatWorld world = OneSeatWorld.Of();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
 
         RuleRetirement? retired = await world.Applying.RetiredAsync(rule.Id, Cancel);
@@ -1300,8 +1296,8 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task BrRd010ARuleTakingABroadcastTheMainAndTheSubChannelsShareReservesItOnceOnTheMain()
     {
-        WorldForSimulcast world = WorldForSimulcast.Of();
-        world.Rules.Rules.Add(WrittenForSimulcast("keyword=hill"));
+        SharedStreamWorld world = SharedStreamWorld.Of();
+        world.Rules.Rules.Add(Written("keyword=hill"));
         world.Guide(
             Listing(Main, "hill walking", related: [Shared(Sub), Shared(Third)]),
             Listing(Sub, "hill walking", related: [Shared(Main)]),
@@ -1319,8 +1315,8 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task BrRd010ARuleTakingOneNameFromOneStartToOneEndOnTwoServicesOfAStreamReservesItOnceOnTheMain()
     {
-        WorldForSimulcast world = WorldForSimulcast.Of();
-        world.Rules.Rules.Add(WrittenForSimulcast("keyword=hill"));
+        SharedStreamWorld world = SharedStreamWorld.Of();
+        world.Rules.Rules.Add(Written("keyword=hill"));
         world.Guide(Listing(Sub, "hill walking", carried: 12), Listing(Main, "hill walking", carried: 11));
 
         RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
@@ -1331,8 +1327,8 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task BrRd010ARuleReachingOnlyTheSubChannelReservesTheBroadcastOnTheSubChannelItNamed()
     {
-        WorldForSimulcast world = WorldForSimulcast.Of();
-        world.Rules.Rules.Add(WrittenForSimulcast($"keyword=hill&channel={NetworkForSimulcast}-{Sub}"));
+        SharedStreamWorld world = SharedStreamWorld.Of();
+        world.Rules.Rules.Add(Written($"keyword=hill&channel={SharedStreamNetwork}-{Sub}"));
         world.Guide(
             Listing(Main, "hill walking", related: [Shared(Sub)]),
             Listing(Sub, "hill walking", related: [Shared(Main)]));
@@ -1345,8 +1341,8 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task BrRd010ARuleNamingTheMainAndTheSubChannelReservesTheBroadcastOnceOnTheMain()
     {
-        WorldForSimulcast world = WorldForSimulcast.Of();
-        world.Rules.Rules.Add(WrittenForSimulcast($"keyword=hill&channel={NetworkForSimulcast}-{Sub}&channel={NetworkForSimulcast}-{Main}"));
+        SharedStreamWorld world = SharedStreamWorld.Of();
+        world.Rules.Rules.Add(Written($"keyword=hill&channel={SharedStreamNetwork}-{Sub}&channel={SharedStreamNetwork}-{Main}"));
         world.Guide(
             Listing(Main, "hill walking", related: [Shared(Sub)]),
             Listing(Sub, "hill walking", related: [Shared(Main)]));
@@ -1359,14 +1355,14 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task BrRd010ASubChannelThatTurnsUpNamedOnlyOnceItIsOnTheAirIsNotReservedBesideTheMain()
     {
-        WorldForSimulcast world = WorldForSimulcast.Of();
-        Rule rule = WrittenForSimulcast("keyword=hill");
+        SharedStreamWorld world = SharedStreamWorld.Of();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
         Programme main = Listing(Main, "hill walking", startsAt: Now.AddMinutes(-5), revision: 1, related: [Shared(Sub)]);
         world.Guide(
             main,
             Listing(Sub, "hill walking", startsAt: Now.AddMinutes(-5), revision: 9, related: [Shared(Main)]));
-        world.Reservations.Standing(StandingForSimulcast(main, rule.Id, startedAt: Now.AddMinutes(-5)));
+        world.Reservations.Standing(Standing(main, ReservationState.Scheduled, rule.Id, startedAt: Now.AddMinutes(-5)));
 
         RuleApplicationRun run = await world.Applying.SinceAsync(5, Cancel);
 
@@ -1377,15 +1373,15 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task BrRd010ASubChannelReservationARuleMadeBeforeItStartsIsTakenBackAndTheMainStays()
     {
-        WorldForSimulcast world = WorldForSimulcast.Of();
-        Rule rule = WrittenForSimulcast("keyword=hill");
+        SharedStreamWorld world = SharedStreamWorld.Of();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
         world.Visited(VisitOutcome.Complete);
         Programme main = Listing(Main, "hill walking", related: [Shared(Sub)]);
         Programme sub = Listing(Sub, "hill walking", related: [Shared(Main)]);
         world.Guide(main, sub);
-        Reservation onTheMain = StandingForSimulcast(main, rule.Id);
-        Reservation onTheSub = StandingForSimulcast(sub, rule.Id);
+        Reservation onTheMain = Standing(main, ReservationState.Scheduled, rule.Id);
+        Reservation onTheSub = Standing(sub, ReservationState.Scheduled, rule.Id);
         world.Reservations.Standing(onTheMain, onTheSub);
 
         RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
@@ -1398,8 +1394,8 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task BrRd010ASubChannelReservationThatHasStartedOrThatAPersonMadeIsLeftAlone()
     {
-        WorldForSimulcast world = WorldForSimulcast.Of();
-        Rule rule = WrittenForSimulcast("keyword=hill");
+        SharedStreamWorld world = SharedStreamWorld.Of();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
         world.Visited(VisitOutcome.Complete);
         Programme running = Listing(Main, "hill walking", carried: 1, startsAt: Now.AddMinutes(-5), related: [Shared(Sub, 1)]);
@@ -1407,8 +1403,8 @@ public sealed class RuleApplicationServiceTests
         Programme later = Listing(Main, "hill walking", carried: 2, startsAt: Now.AddHours(5), related: [Shared(Sub, 2)]);
         Programme laterOnTheSub = Listing(Sub, "hill walking", carried: 2, startsAt: Now.AddHours(5), related: [Shared(Main, 2)]);
         world.Guide(running, runningOnTheSub, later, laterOnTheSub);
-        Reservation started = StandingForSimulcast(runningOnTheSub, rule.Id, startedAt: Now.AddMinutes(-5));
-        Reservation byHand = StandingForSimulcast(laterOnTheSub, ruleId: null);
+        Reservation started = Standing(runningOnTheSub, ReservationState.Scheduled, rule.Id, startedAt: Now.AddMinutes(-5));
+        Reservation byHand = Standing(laterOnTheSub, ReservationState.Scheduled, null);
         world.Reservations.Standing(started, byHand);
 
         RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
@@ -1425,13 +1421,13 @@ public sealed class RuleApplicationServiceTests
     [InlineData("encoding")]
     public async Task BrRd010ASubChannelReservationARuleMadeAndAPersonChangedStaysAndTheMainIsNotReservedBesideIt(string changed)
     {
-        WorldForSimulcast world = WorldForSimulcast.Of();
-        Rule rule = WrittenForSimulcast("keyword=hill");
+        SharedStreamWorld world = SharedStreamWorld.Of();
+        Rule rule = Written("keyword=hill");
         world.Rules.Rules.Add(rule);
         world.Visited(VisitOutcome.Complete);
         Programme sub = Listing(Sub, "hill walking", related: [Shared(Main)]);
         world.Guide(Listing(Main, "hill walking", related: [Shared(Sub)]), sub);
-        Reservation onTheSub = StandingForSimulcast(sub, rule.Id);
+        Reservation onTheSub = Standing(sub, ReservationState.Scheduled, rule.Id);
         Changed(onTheSub, changed);
         world.Reservations.Standing(onTheSub);
 
@@ -1448,22 +1444,22 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task WhatTheImpactSaysDeletingWouldSweepIsWhatDeletingSweeps()
     {
-        WorldForImpact asked = WorldForImpact.Seeded();
-        WorldForImpact acting = WorldForImpact.Seeded();
+        CollectionStatesWorld asked = CollectionStatesWorld.Seeded();
+        CollectionStatesWorld acting = CollectionStatesWorld.Seeded();
 
         RuleRehearsal? rehearsed = await Within(asked.Applying.RehearsedAsync(asked.Rewritten(), Cancel));
-        RuleRetirement? retired = await Within(acting.Applying.RetiredAsync(WorldForImpact.TheRule, Cancel));
+        RuleRetirement? retired = await Within(acting.Applying.RetiredAsync(CollectionStatesWorld.TheRule, Cancel));
 
         Assert.NotNull(rehearsed);
         Assert.NotNull(retired);
-        Assert.Equal(NamedForImpact(retired.Withdrawn.Concat(retired.Swept)), NamedForImpact(rehearsed.Sweeping));
+        Assert.Equal(Named(retired.Withdrawn.Concat(retired.Swept)), Named(rehearsed.Sweeping));
     }
 
     [Fact]
     public async Task WhatTheImpactSaysSavingWouldWithdrawIsWhatTheApplicationAfterSavingWithdraws()
     {
-        WorldForImpact asked = WorldForImpact.Seeded();
-        WorldForImpact acting = WorldForImpact.Seeded();
+        CollectionStatesWorld asked = CollectionStatesWorld.Seeded();
+        CollectionStatesWorld acting = CollectionStatesWorld.Seeded();
 
         RuleRehearsal? rehearsed = await Within(asked.Applying.RehearsedAsync(asked.Rewritten(), Cancel));
         acting.Rewrite();
@@ -1471,93 +1467,93 @@ public sealed class RuleApplicationServiceTests
 
         Assert.NotNull(rehearsed);
         Assert.Empty(ran.Faulted);
-        Assert.Equal(NamedForImpact(ran.Withdrawn), NamedForImpact(rehearsed.Withdrawing));
+        Assert.Equal(Named(ran.Withdrawn), Named(rehearsed.Withdrawing));
     }
 
     [Fact]
     public async Task SavingIsAnsweredWithTheseAndDeletingWithThoseSoNeitherAnswerIsEmptyNorTheSame()
     {
-        WorldForImpact world = WorldForImpact.Seeded();
+        CollectionStatesWorld world = CollectionStatesWorld.Seeded();
 
         RuleRehearsal? rehearsed = await Within(world.Applying.RehearsedAsync(world.Rewritten(), Cancel));
 
         Assert.NotNull(rehearsed);
         Assert.Equal(
             [
-                WorldForImpact.WhatOnlyTheBasicTableVouchesFor,
-                WorldForImpact.WhatStartsJustBeyondTheGrace,
-                WorldForImpact.WhatCollectionVouchesFor,
+                CollectionStatesWorld.WhatOnlyTheBasicTableVouchesFor,
+                CollectionStatesWorld.WhatStartsJustBeyondTheGrace,
+                CollectionStatesWorld.WhatCollectionVouchesFor,
             ],
-            NamedForImpact(rehearsed.Withdrawing));
+            Named(rehearsed.Withdrawing));
         Assert.Equal(
             [
-                WorldForImpact.WhatStartsExactlyOnTheGrace,
-                WorldForImpact.WhatAnotherRuleTakesOver,
-                WorldForImpact.WhatOnlyTheBasicTableVouchesFor,
-                WorldForImpact.WhatStartsJustBeyondTheGrace,
-                WorldForImpact.WhatStartsInsideTheGrace,
-                WorldForImpact.WhatWasNeverVisitedAtAll,
-                WorldForImpact.WhatCollectionVouchesFor,
-                WorldForImpact.WhatTheCollectionNeverFinished,
+                CollectionStatesWorld.WhatStartsExactlyOnTheGrace,
+                CollectionStatesWorld.WhatAnotherRuleTakesOver,
+                CollectionStatesWorld.WhatOnlyTheBasicTableVouchesFor,
+                CollectionStatesWorld.WhatStartsJustBeyondTheGrace,
+                CollectionStatesWorld.WhatStartsInsideTheGrace,
+                CollectionStatesWorld.WhatWasNeverVisitedAtAll,
+                CollectionStatesWorld.WhatCollectionVouchesFor,
+                CollectionStatesWorld.WhatTheCollectionNeverFinished,
             ],
-            NamedForImpact(rehearsed.Sweeping));
+            Named(rehearsed.Sweeping));
     }
 
     [Fact]
     public async Task WhatStartsExactlyOnTheGraceIsHeldBackAndWhatStartsASecondLaterIsNot()
     {
-        WorldForImpact world = WorldForImpact.Seeded();
+        CollectionStatesWorld world = CollectionStatesWorld.Seeded();
 
         RuleRehearsal? rehearsed = await Within(world.Applying.RehearsedAsync(world.Rewritten(), Cancel));
 
         Assert.NotNull(rehearsed);
-        Assert.DoesNotContain(WorldForImpact.WhatStartsExactlyOnTheGrace, NamedForImpact(rehearsed.Withdrawing));
-        Assert.Contains(WorldForImpact.WhatStartsJustBeyondTheGrace, NamedForImpact(rehearsed.Withdrawing));
-        Assert.Contains(WorldForImpact.WhatStartsExactlyOnTheGrace, NamedForImpact(rehearsed.Sweeping));
+        Assert.DoesNotContain(CollectionStatesWorld.WhatStartsExactlyOnTheGrace, Named(rehearsed.Withdrawing));
+        Assert.Contains(CollectionStatesWorld.WhatStartsJustBeyondTheGrace, Named(rehearsed.Withdrawing));
+        Assert.Contains(CollectionStatesWorld.WhatStartsExactlyOnTheGrace, Named(rehearsed.Sweeping));
     }
 
     [Fact]
     public async Task SwitchingTheRuleOffTakesWhatStartsInsideTheGraceThoughAnApplicationLeavesIt()
     {
-        WorldForImpact switching = WorldForImpact.Seeded();
-        WorldForImpact applying = WorldForImpact.Seeded();
+        CollectionStatesWorld switching = CollectionStatesWorld.Seeded();
+        CollectionStatesWorld applying = CollectionStatesWorld.Seeded();
 
         IReadOnlyList<Reservation> dropped =
-            await Within(switching.Applying.DroppedAsync(WorldForImpact.TheRule, Cancel));
+            await Within(switching.Applying.DroppedAsync(CollectionStatesWorld.TheRule, Cancel));
 
         applying.Rewrite();
         RuleApplicationRun ran = await Within(applying.Applying.EverythingAsync(Cancel));
 
-        Assert.Contains(WorldForImpact.WhatStartsInsideTheGrace, NamedForImpact(dropped));
-        Assert.Contains(WorldForImpact.WhatStartsExactlyOnTheGrace, NamedForImpact(dropped));
-        Assert.DoesNotContain(WorldForImpact.WhatStartsInsideTheGrace, NamedForImpact(ran.Withdrawn));
-        Assert.DoesNotContain(WorldForImpact.WhatStartsExactlyOnTheGrace, NamedForImpact(ran.Withdrawn));
-        Assert.Contains(WorldForImpact.WhatCollectionVouchesFor, NamedForImpact(dropped));
-        Assert.Contains(WorldForImpact.WhatCollectionVouchesFor, NamedForImpact(ran.Withdrawn));
+        Assert.Contains(CollectionStatesWorld.WhatStartsInsideTheGrace, Named(dropped));
+        Assert.Contains(CollectionStatesWorld.WhatStartsExactlyOnTheGrace, Named(dropped));
+        Assert.DoesNotContain(CollectionStatesWorld.WhatStartsInsideTheGrace, Named(ran.Withdrawn));
+        Assert.DoesNotContain(CollectionStatesWorld.WhatStartsExactlyOnTheGrace, Named(ran.Withdrawn));
+        Assert.Contains(CollectionStatesWorld.WhatCollectionVouchesFor, Named(dropped));
+        Assert.Contains(CollectionStatesWorld.WhatCollectionVouchesFor, Named(ran.Withdrawn));
     }
 
     [Fact]
     public async Task SwitchingTheRuleOffLeavesWhatNoCollectionVouchesForThoughDeletingTakesIt()
     {
-        WorldForImpact switching = WorldForImpact.Seeded();
-        WorldForImpact deleting = WorldForImpact.Seeded();
+        CollectionStatesWorld switching = CollectionStatesWorld.Seeded();
+        CollectionStatesWorld deleting = CollectionStatesWorld.Seeded();
 
         IReadOnlyList<Reservation> dropped =
-            await Within(switching.Applying.DroppedAsync(WorldForImpact.TheRule, Cancel));
+            await Within(switching.Applying.DroppedAsync(CollectionStatesWorld.TheRule, Cancel));
 
-        RuleRetirement? retired = await Within(deleting.Applying.RetiredAsync(WorldForImpact.TheRule, Cancel));
+        RuleRetirement? retired = await Within(deleting.Applying.RetiredAsync(CollectionStatesWorld.TheRule, Cancel));
 
         Assert.NotNull(retired);
-        Assert.DoesNotContain(WorldForImpact.WhatTheCollectionNeverFinished, NamedForImpact(dropped));
-        Assert.DoesNotContain(WorldForImpact.WhatWasNeverVisitedAtAll, NamedForImpact(dropped));
-        Assert.Contains(WorldForImpact.WhatTheCollectionNeverFinished, NamedForImpact(retired.Swept));
-        Assert.Contains(WorldForImpact.WhatWasNeverVisitedAtAll, NamedForImpact(retired.Swept));
+        Assert.DoesNotContain(CollectionStatesWorld.WhatTheCollectionNeverFinished, Named(dropped));
+        Assert.DoesNotContain(CollectionStatesWorld.WhatWasNeverVisitedAtAll, Named(dropped));
+        Assert.Contains(CollectionStatesWorld.WhatTheCollectionNeverFinished, Named(retired.Swept));
+        Assert.Contains(CollectionStatesWorld.WhatWasNeverVisitedAtAll, Named(retired.Swept));
     }
 
     [Fact]
     public async Task TheRuleTakesTheseBroadcastsBeforeItIsRewrittenToTakeNoneOfThem()
     {
-        WorldForImpact world = WorldForImpact.Seeded();
+        CollectionStatesWorld world = CollectionStatesWorld.Seeded();
 
         RuleRehearsal? asItStands = await Within(world.Applying.RehearsedAsync(world.AsItStands(), Cancel));
         RuleRehearsal? rewritten = await Within(world.Applying.RehearsedAsync(world.Rewritten(), Cancel));
@@ -1565,7 +1561,7 @@ public sealed class RuleApplicationServiceTests
         Assert.NotNull(asItStands);
         Assert.NotNull(rewritten);
         Assert.Contains(
-            WorldForImpact.WhatAnotherRuleTakesOver,
+            CollectionStatesWorld.WhatAnotherRuleTakesOver,
             asItStands.Taking.Select(take => take.Programme.Name).ToList());
         Assert.Empty(rewritten.Taking);
     }
@@ -1573,7 +1569,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task ABroadcastTheGuideDroppedAndAnnouncedAgainIsReservedByTheRowItLeftBehind()
     {
-        WorldForAReturn world = WorldForAReturn.Taking("keyword=hill");
+        RuleAndGuideWorld world = RuleAndGuideWorld.Taking("keyword=hill");
         world.Announce(Taken, "hill walking");
 
         Reservation booked = Assert.Single((await world.Applying.EverythingAsync(Cancel)).Made);
@@ -1599,7 +1595,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task AReservationBroughtBackIsLeftWhereItIsByTheNextReadingOfTheGuide()
     {
-        WorldForAReturn world = WorldForAReturn.Taking("keyword=hill");
+        RuleAndGuideWorld world = RuleAndGuideWorld.Taking("keyword=hill");
         world.Announce(Taken, "hill walking");
 
         Reservation booked = Assert.Single((await world.Applying.EverythingAsync(Cancel)).Made);
@@ -1619,7 +1615,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task ABroadcastThatWentAndCameBackIsWrittenDownOnceEachWayHoweverOftenItDoesIt()
     {
-        WorldForAReturn world = WorldForAReturn.Taking("keyword=hill");
+        RuleAndGuideWorld world = RuleAndGuideWorld.Taking("keyword=hill");
         world.Announce(Taken, "hill walking");
 
         Reservation booked = Assert.Single((await world.Applying.EverythingAsync(Cancel)).Made);
@@ -1641,7 +1637,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task AReservationSomebodyCancelledIsNotBroughtBackThoughTheRuleStillTakesTheProgramme()
     {
-        WorldForAReturn world = WorldForAReturn.Taking("keyword=hill");
+        RuleAndGuideWorld world = RuleAndGuideWorld.Taking("keyword=hill");
         world.Announce(Taken, "hill walking");
 
         Reservation booked = Assert.Single((await world.Applying.EverythingAsync(Cancel)).Made);
@@ -1664,7 +1660,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task AReservationNoRuleMadeIsNotBroughtBackByARuleThatTakesTheProgramme()
     {
-        WorldForAReturn world = WorldForAReturn.Taking("keyword=hill");
+        RuleAndGuideWorld world = RuleAndGuideWorld.Taking("keyword=hill");
         world.Announce(Taken, "hill walking");
         Reservation booked = world.BookedByHand(Taken);
 
@@ -1682,7 +1678,7 @@ public sealed class RuleApplicationServiceTests
     [Fact]
     public async Task AReservationWhoseWindowHasAlreadyClosedIsNotBroughtBackByTheProgrammeReturning()
     {
-        WorldForAReturn world = WorldForAReturn.Taking("keyword=hill");
+        RuleAndGuideWorld world = RuleAndGuideWorld.Taking("keyword=hill");
         world.Announce(Taken, "hill walking");
 
         Reservation closed = world.StandingCancelled(
@@ -1858,20 +1854,20 @@ public sealed class RuleApplicationServiceTests
                 impaired: false);
     }
 
-    private static WorldForRehearsal Crowded(int seats)
+    private static WorldOfSeats Crowded(int seats)
     {
-        WorldForRehearsal world = WorldForRehearsal.Of(seats);
+        WorldOfSeats world = WorldOfSeats.Of(seats);
         DateTime opens = Now.AddHours(2);
         world.Tuning.Answer(Alongside, TuningParameters.Terrestrial(29));
-        world.Guide(BroadcastForRehearsal(1, "hill walking", startsAt: opens));
-        world.Reservations.Standing(StandingForRehearsal(BroadcastForRehearsal(9, "an outside booking", Alongside, opens)));
+        world.Guide(BroadcastInTurn(1, "hill walking", startsAt: opens));
+        world.Reservations.Standing(Standing(BroadcastInTurn(9, "an outside booking", Alongside, opens), ReservationState.Scheduled, null));
 
         return world;
     }
 
-    private static WorldForRehearsal Collected()
+    private static WorldOfSeats CollectedWorldOfSeats()
     {
-        WorldForRehearsal world = WorldForRehearsal.Of();
+        WorldOfSeats world = WorldOfSeats.Of();
         world.Visited(VisitOutcome.Complete);
 
         return world;
@@ -1888,7 +1884,7 @@ public sealed class RuleApplicationServiceTests
             Margin.None,
             Now.AddDays(-1));
 
-    private static Programme BroadcastForRehearsal(
+    private static Programme BroadcastInTurn(
         int carried,
         string name,
         int service = Listed,
@@ -1905,61 +1901,9 @@ public sealed class RuleApplicationServiceTests
             Now,
             revision: 1);
 
-    private static Programme LinkedForRehearsal(
-        int carried,
-        string name,
-        int service,
-        DateTime startsAt,
-        ProgrammeRunning running = ProgrammeRunning.Undetermined,
-        IReadOnlyList<RelatedProgramme>? related = null)
-        => Programme.Rehydrate(
-            new ProgrammeId(new NetworkId(Network), new ServiceId(service), new EventId(carried)),
-            new TransportStreamId(Carried),
-            startsAt,
-            startsAt.AddHours(1),
-            name,
-            "a summary",
-            false,
-            Now,
-            related: related,
-            revision: 1,
-            running: running);
-
-    private static Reservation StandingForRehearsal(Programme programme, RuleId? ruleId = null)
-        => Reservation.Rehydrate(
-            ReservationId.New(),
-            new ProgrammeRef(programme.NetworkId, programme.ServiceId, programme.EventId, programme.StartsAt),
-            ruleId,
-            Priority.Default,
-            programme.StartsAt,
-            programme.StartsAt.AddHours(1),
-            true,
-            Margin.None,
-            Margin.None,
-            new ProgrammeSnapshot(
-                programme.Name,
-                programme.Summary,
-                string.Empty,
-                [],
-                Now,
-                AudioMode.Undetermined,
-                ProgrammeSnapshot.SoundsUnannounced),
-            null,
-            BroadcastGroupRole.Standalone,
-            ReservationState.Scheduled,
-            null,
-            null,
-            false,
-            [],
-            false,
-            null,
-            false,
-            null,
-            Now);
-
-    private sealed class WorldForRehearsal
+    private sealed class WorldOfSeats
     {
-        private WorldForRehearsal(int seats)
+        private WorldOfSeats(int seats)
         {
             Write = new WatchedWrite();
             Outcomes = new HeldOutcomes(Write);
@@ -2021,7 +1965,7 @@ public sealed class RuleApplicationServiceTests
 
         public RuleApplicationService Applying { get; }
 
-        public static WorldForRehearsal Of(int seats = 3) => new(seats);
+        public static WorldOfSeats Of(int seats = 3) => new(seats);
 
         public void Guide(params Programme[] programmes) => Programmes.Programmes.AddRange(programmes);
 
@@ -2040,77 +1984,17 @@ public sealed class RuleApplicationServiceTests
                 impaired: false);
     }
 
-    private static WorldForRetirement CollectedForRetirement()
+    private static OneSeatWorld CollectedOneSeatWorld()
     {
-        WorldForRetirement world = WorldForRetirement.Of();
+        OneSeatWorld world = OneSeatWorld.Of();
         world.Visited(VisitOutcome.Complete);
 
         return world;
     }
 
-    private static Rule WrittenForRetirement(int identifier = 1, bool enabled = true)
-        => Rule.Draft(
-            new RuleId(new Guid($"{identifier:x8}-0000-0000-0000-000000000000")),
-            "a rule",
-            new RuleQuery("keyword=hill"),
-            Priority.Default,
-            enabled,
-            Margin.None,
-            Margin.None,
-            Now.AddDays(-30));
-
-    private static Programme BroadcastForRetirement(int carried, string name = "hill walking")
-        => Programme.Rehydrate(
-            new ProgrammeId(new NetworkId(Network), new ServiceId(Listed), new EventId(carried)),
-            new TransportStreamId(Carried),
-            Now.AddHours(2 + carried),
-            Now.AddHours(3 + carried),
-            name,
-            "a summary",
-            false,
-            Now,
-            revision: 1);
-
-    private static Reservation StandingForRetirement(
-        Programme programme,
-        ReservationState state,
-        RuleId? ruleId,
-        DateTime? startedAt = null)
-        => Reservation.Rehydrate(
-            ReservationId.New(),
-            new ProgrammeRef(programme.NetworkId, programme.ServiceId, programme.EventId, programme.StartsAt),
-            ruleId,
-            Priority.Default,
-            programme.StartsAt,
-            programme.StartsAt.AddHours(1),
-            true,
-            Margin.None,
-            Margin.None,
-            new ProgrammeSnapshot(
-                programme.Name,
-                programme.Summary,
-                string.Empty,
-                [],
-                Now,
-                AudioMode.Undetermined,
-                ProgrammeSnapshot.SoundsUnannounced),
-            null,
-            BroadcastGroupRole.Standalone,
-            state,
-            startedAt,
-            null,
-            false,
-            [],
-            false,
-            null,
-            false,
-            null,
-            Now,
-            state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null);
-
-    private sealed class WorldForRetirement
+    private sealed class OneSeatWorld
     {
-        private WorldForRetirement()
+        private OneSeatWorld()
         {
             Write = new WatchedWrite();
             Outcomes = new HeldOutcomes(Write);
@@ -2166,7 +2050,7 @@ public sealed class RuleApplicationServiceTests
 
         public RuleApplicationService Applying { get; }
 
-        public static WorldForRetirement Of() => new();
+        public static OneSeatWorld Of() => new();
 
         public void Visited(VisitOutcome outcome)
             => Visits.Visits.Add(StreamVisit.Record(
@@ -2203,7 +2087,7 @@ public sealed class RuleApplicationServiceTests
     }
 
     private static RelatedProgramme Shared(int service, int carried = Event)
-        => new(NetworkForSimulcast, service, carried, RelationKind.Shared);
+        => new(SharedStreamNetwork, service, carried, RelationKind.Shared);
 
     private static Programme Listing(
         int service,
@@ -2213,7 +2097,7 @@ public sealed class RuleApplicationServiceTests
         long revision = 1,
         IReadOnlyList<RelatedProgramme>? related = null)
         => Programme.Rehydrate(
-            new ProgrammeId(new NetworkId(NetworkForSimulcast), new ServiceId(service), new EventId(carried)),
+            new ProgrammeId(new NetworkId(SharedStreamNetwork), new ServiceId(service), new EventId(carried)),
             new TransportStreamId(Stream),
             startsAt ?? Now.AddHours(2),
             (startsAt ?? Now.AddHours(2)).AddHours(1),
@@ -2224,54 +2108,9 @@ public sealed class RuleApplicationServiceTests
             related: related,
             revision: revision);
 
-    private static Rule WrittenForSimulcast(string query)
-        => Rule.Draft(
-            new RuleId(new Guid("00000001-0000-0000-0000-000000000000")),
-            "a rule",
-            new RuleQuery(query),
-            new Priority(10),
-            true,
-            Margin.None,
-            Margin.None,
-            Now.AddDays(-30),
-            true);
-
-    private static Reservation StandingForSimulcast(Programme programme, RuleId? ruleId, DateTime? startedAt = null)
-        => Reservation.Rehydrate(
-            ReservationId.New(),
-            new ProgrammeRef(programme.NetworkId, programme.ServiceId, programme.EventId, programme.StartsAt),
-            ruleId,
-            Priority.Default,
-            programme.StartsAt,
-            programme.StartsAt.AddHours(1),
-            true,
-            Margin.None,
-            Margin.None,
-            new ProgrammeSnapshot(
-                programme.Name,
-                programme.Summary,
-                string.Empty,
-                [],
-                Now,
-                AudioMode.Undetermined,
-                ProgrammeSnapshot.SoundsUnannounced),
-            null,
-            BroadcastGroupRole.Standalone,
-            ReservationState.Scheduled,
-            startedAt,
-            null,
-            false,
-            [],
-            false,
-            null,
-            false,
-            null,
-            Now,
-            null);
-
-    private sealed class WorldForSimulcast
+    private sealed class SharedStreamWorld
     {
-        private WorldForSimulcast()
+        private SharedStreamWorld()
         {
             Write = new WatchedWrite();
             Outcomes = new HeldOutcomes(Write);
@@ -2279,7 +2118,7 @@ public sealed class RuleApplicationServiceTests
             Streams = new CountedStreams(
             [
                 new BroadcastStream(
-                    new NetworkId(NetworkForSimulcast),
+                    new NetworkId(SharedStreamNetwork),
                     new TransportStreamId(Stream),
                     TuningParameters.Terrestrial(27),
                     [new ServiceId(Main), new ServiceId(Sub), new ServiceId(Third)]),
@@ -2339,25 +2178,25 @@ public sealed class RuleApplicationServiceTests
 
         public RuleApplicationService Applying { get; }
 
-        public static WorldForSimulcast Of() => new();
+        public static SharedStreamWorld Of() => new();
 
         public void Guide(params Programme[] programmes) => Programmes.Programmes.AddRange(programmes);
 
         public void Visited(VisitOutcome outcome)
             => Visits.Visits.Add(StreamVisit.Record(
-                new NetworkId(NetworkForSimulcast),
+                new NetworkId(SharedStreamNetwork),
                 new TransportStreamId(Stream),
                 outcome,
                 Now.AddHours(-1),
                 TimeSpan.FromSeconds(30)));
     }
 
-    private static IReadOnlyList<string> NamedForImpact(IEnumerable<Reservation> reservations)
+    private static IReadOnlyList<string> Named(IEnumerable<Reservation> reservations)
         => [.. reservations.Select(reservation => reservation.SnapshotName).Order(StringComparer.Ordinal)];
 
     private static Task<T> Within<T>(Task<T> asked) => asked.WaitAsync(LongEnoughToTellAStallFromAWait);
 
-    private sealed class WorldForImpact
+    private sealed class CollectionStatesWorld
     {
         public const string WhatCollectionVouchesFor = "hill walking";
 
@@ -2413,7 +2252,7 @@ public sealed class RuleApplicationServiceTests
 
         private const int Behind = 10;
 
-        private WorldForImpact()
+        private CollectionStatesWorld()
         {
             Write = new WatchedWrite();
             Outcomes = new HeldOutcomes(Write);
@@ -2444,7 +2283,7 @@ public sealed class RuleApplicationServiceTests
                 Programmes,
                 Reservations,
                 new ReservationOutcomeDomainService(Outcomes, new NoRecordings()),
-                new RuleWithdrawalDomainService(Reservations, Streams, Visits, new HeldEpochs(), new FixedClock(NowForImpact)),
+                new RuleWithdrawalDomainService(Reservations, Streams, Visits, new HeldEpochs(), new FixedClock(NowAWeekLater)),
                 new RuleTakingDomainService(Reservations),
                 new ReservationSchedulingService(
                     Reservations,
@@ -2454,12 +2293,12 @@ public sealed class RuleApplicationServiceTests
                     Write,
                     RollingHorizon.Default,
                     new SilentEvents(),
-                    new FixedClock(NowForImpact)),
-                new RuleMatcher(new ProgrammeSearchScopeDomainService(Streams, Services), new FixedClock(NowForImpact)),
+                    new FixedClock(NowAWeekLater)),
+                new RuleMatcher(new ProgrammeSearchScopeDomainService(Streams, Services), new FixedClock(NowAWeekLater)),
                 Settings,
                 Write,
                 new SilentEvents(),
-                new FixedClock(NowForImpact));
+                new FixedClock(NowAWeekLater));
         }
 
         public HeldRules Rules { get; } = new();
@@ -2486,9 +2325,9 @@ public sealed class RuleApplicationServiceTests
 
         public RuleApplicationService Applying { get; }
 
-        public static WorldForImpact Seeded()
+        public static CollectionStatesWorld Seeded()
         {
-            var world = new WorldForImpact();
+            var world = new CollectionStatesWorld();
 
             world.Rules.Rules.Add(Written(TheRule, "keyword=hill", Ahead));
             world.Rules.Rules.Add(Written(Beside, "keyword=river", Behind));
@@ -2498,44 +2337,44 @@ public sealed class RuleApplicationServiceTests
             world.Visited(OnlyBasic, VisitOutcome.BasicOnly);
             world.Visited(Unfinished, VisitOutcome.Incomplete);
 
-            world.Standing(1, WhatCollectionVouchesFor, Listed, Vouched, NowForImpact.AddHours(2), TheRule);
-            world.Standing(2, WhatStartsInsideTheGrace, Alongside, Vouched, NowForImpact.AddMinutes(4), TheRule);
+            world.Standing(1, WhatCollectionVouchesFor, Listed, Vouched, NowAWeekLater.AddHours(2), TheRule);
+            world.Standing(2, WhatStartsInsideTheGrace, Alongside, Vouched, NowAWeekLater.AddMinutes(4), TheRule);
             world.Standing(
                 3,
                 WhatStartsExactlyOnTheGrace,
                 Alongside,
                 Vouched,
-                NowForImpact + world.Settings.Grace,
+                NowAWeekLater + world.Settings.Grace,
                 TheRule);
             world.Standing(
                 4,
                 WhatStartsJustBeyondTheGrace,
                 Alongside,
                 Vouched,
-                NowForImpact + world.Settings.Grace + TimeSpan.FromSeconds(1),
+                NowAWeekLater + world.Settings.Grace + TimeSpan.FromSeconds(1),
                 TheRule);
-            world.Standing(5, WhatOnlyTheBasicTableVouchesFor, Basic, OnlyBasic, NowForImpact.AddHours(3), TheRule);
-            world.Standing(6, WhatTheCollectionNeverFinished, Partial, Unfinished, NowForImpact.AddHours(4), TheRule);
-            world.Standing(7, WhatWasNeverVisitedAtAll, Unseen, Unvisited, NowForImpact.AddHours(5), TheRule);
+            world.Standing(5, WhatOnlyTheBasicTableVouchesFor, Basic, OnlyBasic, NowAWeekLater.AddHours(3), TheRule);
+            world.Standing(6, WhatTheCollectionNeverFinished, Partial, Unfinished, NowAWeekLater.AddHours(4), TheRule);
+            world.Standing(7, WhatWasNeverVisitedAtAll, Unseen, Unvisited, NowAWeekLater.AddHours(5), TheRule);
             world.Standing(
                 8,
                 WhatIsBeingRecorded,
                 Listed,
                 Vouched,
-                NowForImpact.AddMinutes(-20),
+                NowAWeekLater.AddMinutes(-20),
                 TheRule,
-                startedAt: NowForImpact.AddMinutes(-20));
+                startedAt: NowAWeekLater.AddMinutes(-20));
             world.Standing(
                 9,
                 WhatSomebodyCancelled,
                 Listed,
                 Vouched,
-                NowForImpact.AddHours(6),
+                NowAWeekLater.AddHours(6),
                 TheRule,
                 state: ReservationState.Cancelled);
-            world.Standing(10, WhatSomebodyBookedByHand, Listed, Vouched, NowForImpact.AddHours(7), null);
-            world.Standing(11, WhatAnotherRuleMade, Listed, Vouched, NowForImpact.AddHours(8), Beside);
-            world.Standing(12, WhatAnotherRuleTakesOver, Listed, Vouched, NowForImpact.AddHours(9), TheRule);
+            world.Standing(10, WhatSomebodyBookedByHand, Listed, Vouched, NowAWeekLater.AddHours(7), null);
+            world.Standing(11, WhatAnotherRuleMade, Listed, Vouched, NowAWeekLater.AddHours(8), Beside);
+            world.Standing(12, WhatAnotherRuleTakesOver, Listed, Vouched, NowAWeekLater.AddHours(9), TheRule);
 
             return world;
         }
@@ -2564,7 +2403,7 @@ public sealed class RuleApplicationServiceTests
                 true,
                 Margin.None,
                 Margin.None,
-                NowForImpact.AddDays(-30));
+                NowAWeekLater.AddDays(-30));
 
         private static BroadcastStream Terrestrial(int stream, int channel, params int[] services)
             => new(
@@ -2578,7 +2417,7 @@ public sealed class RuleApplicationServiceTests
                 new NetworkId(Network),
                 new TransportStreamId(stream),
                 outcome,
-                NowForImpact.AddHours(-1),
+                NowAWeekLater.AddHours(-1),
                 TimeSpan.FromSeconds(30)));
 
         private Programme Broadcast(int carried, string name, int service, int stream, DateTime startsAt)
@@ -2590,7 +2429,7 @@ public sealed class RuleApplicationServiceTests
                 name,
                 "a summary",
                 false,
-                NowForImpact,
+                NowAWeekLater,
                 revision: carried);
 
         private void Standing(
@@ -2621,7 +2460,7 @@ public sealed class RuleApplicationServiceTests
                     "a summary",
                     string.Empty,
                     [],
-                    NowForImpact,
+                    NowAWeekLater,
                     AudioMode.Undetermined,
                     ProgrammeSnapshot.SoundsUnannounced),
                 null,
@@ -2635,16 +2474,16 @@ public sealed class RuleApplicationServiceTests
                 null,
                 false,
                 null,
-                NowForImpact,
+                NowAWeekLater,
                 state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null));
         }
     }
 
-    private sealed class WorldForAReturn
+    private sealed class RuleAndGuideWorld
     {
         private long revisions;
 
-        private WorldForAReturn(string query)
+        private RuleAndGuideWorld(string query)
         {
             Write = new WatchedWrite();
             Outcomes = new HeldOutcomes(Write);
@@ -2657,7 +2496,7 @@ public sealed class RuleApplicationServiceTests
                     TuningParameters.Terrestrial(27),
                     [new ServiceId(Listed)]),
             ]);
-            Rules.Rules.Add(WrittenForAReturn(query));
+            Rules.Rules.Add(Written(query));
 
             var clock = new FixedClock(Now);
             var tuning = new TuningByService
@@ -2722,7 +2561,7 @@ public sealed class RuleApplicationServiceTests
 
         public ReservationGuideService Guiding { get; }
 
-        public static WorldForAReturn Taking(string query) => new(query);
+        public static RuleAndGuideWorld Taking(string query) => new(query);
 
         public void Announce(int carried, string name, DateTime? heard = null)
         {
@@ -2751,10 +2590,10 @@ public sealed class RuleApplicationServiceTests
         public void Dropped(int carried)
         {
             Programmes.Programmes.RemoveAll(programme =>
-                programme.EventId.Value == carried || programme.EventId.Value == BesideForAReturn);
+                programme.EventId.Value == carried || programme.EventId.Value == BesideEvent);
 
             Programme beside = Programme.Rehydrate(
-                new ProgrammeId(new NetworkId(Network), new ServiceId(Listed), new EventId(BesideForAReturn)),
+                new ProgrammeId(new NetworkId(Network), new ServiceId(Listed), new EventId(BesideEvent)),
                 new TransportStreamId(Carried),
                 Now.AddHours(4),
                 Now.AddHours(5),
@@ -2833,15 +2672,4 @@ public sealed class RuleApplicationServiceTests
             return booked;
         }
     }
-
-    private static Rule WrittenForAReturn(string query)
-        => Rule.Draft(
-            new RuleId(new Guid("00000001-0000-0000-0000-000000000000")),
-            "a rule",
-            new RuleQuery(query),
-            Priority.Default,
-            true,
-            Margin.None,
-            Margin.None,
-            Now.AddDays(-30));
 }

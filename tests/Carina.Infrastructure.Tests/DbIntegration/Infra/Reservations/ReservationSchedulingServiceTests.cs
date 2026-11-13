@@ -494,7 +494,7 @@ public sealed class ReservationSchedulingServiceTests(RepositoryDatabase databas
                 Now.AddHours(hoursAhead)),
             priority: new Priority(40));
 
-        await using AsyncServiceScope scope = StandingInForTheChannels(seats);
+        await using AsyncServiceScope scope = StandingIn(seats);
 
         SchedulingRun made = await Scheduling(scope).CreateAsync(planned, Cancel);
 
@@ -505,7 +505,7 @@ public sealed class ReservationSchedulingServiceTests(RepositoryDatabase databas
 
     private async Task RecalculatedAsync(TunerCapacity seats)
     {
-        await using AsyncServiceScope scope = StandingInForTheChannels(seats);
+        await using AsyncServiceScope scope = StandingIn(seats);
 
         Assert.True((await Scheduling(scope).RecalculateAsync(Cancel)).Settled);
     }
@@ -530,7 +530,7 @@ public sealed class ReservationSchedulingServiceTests(RepositoryDatabase databas
     private static ICandidateChannelRepository Candidates(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<ICandidateChannelRepository>();
 
-    private AsyncServiceScope StandingInForTheChannels(TunerCapacity seats)
+    private AsyncServiceScope StandingIn(TunerCapacity seats)
     {
         HeldSeating seating = new(seats);
 

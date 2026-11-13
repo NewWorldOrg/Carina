@@ -27,9 +27,9 @@ public sealed class RuleApplyNowTests
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    private static readonly TimeSpan LongEnoughToTellAStallFromAWaitForTheRun = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan LongerWait = TimeSpan.FromSeconds(30);
 
-    private static readonly DateTime NowForTheRun = new(2026, 8, 31, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime NowAWeekLater = new(2026, 8, 31, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
     public async Task AskingForTheRulesToBeAppliedRunsAPassAndAnswersWithWhatItDid()
@@ -164,7 +164,7 @@ public sealed class RuleApplyNowTests
     {
         using World world = World.Taking(3);
 
-        RuleApplyOutcome outcome = await WithinForTheRun(world.Applying.StartAsync(Cancel));
+        RuleApplyOutcome outcome = await WithinTheLongerWait(world.Applying.StartAsync(Cancel));
 
         Assert.Null(outcome.Refusal);
         Assert.NotNull(outcome.Run);
@@ -180,9 +180,9 @@ public sealed class RuleApplyNowTests
         using World world = World.Taking(3);
 
         world.Recalculating.Nudge(RecalculationTrigger.SelectedChannelChanged);
-        await WithinForTheRun(world.Recalculating.RunAsync(Cancel));
+        await WithinTheLongerWait(world.Recalculating.RunAsync(Cancel));
 
-        RuleApplyOutcome outcome = await WithinForTheRun(world.Applying.StartAsync(Cancel));
+        RuleApplyOutcome outcome = await WithinTheLongerWait(world.Applying.StartAsync(Cancel));
 
         Assert.Equal(3, world.Reservations.Held.Count);
         Assert.NotNull(outcome.Run?.Pass.Applied);
@@ -195,7 +195,7 @@ public sealed class RuleApplyNowTests
         using World world = World.Taking(3);
         int before = world.Reservations.Held.Count;
 
-        RuleApplyOutcome outcome = await WithinForTheRun(world.Applying.StartAsync(Cancel));
+        RuleApplyOutcome outcome = await WithinTheLongerWait(world.Applying.StartAsync(Cancel));
 
         Assert.NotNull(outcome.Run?.Pass.Applied);
         Assert.Equal(world.Reservations.Held.Count - before, outcome.Run.Pass.Applied.Made.Count);
@@ -208,7 +208,7 @@ public sealed class RuleApplyNowTests
         using World world = World.Losing(2);
         int before = world.Reservations.Held.Count;
 
-        RuleApplyOutcome outcome = await WithinForTheRun(world.Applying.StartAsync(Cancel));
+        RuleApplyOutcome outcome = await WithinTheLongerWait(world.Applying.StartAsync(Cancel));
 
         Assert.NotNull(outcome.Run?.Pass.Applied);
         Assert.Equal(before - world.Reservations.Held.Count, outcome.Run.Pass.Applied.Withdrawn.Count);
@@ -224,12 +224,12 @@ public sealed class RuleApplyNowTests
         world.Recalculating.Nudge(RecalculationTrigger.PeriodicReconciliation);
         Task<RecalculationPass> walking = world.Recalculating.RunAsync(Cancel);
 
-        await world.Seating.Arrived.Task.WaitAsync(LongEnoughToTellAStallFromAWaitForTheRun);
+        await world.Seating.Arrived.Task.WaitAsync(LongerWait);
 
-        RuleApplyOutcome outcome = await WithinForTheRun(world.Applying.StartAsync(Cancel));
+        RuleApplyOutcome outcome = await WithinTheLongerWait(world.Applying.StartAsync(Cancel));
 
         world.Seating.Hold.SetResult();
-        await walking.WaitAsync(LongEnoughToTellAStallFromAWaitForTheRun);
+        await walking.WaitAsync(LongerWait);
 
         Assert.Null(outcome.Run);
         Assert.NotNull(outcome.Refusal);
@@ -335,7 +335,7 @@ public sealed class RuleApplyNowTests
         }
     }
 
-    private static Task<T> WithinForTheRun<T>(Task<T> asked) => asked.WaitAsync(LongEnoughToTellAStallFromAWaitForTheRun);
+    private static Task<T> WithinTheLongerWait<T>(Task<T> asked) => asked.WaitAsync(LongerWait);
 
     private sealed class World : IDisposable
     {
@@ -379,7 +379,7 @@ public sealed class RuleApplyNowTests
             };
 
             var services = new ServiceCollection();
-            services.AddSingleton<TimeProvider>(new FixedClock(NowForTheRun));
+            services.AddSingleton<TimeProvider>(new FixedClock(NowAWeekLater));
             services.AddSingleton<IRuleRepository>(Rules);
             services.AddSingleton<IProgrammeRepository>(Programmes);
             services.AddSingleton<IReservationRepository>(Reservations);
@@ -412,7 +412,7 @@ public sealed class RuleApplyNowTests
                     BeforeFirstPass = TimeSpan.FromHours(1),
                     BetweenReconciliations = TimeSpan.FromHours(1),
                 },
-                new FixedClock(NowForTheRun),
+                new FixedClock(NowAWeekLater),
                 NullLogger<ReservationRecalculationHostedService>.Instance);
         }
 
@@ -465,7 +465,7 @@ public sealed class RuleApplyNowTests
                 new NetworkId(Network),
                 new TransportStreamId(Carried),
                 VisitOutcome.Complete,
-                NowForTheRun.AddHours(-1),
+                NowAWeekLater.AddHours(-1),
                 TimeSpan.FromSeconds(30)));
 
             foreach (int carried in Enumerable.Range(1, reservations))
@@ -487,7 +487,7 @@ public sealed class RuleApplyNowTests
         }
 
         private void Wired()
-            => Applying = new RuleApplyNow(Recalculating, new RuleApplySettings(), new FixedClock(NowForTheRun));
+            => Applying = new RuleApplyNow(Recalculating, new RuleApplySettings(), new FixedClock(NowAWeekLater));
 
         private Rule Written(string query)
             => Rule.Draft(
@@ -498,18 +498,18 @@ public sealed class RuleApplyNowTests
                 true,
                 Margin.None,
                 Margin.None,
-                NowForTheRun.AddDays(-30));
+                NowAWeekLater.AddDays(-30));
 
         private Programme Broadcast(int carried, string name)
             => Programme.Rehydrate(
                 new ProgrammeId(new NetworkId(Network), new ServiceId(Listed), new EventId(carried)),
                 new TransportStreamId(Carried),
-                NowForTheRun.AddHours(2 + carried),
-                NowForTheRun.AddHours(3 + carried),
+                NowAWeekLater.AddHours(2 + carried),
+                NowAWeekLater.AddHours(3 + carried),
                 name,
                 "a summary",
                 false,
-                NowForTheRun,
+                NowAWeekLater,
                 revision: carried);
 
         private Reservation Standing(Programme programme, RuleId ruleId)
@@ -528,7 +528,7 @@ public sealed class RuleApplyNowTests
                     programme.Summary,
                     string.Empty,
                     [],
-                    NowForTheRun,
+                    NowAWeekLater,
                     AudioMode.Undetermined,
                     ProgrammeSnapshot.SoundsUnannounced),
                 null,
@@ -542,6 +542,6 @@ public sealed class RuleApplyNowTests
                 null,
                 false,
                 null,
-                NowForTheRun);
+                NowAWeekLater);
     }
 }

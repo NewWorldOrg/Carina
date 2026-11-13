@@ -593,10 +593,10 @@ public sealed class CreateReservationActionTests
         feature.Announced(4001);
         feature.Announced(4002, serviceId: 1032);
 
-        await feature.PostAsync("/api/reservations", AskingForOneAsking(4001));
+        await feature.PostAsync("/api/reservations", AskingWithoutPriority(4001));
         (HttpStatusCode status, JsonElement made) = await feature.PostAsync(
             "/api/reservations",
-            AskingForOneAsking(4002, serviceId: 1032));
+            AskingWithoutPriority(4002, serviceId: 1032));
         JsonElement settlement = made.GetProperty("data");
         Guid lost = settlement.GetProperty("reservation").GetProperty("id").GetGuid();
 
@@ -615,8 +615,8 @@ public sealed class CreateReservationActionTests
         feature.Announced(4001);
         feature.Announced(4002, serviceId: 1032);
 
-        await feature.PostAsync("/api/reservations", AskingForOneAsking(4001));
-        await feature.PostAsync("/api/reservations", AskingForOneAsking(4002, serviceId: 1032));
+        await feature.PostAsync("/api/reservations", AskingWithoutPriority(4001));
+        await feature.PostAsync("/api/reservations", AskingWithoutPriority(4002, serviceId: 1032));
 
         (_, JsonElement list) = await feature.GetAsync("/api/reservations");
 
@@ -639,8 +639,8 @@ public sealed class CreateReservationActionTests
         feature.Announced(4001);
         feature.Announced(4002, serviceId: 1032);
 
-        (_, JsonElement first) = await feature.PostAsync("/api/reservations", AskingForTheSurface(4001));
-        (_, JsonElement second) = await feature.PostAsync("/api/reservations", AskingForTheSurface(4002, serviceId: 1032));
+        (_, JsonElement first) = await feature.PostAsync("/api/reservations", AskingWithoutPriority(4001));
+        (_, JsonElement second) = await feature.PostAsync("/api/reservations", AskingWithoutPriority(4002, serviceId: 1032));
         Guid lost = second.GetProperty("data").GetProperty("reservation").GetProperty("id").GetGuid();
 
         (_, JsonElement detail) = await feature.GetAsync($"/api/reservations/{lost}");
@@ -670,7 +670,7 @@ public sealed class CreateReservationActionTests
     private static string Standing(JsonElement reservation)
         => reservation.GetProperty("standing").GetString()!;
 
-    private static object AskingForOneAsking(int eventId, int serviceId = 1024)
+    private static object AskingWithoutPriority(int eventId, int serviceId = 1024)
         => new
         {
             programme = $"{ReservationFeature.Network}-{serviceId}-{eventId}",
@@ -681,11 +681,4 @@ public sealed class CreateReservationActionTests
         => new(
             [new TunerSeat(Seat, BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)],
             [NotPlacedYet]);
-
-    private static object AskingForTheSurface(int eventId, int serviceId = 1024)
-        => new
-        {
-            programme = $"{ReservationFeature.Network}-{serviceId}-{eventId}",
-            programmeStartsAt = ReservationFeature.Noon.AddHours(2),
-        };
 }

@@ -59,7 +59,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
         (true, "Failed"),
     ];
 
-    private static readonly TimeSpan[] AirsForTheMatrix =
+    private static readonly TimeSpan[] MatrixStarts =
     [
         TimeSpan.FromHours(-2),
         TimeSpan.FromMinutes(-10),
@@ -373,7 +373,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     {
         Reservation cancelled = ReservationFixtures.Rehydrated(ReservationState.Cancelled);
         Reservation beside = ReservationFixtures.Rehydrated(ReservationState.Cancelled);
-        await AddAsyncForReservationDiscard(cancelled, beside);
+        await AddAsync(cancelled, beside);
 
         Assert.Equal(ReservationDiscard.Discarded, await DiscardAsync(cancelled.Id));
 
@@ -387,7 +387,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     public async Task AReservationNothingIsWaitingOnGoesWhileItsBroadcastIsStillAhead(ReservationState state)
     {
         Reservation standing = ReservationFixtures.Rehydrated(state);
-        await AddAsyncForReservationDiscard(standing);
+        await AddAsync(standing);
 
         Assert.True(standing.EffectiveEndAt > Now);
         Assert.Equal(ReservationDiscard.Discarded, await DiscardAsync(standing.Id));
@@ -400,7 +400,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     public async Task AReservationStillToBeRecordedIsRefusedRatherThanThrownAway(ReservationState state)
     {
         Reservation standing = ReservationFixtures.Rehydrated(state);
-        await AddAsyncForReservationDiscard(standing);
+        await AddAsync(standing);
 
         Assert.True(standing.EffectiveEndAt > Now);
         Assert.Equal(ReservationDiscard.StillToBeRecorded, await DiscardAsync(standing.Id));
@@ -413,7 +413,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     public async Task AReservationNothingWillEverRecordNowGoesEvenThoughItStillStands(ReservationState state)
     {
         Reservation over = Closed(state);
-        await AddAsyncForReservationDiscard(over);
+        await AddAsync(over);
 
         Assert.True(over.EffectiveEndAt <= Now);
         Assert.Equal(ReservationDiscard.Discarded, await DiscardAsync(over.Id));
@@ -428,7 +428,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
             startAt: Now.AddHours(-2),
             endAt: Now.AddHours(-1),
             marginAfter: Margin.OfSeconds(600));
-        await AddAsyncForReservationDiscard(standing);
+        await AddAsync(standing);
 
         Assert.Equal(
             ReservationDiscard.StillToBeRecorded,
@@ -444,7 +444,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
             startAt: Now.AddHours(-2),
             endAt: Now.AddHours(-1),
             marginAfter: Margin.OfSeconds(600));
-        await AddAsyncForReservationDiscard(standing);
+        await AddAsync(standing);
 
         Assert.Equal(
             ReservationDiscard.Discarded,
@@ -460,7 +460,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
             startAt: Now.AddHours(-2),
             endAt: Now.AddHours(-1),
             marginAfter: Margin.OfSeconds(600));
-        await AddAsyncForReservationDiscard(standing);
+        await AddAsync(standing);
 
         Assert.Equal(
             ReservationDiscard.Discarded,
@@ -481,7 +481,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
             startAt: Now.AddHours(-2),
             endAt: ends,
             marginAfter: Margin.OfSeconds(600));
-        await AddAsyncForReservationDiscard(without, waiting);
+        await AddAsync(without, waiting);
 
         DateTime between = ends.AddSeconds(300);
 
@@ -493,8 +493,8 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     public async Task AReservationStoppedEarlyGoesOnceItsRecordingIsGoneThoughItsWindowIsOpen()
     {
         Reservation recorded = ReservationFixtures.Rehydrated(ReservationState.Scheduled);
-        await AddAsyncForReservationDiscard(recorded);
-        await ClaimAsyncForReservationDiscard(recorded.Id);
+        await AddAsync(recorded);
+        await ClaimAsync(recorded.Id, Now);
         Recording written = await RecordedAsync(recorded, settled: true);
 
         await using (AsyncServiceScope throwing = container.CreateAsyncScope())
@@ -513,7 +513,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     public async Task AMomentThatIsNotInUtcIsRefusedRatherThanComparedAgainstTheWindow()
     {
         Reservation standing = ReservationFixtures.Rehydrated(ReservationState.Cancelled);
-        await AddAsyncForReservationDiscard(standing);
+        await AddAsync(standing);
 
         await using AsyncServiceScope discarding = container.CreateAsyncScope();
         ArgumentException refused = await Assert.ThrowsAsync<ArgumentException>(
@@ -530,8 +530,8 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     public async Task AReservationARecordingCameOfIsRefusedUntilThatRecordingIsThrownAway()
     {
         Reservation recorded = ReservationFixtures.Rehydrated(ReservationState.Scheduled);
-        await AddAsyncForReservationDiscard(recorded);
-        await ClaimAsyncForReservationDiscard(recorded.Id);
+        await AddAsync(recorded);
+        await ClaimAsync(recorded.Id, Now);
         Recording written = await RecordedAsync(recorded, settled: true);
 
         Assert.Equal(ReservationDiscard.RecordingCameOfIt, await DiscardAsync(recorded.Id));
@@ -553,8 +553,8 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     public async Task AReservationBeingWrittenRightNowIsRefusedBecauseItsRecordingIsThere()
     {
         Reservation writing = ReservationFixtures.Rehydrated(ReservationState.Scheduled);
-        await AddAsyncForReservationDiscard(writing);
-        await ClaimAsyncForReservationDiscard(writing.Id);
+        await AddAsync(writing);
+        await ClaimAsync(writing.Id, Now);
         Recording begun = await RecordedAsync(writing, settled: false);
 
         Assert.Equal(ReservationDiscard.RecordingCameOfIt, await DiscardAsync(writing.Id));
@@ -566,9 +566,9 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     public async Task AReservationTakenUpBeforeItsRecordingIsWrittenDownIsRefused()
     {
         Reservation claimed = ReservationFixtures.Rehydrated(ReservationState.Scheduled);
-        await AddAsyncForReservationDiscard(claimed);
+        await AddAsync(claimed);
 
-        await ClaimAsyncForReservationDiscard(claimed.Id);
+        await ClaimAsync(claimed.Id, Now);
 
         Assert.Equal(ReservationDiscard.TurningIntoARecording, await DiscardAsync(claimed.Id));
         Assert.Equal(1, await ReservationRows(claimed.Id));
@@ -584,7 +584,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     public async Task ThrowingTheSameReservationAwayTwiceSaysItIsGoneTheSecondTime()
     {
         Reservation cancelled = ReservationFixtures.Rehydrated(ReservationState.Cancelled);
-        await AddAsyncForReservationDiscard(cancelled);
+        await AddAsync(cancelled);
 
         Assert.Equal(ReservationDiscard.Discarded, await DiscardAsync(cancelled.Id));
         Assert.Equal(ReservationDiscard.NoSuchReservation, await DiscardAsync(cancelled.Id));
@@ -595,8 +595,8 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     {
         Reservation cancelled = ReservationFixtures.Rehydrated(ReservationState.Cancelled);
         Reservation recorded = ReservationFixtures.Rehydrated(ReservationState.Scheduled);
-        await AddAsyncForReservationDiscard(cancelled, recorded);
-        await ClaimAsyncForReservationDiscard(recorded.Id);
+        await AddAsync(cancelled, recorded);
+        await ClaimAsync(recorded.Id, Now);
         Recording beside = await RecordedAsync(recorded, settled: true);
 
         Assert.Equal(ReservationDiscard.Discarded, await DiscardAsync(cancelled.Id));
@@ -655,7 +655,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
             receptionUnavailable: true,
             receptionUnavailableSince: Now);
         await AddAsync(cancelled, missed, recorded);
-        await RecordedAsyncForReservationHealth(recorded.Id, Now.AddHours(-2), RecordingOutcome.Complete);
+        await ClaimedAndSettledAsync(recorded.Id, Now.AddHours(-2), RecordingOutcome.Complete);
 
         ReservationHealth after = await HealthAsync(Now);
 
@@ -1016,12 +1016,12 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
 
             if (reservation.Discarding(false, before) is not ReservationDiscard.Discarded)
             {
-                Assert.Equal(reservation.Discarding(false, before), await DiscardAsyncForTheMatrix(reservation.Id, before));
+                Assert.Equal(reservation.Discarding(false, before), await DiscardInTheMigratedStoreAsync(reservation.Id, before));
             }
 
             Assert.Equal(
                 reservation.Discarding(false, reservation.EffectiveEndAt),
-                await DiscardAsyncForTheMatrix(reservation.Id, reservation.EffectiveEndAt));
+                await DiscardInTheMigratedStoreAsync(reservation.Id, reservation.EffectiveEndAt));
         }
     }
 
@@ -1107,13 +1107,6 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     private static Reservation Closed(ReservationState state)
         => ReservationFixtures.Rehydrated(state, startAt: Now.AddHours(-3), endAt: Now.AddHours(-2));
 
-    private async Task ClaimAsyncForReservationDiscard(ReservationId id)
-    {
-        await using AsyncServiceScope claiming = container.CreateAsyncScope();
-
-        Assert.True(await Contract(claiming).ClaimAsync(id, Now, Cancel));
-    }
-
     private async Task<ReservationDiscard> DiscardAsync(ReservationId id, DateTime? at = null)
     {
         await using AsyncServiceScope discarding = container.CreateAsyncScope();
@@ -1141,17 +1134,6 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
         Reservation? found = await Reservations(reading).FindAsync(id, Cancel);
 
         return found?.RecordingOutcome;
-    }
-
-    private async Task AddAsyncForReservationDiscard(params Reservation[] reservations)
-    {
-        await using AsyncServiceScope writing = container.CreateAsyncScope();
-        IReservationRepository repository = Reservations(writing);
-
-        foreach (Reservation reservation in reservations)
-        {
-            await repository.AddAsync(reservation, Cancel);
-        }
     }
 
     private async Task<Recording> RecordedAsync(Reservation reservation, bool settled)
@@ -1205,7 +1187,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
         return await Reservations(scope).HealthAsync(at, Cancel);
     }
 
-    private async Task RecordedAsyncForReservationHealth(ReservationId id, DateTime claimedAt, RecordingOutcome outcome)
+    private async Task ClaimedAndSettledAsync(ReservationId id, DateTime claimedAt, RecordingOutcome outcome)
     {
         await using AsyncServiceScope scope = container.CreateAsyncScope();
         await using var connection = new NpgsqlConnection(Context(scope).Database.GetConnectionString());
@@ -1326,7 +1308,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
         await running.ExecuteNonQueryAsync(Cancel);
     }
 
-    private async Task<ReservationDiscard> DiscardAsyncForTheMatrix(ReservationId id, DateTime at)
+    private async Task<ReservationDiscard> DiscardInTheMigratedStoreAsync(ReservationId id, DateTime at)
     {
         await using AsyncServiceScope scope = migrated.CreateAsyncScope();
 
@@ -1361,7 +1343,7 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
     private static IEnumerable<Row> Matrix()
         => from state in States
            from claim in Claims
-           from airs in AirsForTheMatrix
+           from airs in MatrixStarts
            from margin in Margins
            select new Row(state, claim.Claimed, claim.Outcome, airs, margin);
 
@@ -1391,12 +1373,12 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database, Migr
 
     private async Task ExecuteAsync(string sql)
     {
-        await using NpgsqlConnection connection = await OpenAsyncForTheMatrix();
+        await using NpgsqlConnection connection = await OpenTheMigratedStoreAsync();
         await using var command = new NpgsqlCommand(sql, connection);
         await command.ExecuteNonQueryAsync();
     }
 
-    private async Task<NpgsqlConnection> OpenAsyncForTheMatrix()
+    private async Task<NpgsqlConnection> OpenTheMigratedStoreAsync()
     {
         await using AsyncServiceScope scope = migrated.CreateAsyncScope();
         var connection = new NpgsqlConnection(Context(scope).Database.GetConnectionString());
