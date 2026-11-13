@@ -1,6 +1,6 @@
 using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Streaming;
-using Carina.Infrastructure.Tests.Streaming;
+using Carina.Infrastructure.Tests.Fixtures.Streaming;
 
 namespace Carina.Infrastructure.Tests.Machines;
 

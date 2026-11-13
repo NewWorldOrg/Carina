@@ -1,0 +1,857 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Pipes;
+using System.Runtime.Versioning;
+
+using Carina.BroadcastTestSupport;
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
+using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
+using Carina.Infrastructure.Encodings;
+using Carina.Infrastructure.Machines;
+using Carina.Infrastructure.Streaming;
+using Carina.TestSupport;
+
+namespace Carina.Infrastructure.Tests;
+
+[SupportedOSPlatform("linux")]
+[Trait("Category", "Material")]
+public sealed class SyntheticBroadcastMaterialTests : IDisposable
+{
+    private const string Ffprobe = "ffprobe";
+
+    private static readonly TimeSpan PastTheProbe = TimeSpan.FromSeconds(12);
+
+    private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
+
+    private static readonly MachineSettings Machine = new();
+
+    private static readonly SoundPlacement TheWholeFirstStream = SoundPlacement.WholeStream(0);
+
+    private static readonly EncodeProfile Standard = EncodeProfile.Define(
+        EncodeProfileId.New(),
+        new EncodeLabel("Standard"),
+        EncodeCodec.H264,
+        EncodeResolution.AsSource,
+        Deinterlace.EveryFrame,
+        new ConstantRateFactor(28),
+        new Carina.Domain.Encodings.ConstantQuantiser(24),
+        new DateTime(2026, 9, 14, 3, 0, 0, DateTimeKind.Utc));
+
+    private static readonly StreamAttributes Interlaced = new(
+        new VideoSize(1440, 1080),
+        ScanType.Interlaced,
+        FrameRate.BroadcastFrames,
+        AudioMode.Stereo);
+
+    private const string Entries =
+        "stream=codec_type,codec_name,profile,channels,channel_layout:stream_tags=language:program=program_id";
+
+    private const string Counted = "stream=codec_type,nb_read_packets";
+
+    private const string Shape =
+        "stream=codec_type,width,height,sample_aspect_ratio,display_aspect_ratio";
+
+    private const int SampleRate = 48_000;
+
+    private const int TimesLouder = 8;
+
+    private readonly string room = Directory.CreateTempSubdirectory("carina-material").FullName;
+
+    public void Dispose() => Directory.Delete(room, recursive: true);
+
+    [Fact]
+    public async Task TheMeasuredBroadcastReadsAsInterlacedHdStereoWithCaptionsAndData()
+    {
+        string written = await SyntheticBroadcast.AsMeasured().WriteAsync(Path.Combine(room, "measured.m2ts"));
+
+        StreamAttributeReading reading = await ReadAsync(written);
+        IReadOnlyList<FfprobeRecord> probed = await ProbedAsync(written);
+
+        Assert.True(reading.Measured);
+        Assert.False(reading.SeveralVideoDescriptions);
+        Assert.Equal(new VideoSize(1440, 1080), reading.Attributes.Size);
+        Assert.Equal(ScanType.Interlaced, reading.Attributes.Scan);
+        Assert.Equal(FrameRate.BroadcastFrames, reading.Attributes.Rate);
+        Assert.Equal(AudioMode.Stereo, reading.Attributes.Audio);
+        Assert.Equal(["mpeg2video", "aac", "arib_caption", "bin_data"], Codecs(probed));
+        Assert.Equal("Profile A", probed.First(record => record.Value("codec_name") is "arib_caption").Value("profile"));
+        Assert.Equal("LC", probed.First(record => record.Value("codec_name") is "aac").Value("profile"));
+        Assert.Equal(["1040"], Programs(probed));
+    }
+
+    [Fact]
+    public async Task TheStandardDefinitionBroadcastReadsAs480i()
+    {
+        StreamAttributeReading reading = await ReadAsync(
+            await SyntheticBroadcast.Of(SyntheticPicture.StandardDefinition).WriteAsync(Path.Combine(room, "sd.m2ts")));
+
+        Assert.True(reading.Measured);
+        Assert.Equal(new VideoSize(720, 480), reading.Attributes.Size);
+        Assert.Equal(ScanType.Interlaced, reading.Attributes.Scan);
+    }
+
+    [Fact]
+    public async Task TheFullHdBroadcastReadsAs1920By1080Interlaced()
+    {
+        StreamAttributeReading reading = await ReadAsync(
+            await SyntheticBroadcast.Of(SyntheticPicture.FullHd).WriteAsync(Path.Combine(room, "full.m2ts")));
+
+        Assert.True(reading.Measured);
+        Assert.Equal(new VideoSize(1920, 1080), reading.Attributes.Size);
+        Assert.Equal(ScanType.Interlaced, reading.Attributes.Scan);
+    }
+
+    [Theory]
+    [InlineData(SyntheticSound.Mono, AudioMode.Mono, "1", "mono")]
+    [InlineData(SyntheticSound.Surround, AudioMode.Surround, "6", "5.1")]
+    [InlineData(SyntheticSound.DualMono, AudioMode.Stereo, "2", "stereo")]
+    public async Task EachSoundIsReadAsTheModeTheProbeCanTell(
+        SyntheticSound sound,
+        AudioMode expected,
+        string channels,
+        string layout)
+    {
+        string written = await SyntheticBroadcast.Sounding(sound).WriteAsync(Path.Combine(room, $"{sound}.m2ts"));
+
+        StreamAttributeReading reading = await ReadAsync(written);
+        FfprobeRecord probed = (await ProbedAsync(written)).First(record => record.Value("codec_type") is "audio");
+
+        Assert.True(reading.Measured);
+        Assert.Equal(expected, reading.Attributes.Audio);
+        Assert.Equal(channels, probed.Value("channels"));
+        Assert.Equal(layout, probed.Value("channel_layout"));
+    }
+
+    [Fact]
+    public async Task TheDualMonoSoundDecodesAsTwoChannelsOfSilence()
+    {
+        string written = await SyntheticBroadcast.Sounding(SyntheticSound.DualMono).WriteAsync(Path.Combine(room, "dual.m2ts"));
+        string decoded = Path.Combine(room, "dual.s16le");
+
+        await FfmpegProgramme.RunAsync(
+            FfmpegProgramme.Default,
+            [
+                "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror",
+                "-i", written, "-map", "0:a", "-ac", "2", "-f", "s16le", decoded,
+            ],
+            CancellationToken.None);
+
+        byte[] sound = await File.ReadAllBytesAsync(decoded);
+
+        Assert.NotEmpty(sound);
+        Assert.False(
+            Array.Exists(sound, sample => sample is not 0),
+            "the dual-mono sound decoded to something other than silence");
+    }
+
+    [Fact]
+    public async Task ABilingualBroadcastCarriesTwoSoundsEachNamingItsLanguage()
+    {
+        string written = await SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguages).WriteAsync(Path.Combine(room, "bilingual.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> sounds =
+            [.. (await ProbedAsync(written)).Where(record => record.Value("codec_type") is "audio")];
+
+        Assert.Equal(
+            ["jpn", "eng"],
+            sounds.Select(record => record.Value("TAG:language")).OfType<string>().Distinct().ToArray());
+        Assert.Equal(AudioMode.Stereo, (await ReadAsync(written)).Attributes.Audio);
+    }
+
+    [Fact]
+    public async Task ABroadcastWithoutAPictureFallsBackOnEveryPictureAttributeAndMeasuresTheSound()
+    {
+        StreamAttributeReading reading = await ReadAsync(
+            await SyntheticBroadcast.Of(SyntheticPicture.None).WriteAsync(Path.Combine(room, "sound-only.m2ts")));
+
+        Assert.False(reading.Measured);
+        Assert.Equal([StreamAttribute.Resolution, StreamAttribute.Scan, StreamAttribute.FrameRate], reading.FellBackOn);
+        Assert.Equal(AudioMode.Stereo, reading.Attributes.Audio);
+        Assert.Equal(StreamAttributes.SafeSide.Size, reading.Attributes.Size);
+    }
+
+    [Fact]
+    public async Task TheEncodedCounterpartIsH264WithTheSoundCarriedAcross()
+    {
+        string original = await SyntheticBroadcast.AsMeasured().WriteAsync(Path.Combine(room, "original.m2ts"));
+        string encoded = Path.Combine(room, "encoded.mp4");
+
+        await SyntheticBroadcast.EncodeAsH264Async(original, encoded);
+
+        IReadOnlyList<FfprobeRecord> probed = await ProbedAsync(encoded);
+
+        Assert.Equal(["h264", "aac"], Codecs(probed));
+        Assert.Equal(ScanType.Progressive, (await ReadAsync(encoded)).Attributes.Scan);
+    }
+
+    [Fact]
+    public async Task ARecordingWhoseLedgerRowSaysNothingAboutThePictureStillMeasuresAs480i()
+    {
+        DirectoryInfo mounted = Directory.CreateDirectory(Path.Combine(room, "bulk"));
+        string written = await SyntheticBroadcast
+            .Of(SyntheticPicture.StandardDefinition)
+            .WriteAsync(Path.Combine(room, "standard-definition.m2ts"));
+
+        Recording recording = new RecordedMaterial(mounted, new OutputRoot("bulk")).Ended(RecordingId.New(), written);
+        StreamAttributeReading reading = await ReadAsync(Path.Combine(mounted.FullName, recording.FileName.Value));
+
+        Assert.True(reading.Measured);
+        Assert.Equal(new VideoSize(720, 480), reading.Attributes.Size);
+        Assert.Equal(ScanType.Interlaced, reading.Attributes.Scan);
+    }
+
+    [Fact]
+    public async Task TheRecordedPairIsOneProgrammeHeldTwiceAsTheTransportStreamAndAsH264()
+    {
+        DirectoryInfo mounted = Directory.CreateDirectory(Path.Combine(room, "pair"));
+        string original = await SyntheticBroadcast.AsMeasured().WriteAsync(Path.Combine(room, "pair.m2ts"));
+        string encoded = Path.Combine(room, "pair.mp4");
+
+        await SyntheticBroadcast.EncodeAsH264Async(original, encoded);
+
+        RecordedPair pair = new RecordedMaterial(mounted, new OutputRoot("pair"))
+            .Pair(RecordingId.New(), RecordingId.New(), original, encoded);
+
+        Assert.Equal(pair.Original.EventId, pair.Encoded.EventId);
+        Assert.Equal(
+            ScanType.Interlaced,
+            (await ReadAsync(Path.Combine(mounted.FullName, pair.Original.FileName.Value))).Attributes.Scan);
+        Assert.Equal(
+            ScanType.Progressive,
+            (await ReadAsync(Path.Combine(mounted.FullName, pair.Encoded.FileName.Value))).Attributes.Scan);
+    }
+
+    [Fact]
+    public async Task TheSameBroadcastIsWrittenByteForByteTwice()
+    {
+        byte[] first = await File.ReadAllBytesAsync(await SyntheticBroadcast.AsMeasured().WriteAsync(Path.Combine(room, "first.m2ts")));
+        byte[] second = await File.ReadAllBytesAsync(await SyntheticBroadcast.AsMeasured().WriteAsync(Path.Combine(room, "second.m2ts")));
+
+        Assert.Equal(first, second);
+        Assert.InRange(first.Length, 1_000_000, 4_000_000);
+    }
+
+    [Fact]
+    public async Task BrPd007TheCaptionsLeaveTheLiveTranscoderAsStampedPngFramesOnTheirOwnPipeStampedAsTheBroadcastStampedThem()
+    {
+        string written = await (SyntheticBroadcast.AsMeasured() with { Length = PastTheProbe }).WriteAsync(Path.Combine(room, "captioned.m2ts"));
+
+        DrawnCaptions drawn = await DrawnAsync(written);
+        IReadOnlyList<ulong> statements = await CaptionStatementsAsync(written);
+
+        Assert.InRange(drawn.Painted.Count, 1, drawn.Frames.Count);
+        Assert.NotEmpty(statements);
+        Assert.Contains(drawn.Painted, frame => statements.Contains(frame.Pts.Value));
+    }
+
+    [Fact]
+    public async Task BrPd007AClearScreenStatementTakesTheCaptionOffTheScreen()
+    {
+        string written = await (SyntheticBroadcast.AsMeasured() with { Length = PastTheProbe, Captions = SyntheticCaptions.ShownThenCleared })
+            .WriteAsync(Path.Combine(room, "cleared.m2ts"));
+
+        DrawnCaptions drawn = await DrawnAsync(written);
+        IReadOnlyList<ulong> statements = await CaptionStatementsAsync(written);
+
+        Assert.Equal(2, statements.Count);
+
+        ulong shown = statements[0];
+        ulong cleared = statements[1];
+
+        Assert.NotEmpty(drawn.Painted);
+        Assert.All(drawn.Painted, frame => Assert.InRange(frame.Pts.Value, shown, cleared - 1));
+        Assert.Contains(drawn.Blank, frame => frame.Pts.Value == cleared);
+    }
+
+    private static async Task<IReadOnlyList<ulong>> CaptionStatementsAsync(string written)
+    {
+        IReadOnlyList<FfprobeRecord> packets = await ProbedAsync(written, "packet=pts", "-select_streams", "s:0");
+        ulong[] stamped = [.. packets.Select(packet => ulong.Parse(packet.Value("pts")!, CultureInfo.InvariantCulture))];
+        ulong management = stamped.Min();
+
+        return [.. stamped.Where(pts => (pts - management) % 90_000 is 45_000)];
+    }
+
+    private async Task<DrawnCaptions> DrawnAsync(string written)
+    {
+        VideoSize canvas = Interlaced.Size;
+
+        using AnonymousPipeServerStream captions = new(PipeDirection.In, HandleInheritability.Inheritable);
+
+        var start = new ProcessStartInfo(FfmpegProgramme.Default)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        foreach (string argument in FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.Drawn)
+            .Concat(FfmpegLiveInvocation.Delivery())
+            .Concat(FfmpegLiveInvocation.CaptionDelivery(Service, int.Parse(captions.GetClientHandleAsString(), CultureInfo.InvariantCulture))))
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process drawing = Process.Start(start)!;
+
+        captions.DisposeLocalCopyOfClientHandle();
+
+        Task feeding = Task.Run(async () =>
+        {
+            await using FileStream source = File.OpenRead(written);
+            await source.CopyToAsync(drawing.StandardInput.BaseStream);
+            drawing.StandardInput.Close();
+        });
+        Task<string> complaint = drawing.StandardError.ReadToEndAsync();
+        Task<long> picture = Task.Run(async () =>
+        {
+            using MemoryStream held = new();
+            await drawing.StandardOutput.BaseStream.CopyToAsync(held);
+
+            return held.Length;
+        });
+
+        using MemoryStream held = new();
+        await captions.CopyToAsync(held);
+        await feeding;
+        await drawing.WaitForExitAsync();
+
+        NutFrames frames = new();
+        NutReading read = frames.Read(held.ToArray());
+        byte[] pixels = new byte[canvas.Width * canvas.Height * 4];
+        List<NutFrame> painted = [];
+        List<NutFrame> blank = [];
+
+        foreach (NutFrame frame in read.Frames)
+        {
+            Assert.True(RgbaPng.TryDecode(frame.Data.Span, canvas, pixels), "every frame is an RGBA PNG of the canvas");
+
+            if (pixels.AsSpan().IndexOfAnyExcept((byte)0) >= 0)
+            {
+                painted.Add(frame);
+            }
+            else
+            {
+                blank.Add(frame);
+            }
+        }
+
+        Assert.Equal(0, drawing.ExitCode);
+        Assert.True(read.Fault is null, $"the caption stream faulted with {read.Fault} after {read.Frames.Count} frames of {held.Length} bytes");
+        Assert.Null(frames.Ended().Fault);
+        Assert.True(await picture > 0, "the picture leaves on standard output beside the captions");
+        Assert.DoesNotContain("overflowing", await complaint, StringComparison.Ordinal);
+
+        return new DrawnCaptions(read.Frames, painted, blank);
+    }
+
+    private sealed record DrawnCaptions(IReadOnlyList<NutFrame> Frames, IReadOnlyList<NutFrame> Painted, IReadOnlyList<NutFrame> Blank);
+
+    [Fact]
+    public async Task ABroadcastCarryingTwoSoundsReachesALiveViewerAsOnePictureAndOneSound()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguages) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-bilingual.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> tracks = await LiveTracksAsync(written, "live-bilingual.mp4");
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("LC", Sound(tracks).Value("profile"));
+        Assert.Equal("2", Sound(tracks).Value("channels"));
+        await BothTracksCarrySomethingAsync("live-bilingual.mp4");
+    }
+
+    [Fact]
+    public async Task ASurroundBroadcastStillReachesALiveViewerWithEveryOneOfItsChannels()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.Surround) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-surround.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> tracks = await LiveTracksAsync(written, "live-surround.mp4");
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("6", Sound(tracks).Value("channels"));
+        Assert.Equal("5.1", Sound(tracks).Value("channel_layout"));
+        await BothTracksCarrySomethingAsync("live-surround.mp4");
+    }
+
+    [Fact]
+    public async Task ADualMonoBroadcastReachesALiveViewerOnBothOfItsChannelsRatherThanFoldedIntoOne()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.DualMono) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-dual-mono.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> tracks = await LiveTracksAsync(written, "live-dual-mono.mp4");
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("LC", Sound(tracks).Value("profile"));
+        Assert.Equal("2", Sound(tracks).Value("channels"));
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a live viewer of a broadcast carrying two languages on one sound hears only the language asked for, in both ears")]
+    public async Task BrPd008ALiveViewerOfTwoLanguagesOnOneSoundHearsOnlyTheLanguageAskedFor()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguagesOnOneSound) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-two-languages.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> main = await LiveTracksAsync(
+            written,
+            "live-main.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Left));
+        IReadOnlyList<FfprobeRecord> secondary = await LiveTracksAsync(
+            written,
+            "live-secondary.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Right));
+
+        Assert.Equal(["video", "audio"], Types(main));
+        Assert.Equal(["video", "audio"], Types(secondary));
+        Assert.Equal("2", Sound(main).Value("channels"));
+        Assert.Equal("2", Sound(secondary).Value("channels"));
+
+        foreach (int ear in new[] { 0, 1 })
+        {
+            Tones heard = await HeardAsync("live-main.mp4", ear);
+            Tones other = await HeardAsync("live-secondary.mp4", ear);
+
+            Assert.True(
+                heard.Main > heard.Secondary * TimesLouder,
+                $"the main sound in ear {ear} carried {heard.Main:F5} of its own tone and {heard.Secondary:F5} of the other one");
+            Assert.True(
+                other.Secondary > other.Main * TimesLouder,
+                $"the secondary sound in ear {ear} carried {other.Secondary:F5} of its own tone and {other.Main:F5} of the other one");
+        }
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a live viewer of a broadcast that did not announce two languages still hears each channel where the broadcast put it")]
+    public async Task BrPd008ALiveViewerOfABroadcastThatAnnouncedNothingStillHearsEachChannelWhereItWasPut()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguagesOnOneSound) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-as-sent.m2ts"));
+
+        await LiveTracksAsync(written, "live-as-sent.mp4");
+
+        Tones left = await HeardAsync("live-as-sent.mp4", 0);
+        Tones right = await HeardAsync("live-as-sent.mp4", 1);
+
+        Assert.True(left.Main > left.Secondary * TimesLouder, $"the left ear carried {left.Main:F5} and {left.Secondary:F5}");
+        Assert.True(right.Secondary > right.Main * TimesLouder, $"the right ear carried {right.Main:F5} and {right.Secondary:F5}");
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a dual-mono sound taken from one of its channels still reaches a live viewer on two channels")]
+    public async Task BrPd008ADualMonoSoundTakenFromOneOfItsChannelsStillReachesALiveViewerOnTwoChannels()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.DualMono) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-dual-mono-main.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> tracks = await LiveTracksAsync(
+            written,
+            "live-dual-mono-main.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Left));
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("LC", Sound(tracks).Value("profile"));
+        Assert.Equal("2", Sound(tracks).Value("channels"));
+        await BothTracksCarrySomethingAsync("live-dual-mono-main.mp4");
+    }
+
+    [Fact]
+    public async Task ARecordingCarryingTwoSoundsIsPlayedBackWithItsMainOneAlone()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguages) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "played-bilingual.m2ts"));
+
+        string delivered = Path.Combine(room, "played-bilingual.mp4");
+
+        await TranscodedAsync(
+            [
+                .. FfmpegPlaybackInvocation.Arguments(
+                    Service,
+                    LiveProfile.Hd30,
+                    Interlaced,
+                    LiveEncoder.Software,
+                    Machine,
+                    new StreamSource(written),
+                    TimeSpan.Zero,
+                    TheWholeFirstStream),
+                .. FfmpegLiveInvocation.DeliveryFromTheStart(),
+            ],
+            fed: null,
+            delivered);
+
+        IReadOnlyList<FfprobeRecord> tracks = await ProbedAsync(delivered);
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("LC", Sound(tracks).Value("profile"));
+        Assert.Equal("2", Sound(tracks).Value("channels"));
+        await BothTracksCarrySomethingAsync("played-bilingual.mp4");
+    }
+
+    [Fact]
+    public async Task ASurroundRecordingIsPlayedBackWithEveryOneOfItsChannels()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.Surround) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "played-surround.m2ts"));
+
+        string delivered = Path.Combine(room, "played-surround.mp4");
+
+        await TranscodedAsync(
+            [
+                .. FfmpegPlaybackInvocation.Arguments(
+                    Service,
+                    LiveProfile.Hd30,
+                    Interlaced,
+                    LiveEncoder.Software,
+                    Machine,
+                    new StreamSource(written),
+                    TimeSpan.Zero,
+                    TheWholeFirstStream),
+                .. FfmpegLiveInvocation.DeliveryFromTheStart(),
+            ],
+            fed: null,
+            delivered);
+
+        IReadOnlyList<FfprobeRecord> tracks = await ProbedAsync(delivered);
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("6", Sound(tracks).Value("channels"));
+        Assert.Equal("5.1", Sound(tracks).Value("channel_layout"));
+        await BothTracksCarrySomethingAsync("played-surround.mp4");
+    }
+
+    [Fact]
+    public async Task BrPd008ARecordingCarryingTwoLanguagesOnOneSoundIsPlayedWithOnlyTheLanguageThatWasAskedFor()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguagesOnOneSound) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "played-two-languages.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> carried = await ProbedAsync(
+            written,
+            "stream=index,codec_type,channels",
+            "-select_streams",
+            "a");
+
+        Assert.Single(carried.Select(record => record.Value("index")).Distinct(StringComparer.Ordinal));
+        Assert.Equal("2", Sound(carried).Value("channels"));
+
+        IReadOnlyList<FfprobeRecord> main = await PlayedAsync(
+            written,
+            "played-main.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Left));
+        IReadOnlyList<FfprobeRecord> secondary = await PlayedAsync(
+            written,
+            "played-secondary.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Right));
+
+        Assert.Equal(["video", "audio"], Types(main));
+        Assert.Equal(["video", "audio"], Types(secondary));
+        Assert.Equal("2", Sound(main).Value("channels"));
+        Assert.Equal("2", Sound(secondary).Value("channels"));
+
+        foreach (int ear in new[] { 0, 1 })
+        {
+            Tones heard = await HeardAsync("played-main.mp4", ear);
+            Tones other = await HeardAsync("played-secondary.mp4", ear);
+
+            Assert.True(
+                heard.Main > heard.Secondary * TimesLouder,
+                $"the main sound in ear {ear} carried {heard.Main:F5} of its own tone and {heard.Secondary:F5} of the other one");
+            Assert.True(
+                other.Secondary > other.Main * TimesLouder,
+                $"the secondary sound in ear {ear} carried {other.Secondary:F5} of its own tone and {other.Main:F5} of the other one");
+        }
+    }
+
+    [Fact(DisplayName = "the artefact of a recording that carried two languages on one sound holds the main language in both ears and not the other one")]
+    public async Task BrPd008TheEncodeOfARecordingCarryingTwoLanguagesOnOneSoundBakesInTheMainOne()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguagesOnOneSound) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "encoded-two-languages.m2ts"));
+        string artefact = Path.Combine(room, "encoded-two-languages.mp4");
+
+        await FfmpegProgramme.RunAsync(
+            FfmpegProgramme.Default,
+            [
+                .. FfmpegEncodeInvocation.Arguments(
+                    Service,
+                    Standard,
+                    EncodeEncoder.Software,
+                    Machine,
+                    written,
+                    1,
+                    TimeSpan.Zero,
+                    EncodeSound.Of(AudioMode.DualMono, 1)),
+                .. FfmpegEncodeInvocation.Delivery(artefact),
+            ],
+            CancellationToken.None);
+
+        IReadOnlyList<FfprobeRecord> made = await ProbedAsync(artefact);
+
+        Assert.Equal(["video", "audio"], Types(made));
+        Assert.Equal("2", Sound(made).Value("channels"));
+        Assert.Equal("aac", Sound(made).Value("codec_name"));
+
+        foreach (int ear in new[] { 0, 1 })
+        {
+            Tones heard = await HeardAsync("encoded-two-languages.mp4", ear);
+
+            Assert.True(
+                heard.Main > heard.Secondary * TimesLouder,
+                $"the artefact in ear {ear} carried {heard.Main:F5} of the main language and {heard.Secondary:F5} of the other one");
+        }
+    }
+
+    [Theory(DisplayName = "a broadcast sends 1440 by 1080 with samples 4:3 wide, and the artefact of it is shown at 16:9 whatever size the profile asks for — the picture is never squared up without being resized")]
+    [InlineData(EncodeResolution.AsSource, "1440", "1080")]
+    [InlineData(EncodeResolution.FullHd, "1920", "1080")]
+    [InlineData(EncodeResolution.Hd, "1280", "720")]
+    public async Task TheArtefactIsShownAtTheShapeTheBroadcastWasSentAt(EncodeResolution resolution, string width, string height)
+    {
+        string written = await SyntheticBroadcast.AsMeasured().WriteAsync(Path.Combine(room, $"shaped-{resolution}.m2ts"));
+        string artefact = Path.Combine(room, $"shaped-{resolution}.mp4");
+
+        FfprobeRecord sent = Picture(await ProbedAsync(written, Shape));
+
+        Assert.Equal("1440", sent.Value("width"));
+        Assert.Equal("1080", sent.Value("height"));
+        Assert.Equal("4:3", sent.Value("sample_aspect_ratio"));
+        Assert.Equal("16:9", sent.Value("display_aspect_ratio"));
+
+        await FfmpegProgramme.RunAsync(
+            FfmpegProgramme.Default,
+            [
+                .. FfmpegEncodeInvocation.Arguments(
+                    Service,
+                    Sized(resolution),
+                    EncodeEncoder.Software,
+                    Machine,
+                    written,
+                    1,
+                    TimeSpan.Zero,
+                    EncodeSound.EveryStreamAsItStands),
+                .. FfmpegEncodeInvocation.Delivery(artefact),
+            ],
+            CancellationToken.None);
+
+        FfprobeRecord made = Picture(await ProbedAsync(artefact, Shape));
+
+        Assert.Equal(width, made.Value("width"));
+        Assert.Equal(height, made.Value("height"));
+        Assert.Equal("16:9", made.Value("display_aspect_ratio"));
+    }
+
+    private static EncodeProfile Sized(EncodeResolution resolution)
+        => EncodeProfile.Define(
+            EncodeProfileId.New(),
+            new EncodeLabel("Sized"),
+            EncodeCodec.H264,
+            resolution,
+            Deinterlace.EveryFrame,
+            new ConstantRateFactor(28),
+            new Carina.Domain.Encodings.ConstantQuantiser(24),
+            new DateTime(2026, 9, 14, 3, 0, 0, DateTimeKind.Utc));
+
+    private static FfprobeRecord Picture(IReadOnlyList<FfprobeRecord> probed)
+        => probed.First(record => record.Value("codec_type") is "video");
+
+    private async Task<IReadOnlyList<FfprobeRecord>> PlayedAsync(string written, string name, SoundPlacement sound)
+    {
+        string delivered = Path.Combine(room, name);
+
+        await TranscodedAsync(
+            [
+                .. FfmpegPlaybackInvocation.Arguments(
+                    Service,
+                    LiveProfile.Hd30,
+                    Interlaced,
+                    LiveEncoder.Software,
+                    Machine,
+                    new StreamSource(written),
+                    TimeSpan.Zero,
+                    sound),
+                .. FfmpegLiveInvocation.DeliveryFromTheStart(),
+            ],
+            fed: null,
+            delivered);
+
+        return await ProbedAsync(delivered);
+    }
+
+    private async Task<Tones> HeardAsync(string name, int ear)
+    {
+        string decoded = Path.Combine(room, FormattableString.Invariant($"{name}.ear{ear}.f32le"));
+
+        await FfmpegProgramme.RunAsync(
+            FfmpegProgramme.Default,
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                Path.Combine(room, name),
+                "-map",
+                "0:a:0",
+                "-af",
+                FormattableString.Invariant($"pan=mono|c0=c{ear}"),
+                "-ar",
+                SampleRate.ToString(CultureInfo.InvariantCulture),
+                "-f",
+                "f32le",
+                decoded,
+            ],
+            CancellationToken.None);
+
+        byte[] samples = await File.ReadAllBytesAsync(decoded);
+
+        Assert.True(samples.Length > sizeof(float) * SampleRate, $"{name} decoded to {samples.Length} bytes of sound");
+
+        return new Tones(
+            LoudnessAt(samples, SyntheticBroadcast.MainTone),
+            LoudnessAt(samples, SyntheticBroadcast.SecondaryTone));
+    }
+
+    private static double LoudnessAt(byte[] samples, int hertz)
+    {
+        int taken = samples.Length / sizeof(float);
+        double coefficient = 2 * Math.Cos(2 * Math.PI * hertz / SampleRate);
+        double last = 0;
+        double before = 0;
+
+        for (int at = 0; at < taken; at++)
+        {
+            double now = BitConverter.ToSingle(samples, at * sizeof(float)) + (coefficient * last) - before;
+
+            before = last;
+            last = now;
+        }
+
+        return Math.Sqrt(Math.Max(0, (last * last) + (before * before) - (coefficient * last * before))) / taken;
+    }
+
+    private readonly record struct Tones(double Main, double Secondary);
+
+    private async Task BothTracksCarrySomethingAsync(string name)
+    {
+        IReadOnlyList<FfprobeRecord> counted = await ProbedAsync(Path.Combine(room, name), Counted, "-count_packets");
+
+        Assert.All(
+            counted,
+            record => Assert.True(
+                int.Parse(record.Value("nb_read_packets")!, CultureInfo.InvariantCulture) > 0,
+                $"the {record.Value("codec_type")} track holds no packet, so only a header was measured"));
+    }
+
+    private static string[] Types(IReadOnlyList<FfprobeRecord> probed)
+        => [.. probed.Select(record => record.Value("codec_type")).OfType<string>()];
+
+    private static FfprobeRecord Sound(IReadOnlyList<FfprobeRecord> probed)
+        => probed.First(record => record.Value("codec_type") is "audio");
+
+    private async Task<IReadOnlyList<FfprobeRecord>> LiveTracksAsync(string written, string name, SoundPlacement? sound = null)
+    {
+        string delivered = Path.Combine(room, name);
+
+        await TranscodedAsync(
+            [
+                .. FfmpegLiveInvocation.Arguments(
+                    Service,
+                    LiveProfile.Hd30,
+                    Interlaced,
+                    LiveEncoder.Software,
+                    Machine,
+                    CaptionOutlet.None,
+                    sound),
+                .. FfmpegLiveInvocation.Delivery(),
+            ],
+            fed: written,
+            delivered);
+
+        return await ProbedAsync(delivered);
+    }
+
+    private static async Task TranscodedAsync(IReadOnlyList<string> arguments, string? fed, string delivered)
+    {
+        var start = new ProcessStartInfo(FfmpegProgramme.Default)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        foreach (string argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process running = Process.Start(start)!;
+
+        Task feeding = Task.Run(async () =>
+        {
+            if (fed is not null)
+            {
+                await using FileStream source = File.OpenRead(fed);
+                await source.CopyToAsync(running.StandardInput.BaseStream);
+            }
+
+            running.StandardInput.Close();
+        });
+        Task<string> complaint = running.StandardError.ReadToEndAsync();
+
+        await using (FileStream held = File.Create(delivered))
+        {
+            await running.StandardOutput.BaseStream.CopyToAsync(held);
+        }
+
+        await feeding;
+        await running.WaitForExitAsync();
+
+        Assert.True(running.ExitCode is 0, await complaint);
+    }
+
+    private static string[] Codecs(IReadOnlyList<FfprobeRecord> probed)
+        => [.. probed.Select(record => record.Value("codec_name")).Where(codec => codec is not null).Distinct()!];
+
+    private static string[] Programs(IReadOnlyList<FfprobeRecord> probed)
+        => [.. probed.Select(record => record.Value("program_id")).Where(program => program is not null).Distinct()!];
+
+    private static Task<StreamAttributeReading> ReadAsync(string path)
+        => new FfprobeStreamAttributeReader(new StreamAttributeSettings(), TimeProvider.System)
+            .ReadAsync(new StreamSource(path), CancellationToken.None);
+
+    private static Task<IReadOnlyList<FfprobeRecord>> ProbedAsync(string path) => ProbedAsync(path, Entries);
+
+    private static async Task<IReadOnlyList<FfprobeRecord>> ProbedAsync(string path, string entries, params string[] more)
+    {
+        var start = new ProcessStartInfo(Ffprobe)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        foreach (string argument in new[]
+        {
+            "-hide_banner", "-loglevel", "error", "-of", FfprobeInvocation.Format, "-show_entries", entries, "-i", path,
+        }.Concat(more))
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process probing = Process.Start(start)!;
+        Task<string> answer = probing.StandardOutput.ReadToEndAsync();
+        Task<string> complaint = probing.StandardError.ReadToEndAsync();
+
+        await probing.WaitForExitAsync();
+
+        Assert.True(probing.ExitCode is 0, await complaint);
+
+        return FfprobeRecords.From(await answer);
+    }
+}

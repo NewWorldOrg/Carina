@@ -1,0 +1,654 @@
+using System.Collections.Concurrent;
+
+using Carina.Domain.Captions;
+using Carina.Domain.Channels;
+using Carina.Domain.Integrity;
+using Carina.Domain.Recordings;
+using Carina.Infrastructure.Captions;
+using Carina.Infrastructure.Recordings;
+using Carina.TestSupport;
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace Carina.Infrastructure.Tests.Unit.Infra.Captions;
+
+[Trait("Category", "Unit")]
+public sealed class CaptionJobTests : IDisposable
+{
+    private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private static readonly OutputRoot Bulk = new("bulk");
+
+    private static readonly OutputRoot Elsewhere = new("elsewhere");
+
+    private static readonly ServiceId Service = new(1040);
+
+    private readonly string recordings = Directory.CreateTempSubdirectory("carina-caption-recordings-").FullName;
+
+    private readonly string shelved = Path.Combine(Directory.CreateTempSubdirectory("carina-caption-shelf-").FullName, "captions");
+
+    private readonly HeldCaptionWorklist worklist = new();
+
+    private readonly HeldTranscriber transcriber = new();
+
+    private readonly HeldWatching watching = new();
+
+    private readonly RecordingAppEvents events = new();
+
+    private readonly HeldArtefactCaptioning captioning = new();
+
+    private readonly RecordingReadTurn turn = new();
+
+    private DateTime? reservationStartsAt;
+
+    public void Dispose()
+    {
+        turn.Dispose();
+        Directory.Delete(recordings, recursive: true);
+        Directory.Delete(Path.GetDirectoryName(shelved)!, recursive: true);
+    }
+
+    [Fact]
+    public async Task BrPd016TheCaptionsTakenAreKeptOnTheShelfAndTheRecordingSaysHowManyChangesThereAre()
+    {
+        CaptionSubject subject = Recorded();
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(Record(3));
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal([(subject.Id, CaptionState.Ready, (int?)3)], worklist.Written);
+        Assert.Equal(3, (await new CaptionShelf(Settings()).ReadAsync(subject.Id, Cancel))!.Cues.Count);
+        Assert.Equal([(Path.Combine(recordings, subject.FileName.Value), Service)], transcriber.Asked);
+        Assert.Equal((1, 1, 0, 0), (pass.Read, pass.Kept, pass.Absent, pass.Failed));
+        Assert.Equal(["recordings"], events.Signalled);
+    }
+
+    [Fact(DisplayName = "BR-BS-001: the captions are taken in the turn shared with the data broadcast, so that no two recordings are read through side by side")]
+    public async Task TheCaptionsAreTakenInTheTurnSharedWithTheDataBroadcast()
+    {
+        Recorded();
+        bool heldMeanwhile = false;
+        transcriber.Answer = _ =>
+        {
+            heldMeanwhile = turn.Held;
+
+            return CaptionTranscription.Transcribed(Record(1));
+        };
+
+        await Job().RunAsync(Cancel);
+
+        Assert.True(heldMeanwhile);
+        Assert.False(turn.Held);
+    }
+
+    [Fact(DisplayName = "BR-BS-001: something that starts being recorded while the caption pass waits for its turn stops it before anything is read, and the turn is given back")]
+    public async Task SomethingRecordedWhileThePassWaitsForItsTurnStopsIt()
+    {
+        Recorded();
+        IDisposable dataBroadcast = await turn.TakeAsync(Cancel);
+
+        Task<CaptionPass> waiting = Job().RunAsync(Cancel);
+        worklist.BeingRecorded = true;
+        dataBroadcast.Dispose();
+        CaptionPass pass = await waiting;
+
+        Assert.True(pass.Yielded);
+        Assert.Empty(transcriber.Asked);
+        Assert.Empty(worklist.Written);
+        Assert.False(turn.Held);
+    }
+
+    [Fact]
+    public async Task BrPd016AServiceWithNoCaptionStreamHasNoCaptionsAndAnythingKeptBeforeGoes()
+    {
+        CaptionSubject subject = Recorded();
+        await new CaptionShelf(Settings()).KeepAsync(subject.Id, Record(1), Cancel);
+        transcriber.Answer = _ => CaptionTranscription.WithoutACaptionStream("matches no streams");
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal([(subject.Id, CaptionState.Absent, (int?)null)], worklist.Written);
+        Assert.False(new CaptionShelf(Settings()).Holds(subject.Id));
+        Assert.Equal(1, pass.Absent);
+    }
+
+    [Fact]
+    public async Task BrPd016ARecordingWhoseCaptionsShowedNothingHasNoCaptions()
+    {
+        CaptionSubject subject = Recorded();
+        transcriber.Answer = _ => CaptionTranscription.NothingShown();
+
+        await Job().RunAsync(Cancel);
+
+        Assert.Equal([(subject.Id, CaptionState.Absent, (int?)null)], worklist.Written);
+    }
+
+    [Fact]
+    public async Task BrPd016ARecordingWhoseFileIsNotOnTheDiskHasNoCaptionsAndNothingIsRun()
+    {
+        Recorded();
+        CaptionSubject gone = Subject();
+        worklist.Awaiting.Add(gone);
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(Record(1));
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Contains((gone.Id, CaptionState.Absent, (int?)null), worklist.Written);
+        Assert.DoesNotContain(transcriber.Asked, asked => asked.Source.Contains(gone.Id.Wire, StringComparison.Ordinal));
+        Assert.Equal(1, pass.Absent);
+    }
+
+    [Fact]
+    public async Task AFileMissingFromARootThatHoldsNothingAtAllKeepsItsPlaceBecauseThatIsWhatALostMountLooksLike()
+    {
+        CaptionSubject gone = Subject();
+        worklist.Awaiting.Add(gone);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(worklist.Written);
+        Assert.Equal((1, 0, 1), (pass.Read, pass.Settled, pass.LeftForNextTime));
+        Assert.Empty(events.Signalled);
+    }
+
+    [Theory]
+    [InlineData(CaptionFault.Refused)]
+    [InlineData(CaptionFault.TimedOut)]
+    [InlineData(CaptionFault.ClockUnread)]
+    public async Task BrPd016ATranscriptionThatFailedIsCountedAsAFailureAndNothingIsKept(CaptionFault fault)
+    {
+        CaptionSubject subject = Recorded();
+        transcriber.Answer = _ => CaptionTranscription.Failed(fault, "it fell over");
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal([(subject.Id, CaptionState.Failed, (int?)null)], worklist.Written);
+        Assert.False(Directory.Exists(shelved));
+        Assert.Equal(1, pass.Failed);
+    }
+
+    [Fact]
+    public async Task BrPd016ARecordThatCannotBeWrittenIsAFailure()
+    {
+        CaptionSubject subject = Recorded();
+        Directory.CreateDirectory(Path.Combine(shelved, subject.Id.Wire + CaptionSettings.Extension, "in-the-way"));
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(Record(2));
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal([(subject.Id, CaptionState.Failed, (int?)null)], worklist.Written);
+        Assert.Equal(1, pass.Failed);
+    }
+
+    [Fact]
+    public async Task BrPd016NothingIsStartedWhileSomebodyIsWatching()
+    {
+        Recorded();
+        watching.Anyone = true;
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(transcriber.Asked);
+        Assert.True(pass.Yielded);
+        Assert.Equal(1, pass.LeftForNextTime);
+    }
+
+    [Fact]
+    public async Task BrPd016NothingIsStartedWhileSomethingIsBeingRecorded()
+    {
+        Recorded();
+        worklist.BeingRecorded = true;
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(transcriber.Asked);
+        Assert.True(pass.Yielded);
+    }
+
+    [Fact(DisplayName = "BR-BS-001: captions are not taken while a reservation starts within thirty minutes, as the data broadcast is not")]
+    public async Task NothingIsStartedWhileAReservationStartsWithinThirtyMinutes()
+    {
+        Recorded();
+        reservationStartsAt = DateTime.UtcNow.AddMinutes(20);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(transcriber.Asked);
+        Assert.True(pass.Yielded);
+    }
+
+    [Fact]
+    public async Task BrPd016APassAsksAgainBeforeEachRecordingAndStopsOnceSomebodyStartsWatching()
+    {
+        Recorded();
+        Recorded();
+        transcriber.Answer = _ =>
+        {
+            watching.Anyone = true;
+
+            return CaptionTranscription.NothingShown();
+        };
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Single(transcriber.Asked);
+        Assert.Equal((2, 1, 1), (pass.Read, pass.Settled, pass.LeftForNextTime));
+        Assert.True(pass.Yielded);
+    }
+
+    [Fact]
+    public async Task APassTakesNoMoreThanItIsAllowedAndOnlyWhatIsWithinReach()
+    {
+        worklist.Awaiting.Add(Subject(Elsewhere));
+        Recorded();
+
+        await Job(Settings() with { AtMostAPass = 2 }).RunAsync(Cancel);
+
+        Assert.Equal(2, worklist.AskedFor);
+        Assert.Equal([Bulk], worklist.AskedWithin);
+    }
+
+    [Fact]
+    public async Task ARecordingUnderARootThisProcessCannotFindKeepsItsPlace()
+    {
+        worklist.Awaiting.Add(Subject(Elsewhere));
+
+        CaptionPass pass = await new CaptionJob(
+            Scopes(),
+            transcriber,
+            new CaptionShelf(Settings()),
+            Settings(),
+            new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, recordings), new StorageRootPath(Elsewhere, recordings)] },
+            turn,
+            events,
+            TimeProvider.System,
+            NullLogger<CaptionJob>.Instance).RunAsync(Cancel);
+
+        Assert.Equal(1, pass.Read);
+    }
+
+    [Fact]
+    public async Task WithNowhereToKeepThemNoPassIsRun()
+    {
+        Recorded();
+
+        CaptionPass pass = await Job(new CaptionSettings()).RunAsync(Cancel);
+
+        Assert.True(pass.NowhereToKeepThem);
+        Assert.Equal(0, worklist.Reads);
+    }
+
+    [Fact]
+    public async Task OnlyOnePassRunsAtATime()
+    {
+        Recorded();
+        TaskCompletionSource gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        worklist.Gate = gate;
+        CaptionJob job = Job();
+
+        Task<CaptionPass> first = job.RunAsync(Cancel);
+        CaptionPass second = await job.RunAsync(Cancel);
+        gate.SetResult();
+        await first;
+
+        Assert.True(second.AlreadyRunning);
+        Assert.Equal(1, worklist.Reads);
+    }
+
+    [Fact]
+    public async Task BrPd016ATranscriberThatThrowsCountsAsAFailureSoItIsNotTriedForeverAndTheRestOfThePassGoesOn()
+    {
+        CaptionSubject first = Recorded();
+        CaptionSubject second = Recorded();
+        int asked = 0;
+        transcriber.Answer = _ => Interlocked.Increment(ref asked) is 1
+            ? throw new InvalidOperationException("the transcriber fell over")
+            : CaptionTranscription.NothingShown();
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal([(first.Id, CaptionState.Failed, (int?)null), (second.Id, CaptionState.Absent, (int?)null)], worklist.Written);
+        Assert.Equal((2, 2, 1), (pass.Read, pass.Settled, pass.Failed));
+    }
+
+    [Fact]
+    public async Task ARecordingThatGoesWhileItsCaptionsAreTakenLeavesNoRecordBehind()
+    {
+        CaptionSubject subject = Recorded();
+        worklist.Gone.Add(subject.Id);
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(Record(2));
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.False(new CaptionShelf(Settings()).Holds(subject.Id));
+        Assert.Empty(worklist.Written);
+        Assert.Equal(0, pass.Settled);
+    }
+
+    [Fact]
+    public async Task BrPd016ARecordingThatSaysItsCaptionsAreReadyWithNoRecordOnTheShelfIsPutBackToBeTakenAgain()
+    {
+        RecordingId lost = RecordingId.New();
+        RecordingId kept = RecordingId.New();
+        await new CaptionShelf(Settings()).KeepAsync(kept, Record(1), Cancel);
+        worklist.Ready.AddRange([lost, kept]);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal([(lost, CaptionState.Pending, (int?)null)], worklist.Written);
+        Assert.Equal(1, pass.Requeued);
+        Assert.Equal(["recordings"], events.Signalled);
+    }
+
+    [Fact]
+    public async Task ARecordingThatGoesBeforeItIsPutBackIsPassedOverAndThePassGoesOn()
+    {
+        RecordingId gone = RecordingId.New();
+        worklist.Ready.Add(gone);
+        worklist.Gone.Add(gone);
+        CaptionSubject subject = Recorded();
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal(0, pass.Requeued);
+        Assert.Equal([(subject.Id, CaptionState.Absent, (int?)null)], worklist.Written);
+    }
+
+    [Fact]
+    public async Task WithNothingOnTheShelfAtAllEveryReadyRecordingIsPutBack()
+    {
+        RecordingId first = RecordingId.New();
+        RecordingId second = RecordingId.New();
+        worklist.Ready.AddRange([first, second]);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal(2, pass.Requeued);
+        Assert.All(worklist.Written, written => Assert.Equal(CaptionState.Pending, written.State));
+    }
+
+    [Fact]
+    public async Task BrPd016ARecordKeptBeforeTheTextWasTakenIsTakenAgainWhileTheRecordingStaysReady()
+    {
+        CaptionSubject subject = Retakable();
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(
+            new CaptionRecord(1440, 1080, TimeSpan.FromSeconds(2), Record(2).Cues, [new CaptionLine(0, "字")]));
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Equal([(subject.Id, CaptionState.Ready, (int?)2)], worklist.Written);
+        Assert.Equal([new CaptionLine(0, "字")], (await new CaptionShelf(Settings()).ReadAsync(subject.Id, Cancel))!.Lines);
+        Assert.Equal((1, 1, 1, 0), (pass.Read, pass.Kept, pass.Retaken, pass.Requeued));
+        Assert.Empty(new CaptionShelf(Settings()).Textless());
+    }
+
+    [Fact]
+    public async Task BrPd016RecordingsWaitingForCaptionsComeBeforeThoseTakenAgainForTheirText()
+    {
+        CaptionSubject waiting = Recorded();
+        CaptionSubject textless = Retakable();
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(Record(1));
+
+        CaptionPass pass = await Job(Settings() with { AtMostAPass = 1 }).RunAsync(Cancel);
+
+        Assert.Equal([waiting.Id], worklist.Written.Select(written => written.Id));
+        Assert.Equal(0, pass.Retaken);
+        Assert.Contains(textless.Id.Wire, new CaptionShelf(Settings()).Textless());
+    }
+
+    [Fact]
+    public async Task BrPd016NothingIsTakenAgainForItsTextWhileSomebodyIsWatching()
+    {
+        Retakable();
+        watching.Anyone = true;
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(worklist.Written);
+        Assert.Empty(transcriber.Asked);
+        Assert.True(pass.Yielded);
+    }
+
+    [Fact]
+    public async Task BrPd016ARecordThatCarriesItsTextIsNotTakenAgain()
+    {
+        CaptionSubject subject = Subject();
+        await new CaptionShelf(Settings()).KeepAsync(subject.Id, new CaptionRecord(1440, 1080, TimeSpan.Zero, [], []), Cancel);
+        worklist.Ready.Add(subject.Id);
+        worklist.Retakable.Add(subject);
+
+        CaptionPass pass = await Job().RunAsync(Cancel);
+
+        Assert.Empty(transcriber.Asked);
+        Assert.Equal(0, pass.Read);
+    }
+
+    [Fact]
+    public async Task BrPd016ARetakeThatFailsLeavesTheRecordKeptBeforeAndTheRecordingReadyAndIsTriedThreeTimes()
+    {
+        CaptionSubject subject = Retakable();
+        transcriber.Answer = _ => CaptionTranscription.Failed(CaptionFault.TimedOut, "it took too long");
+        CaptionJob job = Job();
+
+        CaptionPass first = await job.RunAsync(Cancel);
+        await job.RunAsync(Cancel);
+        await job.RunAsync(Cancel);
+        await job.RunAsync(Cancel);
+
+        Assert.Empty(worklist.Written);
+        Assert.Equal(3, transcriber.Asked.Count);
+        Assert.Equal((1, 0, 0, 1), (first.Read, first.Settled, first.Failed, first.LeftForNextTime));
+        Assert.Single((await new CaptionShelf(Settings()).ReadAsync(subject.Id, Cancel))!.Cues);
+        Assert.Contains(subject.Id.Wire, new CaptionShelf(Settings()).Textless());
+    }
+
+    [Fact]
+    public async Task BrPd016ARetakeThatDrawsNothingOrThrowsLeavesTheRecordAsItWas()
+    {
+        CaptionSubject nothing = Retakable();
+        CaptionSubject throwing = Retakable();
+        transcriber.Answer = source => source.Contains(throwing.FileName.Value, StringComparison.Ordinal)
+            ? throw new IOException("the disk went away")
+            : CaptionTranscription.NothingShown();
+
+        await Job().RunAsync(Cancel);
+
+        Assert.Empty(worklist.Written);
+        Assert.Equal(2, new CaptionShelf(Settings()).Textless().Count);
+        Assert.True(new CaptionShelf(Settings()).Holds(nothing.Id));
+    }
+
+    [Fact]
+    public async Task BrEd2019AfterTheCaptionsAreTakenThePassPutsTextTracksIntoArtefactsAskingWhetherItIsBusyBeforeEach()
+    {
+        Recorded();
+        transcriber.Answer = _ => CaptionTranscription.Transcribed(Record(1));
+
+        await Job().RunAsync(Cancel);
+        watching.Anyone = true;
+        bool busyThen = await captioning.Busy!(Cancel);
+
+        Assert.Equal(Settings().AtMostAPass, captioning.AskedFor);
+        Assert.Single(transcriber.Asked);
+        Assert.True(busyThen);
+    }
+
+    [Fact]
+    public async Task BrEd2019APassThatStoppedForSomebodyWatchingPutsNoTextTrackIntoAnything()
+    {
+        Recorded();
+        watching.Anyone = true;
+
+        await Job().RunAsync(Cancel);
+
+        Assert.Null(captioning.AskedFor);
+    }
+
+    private CaptionSettings Settings() => new() { WrittenTo = shelved };
+
+    private CaptionJob Job(CaptionSettings? settings = null)
+    {
+        CaptionSettings chosen = settings ?? Settings();
+
+        return new CaptionJob(
+            Scopes(),
+            transcriber,
+            new CaptionShelf(chosen),
+            chosen,
+            new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, recordings)] },
+            turn,
+            events,
+            TimeProvider.System,
+            NullLogger<CaptionJob>.Instance);
+    }
+
+    private IServiceScopeFactory Scopes()
+    {
+        ServiceCollection services = new();
+        services.AddScoped<ICaptionWorklist>(_ => worklist);
+        services.AddScoped<ICaptionRecords>(_ => new CaptionShelf(Settings()));
+        services.AddScoped<CaptionRequeueDomainService>();
+        services.AddScoped<IBusynessReader>(_ => new HeldBusyness(() => new Busyness(worklist.BeingRecorded, watching.Anyone, reservationStartsAt)));
+        services.AddScoped<IArtefactCaptioning>(_ => captioning);
+
+        return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+    }
+
+    private CaptionSubject Recorded()
+    {
+        CaptionSubject subject = Subject();
+        File.WriteAllBytes(Path.Combine(recordings, subject.FileName.Value), new byte[16]);
+        worklist.Awaiting.Add(subject);
+
+        return subject;
+    }
+
+    private CaptionSubject Retakable()
+    {
+        CaptionSubject subject = Subject();
+        File.WriteAllBytes(Path.Combine(recordings, subject.FileName.Value), new byte[16]);
+        new CaptionShelf(Settings()).KeepAsync(subject.Id, Record(1), Cancel).GetAwaiter().GetResult();
+        worklist.Ready.Add(subject.Id);
+        worklist.Retakable.Add(subject);
+
+        return subject;
+    }
+
+    private static CaptionSubject Subject(OutputRoot? root = null)
+    {
+        RecordingId id = RecordingId.New();
+
+        return new CaptionSubject(id, root ?? Bulk, RecordingFileName.For(id, ".ts"), Service);
+    }
+
+    private static CaptionRecord Record(int changes)
+        => new(
+            1440,
+            1080,
+            TimeSpan.FromSeconds(2),
+            [.. Enumerable.Range(0, changes).Select(at => new CaptionCue(90_000L * at, new CaptionPlacement(0, 0, 1, 1, new byte[] { 1 })))]);
+
+    private sealed class HeldCaptionWorklist : ICaptionWorklist
+    {
+        public List<CaptionSubject> Awaiting { get; } = [];
+
+        public List<(RecordingId Id, CaptionState State, int? Pictures)> Written { get; } = [];
+
+        public bool BeingRecorded { get; set; }
+
+        public List<RecordingId> Ready { get; } = [];
+
+        public List<CaptionSubject> Retakable { get; } = [];
+
+        public HashSet<RecordingId> Gone { get; } = [];
+
+        public int Reads { get; private set; }
+
+        public int? AskedFor { get; private set; }
+
+        public IReadOnlyList<OutputRoot> AskedWithin { get; private set; } = [];
+
+        public TaskCompletionSource? Gate { get; set; }
+
+        public async Task<IReadOnlyList<CaptionSubject>> AwaitingAsync(
+            IReadOnlyList<OutputRoot> withinReach,
+            int atMost,
+            CancellationToken cancellationToken)
+        {
+            Reads++;
+            AskedFor = atMost;
+            AskedWithin = withinReach;
+
+            if (Gate is { } waiting)
+            {
+                await waiting.Task.WaitAsync(cancellationToken);
+            }
+
+            return [.. Awaiting.Where(subject => withinReach.Contains(subject.Root)).Take(atMost)];
+        }
+
+        public Task<int> WaitingOutOfReachAsync(IReadOnlyList<OutputRoot> withinReach, CancellationToken cancellationToken)
+            => Task.FromResult(Awaiting.Count(subject => !withinReach.Contains(subject.Root)));
+
+        public Task<IReadOnlyList<RecordingId>> ReadyAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<RecordingId>>([.. Ready]);
+
+        public Task<IReadOnlyList<CaptionSubject>> ReadyAmongAsync(
+            IReadOnlyCollection<RecordingId> among,
+            IReadOnlyList<OutputRoot> withinReach,
+            int atMost,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<CaptionSubject>>(
+                [.. Retakable.Where(subject => among.Contains(subject.Id) && withinReach.Contains(subject.Root)).Take(atMost)]);
+
+        public Task<bool> CaptionAsync(RecordingId id, CaptionState state, int? pictures, CancellationToken cancellationToken)
+        {
+            if (Gone.Contains(id))
+            {
+                return Task.FromResult(false);
+            }
+
+            Written.Add((id, state, pictures));
+
+            return Task.FromResult(true);
+        }
+    }
+
+    private sealed class HeldTranscriber : ICaptionTranscriber
+    {
+        public Func<string, CaptionTranscription> Answer { get; set; } = _ => CaptionTranscription.NothingShown();
+
+        public ConcurrentQueue<(string Source, ServiceId Service)> Asked { get; } = new();
+
+        public Task<CaptionTranscription> TranscribeAsync(string source, ServiceId service, CancellationToken cancellationToken)
+        {
+            Asked.Enqueue((source, service));
+
+            return Task.FromResult(Answer(source));
+        }
+    }
+
+    private sealed class HeldArtefactCaptioning : IArtefactCaptioning
+    {
+        public int? AskedFor { get; private set; }
+
+        public Func<CancellationToken, Task<bool>>? Busy { get; private set; }
+
+        public Task<ArtefactCaptioningRound> CaptionAsync(
+            int atMost,
+            Func<CancellationToken, Task<bool>> busy,
+            CancellationToken cancellationToken)
+        {
+            AskedFor = atMost;
+            Busy = busy;
+
+            return Task.FromResult(new ArtefactCaptioningRound(0, 0, 0, 0, false));
+        }
+    }
+
+    private sealed class HeldWatching : IWatching
+    {
+        public bool Anyone { get; set; }
+    }
+}
