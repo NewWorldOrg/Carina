@@ -1,6 +1,6 @@
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
-using Carina.Domain.Tests.Recordings;
+using Carina.Domain.Tests.Unit.Recordings;
 using Carina.TestSupport;
 
 namespace Carina.Domain.Tests.Unit.Encodings;

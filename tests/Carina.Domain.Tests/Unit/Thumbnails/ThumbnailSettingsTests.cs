@@ -1,0 +1,92 @@
+using Carina.Domain.Thumbnails;
+
+namespace Carina.Domain.Tests.Unit.Thumbnails;
+
+[Trait("Category", "Unit")]
+public sealed class ThumbnailSettingsTests
+{
+    private static readonly ThumbnailSettings Unset = new();
+
+    [Fact]
+    public void ThePositionIsTakenTwoMinutesInOrAThirdOfTheWayThroughWhicheverComesFirst()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(120), Unset.NoLaterThan);
+        Assert.Equal(3, Unset.OneOverAShareOf);
+    }
+
+    [Theory]
+    [InlineData(3, 1)]
+    [InlineData(357, 119)]
+    [InlineData(360, 120)]
+    [InlineData(363, 120)]
+    [InlineData(7200, 120)]
+    public void APictureIsTakenAThirdOfTheWayInUntilThatWouldBePastTheCap(int written, int expected)
+        => Assert.Equal(
+            TimeSpan.FromSeconds(expected),
+            Unset.PositionIn(TimeSpan.FromSeconds(written)));
+
+    [Theory]
+    [InlineData(180, 60)]
+    [InlineData(7200, 120)]
+    public void TheTwoLengthsTheRuleIsWrittenForLandWhereTheRuleSays(int written, int expected)
+        => Assert.Equal(
+            TimeSpan.FromSeconds(expected),
+            Unset.PositionIn(TimeSpan.FromSeconds(written)));
+
+    [Fact]
+    public void ALengthNobodyWroteDownIsNotALengthOfNothingAndTakesTheCap()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(120), Unset.PositionIn(TimeSpan.Zero));
+        Assert.Equal(
+            TimeSpan.FromSeconds(20),
+            (Unset with { NoLaterThan = TimeSpan.FromSeconds(20) }).PositionIn(TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void TheHeadOfTheFileIsTheOnePlaceTheRuleNeverLands()
+    {
+        TimeSpan[] everyLength =
+        [
+            TimeSpan.Zero,
+            TimeSpan.FromMilliseconds(1),
+            TimeSpan.FromSeconds(3),
+            TimeSpan.FromMinutes(3),
+            TimeSpan.FromHours(2),
+        ];
+
+        Assert.All(everyLength, written => Assert.NotEqual(TimeSpan.Zero, Unset.PositionIn(written)));
+    }
+
+    [Fact]
+    public void TheCapIsWhatDecidesOnceAThirdOfTheWayIsFurtherIn()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(119.999), Unset.PositionIn(TimeSpan.FromSeconds(359.997)));
+        Assert.Equal(TimeSpan.FromSeconds(120), Unset.PositionIn(TimeSpan.FromSeconds(360.003)));
+    }
+
+    [Fact]
+    public void BothHalvesOfTheRuleCanBeConfigured()
+    {
+        var closer = new ThumbnailSettings { NoLaterThan = TimeSpan.FromSeconds(20), OneOverAShareOf = 2 };
+
+        Assert.Equal(TimeSpan.FromSeconds(15), closer.PositionIn(TimeSpan.FromSeconds(30)));
+        Assert.Equal(TimeSpan.FromSeconds(20), closer.PositionIn(TimeSpan.FromSeconds(3600)));
+        Assert.Equal(TimeSpan.FromSeconds(120), Unset.PositionIn(TimeSpan.FromSeconds(3600)));
+    }
+
+    [Fact]
+    public void ARecordingShorterThanNothingIsRefused()
+    {
+        ArgumentOutOfRangeException refusal = Assert.Throws<ArgumentOutOfRangeException>(
+            () => Unset.PositionIn(TimeSpan.FromMilliseconds(-1)));
+
+        Assert.Equal("written", refusal.ParamName);
+    }
+
+    [Fact]
+    public void NoDirectoryMeansNoPictures()
+    {
+        Assert.False(Unset.DrawsAnything);
+        Assert.True((Unset with { WrittenTo = "/srv/thumbnails" }).DrawsAnything);
+    }
+}
