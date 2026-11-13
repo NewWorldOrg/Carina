@@ -1,14 +1,16 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Reservations;
 
-public sealed class ReservationOutcomeEndpointTests
+[Trait("Category", "Feature")]
+public sealed class ListReservationOutcomesActionTests
 {
     private static readonly DateTime Noon = ReservationFeature.Noon;
 
@@ -262,57 +264,63 @@ public sealed class ReservationOutcomeEndpointTests
     }
 
     [Fact]
-    public async Task TheHealthCountsWhatStandsInTheWayOfWhatIsStillAhead()
+    public async Task TheLedgerLineOfARecordingLeftScrambledSaysSoUntilItIsDescrambled()
     {
         await using var feature = new ReservationFeature();
-        feature.Booked(4001);
-        feature.Booked(4002, state: ReservationState.Conflict);
-        feature.Booked(4003, state: ReservationState.Conflict, startsAt: Noon.AddHours(-3));
-        feature.Booked(4004, state: ReservationState.Cancelled);
-        feature.Booked(4005, receptionUnavailable: true);
-        feature.Booked(4006, diverged: true);
-        feature.Booked(4007, diverged: true, acknowledgedAt: Noon);
-        feature.Booked(4008, missing: true);
-        feature.Booked(4009, missing: true, acknowledgedAt: Noon);
+        ReservationOutcome line = feature.Recorded(
+            feature.Booked(4001),
+            ReservationOutcomeKind.RecordingFailure,
+            recordingOutcome: RecordingOutcome.Complete,
+            faults: [RecordingFault.ScramblingUnresolved]);
 
-        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/reservations/health");
-        JsonElement data = body.GetProperty("data");
+        JsonElement before = Only(await feature.GetAsync("/api/reservations/outcomes"));
+        line.Descrambled(ReservationFeature.Noon.AddDays(1));
+        JsonElement after = Only(await feature.GetAsync("/api/reservations/outcomes"));
 
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(Noon, data.GetProperty("asOf").GetDateTime());
-        Assert.Equal(1, data.GetProperty("contended").GetInt32());
-        Assert.Equal(1, data.GetProperty("receptionUnavailable").GetInt32());
-        Assert.Equal(1, data.GetProperty("epgDiverged").GetInt32());
-        Assert.Equal(1, data.GetProperty("epgMissing").GetInt32());
+        Assert.Equal("recordingFailure", before.GetProperty("kind").GetString());
+        Assert.Equal("complete", before.GetProperty("recordingOutcome").GetString());
+        Assert.Equal(["scramblingUnresolved"], Faults(before));
+        Assert.True(before.GetProperty("leftScrambled").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, before.GetProperty("descrambledAt").ValueKind);
+        Assert.False(after.GetProperty("leftScrambled").GetBoolean());
+        Assert.Equal(
+            ReservationFeature.Noon.AddDays(1),
+            after.GetProperty("descrambledAt").GetDateTime().ToUniversalTime());
+        Assert.Equal(["scramblingUnresolved"], Faults(after));
     }
 
     [Fact]
-    public async Task AClearBillOfHealthIsAllZeroesRatherThanAbsent()
+    public async Task ALedgerLineThatNamesNoScramblingIsNotLeftScrambled()
     {
         await using var feature = new ReservationFeature();
+        feature.Recorded(feature.Booked(4001), ReservationOutcomeKind.Missed);
 
-        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/reservations/health");
-        JsonElement data = body.GetProperty("data");
+        JsonElement line = Only(await feature.GetAsync("/api/reservations/outcomes"));
 
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(0, data.GetProperty("contended").GetInt32());
-        Assert.Equal(0, data.GetProperty("receptionUnavailable").GetInt32());
-        Assert.Equal(0, data.GetProperty("epgDiverged").GetInt32());
-        Assert.Equal(0, data.GetProperty("epgMissing").GetInt32());
+        Assert.False(line.GetProperty("leftScrambled").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, line.GetProperty("descrambledAt").ValueKind);
     }
 
-    [Theory]
-    [InlineData("/api/reservations/outcomes")]
-    [InlineData("/api/reservations/health")]
-    public async Task NeitherSurfaceIsReachedWithoutASession(string path)
+    [Fact]
+    public async Task TheOutcomesAreNotReachedWithoutASession()
     {
         await using var feature = new ReservationFeature();
         feature.Client.DefaultRequestHeaders.Authorization = null;
 
-        (HttpStatusCode status, _) = await feature.GetAsync(path);
+        (HttpStatusCode status, _) = await feature.GetAsync("/api/reservations/outcomes");
 
         Assert.Equal(HttpStatusCode.Unauthorized, status);
     }
 
     private static string Kind(JsonElement item) => item.GetProperty("kind").GetString()!;
+
+    private static JsonElement Only((HttpStatusCode Status, JsonElement Body) answered)
+    {
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+
+        return Assert.Single(answered.Body.GetProperty("data").GetProperty("items").EnumerateArray());
+    }
+
+    private static string[] Faults(JsonElement line)
+        => [.. line.GetProperty("faults").EnumerateArray().Select(fault => fault.GetString()!)];
 }

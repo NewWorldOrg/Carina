@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Api.Tests.Unit;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
@@ -21,9 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
-using Puppis.Contracts;
-
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Rules;
 
 internal sealed class HeldRuleLedger : IRuleRepository
 {

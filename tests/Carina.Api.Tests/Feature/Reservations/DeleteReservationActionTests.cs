@@ -1,8 +1,8 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
@@ -10,9 +10,10 @@ using Microsoft.Net.Http.Headers;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Reservations;
 
-public sealed class DeleteReservationEndpointTests
+[Trait("Category", "Feature")]
+public sealed class DeleteReservationActionTests
 {
     private const string ReservationIdTextDescription =
         "A reservation is named by a UUID, and never by one that is all zeroes.";
@@ -247,7 +248,7 @@ public sealed class DeleteReservationEndpointTests
             HttpMethod.Delete,
             new Uri($"/api/reservations/{cancelled.Id.Value}", UriKind.Relative))
         {
-            Content = new StringContent("anything=1", Encoding.UTF8, "application/x-www-form-urlencoded"),
+            Content = new StringContent("anything=1", System.Text.Encoding.UTF8, "application/x-www-form-urlencoded"),
         };
         using HttpResponseMessage response = await feature.Client.SendAsync(asking);
 
@@ -301,5 +302,4 @@ public sealed class DeleteReservationEndpointTests
 
         Assert.Empty(feature.Events.Signalled);
     }
-
 }
