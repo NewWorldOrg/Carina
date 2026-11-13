@@ -76,24 +76,22 @@ public sealed class RemoveEncodeProfileActionTests
         Assert.Single(feature.Profiles.Profiles);
     }
 
-    [Theory(DisplayName = "a definition nobody defined answers that it is not there")]
-    [InlineData("profiles")]
-    public async Task ADefinitionNobodyDefinedIsNotThere(string surface)
+    [Fact(DisplayName = "a definition nobody defined answers that it is not there")]
+    public async Task ADefinitionNobodyDefinedIsNotThere()
     {
         await using var feature = new EncodingFeature();
 
-        (HttpStatusCode removed, _) = await feature.DeleteAsync($"/api/encoding/{surface}/{Guid.NewGuid()}");
+        (HttpStatusCode removed, _) = await feature.DeleteAsync($"/api/encoding/profiles/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.NotFound, removed);
     }
 
-    [Theory(DisplayName = "an id of nothing but zeroes names no definition")]
-    [InlineData("profiles")]
-    public async Task AnIdOfNothingButZeroesNamesNoDefinition(string surface)
+    [Fact(DisplayName = "an id of nothing but zeroes names no definition")]
+    public async Task AnIdOfNothingButZeroesNamesNoDefinition()
     {
         await using var feature = new EncodingFeature();
 
-        (HttpStatusCode removed, _) = await feature.DeleteAsync($"/api/encoding/{surface}/{Guid.Empty}");
+        (HttpStatusCode removed, _) = await feature.DeleteAsync($"/api/encoding/profiles/{Guid.Empty}");
 
         Assert.Equal(HttpStatusCode.BadRequest, removed);
     }

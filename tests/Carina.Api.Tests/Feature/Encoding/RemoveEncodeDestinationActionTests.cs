@@ -61,24 +61,22 @@ public sealed class RemoveEncodeDestinationActionTests
         Assert.DoesNotContain(spare, feature.Destinations.Destinations);
     }
 
-    [Theory(DisplayName = "a definition nobody defined answers that it is not there")]
-    [InlineData("destinations")]
-    public async Task ADefinitionNobodyDefinedIsNotThere(string surface)
+    [Fact(DisplayName = "a definition nobody defined answers that it is not there")]
+    public async Task ADefinitionNobodyDefinedIsNotThere()
     {
         await using var feature = new EncodingFeature();
 
-        (HttpStatusCode removed, _) = await feature.DeleteAsync($"/api/encoding/{surface}/{Guid.NewGuid()}");
+        (HttpStatusCode removed, _) = await feature.DeleteAsync($"/api/encoding/destinations/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.NotFound, removed);
     }
 
-    [Theory(DisplayName = "an id of nothing but zeroes names no definition")]
-    [InlineData("destinations")]
-    public async Task AnIdOfNothingButZeroesNamesNoDefinition(string surface)
+    [Fact(DisplayName = "an id of nothing but zeroes names no definition")]
+    public async Task AnIdOfNothingButZeroesNamesNoDefinition()
     {
         await using var feature = new EncodingFeature();
 
-        (HttpStatusCode removed, _) = await feature.DeleteAsync($"/api/encoding/{surface}/{Guid.Empty}");
+        (HttpStatusCode removed, _) = await feature.DeleteAsync($"/api/encoding/destinations/{Guid.Empty}");
 
         Assert.Equal(HttpStatusCode.BadRequest, removed);
     }
