@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 
 using Carina.Api.Tests.FeatureTest;
@@ -732,6 +733,30 @@ public sealed class GetRecordingActionTests
             (await DetailOfAsync(feature, sharedWithSomeoneElse)).GetProperty("watchedPositionSec").ValueKind);
     }
 
+    [Fact(DisplayName = "the screen is given both numbers it needs: how long a recording is, and where the watching got to")]
+    public async Task TheScreenIsGivenBothNumbersItNeeds()
+    {
+        await using var recordings = new RecordingFeature();
+        Recording written = Settled(recordings);
+
+        (HttpStatusCode standing, JsonElement detail) =
+            await recordings.GetAsync($"/api/recordings/{written.Id.Wire}");
+
+        await using var feature = new PlayFeature();
+        Recording playing = feature.Ended(RecordingOutcome.Complete);
+
+        await KeepAsync(feature.Client, playing.Id.Wire, new { positionSec = 600 });
+
+        using HttpResponseMessage answer = await feature.PlanAsync(playing);
+        JsonElement plan = (await PlayFeature.PlanOfAsync(answer)).GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, standing);
+        Assert.Equal(
+            (long)TimeSpan.FromMinutes(30).TotalMilliseconds,
+            detail.GetProperty("data").GetProperty("recording").GetProperty("writtenDurationMs").GetInt64());
+        Assert.Equal(600, plan.GetProperty("resumeAtSec").GetDouble());
+    }
+
     private static async Task<JsonElement> DetailOfAsync(RecordingFeature feature, Recording recording)
     {
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
@@ -756,5 +781,36 @@ public sealed class GetRecordingActionTests
         recording.Settle(RecordingOutcome.Complete, 1_000_000, RecordingFeature.Noon.AddHours(1));
 
         return recording;
+    }
+
+    private static Recording Settled(RecordingFeature feature, int eventId = 4_001)
+    {
+        Recording held = feature.Held(eventId: eventId);
+
+        held.Wrote(TimeSpan.FromMinutes(30));
+        held.Abort(RecordingFeature.Noon.AddMinutes(30));
+        held.Settle(RecordingOutcome.Complete, 4_000, RecordingFeature.Noon.AddMinutes(30));
+
+        return held;
+    }
+
+    private static async Task<(HttpStatusCode Status, JsonElement Body)> KeepAsync(
+        HttpClient client,
+        string recordingId,
+        object body)
+    {
+        using HttpResponseMessage response = await client.PutAsJsonAsync(
+            new Uri($"/api/videos/{recordingId}/position", UriKind.Relative),
+            body);
+        string read = await response.Content.ReadAsStringAsync();
+
+        if (!read.StartsWith('{'))
+        {
+            return (response.StatusCode, default);
+        }
+
+        using var document = JsonDocument.Parse(read);
+
+        return (response.StatusCode, document.RootElement.Clone());
     }
 }
