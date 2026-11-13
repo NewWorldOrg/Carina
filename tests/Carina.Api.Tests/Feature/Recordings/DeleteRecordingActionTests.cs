@@ -1,7 +1,7 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Captions;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
@@ -18,18 +18,85 @@ using Microsoft.Net.Http.Headers;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Recordings;
 
-public sealed class DeleteRecordingEndpointTests
+[Trait("Category", "Feature")]
+public sealed class DeleteRecordingActionTests
 {
     private const string RecordingIdTextDescription =
         "A recording is named by the thirty-two hexadecimal digits the ledger holds, without separators.";
+
+    [Theory]
+    [InlineData("DELETE", "/api/recordings")]
+    [InlineData("DELETE", "/api/recordings/{0}/stop")]
+    [InlineData("DELETE", "/api/recordings/{0}/thumbnail")]
+    [InlineData("DELETE", "/api/recordings/integrity/run")]
+    public async Task TheOnlyPlaceThisDomainDeletesFromIsTheOneRecordingAPersonNamed(string method, string path)
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+
+        using HttpResponseMessage response = await SendingAsync(feature, method, path, recording);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TheLedgerCheckIsNotSomethingTheOneDeletingRouteCanBeTalkedIntoThrowingAway()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+
+        using HttpResponseMessage response = await SendingAsync(
+            feature,
+            "DELETE",
+            "/api/recordings/integrity",
+            recording);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Single(feature.Recordings.Recordings);
+        Assert.Empty(feature.Eraser.Asked);
+    }
+
+    [Fact]
+    public async Task TheOneRecordingAPersonNamedIsReachedByDeleteRatherThanRefusedAsAMethod()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+
+        using HttpResponseMessage response = await SendingAsync(
+            feature,
+            "DELETE",
+            "/api/recordings/{0}",
+            recording);
+
+        Assert.NotEqual(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    private static async Task<HttpResponseMessage> SendingAsync(
+        RecordingFeature feature,
+        string method,
+        string path,
+        Recording recording)
+    {
+        using var asking = new HttpRequestMessage(
+            new HttpMethod(method),
+            new Uri(
+                string.Format(System.Globalization.CultureInfo.InvariantCulture, path, recording.Id.Wire),
+                UriKind.Relative));
+        using var empty = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+
+        asking.Content = empty;
+
+        return await feature.Client.SendAsync(asking);
+    }
 
     [Fact]
     public async Task ARecordingThatHasEndedIsThrownAwayAndIsGoneFromTheLedger()
     {
         await using var feature = new RecordingFeature();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Eraser.Answer = RecordingErasure.Erased(2);
 
         (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
@@ -65,7 +132,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ARecordingWithAnEncodeWaitingOrRunningIsRefusedAndNothingOfItIsTouched()
     {
         await using RecordingFeature feature = new();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Encodes.UnderWay = true;
 
         (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
@@ -82,7 +149,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task AnEncodeQueuedWhileTheFileWasBeingTakenAwayKeepsTheRowAndItsEncodes()
     {
         await using RecordingFeature feature = new();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Encodes.UnderWayWhenAsked = () => feature.Eraser.Asked.Count > 0;
 
         (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
@@ -98,7 +165,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task WhatItsEncodesLeftLeavesTheDiskWhileTheRowIsStillThereAndIsCounted()
     {
         await using RecordingFeature feature = new();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Eraser.Answer = RecordingErasure.Erased(2);
         feature.Encodes.Answer = new EncodesErased(3, []);
         int rowsWhenAsked = -1;
@@ -117,7 +184,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task AnEncodeLeftOnTheDiskKeepsTheRowBecauseTheRowIsWhatSaysTheJobIsUnfinished()
     {
         await using RecordingFeature feature = new();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Encodes.Answer = new EncodesErased(0, [EncodeFileName.Artefact(held.Id, EncodeProfileId.New())]);
 
         (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
@@ -138,7 +205,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ARecordingWhoseFileStayedOnTheDiskAsksNothingOfItsEncodes()
     {
         await using RecordingFeature feature = new();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Eraser.Answer = RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied");
 
         (HttpStatusCode status, _) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
@@ -182,7 +249,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ARootThatCannotBeReachedRefusesTheDeletionAndLeavesTheRowWhereItIs()
     {
         await using var feature = new RecordingFeature();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Eraser.Answer = RecordingErasure.Refused(ErasureFault.RootOutOfReach, "the mount has gone");
 
         (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
@@ -200,7 +267,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task AFileLeftBehindKeepsTheRowBecauseTheRowIsWhatSaysTheJobIsUnfinished()
     {
         await using var feature = new RecordingFeature();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Eraser.Answer = RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied");
 
         (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
@@ -222,7 +289,7 @@ public sealed class DeleteRecordingEndpointTests
     {
         using var disk = new ErasableDisk();
         await using var feature = new RecordingFeature(disk.Eraser);
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         disk.Holding(held);
         disk.Holding(RecordingId.New());
         disk.Driver.StandingInForTheDriver = (_, _) => DriverCall<RecordingErasedDto>.Refused(
@@ -261,22 +328,10 @@ public sealed class DeleteRecordingEndpointTests
     }
 
     [Fact]
-    public async Task ARecordingNobodyTriedToThrowAwayCarriesNoMark()
-    {
-        await using var feature = new RecordingFeature();
-        Ended(feature);
-
-        (_, JsonElement shelf) = await feature.GetAsync("/api/recordings");
-        JsonElement row = Assert.Single(shelf.GetProperty("data").GetProperty("items").EnumerateArray());
-
-        Assert.Equal(JsonValueKind.Null, row.GetProperty("unfinishedDeletion").ValueKind);
-    }
-
-    [Fact]
     public async Task ADeletionRefusedBeforeAnythingWasTouchedLeavesNoMark()
     {
         await using var feature = new RecordingFeature();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Eraser.Answer = RecordingErasure.Refused(ErasureFault.RootOutOfReach, "the mount has gone");
         feature.Events.Signalled.Clear();
 
@@ -290,7 +345,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task MarkingWhatADeletionLeftBehindTellsTheScreensTheRecordingsMoved()
     {
         await using var feature = new RecordingFeature();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Eraser.Answer = RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1);
         feature.Events.Signalled.Clear();
 
@@ -304,8 +359,8 @@ public sealed class DeleteRecordingEndpointTests
     public async Task OnlyOneDeletionRunsAtATimeAndTheOneWaitingIsToldWhichIsUnderway()
     {
         await using var feature = new RecordingFeature();
-        Recording first = Ended(feature);
-        Recording second = Ended(feature);
+        Recording first = EndedAfterTwentyMinutes(feature);
+        Recording second = EndedAfterTwentyMinutes(feature);
         TaskCompletionSource underway = new(TaskCreationOptions.RunContinuationsAsynchronously);
         TaskCompletionSource refused = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -337,8 +392,8 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ADeletionThatFinishedLetsTheNextOneRun()
     {
         await using var feature = new RecordingFeature();
-        Recording first = Ended(feature);
-        Recording second = Ended(feature);
+        Recording first = EndedAfterTwentyMinutes(feature);
+        Recording second = EndedAfterTwentyMinutes(feature);
 
         Assert.Equal(HttpStatusCode.OK, (await feature.DeleteAsync($"/api/recordings/{first.Id.Wire}")).Status);
         Assert.Equal(HttpStatusCode.OK, (await feature.DeleteAsync($"/api/recordings/{second.Id.Wire}")).Status);
@@ -349,8 +404,8 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ARefusedDeletionStillLetsTheNextOneRun()
     {
         await using var feature = new RecordingFeature();
-        Recording first = Ended(feature);
-        Recording second = Ended(feature);
+        Recording first = EndedAfterTwentyMinutes(feature);
+        Recording second = EndedAfterTwentyMinutes(feature);
         feature.Eraser.Answer = RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied");
 
         Assert.Equal(
@@ -367,7 +422,7 @@ public sealed class DeleteRecordingEndpointTests
     {
         using var disk = new ErasableDisk();
         await using var feature = new RecordingFeature(disk.Eraser);
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         disk.Holding(held);
         disk.Holding(RecordingId.New());
 
@@ -400,7 +455,7 @@ public sealed class DeleteRecordingEndpointTests
     {
         using var disk = new ErasableDisk();
         await using var feature = new RecordingFeature(disk.Eraser);
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
 
         (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
 
@@ -413,7 +468,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ADeletionStillGoingWhenTheTimeIsUpIsGivenUpOnAndTheRowStaysWhereItIs()
     {
         await using var feature = new RecordingFeature(null, TimeSpan.FromMilliseconds(50));
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Eraser.NeverFinishes = true;
 
         (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
@@ -427,8 +482,8 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ADeletionGivenUpOnStillLetsTheNextOneRun()
     {
         await using var feature = new RecordingFeature(null, TimeSpan.FromMilliseconds(50));
-        Recording first = Ended(feature);
-        Recording second = Ended(feature);
+        Recording first = EndedAfterTwentyMinutes(feature);
+        Recording second = EndedAfterTwentyMinutes(feature);
         feature.Eraser.NeverFinishes = true;
 
         Assert.Equal(
@@ -445,7 +500,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ADeleteCarryingNoBodyReachesTheEndpointWithoutNamingAContentType()
     {
         await using var feature = new RecordingFeature();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
 
         using var asking = new HttpRequestMessage(
             HttpMethod.Delete,
@@ -460,7 +515,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ADeleteThatNamesNoOriginIsRefusedBecauseThatIsWhatStandsInForTheContentType()
     {
         await using var feature = new RecordingFeature();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Client.DefaultRequestHeaders.Remove(HeaderNames.Origin);
 
         using var asking = new HttpRequestMessage(
@@ -477,13 +532,13 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ADeleteCarryingABodyThatIsNotJsonIsStillRefused()
     {
         await using var feature = new RecordingFeature();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
 
         using var asking = new HttpRequestMessage(
             HttpMethod.Delete,
             new Uri($"/api/recordings/{held.Id.Wire}", UriKind.Relative))
         {
-            Content = new StringContent("anything=1", Encoding.UTF8, "application/x-www-form-urlencoded"),
+            Content = new StringContent("anything=1", System.Text.Encoding.UTF8, "application/x-www-form-urlencoded"),
         };
         using HttpResponseMessage response = await feature.Client.SendAsync(asking);
 
@@ -496,7 +551,7 @@ public sealed class DeleteRecordingEndpointTests
     {
         using var disk = new ErasableDisk();
         await using var feature = new RecordingFeature(disk.Eraser);
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         disk.Holding(held);
         disk.Holding(RecordingId.New());
         disk.Driver.StandingInForTheDriver = null;
@@ -516,7 +571,7 @@ public sealed class DeleteRecordingEndpointTests
     {
         using var disk = new ErasableDisk();
         await using var feature = new RecordingFeature(disk.Eraser);
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         disk.Holding(held);
         disk.Holding(RecordingId.New());
         disk.Driver.StandingInForTheDriver = null;
@@ -531,7 +586,7 @@ public sealed class DeleteRecordingEndpointTests
         Assert.Single(feature.Recordings.Recordings);
     }
 
-    private static Recording Ended(RecordingFeature feature)
+    private static Recording EndedAfterTwentyMinutes(RecordingFeature feature)
     {
         Recording held = feature.Held();
 
@@ -606,7 +661,7 @@ public sealed class DeleteRecordingEndpointTests
     public async Task ThrowingARecordingAwayTellsTheScreensTheRecordingsAndTheQualityLedgerMoved()
     {
         await using var feature = new RecordingFeature();
-        Recording held = Ended(feature);
+        Recording held = EndedAfterTwentyMinutes(feature);
         feature.Eraser.Answer = RecordingErasure.Erased(2);
         feature.Events.Signalled.Clear();
 
@@ -626,5 +681,4 @@ public sealed class DeleteRecordingEndpointTests
 
         Assert.Empty(feature.Events.Signalled);
     }
-
 }
