@@ -42,8 +42,6 @@ public static class TestLayoutRules
         "Programmes",
         "Quality",
         "Recordings",
-        "Reservations",
-        "Rules",
         "Segments",
         "Services",
         "Storage",
