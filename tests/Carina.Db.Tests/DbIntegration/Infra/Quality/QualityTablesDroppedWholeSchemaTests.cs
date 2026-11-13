@@ -1,10 +1,10 @@
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Quality;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class QualityTablesDroppedWholeTests(MigratedScratchDatabase database) : IClassFixture<MigratedScratchDatabase>
+public sealed class QualityTablesDroppedWholeSchemaTests(MigratedScratchDatabase database) : IClassFixture<MigratedScratchDatabase>
 {
     private const string Airs = "timestamptz '2026-08-24 20:00:00+00'";
 

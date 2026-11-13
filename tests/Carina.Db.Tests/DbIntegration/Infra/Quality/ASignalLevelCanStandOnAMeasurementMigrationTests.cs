@@ -1,16 +1,15 @@
 using Carina.Infrastructure.Persistence;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Quality;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class QualityThresholdByHandMigrationTests
+public sealed class ASignalLevelCanStandOnAMeasurementMigrationTests
 {
     private const string ScratchDatabase = "carina_quality_threshold_by_hand_test";
 

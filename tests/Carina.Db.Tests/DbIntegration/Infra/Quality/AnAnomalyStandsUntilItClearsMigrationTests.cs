@@ -1,16 +1,15 @@
 using Carina.Infrastructure.Persistence;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Quality;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class QualityIncidentAcknowledgementMigrationTests
+public sealed class AnAnomalyStandsUntilItClearsMigrationTests
 {
     private const string ScratchDatabase = "carina_quality_incident_acknowledgement_test";
 
