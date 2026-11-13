@@ -58,10 +58,12 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database) 
     public async Task AChangeHoldsItsTurnSoTheNextReadsIt()
     {
         await ClearAsync();
-        await using CarinaDbContext first = database.Open();
-        await using CarinaDbContext second = database.Open();
+        await using AsyncServiceScope firstScope = container.CreateAsyncScope();
+        await using AsyncServiceScope secondScope = container.CreateAsyncScope();
+        CarinaDbContext first = firstScope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+        CarinaDbContext second = secondScope.ServiceProvider.GetRequiredService<CarinaDbContext>();
         await using IDbContextTransaction holding = await first.Database.BeginTransactionAsync(Cancel);
-        SegmentSettingsRepository earlier = new(first);
+        ISegmentSettingsRepository earlier = Settings(firstScope);
         await earlier.TakeTurnAsync(Cancel);
         SegmentSettingsStanding before = SegmentSettingsStanding.Over(await earlier.ReadAsync(Cancel));
         double? seenByTheLater = null;
@@ -70,7 +72,7 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database) 
             async () =>
             {
                 await using IDbContextTransaction waiting = await second.Database.BeginTransactionAsync(Cancel);
-                SegmentSettingsRepository later = new(second);
+                ISegmentSettingsRepository later = Settings(secondScope);
                 await later.TakeTurnAsync(Cancel);
                 SegmentSettingsStanding seen = SegmentSettingsStanding.Over(await later.ReadAsync(Cancel));
                 seenByTheLater = seen.SkipThreshold;
