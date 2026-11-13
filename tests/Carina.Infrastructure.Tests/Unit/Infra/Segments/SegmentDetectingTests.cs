@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
-using Carina.TestSupport;
 
 using static Carina.Infrastructure.Tests.Unit.Infra.Segments.SegmentDetectionHarness;
 

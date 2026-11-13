@@ -1,7 +1,6 @@
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 using Microsoft.EntityFrameworkCore;

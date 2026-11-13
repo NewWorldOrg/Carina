@@ -2,7 +2,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;

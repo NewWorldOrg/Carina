@@ -1,7 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
-using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Tests.Integrity;

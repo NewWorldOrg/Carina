@@ -243,7 +243,4 @@ public sealed class LearningFollowJobTests : IDisposable
         Assert.Equal(ExtractionChange.Missing, await harness.Store.ChangeAsync(RecordingId.New(), _ => true, Cancel));
         Assert.Equal(ExtractionChange.Declined, await harness.Store.ChangeAsync(recording.Id, _ => false, Cancel));
     }
-
-    private static LearningDataBlock Written(Recording recording)
-        => LearningDataBlock.Rehydrate(recording.Id, LearningDataKind.Loudness, 0, [1, 2, 3], ExtractionVersion.Current, Now);
 }

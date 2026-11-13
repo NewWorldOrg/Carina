@@ -6,7 +6,6 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
-using Carina.TestSupport;
 
 using Npgsql;
 

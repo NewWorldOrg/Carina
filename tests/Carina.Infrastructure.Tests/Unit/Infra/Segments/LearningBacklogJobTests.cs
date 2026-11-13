@@ -493,9 +493,6 @@ public sealed class LearningBacklogJobTests : IDisposable
     private static CaptionCue Cue(double seconds, bool shown)
         => new((long)(seconds * CaptionCue.Hertz), shown ? new CaptionPlacement(0, 900, 100, 40, new byte[] { 0x89, 1 }) : null);
 
-    private static LearningDataBlock Written(Recording recording)
-        => LearningDataBlock.Rehydrate(recording.Id, LearningDataKind.Loudness, 0, [1, 2, 3], ExtractionVersion.Current, Now);
-
     private static readonly ExtractionVersion Reduced = ExtractionVersion.CurrentFromReducedCopy;
 
     [Fact(DisplayName = "in spare time a reduced copy is imported before any recording is read, its record reading with the version of a reduced copy and the copy of the programme its rows give")]
