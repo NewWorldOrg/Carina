@@ -3,9 +3,10 @@ using Carina.Domain.Reservations;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Reservations;
+namespace Carina.Domain.Tests.Unit.Reservations;
 
-public sealed class RecalculationReachTests
+[Trait("Category", "Unit")]
+public sealed class RecalculationReachesTests
 {
     public static TheoryData<RecalculationTrigger, RecalculationReach> WhatEachTriggerReaches => new()
     {

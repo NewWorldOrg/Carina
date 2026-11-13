@@ -2,12 +2,14 @@ using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.TestSupport;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Reservations;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Reservations;
 
+[Trait("Category", "Unit")]
 public sealed class ReservationSchedulingServiceTests
 {
     private static readonly DateTime Now = ReservationFixtures.Now;

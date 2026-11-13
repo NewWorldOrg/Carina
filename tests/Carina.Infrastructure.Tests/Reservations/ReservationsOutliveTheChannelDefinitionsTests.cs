@@ -1,11 +1,10 @@
-using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
-using Carina.Infrastructure.Channels;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.TestSupport;
 
 using Puppis.Contracts;

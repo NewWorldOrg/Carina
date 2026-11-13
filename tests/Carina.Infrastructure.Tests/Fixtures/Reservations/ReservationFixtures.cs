@@ -5,7 +5,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 
-namespace Carina.Infrastructure.Tests.Reservations;
+namespace Carina.Infrastructure.Tests.Fixtures.Reservations;
 
 internal static class ReservationFixtures
 {

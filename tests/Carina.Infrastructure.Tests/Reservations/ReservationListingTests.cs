@@ -4,6 +4,7 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 
 namespace Carina.Infrastructure.Tests.Reservations;
 

@@ -7,7 +7,7 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
-using Carina.Infrastructure.Tests.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;

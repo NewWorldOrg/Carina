@@ -2,7 +2,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Reservations;
+namespace Carina.Infrastructure.Tests.Fixtures.Reservations;
 
 internal sealed class GatedSeating(TunerCapacity capacity, bool throws = false) : ITunerCapacityDirectory
 {

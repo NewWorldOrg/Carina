@@ -8,7 +8,7 @@ using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Tests.Fixtures.Clocks;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Reservations;
+namespace Carina.Infrastructure.Tests.Collection;
 
 public sealed class BroadcastGroupsFromTheGuideTests
 {

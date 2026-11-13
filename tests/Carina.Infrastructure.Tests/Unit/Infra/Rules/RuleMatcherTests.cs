@@ -3,13 +3,12 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Rules;
-using Carina.Infrastructure.Tests.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.TestSupport;
 
-using Puppis.Contracts;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Rules;
 
-namespace Carina.Infrastructure.Tests.Rules;
-
+[Trait("Category", "Unit")]
 public sealed class RuleMatcherTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);

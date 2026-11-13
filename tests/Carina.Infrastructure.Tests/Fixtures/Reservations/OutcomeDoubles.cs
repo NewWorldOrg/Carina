@@ -1,7 +1,7 @@
 using Carina.Domain.Base;
 using Carina.Domain.Reservations;
 
-namespace Carina.Infrastructure.Tests.Reservations;
+namespace Carina.Infrastructure.Tests.Fixtures.Reservations;
 
 internal sealed class HeldOutcomes(WatchedWrite? write = null) : IReservationOutcomeRepository
 {

@@ -8,7 +8,8 @@ using Carina.Domain.Rules;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Tests.Collection;
-using Carina.Infrastructure.Tests.Rules;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Rules;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -16,8 +17,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Reservations;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Reservations;
 
+[Trait("Category", "Unit")]
 public sealed class ReservationRecalculationHostedServiceTests
 {
     private static readonly DateTime Now = new(2026, 8, 28, 12, 0, 0, DateTimeKind.Utc);
@@ -668,7 +670,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             };
 
             var services = new ServiceCollection();
-            services.AddSingleton<TimeProvider>(new FixedClock(Now));
+            services.AddSingleton<TimeProvider>(new Fixtures.Reservations.FixedClock(Now));
             services.AddSingleton<IRuleRepository>(Rules);
             services.AddSingleton<IProgrammeRepository>(Programmes);
             services.AddSingleton<IReservationRepository>(Reservations);
@@ -708,7 +710,7 @@ public sealed class ReservationRecalculationHostedServiceTests
                     BeforeFirstPass = TimeSpan.FromMilliseconds(1),
                     BetweenReconciliations = TimeSpan.FromHours(1),
                 },
-                rushed ? new RushedClock(Now) : new FixedClock(Now),
+                rushed ? new RushedClock(Now) : new Fixtures.Reservations.FixedClock(Now),
                 log?.For<ReservationRecalculationHostedService>()
                 ?? NullLogger<ReservationRecalculationHostedService>.Instance);
         }

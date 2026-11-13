@@ -5,7 +5,7 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Rules;
 
-namespace Carina.Infrastructure.Tests.Rules;
+namespace Carina.Infrastructure.Tests.Fixtures.Rules;
 
 internal sealed class HeldRules : IRuleRepository
 {
