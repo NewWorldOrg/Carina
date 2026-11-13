@@ -261,7 +261,7 @@ walks past it.
   the store as one `INSERT ... ON CONFLICT DO UPDATE ... WHERE (...) IS DISTINCT
   FROM (...)`, whose `CASE` expressions are `Programme.Absorb` written in SQL;
   `Programme.Absorb` is what the in-memory stand-in runs, and
-  `ProgrammeAbsorbArmsTests` pushes the same visits through both and compares
+  `ProgrammeRepositoryTests` pushes the same visits through both and compares
   every column and whether the revision moved. Every visit first takes one
   transaction-scoped advisory lock: revisions are drawn from a sequence inside the
   writing transaction, and without the lock a visit that drew lower numbers could
@@ -525,7 +525,7 @@ Five filters divide the suite, and CI runs one job per filter:
 | --- | --- |
 | under a `Unit` folder and of neither the scale nor the material job, or nothing more specific | everything that needs neither a database, the HTTP surface nor ffmpeg |
 | `Category=Feature` or a `FeatureTest` name | the tests that drive the application through its HTTP surface, split by class into shards |
-| `Category=DbIntegration` or a `DbIntegration` name | the tests that need a real PostgreSQL |
+| `Category=DbIntegration`, or a `DbIntegration` name and of neither the scale nor the material job | the tests that need a real PostgreSQL |
 | `Category=Material` | the tests that write a synthetic broadcast with ffmpeg and read it back |
 | `Category=Scale` | the measurements at archive and schedule scale |
 
