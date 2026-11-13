@@ -6,7 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
-using Carina.Infrastructure.Tests.DataBroadcast;
+using Carina.Infrastructure.Tests.Fixtures.DataBroadcast;
 using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Notifications;

@@ -7,7 +7,7 @@ using System.Text;
 
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
-using Carina.Infrastructure.Tests.DataBroadcast;
+using Carina.Infrastructure.Tests.Fixtures.DataBroadcast;
 using Carina.Infrastructure.Tests.Notifications;
 using Carina.TestSupport;
 

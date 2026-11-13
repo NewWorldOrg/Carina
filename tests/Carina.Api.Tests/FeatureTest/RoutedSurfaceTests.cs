@@ -1,13 +1,24 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 using Carina.Api.Authentication;
+using Carina.Api.Events;
 using Carina.Api.Live;
 using Carina.Api.Playback;
 using Carina.Api.Tests.Unit;
 using Carina.Domain.Auth;
+using Carina.Domain.Channels;
+using Carina.Domain.DataBroadcast;
+using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
+using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -35,6 +46,10 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         "GET /api/videos/{id}/thumbnail",
         "POST /api/videos/{id}/ticket",
     ];
+
+    private static readonly DateTime At = new(2026, 9, 3, 0, 0, 0, DateTimeKind.Utc);
+
+    private readonly PipedSupply supply = new();
 
     [Fact]
     public void EveryRoutedSurfaceSaysWhetherItDestroys()
@@ -645,6 +660,168 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             inventory.Where(UnderARoot).Select(surface => surface.ToString()).ToArray());
     }
 
+    [Theory]
+    [InlineData("GET", "/api/live/channels")]
+    [InlineData("GET", "/api/live/profiles")]
+    [InlineData("GET", "/api/live/sessions")]
+    [InlineData("GET", "/api/live/departures")]
+    [InlineData("POST", "/api/live/ticket")]
+    public async Task EveryLiveSurfaceRefusesACallerCarryingNoCredentialsWithoutABodyAndWithoutRedirecting(string method, string path)
+    {
+        await using LiveFeature feature = new();
+
+        using HttpRequestMessage asking = new(new HttpMethod(method), new Uri(path, UriKind.Relative));
+
+        if (method is "POST")
+        {
+            asking.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        }
+
+        using HttpResponseMessage response = await feature.Anonymous.SendAsync(asking);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.Null(response.Headers.Location);
+    }
+
+    [Theory]
+    [InlineData("/api/live/ws")]
+    [InlineData("/api/live/sessions")]
+    [InlineData("/api/live/channels")]
+    [InlineData("/api/live/profiles")]
+    [InlineData("/api/live/departures")]
+    [InlineData("/api/live/32736-1024/data-broadcast/fetch?uri=http%3A%2F%2Fbc.example.jp%2F")]
+    [InlineData("/api/live/32736-1024/data-broadcast/receiver-id")]
+    [InlineData("/api/live/32736-1024/data-broadcast/ait?uri=http%3A%2F%2Fbc.example.jp%2Fapp.ait")]
+    [InlineData(AppEventStream.Path)]
+    public async Task ALiveTicketOpensNoOtherSurfaceABrowserReachesWithItsCookie(string path)
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Carrying(probe, ticket);
+        using HttpResponseMessage response = await player.GetAsync(new Uri(path, UriKind.Relative), HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Theory(DisplayName = "BR-BA-004: the frame's two relays answer any origin, without credentials and naming no header beyond the safe ones")]
+    [InlineData("app")]
+    [InlineData("ws")]
+    public async Task TheFramesRelaysAnswerAnyOrigin(string relay)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        using HttpRequestMessage asking = new(HttpMethod.Get, HybridcastRelayFeature.Relayed(started, relay, "http://hc.station.example.jp/p/a.js"));
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+
+        Assert.Equal("*", response.Headers.GetValues(HeaderNames.AccessControlAllowOrigin).Single());
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowCredentials));
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlExposeHeaders));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: every answer of the frame's relays carries the CORS headers, whatever refused or failed it")]
+    [InlineData("GET", "app", "outside the boundary", 403)]
+    [InlineData("POST", "app", "outside the boundary", 403)]
+    [InlineData("GET", "app", "a name that did not resolve", 502)]
+    [InlineData("GET", "app", "a refused address", 502)]
+    [InlineData("POST", "app", "a server out of reach", 502)]
+    [InlineData("GET", "app", "no address", 400)]
+    [InlineData("GET", "app", "a ticket that started nothing", 403)]
+    [InlineData("GET", "app", "a ticket that is not one", 401)]
+    [InlineData("GET", "app", "another channel", 403)]
+    [InlineData("GET", "app", "a failure nothing answered for", 500)]
+    [InlineData("POST", "app", "a failure nothing answered for", 500)]
+    [InlineData("GET", "ws", "a page and not a WebSocket", 400)]
+    [InlineData("GET", "ws", "a ticket that started nothing", 400)]
+    public async Task EveryAnswerOfTheFramesRelaysCarriesTheCorsHeaders(string method, string relay, string what, int status)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        string ticket = started.GetProperty("inTheClear").GetString()!;
+        feature.Relay.Fetched = what switch
+        {
+            "a name that did not resolve" => _ => RelayedBody.Failed(RelayResult.NameNotResolved),
+            "a refused address" => _ => RelayedBody.Failed(RelayResult.RefusedOrTooLarge),
+            "a server out of reach" => _ => RelayedBody.Failed(RelayResult.Disconnected),
+            "a failure nothing answered for" => _ => throw new InvalidOperationException("The relay failed."),
+            _ => feature.Relay.Fetched,
+        };
+        string address = what == "outside the boundary" ? "http://elsewhere.example/a.js" : "http://hc.station.example.jp/p/a.js";
+        string path = what switch
+        {
+            "no address" => $"/api/live/32736-1024/data-broadcast/{relay}/{ticket}",
+            "a ticket that started nothing" => $"/api/live/32736-1024/data-broadcast/{relay}/{new string('A', 43)}?uri={Uri.EscapeDataString(address)}",
+            "a ticket that is not one" => $"/api/live/32736-1024/data-broadcast/{relay}/{new string('~', 43)}?uri={Uri.EscapeDataString(address)}",
+            "another channel" => $"/api/live/32736-1025/data-broadcast/{relay}/{ticket}?uri={Uri.EscapeDataString(address)}",
+            _ => HybridcastRelayFeature.Relayed(started, relay, address).OriginalString,
+        };
+        using HttpRequestMessage asking = new(new HttpMethod(method), new Uri(path, UriKind.Relative));
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+
+        if (method == "POST")
+        {
+            asking.Content = new StringContent("a=1", Encoding.UTF8, "application/x-www-form-urlencoded");
+        }
+
+        using HttpResponseMessage response = await feature.Frame.SendAsync(asking);
+
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Equal("*", response.Headers.GetValues(HeaderNames.AccessControlAllowOrigin).Single());
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowCredentials));
+    }
+
+    [Theory(DisplayName = "BR-BA-004: no other route answers another origin, whether it carries a ticket in its path, is asked for plainly or is preflighted")]
+    [InlineData("GET", "/api/health")]
+    [InlineData("GET", "/api/live/32736-1024/with-ticket/{ticket}/live.ts")]
+    [InlineData("GET", "/api/videos/sample/with-ticket/{ticket}/video.mp4")]
+    [InlineData("OPTIONS", "/api/live/32736-1024/with-ticket/{ticket}/live.ts")]
+    [InlineData("OPTIONS", "/api/live/32736-1024/data-broadcast/app/ticket")]
+    [InlineData("OPTIONS", "/api/reservations")]
+    public async Task NoOtherRouteAnswersAnotherOrigin(string method, string path)
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        Uri target = new(path.Replace("{ticket}", started.GetProperty("inTheClear").GetString(), StringComparison.Ordinal), UriKind.Relative);
+        using HttpRequestMessage asking = method == "OPTIONS" ? HybridcastRelayFeature.Preflight(target, "GET", string.Empty) : new HttpRequestMessage(HttpMethod.Get, target);
+        asking.Headers.TryAddWithoutValidation(HeaderNames.Origin, "null");
+
+        using HttpResponseMessage response = await feature.Viewer.SendAsync(asking);
+
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowOrigin));
+        Assert.False(response.Headers.Contains(HeaderNames.AccessControlAllowMethods));
+    }
+
+    [Theory]
+    [InlineData("/api/recordings?standing=sideways", "sideways")]
+    [InlineData("/api/recordings?outcome=nearly", "nearly")]
+    [InlineData("/api/recordings?drops=maybe", "maybe")]
+    [InlineData("/api/recordings?sort=alphabetically", "alphabetically")]
+    [InlineData("/api/recordings?perPage=abc", "abc")]
+    [InlineData("/api/recordings?from=whenever", "whenever")]
+    [InlineData("/api/reservations?sort=sideways", "sideways")]
+    [InlineData("/api/live/channels?fields=everything", "everything")]
+    [InlineData("/api/quality/channels?sort=sideways", "sideways")]
+    [InlineData("/api/encoding/jobs?status=nearly", "nearly")]
+    public async Task AValueAnEndpointCannotReadIsRefusedInTheEnvelopeWithoutRepeatingWhatWasSent(
+        string path,
+        string sent)
+    {
+        await using var feature = new RecordingFeature();
+
+        string body = await feature.GetTextAsync(path);
+        (HttpStatusCode status, JsonElement answer) = await feature.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.False(answer.GetProperty("status").GetBoolean());
+        Assert.False(string.IsNullOrWhiteSpace(answer.GetProperty("message").GetString()));
+        Assert.DoesNotContain(sent, body, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool UnderTheMigrationRoot(RoutedSurface surface)
         => string.Equals(surface.Pattern, MigrationRoot, StringComparison.Ordinal)
            || surface.Pattern.StartsWith(MigrationRoot + "/", StringComparison.Ordinal);
@@ -658,4 +835,68 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                                       || surface.Pattern.StartsWith(root + "/", StringComparison.Ordinal));
 
     private IEnumerable<RoutedSurface> Streaming() => Inventory().Where(UnderARoot);
+
+    private static HttpClient Carrying(AuthProbe probe, string? ticket)
+    {
+        HttpClient player = probe.Wired.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("http://localhost"),
+            AllowAutoRedirect = false,
+        });
+
+        if (ticket is not null)
+        {
+            player.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ticket);
+        }
+
+        return player;
+    }
+
+    private static async Task<string> IssuedAsync(AuthProbe probe)
+    {
+        await probe.SignedInAsync();
+
+        using HttpResponseMessage answer = await probe.Client.PostAsJsonAsync(
+            new Uri("/api/live/ticket", UriKind.Relative),
+            new { networkId = 32736, serviceId = 1024 });
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+
+        using JsonDocument read = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
+
+        return read.RootElement.GetProperty("data").GetProperty("inTheClear").GetString()!;
+    }
+
+    private AuthProbe Wiring(out Recording recording)
+    {
+        HeldServices services = new();
+        HeldCandidates candidates = new();
+        HeldRecordings recordings = new();
+        NetworkId network = new(32736);
+        ServiceId service = new(1024);
+        CandidateChannel candidate = CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            network,
+            service,
+            TuningParameters.Terrestrial(27),
+            At);
+
+        candidate.Select(SelectionSource.Manual, null, At);
+        services.Services.Add(BroadcastService.Discover(network, service, "Watched", ServiceCategory.Television, At));
+        candidates.Candidates.Add(candidate);
+
+        recording = RecordingFeature.Begin(RecordingId.New());
+        recording.Wrote(TimeSpan.FromMinutes(30));
+        recording.Abort(RecordingFeature.Noon.AddMinutes(30));
+        recording.Settle(RecordingOutcome.Complete, 4_000, RecordingFeature.Noon.AddMinutes(30));
+        recordings.Recordings.Add(recording);
+
+        return AuthProbe.OverHttp(wired =>
+        {
+            wired.AddSingleton<IBroadcastServiceRepository>(services);
+            wired.AddSingleton<ICandidateChannelRepository>(candidates);
+            wired.AddSingleton<IRecordingDirectory>(recordings);
+            wired.AddSingleton<ILiveSupply>(supply);
+        });
+    }
 }
