@@ -1,13 +1,12 @@
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -223,8 +222,8 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database) : IAs
     private static IEncodeProfileRepository Profiles(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IEncodeProfileRepository>();
 
-    private static EncodeStandingReader Standing(AsyncServiceScope scope)
-        => ActivatorUtilities.CreateInstance<EncodeStandingReader>(scope.ServiceProvider);
+    private static IEncodeStandingReader Standing(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeStandingReader>();
 
     private static CarinaDbContext Context(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();

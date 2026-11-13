@@ -1,7 +1,6 @@
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
-using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
@@ -9,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -203,8 +202,8 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
         await Context(clearing).Set<RecordingDetection>().ExecuteDeleteAsync(Cancel);
     }
 
-    private static ChapterRewriteWorklist ChapterRewrites(AsyncServiceScope scope)
-        => ActivatorUtilities.CreateInstance<ChapterRewriteWorklist>(scope.ServiceProvider);
+    private static IChapterRewriteWorklist ChapterRewrites(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IChapterRewriteWorklist>();
 
     private static IEncodeDestinationRepository Destinations(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>();

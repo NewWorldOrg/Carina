@@ -1,13 +1,12 @@
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -17,6 +16,10 @@ public sealed class EncodeScratchLedgerTests(RepositoryDatabase database) : IAsy
 
     private static readonly DateTime Queued = new(2026, 9, 5, 3, 0, 0, DateTimeKind.Utc);
 
+    private static readonly DateTime MadeFirst = new(2026, 9, 5, 3, 10, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime MadeAgain = new(2026, 9, 5, 3, 40, 0, DateTimeKind.Utc);
+
     private static readonly DateTime Ended = new(2026, 9, 5, 4, 0, 0, DateTimeKind.Utc);
 
     private static readonly OutputRoot Primary = new("primary");
@@ -24,10 +27,6 @@ public sealed class EncodeScratchLedgerTests(RepositoryDatabase database) : IAsy
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private readonly ServiceProvider container = database.Infrastructure();
-
-    private static readonly DateTime MadeFirst = new(2026, 9, 5, 3, 10, 0, DateTimeKind.Utc);
-
-    private static readonly DateTime MadeAgain = new(2026, 9, 5, 3, 40, 0, DateTimeKind.Utc);
 
     public Task InitializeAsync() => Task.CompletedTask;
 
@@ -50,7 +49,7 @@ public sealed class EncodeScratchLedgerTests(RepositoryDatabase database) : IAsy
             await jobs.AddAsync(job, Cancel);
             await jobs.AddAsync(other, Cancel);
 
-            EncodeScratchLedger ledger = ScratchLedger(writing);
+            IEncodeScratchLedger ledger = ScratchLedger(writing);
             await ledger.RecordAsync(first, Cancel);
             await ledger.RecordAsync(second, Cancel);
             await ledger.RecordAsync(others, Cancel);
@@ -81,7 +80,7 @@ public sealed class EncodeScratchLedgerTests(RepositoryDatabase database) : IAsy
         {
             await Jobs(writing).AddAsync(job, Cancel);
 
-            EncodeScratchLedger ledger = ScratchLedger(writing);
+            IEncodeScratchLedger ledger = ScratchLedger(writing);
             await ledger.RecordAsync(stuck, Cancel);
             await ledger.RecordAsync(gone, Cancel);
 
@@ -111,7 +110,7 @@ public sealed class EncodeScratchLedgerTests(RepositoryDatabase database) : IAsy
 
         await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            EncodeScratchLedger ledger = ScratchLedger(writing);
+            IEncodeScratchLedger ledger = ScratchLedger(writing);
             EncodeScratchFile earlierRemoval = Owed(first, shared, MadeAgain);
             await ledger.RecordAsync(earlierRemoval, Cancel);
             earlierRemoval.Settle(EncodeScratchFate.Removed, MadeAgain);
@@ -125,7 +124,7 @@ public sealed class EncodeScratchLedgerTests(RepositoryDatabase database) : IAsy
         }
 
         await using AsyncServiceScope refusing = container.CreateAsyncScope();
-        EncodeScratchLedger refused = ScratchLedger(refusing);
+        IEncodeScratchLedger refused = ScratchLedger(refusing);
         await refused.RecordAsync(Work(first, MadeAgain), Cancel);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => refused.RecordAsync(Work(first, MadeAgain.AddMinutes(1)), Cancel));
@@ -185,8 +184,8 @@ public sealed class EncodeScratchLedgerTests(RepositoryDatabase database) : IAsy
     private static IEncodeProfileRepository Profiles(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IEncodeProfileRepository>();
 
-    private static EncodeScratchLedger ScratchLedger(AsyncServiceScope scope)
-        => ActivatorUtilities.CreateInstance<EncodeScratchLedger>(scope.ServiceProvider);
+    private static IEncodeScratchLedger ScratchLedger(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeScratchLedger>();
 
     private static CarinaDbContext Context(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();

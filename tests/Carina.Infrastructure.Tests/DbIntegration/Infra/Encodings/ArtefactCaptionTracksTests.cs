@@ -38,7 +38,7 @@ public sealed class ArtefactCaptionTracksTests(RepositoryDatabase database) : IA
         TimeSpan sourceStart = TimeSpan.FromSeconds(30499.5);
         EncodeJob standing = await StandingAsync(
             CaptionState.Ready,
-            timeline: new EncodeTimeline(sourceStart, TimeSpan.FromSeconds(0.5), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30)));
+            new EncodeTimeline(sourceStart, TimeSpan.FromSeconds(0.5), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30)));
         long shownAt = (long)((sourceStart.TotalSeconds + 2) * 90_000);
         await harness.CaptionShelf.KeepAsync(
             standing.RecordingId,
@@ -51,7 +51,7 @@ public sealed class ArtefactCaptionTracksTests(RepositoryDatabase database) : IA
         for (int pass = 0; pass < 2; pass++)
         {
             await using AsyncServiceScope context = standingIn.CreateAsyncScope();
-            ArtefactCaptioningRound round = await ActivatorUtilities.CreateInstance<ArtefactCaptionTracks>(context.ServiceProvider)
+            ArtefactCaptioningRound round = await Assert.IsType<ArtefactCaptionTracks>(context.ServiceProvider.GetRequiredService<IArtefactCaptioning>())
                 .CaptionAsync(4, _ => Task.FromResult(false), Cancel);
 
             Assert.Equal((1, 1), (round.Read, round.Failed));
@@ -66,22 +66,7 @@ public sealed class ArtefactCaptionTracksTests(RepositoryDatabase database) : IA
         Assert.All(scratch, file => Assert.False(file.IsOwedARemoval));
     }
 
-    private static void Failed(EncodeJob job, int times)
-    {
-        for (int time = 0; time < times; time++)
-        {
-            job.Tracked(EncodeCaptionTrack.Failed, MadeAt);
-        }
-    }
-
-    private async Task<IReadOnlyList<CaptionTrackSubject>> AwaitingAsync(int atMost)
-    {
-        await using AsyncServiceScope context = container.CreateAsyncScope();
-
-        return await CaptionTracks(context).AwaitingAsync(atMost, Cancel);
-    }
-
-    private async Task<EncodeJob> StandingAsync(CaptionState captions, Action<EncodeJob>? tracked = null, EncodeTimeline? timeline = null)
+    private async Task<EncodeJob> StandingAsync(CaptionState captions, EncodeTimeline timeline)
     {
         Recording recording = harness.Recorded();
         recording.Caption(captions, captions is CaptionState.Ready ? 3 : null, MadeAt);
@@ -111,8 +96,6 @@ public sealed class ArtefactCaptionTracksTests(RepositoryDatabase database) : IA
             timeline,
             null);
 
-        tracked?.Invoke(job);
-
         await using AsyncServiceScope writing = container.CreateAsyncScope();
         await Recordings(writing).AddAsync(recording, Cancel);
         await Profiles(writing).AddAsync(profile, Cancel);
@@ -122,32 +105,6 @@ public sealed class ArtefactCaptionTracksTests(RepositoryDatabase database) : IA
         return job;
     }
 
-    private async Task AddAsync(EncodeJob job)
-    {
-        await using AsyncServiceScope writing = container.CreateAsyncScope();
-        EncodeJob standing = await Context(writing).Set<EncodeJob>().AsNoTracking().FirstAsync(held => held.RecordingId == job.RecordingId, Cancel);
-        await Jobs(writing).AddAsync(
-            EncodeJob.Rehydrate(
-                job.Id,
-                job.RecordingId,
-                standing.ProfileId,
-                standing.DestinationId,
-                job.OutputRoot,
-                job.Status,
-                job.Attempt,
-                job.QueuedAt,
-                job.StartedAt,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null),
-            Cancel);
-    }
-
     private async Task ClearAsync()
     {
         await using AsyncServiceScope clearing = container.CreateAsyncScope();
@@ -155,9 +112,6 @@ public sealed class ArtefactCaptionTracksTests(RepositoryDatabase database) : IA
         await Context(clearing).Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
         await Context(clearing).Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
     }
-
-    private static CaptionTrackWorklist CaptionTracks(AsyncServiceScope scope)
-        => ActivatorUtilities.CreateInstance<CaptionTrackWorklist>(scope.ServiceProvider);
 
     private static IEncodeDestinationRepository Destinations(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>();

@@ -1,13 +1,12 @@
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
-using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -60,7 +59,7 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
         await AddAsync(running);
 
         await using AsyncServiceScope context = container.CreateAsyncScope();
-        CaptionTrackWorklist worklist = CaptionTracks(context);
+        ICaptionTrackWorklist worklist = CaptionTracks(context);
 
         Assert.Empty(await worklist.AwaitingAsync(64, Cancel));
         Assert.False(await worklist.StandsWithNothingInHandAsync(standing, Cancel));
@@ -72,7 +71,7 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
         EncodeJob standing = await StandingAsync(CaptionState.Ready);
 
         await using AsyncServiceScope context = container.CreateAsyncScope();
-        CaptionTrackWorklist worklist = CaptionTracks(context);
+        ICaptionTrackWorklist worklist = CaptionTracks(context);
 
         Assert.True(await worklist.StandsWithNothingInHandAsync(standing, Cancel));
 
@@ -174,8 +173,8 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
         await Context(clearing).Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
     }
 
-    private static CaptionTrackWorklist CaptionTracks(AsyncServiceScope scope)
-        => ActivatorUtilities.CreateInstance<CaptionTrackWorklist>(scope.ServiceProvider);
+    private static ICaptionTrackWorklist CaptionTracks(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ICaptionTrackWorklist>();
 
     private static IEncodeDestinationRepository Destinations(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>();

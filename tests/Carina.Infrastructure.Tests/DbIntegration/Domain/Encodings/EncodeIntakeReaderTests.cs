@@ -5,11 +5,10 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -150,8 +149,8 @@ public sealed class EncodeIntakeReaderTests(RepositoryDatabase database) : IAsyn
     private static IEncodeDestinationRepository Destinations(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>();
 
-    private static EncodeIntakeReader Intake(AsyncServiceScope scope)
-        => ActivatorUtilities.CreateInstance<EncodeIntakeReader>(scope.ServiceProvider);
+    private static IEncodeIntakeReader Intake(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeIntakeReader>();
 
     private static IEncodeJobRepository Jobs(AsyncServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>();

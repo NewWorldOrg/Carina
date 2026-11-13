@@ -60,7 +60,7 @@ public sealed class OidcSettingsRepositoryTests(RepositoryDatabase database) : I
     }
 
     private static OidcSettingsRepository Settings(AsyncServiceScope scope)
-        => ActivatorUtilities.CreateInstance<OidcSettingsRepository>(scope.ServiceProvider);
+        => Assert.IsType<OidcSettingsRepository>(scope.ServiceProvider.GetRequiredService<IOidcSettingsRepository>());
 
     private async Task HeldInTheClearAsync(string secret)
     {

@@ -75,9 +75,6 @@ public static class TestLayoutRules
         new("Encodings", "src/Carina.Db/Migrations/20261018102824_TheChaptersOfAnArtefactSayWhichDetectionTheyCameFrom.cs"),
         new("Encodings", "src/Carina.Db/Migrations/20261019091700_ChaptersOfAnArtefactTellOpeningsAndEndingsApart.cs"),
         new("Encodings", "src/Carina.Infrastructure/Configuration/EncodingOptions.cs"),
-        new("Encodings", "src/Carina.Infrastructure/Persistence/Repositories/EncodeIntakeReader.cs"),
-        new("Encodings", "src/Carina.Infrastructure/Persistence/Repositories/EncodeScratchLedger.cs"),
-        new("Encodings", "src/Carina.Infrastructure/Persistence/Repositories/EncodeStandingReader.cs"),
         new("Notifications", "src/Carina.Api/Requests/NotificationRequests.cs"),
         new("Notifications", "src/Carina.Api/Services/NotificationDestinationService.cs"),
         new("Notifications", "src/Carina.Api/Services/NotificationPushService.cs"),
@@ -199,6 +196,12 @@ public static class TestLayoutRules
 
         ILookup<string, string> migrations = Migrations(root);
 
+        HashSet<string> domainInterfaces = product
+            .Where(file => file.Relative.StartsWith(DomainSource, StringComparison.Ordinal))
+            .SelectMany(file => file.Root.DescendantNodes().OfType<InterfaceDeclarationSyntax>())
+            .Select(declaration => declaration.Identifier.ValueText)
+            .ToHashSet(StringComparer.Ordinal);
+
         return new Reading(
             product.Select(file => file.Relative).Concat(migrations.SelectMany(files => files)).ToHashSet(StringComparer.Ordinal),
             product
@@ -212,6 +215,13 @@ public static class TestLayoutRules
                 .SelectMany(file => Routes(file, constants))
                 .ToArray(),
             AreaRoots.SelectMany(areas => Folders(Path.Combine(root, areas))).ToHashSet(StringComparer.Ordinal),
+            product
+                .SelectMany(file => file.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+                .SelectMany(declaration => (declaration.BaseList?.Types ?? [])
+                    .Select(implemented => Simple(implemented.Type))
+                    .Where(domainInterfaces.Contains)
+                    .Select(port => KeyValuePair.Create(declaration.Identifier.ValueText, port)))
+                .ToLookup(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
             Projects
                 .SelectMany(project => Scanned(root, $"tests/{project}"))
                 .Where(file => file.Source.Contains("[Fact", StringComparison.Ordinal) || file.Source.Contains("[Theory", StringComparison.Ordinal))
@@ -278,7 +288,7 @@ public static class TestLayoutRules
                 Kind: DbIntegration,
                 Subject: Subject.DomainPort or Subject.AppService or Subject.InfrastructureType,
             }),
-            HandBuilding);
+            (file, type) => HandBuilding(reading, file, type));
 
     public static IReadOnlyList<string> ClassesLeftInTheOldPlace(
         Reading reading,
@@ -455,7 +465,7 @@ public static class TestLayoutRules
             Subject.ApiType => IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere),
             Subject.AppService => subject.EndsWith(Service, StringComparison.Ordinal) && IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere),
             Subject.DomainType => IsDeclaredFor(reading, subject, area, DomainLayer, elsewhere),
-            Subject.DomainPort => IsBehindTheDomain(subject) && IsDeclaredFor(reading, PortOf(subject), area, DomainLayer, elsewhere),
+            Subject.DomainPort => IsBehindTheDomain(reading, subject) && IsDeclaredFor(reading, PortOf(subject), area, DomainLayer, elsewhere),
             Subject.InfrastructureType => IsDeclaredFor(reading, subject, area, InfrastructureLayer, elsewhere),
             _ => IsOfTheDatabaseProject(reading, subject, area, listed),
         };
@@ -468,7 +478,7 @@ public static class TestLayoutRules
             Subject.ApiType => $"nothing the API declares for {area}",
             Subject.AppService => $"no service the API declares for {area}",
             Subject.DomainType => $"nothing the domain declares for {area}",
-            Subject.DomainPort => $"nothing the domain declares for {area}: no repository behind its interface, no domain service",
+            Subject.DomainPort => $"nothing the domain declares for {area}: nothing behind an interface of its name, no domain service",
             Subject.InfrastructureType => $"nothing the infrastructure declares for {area}",
             _ => $"nothing the database project declares for {area}: no type, no migration, no schema of the area",
         };
@@ -477,8 +487,10 @@ public static class TestLayoutRules
         => subject.EndsWith(Action, StringComparison.Ordinal)
            && reading.Types[subject].Any(relative => relative.StartsWith($"{Controllers}{area}/", StringComparison.Ordinal));
 
-    private static bool IsBehindTheDomain(string subject)
-        => subject.EndsWith(Repository, StringComparison.Ordinal) || subject.EndsWith(DomainServiceRules.Suffix, StringComparison.Ordinal);
+    private static bool IsBehindTheDomain(Reading reading, string subject)
+        => subject.EndsWith(Repository, StringComparison.Ordinal)
+           || subject.EndsWith(DomainServiceRules.Suffix, StringComparison.Ordinal)
+           || reading.DomainPorts[subject].Contains(PortOf(subject), StringComparer.Ordinal);
 
     private static bool ServesRequests(Reading reading, string subject, string area, IReadOnlyList<AreaSource> elsewhere)
         => reading.ServingRequests.Contains(subject) && IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere);
@@ -526,15 +538,20 @@ public static class TestLayoutRules
             ? area
             : string.Empty;
 
-    private static IEnumerable<string> HandBuilding(TestFile file, TestClass type)
+    private static IEnumerable<string> HandBuilding(Reading reading, TestFile file, TestClass type)
     {
         string subject = SubjectOf(type);
         string taken = file.Seat.Place!.Subject == Subject.DomainPort ? PortOf(subject) : subject;
 
         if (!file.Resolved.Contains(taken)
-            && !(file.Seat.Place!.Subject == Subject.InfrastructureType && file.Composed.Contains(taken)))
+            && !(file.Seat.Place!.Subject == Subject.InfrastructureType && IsTakenAsInfrastructure(reading, file, subject)))
         {
             yield return $"does not take {taken} from the container";
+        }
+
+        foreach (string built in file.Instantiated.Where(built => reading.DomainPorts[built].Any()).Order(StringComparer.Ordinal))
+        {
+            yield return $"builds {built} with CreateInstance although the container gives it as {string.Join(", ", reading.DomainPorts[built].Order(StringComparer.Ordinal))}";
         }
 
         if (!string.Equals(taken, subject, StringComparison.Ordinal) && file.Identifiers.Contains(subject))
@@ -720,9 +737,22 @@ public static class TestLayoutRules
                                && IsCalledWithTheProviderAlone(name))
                 .Select(name => Simple(name.TypeArgumentList.Arguments[0]))
                 .ToHashSet(StringComparer.Ordinal),
+            Generic(file.Root, "CreateInstance"),
+            Generic(file.Root, "IsType"),
             file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().Select(Created).ToHashSet(StringComparer.Ordinal),
             file.Root.DescendantNodes().Select(Spoken).Where(path => path.StartsWith("/api/", StringComparison.Ordinal)).ToArray());
     }
+
+    private static HashSet<string> Generic(SyntaxNode root, string method)
+        => root.DescendantNodes().OfType<GenericNameSyntax>()
+            .Where(name => name.Identifier.ValueText == method && name.TypeArgumentList.Arguments.Count == 1)
+            .Select(name => Simple(name.TypeArgumentList.Arguments[0]))
+            .ToHashSet(StringComparer.Ordinal);
+
+    private static bool IsTakenAsInfrastructure(Reading reading, TestFile file, string subject)
+        => reading.DomainPorts[subject].Any()
+            ? file.Narrowed.Contains(subject) && reading.DomainPorts[subject].Any(file.Resolved.Contains)
+            : file.Composed.Contains(subject);
 
     private static bool HoldsATest(ClassDeclarationSyntax type)
         => type.Members
@@ -909,6 +939,7 @@ public static class TestLayoutRules
             IReadOnlySet<string> servingRequests,
             IReadOnlyList<Route> routes,
             IReadOnlySet<string> areas,
+            ILookup<string, string> domainPorts,
             IReadOnlyList<TestFile> tests)
         {
             Sources = sources;
@@ -917,6 +948,7 @@ public static class TestLayoutRules
             ServingRequests = servingRequests;
             Routes = routes;
             Areas = areas;
+            DomainPorts = domainPorts;
             Tests = tests;
         }
 
@@ -931,6 +963,9 @@ public static class TestLayoutRules
         internal IReadOnlyList<Route> Routes { get; }
 
         internal IReadOnlySet<string> Areas { get; }
+
+        /// <summary>For each class of the product, the interfaces declared under the domain that it implements.</summary>
+        internal ILookup<string, string> DomainPorts { get; }
 
         internal IReadOnlyList<TestFile> Tests { get; }
     }
@@ -958,6 +993,8 @@ public static class TestLayoutRules
         IReadOnlySet<string> Imports,
         IReadOnlySet<string> Resolved,
         IReadOnlySet<string> Composed,
+        IReadOnlySet<string> Instantiated,
+        IReadOnlySet<string> Narrowed,
         IReadOnlySet<string> Created,
         IReadOnlyList<string> ApiPaths);
 
