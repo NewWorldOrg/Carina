@@ -18,17 +18,17 @@ namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
 [Trait("Category", "Unit")]
 public sealed class RecordingStreamSupervisorTests
 {
-    private static readonly CancellationToken Cancel = CancellationToken.None;
-
     private const long WhatLandedBeforeTheDiskFilled = 4_096_000;
+
+    private const long Packets = 1_000_000;
+
+    private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly DateTime LastWrite = Airs.AddMinutes(10).AddSeconds(0.08);
 
     private static readonly DateTime CameBack = Airs.AddMinutes(11).AddSeconds(51.79);
 
     private static readonly DateTime FirstWriteAfter = Airs.AddMinutes(11).AddSeconds(52.6);
-
-    private const long Packets = 1_000_000;
 
     private static readonly DateTime Ended = Airs.AddMinutes(31);
 
