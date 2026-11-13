@@ -22,18 +22,6 @@ public sealed class RecordingTests
 {
     private static readonly DateTime Now = RecordingFactory.Now;
 
-    public static TheoryData<long?, int, bool> Endings => new()
-    {
-        { CompletionFactory.TypicalBytes, 1000, true },
-        { 0, 1000, true },
-        { null, 1000, true },
-        { CompletionFactory.TypicalBytes, 1000, false },
-        { 2_400_000_000, 960, true },
-        { 1_700_000_000, 1000, true },
-        { 3_300_000_001, 1000, true },
-        { 2_250_000_000, 900, true },
-    };
-
     private static readonly DateTime Later = RecordingFactory.Now.AddHours(2);
 
     private static readonly DateTime Began = RecordingFactory.Now;
@@ -48,8 +36,6 @@ public sealed class RecordingTests
 
     private static readonly ProgrammeRef Programme =
         new(new NetworkId(32736), new ServiceId(1024), new EventId(4321), BeganAtTheSource);
-
-    private static readonly DateTime EndsInAnHour = RecordingFactory.Now.AddHours(1);
 
     private static readonly DateTime EndedAfterAnHour = RecordingFactory.Now.AddHours(1);
 
@@ -67,9 +53,6 @@ public sealed class RecordingTests
             ]);
 
     private static readonly DateTime AnHourLater = RecordingFactory.Now.AddHours(1);
-
-    private static readonly QualityBands Bands =
-        QualityThresholdStanding.Bands(QualityThresholdStanding.Over([], RecordingFactory.Now));
 
     private static readonly HashSet<string> Derived = new(StringComparer.Ordinal)
     {
@@ -95,14 +78,26 @@ public sealed class RecordingTests
 
     private static readonly QualityBands AsShipped = QualityThresholdStanding.Bands(QualityThresholdStanding.Over([], Now));
 
-    public static TheoryData<long?> EverySize => new(null, 0L, 1L, 4_096_000L);
-
     private static readonly DateTime Local = DateTime.SpecifyKind(Now.AddMinutes(1), DateTimeKind.Local);
 
     private static readonly DateTime Unspecified =
         DateTime.SpecifyKind(Now.AddMinutes(1), DateTimeKind.Unspecified);
 
     private static readonly DateTime Noon = new(2026, 9, 17, 3, 0, 0, DateTimeKind.Utc);
+
+    public static TheoryData<long?, int, bool> Endings => new()
+    {
+        { CompletionFactory.TypicalBytes, 1000, true },
+        { 0, 1000, true },
+        { null, 1000, true },
+        { CompletionFactory.TypicalBytes, 1000, false },
+        { 2_400_000_000, 960, true },
+        { 1_700_000_000, 1000, true },
+        { 3_300_000_001, 1000, true },
+        { 2_250_000_000, 900, true },
+    };
+
+    public static TheoryData<long?> EverySize => new(null, 0L, 1L, 4_096_000L);
 
     public static TheoryData<RecordingFault> Breaking => Set(RecordingFaults.ThatCanInterrupt);
 
@@ -1289,16 +1284,16 @@ public sealed class RecordingTests
             new OutputRoot("primary"),
             RecordingFileName.For(id, ".ts"),
             1_000,
-            EndsInAnHour,
+            EndedAfterAnHour,
             RecordingFactory.Now,
-            EndsInAnHour,
-            EndsInAnHour,
+            EndedAfterAnHour,
+            EndedAfterAnHour,
             0,
             0,
             [],
             RecordingFactory.Now,
-            EndsInAnHour,
-            EndsInAnHour,
+            EndedAfterAnHour,
+            EndedAfterAnHour,
             RecordingOutcome.Truncated,
             [RecordingFactory.Fault()],
             DropCounters.Unmeasured,
@@ -1479,9 +1474,9 @@ public sealed class RecordingTests
     private static Recording Ended(RecordingOutcome outcome = RecordingOutcome.Truncated, bool scrambled = false)
     {
         Recording recording = RecordingFactory.Started();
-        recording.Abort(EndsInAnHour);
+        recording.Abort(EndedAfterAnHour);
         recording.Note(RecordingFactory.Fault(scrambled ? RecordingFault.ScramblingUnresolved : RecordingFault.DriverLost));
-        recording.Settle(outcome, outcome is RecordingOutcome.Failed ? 0 : 1_000, EndsInAnHour);
+        recording.Settle(outcome, outcome is RecordingOutcome.Failed ? 0 : 1_000, EndedAfterAnHour);
 
         return recording;
     }
@@ -1498,16 +1493,16 @@ public sealed class RecordingTests
             new OutputRoot("primary"),
             RecordingFileName.For(id, ".ts"),
             ended ? 0 : null,
-            ended ? EndsInAnHour : null,
+            ended ? EndedAfterAnHour : null,
             RecordingFactory.Now,
-            ended ? EndsInAnHour : null,
+            ended ? EndedAfterAnHour : null,
             null,
             0,
             0,
             [],
             RecordingFactory.Now,
-            EndsInAnHour,
-            EndsInAnHour,
+            EndedAfterAnHour,
+            EndedAfterAnHour,
             outcome,
             ended ? [RecordingFactory.Fault()] : [],
             DropCounters.Unmeasured,
@@ -2157,9 +2152,9 @@ public sealed class RecordingTests
             () => recording.Settle(RecordingOutcome.Complete, 1, AnHourLater));
         Assert.Throws<InvalidOperationException>(() => recording.Wrote(TimeSpan.FromMinutes(1)));
         Assert.Throws<InvalidOperationException>(() => recording.FailOnAFullDisk(1, AnHourLater));
-        Assert.Throws<InvalidOperationException>(() => recording.SettleOnWhatWasLeft(false, 1, Bands, AnHourLater));
+        Assert.Throws<InvalidOperationException>(() => recording.SettleOnWhatWasLeft(false, 1, AsShipped, AnHourLater));
         Assert.Throws<InvalidOperationException>(
-            () => recording.Conclude(1, ExpectedBitrate.Terrestrial, Bands, AnHourLater));
+            () => recording.Conclude(1, ExpectedBitrate.Terrestrial, AsShipped, AnHourLater));
         Assert.Throws<InvalidOperationException>(() => recording.ReachedItsEnd(null, AnHourLater));
         Assert.Throws<InvalidOperationException>(() => recording.Adopt("pt3-4"));
         Assert.Throws<InvalidOperationException>(() => recording.NoteEndUndecided(AnHourLater));
