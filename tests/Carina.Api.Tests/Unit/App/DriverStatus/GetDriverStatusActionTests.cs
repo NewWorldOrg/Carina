@@ -10,8 +10,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.DriverStatus;
 
+[Trait("Category", "Unit")]
 public sealed class GetDriverStatusActionTests
 {
     private static readonly DateTimeOffset ObservedAt = new(2026, 8, 14, 3, 0, 0, TimeSpan.Zero);

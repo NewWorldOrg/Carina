@@ -8,8 +8,9 @@ using Carina.Infrastructure.Integrity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Integrity;
 
+[Trait("Category", "Unit")]
 public sealed class IntegrityServiceTests
 {
     private static readonly OutputRoot Root = new("primary");
