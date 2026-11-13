@@ -1,0 +1,206 @@
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
+using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
+using Carina.Infrastructure.Persistence;
+using Carina.TestSupport;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+using Puppis.Contracts;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Quality;
+
+[Trait("Category", "DbIntegration")]
+public sealed class QualityLedgerReaderTests : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
+{
+    private static readonly DateTime Airs = new(2026, 9, 7, 3, 0, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime Now = new(2026, 9, 7, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly HeldStreams streams = new([]);
+
+    private readonly ServiceProvider container;
+
+    public QualityLedgerReaderTests(MigratedRepositoryDatabase database)
+        => container = database.Infrastructure(services => services.AddSingleton<IBroadcastStreamDirectory>(streams));
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
+
+    [Fact]
+    public async Task OnlyTheRecordingsInsideThePeriodComeBack()
+    {
+        await ClearAsync();
+        Recording inside = await WrittenAsync(6001, Airs);
+        await WrittenAsync(6002, Airs.AddDays(-8));
+
+        IReadOnlyList<QualityLedgerRow> read = await ReadAsync(Now.AddDays(-1), Now);
+
+        Assert.Equal([inside.Id], read.Select(row => row.Recording));
+    }
+
+    [Fact]
+    public async Task WhatTheLedgerCountedComesBackAsItWasCounted()
+    {
+        await ClearAsync();
+        Recording measured = await WrittenAsync(6011, Airs, dropped: 120, total: 750_000, scrambled: 30, overflows: 2);
+
+        QualityLedgerRow row = Assert.Single(await ReadAsync(Now.AddDays(-1), Now));
+
+        Assert.True(row.Counters.Measured);
+        Assert.Equal(120, row.Counters.Dropped);
+        Assert.Equal(750_000, row.Counters.Total);
+        Assert.Equal(30, row.ScrambledPackets);
+        Assert.Equal(2, row.Overflows);
+        Assert.Equal(measured.Id, row.Recording);
+        Assert.NotNull(row.MeasuredUpdatedAt);
+    }
+
+    [Fact(DisplayName = "a recording nothing counted comes back uncounted rather than as zeroes")]
+    public async Task ARecordingNothingCountedComesBackUncounted()
+    {
+        await ClearAsync();
+        await WrittenAsync(6021, Airs);
+
+        QualityLedgerRow row = Assert.Single(await ReadAsync(Now.AddDays(-1), Now));
+
+        Assert.False(row.Counters.Measured);
+        Assert.Null(row.Counters.Dropped);
+        Assert.Null(row.Counters.Total);
+        Assert.Null(row.ScrambledPackets);
+        Assert.Null(row.MeasuredUpdatedAt);
+    }
+
+    [Fact(DisplayName = "the gaps a recording holds come back as how many and how long")]
+    public async Task TheGapsARecordingHoldsComeBackAsHowManyAndHowLong()
+    {
+        await ClearAsync();
+        await WrittenAsync(
+            6051,
+            Airs,
+            dropped: 0,
+            total: 750_000,
+            gaps:
+            [
+                new RecordingGap(Airs.AddMinutes(3), Airs.AddMinutes(3).AddSeconds(2.5)),
+                new RecordingGap(Airs.AddMinutes(8), Airs.AddMinutes(8).AddSeconds(1.3)),
+            ]);
+        await WrittenAsync(6052, Airs.AddHours(1), dropped: 0, total: 750_000);
+
+        IReadOnlyList<QualityLedgerRow> read = await ReadAsync(Now.AddDays(-1), Now);
+
+        Assert.Equal(2, read[0].Gaps);
+        Assert.Equal(3_800, read[0].MissedMs);
+        Assert.Equal(0, read[1].Gaps);
+        Assert.Equal(0, read[1].MissedMs);
+    }
+
+    [Fact]
+    public async Task AChannelTheCatalogueCarriesIsPlacedAndOneItDoesNotIsLeftUnplaced()
+    {
+        await ClearAsync();
+        await WrittenAsync(6031, Airs, service: 1_024);
+        await WrittenAsync(6032, Airs, service: 1_032);
+
+        streams.Carried.Add(Carried(1_024));
+
+        IReadOnlyList<QualityLedgerRow> read = await ReadAsync(Now.AddDays(-1), Now);
+
+        Assert.Equal(TuneSystem.IsdbT, read.Single(row => row.Service.Value is 1_024).Kind);
+        Assert.Null(read.Single(row => row.Service.Value is 1_032).Kind);
+    }
+
+    [Fact]
+    public async Task ARecordingThatNamesNoTunerIsStillRead()
+    {
+        await ClearAsync();
+        await WrittenAsync(6041, Airs, tuner: null);
+
+        Assert.Null(Assert.Single(await ReadAsync(Now.AddDays(-1), Now)).Tuner);
+    }
+
+    private static BroadcastStream Carried(int service)
+        => new(
+            new NetworkId(32_736),
+            new TransportStreamId(32_736),
+            TuningParameters.Terrestrial(27),
+            [new ServiceId(service)]);
+
+    private async Task<IReadOnlyList<QualityLedgerRow>> ReadAsync(DateTime from, DateTime until)
+    {
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+
+        return await reading.ServiceProvider
+            .GetRequiredService<IQualityLedgerReader>()
+            .ReadAsync(QualityPeriod.Of(from, until, Now)!, Cancel);
+    }
+
+    private async Task ClearAsync()
+    {
+        await using AsyncServiceScope clearing = container.CreateAsyncScope();
+        await clearing.ServiceProvider.GetRequiredService<CarinaDbContext>().Set<Recording>().ExecuteDeleteAsync(Cancel);
+    }
+
+    private async Task<Recording> WrittenAsync(
+        int eventId,
+        DateTime airs,
+        long? dropped = null,
+        long? total = null,
+        long? scrambled = null,
+        long overflows = 0,
+        int service = 1_024,
+        string? tuner = "adapter3.frontend0",
+        IReadOnlyList<RecordingGap>? gaps = null)
+    {
+        RecordingId id = RecordingId.New();
+        Recording begun = Recording.Begin(
+            id,
+            ReservationId.New(),
+            new ProgrammeRef(new NetworkId(32_736), new ServiceId(service), new EventId(eventId), airs),
+            new OutputRoot("primary"),
+            RecordingFileName.For(id, ".ts"),
+            airs,
+            airs.AddMinutes(30),
+            new ProgrammeSnapshot(
+                "A programme",
+                string.Empty,
+                string.Empty,
+                [],
+                airs.AddHours(-6),
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
+            null,
+            BroadcastGroupRole.Standalone,
+            airs,
+            tuner is null ? null : new TunerDeviceId(tuner));
+
+        foreach (RecordingGap gap in gaps ?? [])
+        {
+            begun.Missed(gap);
+        }
+
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        IRecordingRepository repository = writing.ServiceProvider.GetRequiredService<IRecordingRepository>();
+        await repository.AddAsync(begun, Cancel);
+
+        if (dropped is { } lost && total is { } carried)
+        {
+            begun.Measure(
+                DropCounters.Counted(lost, carried),
+                DropTimeline.Unlocated,
+                scrambled,
+                overflows,
+                airs.AddMinutes(10));
+            await repository.SaveAsync(begun, Cancel);
+        }
+
+        return begun;
+    }
+}
