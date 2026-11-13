@@ -6,8 +6,9 @@ using Carina.TestSupport;
 
 using static Carina.TestSupport.CarriedMigrationFixtures;
 
-namespace Carina.Domain.Tests.Migration;
+namespace Carina.Domain.Tests.Unit.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class MigrationCarriageDomainServiceTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

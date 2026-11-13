@@ -1,8 +1,9 @@
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 
-namespace Carina.Domain.Tests.Migration;
+namespace Carina.Domain.Tests.Unit.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class MigrationStandingTests
 {
     private static readonly MigrationRunId Run = new(new Guid("00000001-0000-0000-0000-000000000001"));

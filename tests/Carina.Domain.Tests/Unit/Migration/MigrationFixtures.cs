@@ -5,7 +5,7 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 using Carina.Domain.Programmes;
 
-namespace Carina.Domain.Tests.Migration;
+namespace Carina.Domain.Tests.Unit.Migration;
 
 internal static class MigrationFixtures
 {

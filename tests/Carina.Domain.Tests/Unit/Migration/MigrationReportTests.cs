@@ -2,10 +2,11 @@ using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 
-using static Carina.Domain.Tests.Migration.MigrationFixtures;
+using static Carina.Domain.Tests.Unit.Migration.MigrationFixtures;
 
-namespace Carina.Domain.Tests.Migration;
+namespace Carina.Domain.Tests.Unit.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class MigrationReportTests
 {
     private static readonly MigrationRunId Another = new(new Guid("00000001-0000-0000-0000-000000000002"));

@@ -1,9 +1,10 @@
 using Carina.Domain.Migration;
 
-using static Carina.Domain.Tests.Migration.MigrationFixtures;
+using static Carina.Domain.Tests.Unit.Migration.MigrationFixtures;
 
-namespace Carina.Domain.Tests.Migration;
+namespace Carina.Domain.Tests.Unit.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class MigrationChannelProposalTests
 {
     [Fact]

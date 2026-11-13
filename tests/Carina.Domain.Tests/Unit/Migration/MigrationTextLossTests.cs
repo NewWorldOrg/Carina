@@ -1,7 +1,8 @@
 using Carina.Domain.Migration;
 
-namespace Carina.Domain.Tests.Migration;
+namespace Carina.Domain.Tests.Unit.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class MigrationTextLossTests
 {
     [Theory]
