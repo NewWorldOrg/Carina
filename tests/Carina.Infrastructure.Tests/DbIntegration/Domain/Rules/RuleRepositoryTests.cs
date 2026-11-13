@@ -30,7 +30,11 @@ public sealed class RuleRepositoryTests(RepositoryDatabase database) : IAsyncLif
 
     public Task InitializeAsync() => Task.CompletedTask;
 
-    public async Task DisposeAsync() => await container.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await ClearAsync();
+        await container.DisposeAsync();
+    }
 
     [Fact]
     public async Task ARuleComesBackWithEverythingItWasStoredUnder()

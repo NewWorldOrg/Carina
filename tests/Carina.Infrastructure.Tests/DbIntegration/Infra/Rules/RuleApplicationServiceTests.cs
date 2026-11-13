@@ -45,6 +45,12 @@ public sealed class RuleApplicationServiceTests(RepositoryDatabase database) : I
 
     public async Task DisposeAsync()
     {
+        await using (AsyncServiceScope clearing = container.CreateAsyncScope())
+        {
+            await Context(clearing).Set<Reservation>().Where(reservation => reservation.RuleId != null).ExecuteDeleteAsync(Cancel);
+            await Context(clearing).Set<Rule>().ExecuteDeleteAsync(Cancel);
+        }
+
         await container.DisposeAsync();
 
         foreach (ServiceProvider standing in standingIn)
