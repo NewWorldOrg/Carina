@@ -1,8 +1,10 @@
 using Carina.Domain.Migration;
+using Carina.Infrastructure.Migration;
+using Carina.Infrastructure.Persistence;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Migration;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -12,6 +14,8 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
     private const string Began = "timestamptz '2026-09-08 03:00:00+00'";
 
     private const string Ended = "timestamptz '2026-09-08 03:04:00+00'";
+
+    private static readonly CancellationToken Cancel = CancellationToken.None;
 
     public static TheoryData<string> Refusals => Named(MigrationRefusals.All.Select(refusal => refusal.ToString()));
 
@@ -335,6 +339,37 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
             await CountAsync(
                 connection,
                 $"SELECT count(*) FROM migration_rule_proposal WHERE run_id = '{run}' AND rule_id IS NULL"));
+    }
+
+    [Fact]
+    public async Task ASecondRunIsRefusedWhileTheFirstStillHoldsTheLease()
+    {
+        await using CarinaDbContext first = CarinaDbContextFactory.Create(database.ConnectionString);
+        await using CarinaDbContext second = CarinaDbContextFactory.Create(database.ConnectionString);
+
+        IAsyncDisposable? held = await new MigrationLease(first).TakeAsync(Cancel);
+
+        Assert.NotNull(held);
+        Assert.Null(await new MigrationLease(second).TakeAsync(Cancel));
+
+        await held.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task TheNextRunGetsTheLeaseOnceTheFirstHasGivenItBack()
+    {
+        await using CarinaDbContext first = CarinaDbContextFactory.Create(database.ConnectionString);
+        await using CarinaDbContext second = CarinaDbContextFactory.Create(database.ConnectionString);
+
+        IAsyncDisposable? held = await new MigrationLease(first).TakeAsync(Cancel);
+        Assert.NotNull(held);
+        await held.DisposeAsync();
+
+        IAsyncDisposable? next = await new MigrationLease(second).TakeAsync(Cancel);
+
+        Assert.NotNull(next);
+
+        await next.DisposeAsync();
     }
 
     private static TheoryData<string> Named(IEnumerable<string> names)

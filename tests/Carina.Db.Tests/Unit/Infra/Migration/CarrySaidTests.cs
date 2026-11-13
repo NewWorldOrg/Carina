@@ -2,8 +2,9 @@ using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.Unit.Infra.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class CarrySaidTests
 {
     private static readonly DateTime Began = new(2026, 9, 8, 3, 0, 0, DateTimeKind.Utc);

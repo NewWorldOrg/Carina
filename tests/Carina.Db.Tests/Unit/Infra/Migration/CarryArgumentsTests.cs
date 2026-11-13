@@ -1,7 +1,8 @@
 using Carina.Domain.Migration;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.Unit.Infra.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class CarryArgumentsTests
 {
     [Fact]
