@@ -20,6 +20,40 @@ public sealed class CatalogKindsTests
 
     private static readonly CatalogEntryId Entry = CatalogEntryId.New();
 
+    /// <summary>
+    /// The evening a synthetic weekly series of half an hour airs, whose opening is matched in pieces: a long head, a
+    /// short phrase that the programme plays again in its middle, and a slot of 30 seconds on the grid. The first
+    /// episode is recorded twice, the second recording starting a few seconds after the first.
+    /// </summary>
+    private static readonly DateTime LateEvening = new(2026, 10, 5, 13, 0, 0, DateTimeKind.Utc);
+
+    private static readonly TimeSpan Lead = TimeSpan.FromSeconds(10);
+
+    private static readonly TimeSpan Runs = TimeSpan.FromMinutes(30);
+
+    private static readonly DateTime Now = new(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>
+    /// The night a synthetic weekly late-night series airs, whose sponsor's advert is put in the same break every week,
+    /// so that it is heard at about the same place from the start of each episode as a fixed part of the programme is.
+    /// Each week has a recording of its own, and a quiz on the same station shares the adverts heard in two series.
+    /// </summary>
+    private static readonly DateTime Night = new(2026, 10, 5, 15, 0, 0, DateTimeKind.Utc);
+
+    private static readonly CatalogSeries Variety = new(1, "架空の深夜番組", Night);
+
+    private static readonly CatalogSeries QuizBeforeVariety = new(1, "架空のクイズ", Night.AddHours(-5));
+
+    private readonly Episode first = new(Programme(1, "架空の物語", LateEvening, Lead), RecordingId.New());
+
+    private readonly Episode again = new(Programme(1, null, LateEvening, Lead - TimeSpan.FromSeconds(4)), RecordingId.New());
+
+    private readonly Episode second = new(Programme(1, "架空の物語", LateEvening.AddDays(7), Lead), RecordingId.New());
+
+    private readonly RecordingId[] recordingsOfTheWeeks = [RecordingId.New(), RecordingId.New(), RecordingId.New()];
+
+    private Episode[] Weeks => [first, again, second];
+
     [Theory(DisplayName = "a piece on the 15-second grid, from a second and a half short of a multiple to half a second over, heard in two series or on two stations is an advert, 0.9")]
     [InlineData(13.5)]
     [InlineData(14.0)]
@@ -498,61 +532,6 @@ public sealed class CatalogKindsTests
         Assert.Equal(1, ending.SeriesCount);
     }
 
-    private static ProgrammeCopy Daily(int day, string subtitle)
-    {
-        DateTime starts = Evening.AddDays(day);
-        string keptBefore = $"アニメ 架空の忍者「{subtitle}」";
-
-        return new ProgrammeCopy(new NetworkId(3), new ServiceId(3), starts, starts.AddMinutes(10), starts - Lead, $"{keptBefore}[字]", [], [], null, AudioMode.Stereo, keptBefore);
-    }
-
-    private static PlacedOccurrence KeptAt(long id, ProgrammeCopy programme, double fromProgrammeStart, double seconds)
-    {
-        TimeSpan starts = Lead + TimeSpan.FromSeconds(fromProgrammeStart);
-        CatalogOccurrence kept = CatalogOccurrence.Rehydrate(
-            id,
-            Entry,
-            RecordingId.New(),
-            starts,
-            starts + TimeSpan.FromSeconds(seconds),
-            programme.NetworkId,
-            programme.ServiceId,
-            programme.SeriesName,
-            programme.RecordingStartedAt,
-            0.05f,
-            null,
-            Now);
-
-        return PlacedOccurrence.Of(kept, programme);
-    }
-
-    private static CatalogPattern Estimated(double seconds, params PlacedOccurrence[] occurrences)
-        => CatalogKinds.Estimate(TimeSpan.FromSeconds(seconds), occurrences, SeriesLinks.None);
-
-    private static PlacedOccurrence[] Weekly(CatalogSeries series, int weeks, double fromProgrammeStart, double seconds, int firstWeek = 0)
-        => [.. Enumerable.Range(firstWeek, weeks).Select(week => At(Entry, series.Episode(week), fromProgrammeStart, seconds))];
-
-    /// <summary>
-    /// The evening a synthetic weekly series of half an hour airs, whose opening is matched in pieces: a long head, a
-    /// short phrase that the programme plays again in its middle, and a slot of 30 seconds on the grid. The first
-    /// episode is recorded twice, the second recording starting a few seconds after the first.
-    /// </summary>
-    private static readonly DateTime LateEvening = new(2026, 10, 5, 13, 0, 0, DateTimeKind.Utc);
-
-    private static readonly TimeSpan Lead = TimeSpan.FromSeconds(10);
-
-    private static readonly TimeSpan Runs = TimeSpan.FromMinutes(30);
-
-    private static readonly DateTime Now = new(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);
-
-    private readonly Episode first = new(Programme(1, "架空の物語", LateEvening, Lead), RecordingId.New());
-
-    private readonly Episode again = new(Programme(1, null, LateEvening, Lead - TimeSpan.FromSeconds(4)), RecordingId.New());
-
-    private readonly Episode second = new(Programme(1, "架空の物語", LateEvening.AddDays(7), Lead), RecordingId.New());
-
-    private Episode[] Weeks => [first, again, second];
-
     [Fact(DisplayName = "BR-CD-005: a sound heard only in a broadcast recorded twice is heard in one episode, so it is neither an ending nor a programme fixture")]
     public void ASoundOfABroadcastRecordedTwiceIsHeardInOneEpisode()
     {
@@ -631,65 +610,6 @@ public sealed class CatalogKindsTests
         Assert.Equal(CatalogKind.ProgrammeFixture, Carried(next, around).Estimate.Kind);
     }
 
-    private static ProgrammeCopy Programme(int station, string? series, DateTime starts, TimeSpan lead)
-        => new(
-            new NetworkId(station),
-            new ServiceId(station),
-            starts,
-            starts + Runs,
-            starts - lead,
-            series ?? "架空の物語🈑",
-            [],
-            [],
-            null,
-            AudioMode.Stereo,
-            series);
-
-    private static PlacedOccurrence Stretch(CatalogEntryId entry, ProgrammeCopy programme, RecordingId recording, double fromProgrammeStart, double seconds)
-    {
-        TimeSpan starts = programme.ProgrammeStartsAt - programme.RecordingStartedAt + TimeSpan.FromSeconds(fromProgrammeStart);
-        SoundSpan span = new(starts, starts + TimeSpan.FromSeconds(seconds));
-
-        return PlacedOccurrence.Of(CatalogOccurrence.Found(entry, recording, span, programme, 0.05, Now), programme);
-    }
-
-    private static CatalogPattern Own(Sound sound) => CatalogKinds.Estimate(sound.Length, sound.Placed, SeriesLinks.None);
-
-    private static CatalogPattern Carried(Sound sound, CatalogSurroundings around)
-        => CatalogKinds.Estimate(sound.Length, sound.Placed, SeriesLinks.None, around);
-
-    private static CatalogSurroundings Around(params Sound[] sounds)
-        => new([.. sounds.SelectMany(sound => CatalogKinds.Stretches(sound.Placed, Own(sound)))]);
-
-    private (Episode Episode, double FromProgrammeStart)[] Every(double fromProgrammeStart)
-        => [.. Weeks.Select(episode => (episode, fromProgrammeStart))];
-
-    private static Sound Heard(double seconds, params (Episode Episode, double FromProgrammeStart)[] places)
-    {
-        CatalogEntryId entry = CatalogEntryId.New();
-
-        return new Sound(
-            entry,
-            TimeSpan.FromSeconds(seconds),
-            [.. places.Select(place => Stretch(entry, place.Episode.Programme, place.Episode.Recording, place.FromProgrammeStart, seconds))]);
-    }
-
-    private sealed record Episode(ProgrammeCopy Programme, RecordingId Recording);
-
-
-    /// <summary>
-    /// The night a synthetic weekly late-night series airs, whose sponsor's advert is put in the same break every week,
-    /// so that it is heard at about the same place from the start of each episode as a fixed part of the programme is.
-    /// Each week has a recording of its own, and a quiz on the same station shares the adverts heard in two series.
-    /// </summary>
-    private static readonly DateTime Night = new(2026, 10, 5, 15, 0, 0, DateTimeKind.Utc);
-
-    private static readonly CatalogSeries Variety = new(1, "架空の深夜番組", Night);
-
-    private static readonly CatalogSeries QuizBeforeVariety = new(1, "架空のクイズ", Night.AddHours(-5));
-
-    private readonly RecordingId[] weeks = [RecordingId.New(), RecordingId.New(), RecordingId.New()];
-
     [Theory(DisplayName = "BR-CD-005: a piece on the grid heard at the same place in two episodes of one series, right before or after an advert in one of them, is a sponsor's advert, an advert of one series, 0.5")]
     [InlineData(14.0, 825.0, true)]
     [InlineData(14.0, 855.0, true)]
@@ -760,20 +680,97 @@ public sealed class CatalogKindsTests
     public void ASponsorsAdvertCountsAsABreakBesideTheNext()
     {
         Sound advert = HeardWeekly(14, (0, 825)).And(QuizBeforeVariety.Episode(0), 600);
-        Sound first = HeardWeekly(14, (0, 840), (1, 840));
-        Sound second = HeardWeekly(14, (0, 855), (1, 855));
-        CatalogPattern settledFirst = Carried(first, Around(advert, first, second));
+        Sound firstAfter = HeardWeekly(14, (0, 840), (1, 840));
+        Sound secondAfter = HeardWeekly(14, (0, 855), (1, 855));
+        CatalogPattern settledFirst = Carried(firstAfter, Around(advert, firstAfter, secondAfter));
         CatalogSurroundings afterwards = new(
         [
             .. CatalogKinds.Stretches(advert.Placed, Own(advert)),
-            .. CatalogKinds.Stretches(first.Placed, settledFirst),
-            .. CatalogKinds.Stretches(second.Placed, Own(second)),
+            .. CatalogKinds.Stretches(firstAfter.Placed, settledFirst),
+            .. CatalogKinds.Stretches(secondAfter.Placed, Own(secondAfter)),
         ]);
 
         Assert.Equal(CatalogKind.Cm, settledFirst.Estimate.Kind);
-        Assert.Equal(CatalogKind.ProgrammeFixture, Carried(second, Around(advert, first, second)).Estimate.Kind);
-        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.5, CatalogDecision.Pattern), Carried(second, afterwards).Estimate);
-        Assert.All(CatalogKinds.Stretches(first.Placed, settledFirst), stretch => Assert.Equal(SegmentKind.Break, stretch.CountsAs));
+        Assert.Equal(CatalogKind.ProgrammeFixture, Carried(secondAfter, Around(advert, firstAfter, secondAfter)).Estimate.Kind);
+        Assert.Equal(new CatalogEstimate(CatalogKind.Cm, 0.5, CatalogDecision.Pattern), Carried(secondAfter, afterwards).Estimate);
+        Assert.All(CatalogKinds.Stretches(firstAfter.Placed, settledFirst), stretch => Assert.Equal(SegmentKind.Break, stretch.CountsAs));
+    }
+
+    private static ProgrammeCopy Daily(int day, string subtitle)
+    {
+        DateTime starts = Evening.AddDays(day);
+        string keptBefore = $"アニメ 架空の忍者「{subtitle}」";
+
+        return new ProgrammeCopy(new NetworkId(3), new ServiceId(3), starts, starts.AddMinutes(10), starts - Lead, $"{keptBefore}[字]", [], [], null, AudioMode.Stereo, keptBefore);
+    }
+
+    private static PlacedOccurrence KeptAt(long id, ProgrammeCopy programme, double fromProgrammeStart, double seconds)
+    {
+        TimeSpan starts = Lead + TimeSpan.FromSeconds(fromProgrammeStart);
+        CatalogOccurrence kept = CatalogOccurrence.Rehydrate(
+            id,
+            Entry,
+            RecordingId.New(),
+            starts,
+            starts + TimeSpan.FromSeconds(seconds),
+            programme.NetworkId,
+            programme.ServiceId,
+            programme.SeriesName,
+            programme.RecordingStartedAt,
+            0.05f,
+            null,
+            Now);
+
+        return PlacedOccurrence.Of(kept, programme);
+    }
+
+    private static CatalogPattern Estimated(double seconds, params PlacedOccurrence[] occurrences)
+        => CatalogKinds.Estimate(TimeSpan.FromSeconds(seconds), occurrences, SeriesLinks.None);
+
+    private static PlacedOccurrence[] Weekly(CatalogSeries series, int weeks, double fromProgrammeStart, double seconds, int firstWeek = 0)
+        => [.. Enumerable.Range(firstWeek, weeks).Select(week => At(Entry, series.Episode(week), fromProgrammeStart, seconds))];
+
+    private static ProgrammeCopy Programme(int station, string? series, DateTime starts, TimeSpan lead)
+        => new(
+            new NetworkId(station),
+            new ServiceId(station),
+            starts,
+            starts + Runs,
+            starts - lead,
+            series ?? "架空の物語🈑",
+            [],
+            [],
+            null,
+            AudioMode.Stereo,
+            series);
+
+    private static PlacedOccurrence Stretch(CatalogEntryId entry, ProgrammeCopy programme, RecordingId recording, double fromProgrammeStart, double seconds)
+    {
+        TimeSpan starts = programme.ProgrammeStartsAt - programme.RecordingStartedAt + TimeSpan.FromSeconds(fromProgrammeStart);
+        SoundSpan span = new(starts, starts + TimeSpan.FromSeconds(seconds));
+
+        return PlacedOccurrence.Of(CatalogOccurrence.Found(entry, recording, span, programme, 0.05, Now), programme);
+    }
+
+    private static CatalogPattern Own(Sound sound) => CatalogKinds.Estimate(sound.Length, sound.Placed, SeriesLinks.None);
+
+    private static CatalogPattern Carried(Sound sound, CatalogSurroundings around)
+        => CatalogKinds.Estimate(sound.Length, sound.Placed, SeriesLinks.None, around);
+
+    private static CatalogSurroundings Around(params Sound[] sounds)
+        => new([.. sounds.SelectMany(sound => CatalogKinds.Stretches(sound.Placed, Own(sound)))]);
+
+    private (Episode Episode, double FromProgrammeStart)[] Every(double fromProgrammeStart)
+        => [.. Weeks.Select(episode => (episode, fromProgrammeStart))];
+
+    private static Sound Heard(double seconds, params (Episode Episode, double FromProgrammeStart)[] places)
+    {
+        CatalogEntryId entry = CatalogEntryId.New();
+
+        return new Sound(
+            entry,
+            TimeSpan.FromSeconds(seconds),
+            [.. places.Select(place => Stretch(entry, place.Episode.Programme, place.Episode.Recording, place.FromProgrammeStart, seconds))]);
     }
 
     private Sound HeardWeekly(double seconds, params (int Week, double FromProgrammeStart)[] places)
@@ -783,8 +780,10 @@ public sealed class CatalogKindsTests
         return new Sound(
             entry,
             TimeSpan.FromSeconds(seconds),
-            [.. places.Select(place => CatalogSeries.At(entry, Variety.Episode(place.Week), place.FromProgrammeStart, seconds, weeks[place.Week]))]);
+            [.. places.Select(place => CatalogSeries.At(entry, Variety.Episode(place.Week), place.FromProgrammeStart, seconds, recordingsOfTheWeeks[place.Week]))]);
     }
+
+    private sealed record Episode(ProgrammeCopy Programme, RecordingId Recording);
 
     private sealed record Sound(CatalogEntryId Entry, TimeSpan Length, PlacedOccurrence[] Placed)
     {
