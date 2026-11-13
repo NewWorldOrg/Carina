@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 
 using Carina.Api.Live;
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
@@ -11,11 +12,10 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Streaming;
 
 internal sealed class LiveKestrelHost : IAsyncDisposable
 {

@@ -5,12 +5,14 @@ using System.Text.Json;
 using Carina.Api.Events;
 using Carina.Api.Live;
 using Carina.Api.Tests.FeatureTest;
+using Carina.BroadcastTestSupport;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
@@ -44,6 +46,16 @@ public sealed class LiveWireTests
     private static readonly Uri Events = new(AppEventStream.Path, UriKind.Relative);
 
     private static readonly DateTime At = new(2026, 9, 3, 0, 0, 0, DateTimeKind.Utc);
+
+    private static readonly CarouselModule Startup = new(
+        0x0000,
+        1,
+        CarouselBroadcast.Resource("startup.bml", EntityWriter.BmlType, System.Text.Encoding.ASCII.GetBytes("<bml/>")));
+
+    private static readonly CarouselModule Logo = new(
+        0x0001,
+        1,
+        CarouselBroadcast.Resource("logo.png", EntityWriter.PngType, [0x89, 0x50, 0x4E, 0x47]));
 
     private readonly PipedSupply supply = new();
 
@@ -1222,6 +1234,55 @@ public sealed class LiveWireTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact(DisplayName = "BR-BD-004: a wire joining a channel already being watched receives the catalog naming what has arrived and every module before anything else")]
+    public async Task AWireJoiningLaterReceivesTheCatalogAndEveryModuleFirst()
+    {
+        await using AuthProbe probe = WiringSessions();
+        string cookie = await probe.SignedInCookieAsync();
+        using WebSocket first = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        await supply.Opened[0].WriteAsync(new CarouselBroadcast()
+            .Associated()
+            .Mapped()
+            .At(CarouselBroadcast.Second)
+            .Listed(1, Startup, Logo)
+            .Delivered(Startup)
+            .Delivered(Logo)
+            .Bytes);
+        IReadOnlyList<LiveFrame> toTheFirst = await DataBroadcastUntil(first, frames => frames.Count(IsModule) is 2);
+
+        using WebSocket late = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+        LiveFrame[] toTheLate = [await TakePastControl(late), await TakePastControl(late), await TakePastControl(late)];
+
+        Assert.All(toTheLate, frame => Assert.Equal(LiveChannel.DataBroadcast, frame.Channel));
+        Assert.Equal(
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.ModuleKind],
+            toTheLate.Select(frame => frame.Payload.Span[0]));
+        Assert.Equal(
+            [DataBroadcastFrames.CatalogKind, DataBroadcastFrames.CatalogKind, DataBroadcastFrames.ModuleKind, DataBroadcastFrames.ModuleKind],
+            toTheFirst.Select(frame => frame.Payload.Span[0]));
+        Assert.All(["startup.bml", "logo.png"], path => Assert.True(Names(toTheLate[0], path)));
+        Assert.False(Names(toTheFirst[1], "logo.png"));
+        Assert.Equal(
+            toTheFirst.Where(IsModule).Select(frame => frame.Payload.ToArray()),
+            toTheLate.Skip(1).Select(frame => frame.Payload.ToArray()));
+    }
+
+    [Fact(DisplayName = "BR-BD-004: a wire on a service with no data broadcast is told so on the data broadcast channel")]
+    public async Task AWireOnAServiceWithNoDataBroadcastIsToldSo()
+    {
+        await using AuthProbe probe = WiringSessions();
+        string cookie = await probe.SignedInCookieAsync();
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        await supply.Opened[0].WriteAsync(new CarouselBroadcast().Associated().Mapped(carrying: false).At(CarouselBroadcast.Second).Bytes);
+
+        LiveFrame said = await TakePastControl(socket);
+
+        Assert.Equal(LiveChannel.DataBroadcast, said.Channel);
+        Assert.Equal([DataBroadcastFrames.AbsentKind], said.Payload.ToArray());
+    }
+
     private static long Counted(AuthProbe probe, LiveDeparture departure)
         => Departures(probe).Counted.Single(counted => counted.Departure == departure).Times;
 
@@ -1612,5 +1673,61 @@ public sealed class LiveWireTests
             wired.AddSingleton<IRecordingDirectory>(recordings);
             wired.AddSingleton<ILiveSupply>(supply);
         });
+    }
+
+    private static bool IsModule(LiveFrame frame) => frame.Payload.Span[0] == DataBroadcastFrames.ModuleKind;
+
+    private static bool Names(LiveFrame catalog, string path) => catalog.Payload.Span.IndexOf(System.Text.Encoding.UTF8.GetBytes(path)) >= 0;
+
+    private static async Task<IReadOnlyList<LiveFrame>> DataBroadcastUntil(WebSocket socket, Func<IReadOnlyList<LiveFrame>, bool> enough)
+    {
+        List<LiveFrame> heard = [];
+
+        while (!enough(heard))
+        {
+            LiveFrame frame = await TakePastControl(socket);
+
+            Assert.Equal(LiveChannel.DataBroadcast, frame.Channel);
+            heard.Add(frame);
+        }
+
+        return heard;
+    }
+
+    private static async Task<LiveFrame> TakePastControl(WebSocket socket)
+    {
+        while (true)
+        {
+            LiveFrame frame = await TakeWhole(socket);
+
+            if (frame.Channel is not LiveChannel.Control)
+            {
+                return frame;
+            }
+        }
+    }
+
+    private static async Task<LiveFrame> TakeWhole(WebSocket socket)
+    {
+        using MemoryStream message = new();
+        byte[] heard = new byte[64 * 1024];
+        WebSocketReceiveResult said;
+
+        do
+        {
+            said = await socket.ReceiveAsync(new ArraySegment<byte>(heard), Patiently());
+
+            Assert.True(
+                said.MessageType is WebSocketMessageType.Binary,
+                $"a frame was expected, and the wire said {said.MessageType} ({said.CloseStatusDescription})");
+            message.Write(heard, 0, said.Count);
+        }
+        while (!said.EndOfMessage);
+
+        LiveFraming framing = LiveFrame.Read(message.ToArray());
+
+        Assert.NotNull(framing.Frame);
+
+        return framing.Frame;
     }
 }

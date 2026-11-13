@@ -2,15 +2,17 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Api.Live;
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Driver;
 
 using Microsoft.Net.Http.Headers;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Live;
 
-public sealed class LiveDataBroadcastReceiverIdTests
+[Trait("Category", "Feature")]
+public sealed class GetLiveDataBroadcastReceiverIdActionTests
 {
     private static async Task<(HttpStatusCode Status, JsonElement Body, HttpResponseMessage Response)> AskAsync(
         HttpClient client,

@@ -400,6 +400,19 @@ public sealed partial class LiveStreamDeliveryTests
         return [.. heard.Take(filled)];
     }
 
+    [Fact(DisplayName = "BR-BA-004: an application's ticket opens no live stream")]
+    public async Task AnApplicationsTicketOpensNoLiveStream()
+    {
+        await using HybridcastRelayFeature feature = new();
+        JsonElement started = await feature.StartedAsync();
+        string ticket = started.GetProperty("inTheClear").GetString()!;
+
+        using HttpResponseMessage stream = await feature.Frame.GetAsync(new Uri($"/api/live/32736-1024/with-ticket/{ticket}/a.ts", UriKind.Relative), HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Forbidden, stream.StatusCode);
+        Assert.Single(feature.Relay.Asked);
+    }
+
     private static async Task<string> IssuedAsync(AuthProbe probe)
     {
         await probe.SignedInAsync();

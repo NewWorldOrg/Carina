@@ -1,10 +1,12 @@
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Streaming;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Live;
 
-public sealed class LiveDepartureEndpointTests
+[Trait("Category", "Feature")]
+public sealed class ListLiveDeparturesActionTests
 {
     [Fact]
     public async Task EveryWayAWireCanEndIsAnsweredForEvenWhenNoWireHasEndedThatWay()
