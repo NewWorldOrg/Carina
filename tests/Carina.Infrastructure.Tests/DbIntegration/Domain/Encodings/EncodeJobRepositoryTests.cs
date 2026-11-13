@@ -3,15 +3,18 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Encodings;
+using Npgsql;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class EncodeRepositoryTests(RepositoryDatabase database)
+public sealed class EncodeJobRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly DateTime Defined = new(2026, 9, 5, 2, 0, 0, DateTimeKind.Utc);
 
@@ -23,33 +26,23 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
 
     private static readonly OutputRoot Primary = new("primary");
 
+    private static readonly DateTime CaptionsMadeAt = Queued.AddHours(2);
+
+    private static readonly DateTime ChaptersDecided = Queued.AddDays(2);
+
+    private static readonly EncodeTimeline ChapteredTimeline = new(TimeSpan.FromSeconds(3.2), TimeSpan.FromSeconds(0.5), TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(1799.5));
+
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact]
-    public async Task AProfileAndADestinationWrittenDownAreFoundAgainAsTheyWereWritten()
-    {
-        await ClearAsync();
-        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+    private readonly ServiceProvider container = database.Infrastructure();
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeProfile? readProfile = await new EncodeProfileRepository(reading).FindAsync(profile.Id, Cancel);
-        EncodeDestination? readDestination = await new EncodeDestinationRepository(reading).FindAsync(destination.Id, Cancel);
+    private static readonly DateTime MadeFirst = new(2026, 9, 5, 3, 10, 0, DateTimeKind.Utc);
 
-        Assert.NotNull(readProfile);
-        Assert.Equal(new EncodeLabel("Viewing"), readProfile.Label);
-        Assert.Equal(EncodeCodec.H264, readProfile.Codec);
-        Assert.Equal(EncodeResolution.Hd, readProfile.Resolution);
-        Assert.Equal(Deinterlace.EveryFrame, readProfile.Deinterlace);
-        Assert.Equal(new ConstantRateFactor(22), readProfile.SoftwareRateControl);
-        Assert.Equal(new ConstantQuantiser(25), readProfile.VaapiRateControl);
-        Assert.Equal(Defined, readProfile.DefinedAt);
+    private static readonly DateTime MadeAgain = new(2026, 9, 5, 3, 40, 0, DateTimeKind.Utc);
 
-        Assert.NotNull(readDestination);
-        Assert.Equal(Primary, readDestination.OutputRoot);
-        Assert.Equal(profile.Id, readDestination.DefaultProfileId);
-        Assert.Contains(await new EncodeProfileRepository(reading).ListAsync(Cancel), listed => listed.Id.Equals(profile.Id));
-        Assert.Contains(await new EncodeDestinationRepository(reading).ListAsync(Cancel), listed => listed.Id.Equals(destination.Id));
-    }
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact(DisplayName = "a job that failed comes back with its classification, its note and the time, and one that did not with none of them")]
     public async Task AJobComesBackAsItWasWrittenFailureAndAll()
@@ -61,16 +54,16 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         failed.Start(Started);
         failed.Fail(EncodeFailure.SourceMissing, "the recording is not where the ledger says", Ended);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var repository = new EncodeJobRepository(writing);
+            IEncodeJobRepository repository = Jobs(writing);
             await repository.AddAsync(failed, Cancel);
             await repository.AddAsync(waiting, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob? readFailed = await new EncodeJobRepository(reading).FindAsync(failed.Id, Cancel);
-        EncodeJob? readWaiting = await new EncodeJobRepository(reading).FindAsync(waiting.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeJob? readFailed = await Jobs(reading).FindAsync(failed.Id, Cancel);
+        EncodeJob? readWaiting = await Jobs(reading).FindAsync(waiting.Id, Cancel);
 
         Assert.NotNull(readFailed);
         Assert.Equal(EncodeJobStatus.Failed, readFailed.Status);
@@ -96,13 +89,13 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         running.Start(Started);
         running.Routed(new EncodeRoute(EncodeEncoder.Nvenc, EncodeEncoder.Nvenc, null));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new EncodeJobRepository(writing).AddAsync(running, Cancel);
+            await Jobs(writing).AddAsync(running, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(running.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeJob? read = await Jobs(reading).FindAsync(running.Id, Cancel);
 
         Assert.NotNull(read);
         Assert.Equal(new EncodeRoute(EncodeEncoder.Nvenc, EncodeEncoder.Nvenc, null), read.Route);
@@ -121,14 +114,14 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         running.Reached(EncodeProgress.Of(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(120), 2, false), Started.AddSeconds(20));
         running.Aligned(new EncodeTimeline(TimeSpan.FromSeconds(30499.474078), TimeSpan.FromSeconds(0.5072), TimeSpan.FromSeconds(2097.502489), null));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new EncodeJobRepository(writing).AddAsync(running, Cancel);
+            await Jobs(writing).AddAsync(running, Cancel);
         }
 
-        await using (CarinaDbContext reading = database.Open())
+        await using (AsyncServiceScope reading = container.CreateAsyncScope())
         {
-            EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(running.Id, Cancel);
+            EncodeJob? read = await Jobs(reading).FindAsync(running.Id, Cancel);
 
             Assert.NotNull(read);
             Assert.Equal(running.Route, read.Route);
@@ -141,11 +134,11 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
 
             read.Measured(TimeSpan.FromSeconds(2096.7947));
             read.Fail(EncodeFailure.TimedOut, "quiet", Ended);
-            await new EncodeJobRepository(reading).SaveAsync(read, Cancel);
+            await Jobs(reading).SaveAsync(read, Cancel);
         }
 
-        await using CarinaDbContext again = database.Open();
-        EncodeJob? ended = await new EncodeJobRepository(again).FindAsync(running.Id, Cancel);
+        await using AsyncServiceScope again = container.CreateAsyncScope();
+        EncodeJob? ended = await Jobs(again).FindAsync(running.Id, Cancel);
 
         Assert.NotNull(ended);
         Assert.Null(ended.Programme);
@@ -164,33 +157,33 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         running.Start(Started);
         running.Remaking();
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new EncodeJobRepository(writing).AddAsync(running, Cancel);
+            await Jobs(writing).AddAsync(running, Cancel);
         }
 
-        await using (CarinaDbContext reading = database.Open())
+        await using (AsyncServiceScope reading = container.CreateAsyncScope())
         {
-            EncodeJob read = (await new EncodeJobRepository(reading).FindAsync(running.Id, Cancel))!;
+            EncodeJob read = (await Jobs(reading).FindAsync(running.Id, Cancel))!;
 
             Assert.Equal(EncodeRemake.LargerThanTheSource, read.Remade);
 
             read.MadeAgain(EncodeRemake.StillLargerThanTheSource);
-            await new EncodeJobRepository(reading).SaveAsync(read, Cancel);
+            await Jobs(reading).SaveAsync(read, Cancel);
         }
 
-        await using (CarinaDbContext reading = database.Open())
+        await using (AsyncServiceScope reading = container.CreateAsyncScope())
         {
-            EncodeJob read = (await new EncodeJobRepository(reading).FindAsync(running.Id, Cancel))!;
+            EncodeJob read = (await Jobs(reading).FindAsync(running.Id, Cancel))!;
 
             Assert.Equal(EncodeRemake.StillLargerThanTheSource, read.Remade);
 
             read.Requeue(Ended);
-            await new EncodeJobRepository(reading).SaveAsync(read, Cancel);
+            await Jobs(reading).SaveAsync(read, Cancel);
         }
 
-        await using CarinaDbContext again = database.Open();
-        EncodeJob? putBack = await new EncodeJobRepository(again).FindAsync(running.Id, Cancel);
+        await using AsyncServiceScope again = container.CreateAsyncScope();
+        EncodeJob? putBack = await Jobs(again).FindAsync(running.Id, Cancel);
 
         Assert.Null(putBack!.Remade);
     }
@@ -203,9 +196,9 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeJob job = Job(profile, destination);
         job.Start(Started);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var repository = new EncodeJobRepository(writing);
+            IEncodeJobRepository repository = Jobs(writing);
             await repository.AddAsync(job, Cancel);
 
             Assert.Equal(
@@ -213,8 +206,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
                 await repository.ClaimArtefactAsync(job, EncodeFileName.Artefact(job.RecordingId, profile.Id), Cancel));
         }
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(job.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeJob? read = await Jobs(reading).FindAsync(job.Id, Cancel);
 
         Assert.NotNull(read);
         Assert.Equal(EncodeFileName.Artefact(job.RecordingId, profile.Id), read.ArtefactName);
@@ -232,8 +225,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeFileName name = EncodeFileName.Artefact(recording, profile.Id);
         first.Start(Started);
 
-        await using CarinaDbContext writing = database.Open();
-        var repository = new EncodeJobRepository(writing);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        IEncodeJobRepository repository = Jobs(writing);
         await repository.AddAsync(first, Cancel);
         await repository.AddAsync(second, Cancel);
 
@@ -246,8 +239,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
 
         Assert.Equal(ArtefactClaim.Claimed, await repository.ClaimArtefactAsync(second, name, Cancel));
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(first.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeJob? read = await Jobs(reading).FindAsync(first.Id, Cancel);
 
         Assert.NotNull(read);
         Assert.Equal(name, read.ArtefactName);
@@ -265,8 +258,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeFileName name = EncodeFileName.Artefact(recording, profile.Id);
         first.Start(Started);
 
-        await using CarinaDbContext writing = database.Open();
-        var repository = new EncodeJobRepository(writing);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        IEncodeJobRepository repository = Jobs(writing);
         await repository.AddAsync(first, Cancel);
         await repository.AddAsync(second, Cancel);
 
@@ -284,8 +277,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         second.Fail(EncodePlacements.WhatACollisionIsCalled, "another job holds that name", Ended);
         await repository.SaveAsync(second, Cancel);
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(second.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeJob? read = await Jobs(reading).FindAsync(second.Id, Cancel);
 
         Assert.NotNull(read);
         Assert.Equal(EncodeJobStatus.Failed, read.Status);
@@ -302,8 +295,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeFileName name = EncodeFileName.Artefact(job.RecordingId, profile.Id);
         job.Start(Started);
 
-        await using CarinaDbContext writing = database.Open();
-        var repository = new EncodeJobRepository(writing);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        IEncodeJobRepository repository = Jobs(writing);
         await repository.AddAsync(job, Cancel);
 
         Assert.Equal(ArtefactClaim.Claimed, await repository.ClaimArtefactAsync(job, name, Cancel));
@@ -324,8 +317,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
         EncodeJob job = Job(profile, destination);
 
-        await using CarinaDbContext writing = database.Open();
-        var repository = new EncodeJobRepository(writing);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        IEncodeJobRepository repository = Jobs(writing);
         await repository.AddAsync(job, Cancel);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => repository.ClaimArtefactAsync(
@@ -341,15 +334,15 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeJob later = Job(profile, destination);
         EncodeJob earlier = EncodeJob.Queue(EncodeJobId.New(), RecordingId.New(), profile.Id, destination.Id, Primary, Queued.AddMinutes(-5));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var repository = new EncodeJobRepository(writing);
+            IEncodeJobRepository repository = Jobs(writing);
             await repository.AddAsync(later, Cancel);
             await repository.AddAsync(earlier, Cancel);
         }
 
-        await using CarinaDbContext claiming = database.Open();
-        EncodeClaim claim = await new EncodeJobRepository(claiming).ClaimNextAsync(Started, Cancel);
+        await using AsyncServiceScope claiming = container.CreateAsyncScope();
+        EncodeClaim claim = await Jobs(claiming).ClaimNextAsync(Started, Cancel);
 
         Assert.Equal(EncodeClaimStanding.Claimed, claim.Standing);
         Assert.NotNull(claim.Job);
@@ -358,10 +351,10 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(Started, claim.Job.StartedAt);
         Assert.Equal(EncodeJob.FirstAttempt, claim.Job.Attempt);
 
-        await using CarinaDbContext reading = database.Open();
-        Assert.Equal(EncodeJobStatus.Running, (await new EncodeJobRepository(reading).FindAsync(earlier.Id, Cancel))!.Status);
-        Assert.Equal(EncodeJobStatus.Queued, (await new EncodeJobRepository(reading).FindAsync(later.Id, Cancel))!.Status);
-        Assert.Equal([earlier.Id], (await new EncodeJobRepository(reading).ListRunningAsync(Cancel)).Select(job => job.Id));
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Assert.Equal(EncodeJobStatus.Running, (await Jobs(reading).FindAsync(earlier.Id, Cancel))!.Status);
+        Assert.Equal(EncodeJobStatus.Queued, (await Jobs(reading).FindAsync(later.Id, Cancel))!.Status);
+        Assert.Equal([earlier.Id], (await Jobs(reading).ListRunningAsync(Cancel)).Select(job => job.Id));
     }
 
     [Fact(DisplayName = "while the ledger holds a running job, a claim is refused by the index and answers that another is running")]
@@ -373,21 +366,21 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeJob waiting = Job(profile, destination);
         running.Start(Started);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var repository = new EncodeJobRepository(writing);
+            IEncodeJobRepository repository = Jobs(writing);
             await repository.AddAsync(running, Cancel);
             await repository.AddAsync(waiting, Cancel);
         }
 
-        await using CarinaDbContext claiming = database.Open();
-        EncodeClaim claim = await new EncodeJobRepository(claiming).ClaimNextAsync(Ended, Cancel);
+        await using AsyncServiceScope claiming = container.CreateAsyncScope();
+        EncodeClaim claim = await Jobs(claiming).ClaimNextAsync(Ended, Cancel);
 
         Assert.Equal(EncodeClaimStanding.AnotherIsRunning, claim.Standing);
         Assert.Null(claim.Job);
 
-        await using CarinaDbContext reading = database.Open();
-        Assert.Equal(EncodeJobStatus.Queued, (await new EncodeJobRepository(reading).FindAsync(waiting.Id, Cancel))!.Status);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Assert.Equal(EncodeJobStatus.Queued, (await Jobs(reading).FindAsync(waiting.Id, Cancel))!.Status);
     }
 
     [Fact(DisplayName = "twenty claims at once start exactly one job; the rest are refused by the ledger, not by anything in memory")]
@@ -396,9 +389,9 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         await ClearAsync();
         (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var repository = new EncodeJobRepository(writing);
+            IEncodeJobRepository repository = Jobs(writing);
 
             for (int queued = 0; queued < 5; queued++)
             {
@@ -408,9 +401,9 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
 
         EncodeClaim[] claims = await Task.WhenAll(Enumerable.Range(0, 20).Select(async _ =>
         {
-            await using CarinaDbContext claiming = database.Open();
+            await using AsyncServiceScope claiming = container.CreateAsyncScope();
 
-            return await new EncodeJobRepository(claiming).ClaimNextAsync(Started, Cancel);
+            return await Jobs(claiming).ClaimNextAsync(Started, Cancel);
         }));
 
         Assert.Single(claims, claim => claim.Standing is EncodeClaimStanding.Claimed);
@@ -418,8 +411,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
             claims.Where(claim => claim.Standing is not EncodeClaimStanding.Claimed),
             claim => Assert.Contains(claim.Standing, new[] { EncodeClaimStanding.AnotherIsRunning, EncodeClaimStanding.TakenMeanwhile }));
 
-        await using CarinaDbContext reading = database.Open();
-        Assert.Single(await new EncodeJobRepository(reading).ListRunningAsync(Cancel));
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Assert.Single(await Jobs(reading).ListRunningAsync(Cancel));
     }
 
     [Fact(DisplayName = "an empty queue answers that nothing is waiting")]
@@ -427,11 +420,11 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
     {
         await ClearAsync();
 
-        await using CarinaDbContext claiming = database.Open();
-        EncodeClaim claim = await new EncodeJobRepository(claiming).ClaimNextAsync(Started, Cancel);
+        await using AsyncServiceScope claiming = container.CreateAsyncScope();
+        EncodeClaim claim = await Jobs(claiming).ClaimNextAsync(Started, Cancel);
 
         Assert.Equal(EncodeClaimStanding.NothingWaiting, claim.Standing);
-        Assert.Empty(await new EncodeJobRepository(claiming).ListRunningAsync(Cancel));
+        Assert.Empty(await Jobs(claiming).ListRunningAsync(Cancel));
     }
 
     [Fact(DisplayName = "a running job put back by a restart is claimed again on its next attempt")]
@@ -441,9 +434,9 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
         EncodeJob job = Job(profile, destination);
 
-        await using (CarinaDbContext first = database.Open())
+        await using (AsyncServiceScope first = container.CreateAsyncScope())
         {
-            var repository = new EncodeJobRepository(first);
+            IEncodeJobRepository repository = Jobs(first);
             await repository.AddAsync(job, Cancel);
 
             EncodeJob claimed = (await repository.ClaimNextAsync(Started, Cancel)).Job!;
@@ -451,78 +444,12 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
             await repository.SaveAsync(claimed, Cancel);
         }
 
-        await using CarinaDbContext second = database.Open();
-        EncodeClaim again = await new EncodeJobRepository(second).ClaimNextAsync(Ended.AddMinutes(1), Cancel);
+        await using AsyncServiceScope second = container.CreateAsyncScope();
+        EncodeClaim again = await Jobs(second).ClaimNextAsync(Ended.AddMinutes(1), Cancel);
 
         Assert.Equal(EncodeClaimStanding.Claimed, again.Standing);
         Assert.Equal(2, again.Job!.Attempt);
         Assert.Equal(Ended.AddMinutes(1), again.Job.StartedAt);
-    }
-
-    [Fact(DisplayName = "what a job still owes a removal for is exactly what the ledger holds unsettled for that job")]
-    public async Task WhatAJobStillOwesARemovalForIsWhatTheLedgerHoldsUnsettledForIt()
-    {
-        await ClearAsync();
-        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
-        EncodeJob job = Job(profile, destination);
-        EncodeJob other = Job(profile, destination);
-        EncodeScratchFile first = Scratch(job, 1, Queued);
-        EncodeScratchFile second = Scratch(job, 2, Queued.AddMinutes(1));
-        EncodeScratchFile others = Scratch(other, 1, Queued);
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            var jobs = new EncodeJobRepository(writing);
-            await jobs.AddAsync(job, Cancel);
-            await jobs.AddAsync(other, Cancel);
-
-            var ledger = new EncodeScratchLedger(writing);
-            await ledger.RecordAsync(first, Cancel);
-            await ledger.RecordAsync(second, Cancel);
-            await ledger.RecordAsync(others, Cancel);
-
-            first.Settle(EncodeScratchFate.Removed, Ended);
-            await ledger.SaveAsync(first, Cancel);
-        }
-
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<EncodeScratchFile> owed = await new EncodeScratchLedger(reading).ListOwedAsync(job.Id, Cancel);
-
-        Assert.Equal([second.Id], owed.Select(scratch => scratch.Id));
-        Assert.Equal(EncodeScratchKind.WorkFile, owed[0].Kind);
-        Assert.Equal(second.FileName, owed[0].FileName);
-        Assert.True(owed[0].IsOwedARemoval);
-    }
-
-    [Fact]
-    public async Task AFileThatCouldNotBeRemovedIsListedAsOwedAgain()
-    {
-        await ClearAsync();
-        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
-        EncodeJob job = Job(profile, destination);
-        EncodeScratchFile stuck = Scratch(job, 1, Queued);
-        EncodeScratchFile gone = Scratch(job, 2, Queued.AddMinutes(1));
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
-
-            EncodeScratchLedger ledger = new(writing);
-            await ledger.RecordAsync(stuck, Cancel);
-            await ledger.RecordAsync(gone, Cancel);
-
-            stuck.Settle(EncodeScratchFate.CouldNotBeRemoved, Ended);
-            await ledger.SaveAsync(stuck, Cancel);
-            gone.Settle(EncodeScratchFate.Removed, Ended);
-            await ledger.SaveAsync(gone, Cancel);
-        }
-
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<EncodeScratchFile> owed = await new EncodeScratchLedger(reading).ListOwedAsync(job.Id, Cancel);
-
-        EncodeScratchFile listed = Assert.Single(owed);
-        Assert.Equal(stuck.Id, listed.Id);
-        Assert.Equal(EncodeScratchFate.CouldNotBeRemoved, listed.Fate);
     }
 
     [Fact(DisplayName = "a page of the ledger comes newest first, narrowed to the standings asked for, and says how many there are")]
@@ -535,16 +462,16 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeJob newest = EncodeJob.Queue(EncodeJobId.New(), RecordingId.New(), profile.Id, destination.Id, Primary, Queued.AddMinutes(5));
         running.Start(Started.AddMinutes(1));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var repository = new EncodeJobRepository(writing);
+            IEncodeJobRepository repository = Jobs(writing);
             await repository.AddAsync(oldest, Cancel);
             await repository.AddAsync(running, Cancel);
             await repository.AddAsync(newest, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        var reader = new EncodeJobRepository(reading);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IEncodeJobRepository reader = Jobs(reading);
         PaginatedList<EncodeJob> everything = await reader.ListAsync(EncodeJobQuery.For(null, null, 1, 2)!, Cancel);
         PaginatedList<EncodeJob> waiting = await reader.ListAsync(EncodeJobQuery.For([EncodeJobStatus.Queued], null, 1, 10)!, Cancel);
 
@@ -565,16 +492,16 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeJob second = EncodeJob.Queue(EncodeJobId.New(), recording, profile.Id, destination.Id, Primary, Queued.AddMinutes(1));
         EncodeJob other = Job(profile, destination);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var repository = new EncodeJobRepository(writing);
+            IEncodeJobRepository repository = Jobs(writing);
             await repository.AddAsync(first, Cancel);
             await repository.AddAsync(second, Cancel);
             await repository.AddAsync(other, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<EncodeJob> listed = await new EncodeJobRepository(reading).ListForRecordingAsync(recording, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IReadOnlyList<EncodeJob> listed = await Jobs(reading).ListForRecordingAsync(recording, Cancel);
 
         Assert.Equal([first.Id, second.Id], listed.Select(job => job.Id));
     }
@@ -587,18 +514,18 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeJob job = Job(profile, destination);
         job.Start(Started);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+            await Jobs(writing).AddAsync(job, Cancel);
         }
 
-        await using CarinaDbContext running = database.Open();
-        var runner = new EncodeJobRepository(running);
+        await using AsyncServiceScope running = container.CreateAsyncScope();
+        IEncodeJobRepository runner = Jobs(running);
         EncodeJob held = (await runner.FindAsync(job.Id, Cancel))!;
 
-        await using (CarinaDbContext cancelling = database.Open())
+        await using (AsyncServiceScope cancelling = container.CreateAsyncScope())
         {
-            var hand = new EncodeJobRepository(cancelling);
+            IEncodeJobRepository hand = Jobs(cancelling);
             EncodeJob calledOff = (await hand.FindAsync(job.Id, Cancel))!;
             calledOff.Cancel(Ended);
             await hand.SaveAsync(calledOff, Cancel);
@@ -608,8 +535,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         EncodeJobMovedMeanwhileException moved = await Assert.ThrowsAsync<EncodeJobMovedMeanwhileException>(() => runner.SaveAsync(held, Cancel));
 
         Assert.Equal(job.Id, moved.JobId);
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(job.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeJob? read = await Jobs(reading).FindAsync(job.Id, Cancel);
         Assert.Equal(EncodeJobStatus.Cancelled, read!.Status);
         Assert.Null(read.Failure);
     }
@@ -621,31 +548,31 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
         EncodeJob job = Job(profile, destination);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+            await Jobs(writing).AddAsync(job, Cancel);
         }
 
         EncodeJob ran;
 
-        await using (CarinaDbContext running = database.Open())
+        await using (AsyncServiceScope running = container.CreateAsyncScope())
         {
-            ran = (await new EncodeJobRepository(running).ClaimNextAsync(Started, Cancel)).Job!;
+            ran = (await Jobs(running).ClaimNextAsync(Started, Cancel)).Job!;
         }
 
         ran.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Ended);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            Assert.True(await new EncodeJobRepository(writing).WriteTheEndingAsync(ran, Cancel));
+            Assert.True(await Jobs(writing).WriteTheEndingAsync(ran, Cancel));
         }
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(job.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeJob? read = await Jobs(reading).FindAsync(job.Id, Cancel);
         Assert.Equal(EncodeJobStatus.Failed, read!.Status);
         Assert.Equal(EncodeFailure.FfmpegExitedNonZero, read.Failure!.Failure);
         Assert.Equal(Ended, read.EndedAt);
-        Assert.Equal(EncodeClaimStanding.NothingWaiting, (await new EncodeJobRepository(reading).ClaimNextAsync(Ended, Cancel)).Standing);
+        Assert.Equal(EncodeClaimStanding.NothingWaiting, (await Jobs(reading).ClaimNextAsync(Ended, Cancel)).Standing);
     }
 
     [Fact]
@@ -655,21 +582,21 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
         EncodeJob job = Job(profile, destination);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+            await Jobs(writing).AddAsync(job, Cancel);
         }
 
         EncodeJob ran;
 
-        await using (CarinaDbContext running = database.Open())
+        await using (AsyncServiceScope running = container.CreateAsyncScope())
         {
-            ran = (await new EncodeJobRepository(running).ClaimNextAsync(Started, Cancel)).Job!;
+            ran = (await Jobs(running).ClaimNextAsync(Started, Cancel)).Job!;
         }
 
-        await using (CarinaDbContext cancelling = database.Open())
+        await using (AsyncServiceScope cancelling = container.CreateAsyncScope())
         {
-            var hand = new EncodeJobRepository(cancelling);
+            IEncodeJobRepository hand = Jobs(cancelling);
             EncodeJob calledOff = (await hand.FindAsync(job.Id, Cancel))!;
             calledOff.Cancel(Ended);
             await hand.SaveAsync(calledOff, Cancel);
@@ -677,13 +604,13 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
 
         ran.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Ended.AddSeconds(1));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            Assert.False(await new EncodeJobRepository(writing).WriteTheEndingAsync(ran, Cancel));
+            Assert.False(await Jobs(writing).WriteTheEndingAsync(ran, Cancel));
         }
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(job.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeJob? read = await Jobs(reading).FindAsync(job.Id, Cancel);
         Assert.Equal(EncodeJobStatus.Cancelled, read!.Status);
         Assert.Null(read.Failure);
     }
@@ -700,8 +627,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         await WrittenAsync(profile, destination, EncodeJobStatus.Cancelled, Queued, Started.AddHours(3), Started.AddHours(3).AddMinutes(1));
         await WrittenAsync(profile, destination, EncodeJobStatus.Queued, Queued, null, null);
 
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<EncodeSpell> spells = await new EncodeJobRepository(reading).RecentSpellsAsync(20, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IReadOnlyList<EncodeSpell> spells = await Jobs(reading).RecentSpellsAsync(20, Cancel);
 
         Assert.Equal(2, spells.Count);
         Assert.Equal(TimeSpan.FromMinutes(30), spells[0].Took);
@@ -726,150 +653,92 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
                 Started.AddHours(each).AddMinutes(5 + each));
         }
 
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<EncodeSpell> spells = await new EncodeJobRepository(reading).RecentSpellsAsync(2, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IReadOnlyList<EncodeSpell> spells = await Jobs(reading).RecentSpellsAsync(2, Cancel);
 
         Assert.Equal(2, spells.Count);
         Assert.Equal(TimeSpan.FromMinutes(8), spells[0].Took);
         Assert.Equal(TimeSpan.FromMinutes(7), spells[1].Took);
     }
 
-    [Fact(DisplayName = "the chapters a run marked come back in the order they were marked, on the artefact's clock, and only the ones belonging to the job asked for")]
-    public async Task TheChaptersARunMarkedComeBackInTheOrderTheyWereMarked()
-    {
-        await ClearAsync();
-        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
-        EncodeJob job = Job(profile, destination);
-        EncodeJob other = Job(profile, destination);
-        IReadOnlyList<ChapterSegment> segments =
-        [
-            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(30), ChapterKind.Programme),
-            new ChapterSegment(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(90), ChapterKind.Break),
-            new ChapterSegment(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(130.5), ChapterKind.Programme),
-        ];
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
-            await new EncodeJobRepository(writing).AddAsync(other, Cancel);
-        }
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new EncodeChapterRepository(writing).RecordAsync(job.Id, EncodeChapter.Mark(job.Id, segments), Cancel);
-            await new EncodeChapterRepository(writing).RecordAsync(
-                other.Id,
-                EncodeChapter.Mark(other.Id, [new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(5), ChapterKind.Break)]),
-                Cancel);
-        }
-
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<EncodeChapter> read = await new EncodeChapterRepository(reading).ListForJobAsync(job.Id, Cancel);
-
-        Assert.Equal([EncodeChapter.FirstOrdinal, 1, 2], read.Select(chapter => chapter.Ordinal));
-        Assert.Equal(segments, read.Select(chapter => chapter.Segment));
-        Assert.All(read, chapter => Assert.Equal(job.Id, chapter.JobId));
-        Assert.Equal(TimeSpan.FromSeconds(130.5), read[^1].EndsAt);
-        Assert.Empty(await new EncodeChapterRepository(reading).ListForJobAsync(EncodeJobId.New(), Cancel));
-        Assert.Equal(
-            [ChapterKind.Break],
-            (await new EncodeChapterRepository(reading).ListForJobAsync(other.Id, Cancel)).Select(chapter => chapter.Kind));
-    }
-
-    [Fact(DisplayName = "a reading of nothing writes nothing, and what a run made of the breaks comes back on the job as it was written")]
-    public async Task WhatARunMadeOfTheBreaksComesBackOnTheJobAsItWasWritten()
-    {
-        await ClearAsync();
-        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
-        EncodeJob judged = Job(profile, destination);
-        EncodeJob unjudged = Job(profile, destination);
-        judged.Start(Started);
-        judged.Judged(new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.Discarded, 0.71, Started));
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new EncodeJobRepository(writing).AddAsync(judged, Cancel);
-            await new EncodeJobRepository(writing).AddAsync(unjudged, Cancel);
-            await new EncodeChapterRepository(writing).RecordAsync(judged.Id, [], Cancel);
-        }
-
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob? readJudged = await new EncodeJobRepository(reading).FindAsync(judged.Id, Cancel);
-        EncodeJob? readUnjudged = await new EncodeJobRepository(reading).FindAsync(unjudged.Id, Cancel);
-
-        Assert.NotNull(readJudged);
-        Assert.Equal(ChapterDetectorName.Ffmpeg, readJudged.Chapters!.Detector);
-        Assert.Equal(ChapterVerdict.Discarded, readJudged.Chapters.Verdict);
-        Assert.Equal(0.71, readJudged.Chapters.BreakShare);
-        Assert.Equal(Started, readJudged.Chapters.DecidedAt);
-        Assert.Null(readUnjudged!.Chapters);
-        Assert.Empty(await new EncodeChapterRepository(reading).ListForJobAsync(judged.Id, Cancel));
-    }
-
-    [Fact(DisplayName = "a job read a second time holds what the second reading marked and nothing of the first, and a second reading that marked nothing leaves it holding none")]
-    public async Task AJobReadASecondTimeHoldsWhatTheSecondReadingMarked()
-    {
-        await ClearAsync();
-        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
-        EncodeJob job = Job(profile, destination);
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
-        }
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new EncodeChapterRepository(writing).RecordAsync(
-                job.Id,
-                EncodeChapter.Mark(
-                    job.Id,
-                    [
-                        new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(30), ChapterKind.Programme),
-                        new ChapterSegment(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(90), ChapterKind.Break),
-                    ]),
-                Cancel);
-        }
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new EncodeChapterRepository(writing).RecordAsync(
-                job.Id,
-                EncodeChapter.Mark(job.Id, [new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(45), ChapterKind.Break)]),
-                Cancel);
-        }
-
-        await using (CarinaDbContext reading = database.Open())
-        {
-            EncodeChapter only = Assert.Single(await new EncodeChapterRepository(reading).ListForJobAsync(job.Id, Cancel));
-
-            Assert.Equal(EncodeChapter.FirstOrdinal, only.Ordinal);
-            Assert.Equal(TimeSpan.FromSeconds(45), only.EndsAt);
-            Assert.Equal(ChapterKind.Break, only.Kind);
-        }
-
-        await using (CarinaDbContext writing = database.Open())
-        {
-            await new EncodeChapterRepository(writing).RecordAsync(job.Id, [], Cancel);
-        }
-
-        await using CarinaDbContext after = database.Open();
-        Assert.Empty(await new EncodeChapterRepository(after).ListForJobAsync(job.Id, Cancel));
-    }
-
     [Fact]
-    public async Task AJobIsWrittenTheChaptersOfItsOwnReading()
+    public async Task BrEd2019WhatBecameOfATrackIsKeptWithTheRecordItCameFromAndTheFailuresInARow()
     {
         await ClearAsync();
-        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
-        EncodeJob job = Job(profile, destination);
+        EncodeJob standing = await StandingAsync(null, null, job => Failed(job, 2));
 
-        await using CarinaDbContext writing = database.Open();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        EncodeJob read = (await Jobs(context).FindAsync(standing.Id, Cancel))!;
 
-        await Assert.ThrowsAsync<ArgumentException>(() => new EncodeChapterRepository(writing).RecordAsync(
-            job.Id,
-            EncodeChapter.Mark(EncodeJobId.New(), [new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(5), ChapterKind.Break)]),
-            Cancel));
+        Assert.Equal((EncodeCaptionTrack.Failed, CaptionsMadeAt, 2), (read.CaptionTrack!.Value, read.CaptionTrackFrom!.Value, read.CaptionTrackAttempts));
+
+        read.Tracked(EncodeCaptionTrack.Added, CaptionsMadeAt);
+        await Jobs(context).SaveAsync(read, Cancel);
+
+        await using AsyncServiceScope again = container.CreateAsyncScope();
+        EncodeJob saved = (await Jobs(again).FindAsync(standing.Id, Cancel))!;
+
+        Assert.Equal((EncodeCaptionTrack.Added, CaptionsMadeAt, 0), (saved.CaptionTrack!.Value, saved.CaptionTrackFrom!.Value, saved.CaptionTrackAttempts));
+    }
+
+    [Fact(DisplayName = "BR-CD-010: what the chapters of a standing artefact stand for is kept with the version it came from")]
+    public async Task WhatTheChaptersStandForIsKept()
+    {
+        await ClearAsync();
+        EncodeJob standing = await StandingAsync(ChapteredTimeline, new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.Marked, 0.1, Started));
+
+        await using (AsyncServiceScope context = container.CreateAsyncScope())
+        {
+            IEncodeJobRepository jobs = Jobs(context);
+            EncodeJob held = (await jobs.FindAsync(standing.Id, Cancel))!;
+            held.Rechaptered(new ChapterReading(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.2, ChaptersDecided, 1));
+            await jobs.SaveAsync(held, Cancel);
+        }
+
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeJob read = (await Jobs(reading).FindAsync(standing.Id, Cancel))!;
+
+        Assert.Equal(
+            (ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.2, ChaptersDecided, (int?)1),
+            (read.Chapters!.Detector, read.Chapters.Verdict, read.Chapters.BreakShare, read.Chapters.DecidedAt, read.Chapters.ModelVersion));
+    }
+
+    [Fact(DisplayName = "the recordings made more than once are the ones two jobs completed for, whether or not the earlier one is replaced yet")]
+    public async Task TheRecordingsMadeMoreThanOnceAreTheOnesTwoJobsCompletedFor()
+    {
+        await ClearAsync();
+        RecordingId twice = RecordingId.New();
+        RecordingId settled = RecordingId.New();
+        RecordingId once = RecordingId.New();
+        EncodeJob settledEarlier = Completed(settled, MadeFirst);
+        EncodeJob settledNewer = Completed(settled, MadeAgain);
+        settledEarlier.Replaced(settledNewer, MadeAgain);
+        EncodeJob failed = Running(once);
+        failed.Fail(EncodeFailure.FfmpegExitedNonZero, "exit 1", MadeAgain);
+        await AddAsync(Completed(twice, MadeFirst), Completed(twice, MadeAgain), settledEarlier, settledNewer, Completed(once, MadeFirst), failed);
+
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IReadOnlyList<RecordingId> made = await Jobs(reading).ListRecordingsMadeMoreThanOnceAsync(Cancel);
+
+        Assert.Equal(
+            new HashSet<RecordingId> { twice, settled },
+            made.ToHashSet());
+    }
+
+    [Fact(DisplayName = "the table itself refuses a job read as replaced that did not complete")]
+    public async Task TheTableRefusesAReplacedJobThatDidNotComplete()
+    {
+        await ClearAsync();
+        EncodeJob running = Running(RecordingId.New());
+        await AddAsync(running);
+
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
+            () => Context(writing).Database.ExecuteSqlAsync(
+                $"UPDATE encode_job SET replaced_at = {MadeAgain} WHERE id = {running.Id.Value}",
+                Cancel));
+
+        Assert.Equal("ck_encode_job_replaced", refused.ConstraintName);
     }
 
     private async Task WrittenAsync(
@@ -902,16 +771,55 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
             null,
             null);
 
-        await using CarinaDbContext writing = database.Open();
-        await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        await Jobs(writing).AddAsync(job, Cancel);
+    }
+
+    private async Task<EncodeJob> StandingAsync(EncodeTimeline? timeline, ChapterReading? chapters, Action<EncodeJob>? tracked = null)
+    {
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        RecordingId recording = RecordingId.New();
+        EncodeJob job = EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            recording,
+            profile.Id,
+            destination.Id,
+            destination.OutputRoot,
+            EncodeJobStatus.Completed,
+            EncodeJob.FirstAttempt,
+            Queued,
+            Started,
+            Started.AddMinutes(30),
+            null,
+            EncodeFileName.Artefact(recording, profile.Id),
+            null,
+            null,
+            null,
+            timeline,
+            chapters);
+
+        tracked?.Invoke(job);
+
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        await Jobs(writing).AddAsync(job, Cancel);
+
+        return job;
+    }
+
+    private static void Failed(EncodeJob job, int times)
+    {
+        for (int time = 0; time < times; time++)
+        {
+            job.Tracked(EncodeCaptionTrack.Failed, CaptionsMadeAt);
+        }
     }
 
     private async Task ClearAsync()
     {
-        await using CarinaDbContext clearing = database.Open();
-        await clearing.Set<EncodeChapter>().ExecuteDeleteAsync(Cancel);
-        await clearing.Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
-        await clearing.Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
+        await using AsyncServiceScope clearing = container.CreateAsyncScope();
+        await Context(clearing).Set<EncodeChapter>().ExecuteDeleteAsync(Cancel);
+        await Context(clearing).Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
+        await Context(clearing).Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
     }
 
     private async Task<(EncodeProfile, EncodeDestination)> DefinedAsync()
@@ -932,9 +840,9 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
             profile.Id,
             Defined);
 
-        await using CarinaDbContext writing = database.Open();
-        await new EncodeProfileRepository(writing).AddAsync(profile, Cancel);
-        await new EncodeDestinationRepository(writing).AddAsync(destination, Cancel);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        await Profiles(writing).AddAsync(profile, Cancel);
+        await Destinations(writing).AddAsync(destination, Cancel);
 
         return (profile, destination);
     }
@@ -942,12 +850,70 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
     private static EncodeJob Job(EncodeProfile profile, EncodeDestination destination, RecordingId? recording = null)
         => EncodeJob.Queue(EncodeJobId.New(), recording ?? RecordingId.New(), profile.Id, destination.Id, Primary, Queued);
 
-    private static EncodeScratchFile Scratch(EncodeJob job, int attempt, DateTime at)
-        => EncodeScratchFile.Record(
-            EncodeScratchFileId.New(),
-            job.Id,
-            EncodeScratchKind.WorkFile,
-            Primary,
-            EncodeFileName.Working(job.RecordingId, job.Id, attempt),
-            at);
+    private static IEncodeDestinationRepository Destinations(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>();
+
+    private static IEncodeJobRepository Jobs(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>();
+
+    private static IEncodeProfileRepository Profiles(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeProfileRepository>();
+
+    private static CarinaDbContext Context(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+
+    private static EncodeJob Running(RecordingId recording)
+    {
+        EncodeJob job = EncodeJob.Queue(
+            EncodeJobId.New(),
+            recording,
+            EncodeProfileId.New(),
+            EncodeDestinationId.New(),
+            EncodeHarness.Encodes,
+            EncodeHarness.Queued);
+        job.Start(EncodeHarness.Started);
+
+        return job;
+    }
+
+    private static EncodeJob Completed(RecordingId recording, DateTime ended)
+    {
+        EncodeJob job = Running(recording);
+        job.Name(EncodeFileName.Artefact(recording, job.ProfileId));
+        job.Complete(ended);
+
+        return job;
+    }
+
+    private async Task AddAsync(params EncodeJob[] jobs)
+    {
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        IEncodeProfileRepository profiles = Profiles(writing);
+        IEncodeDestinationRepository destinations = Destinations(writing);
+        IEncodeJobRepository repository = Jobs(writing);
+
+        foreach (EncodeJob job in jobs)
+        {
+            await profiles.AddAsync(
+                EncodeProfile.Define(
+                    job.ProfileId,
+                    new EncodeLabel("Viewing"),
+                    EncodeCodec.H264,
+                    EncodeResolution.AsSource,
+                    Deinterlace.EveryFrame,
+                    new ConstantRateFactor(22),
+                    new ConstantQuantiser(24),
+                    EncodeHarness.Queued),
+                Cancel);
+            await destinations.AddAsync(
+                EncodeDestination.Define(
+                    job.DestinationId,
+                    new EncodeLabel("Shelf"),
+                    job.OutputRoot,
+                    job.ProfileId,
+                    EncodeHarness.Queued),
+                Cancel);
+            await repository.AddAsync(job, Cancel);
+        }
+    }
 }

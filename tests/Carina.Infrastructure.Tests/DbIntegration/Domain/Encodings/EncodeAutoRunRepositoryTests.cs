@@ -1,30 +1,36 @@
 using Carina.Domain.Encodings;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Configurations;
-using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
-namespace Carina.Infrastructure.Tests.Encodings;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class EncodeAutoRunRepositoryTests(RepositoryDatabase database)
+public sealed class EncodeAutoRunRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly DateTime Settled = new(2026, 9, 14, 12, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact(DisplayName = "a machine nobody has settled holds no row at all")]
     public async Task AMachineNobodyHasSettledHoldsNoRowAtAll()
     {
         await ClearAsync();
 
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
 
-        Assert.Null(await new EncodeAutoRunRepository(reading).ReadAsync(Cancel));
+        Assert.Null(await AutoRuns(reading).ReadAsync(Cancel));
     }
 
     [Fact(DisplayName = "what was settled is read back as it was written, and settling again keeps one row")]
@@ -35,15 +41,15 @@ public sealed class EncodeAutoRunRepositoryTests(RepositoryDatabase database)
         await SaveAsync(EncodeAutoRun.Settled(false, 4, Settled));
         await SaveAsync(EncodeAutoRun.Settled(true, 1, Settled.AddHours(3)));
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeAutoRun? held = await new EncodeAutoRunRepository(reading).ReadAsync(Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeAutoRun? held = await AutoRuns(reading).ReadAsync(Cancel);
 
         Assert.NotNull(held);
         Assert.Equal(EncodeAutoRun.TheOnlyRow, held.Id);
         Assert.True(held.Automatically);
         Assert.Equal(1, held.MostCores);
         Assert.Equal(Settled.AddHours(3), held.UpdatedAt);
-        Assert.Equal(1, await reading.Set<EncodeAutoRun>().CountAsync(Cancel));
+        Assert.Equal(1, await Context(reading).Set<EncodeAutoRun>().CountAsync(Cancel));
     }
 
     [Fact(DisplayName = "the table itself refuses a second row and a cap the domain would not allow")]
@@ -78,18 +84,18 @@ public sealed class EncodeAutoRunRepositoryTests(RepositoryDatabase database)
 
         await Task.WhenAll(settling.Select(autoRun => Task.Run(async () =>
         {
-            await using CarinaDbContext writing = database.Open();
-            await writing.Database.OpenConnectionAsync(Cancel);
+            await using AsyncServiceScope writing = container.CreateAsyncScope();
+            await Context(writing).Database.OpenConnectionAsync(Cancel);
             gate.SignalAndWait(Cancel);
 
-            await new EncodeAutoRunRepository(writing).SaveAsync(autoRun, Cancel);
+            await AutoRuns(writing).SaveAsync(autoRun, Cancel);
         })));
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeAutoRun? held = await new EncodeAutoRunRepository(reading).ReadAsync(Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeAutoRun? held = await AutoRuns(reading).ReadAsync(Cancel);
 
         Assert.NotNull(held);
-        Assert.Equal(1, await reading.Set<EncodeAutoRun>().CountAsync(Cancel));
+        Assert.Equal(1, await Context(reading).Set<EncodeAutoRun>().CountAsync(Cancel));
         Assert.Contains(
             (held.Automatically, held.MostCores, held.UpdatedAt),
             settling.Select(autoRun => (autoRun.Automatically, autoRun.MostCores, autoRun.UpdatedAt)));
@@ -97,19 +103,25 @@ public sealed class EncodeAutoRunRepositoryTests(RepositoryDatabase database)
 
     private async Task SaveAsync(EncodeAutoRun autoRun)
     {
-        await using CarinaDbContext writing = database.Open();
-        await new EncodeAutoRunRepository(writing).SaveAsync(autoRun, Cancel);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        await AutoRuns(writing).SaveAsync(autoRun, Cancel);
     }
 
     private async Task RunAsync(string sql)
     {
-        await using CarinaDbContext running = database.Open();
-        await running.Database.ExecuteSqlRawAsync(sql, Cancel);
+        await using AsyncServiceScope running = container.CreateAsyncScope();
+        await Context(running).Database.ExecuteSqlRawAsync(sql, Cancel);
     }
 
     private async Task ClearAsync()
     {
-        await using CarinaDbContext clearing = database.Open();
-        await clearing.Set<EncodeAutoRun>().ExecuteDeleteAsync(Cancel);
+        await using AsyncServiceScope clearing = container.CreateAsyncScope();
+        await Context(clearing).Set<EncodeAutoRun>().ExecuteDeleteAsync(Cancel);
     }
+
+    private static IEncodeAutoRunRepository AutoRuns(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeAutoRunRepository>();
+
+    private static CarinaDbContext Context(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
 }
