@@ -6,14 +6,13 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
-[Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class LearningBacklogTests(RepositoryDatabase database) : IAsyncLifetime
+public sealed class LearningBacklogTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
     private static readonly DateTime Noon = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
 
@@ -25,24 +24,11 @@ public sealed class LearningBacklogTests(RepositoryDatabase database) : IAsyncLi
 
     private readonly ServiceProvider container = database.Infrastructure();
 
-    private readonly List<Guid> recorded = [];
-
     private int nextEvent = 8_000;
 
     public Task InitializeAsync() => Task.CompletedTask;
 
-    public async Task DisposeAsync()
-    {
-        await using (CarinaDbContext context = database.Open())
-        {
-            Guid[] ours = [.. recorded];
-            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_learning_data WHERE recording_id = ANY({ours})");
-            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_extraction WHERE recording_id = ANY({ours})");
-            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM recording WHERE id = ANY({ours})");
-        }
-
-        await container.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact(DisplayName = "the recordings waiting to be read are the ended ones the record says wait or that have none, under the roots named, the most recently started first, a page at a time, and as many as the figures count")]
     public async Task TheRecordingsWaitingAreThoseTheRecordSaysWait()
@@ -188,7 +174,6 @@ public sealed class LearningBacklogTests(RepositoryDatabase database) : IAsyncLi
         bool failed = false)
     {
         RecordingId id = RecordingId.New();
-        recorded.Add(id.Value);
         Recording recording = Recording.Begin(
             id,
             null,
@@ -226,7 +211,8 @@ public sealed class LearningBacklogTests(RepositoryDatabase database) : IAsyncLi
             recording.Caption(taken.State, taken.State is CaptionState.Ready ? 2 : null, taken.At);
         }
 
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        CarinaDbContext context = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
         context.Add(recording);
         await context.SaveChangesAsync();
 
