@@ -5,13 +5,16 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
 public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncLifetime
 {
+    private readonly ServiceProvider container = database.Infrastructure();
+
     private static readonly DateTime Started = new(2033, 3, 1, 12, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -38,7 +41,11 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
 
     public Task InitializeAsync() => ClearAsync();
 
-    public Task DisposeAsync() => ClearAsync();
+    public async Task DisposeAsync()
+    {
+        await ClearAsync();
+        await container.DisposeAsync();
+    }
 
     [Fact(DisplayName = "BR-CD-004: a round could read every recording read through with a stretch of the catalog, a skip event or a seek, those the catalog hears an advert in first, and no other")]
     public async Task EveryRecordingWithSomethingToLearnItByIsACandidate()
@@ -50,12 +57,13 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
 
         await KeepRecordAsync(unread, readThrough: false);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope scope = container.CreateAsyncScope())
         {
-            await new SkipEventRepository(writing).TakeAsync(
+            CarinaDbContext writing = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+            await Skips(scope).TakeAsync(
                 SkipEvent.Of(skipped, new ViewerAction(Started.AddDays(1), ViewerActionKind.Skipped, SegmentKind.Break, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(115), null)),
                 Cancel);
-            await new SeekEventRepository(writing).TakeAsync(
+            await Seeks(scope).TakeAsync(
                 SeekEvent.Of(sought, new ViewerSeek(Started.AddDays(1), SeekAction.Forward, SeekMeans.Bar, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(190))),
                 Cancel);
             CatalogOccurrence[] adverts = [Found(advert, advertised, 100), Found(advert, advertised, 200), Found(advert, unread, 100)];
@@ -69,8 +77,8 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
             Assert.Equal(CatalogKind.Cm, heardTwice.Kind);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<LearningCandidate> candidates = await new TrainingWorklist(reading).CandidatesAsync(Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IReadOnlyList<LearningCandidate> candidates = await Worklist(reading).CandidatesAsync(Cancel);
 
         Assert.Equal(
             [(advertised, LearningGround.CatalogAdverts), (unknown, LearningGround.Other), (skipped, LearningGround.Other), (sought, LearningGround.Other)],
@@ -100,8 +108,8 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
             record.Finish(Started.AddMinutes(5));
         }
 
-        await using CarinaDbContext writing = database.Open();
-        await new LearningExtractionRepository(writing).AddAsync(record, Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await Extractions(scope).AddAsync(record, Cancel);
     }
 
     private async Task ClearAsync()
@@ -116,4 +124,16 @@ public sealed class TrainingWorklistTests(RepositoryDatabase database) : IAsyncL
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_catalog_entry WHERE id = ANY({entries})", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_extraction WHERE recording_id = ANY({recordings})", Cancel);
     }
+
+    private static ILearningExtractionRepository Extractions(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILearningExtractionRepository>();
+
+    private static ISeekEventRepository Seeks(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ISeekEventRepository>();
+
+    private static ISkipEventRepository Skips(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ISkipEventRepository>();
+
+    private static ITrainingWorklist Worklist(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ITrainingWorklist>();
 }

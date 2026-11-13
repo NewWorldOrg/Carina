@@ -5,13 +5,16 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
 public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : IAsyncLifetime
 {
+    private readonly ServiceProvider container = database.Infrastructure();
+
     private static readonly DateTime Later = new(2034, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -32,7 +35,11 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
 
     public Task InitializeAsync() => ClearAsync();
 
-    public Task DisposeAsync() => ClearAsync();
+    public async Task DisposeAsync()
+    {
+        await ClearAsync();
+        await container.DisposeAsync();
+    }
 
     [Fact(DisplayName = "BR-CD-004: what learning reads last changed when an entry of the catalog or a stretch of one was kept, a skip event or a seek taken, or a recording's data read to its end")]
     public async Task EachKindOfChangeMovesTheLastChange()
@@ -43,17 +50,17 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
         DateTime? estimated = await LastChangedAsync();
         await KeepStretchAsync(heard, 300, Later.AddHours(5));
         DateTime? matched = await LastChangedAsync();
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope scope = container.CreateAsyncScope())
         {
-            await new SkipEventRepository(writing).TakeAsync(
+            await Skips(scope).TakeAsync(
                 SkipEvent.Of(viewed, new ViewerAction(Later.AddHours(6), ViewerActionKind.Skipped, SegmentKind.Break, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(115), null)),
                 Cancel);
         }
 
         DateTime? skipped = await LastChangedAsync();
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope scope = container.CreateAsyncScope())
         {
-            await new SeekEventRepository(writing).TakeAsync(
+            await Seeks(scope).TakeAsync(
                 SeekEvent.Of(viewed, new ViewerSeek(Later.AddHours(6.5), SeekAction.Forward, SeekMeans.Step, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(150))),
                 Cancel);
         }
@@ -72,9 +79,9 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
 
     private async Task<DateTime?> LastChangedAsync()
     {
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new LearningMaterialChanges(reading).LastChangedAsync(Cancel);
+        return await Changes(scope).LastChangedAsync(Cancel);
     }
 
     private async Task KeepCatalogAsync(DateTime estimated, DateTime matched)
@@ -120,8 +127,8 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
             record.FinishPartway(finished);
         }
 
-        await using CarinaDbContext writing = database.Open();
-        await new LearningExtractionRepository(writing).AddAsync(record, Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await Extractions(scope).AddAsync(record, Cancel);
     }
 
     private async Task ClearAsync()
@@ -136,4 +143,16 @@ public sealed class LearningMaterialChangesTests(RepositoryDatabase database) : 
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_catalog_entry WHERE id = {id}", Cancel);
         await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_extraction WHERE recording_id = ANY({recordings})", Cancel);
     }
+
+    private static ILearningMaterialChanges Changes(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILearningMaterialChanges>();
+
+    private static ILearningExtractionRepository Extractions(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILearningExtractionRepository>();
+
+    private static ISeekEventRepository Seeks(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ISeekEventRepository>();
+
+    private static ISkipEventRepository Skips(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ISkipEventRepository>();
 }

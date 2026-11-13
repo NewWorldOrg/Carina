@@ -5,13 +5,16 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
 public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
+    private readonly ServiceProvider container = database.Infrastructure();
+
     private const string Ours = "number BETWEEN 61 AND 69";
 
     private const string OthersOutOfUse =
@@ -30,7 +33,11 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
 
     public Task InitializeAsync() => ResetAsync();
 
-    public Task DisposeAsync() => ResetAsync();
+    public async Task DisposeAsync()
+    {
+        await ResetAsync();
+        await container.DisposeAsync();
+    }
 
     [Fact(DisplayName = "BR-CD-008: the figures of an evaluation and what a rollback measured are kept in the shapes the status answers, and read back as they were")]
     public async Task TheFiguresOfAnEvaluationAreKeptAndReadBack()
@@ -154,11 +161,12 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         using var gate = new Barrier(3);
         int[] numbers = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => Task.Run(async () =>
         {
-            await using CarinaDbContext writing = database.Open();
+            await using AsyncServiceScope scope = container.CreateAsyncScope();
+            CarinaDbContext writing = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
             await writing.Database.OpenConnectionAsync(Cancel);
             gate.SignalAndWait(Cancel);
 
-            return (await new SegmentModelVersionRepository(writing).AddCandidateAsync(HandMadeModels.First, Evaluated, Noon.AddDays(1), Cancel)).Number;
+            return (await Versions(scope).AddCandidateAsync(HandMadeModels.First, Evaluated, Noon.AddDays(1), Cancel)).Number;
         })));
 
         Assert.Equal([62, 63, 64], numbers.Order());
@@ -186,11 +194,12 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         using var gate = new Barrier(numbers.Length);
         SegmentModelVersion?[] answered = await Task.WhenAll(numbers.Select(number => Task.Run(async () =>
         {
-            await using CarinaDbContext writing = database.Open();
+            await using AsyncServiceScope scope = container.CreateAsyncScope();
+            CarinaDbContext writing = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
             await writing.Database.OpenConnectionAsync(Cancel);
             gate.SignalAndWait(Cancel);
 
-            return await new SegmentModelVersionRepository(writing).ChangeAsync(SegmentVersionChange.ChosenByHand(number), Noon.AddDays(1), Cancel);
+            return await Versions(scope).ChangeAsync(SegmentVersionChange.ChosenByHand(number), Noon.AddDays(1), Cancel);
         })));
 
         Assert.All(answered, Assert.NotNull);
@@ -217,30 +226,30 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
 
     private async Task<IReadOnlyList<SegmentModelVersion>> ListAsync()
     {
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return [.. (await new SegmentModelVersionRepository(reading).ListAsync(Cancel)).Where(version => version.Number is SegmentModelVersion.FirstNumber or (>= 61 and <= 69))];
+        return [.. (await Versions(scope).ListAsync(Cancel)).Where(version => version.Number is SegmentModelVersion.FirstNumber or (>= 61 and <= 69))];
     }
 
     private async Task<SegmentModelVersion> AddCandidateAsync(DateTime trainedAt)
     {
-        await using CarinaDbContext writing = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new SegmentModelVersionRepository(writing).AddCandidateAsync(HandMadeModels.First, Evaluated, trainedAt, Cancel);
+        return await Versions(scope).AddCandidateAsync(HandMadeModels.First, Evaluated, trainedAt, Cancel);
     }
 
     private async Task<SegmentModelVersion> ActiveAsync()
     {
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new SegmentModelVersionRepository(reading).ActiveAsync(Cancel);
+        return await Versions(scope).ActiveAsync(Cancel);
     }
 
     private async Task<SegmentModelVersion?> ChangeAsync(SegmentVersionChange change, DateTime at)
     {
-        await using CarinaDbContext writing = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new SegmentModelVersionRepository(writing).ChangeAsync(change, at, Cancel);
+        return await Versions(scope).ChangeAsync(change, at, Cancel);
     }
 
     private Task<string> StatesAsync() => ScalarAsync($"SELECT string_agg(number || ':' || state || ':' || by_hand, ' ' ORDER BY number) FROM segment_model_version WHERE number = 1 OR {Ours}");
@@ -291,4 +300,7 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
             await context.SaveChangesAsync(Cancel);
         }
     }
+
+    private static ISegmentModelVersionRepository Versions(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ISegmentModelVersionRepository>();
 }

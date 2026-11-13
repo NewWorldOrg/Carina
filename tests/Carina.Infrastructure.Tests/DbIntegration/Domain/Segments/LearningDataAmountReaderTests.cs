@@ -10,13 +10,20 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
+public sealed class LearningDataAmountReaderTests(RepositoryDatabase database) : IAsyncLifetime
 {
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
+
     private static readonly DateTime Noon = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -182,8 +189,8 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
     {
         Recording begun = Begun();
 
-        await using CarinaDbContext writing = database.Open();
-        await new RecordingRepository(writing).AddAsync(begun, Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await Recordings(scope).AddAsync(begun, Cancel);
 
         return begun;
     }
@@ -192,8 +199,8 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
     {
         Recording begun = Begun();
 
-        await using CarinaDbContext writing = database.Open();
-        var repository = new RecordingRepository(writing);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        IRecordingRepository repository = Recordings(scope);
         await repository.AddAsync(begun, Cancel);
 
         begun.Abort(Noon.AddMinutes(30));
@@ -205,8 +212,8 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
 
     private async Task AddAsync(RecordingId recording, LearningExtractionState state, TimeSpan readThrough, int failures = 1)
     {
-        await using CarinaDbContext writing = database.Open();
-        await new LearningExtractionRepository(writing).AddAsync(Extraction(recording, state, readThrough, failures), Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await Extractions(scope).AddAsync(Extraction(recording, state, readThrough, failures), Cancel);
     }
 
     private async Task ThrowAwayAsync(RecordingId recording)
@@ -247,8 +254,17 @@ public sealed class LearningDataAmountReaderTests(RepositoryDatabase database)
 
     private async Task<LearningDataAmount> ReadAsync()
     {
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new LearningDataAmountReader(reading).ReadAsync(Cancel);
+        return await Amounts(scope).ReadAsync(Cancel);
     }
+
+    private static ILearningDataAmountReader Amounts(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILearningDataAmountReader>();
+
+    private static ILearningExtractionRepository Extractions(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILearningExtractionRepository>();
+
+    private static IRecordingRepository Recordings(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingRepository>();
 }

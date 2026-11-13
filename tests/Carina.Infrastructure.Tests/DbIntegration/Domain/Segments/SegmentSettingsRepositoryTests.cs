@@ -5,15 +5,22 @@ using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
+public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
+
     private static readonly DateTime Noon = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -23,9 +30,9 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
     {
         await ClearAsync();
 
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        Assert.Null(await new SegmentSettingsRepository(reading).ReadAsync(Cancel));
+        Assert.Null(await Settings(scope).ReadAsync(Cancel));
     }
 
     [Fact(DisplayName = "BR-CV-002: a threshold is read back as it was written, one never changed included, and setting it again keeps one row")]
@@ -38,8 +45,9 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
         await SaveAsync(SegmentSettingsStanding.Over(unchanged).Set(0.65, Noon)!);
         await SaveAsync(SegmentSettingsStanding.Over(await ReadAsync()).Set(0.8, Noon.AddHours(3))!);
 
-        await using CarinaDbContext reading = database.Open();
-        SegmentSettings? held = await new SegmentSettingsRepository(reading).ReadAsync(Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        CarinaDbContext reading = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+        SegmentSettings? held = await Settings(scope).ReadAsync(Cancel);
 
         Assert.Equal((0.70, (DateTime?)null), (unchanged!.SkipThreshold, unchanged.SkipThresholdChangedAt));
         Assert.Equal((SegmentSettings.TheOnlyRow, 0.8, (DateTime?)Noon.AddHours(3)), (held!.Id, held.SkipThreshold, held.SkipThresholdChangedAt));
@@ -108,15 +116,17 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
 
         await Task.WhenAll(setting.Select(settings => Task.Run(async () =>
         {
-            await using CarinaDbContext writing = database.Open();
+            await using AsyncServiceScope scope = container.CreateAsyncScope();
+            CarinaDbContext writing = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
             await writing.Database.OpenConnectionAsync(Cancel);
             gate.SignalAndWait(Cancel);
 
-            await new SegmentSettingsRepository(writing).SaveAsync(settings, Cancel);
+            await Settings(scope).SaveAsync(settings, Cancel);
         })));
 
-        await using CarinaDbContext reading = database.Open();
-        SegmentSettings? held = await new SegmentSettingsRepository(reading).ReadAsync(Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        CarinaDbContext reading = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+        SegmentSettings? held = await Settings(scope).ReadAsync(Cancel);
 
         Assert.NotNull(held);
         Assert.Equal(1, await reading.Set<SegmentSettings>().CountAsync(Cancel));
@@ -127,15 +137,15 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
 
     private async Task SaveAsync(SegmentSettings settings)
     {
-        await using CarinaDbContext writing = database.Open();
-        await new SegmentSettingsRepository(writing).SaveAsync(settings, Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await Settings(scope).SaveAsync(settings, Cancel);
     }
 
     private async Task<SegmentSettings?> ReadAsync()
     {
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new SegmentSettingsRepository(reading).ReadAsync(Cancel);
+        return await Settings(scope).ReadAsync(Cancel);
     }
 
     private async Task RunAsync(string sql)
@@ -149,4 +159,7 @@ public sealed class SegmentSettingsRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext clearing = database.Open();
         await clearing.Set<SegmentSettings>().ExecuteDeleteAsync(Cancel);
     }
+
+    private static ISegmentSettingsRepository Settings(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ISegmentSettingsRepository>();
 }

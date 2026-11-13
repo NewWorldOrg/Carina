@@ -3,7 +3,6 @@ using System.Globalization;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Tests.Unit.Infra.Segments;
 using Carina.TestSupport;
@@ -11,11 +10,11 @@ using Carina.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Segments;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
+public sealed class SegmentTrainingJobTests : IAsyncLifetime
 {
     private const string Ours = "number BETWEEN 71 AND 79";
 
@@ -28,7 +27,7 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
 
     private readonly RepositoryDatabase database;
 
-    private readonly ServiceProvider provider;
+    private readonly ServiceProvider container;
 
     private readonly HandTurnedClock clock = new(new DateTimeOffset(SegmentTrainingHarness.Start));
 
@@ -36,22 +35,15 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
 
     private readonly List<Guid> skipped = [];
 
-    public SegmentTrainingDatabaseTests(RepositoryDatabase database)
+    public SegmentTrainingJobTests(RepositoryDatabase database)
     {
         this.database = database;
-        provider = new ServiceCollection()
-            .AddScoped(_ => database.Open())
-            .AddScoped<ISegmentModelVersionRepository, SegmentModelVersionRepository>()
-            .AddScoped<ISegmentLearningRoundRepository, SegmentLearningRoundRepository>()
-            .AddScoped<ILearningMaterialChanges, LearningMaterialChanges>()
-            .AddScoped<ISkipEventRepository, SkipEventRepository>()
-            .AddScoped<IOccupancyReader, OccupancyReader>()
-            .AddSingleton<IBusynessReader>(new HeldBusyness(() => new Busyness(false, false, null)))
-            .AddSingleton<ISegmentTrainer>(trainer)
-            .AddSingleton<TimeProvider>(clock)
-            .AddScoped<SegmentVersionDomainService>()
-            .AddScoped<SegmentLearningRoundDomainService>()
-            .BuildServiceProvider();
+        container = database.Infrastructure(services =>
+        {
+            services.AddSingleton<IBusynessReader>(new HeldBusyness(() => new Busyness(false, false, null)));
+            services.AddSingleton<ISegmentTrainer>(trainer);
+            services.AddSingleton<TimeProvider>(clock);
+        });
     }
 
     public async Task InitializeAsync()
@@ -62,9 +54,11 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
         await writing.SaveChangesAsync(Cancel);
     }
 
-    public Task DisposeAsync() => ResetAsync();
-
-    public void Dispose() => provider.Dispose();
+    public async Task DisposeAsync()
+    {
+        await ResetAsync();
+        await container.DisposeAsync();
+    }
 
     [Fact(DisplayName = "BR-CD-008: the day's round keeps its candidate in the store with its figures, lets go of the candidate before it, puts it in use through the one change, and keeps the day with the candidate's figures so that a job started again does not take it again")]
     public async Task TheDaysRoundKeepsItsCandidateAndPutsItInUse()
@@ -123,9 +117,9 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
     public async Task ARollbackCountedFromTheStoreGoesBack()
     {
         DateTime adopted = SegmentTrainingHarness.Start.AddDays(-3);
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope scope = container.CreateAsyncScope())
         {
-            SegmentModelVersionRepository versions = new(writing);
+            ISegmentModelVersionRepository versions = scope.ServiceProvider.GetRequiredService<ISegmentModelVersionRepository>();
             await versions.ChangeAsync(SegmentVersionChange.Adopting(71), adopted, Cancel);
         }
 
@@ -145,13 +139,12 @@ public sealed class SegmentTrainingDatabaseTests : IAsyncLifetime, IDisposable
                 """));
     }
 
-    private SegmentTrainingJob Job()
-        => new(provider.GetRequiredService<IServiceScopeFactory>(), SegmentTrainingSettings.Default, clock, new KeptLines<SegmentTrainingJob>());
+    private SegmentTrainingJob Job() => container.GetRequiredService<SegmentTrainingJob>();
 
     private async Task SkippedAsync(int version, DateTime from, int skips, int returned)
     {
-        await using CarinaDbContext writing = database.Open();
-        SkipEventRepository events = new(writing);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        ISkipEventRepository events = scope.ServiceProvider.GetRequiredService<ISkipEventRepository>();
         RecordingId recording = RecordingId.New();
         skipped.Add(recording.Value);
 
