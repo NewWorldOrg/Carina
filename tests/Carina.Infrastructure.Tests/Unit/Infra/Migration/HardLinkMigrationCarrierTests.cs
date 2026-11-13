@@ -2,8 +2,9 @@ using Carina.Domain.Migration;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Migration;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class HardLinkMigrationCarrierTests : IDisposable
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

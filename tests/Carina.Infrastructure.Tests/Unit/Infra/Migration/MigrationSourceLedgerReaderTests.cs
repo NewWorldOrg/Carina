@@ -1,8 +1,9 @@
 using Carina.Domain.Migration;
 using Carina.Infrastructure.Migration;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class MigrationSourceLedgerReaderTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

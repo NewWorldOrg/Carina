@@ -2,11 +2,12 @@ using Carina.Domain.Integrity;
 using Carina.Domain.Migration;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Migration;
+using Carina.Infrastructure.Tests.Fixtures.Migration;
 using Carina.TestSupport;
 
 using static Carina.TestSupport.CarriedMigrationFixtures;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests.Integrity;
 
 public sealed class WhatAMigrationLeftBehindStaysOnItsOwnRecordTests : IDisposable
 {

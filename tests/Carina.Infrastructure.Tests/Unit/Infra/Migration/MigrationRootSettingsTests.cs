@@ -1,7 +1,8 @@
 using Carina.Infrastructure.Migration;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class MigrationRootSettingsTests
 {
     [Fact]

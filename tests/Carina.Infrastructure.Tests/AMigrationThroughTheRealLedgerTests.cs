@@ -5,6 +5,7 @@ using Carina.Domain.Rules;
 using Carina.Infrastructure.Migration;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Fixtures.Migration;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +14,7 @@ using Npgsql;
 
 using static Carina.TestSupport.CarriedMigrationFixtures;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]

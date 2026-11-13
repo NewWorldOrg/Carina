@@ -1,7 +1,8 @@
 using Carina.Infrastructure.Migration;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Migration;
 
+[Trait("Category", "Unit")]
 public sealed class MigrationSourceSettingsTests
 {
     private const string Complete = "Server=somewhere.invalid;Port=3306;Database=somedb;Uid=reader;Pwd=notreal";

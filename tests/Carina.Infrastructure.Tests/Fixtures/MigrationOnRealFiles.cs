@@ -8,7 +8,7 @@ using Carina.TestSupport;
 
 using static Carina.TestSupport.CarriedMigrationFixtures;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests.Fixtures.Migration;
 
 internal static class MigrationOnRealFiles
 {

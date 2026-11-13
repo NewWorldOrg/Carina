@@ -17,7 +17,7 @@ using Npgsql;
 
 using static Carina.TestSupport.CarriedMigrationFixtures;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]

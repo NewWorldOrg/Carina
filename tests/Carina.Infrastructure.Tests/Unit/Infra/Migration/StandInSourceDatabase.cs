@@ -5,7 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Carina.Infrastructure.Migration;
 
-namespace Carina.Infrastructure.Tests.Migration;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Migration;
 
 internal sealed class StandInSourceDatabase : IMigrationSourceConnection
 {
