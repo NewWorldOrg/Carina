@@ -1,10 +1,11 @@
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 
-using static Carina.Domain.Tests.Integrity.IntegrityFixtures;
+using static Carina.Domain.Tests.Unit.Integrity.IntegrityFixtures;
 
-namespace Carina.Domain.Tests.Integrity;
+namespace Carina.Domain.Tests.Unit.Integrity;
 
+[Trait("Category", "Unit")]
 public sealed class IntegrityFindingTests
 {
     private static readonly RecordingFileName Name = new("one.m2ts");

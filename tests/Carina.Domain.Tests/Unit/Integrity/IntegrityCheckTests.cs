@@ -1,9 +1,10 @@
 using Carina.Domain.Integrity;
 
-using static Carina.Domain.Tests.Integrity.IntegrityFixtures;
+using static Carina.Domain.Tests.Unit.Integrity.IntegrityFixtures;
 
-namespace Carina.Domain.Tests.Integrity;
+namespace Carina.Domain.Tests.Unit.Integrity;
 
+[Trait("Category", "Unit")]
 public sealed class IntegrityCheckTests
 {
     private static IntegrityCheck Of(

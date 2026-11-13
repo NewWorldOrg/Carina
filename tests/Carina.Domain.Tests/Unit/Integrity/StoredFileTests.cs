@@ -1,7 +1,8 @@
 using Carina.Domain.Integrity;
 
-namespace Carina.Domain.Tests.Integrity;
+namespace Carina.Domain.Tests.Unit.Integrity;
 
+[Trait("Category", "Unit")]
 public sealed class StoredFileTests
 {
     [Fact]

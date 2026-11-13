@@ -1,7 +1,8 @@
 using Carina.Domain.Integrity;
 
-namespace Carina.Domain.Tests.Integrity;
+namespace Carina.Domain.Tests.Unit.Integrity;
 
+[Trait("Category", "Unit")]
 public sealed class SweepGuardTests
 {
     private static readonly DateTime Now = new(2026, 8, 26, 3, 0, 0, DateTimeKind.Utc);

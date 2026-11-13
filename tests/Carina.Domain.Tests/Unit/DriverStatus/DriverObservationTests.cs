@@ -2,8 +2,9 @@ using Carina.Domain.DriverStatus;
 
 using Puppis.Contracts;
 
-namespace Carina.Domain.Tests;
+namespace Carina.Domain.Tests.Unit.DriverStatus;
 
+[Trait("Category", "Unit")]
 public sealed class DriverObservationTests
 {
     private static DriverHello Hello(

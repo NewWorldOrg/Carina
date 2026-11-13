@@ -2,8 +2,9 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 
-namespace Carina.Domain.Tests.Machines;
+namespace Carina.Domain.Tests.Unit.Machines;
 
+[Trait("Category", "Unit")]
 public sealed class CardKindTests
 {
     [Fact]

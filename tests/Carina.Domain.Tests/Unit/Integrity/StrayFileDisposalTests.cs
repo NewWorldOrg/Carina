@@ -1,8 +1,9 @@
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 
-namespace Carina.Domain.Tests.Integrity;
+namespace Carina.Domain.Tests.Unit.Integrity;
 
+[Trait("Category", "Unit")]
 public sealed class StrayFileDisposalTests
 {
     private const string StrayPath = "nested/stray.bin";

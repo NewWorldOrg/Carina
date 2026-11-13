@@ -1,7 +1,8 @@
 using Carina.Domain.DriverStatus;
 
-namespace Carina.Domain.Tests;
+namespace Carina.Domain.Tests.Unit.DriverStatus;
 
+[Trait("Category", "Unit")]
 public sealed class DriverSocketPathTests
 {
     [Fact]

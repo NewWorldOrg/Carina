@@ -1,7 +1,7 @@
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 
-namespace Carina.Domain.Tests.Integrity;
+namespace Carina.Domain.Tests.Unit.Integrity;
 
 internal static class IntegrityFixtures
 {

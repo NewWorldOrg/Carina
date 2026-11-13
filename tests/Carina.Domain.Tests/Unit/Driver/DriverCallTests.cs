@@ -2,8 +2,9 @@ using Carina.Domain.Driver;
 
 using Puppis.Contracts;
 
-namespace Carina.Domain.Tests;
+namespace Carina.Domain.Tests.Unit.Driver;
 
+[Trait("Category", "Unit")]
 public sealed class DriverCallTests
 {
     [Fact]

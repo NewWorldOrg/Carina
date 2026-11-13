@@ -1,7 +1,8 @@
 using Carina.Domain.Machines;
 
-namespace Carina.Domain.Tests.Machines;
+namespace Carina.Domain.Tests.Unit.Machines;
 
+[Trait("Category", "Unit")]
 public sealed class RunningProgrammeTests
 {
     private static readonly DateTime Began = new(2026, 9, 5, 3, 0, 5, DateTimeKind.Utc);
