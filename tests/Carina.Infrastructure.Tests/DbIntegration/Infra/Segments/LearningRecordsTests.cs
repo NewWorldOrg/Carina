@@ -4,28 +4,42 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Segments;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Db.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Segments;
 
-[Collection(ConnectionEnvironmentCollection.Name)]
+[Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class LearningRecordsDatabaseTests(MigratedScratchDatabase database)
-    : IClassFixture<MigratedScratchDatabase>
+public sealed class LearningRecordsTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly DateTime Noon = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    private readonly RecordingId recording = RecordingId.New();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        await using (CarinaDbContext context = database.Open())
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_learning_data WHERE recording_id = {recording.Value}");
+            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_extraction WHERE recording_id = {recording.Value}");
+        }
+
+        await container.DisposeAsync();
+    }
+
     [Fact(DisplayName = "a change that meets a row another writer moved after it was read is made again on the row as it stands")]
     public async Task AChangeThatMeetsAMovedRowIsMadeAgain()
     {
-        await using ServiceProvider provider = Provider();
-        LearningRecords records = new(provider.GetRequiredService<IServiceScopeFactory>());
-        RecordingId recording = RecordingId.New();
+        LearningRecords records = container.GetRequiredService<LearningRecords>();
         LearningDataGap gap = new(TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(30));
         int attempts = 0;
 
@@ -58,9 +72,7 @@ public sealed class LearningRecordsDatabaseTests(MigratedScratchDatabase databas
     [Fact(DisplayName = "a follow's chunks, its sound, its gaps and how far it read are kept, and it ends done")]
     public async Task AFollowsChunksAndProgressAreKeptAndItEndsDone()
     {
-        await using ServiceProvider provider = Provider();
-        LearningRecords records = new(provider.GetRequiredService<IServiceScopeFactory>());
-        RecordingId recording = RecordingId.New();
+        LearningRecords records = container.GetRequiredService<LearningRecords>();
         ExtractionSound sound = new(0, TimeSpan.FromMilliseconds(-33));
         LearningDataGap[] gaps =
         [
@@ -94,7 +106,7 @@ public sealed class LearningRecordsDatabaseTests(MigratedScratchDatabase databas
             Cancel);
 
         LearningExtraction? kept = await records.FindAsync(recording, Cancel);
-        await using AsyncServiceScope scope = provider.CreateAsyncScope();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
         int rows = await scope.ServiceProvider.GetRequiredService<ILearningDataRepository>().CountAsync(recording, Cancel);
 
         Assert.NotNull(kept);
@@ -105,17 +117,10 @@ public sealed class LearningRecordsDatabaseTests(MigratedScratchDatabase databas
         Assert.Equal(2 * LearningDataChunk.Kinds.Count, rows);
     }
 
-    private ServiceProvider Provider()
-        => new ServiceCollection()
-            .AddScoped(_ => CarinaDbContextFactory.Create(database.ConnectionString))
-            .AddScoped<ILearningExtractionRepository, LearningExtractionRepository>()
-            .AddScoped<ILearningDataRepository, LearningDataRepository>()
-            .BuildServiceProvider();
-
     private void MovedElsewhere(RecordingId recording, LearningDataGap gap)
     {
-        using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
-        LearningExtractionRepository elsewhere = new(context);
+        using IServiceScope scope = container.CreateScope();
+        ILearningExtractionRepository elsewhere = scope.ServiceProvider.GetRequiredService<ILearningExtractionRepository>();
         LearningExtraction moved = elsewhere.FindAsync(recording, Cancel).GetAwaiter().GetResult()
             ?? throw new InvalidOperationException("The record that was just written is not there.");
 

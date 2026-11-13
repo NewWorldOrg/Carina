@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -7,13 +8,20 @@ using Carina.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
+using static Carina.Infrastructure.Tests.DbIntegration.Domain.Segments.RowsNamingAVersion;
+
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
+public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase database, MigratedRepositoryDatabase migratedDatabase)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
+    private const int Latest = 12;
+
     private readonly ServiceProvider container = database.Infrastructure();
+
+    private readonly ServiceProvider migrated = migratedDatabase.Infrastructure();
 
     private const string Ours = "number BETWEEN 61 AND 69";
 
@@ -24,6 +32,17 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
 
     private static readonly DateTime Installed = new(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc);
 
+    private static readonly DateTime FirstStarted = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime Started = new(2026, 11, 2, 9, 0, 0, DateTimeKind.Utc);
+
+    private static readonly SegmentEvaluation Unmeasured = new(null, [], new EvaluationEvidence(12, 148, FirstStarted));
+
+    private static readonly SegmentEvaluation MeasuredAtFirstStart = new(
+        new SegmentMetrics(0.5, 0.4, [new KindMetrics(SegmentKind.Break, 0.8)], null, 0),
+        [],
+        new EvaluationEvidence(12, 56, FirstStarted));
+
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly SegmentEvaluation Evaluated = new(
@@ -31,12 +50,17 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         [new StationMetrics(new NetworkId(40_001), new ServiceId(60_001), 5, new SegmentMetrics(0.96, 0.9, [], null, 0))],
         new EvaluationEvidence(12, 148, Noon.AddHours(-3)));
 
-    public Task InitializeAsync() => ResetAsync();
+    public async Task InitializeAsync()
+    {
+        await ResetAsync();
+        await ExecuteInTheMigratedStoreAsync(RowsNamingAVersion.Emptied);
+    }
 
     public async Task DisposeAsync()
     {
         await ResetAsync();
         await container.DisposeAsync();
+        await migrated.DisposeAsync();
     }
 
     [Fact(DisplayName = "BR-CD-008: the figures of an evaluation and what a rollback measured are kept in the shapes the status answers, and read back as they were")]
@@ -205,6 +229,268 @@ public sealed class SegmentModelVersionRepositoryTests(RepositoryDatabase databa
         Assert.All(answered, Assert.NotNull);
         Assert.Equal("1", await ScalarAsync("SELECT count(*) FROM segment_model_version WHERE state = 'Active'"));
         Assert.Contains((await ActiveAsync()).Number, numbers);
+    }
+
+    [Fact(DisplayName = "BR-CS-003: on a database with no version the built-in version of this release is kept as the first and put in use, and keeping it again writes nothing")]
+    public async Task OnNoVersionTheBuiltInIsTheFirstInUse()
+    {
+        SegmentBuiltInKept? kept = await KeepBuiltInAsync(Started);
+
+        Assert.Equal((1, 1), (kept?.Added.Number, kept?.Active.Number));
+        SegmentModelVersion active = await ActiveInTheMigratedStoreAsync();
+        Assert.Equal((1, true, false, (DateTime?)Started), (active.Number, active.BuiltIn, active.ByHand, active.AdoptedAt));
+        Assert.Equal(SegmentModel.BuiltIn, active.Model);
+        Assert.Null(active.Evaluation);
+        Assert.Null(await KeepBuiltInAsync(Started.AddDays(1)));
+        Assert.Equal("1:Active:t", await BuiltInStatesAsync());
+    }
+
+    [Fact(DisplayName = "BR-CS-003: once the versions and what was detected with them are emptied, with no round of learning or chapters of an encode remembering a number, the built-in version is kept again as version 1 in use")]
+    public async Task OnceEmptiedTheBuiltInIsVersionOneAgain()
+    {
+        await KeepBuiltInAsync(FirstStarted);
+        await AddToTheMigratedStoreAsync(SegmentModelVersion.Learned(2, HandMadeModels.First, Unmeasured, FirstStarted.AddDays(1)));
+        await AddToTheMigratedStoreAsync(SegmentModelVersion.Learned(3, HandMadeModels.First, Unmeasured, FirstStarted.AddDays(2)));
+        await ExecuteInTheMigratedStoreAsync("INSERT INTO segment_detection (recording_id, model_version, state, segments, cm_share, snaps, extraction_version, catalog_until, detected_at) VALUES (gen_random_uuid(), 1, 'NothingFound', '[{\"startsAtSec\": 0, \"endsAtSec\": 1800, \"kind\": \"Programme\", \"probability\": 0.9}]', 0, '[]', 2, now(), now())");
+
+        await ExecuteInTheMigratedStoreAsync("TRUNCATE segment_model_version CASCADE");
+        SegmentBuiltInKept? kept = await KeepBuiltInAsync(Started);
+
+        Assert.Equal(1, kept?.Added.Number);
+        Assert.Equal("1:Active:t", await BuiltInStatesAsync());
+        Assert.Equal(1, (await ActiveInTheMigratedStoreAsync()).Number);
+    }
+
+    [Fact(DisplayName = "BR-CS-003: an earlier built-in version in use and not chosen by hand gives way to the built-in version of this release, kept under the number after the highest; the earlier one is taken out of use and keeps what was detected with it")]
+    public async Task AnEarlierBuiltInVersionGivesWay()
+    {
+        await AddToTheMigratedStoreAsync(SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Active, false, HandMadeModels.First, FirstStarted, FirstStarted, null, null, null, builtIn: true));
+        await AddToTheMigratedStoreAsync(SegmentModelVersion.Learned(2, HandMadeModels.First, Unmeasured, FirstStarted.AddDays(1)));
+
+        SegmentBuiltInKept? kept = await KeepBuiltInAsync(Started);
+
+        Assert.Equal((3, 3), (kept?.Added.Number, kept?.Active.Number));
+        Assert.Equal("1:Retired:t 2:Candidate:f 3:Active:t", await BuiltInStatesAsync());
+        SegmentModelVersion active = await ActiveInTheMigratedStoreAsync();
+        Assert.Equal((SegmentModel.BuiltIn, (DateTime?)Started), (active.Model, active.AdoptedAt));
+        await using AsyncServiceScope reading = migrated.CreateAsyncScope();
+        SegmentModelVersion left = (await Versions(reading).ListAsync(Cancel)).Single(version => version.Number == 1);
+        Assert.Equal(((DateTime?)FirstStarted, (DateTime?)Started, HandMadeModels.First), (left.AdoptedAt, left.RetiredAt, left.Model));
+    }
+
+    [Theory(DisplayName = "BR-CS-003: beside a version chosen by hand or learned in use, the built-in version is kept as a candidate and the version in use stays")]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BesideAVersionChosenOrLearnedTheBuiltInWaits(bool chosenByHand)
+    {
+        await AddToTheMigratedStoreAsync(chosenByHand
+            ? SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Active, true, HandMadeModels.First, FirstStarted, FirstStarted, null, FirstStarted.AddDays(1), null, builtIn: true)
+            : SegmentModelVersion.Rehydrate(1, SegmentModelVersionState.Active, false, HandMadeModels.First, FirstStarted, FirstStarted, null, null, null, Unmeasured));
+
+        SegmentBuiltInKept? kept = await KeepBuiltInAsync(Started);
+
+        Assert.Equal((2, 1), (kept?.Added.Number, kept?.Active.Number));
+        Assert.Equal(chosenByHand ? "1:Active:t 2:Candidate:t" : "1:Active:f 2:Candidate:t", await BuiltInStatesAsync());
+        Assert.Equal((1, chosenByHand), ((await ActiveInTheMigratedStoreAsync()).Number, (await ActiveInTheMigratedStoreAsync()).ByHand));
+    }
+
+    [Fact(DisplayName = "BR-CS-003: processes starting at once keep the built-in version once, and exactly one version is in use after them")]
+    public async Task ProcessesStartingAtOnceKeepItOnce()
+    {
+        using var gate = new Barrier(4);
+        SegmentBuiltInKept?[] answered = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
+        {
+            await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<CarinaDbContext>().Database.OpenConnectionAsync(Cancel);
+            gate.SignalAndWait(Cancel);
+
+            return await Versions(scope).KeepBuiltInAsync(SegmentModel.BuiltIn, Started, Cancel);
+        })));
+
+        Assert.Single(answered, kept => kept is not null);
+        Assert.Equal("1:Active:t", await BuiltInStatesAsync());
+    }
+
+    [Fact(DisplayName = "BR-CS-003: with the candidate of the highest number gone, a new version is numbered after the number a round of learning still remembers, never under it again")]
+    public async Task TheHighestNumberGoneIsNotGivenAgain()
+    {
+        await KeepBuiltInAsync(FirstStarted);
+        SegmentModelVersion highest = await AddCandidateToTheMigratedStoreAsync(Started);
+        await ExecuteInTheMigratedStoreAsync(Round("2026-11-03", candidate: highest.Number, inUseVersion: 1));
+        await ExecuteInTheMigratedStoreAsync($"DELETE FROM segment_model_version WHERE number = {highest.Number}");
+
+        SegmentModelVersion next = await AddCandidateToTheMigratedStoreAsync(Started.AddDays(1));
+
+        Assert.Equal((2, 3), (highest.Number, next.Number));
+        Assert.Equal("1:Active 3:Candidate", await MigratedStatesAsync());
+    }
+
+    [Fact(DisplayName = "BR-CS-003: on a version table emptied while rounds of learning still remember numbers, the built-in version goes on from the highest remembered, and so does the next candidate")]
+    public async Task OnAnEmptiedTableTheBuiltInGoesOnFromTheRounds()
+    {
+        await KeepBuiltInAsync(FirstStarted);
+        await ExecuteInTheMigratedStoreAsync(Round("2026-10-24", candidate: 2, inUseVersion: 1));
+        await ExecuteInTheMigratedStoreAsync(Round("2026-10-25", candidate: 4, inUseVersion: 3));
+        await ExecuteInTheMigratedStoreAsync("TRUNCATE segment_model_version CASCADE");
+
+        SegmentBuiltInKept? kept = await KeepBuiltInAsync(Started);
+        SegmentModelVersion candidate = await AddCandidateToTheMigratedStoreAsync(Started.AddDays(1));
+
+        Assert.Equal((5, 5, 6), (kept?.Added.Number, kept?.Active.Number, candidate.Number));
+        Assert.Equal("5:Active 6:Candidate", await MigratedStatesAsync());
+    }
+
+    [Fact(DisplayName = "BR-CS-003: on a version table emptied while the chapters of an encode still remember a number, the built-in version goes on after it")]
+    public async Task OnAnEmptiedTableTheBuiltInGoesOnFromTheChapters()
+    {
+        await KeepBuiltInAsync(FirstStarted);
+        await ExecuteInTheMigratedStoreAsync(Encoded(7));
+        await ExecuteInTheMigratedStoreAsync("TRUNCATE segment_model_version CASCADE");
+
+        SegmentBuiltInKept? kept = await KeepBuiltInAsync(Started);
+
+        Assert.Equal((8, 8), (kept?.Added.Number, kept?.Active.Number));
+    }
+
+    [Fact(DisplayName = "BR-CS-003: the store names the same versions as named that the rows laid name: a detection, a viewer's skip, the chapters of an encode or a round measuring the version in use, and not a round that only kept it as its candidate")]
+    public async Task TheStoreNamesWhatTheRowsName()
+    {
+        IReadOnlyDictionary<int, bool> named = await LaidAsync();
+
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+        IReadOnlySet<int> found = await Versions(scope).NamedAmongAsync([.. named.Keys, 99], Cancel);
+
+        Assert.Equal(named.Where(pair => pair.Value).Select(pair => pair.Key).Order(), found.Order());
+    }
+
+    [Fact(DisplayName = "BR-CS-003: the statement that lets go of candidates deletes, among those numbered before the latest, exactly the versions the version itself says learning lets go of, the one just before the latest included and the latest kept")]
+    public async Task TheStatementLetsGoOfWhatEachVersionSays()
+    {
+        IReadOnlyDictionary<int, bool> named = await LaidAsync();
+        IReadOnlyList<SegmentModelVersion> kept;
+
+        await using (AsyncServiceScope reading = migrated.CreateAsyncScope())
+        {
+            kept = await Versions(reading).ListAsync(Cancel);
+        }
+
+        int[] expected = [.. kept.Where(version => version.IsLetGoBefore(Latest, named[version.Number])).Select(version => version.Number).Order()];
+
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+        IReadOnlyList<int> letGo = await Versions(scope).LetGoAsync([.. kept.Select(version => version.Number).Where(number => number < Latest)], Cancel);
+
+        Assert.Equal(expected, letGo);
+        Assert.Contains(Latest - 1, letGo);
+        Assert.Equal(expected, SegmentModelVersion.LetGoBefore(kept, Latest, named.Where(pair => pair.Value).Select(pair => pair.Key).ToHashSet()));
+        Assert.Equal(kept.Count - expected.Length, (await MigratedStatesAsync()).Split(' ').Length);
+        Assert.Contains($"{Latest}:Candidate", await MigratedStatesAsync(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Lays the built-in version in use, a version used before, a candidate built in, and candidates learning made,
+    /// each named by one of the rows that remember versions or by none, the one just before the latest and the latest
+    /// named by none; answers each number and whether something names it.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<int, bool>> LaidAsync()
+    {
+        await KeepBuiltInAsync(FirstStarted);
+
+        foreach (int number in new[] { 2, 3, 4, 5, 6, 7, Latest - 1, Latest })
+        {
+            await AddToTheMigratedStoreAsync(SegmentModelVersion.Learned(number, HandMadeModels.First, MeasuredAtFirstStart, FirstStarted.AddDays(number)));
+        }
+
+        await AddToTheMigratedStoreAsync(SegmentModelVersion.Rehydrate(8, SegmentModelVersionState.Candidate, false, HandMadeModels.First, FirstStarted.AddDays(8), null, null, null, null, builtIn: true));
+        await AddToTheMigratedStoreAsync(SegmentModelVersion.Rehydrate(9, SegmentModelVersionState.Retired, false, HandMadeModels.First, FirstStarted.AddDays(9), FirstStarted.AddDays(9), FirstStarted.AddDays(10), null, null, MeasuredAtFirstStart));
+        await ExecuteInTheMigratedStoreAsync(Detected(3));
+        await SkippedInTheMigratedStoreAsync(4);
+        await ExecuteInTheMigratedStoreAsync(Encoded(5));
+        await ExecuteInTheMigratedStoreAsync(Round("2026-10-20", candidate: 7, inUseVersion: 6));
+
+        return new Dictionary<int, bool>
+        {
+            [1] = false,
+            [2] = false,
+            [3] = true,
+            [4] = true,
+            [5] = true,
+            [6] = true,
+            [7] = false,
+            [8] = false,
+            [9] = false,
+            [Latest - 1] = false,
+            [Latest] = false,
+        };
+    }
+
+    private async Task<SegmentBuiltInKept?> KeepBuiltInAsync(DateTime at)
+    {
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+
+        return await Versions(scope).KeepBuiltInAsync(SegmentModel.BuiltIn, at, Cancel);
+    }
+
+    private async Task<SegmentModelVersion> ActiveInTheMigratedStoreAsync()
+    {
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+
+        return await Versions(scope).ActiveAsync(Cancel);
+    }
+
+    private async Task<SegmentModelVersion> AddCandidateToTheMigratedStoreAsync(DateTime at)
+    {
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+
+        return await Versions(scope).AddCandidateAsync(HandMadeModels.First, MeasuredAtFirstStart, at, Cancel);
+    }
+
+    private async Task AddToTheMigratedStoreAsync(SegmentModelVersion version)
+    {
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+        CarinaDbContext context = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+        context.Add(version);
+        await context.SaveChangesAsync(Cancel);
+    }
+
+    private async Task SkippedInTheMigratedStoreAsync(int version)
+    {
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+
+        await scope.ServiceProvider.GetRequiredService<ISkipEventRepository>().TakeAsync(
+            SkipEvent.Of(RecordingId.New(), new ViewerAction(Started, ViewerActionKind.Skipped, SegmentKind.Break, TimeSpan.FromSeconds(600), TimeSpan.FromSeconds(690), version)),
+            Cancel);
+    }
+
+    private Task<string> BuiltInStatesAsync()
+        => ScalarInTheMigratedStoreAsync("SELECT string_agg(number || ':' || state || ':' || built_in::text::char, ' ' ORDER BY number) FROM segment_model_version");
+
+    private Task<string> MigratedStatesAsync()
+        => ScalarInTheMigratedStoreAsync("SELECT string_agg(number || ':' || state, ' ' ORDER BY number) FROM segment_model_version");
+
+    private async Task ExecuteInTheMigratedStoreAsync(string sql)
+    {
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+        await using System.Data.Common.DbCommand command = await CommandAsync(scope, sql);
+
+        await command.ExecuteNonQueryAsync(Cancel);
+    }
+
+    private async Task<string> ScalarInTheMigratedStoreAsync(string sql)
+    {
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+        await using System.Data.Common.DbCommand command = await CommandAsync(scope, sql);
+
+        return Convert.ToString(await command.ExecuteScalarAsync(Cancel), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+
+    private static async Task<System.Data.Common.DbCommand> CommandAsync(AsyncServiceScope scope, string sql)
+    {
+        CarinaDbContext context = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+        await context.Database.OpenConnectionAsync(Cancel);
+        System.Data.Common.DbCommand command = context.Database.GetDbConnection().CreateCommand();
+        command.CommandText = sql;
+
+        return command;
     }
 
     private static SegmentModelVersion Version(

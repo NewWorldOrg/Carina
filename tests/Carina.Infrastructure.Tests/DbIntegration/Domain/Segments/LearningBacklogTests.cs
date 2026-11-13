@@ -5,14 +5,15 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 
-namespace Carina.Db.Tests;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-[Collection(ConnectionEnvironmentCollection.Name)]
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
+
+[Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase database)
-    : IClassFixture<MigratedScratchDatabase>
+public sealed class LearningBacklogTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly DateTime Noon = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
 
@@ -22,7 +23,26 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    private readonly List<Guid> recorded = [];
+
     private int nextEvent = 8_000;
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        await using (CarinaDbContext context = database.Open())
+        {
+            Guid[] ours = [.. recorded];
+            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_learning_data WHERE recording_id = ANY({ours})");
+            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM segment_extraction WHERE recording_id = ANY({ours})");
+            await context.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM recording WHERE id = ANY({ours})");
+        }
+
+        await container.DisposeAsync();
+    }
 
     [Fact(DisplayName = "the recordings waiting to be read are the ended ones the record says wait or that have none, under the roots named, the most recently started first, a page at a time, and as many as the figures count")]
     public async Task TheRecordingsWaitingAreThoseTheRecordSaysWait()
@@ -107,22 +127,6 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         Assert.Equal([retaken.Id, reread.Id], (await UncaptionedAsync(2, skip: 2)).Select(record => record.RecordingId));
     }
 
-    [Fact(DisplayName = "whether captions are shown is kept and read back as a kind of learning data of its own")]
-    public async Task WhetherCaptionsAreShownIsKept()
-    {
-        RecordingId recording = RecordingId.New();
-        byte[] seconds = [.. Enumerable.Range(0, LearningData.ChunkSeconds).Select(second => second % 5 is 0 ? CaptionPresence.Shown : CaptionPresence.Hidden)];
-
-        await KeepAsync(LearningDataBlock.Of(recording, LearningDataPart.OfCaptions(2, seconds), ExtractionVersion.Current, Noon));
-
-        await using CarinaDbContext context = Context();
-        LearningDataBlock? kept = await new LearningDataRepository(context).FindAsync(recording, LearningDataKind.CaptionPresence, 2, Cancel);
-
-        Assert.NotNull(kept);
-        Assert.True(kept.TryRead(out LearningDataPart? part));
-        Assert.Equal(seconds, part.Captions.ToArray());
-    }
-
     private static IEnumerable<(LearningExtractionState, ExtractionVersion, int, TimeSpan)> Shapes()
     {
         TimeSpan beforeTheEnd = TimeSpan.FromMinutes(10);
@@ -184,6 +188,7 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
         bool failed = false)
     {
         RecordingId id = RecordingId.New();
+        recorded.Add(id.Value);
         Recording recording = Recording.Begin(
             id,
             null,
@@ -221,47 +226,57 @@ public sealed class LearningBacklogDatabaseTests(MigratedScratchDatabase databas
             recording.Caption(taken.State, taken.State is CaptionState.Ready ? 2 : null, taken.At);
         }
 
-        await using CarinaDbContext context = Context();
+        await using CarinaDbContext context = database.Open();
         context.Add(recording);
         await context.SaveChangesAsync();
 
         return recording;
     }
 
-    private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
-
     private async Task AddAsync(LearningExtraction extraction)
     {
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        await new LearningExtractionRepository(context).AddAsync(extraction, Cancel);
+        await Extractions(scope).AddAsync(extraction, Cancel);
     }
 
     private async Task KeepAsync(LearningDataBlock block)
     {
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        await new LearningDataRepository(context).KeepAsync(block, Cancel);
+        await Data(scope).KeepAsync(block, Cancel);
     }
 
     private async Task<IReadOnlyList<BackloggedRecording>> AwaitingAsync(OutputRoot root, int atMost, int skip = 0)
     {
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new LearningBacklogReader(context).AwaitingAsync([root], skip, atMost, Cancel);
+        return await Backlog(scope).AwaitingAsync([root], skip, atMost, Cancel);
     }
 
     private async Task<int> CountedWaitingAsync()
     {
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return (await new LearningDataAmountReader(context).ReadAsync(Cancel)).Waiting;
+        return (await Amounts(scope).ReadAsync(Cancel)).Waiting;
     }
 
     private async Task<IReadOnlyList<LearningExtraction>> UncaptionedAsync(int atMost, int skip = 0)
     {
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new LearningBacklogReader(context).UncaptionedAsync(skip, atMost, Cancel);
+        return await Backlog(scope).UncaptionedAsync(skip, atMost, Cancel);
     }
+
+    private static ILearningDataAmountReader Amounts(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILearningDataAmountReader>();
+
+    private static ILearningBacklog Backlog(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILearningBacklog>();
+
+    private static ILearningDataRepository Data(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILearningDataRepository>();
+
+    private static ILearningExtractionRepository Extractions(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ILearningExtractionRepository>();
 }
