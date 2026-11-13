@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Globalization;
 using System.Reflection;
+
 using Carina.Domain.Base;
 using Carina.Domain.Captions;
 using Carina.Domain.Channels;
@@ -9,7 +10,9 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+
 using Puppis.Contracts;
+
 using static Carina.Domain.Tests.Unit.Recordings.RecordingFactory;
 
 namespace Carina.Domain.Tests.Unit.Recordings;

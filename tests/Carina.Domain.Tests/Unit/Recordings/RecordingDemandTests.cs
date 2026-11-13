@@ -1,4 +1,5 @@
 using Carina.Domain.Recordings;
+
 using Puppis.Contracts;
 
 namespace Carina.Domain.Tests.Unit.Recordings;
