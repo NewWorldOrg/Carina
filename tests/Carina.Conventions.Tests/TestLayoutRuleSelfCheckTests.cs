@@ -609,6 +609,32 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void LetsOffATestOverADatabaseNamedAfterADomainInterfaceThatAClassOfTheInfrastructureImplements()
+    {
+        using SourceTree tree = new();
+        tree.Write("src/Carina.Domain/Auth/ISessionLedger.cs", "namespace Carina.Domain.Auth;\n\npublic interface ISessionLedger { }\n");
+        tree.Write(
+            "src/Carina.Infrastructure/Persistence/Readers/SessionLedgerReader.cs",
+            "namespace Carina.Infrastructure.Persistence.Readers;\n\npublic sealed class SessionLedgerReader : ISessionLedger { }\n");
+        tree.Test($"{InfrastructureTests}/DbIntegration/Domain/Auth/SessionLedgerTests.cs", TestLayoutRules.DbIntegration);
+
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void DetectsATestOverADatabaseNamedAfterADomainInterfaceThatOnlyAClassOutsideTheInfrastructureImplements()
+    {
+        using SourceTree tree = new();
+        tree.Write("src/Carina.Domain/Auth/ISessionLedger.cs", "namespace Carina.Domain.Auth;\n\npublic interface ISessionLedger { }\n");
+        tree.Write("src/Carina.Api/Services/SessionLedgerReader.cs", "namespace Carina.Api.Services;\n\npublic sealed class SessionLedgerReader : ISessionLedger { }\n");
+        tree.Test($"{InfrastructureTests}/DbIntegration/Domain/Auth/SessionLedgerTests.cs", TestLayoutRules.DbIntegration);
+
+        Assert.Equal(
+            ["/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionLedgerTests.cs:4 SessionLedgerTests is named after nothing the domain declares for Auth: nothing behind an interface of its name, no domain service"],
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
     public void DetectsADatabaseProjectTestNamedAfterNoTypeNoMigrationAndNoSchema()
     {
         using SourceTree tree = new();
@@ -751,6 +777,24 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/AuthSessionRepositoryTests.cs:4 AuthSessionRepositoryTests does not take IAuthSessionRepository from the container",
                 "/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/AuthSessionRepositoryTests.cs:4 AuthSessionRepositoryTests names the class AuthSessionRepository behind IAuthSessionRepository",
             ],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
+    public void DetectsADomainInterfaceTakenFromTheContainerAndThenNamedByTheClassOfTheInfrastructureThatImplementsIt()
+    {
+        using SourceTree tree = new();
+        tree.Write("src/Carina.Domain/Auth/ISessionLedger.cs", "namespace Carina.Domain.Auth;\n\npublic interface ISessionLedger { }\n");
+        tree.Write(
+            "src/Carina.Infrastructure/Persistence/Readers/SessionLedgerReader.cs",
+            "namespace Carina.Infrastructure.Persistence.Readers;\n\npublic sealed class SessionLedgerReader : ISessionLedger { }\n");
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Domain/Auth/SessionLedgerTests.cs",
+            TestLayoutRules.DbIntegration,
+            "Assert.IsType<SessionLedgerReader>(scope.ServiceProvider.GetRequiredService<ISessionLedger>());");
+
+        Assert.Equal(
+            ["/tests/Carina.Infrastructure.Tests/DbIntegration/Domain/Auth/SessionLedgerTests.cs:4 SessionLedgerTests names the class SessionLedgerReader behind ISessionLedger"],
             TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
     }
 
