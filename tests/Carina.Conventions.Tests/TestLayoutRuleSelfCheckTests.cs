@@ -544,6 +544,38 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAScaleOrMaterialClassNamedAfterNothingWithItsKind()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Domain/Auth/SessionToken.cs");
+        tree.Declare("src/Carina.Infrastructure/Auth/PasswordHasher.cs");
+        tree.Test($"{DomainTests}/Unit/Auth/SessionTokenTests.cs", "Scale");
+        tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/HashingMaterialTests.cs", "Material");
+        tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/PasswordHasherScaleTests.cs", "Material");
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Domain.Tests/Unit/Auth/SessionTokenTests.cs:4 SessionTokenTests is named after nothing the domain declares for Auth",
+                "/tests/Carina.Infrastructure.Tests/Unit/Infra/Auth/HashingMaterialTests.cs:4 HashingMaterialTests is named after nothing the infrastructure declares for Auth",
+                "/tests/Carina.Infrastructure.Tests/Unit/Infra/Auth/PasswordHasherScaleTests.cs:4 PasswordHasherScaleTests is named after nothing the infrastructure declares for Auth",
+            ],
+            TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void LetsOffAScaleOrMaterialClassNamedAfterATypeOfItsLayerAndItsKind()
+    {
+        using SourceTree tree = new();
+        tree.Declare("src/Carina.Domain/Auth/SessionToken.cs");
+        tree.Declare("src/Carina.Infrastructure/Auth/PasswordHasher.cs");
+        tree.Test($"{DomainTests}/Unit/Auth/SessionTokenScaleTests.cs", "Scale");
+        tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/PasswordHasherMaterialTests.cs", "Material");
+        tree.Test($"{InfrastructureTests}/Unit/Infra/Auth/PasswordHasherTests.cs", TestLayoutRules.Unit);
+
+        Assert.Empty(TestLayoutRules.ClassesNamedAfterNothing(TestLayoutRules.Read(tree.Root), Elsewhere, Schemas));
+    }
+
+    [Fact]
     public void DetectsATestOverADatabaseNamedAfterNoRepositoryBehindADomainInterfaceAndNoDomainService()
     {
         using SourceTree tree = new();
@@ -885,6 +917,23 @@ public sealed class TestLayoutRuleSelfCheckTests
                 "/tests/Carina.Db.Tests/SessionSchemaTests.cs:4 SessionSchemaTests is named after a type of Auth, which has moved",
                 "/tests/Carina.Domain.Tests/OidcSettingsTests.cs:4 OidcSettingsTests is named after a type of Auth, which has moved",
                 "/tests/Carina.Infrastructure.Tests/AuthSessionRepositoryTests.cs:4 AuthSessionRepositoryTests is named after a type of Auth, which has moved",
+            ],
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
+    }
+
+    [Fact]
+    public void DetectsAScaleOrMaterialClassInAFlatOldPlaceNamedAfterATypeOfAnAreaThatHasMoved()
+    {
+        using SourceTree tree = new();
+        DeclareAuthAndRecordings(tree);
+        tree.Test($"{DomainTests}/OidcSettingsScaleTests.cs", "Scale");
+        tree.Test($"{InfrastructureTests}/AuthSessionRepositoryMaterialTests.cs", "Material");
+        tree.Test($"{InfrastructureTests}/AuthSessionRepositoryScaleTests.cs", "Material");
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Domain.Tests/OidcSettingsScaleTests.cs:4 OidcSettingsScaleTests is named after a type of Auth, which has moved",
+                "/tests/Carina.Infrastructure.Tests/AuthSessionRepositoryMaterialTests.cs:4 AuthSessionRepositoryMaterialTests is named after a type of Auth, which has moved",
             ],
             TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
     }

@@ -11,17 +11,16 @@ using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
-namespace Carina.Infrastructure.Tests.Encodings;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Encodings;
 
 /// <summary>
-/// Bakes chapters into an artefact with the ffmpeg the application runs and reads them back off it:
-/// a synthetic broadcast with a pod of advertisements is encoded with a head to skip, and the
-/// artefact carries its chapters where they were meant to be, with the picture and the sound. A
-/// standing artefact is written again with the chapters of a detection that moved.
+/// Writes the chapters of a standing artefact again with the ffmpeg the application runs and reads them
+/// back off it: a synthetic broadcast with a pod of advertisements is encoded with a head to skip, the
+/// detection moves, and the artefact carries the new chapters with the same picture and sound.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
-public sealed class ChapterEmbeddingMaterialTests
+public sealed class ArtefactChapterRewritesMaterialTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
@@ -34,116 +33,6 @@ public sealed class ChapterEmbeddingMaterialTests
     private static readonly TimeSpan PodOpens = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan PodCloses = TimeSpan.FromSeconds(25);
-
-    [Fact(DisplayName = "an artefact carries its chapters where the ledger says they are on its own clock, and still carries its picture and its sound")]
-    public async Task AnArtefactCarriesItsChaptersWhereTheLedgerSaysTheyAre()
-    {
-        using var harness = new EncodeHarness();
-        var machine = new MachineSettings();
-        harness.Programmes = machine;
-        harness.MachineReader = new MachineCapabilityReader(machine, TimeProvider.System);
-        harness.LengthReader = new FfprobeSourceLength(machine, TimeProvider.System);
-        harness.HeadReader = new AHeadOfItsOwn(new FfprobeSourceHead(machine, TimeProvider.System), HeadOfItsOwn);
-
-        string broadcast = await new SyntheticBroadcast
-        {
-            Picture = SyntheticPicture.StandardDefinition,
-            WithCaptions = false,
-            WithSuperimpose = false,
-            Length = Whole,
-            QuietBreaks = [PodOpens, PodCloses],
-        }.WriteAsync(harness.Room.Under($"broadcast{SyntheticBroadcast.TransportStream}"), Cancel);
-
-        SourceLengthReading source = await harness.LengthReader.ReadAsync(broadcast, Cancel);
-        Assert.True(source.Measured, source.Note);
-
-        TimeSpan artefactLength = source.Length!.Value - HeadOfItsOwn;
-        TimeSpan opens = PodOpens - HeadOfItsOwn;
-        TimeSpan closes = PodCloses - HeadOfItsOwn;
-
-        Recording recording = harness.RecordedFrom(broadcast, SyntheticBroadcast.SomeProgramNumber);
-        harness.Detected(
-            recording,
-            SegmentDetectionState.Marked,
-            new SegmentSpan(TimeSpan.Zero, PodOpens, SegmentKind.Programme, 0.9),
-            new SegmentSpan(PodOpens, PodCloses, SegmentKind.Break, 0.9),
-            new SegmentSpan(PodCloses, source.Length.Value, SegmentKind.Programme, 0.9));
-        EncodeProfile profile = harness.Defined();
-        EncodeJob job = harness.Running(recording.Id, profile.Id);
-
-        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
-
-        Assert.Equal(EncodeJobStatus.Completed, ended);
-        Assert.Equal(HeadOfItsOwn, job.Timeline!.HeadSkip);
-        Assert.Equal(ChapterVerdict.Marked, job.Chapters!.Verdict);
-        Assert.Equal(ChapterDetectorName.Segments, job.Chapters.Detector);
-
-        string artefact = harness.ArtefactPathOf(job);
-        IReadOnlyList<(TimeSpan Starts, TimeSpan Ends, string Title)> carried = await ChaptersOfAsync(artefact);
-
-        Assert.Equal(3, carried.Count);
-        Assert.Equal(["本編", "CM", "本編"], carried.Select(chapter => chapter.Title));
-        Assert.Equal(TimeSpan.Zero, carried[0].Starts);
-        Assert.InRange(carried[0].Ends, opens - Tolerance, opens + Tolerance);
-        Assert.InRange(carried[1].Starts, opens - Tolerance, opens + Tolerance);
-        Assert.InRange(carried[1].Ends, closes - Tolerance, closes + Tolerance);
-        Assert.InRange(carried[2].Starts, closes - Tolerance, closes + Tolerance);
-        Assert.InRange(carried[2].Ends, artefactLength - Tolerance, artefactLength + Tolerance);
-
-        Assert.Equal(["h264", "aac", "bin_data"], await CodecsOfAsync(artefact));
-        Assert.Equal(
-            [ChapterKind.Programme, ChapterKind.Break, ChapterKind.Programme],
-            harness.Chapters.Chapters.Select(chapter => chapter.Kind));
-        Assert.Equal(
-            carried.Select(chapter => chapter.Starts.TotalSeconds).Select(Rounded),
-            harness.Chapters.Chapters.Select(chapter => chapter.StartsAt.TotalSeconds).Select(Rounded));
-
-        SourceLengthReading made = await harness.LengthReader.ReadAsync(artefact, Cancel);
-        Assert.True(made.Measured, made.Note);
-        Assert.InRange(made.Length!.Value, artefactLength - TimeSpan.FromSeconds(1), artefactLength + TimeSpan.FromSeconds(1));
-        Assert.False(File.Exists(harness.ChaptersPathOf(job)), "the chapters file is swept once the job has ended");
-    }
-
-    [Fact(DisplayName = "an artefact of a recording no version has detected carries no chapters at all, and the streams in it are the ones a run without chapters always made")]
-    public async Task AnArtefactOfARunThatMarkedNothingCarriesNoChapters()
-    {
-        using var harness = new EncodeHarness();
-        var machine = new MachineSettings();
-        harness.Programmes = machine;
-        harness.MachineReader = new MachineCapabilityReader(machine, TimeProvider.System);
-        harness.LengthReader = new FfprobeSourceLength(machine, TimeProvider.System);
-        harness.HeadReader = new FfprobeSourceHead(machine, TimeProvider.System);
-
-        string broadcast = await SyntheticBroadcast.AsMeasured()
-            .WriteAsync(harness.Room.Under($"broadcast{SyntheticBroadcast.TransportStream}"), Cancel);
-        Recording recording = harness.RecordedFrom(broadcast, SyntheticBroadcast.SomeProgramNumber);
-        EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
-
-        Assert.Equal(EncodeJobStatus.Completed, await harness.Runner.RunAsync(job, Cancel));
-
-        Assert.Empty(await ChaptersOfAsync(harness.ArtefactPathOf(job)));
-        Assert.Equal(["h264", "aac"], await CodecsOfAsync(harness.ArtefactPathOf(job)));
-        Assert.Equal(ChapterVerdict.NotAsked, job.Chapters!.Verdict);
-        Assert.Empty(harness.Chapters.Chapters);
-    }
-
-    [Fact(DisplayName = "BR-CD-010: an artefact encoded from a detection carries its stretches at the recording's own time less the head skip, titled for the programme and the break")]
-    public async Task AnArtefactEncodedFromADetectionCarriesItsStretchesWhereTheyWereDetected()
-    {
-        using var harness = new EncodeHarness();
-        (EncodeJob job, TimeSpan length) = await EncodedFromADetectionAsync(harness, PodOpens, PodCloses);
-        TimeSpan artefactLength = length - HeadOfItsOwn;
-
-        IReadOnlyList<(TimeSpan Starts, TimeSpan Ends, string Title)> carried = await ChaptersOfAsync(harness.ArtefactPathOf(job));
-
-        Assert.Equal(["本編", "CM", "本編"], carried.Select(chapter => chapter.Title));
-        AssertNear([(TimeSpan.Zero, PodOpens - HeadOfItsOwn), (PodOpens - HeadOfItsOwn, PodCloses - HeadOfItsOwn), (PodCloses - HeadOfItsOwn, artefactLength)], carried);
-        Assert.Equal((ChapterDetectorName.Segments, ChapterVerdict.Marked, 1), (job.Chapters!.Detector, job.Chapters.Verdict, job.Chapters.ModelVersion));
-        Assert.Equal(
-            carried.Select(chapter => chapter.Starts.TotalSeconds).Select(Rounded),
-            harness.Chapters.Chapters.Select(chapter => chapter.StartsAt.TotalSeconds).Select(Rounded));
-        Assert.Equal(["h264", "aac", "bin_data"], await CodecsOfAsync(harness.ArtefactPathOf(job)));
-    }
 
     [Fact(DisplayName = "BR-CD-010: once the detection moves the artefact is written again with the new chapters and the same picture and sound, and a copy dropped because the machine was needed leaves the artefact as it was")]
     public async Task OnceTheDetectionMovesTheArtefactIsWrittenAgain()

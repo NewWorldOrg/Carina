@@ -478,7 +478,8 @@ test named after anything else is refused under that area.
   and is in the namespace of its folder.
 - The class carries `[Trait("Category", "Feature")]`, `"Unit"` or `"DbIntegration"`
   to match its kind. A class of the scale or the material job carries `"Scale"` or
-  `"Material"` instead.
+  `"Material"` instead, and is named `<Type>ScaleTests` or `<Type>MaterialTests`
+  after what it tests, so that it can sit beside the unit class of the same type.
 - A test over a real database takes its subject from the container the application
   builds, never from a constructor. Under `DbIntegration/Domain` a repository is
   asked for as its domain interface and its class is not named at all; a domain
@@ -513,7 +514,7 @@ Five filters divide the suite, and CI runs one job per filter:
 
 | Filter | What it selects |
 | --- | --- |
-| under a `Unit` folder, or nothing more specific | everything that needs neither a database, the HTTP surface nor ffmpeg |
+| under a `Unit` folder and of neither the scale nor the material job, or nothing more specific | everything that needs neither a database, the HTTP surface nor ffmpeg |
 | `Category=Feature` or a `FeatureTest` name | the tests that drive the application through its HTTP surface, split by class into shards |
 | `Category=DbIntegration` or a `DbIntegration` name | the tests that need a real PostgreSQL |
 | `Category=Material` | the tests that write a synthetic broadcast with ffmpeg and read it back |

@@ -13,7 +13,7 @@ concurrency:
 env:
   DOTNET_NOLOGO: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
-  UNIT_FILTER: 'FullyQualifiedName~Unit|(FullyQualifiedName!~FeatureTest&FullyQualifiedName!~DbIntegration&Category!=Feature&Category!=DbIntegration&Category!=Scale&Category!=Material)'
+  UNIT_FILTER: '(FullyQualifiedName~Unit&Category!=Scale&Category!=Material)|(FullyQualifiedName!~FeatureTest&FullyQualifiedName!~DbIntegration&Category!=Feature&Category!=DbIntegration&Category!=Scale&Category!=Material)'
   FEATURE_FILTER: 'FullyQualifiedName~FeatureTest|Category=Feature'
   FEATURE_PROJECT: tests/Carina.Api.Tests/Carina.Api.Tests.csproj
   FEATURE_SHARDS: 6

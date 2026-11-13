@@ -387,7 +387,7 @@ public static class TestLayoutRules
         return reading.Tests
             .Where(file => file.Seat.Standing == Standing.InAnOldFolder)
             .Select(file => file.Seat.Area)
-            .Concat(flat.SelectMany(file => file.Classes.SelectMany(type => AreasOf(reading, SubjectOf(type.Name), listed))))
+            .Concat(flat.SelectMany(file => file.Classes.SelectMany(type => AreasOf(reading, SubjectOf(type), listed))))
             .Concat(flat.SelectMany(ImportedAreas))
             .Concat(reading.Routes
                 .Where(route => flat.Any(file => IsAnOldFeatureTest(file) && file.ApiPaths.Any(path => Reaches(path, route.Template))))
@@ -435,7 +435,7 @@ public static class TestLayoutRules
     private static bool IsNamedAfterItsSubject(Reading reading, TestFile file, TestClass type, Listed listed)
     {
         IReadOnlyList<AreaSource> elsewhere = listed.Sources;
-        string subject = SubjectOf(type.Name);
+        string subject = SubjectOf(type);
         string area = file.Seat.Area;
 
         if (subject.Length == 0)
@@ -499,8 +499,17 @@ public static class TestLayoutRules
     private static string PortOf(string subject)
         => subject.EndsWith(DomainServiceRules.Suffix, StringComparison.Ordinal) ? subject : "I" + subject;
 
-    private static string SubjectOf(string name)
-        => name.EndsWith(Suffix, StringComparison.Ordinal) ? name[..^Suffix.Length] : string.Empty;
+    private static string SubjectOf(TestClass type)
+    {
+        string ending = KindOfItsOwn(type) + Suffix;
+
+        return type.Name.EndsWith(ending, StringComparison.Ordinal) ? type.Name[..^ending.Length] : string.Empty;
+    }
+
+    private static string KindOfItsOwn(TestClass type)
+        => type.Categories.Count == 1 && CategoriesOfAnyKind.Contains(type.Categories[0], StringComparer.Ordinal)
+            ? type.Categories[0]
+            : string.Empty;
 
     private static bool IsTheFeatureClassOf(TestFile file, Declared action)
         => string.Equals(file.Seat.Area, ControllerArea(action.Relative), StringComparison.Ordinal)
@@ -513,7 +522,7 @@ public static class TestLayoutRules
 
     private static IEnumerable<string> HandBuilding(TestFile file, TestClass type)
     {
-        string subject = SubjectOf(type.Name);
+        string subject = SubjectOf(type);
         string taken = file.Seat.Place!.Subject == Subject.DomainPort ? PortOf(subject) : subject;
 
         if (!file.Resolved.Contains(taken)
@@ -552,7 +561,7 @@ public static class TestLayoutRules
             return ["is outside the layout, and no area is left to move"];
         }
 
-        return AreasOf(reading, SubjectOf(type.Name), listed)
+        return AreasOf(reading, SubjectOf(type), listed)
             .Where(area => !notYetMoved.Contains(area))
             .Order(StringComparer.Ordinal)
             .Select(area => $"is named after a type of {area}, which has moved")

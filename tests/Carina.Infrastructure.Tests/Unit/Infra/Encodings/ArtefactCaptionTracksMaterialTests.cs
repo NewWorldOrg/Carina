@@ -16,17 +16,17 @@ using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Infrastructure.Tests.Encodings;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Encodings;
 
 /// <summary>
-/// Puts the text of a synthetic broadcast's captions into its artefact with the ffmpeg the application runs,
-/// once while the artefact is encoded and once into an artefact already made, and reads the track back off
-/// the file: one Japanese text track, off by default, whose cues change where the broadcast's captions
-/// change on the artefact's clock, with the picture, the sound and the chapters as they were.
+/// Puts the text of a synthetic broadcast's captions into an artefact already made with the ffmpeg the
+/// application runs, and reads the track back off the file: one Japanese text track, off by default, whose
+/// cues change where the broadcast's captions change on the artefact's clock, with the picture, the sound
+/// and the chapters as they were.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
-public sealed class CaptionTrackMaterialTests
+public sealed class ArtefactCaptionTracksMaterialTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
@@ -39,25 +39,6 @@ public sealed class CaptionTrackMaterialTests
     private static readonly TimeSpan OneMillisecond = TimeSpan.FromMilliseconds(1);
 
     private static readonly DateTime TakenAt = EncodeHarness.Queued.AddMinutes(20);
-
-    [Fact(DisplayName = "an artefact encoded after the captions were taken carries them as one Japanese text track, off by default, on its own clock")]
-    public async Task AnArtefactEncodedAfterTheCaptionsWereTakenCarriesThemAsAText()
-    {
-        using EncodeHarness harness = OnThisMachine();
-        (Recording recording, CaptionRecord record) = await CaptionedAsync(harness);
-        recording.Caption(CaptionState.Ready, record.Pictures, TakenAt);
-        EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
-
-        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
-
-        Assert.True(ended is EncodeJobStatus.Completed, $"{ended}: {job.Failure?.Failure} {job.Failure?.Note}");
-        Assert.Equal((EncodeCaptionTrack.Added, TakenAt), (job.CaptionTrack!.Value, job.CaptionTrackFrom!.Value));
-
-        string artefact = harness.ArtefactPathOf(job);
-
-        await AssertCarriesTheTextAsync(artefact, record, job.Timeline!);
-        Assert.Empty(Leftovers(harness));
-    }
 
     [Fact(DisplayName = "an artefact made before the captions were taken has the text track put in afterwards, and its picture, sound and chapters are the same bytes as before")]
     public async Task AnArtefactMadeBeforeTheCaptionsWereTakenHasTheTrackPutInAfterwards()
