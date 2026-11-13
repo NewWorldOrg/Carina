@@ -9,17 +9,34 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Recordings;
 
-[Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
-    : IClassFixture<MigratedScratchDatabase>
+public sealed class RecordingDirectoryTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
     private static readonly DateTime Noon = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly IComparer<RecordingId> ById =
+        Comparer<RecordingId>.Create((left, right) => ByTheOrderTheDatabaseReadsThem.Comparer.Compare(left.Value, right.Value));
+
+    private static readonly DateTime Airs = new(2026, 8, 27, 20, 0, 0, DateTimeKind.Utc);
+
+    private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private static int networks;
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    private static QualityBands AsShipped => QualityThresholdStanding.Bands(QualityThresholdStanding.Over([], Noon));
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact]
     public async Task ThePageIsBoundedByWhatWasAskedForWhileTheTotalCountsThemAll()
@@ -261,9 +278,9 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         RecordingListing first = await ListingAsync(Query(network, descending: true, perPage: 2));
         RecordingId thrownAway = first.Found.Items[0].Id;
 
-        await using (CarinaDbContext context = Context())
+        await using (AsyncServiceScope context = container.CreateAsyncScope())
         {
-            Assert.Equal(RecordingDiscard.Discarded, await new RecordingDirectory(context).DiscardAsync(thrownAway, CancellationToken.None));
+            Assert.Equal(RecordingDiscard.Discarded, await Directory(context).DiscardAsync(thrownAway, CancellationToken.None));
         }
 
         IReadOnlyList<RecordingId> rest = await WalkAsync(Query(
@@ -312,12 +329,12 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         int network = await StockedAsync(0);
         Recording recording = await AddAsync(network, 1);
 
-        await using CarinaDbContext context = Context();
-        Recording? found = await new RecordingDirectory(context).FindAsync(recording.Id, CancellationToken.None);
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        Recording? found = await Directory(context).FindAsync(recording.Id, CancellationToken.None);
 
         Assert.NotNull(found);
         Assert.Equal(recording.Id, found.Id);
-        Assert.Null(await new RecordingDirectory(context).FindAsync(RecordingId.New(), CancellationToken.None));
+        Assert.Null(await Directory(context).FindAsync(RecordingId.New(), CancellationToken.None));
     }
 
     [Fact]
@@ -328,17 +345,17 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
 
         RecordingHalt halt;
 
-        await using (CarinaDbContext writing = Context())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            halt = await new RecordingDirectory(writing).HaltAsync(
+            halt = await Directory(writing).HaltAsync(
                 recording.Id,
                 new RecordingStopReason("the wrong programme"),
                 Noon.AddMinutes(30),
                 CancellationToken.None);
         }
 
-        await using CarinaDbContext reading = Context();
-        Recording read = await reading.Set<Recording>().SingleAsync(held => held.Id == recording.Id);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording read = await Store(reading).Set<Recording>().SingleAsync(held => held.Id == recording.Id);
         OutcomeDetail kept = Assert.Single(read.OutcomeDetail);
 
         Assert.Equal(RecordingHalt.Written, halt);
@@ -354,8 +371,8 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         int network = await StockedAsync(0);
         Recording ended = await AddAsync(network, 1, outcome: RecordingOutcome.Complete);
 
-        await using CarinaDbContext context = Context();
-        var directory = new RecordingDirectory(context);
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        IRecordingDirectory directory = Directory(context);
         var reason = new RecordingStopReason("too late");
 
         Assert.Equal(
@@ -374,17 +391,17 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
 
         RecordingErasureNote noted;
 
-        await using (CarinaDbContext writing = Context())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            noted = await new RecordingDirectory(writing).NoteErasureAsync(
+            noted = await Directory(writing).NoteErasureAsync(
                 ended.Id,
                 RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 2),
                 Noon.AddHours(3),
                 CancellationToken.None);
         }
 
-        await using CarinaDbContext reading = Context();
-        Recording? found = await new RecordingDirectory(reading).FindAsync(ended.Id, CancellationToken.None);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording? found = await Directory(reading).FindAsync(ended.Id, CancellationToken.None);
         Recording listed = Assert.Single((await ListAsync(Query(network))).Items);
 
         Assert.Equal(RecordingErasureNote.Noted, noted);
@@ -402,26 +419,26 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         int network = await StockedAsync(0);
         Recording ended = await AddAsync(network, 1, outcome: RecordingOutcome.Truncated);
 
-        await using (CarinaDbContext writing = Context())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new RecordingDirectory(writing).NoteErasureAsync(
+            await Directory(writing).NoteErasureAsync(
                 ended.Id,
                 RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1),
                 Noon.AddHours(3),
                 CancellationToken.None);
         }
 
-        await using (CarinaDbContext clearing = Context())
+        await using (AsyncServiceScope clearing = container.CreateAsyncScope())
         {
-            await new RecordingDirectory(clearing).NoteErasureAsync(
+            await Directory(clearing).NoteErasureAsync(
                 ended.Id,
                 RecordingErasure.Erased(1),
                 Noon.AddHours(4),
                 CancellationToken.None);
         }
 
-        await using CarinaDbContext reading = Context();
-        Recording read = await reading.Set<Recording>().SingleAsync(held => held.Id == ended.Id);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording read = await Store(reading).Set<Recording>().SingleAsync(held => held.Id == ended.Id);
 
         Assert.Null(read.LeftBehindAt);
         Assert.Null(read.FilesLeftBehind);
@@ -434,8 +451,8 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         Recording writing = await AddAsync(network, 1);
         RecordingErasure leftBehind = RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1);
 
-        await using CarinaDbContext context = Context();
-        var directory = new RecordingDirectory(context);
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        IRecordingDirectory directory = Directory(context);
 
         Assert.Equal(
             RecordingErasureNote.StillRecording,
@@ -670,18 +687,20 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         return query ?? throw new InvalidOperationException("The query this test asks for is one the guard takes.");
     }
 
-    private static QualityBands AsShipped => QualityThresholdStanding.Bands(QualityThresholdStanding.Over([], Noon));
+    private static IRecordingDirectory Directory(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingDirectory>();
 
-    private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
+    private static CarinaDbContext Store(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
 
     private async Task<PaginatedList<Recording>> ListAsync(RecordingQuery query)
         => (await ListingAsync(query)).Found;
 
     private async Task<RecordingListing> ListingAsync(RecordingQuery query)
     {
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
-        return await new RecordingDirectory(context).ListAsync(query, AsShipped, CancellationToken.None);
+        return await Directory(context).ListAsync(query, AsShipped, CancellationToken.None);
     }
 
     private async Task<IReadOnlyList<RecordingId>> WalkAsync(RecordingQuery query)
@@ -711,19 +730,16 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         }
     }
 
-    private static readonly IComparer<RecordingId> ById =
-        Comparer<RecordingId>.Create((left, right) => ByTheOrderTheDatabaseReadsThem.Comparer.Compare(left.Value, right.Value));
-
     private async Task FloodAsync(int network, int rows)
     {
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
         foreach (int eventId in Enumerable.Range(1, rows))
         {
             RecordingId id = RecordingId.New();
             DateTime started = Noon.AddSeconds(eventId);
 
-            context.Add(Recording.Begin(
+            Store(context).Add(Recording.Begin(
                 id,
                 null,
                 new ProgrammeRef(new NetworkId(network), new ServiceId(1024), new EventId(eventId), started),
@@ -745,18 +761,18 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
                 new TunerDeviceId("pt3-0")));
         }
 
-        await context.SaveChangesAsync();
+        await Store(context).SaveChangesAsync();
     }
 
     private async Task LevelAsync(int network, int rows)
     {
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
         foreach (int eventId in Enumerable.Range(1, rows))
         {
             RecordingId id = RecordingId.New();
 
-            context.Add(Recording.Begin(
+            Store(context).Add(Recording.Begin(
                 id,
                 null,
                 new ProgrammeRef(new NetworkId(network), new ServiceId(1024), new EventId(eventId), Noon),
@@ -778,7 +794,7 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
                 new TunerDeviceId("pt3-0")));
         }
 
-        await context.SaveChangesAsync();
+        await Store(context).SaveChangesAsync();
     }
 
     private async Task<int> StockedAsync(int recordings)
@@ -792,8 +808,6 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
 
         return network;
     }
-
-    private static int networks;
 
     private async Task<Recording> AddAsync(
         int network,
@@ -869,10 +883,116 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
             recording.Descrambled(started.AddDays(1));
         }
 
-        await using CarinaDbContext context = Context();
-        context.Add(recording);
-        await context.SaveChangesAsync();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        Store(context).Add(recording);
+        await Store(context).SaveChangesAsync();
 
         return recording;
     }
+
+    [Fact]
+    public async Task ARecordingThatHasEndedLeavesTheTableAltogether()
+    {
+        Recording ended = await WrittenAsync(5001, settled: true);
+        Recording beside = await WrittenAsync(5002, settled: true);
+
+        await using (AsyncServiceScope discarding = container.CreateAsyncScope())
+        {
+            Assert.Equal(
+                RecordingDiscard.Discarded,
+                await Directory(discarding).DiscardAsync(ended.Id, Cancel));
+        }
+
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+
+        Assert.Null(await Directory(reading).FindAsync(ended.Id, Cancel));
+        Assert.NotNull(await Directory(reading).FindAsync(beside.Id, Cancel));
+        Assert.Equal(0, await Rows(ended.Id));
+        Assert.Equal(1, await Rows(beside.Id));
+    }
+
+    [Fact]
+    public async Task ARecordingStillBeingWrittenKeepsItsRow()
+    {
+        Recording writing = await WrittenAsync(5011, settled: false);
+
+        await using (AsyncServiceScope discarding = container.CreateAsyncScope())
+        {
+            Assert.Equal(
+                RecordingDiscard.StillRecording,
+                await Directory(discarding).DiscardAsync(writing.Id, Cancel));
+        }
+
+        Assert.Equal(1, await Rows(writing.Id));
+    }
+
+    [Fact]
+    public async Task ARecordingNothingEverWroteDownIsSaidToBeMissingRatherThanDiscarded()
+    {
+        await using AsyncServiceScope discarding = container.CreateAsyncScope();
+
+        Assert.Equal(
+            RecordingDiscard.NoSuchRecording,
+            await Directory(discarding).DiscardAsync(RecordingId.New(), Cancel));
+    }
+
+    [Fact]
+    public async Task DiscardingTheSameRecordingTwiceSaysItIsGoneTheSecondTime()
+    {
+        Recording ended = await WrittenAsync(5021, settled: true);
+
+        await using AsyncServiceScope discarding = container.CreateAsyncScope();
+        IRecordingDirectory directory = Directory(discarding);
+
+        Assert.Equal(RecordingDiscard.Discarded, await directory.DiscardAsync(ended.Id, Cancel));
+        Assert.Equal(RecordingDiscard.NoSuchRecording, await directory.DiscardAsync(ended.Id, Cancel));
+    }
+
+    private async Task<int> Rows(RecordingId id)
+    {
+        await using AsyncServiceScope counting = container.CreateAsyncScope();
+
+        return await Store(counting).Set<Recording>().CountAsync(recording => recording.Id == id, Cancel);
+    }
+
+    private async Task<Recording> WrittenAsync(int eventId, bool settled)
+    {
+        RecordingId id = RecordingId.New();
+        Recording begun = Recording.Begin(
+            id,
+            ReservationId.New(),
+            new ProgrammeRef(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), Airs),
+            new OutputRoot("primary"),
+            RecordingFileName.For(id, ".ts"),
+            Airs,
+            Airs.AddMinutes(30),
+            new ProgrammeSnapshot(
+                "A programme",
+                string.Empty,
+                string.Empty,
+                [],
+                Airs.AddHours(-6),
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
+            null,
+            BroadcastGroupRole.Standalone,
+            Airs,
+            new TunerDeviceId("adapter0"));
+
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        IRecordingRepository repository = Recordings(writing);
+        await repository.AddAsync(begun, Cancel);
+
+        if (settled)
+        {
+            begun.Abort(Airs.AddMinutes(30));
+            begun.Settle(RecordingOutcome.Complete, 1_000_000, Airs.AddMinutes(30));
+            await repository.SaveAsync(begun, Cancel);
+        }
+
+        return begun;
+    }
+
+    private static IRecordingRepository Recordings(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingRepository>();
 }

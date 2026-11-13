@@ -41,6 +41,14 @@ public sealed class MigratedRepositoryDatabase : IAsyncLifetime
 
     public ServiceProvider Infrastructure() => RepositoryDatabase.Container(connectionString, SealingKeys.Fresh(), _ => { });
 
+    public async Task<NpgsqlConnection> OpenAsync()
+    {
+        NpgsqlConnection connection = new(connectionString);
+        await connection.OpenAsync();
+
+        return connection;
+    }
+
     private static string Scratch(string database)
     {
         string? configured = Environment.GetEnvironmentVariable(ConnectionStringVariable);

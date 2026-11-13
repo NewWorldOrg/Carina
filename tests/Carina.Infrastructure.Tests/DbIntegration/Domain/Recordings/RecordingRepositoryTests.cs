@@ -4,32 +4,38 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Fixtures.Recordings;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Recordings;
 
-[Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class RecordingRepositoryTests(RepositoryDatabase database)
+public sealed class RecordingRepositoryTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
     private static readonly DateTime Airs = new(2026, 8, 26, 20, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact]
     public async Task ARecordingThatWasWrittenDownIsFoundAgainAsItWasWritten()
     {
         Recording begun = Begin(4001, Airs, Airs.AddMinutes(30));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new RecordingRepository(writing).AddAsync(begun, Cancel);
+            await Recordings(writing).AddAsync(begun, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        Recording? read = await new RecordingRepository(reading).FindAsync(begun.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording? read = await Recordings(reading).FindAsync(begun.Id, Cancel);
 
         Assert.NotNull(read);
         Assert.Equal(Airs, read.ExpectedWindowStart);
@@ -48,9 +54,9 @@ public sealed class RecordingRepositoryTests(RepositoryDatabase database)
         Recording first = Begin(4101, Airs, Airs.AddMinutes(15));
         Recording settled = Begin(4103, Airs, Airs.AddMinutes(5));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var repository = new RecordingRepository(writing);
+            IRecordingRepository repository = Recordings(writing);
 
             await repository.AddAsync(last, Cancel);
             await repository.AddAsync(first, Cancel);
@@ -63,8 +69,8 @@ public sealed class RecordingRepositoryTests(RepositoryDatabase database)
             await repository.SaveAsync(settled, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<Recording> inFlight = await new RecordingRepository(reading).ListInFlightAsync(Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IReadOnlyList<Recording> inFlight = await Recordings(reading).ListInFlightAsync(Cancel);
 
         Assert.Equal([first.Id, last.Id], inFlight.Select(recording => recording.Id));
     }
@@ -74,9 +80,9 @@ public sealed class RecordingRepositoryTests(RepositoryDatabase database)
     {
         Recording begun = Begin(4201, Airs, Airs.AddMinutes(30));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var repository = new RecordingRepository(writing);
+            IRecordingRepository repository = Recordings(writing);
 
             await repository.AddAsync(begun, Cancel);
 
@@ -85,8 +91,8 @@ public sealed class RecordingRepositoryTests(RepositoryDatabase database)
             await repository.SaveAsync(begun, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        Recording? read = await new RecordingRepository(reading).FindAsync(begun.Id, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording? read = await Recordings(reading).FindAsync(begun.Id, Cancel);
 
         Assert.Equal(Airs.AddMinutes(30), read!.AbortedAt);
     }
@@ -96,13 +102,13 @@ public sealed class RecordingRepositoryTests(RepositoryDatabase database)
     {
         Recording begun = Begin(4301, Airs, Airs.AddMinutes(30));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new RecordingRepository(writing).AddAsync(begun, Cancel);
+            await Recordings(writing).AddAsync(begun, Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        var repository = new RecordingRepository(reading);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IRecordingRepository repository = Recordings(reading);
 
         Assert.Equal(
             begun.Id,
@@ -116,18 +122,18 @@ public sealed class RecordingRepositoryTests(RepositoryDatabase database)
         Recording moved = Begin(4301, Airs, Airs.AddMinutes(30));
         Recording next = Begin(4302, Airs, Airs.AddMinutes(30));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new RecordingRepository(writing).AddAsync(moved, Cancel);
+            await Recordings(writing).AddAsync(moved, Cancel);
         }
 
-        await using CarinaDbContext round = database.Open();
-        RecordingRepository repository = new(round);
+        await using AsyncServiceScope round = container.CreateAsyncScope();
+        IRecordingRepository repository = Recordings(round);
         Recording held = (await repository.FindAsync(moved.Id, Cancel))!;
 
-        await using (CarinaDbContext meanwhile = database.Open())
+        await using (AsyncServiceScope meanwhile = container.CreateAsyncScope())
         {
-            RecordingRepository other = new(meanwhile);
+            IRecordingRepository other = Recordings(meanwhile);
             Recording landed = (await other.FindAsync(moved.Id, Cancel))!;
             landed.Extend(Airs.AddMinutes(40));
             await other.SaveAsync(landed, Cancel);
@@ -139,8 +145,8 @@ public sealed class RecordingRepositoryTests(RepositoryDatabase database)
 
         await repository.AddAsync(next, Cancel);
 
-        await using CarinaDbContext reading = database.Open();
-        RecordingRepository read = new(reading);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IRecordingRepository read = Recordings(reading);
 
         Assert.Equal(Airs.AddMinutes(40), (await read.FindAsync(moved.Id, Cancel))?.ExpectedWindowEnd);
         Assert.NotNull(await read.FindAsync(next.Id, Cancel));
@@ -148,10 +154,13 @@ public sealed class RecordingRepositoryTests(RepositoryDatabase database)
 
     private async Task Clear()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        await context.Database.ExecuteSqlRawAsync("DELETE FROM recording");
+        await scope.ServiceProvider.GetRequiredService<CarinaDbContext>().Database.ExecuteSqlRawAsync("DELETE FROM recording");
     }
+
+    private static IRecordingRepository Recordings(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingRepository>();
 
     private static Recording Begin(int eventId, DateTime from, DateTime until)
     {
