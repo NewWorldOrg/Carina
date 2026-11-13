@@ -3,11 +3,11 @@ using Carina.Infrastructure.Persistence.Configurations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Library;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class RecordingLibrarySchemaTests(MigratedScratchDatabase database)
+public sealed class LibrarySchemaTests(MigratedScratchDatabase database)
     : IClassFixture<MigratedScratchDatabase>
 {
     private const string Airs = "timestamptz '2026-08-24 20:00:00+00'";

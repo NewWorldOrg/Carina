@@ -6,11 +6,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Recordings;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class RecordingPromisedEndMigrationTests
+public sealed class TheEndARecordingWasPromisedMigrationTests
 {
     private const string ScratchDatabase = "carina_recording_promised_end_test";
 

@@ -1,6 +1,15 @@
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
+using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
+using Carina.Infrastructure.Persistence;
+
+using Microsoft.EntityFrameworkCore;
+
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Recordings;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -16,6 +25,10 @@ public sealed class RecordingProjectionSchemaTests(MigratedScratchDatabase datab
     private const string OneReason = """
         '[{"fault":"DriverLost","tuneFailure":null,"note":"","noticedAt":"2026-08-24T20:10:00Z"}]'::jsonb
         """;
+
+    private static readonly DateTime Noon = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime Evening = new(2026, 8, 24, 20, 0, 0, DateTimeKind.Utc);
 
     [Fact]
     public async Task ARecordingThatHasNotEndedLeavesTheReservationSayingNothing()
@@ -252,5 +265,232 @@ public sealed class RecordingProjectionSchemaTests(MigratedScratchDatabase datab
         object? read = await command.ExecuteScalarAsync();
 
         return read is DBNull ? null : read;
+    }
+
+    [Fact]
+    public async Task SavingAReservationCannotPutTheClaimOrTheOutcomeIntoTheDatabase()
+    {
+        Reservation reservation = Reservation.Rehydrate(
+            ReservationId.New(),
+            ProgrammeTwoHoursAfterNoon(61001),
+            null,
+            Priority.Default,
+            Noon.AddHours(2),
+            Noon.AddHours(3),
+            true,
+            Margin.None,
+            Margin.None,
+            SnapshotAtNoon(),
+            null,
+            BroadcastGroupRole.Standalone,
+            ReservationState.Scheduled,
+            Noon,
+            RecordingOutcome.Complete,
+            false,
+            [],
+            false,
+            null,
+            false,
+            null,
+            Noon);
+
+        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        {
+            context.Add(reservation);
+            await context.SaveChangesAsync();
+        }
+
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Null(await Read(connection, reservation.Id, "started_at"));
+        Assert.Null(await Read(connection, reservation.Id, "recording_outcome"));
+    }
+
+    [Fact]
+    public async Task AClaimWrittenBesideTheChangeTrackerSurvivesTheNextSave()
+    {
+        Reservation reservation = Reservation.Plan(
+            ReservationId.New(),
+            ProgrammeTwoHoursAfterNoon(61002),
+            null,
+            Priority.Default,
+            Noon.AddHours(2),
+            Noon.AddHours(3),
+            true,
+            Margin.None,
+            Margin.None,
+            SnapshotAtNoon(),
+            null,
+            BroadcastGroupRole.Standalone,
+            Noon);
+
+        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        {
+            context.Add(reservation);
+            await context.SaveChangesAsync();
+        }
+
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using (var claim = new NpgsqlCommand(
+            $"UPDATE reservation SET started_at = timestamptz '2026-08-24 21:59:50+00' "
+            + $"WHERE id = '{reservation.Id.Value}' AND started_at IS NULL AND state = 'Scheduled'",
+            connection))
+        {
+            Assert.Equal(1, await claim.ExecuteNonQueryAsync());
+        }
+
+        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        {
+            Reservation loaded = await context.Set<Reservation>()
+                .SingleAsync(entity => entity.Id == reservation.Id);
+
+            loaded.Reprioritise(new Priority(20));
+            await context.SaveChangesAsync();
+        }
+
+        Assert.NotNull(await Read(connection, reservation.Id, "started_at"));
+        Assert.Equal(20, Convert.ToInt32(await Read(connection, reservation.Id, "priority")));
+        Assert.Equal("Recording", await Read(connection, reservation.Id, "composite_state"));
+    }
+
+    private static ProgrammeRef ProgrammeTwoHoursAfterNoon(int eventId)
+        => new(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), Noon.AddHours(2));
+
+    private static ProgrammeSnapshot SnapshotAtNoon()
+        => new(
+            "A programme",
+            "What it is about",
+            string.Empty,
+            [new ProgrammeGenre(7, 1)],
+            Noon,
+            AudioMode.Undetermined,
+            ProgrammeSnapshot.SoundsUnannounced);
+
+    private static async Task<object?> Read(NpgsqlConnection connection, ReservationId id, string column)
+    {
+        await using var command = new NpgsqlCommand(
+            $"SELECT {column} FROM reservation WHERE id = '{id.Value}'",
+            connection);
+        object? read = await command.ExecuteScalarAsync();
+
+        return read is DBNull ? null : read;
+    }
+
+    [Fact]
+    public async Task SettlingARecordingReachesTheReservationWithoutASecondWrite()
+    {
+        Reservation reservation = Plan(5101);
+        await Add(reservation);
+        await Claim(reservation.Id);
+
+        Recording recording = Begin(5101, reservation.Id);
+        await Add(recording);
+
+        Assert.Null(await OutcomeOf(reservation.Id));
+
+        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        {
+            Recording loaded = await context.Set<Recording>()
+                .SingleAsync(entity => entity.Id == recording.Id);
+            loaded.Abort(Evening.AddHours(1));
+            loaded.Settle(RecordingOutcome.Complete, 3_400_000_000, Evening.AddHours(1));
+            await context.SaveChangesAsync();
+        }
+
+        Assert.Equal("Complete", await OutcomeOf(reservation.Id));
+    }
+
+    [Fact]
+    public async Task ARecordingKeepsTheReservationItWasStartedForHereToo()
+    {
+        Reservation mine = Plan(5102);
+        Reservation theirs = Plan(5103);
+        await Add(mine);
+        await Add(theirs);
+
+        Recording recording = Begin(5102, mine.Id);
+        await Add(recording);
+
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using var moving = new NpgsqlCommand(
+            $"UPDATE recording SET reservation_id = '{theirs.Id.Value}' WHERE id = '{recording.Id.Value}'",
+            connection);
+
+        await Assert.ThrowsAsync<PostgresException>(() => moving.ExecuteNonQueryAsync());
+    }
+
+    private static Reservation Plan(int eventId)
+        => Reservation.Plan(
+            ReservationId.New(),
+            ProgrammeAtEvening(eventId),
+            null,
+            Priority.Default,
+            Evening,
+            Evening.AddHours(1),
+            true,
+            Margin.None,
+            Margin.None,
+            SnapshotAtEvening(),
+            null,
+            BroadcastGroupRole.Standalone,
+            Evening);
+
+    private static Recording Begin(int eventId, ReservationId reservationId)
+    {
+        RecordingId id = RecordingId.New();
+
+        return Recording.Begin(
+            id,
+            reservationId,
+            ProgrammeAtEvening(eventId),
+            new OutputRoot("bulk"),
+            RecordingFileName.For(id, ".m2ts"),
+            Evening,
+            Evening.AddHours(1),
+            SnapshotAtEvening(),
+            null,
+            BroadcastGroupRole.Standalone,
+            Evening);
+    }
+
+    private static ProgrammeRef ProgrammeAtEvening(int eventId)
+        => new(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), Evening);
+
+    private static ProgrammeSnapshot SnapshotAtEvening()
+        => new(
+            "A programme",
+            "What it is about",
+            string.Empty,
+            [new ProgrammeGenre(7, 1)],
+            Evening,
+            AudioMode.Undetermined,
+            ProgrammeSnapshot.SoundsUnannounced);
+
+    private async Task Add<T>(T entity)
+        where T : class
+    {
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+        context.Add(entity);
+        await context.SaveChangesAsync();
+    }
+
+    private async Task Claim(ReservationId id)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using var claiming = new NpgsqlCommand(
+            $"UPDATE reservation SET started_at = timestamptz '2026-08-24 20:00:00+00' WHERE id = '{id.Value}'",
+            connection);
+        await claiming.ExecuteNonQueryAsync();
+    }
+
+    private async Task<string?> OutcomeOf(ReservationId id)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using var reading = new NpgsqlCommand(
+            $"SELECT recording_outcome FROM reservation WHERE id = '{id.Value}'",
+            connection);
+        object? read = await reading.ExecuteScalarAsync();
+
+        return read is DBNull ? null : read as string;
     }
 }

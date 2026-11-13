@@ -1,8 +1,9 @@
 using Carina.Infrastructure.Persistence.Configurations;
 
-namespace Carina.Db.Tests;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
 
-public sealed class RecordingGuardSqlTests
+[Trait("Category", "Unit")]
+public sealed class RecordingGuardsTests
 {
     public static TheoryData<string, string> Guards => new()
     {
