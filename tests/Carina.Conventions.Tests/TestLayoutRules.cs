@@ -104,6 +104,13 @@ public static class TestLayoutRules
         new("Segments", "src/Carina.Db/Migrations/20261026110822_RoundsOfLearningKeepOutACandidateThatLosesOpeningsOrEndings.cs"),
         new("Segments", "src/Carina.Db/Migrations/20261107141136_TheSkipThresholdReachesNinetyNineHundredths.cs"),
         new("Segments", "src/Carina.Infrastructure/Configuration/LearningOptions.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveHlsDelivery.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveHlsPlaylists.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveRefusalClosures.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveStreamDelivery.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveWire.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveWireRequest.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveWireSocket.cs"),
         new("Thumbnails", "src/Carina.Api/Playback/ScrubDelivery.cs"),
         new("Thumbnails", "src/Carina.Api/Playback/ThumbnailDelivery.cs"),
     ];

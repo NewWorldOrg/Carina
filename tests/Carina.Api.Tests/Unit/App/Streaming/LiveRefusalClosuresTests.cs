@@ -3,8 +3,9 @@ using System.Net.WebSockets;
 using Carina.Api.Live;
 using Carina.Domain.Streaming;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Streaming;
 
+[Trait("Category", "Unit")]
 public sealed class LiveRefusalClosuresTests
 {
     [Fact]

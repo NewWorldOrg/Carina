@@ -5,8 +5,9 @@ using Carina.Domain.Streaming;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Streaming;
 
+[Trait("Category", "Unit")]
 public sealed class LiveWireRequestTests
 {
     private static readonly LiveSessionKey Asked = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);

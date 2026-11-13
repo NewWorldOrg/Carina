@@ -11,9 +11,10 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Streaming;
 
-public sealed class LiveWireDepartureTests
+[Trait("Category", "Unit")]
+public sealed class LiveWireTests
 {
     private static readonly DateTimeOffset Opened = new(2026, 9, 13, 4, 0, 0, TimeSpan.Zero);
 

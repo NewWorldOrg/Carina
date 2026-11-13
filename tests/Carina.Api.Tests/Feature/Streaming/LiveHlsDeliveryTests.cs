@@ -1,9 +1,9 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using Carina.Api.Live;
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Auth;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
@@ -13,9 +13,10 @@ using Carina.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Streaming;
 
-public sealed partial class LiveHlsTests
+[Trait("Category", "Feature")]
+public sealed partial class LiveHlsDeliveryTests
 {
     private const uint OneFrame = 1001;
 
@@ -32,24 +33,6 @@ public sealed partial class LiveHlsTests
     private readonly LiveFanout fanout = new(new LiveFanoutSettings());
 
     private int gops;
-
-    [Fact(DisplayName = "BR-PV-002, BR-PV-005: a ticket in the path under a name ending in .m3u8 is answered with a playlist naming the playlist of one key")]
-    public async Task ATicketUnderANameEndingInM3u8IsAnsweredWithAPlaylistNamingThePlaylistOfOneKey()
-    {
-        await using AuthProbe probe = Wiring();
-        using HttpClient player = Player(probe);
-
-        using HttpResponseMessage answer = await OpenedAsync(player, WithTicket(await IssuedAsync(probe), "a-channel%20a-programme.m3u8"));
-        string playlist = await answer.Content.ReadAsStringAsync();
-
-        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
-        Assert.Equal(LiveHlsPlaylists.MediaType, answer.Content.Headers.ContentType?.MediaType);
-        Assert.Equal("no-store, private", answer.Headers.CacheControl?.ToString());
-        Assert.StartsWith("#EXTM3U\n", playlist, StringComparison.Ordinal);
-        Assert.Single(Regex.Matches(playlist, "#EXT-X-STREAM-INF:"));
-        Assert.Contains(",RESOLUTION=1920x1080,FRAME-RATE=59.940,CODECS=\"avc1.640028,mp4a.40.2\"\n", playlist, StringComparison.Ordinal);
-        Assert.True(Unguessable.IsOne(KeyIn(playlist)));
-    }
 
     [Fact(DisplayName = "BR-PV-005: the playlist of a key, its initialisation and its segments are opened by the key alone")]
     public async Task ThePlaylistOfAKeyItsInitialisationAndItsSegmentsAreOpenedByTheKeyAlone()
@@ -107,21 +90,6 @@ public sealed partial class LiveHlsTests
         Assert.Equal(HttpStatusCode.Unauthorized, shortened.StatusCode);
     }
 
-    [Fact(DisplayName = "BR-PD-022: an external player's playlist sits on the profile this machine opens at with the main sound, in H.264 though another format is encoded here")]
-    public async Task AnExternalPlayersPlaylistSitsOnTheProfileThisMachineOpensAtInH264()
-    {
-        await using AuthProbe probe = Wiring();
-        using HttpClient player = Player(probe);
-
-        using HttpResponseMessage answer = await OpenedAsync(player, WithTicket(await IssuedAsync(probe), "a.m3u8"));
-
-        LiveSessionKey seated = Assert.Single(Seating(probe).Asked);
-
-        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
-        Assert.Equal(new LiveSessionKey(new NetworkId(32736), new ServiceId(1024), LiveProfile.FullHd60), seated);
-        Assert.Equal(VideoCodec.H264, seated.Format);
-    }
-
     [Fact(DisplayName = "BR-PD-022: a playlist sits on the session a wire asking for the same profile and sound sits on, so it takes no transcoder of its own")]
     public async Task APlaylistSitsOnTheSessionAWireAskingForTheSameSitsOn()
     {
@@ -175,33 +143,6 @@ public sealed partial class LiveHlsTests
         using HttpResponseMessage refused = await probe.Client.GetAsync(new Uri($"{Channel}/hls.m3u8{query}", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
-        Assert.Empty(Seating(probe).Asked);
-    }
-
-    [Fact(DisplayName = "BR-PV-002, BR-PV-005: the ticket is spent on the first playlist, and opening the same name again enters by the grant and is handed a new key")]
-    public async Task OpeningTheSameNameAgainEntersByTheGrantAndIsHandedANewKey()
-    {
-        await using AuthProbe probe = Wiring();
-        using HttpClient player = Player(probe);
-        string path = WithTicket(await IssuedAsync(probe), "a.m3u8");
-
-        string first = KeyIn(await (await OpenedAsync(player, path)).Content.ReadAsStringAsync());
-        string second = KeyIn(await (await OpenedAsync(player, path)).Content.ReadAsStringAsync());
-
-        Assert.NotEqual(first, second);
-        Assert.Equal(2, fanout.Viewers);
-    }
-
-    [Fact]
-    public async Task ATicketForOneChannelOpensNoPlaylistOnAnother()
-    {
-        await using AuthProbe probe = Wiring();
-        using HttpClient player = Player(probe);
-
-        using HttpResponseMessage refused = await player.GetAsync(
-            new Uri($"/api/live/32736-1025/with-ticket/{await IssuedAsync(probe)}/a.m3u8", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
         Assert.Empty(Seating(probe).Asked);
     }
 

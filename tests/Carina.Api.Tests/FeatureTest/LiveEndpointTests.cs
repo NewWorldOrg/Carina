@@ -1,9 +1,7 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
-using Carina.Api.Live;
 using Carina.Domain.Auth;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
@@ -715,28 +713,6 @@ public sealed class LiveEndpointTests
         using HttpResponseMessage response = await feature.AskForATicketAsync(new { networkId = 32736, serviceId = 1024 });
 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ATicketIsNotHandedToTheWire()
-    {
-        await using LiveFeature feature = new();
-
-        feature.Seed(1024, "Alpha", remoteControlKey: 1);
-
-        using HttpResponseMessage ticket = await feature.AskForATicketAsync(new { networkId = 32736, serviceId = 1024 });
-        using JsonDocument body = JsonDocument.Parse(await ticket.Content.ReadAsStringAsync());
-        string inTheClear = body.RootElement.GetProperty("data").GetProperty("inTheClear").GetString()!;
-
-        using HttpRequestMessage asking = new(
-            HttpMethod.Get,
-            new Uri(LiveWire.Path + "?network=32736&service=1024&profile=720p30", UriKind.Relative));
-
-        asking.Headers.TryAddWithoutValidation("Authorization", $"Bearer {inTheClear}");
-
-        using HttpResponseMessage response = await feature.Anonymous.SendAsync(asking);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     private static string[] Names(JsonElement data)

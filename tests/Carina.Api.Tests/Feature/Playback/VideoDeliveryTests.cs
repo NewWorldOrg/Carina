@@ -1,7 +1,10 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
 
 using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Auth;
+using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
@@ -9,6 +12,7 @@ using Carina.Domain.Streaming;
 using Carina.Domain.Viewing;
 using Carina.TestSupport;
 
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -26,6 +30,10 @@ public sealed class VideoDeliveryTests
     private const string AName = "a-programme.ts";
 
     private static readonly byte[] Written = [.. Enumerable.Range(0, GatedSize).Select(index => (byte)(index % 251))];
+
+    private static readonly DateTime At = new(2026, 9, 3, 0, 0, 0, DateTimeKind.Utc);
+
+    private readonly PipedSupply supply = new();
 
     [Fact]
     public async Task TheWholeFileComesBackWhenNoRangeIsAskedFor()
@@ -818,6 +826,22 @@ public sealed class VideoDeliveryTests
             .Distinct());
     }
 
+    [Fact]
+    public async Task ALiveTicketOpensNoRecordingAndIsSpentByTheAttempt()
+    {
+        await using AuthProbe probe = WiringWithARecording(out Recording recording);
+        string ticket = await IssuedAsync(probe);
+        Uri bytes = new($"/api/videos/{recording.Id.Wire}", UriKind.Relative);
+
+        using HttpClient player = Carrying(probe, ticket);
+        using HttpResponseMessage first = await player.GetAsync(bytes);
+        using HttpResponseMessage again = await player.GetAsync(bytes);
+
+        Assert.Equal(HttpStatusCode.Forbidden, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, again.StatusCode);
+        Assert.Null(first.Headers.Location);
+    }
+
     private static Uri Bytes(Recording recording) => new($"/api/videos/{recording.Id.Wire}", UriKind.Relative);
 
     private static AuthProbe Wiring(IPlaybackFileStore files, IOnTheFlyPlayer player, out Recording recording)
@@ -845,4 +869,68 @@ public sealed class VideoDeliveryTests
 
     private static string WithTicket(Recording recording, string ticket, string name)
         => $"/api/videos/{recording.Id.Wire}/with-ticket/{ticket}/{name}";
+
+    private static HttpClient Carrying(AuthProbe probe, string? ticket)
+    {
+        HttpClient player = probe.Wired.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("http://localhost"),
+            AllowAutoRedirect = false,
+        });
+
+        if (ticket is not null)
+        {
+            player.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ticket);
+        }
+
+        return player;
+    }
+
+    private static async Task<string> IssuedAsync(AuthProbe probe)
+    {
+        await probe.SignedInAsync();
+
+        using HttpResponseMessage answer = await probe.Client.PostAsJsonAsync(
+            new Uri("/api/live/ticket", UriKind.Relative),
+            new { networkId = 32736, serviceId = 1024 });
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+
+        using JsonDocument read = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
+
+        return read.RootElement.GetProperty("data").GetProperty("inTheClear").GetString()!;
+    }
+
+    private AuthProbe WiringWithARecording(out Recording recording)
+    {
+        HeldServices services = new();
+        HeldCandidates candidates = new();
+        HeldRecordings recordings = new();
+        NetworkId network = new(32736);
+        ServiceId service = new(1024);
+        CandidateChannel candidate = CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            network,
+            service,
+            TuningParameters.Terrestrial(27),
+            At);
+
+        candidate.Select(SelectionSource.Manual, null, At);
+        services.Services.Add(BroadcastService.Discover(network, service, "Watched", ServiceCategory.Television, At));
+        candidates.Candidates.Add(candidate);
+
+        recording = RecordingFeature.Begin(RecordingId.New());
+        recording.Wrote(TimeSpan.FromMinutes(30));
+        recording.Abort(RecordingFeature.Noon.AddMinutes(30));
+        recording.Settle(RecordingOutcome.Complete, 4_000, RecordingFeature.Noon.AddMinutes(30));
+        recordings.Recordings.Add(recording);
+
+        return AuthProbe.OverHttp(wired =>
+        {
+            wired.AddSingleton<IBroadcastServiceRepository>(services);
+            wired.AddSingleton<ICandidateChannelRepository>(candidates);
+            wired.AddSingleton<IRecordingDirectory>(recordings);
+            wired.AddSingleton<ILiveSupply>(supply);
+        });
+    }
 }
