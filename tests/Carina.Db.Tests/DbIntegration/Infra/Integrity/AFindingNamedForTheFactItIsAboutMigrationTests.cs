@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Integrity;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class IntegrityFindingKeyRollbackTests
+public sealed class AFindingNamedForTheFactItIsAboutMigrationTests
 {
     private const string ScratchDatabase = "carina_integrity_rollback_test";
 

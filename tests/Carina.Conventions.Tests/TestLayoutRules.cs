@@ -61,6 +61,7 @@ public static class TestLayoutRules
         new("Encodings", "src/Carina.Infrastructure/Configuration/EncodingOptions.cs"),
         new("Epg", "src/Carina.Api/Events/ProgrammeFeedReaders.cs"),
         new("Epg", "src/Carina.Api/Events/ProgrammeFeedStream.cs"),
+        new("Integrity", "src/Carina.Db/Migrations/20260914005111_AFindingNamedForTheFactItIsAbout.cs"),
         new("Integrity", "src/Carina.Infrastructure/Configuration/IntegrityOptions.cs"),
         new("Live", "src/Carina.Api/Live/HybridcastAppDelivery.cs"),
         new("Live", "src/Carina.Api/Live/HybridcastSocketDelivery.cs"),
