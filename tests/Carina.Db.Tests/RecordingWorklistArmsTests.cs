@@ -19,11 +19,10 @@ using Npgsql;
 namespace Carina.Db.Tests;
 
 /// <summary>
-/// The queries the thumbnail pass, the caption pass, the data broadcast pass and the throwing away of a recording run in
-/// the store, held to the recording's own answer for the same rows. A matrix of recordings in every standing of their
-/// picture, their captions and the record of their data broadcast goes through both, with captions taken on the very
-/// instant the file was descrambled and one microsecond either side of it, and a record that failed on its last try
-/// and on the one before it.
+/// The queries the caption pass and the data broadcast pass run in the store, held to the recording's own answer for the
+/// same rows. A matrix of recordings in every standing of their picture, their captions and the record of their data
+/// broadcast goes through both, with captions taken on the very instant the file was descrambled and one microsecond
+/// either side of it, and a record that failed on its last try and on the one before it.
 /// </summary>
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -41,26 +40,6 @@ public sealed class RecordingWorklistArmsTests(MigratedScratchDatabase database)
     private static readonly OutputRoot Bulk = new("bulk");
 
     private static readonly OutputRoot Spare = new("spare");
-
-    [Fact(DisplayName = "BR-KD-012: the recordings the thumbnail pass reads as waiting are the ones each recording says awaits a picture")]
-    public async Task TheRecordingsWaitingForAPictureAreTheOnesEachSaysAwaitsOne()
-    {
-        IReadOnlyList<Recording> matrix = await LaidAsync();
-
-        Assert.Contains(matrix, recording => recording.AwaitsAThumbnail);
-        Assert.Contains(matrix, recording => !recording.AwaitsAThumbnail);
-
-        await using CarinaDbContext context = Context();
-        var worklist = new ThumbnailWorklist(context);
-
-        IReadOnlyList<ThumbnailSubject> within = await worklist.AwaitingAsync([Bulk], 1_000, CancellationToken.None);
-        int beyond = await worklist.WaitingOutOfReachAsync([Bulk], CancellationToken.None);
-
-        Assert.Equal(
-            Ids(matrix.Where(recording => recording.AwaitsAThumbnail && recording.OutputRoot.Equals(Bulk))),
-            Ids(within.Select(subject => subject.Id)));
-        Assert.Equal(matrix.Count(recording => recording.AwaitsAThumbnail && recording.OutputRoot.Equals(Spare)), beyond);
-    }
 
     [Fact(DisplayName = "BR-PD-016: the recordings the caption pass reads as waiting are the ones each recording says awaits its captions, on the instant of the descrambling and either side of it")]
     public async Task TheRecordingsWaitingForCaptionsAreTheOnesEachSaysAwaitsThem()
@@ -81,23 +60,6 @@ public sealed class RecordingWorklistArmsTests(MigratedScratchDatabase database)
             Ids(matrix.Where(recording => recording.AwaitsCaptions && recording.OutputRoot.Equals(Bulk))),
             Ids(within.Select(subject => subject.Id)));
         Assert.Equal(matrix.Count(recording => recording.AwaitsCaptions && recording.OutputRoot.Equals(Spare)), beyond);
-    }
-
-    [Fact(DisplayName = "BR-LS-001: the store throws away a recording's row only when the recording says it is no longer being written")]
-    public async Task TheStoreThrowsAwayOnlyARecordingThatIsNoLongerWritten()
-    {
-        IReadOnlyList<Recording> matrix = await LaidAsync();
-
-        Assert.Contains(matrix, recording => recording.IsInFlight);
-
-        foreach (Recording recording in matrix)
-        {
-            await using CarinaDbContext context = Context();
-
-            Assert.Equal(
-                recording.IsInFlight ? RecordingDiscard.StillRecording : RecordingDiscard.Discarded,
-                await new RecordingDirectory(context).DiscardAsync(recording.Id, CancellationToken.None));
-        }
     }
 
     [Fact(DisplayName = "BR-BS-001: the recordings the data broadcast pass reads as waiting, puts to coming once ended and tries again are the ones each recording says so of, on the last try and the one before it")]

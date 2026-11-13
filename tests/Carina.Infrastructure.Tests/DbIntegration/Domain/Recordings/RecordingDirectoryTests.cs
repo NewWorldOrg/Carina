@@ -6,6 +6,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
@@ -946,6 +947,23 @@ public sealed class RecordingDirectoryTests(MigratedRepositoryDatabase database)
 
         Assert.Equal(RecordingDiscard.Discarded, await directory.DiscardAsync(ended.Id, Cancel));
         Assert.Equal(RecordingDiscard.NoSuchRecording, await directory.DiscardAsync(ended.Id, Cancel));
+    }
+
+    [Fact(DisplayName = "BR-LS-001: the store throws away a recording's row only when the recording says it is no longer being written")]
+    public async Task TheStoreThrowsAwayOnlyARecordingThatIsNoLongerWritten()
+    {
+        IReadOnlyList<Recording> matrix = await RecordingMatrix.LaidAsync(container);
+
+        Assert.Contains(matrix, recording => recording.IsInFlight);
+
+        foreach (Recording recording in matrix)
+        {
+            await using AsyncServiceScope context = container.CreateAsyncScope();
+
+            Assert.Equal(
+                recording.IsInFlight ? RecordingDiscard.StillRecording : RecordingDiscard.Discarded,
+                await Directory(context).DiscardAsync(recording.Id, CancellationToken.None));
+        }
     }
 
     private async Task<int> Rows(RecordingId id)

@@ -5,19 +5,27 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Thumbnails;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
 
-namespace Carina.Infrastructure.Tests.Fixtures.Thumbnails;
+using Microsoft.Extensions.DependencyInjection;
 
-[Collection(RepositoryDatabaseCollection.Name)]
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Thumbnails;
+
 [Trait("Category", "DbIntegration")]
-public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
+public sealed class ThumbnailWorklistTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
     private static readonly DateTime Now = new(2026, 8, 26, 6, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly OutputRoot Bulk = new("bulk");
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact]
     public async Task ARecordingStillBeingWrittenIsNotWaitingForAPicture()
@@ -206,20 +214,40 @@ public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
         => await Assert.ThrowsAsync<InvalidOperationException>(
             () => IllustrateAsync(RecordingId.New(), ThumbnailState.Ready, null));
 
+    [Fact(DisplayName = "BR-KD-012: the recordings the thumbnail pass reads as waiting are the ones each recording says awaits a picture")]
+    public async Task TheRecordingsWaitingForAPictureAreTheOnesEachSaysAwaitsOne()
+    {
+        IReadOnlyList<Recording> matrix = await RecordingMatrix.LaidAsync(container);
+
+        Assert.Contains(matrix, recording => recording.AwaitsAThumbnail);
+        Assert.Contains(matrix, recording => !recording.AwaitsAThumbnail);
+
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        IThumbnailWorklist worklist = Worklist(context);
+
+        IReadOnlyList<ThumbnailSubject> within = await worklist.AwaitingAsync([Bulk], 1_000, CancellationToken.None);
+        int beyond = await worklist.WaitingOutOfReachAsync([Bulk], CancellationToken.None);
+
+        Assert.Equal(
+            RecordingMatrix.Ids(matrix.Where(recording => recording.AwaitsAThumbnail && recording.OutputRoot.Equals(Bulk))),
+            RecordingMatrix.Ids(within.Select(subject => subject.Id)));
+        Assert.Equal(matrix.Count(recording => recording.AwaitsAThumbnail && recording.OutputRoot.Equals(RecordingMatrix.Spare)), beyond);
+    }
+
     private async Task<IReadOnlyList<ThumbnailSubject>> AwaitingAsync(
         int atMost = 64,
         params string[] withinReach)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
-        return await new ThumbnailWorklist(context).AwaitingAsync(Reachable(withinReach), atMost, Cancel);
+        return await Worklist(context).AwaitingAsync(Reachable(withinReach), atMost, Cancel);
     }
 
     private async Task<int> OutOfReachAsync(params string[] withinReach)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
-        return await new ThumbnailWorklist(context).WaitingOutOfReachAsync(Reachable(withinReach), Cancel);
+        return await Worklist(context).WaitingOutOfReachAsync(Reachable(withinReach), Cancel);
     }
 
     private static IReadOnlyList<OutputRoot> Reachable(string[] withinReach)
@@ -227,23 +255,23 @@ public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
 
     private async Task IllustrateAsync(RecordingId id, ThumbnailState state, ThumbnailFault? fault)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
-        await new ThumbnailWorklist(context).IllustrateAsync(id, state, fault, Cancel);
+        await Worklist(context).IllustrateAsync(id, state, fault, Cancel);
     }
 
     private async Task<ThumbnailSubject?> AskAgainAsync(RecordingId id)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
-        return await new ThumbnailWorklist(context).AskAgainAsync(id, Cancel);
+        return await Worklist(context).AskAgainAsync(id, Cancel);
     }
 
     private async Task<Recording> ReadAsync(RecordingId id)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
-        return await context.FindAsync<Recording>([id], Cancel)
+        return await Store(context).FindAsync<Recording>([id], Cancel)
             ?? throw new InvalidOperationException("The recording that was just written is not there.");
     }
 
@@ -273,9 +301,9 @@ public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
 
         recording.Wrote(TimeSpan.FromMinutes(30));
 
-        await using CarinaDbContext context = database.Open();
-        context.Add(recording);
-        await context.SaveChangesAsync(Cancel);
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        Store(context).Add(recording);
+        await Store(context).SaveChangesAsync(Cancel);
 
         return recording;
     }
@@ -288,8 +316,8 @@ public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
     {
         DateTime stopped = at ?? Now.AddHours(1);
 
-        await using CarinaDbContext context = database.Open();
-        Recording loaded = await context.FindAsync<Recording>([id], Cancel)
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        Recording loaded = await Store(context).FindAsync<Recording>([id], Cancel)
             ?? throw new InvalidOperationException("The recording that was just written is not there.");
 
         loaded.Abort(stopped);
@@ -300,6 +328,12 @@ public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
         }
 
         loaded.Settle(outcome, fileSizeObserved, stopped);
-        await context.SaveChangesAsync(Cancel);
+        await Store(context).SaveChangesAsync(Cancel);
     }
+
+    private static IThumbnailWorklist Worklist(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IThumbnailWorklist>();
+
+    private static CarinaDbContext Store(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
 }

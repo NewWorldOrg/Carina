@@ -1,3 +1,5 @@
+
+
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Segments;
 
 /// <summary>
