@@ -4,21 +4,28 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
-using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Fixtures.Reservations;
 
-namespace Carina.Infrastructure.Tests.Reservations;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Reservations;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ReservationOutcomeListingTests(RepositoryDatabase database)
+public sealed class ReservationOutcomeRepositoryTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private const int Network = 32736;
 
     private static readonly DateTime Now = ReservationFixtures.Now;
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact]
     public async Task ThePageSaysHowManyThereAreAndHandsBackTheNewestFirst()
@@ -211,19 +218,22 @@ public sealed class ReservationOutcomeListingTests(RepositoryDatabase database)
     {
         ReservationOutcomeQuery query = ReservationOutcomeQuery.For(from, to, page, perPage, conditions)!;
 
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new ReservationOutcomeRepository(context).ListAsync(query, Cancel);
+        return await Outcomes(scope).ListAsync(query, Cancel);
     }
 
     private async Task WrittenAsync(params ReservationOutcome[] outcomes)
     {
-        await using CarinaDbContext context = database.Open();
-        var repository = new ReservationOutcomeRepository(context);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        IReservationOutcomeRepository repository = Outcomes(scope);
 
         foreach (ReservationOutcome outcome in outcomes)
         {
             await repository.AddAsync(outcome, Cancel);
         }
     }
+
+    private static IReservationOutcomeRepository Outcomes(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IReservationOutcomeRepository>();
 }

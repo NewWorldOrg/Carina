@@ -3,24 +3,58 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Reservations;
 
-[Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ReservationRecordingContractTests(MigratedScratchDatabase database)
-    : IClassFixture<MigratedScratchDatabase>
+public sealed class ReservationRecordingContractTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
     private static readonly DateTime Airs = new(2026, 8, 24, 20, 0, 0, DateTimeKind.Utc);
 
     private static readonly DateTime Tick = new(2026, 8, 24, 20, 30, 0, DateTimeKind.Utc);
 
     private static readonly DateTime Made = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly TimeSpan[] Ahead = [TimeSpan.Zero, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
+
+    private static readonly ReservationState[] States =
+    [
+        ReservationState.Scheduled,
+        ReservationState.Conflict,
+        ReservationState.Cancelled,
+        ReservationState.Missed,
+    ];
+
+    private static readonly (bool Claimed, string? Outcome)[] Claims =
+    [
+        (false, null),
+        (true, null),
+        (true, "Complete"),
+        (true, "Failed"),
+    ];
+
+    private static readonly TimeSpan[] AirsForTheMatrix =
+    [
+        TimeSpan.FromHours(-2),
+        TimeSpan.FromMinutes(-10),
+        TimeSpan.FromSeconds(10),
+        TimeSpan.FromSeconds(40),
+        TimeSpan.FromHours(4),
+    ];
+
+    private static readonly int[] Margins = [0, 30];
+
+    private readonly ServiceProvider migrated = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await migrated.DisposeAsync();
 
     [Fact]
     public async Task OneQueryRebuildsWhatShouldBeRecordingRightNow()
@@ -118,10 +152,10 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
         await Clear();
         Reservation reservation = Build(21701, Airs, Margin.OfSeconds(10), Margin.OfSeconds(30));
 
-        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        await using (AsyncServiceScope scope = migrated.CreateAsyncScope())
         {
-            context.Add(reservation);
-            await context.SaveChangesAsync();
+            Context(scope).Add(reservation);
+            await Context(scope).SaveChangesAsync();
         }
 
         RecordingTick tick = Assert.Single(await Ticks(Tick));
@@ -137,10 +171,10 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
         await Clear();
         Reservation reservation = Build(21705, Airs, Margin.OfSeconds(10), Margin.OfSeconds(45));
 
-        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        await using (AsyncServiceScope scope = migrated.CreateAsyncScope())
         {
-            context.Add(reservation);
-            await context.SaveChangesAsync();
+            Context(scope).Add(reservation);
+            await Context(scope).SaveChangesAsync();
         }
 
         RecordingTick tick = Assert.Single(await Ticks(Tick));
@@ -176,10 +210,10 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
             BroadcastGroupRole.Standalone,
             asking);
 
-        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        await using (AsyncServiceScope scope = migrated.CreateAsyncScope())
         {
-            context.Add(reservation);
-            await context.SaveChangesAsync();
+            Context(scope).Add(reservation);
+            await Context(scope).SaveChangesAsync();
         }
 
         RecordingTick tick = Assert.Single(await Ticks(asking));
@@ -196,10 +230,10 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
         await Clear();
         Reservation reservation = Build(21702, Airs, Margin.None, Margin.None);
 
-        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        await using (AsyncServiceScope scope = migrated.CreateAsyncScope())
         {
-            context.Add(reservation);
-            await context.SaveChangesAsync();
+            Context(scope).Add(reservation);
+            await Context(scope).SaveChangesAsync();
         }
 
         RecordingTick tick = Assert.Single(await Ticks(Tick));
@@ -218,10 +252,10 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
         await Clear();
         Reservation reservation = Build(21703, Airs, Margin.None, Margin.None, AudioMode.DualMono, 2);
 
-        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        await using (AsyncServiceScope scope = migrated.CreateAsyncScope())
         {
-            context.Add(reservation);
-            await context.SaveChangesAsync();
+            Context(scope).Add(reservation);
+            await Context(scope).SaveChangesAsync();
         }
 
         RecordingTick tick = Assert.Single(await Ticks(Tick));
@@ -283,7 +317,7 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
         await Clear();
         ReservationId airing = await Plan(21901, ReservationState.Scheduled);
 
-        await using NpgsqlConnection holder = await database.OpenAsync();
+        await using NpgsqlConnection holder = await OpenAsync();
         await using NpgsqlTransaction held = await holder.BeginTransactionAsync();
         await using (var winner = new NpgsqlCommand(
             $"UPDATE reservation SET started_at = '{Sql(Tick)}' WHERE id = '{airing.Value}' "
@@ -388,18 +422,87 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
         }
     }
 
+    [Fact(DisplayName = "BR-RS-001: the reservations the recorder reads as due are the ones each reservation says is due")]
+    public async Task TheReservationsReadAsDueAreTheOnesEachSaysIsDue()
+    {
+        IReadOnlyList<Reservation> matrix = await LaidAsync();
+
+        foreach (DateTime at in new[] { Tick, Tick.AddMinutes(-30), Tick.AddHours(5) })
+        {
+            foreach (TimeSpan ahead in Ahead)
+            {
+                await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+                IReadOnlyList<RecordingTick> due =
+                    await Contract(scope).DueAtAsync(at, ahead, CancellationToken.None);
+
+                Assert.Equal(
+                    Ids(matrix.Where(reservation => reservation.IsDueAt(at, ahead))),
+                    Ids(due.Select(tick => tick.Id)));
+            }
+        }
+    }
+
+    [Fact(DisplayName = "BR-RS-001: on the instant a window opens, as far ahead as the recorder prepares, and on the instant it closes, the store and each reservation say the same")]
+    public async Task OnTheEdgesOfEveryWindowTheStoreAndEachReservationSayTheSame()
+    {
+        IReadOnlyList<Reservation> matrix = await LaidAsync();
+
+        foreach ((DateTime at, TimeSpan ahead) in Edges(matrix))
+        {
+            await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+            IReadOnlyList<RecordingTick> due =
+                await Contract(scope).DueAtAsync(at, ahead, CancellationToken.None);
+
+            Assert.Equal(
+                Ids(matrix.Where(reservation => reservation.IsDueAt(at, ahead))),
+                Ids(due.Select(tick => tick.Id)));
+        }
+    }
+
+    [Fact(DisplayName = "BR-RS-001: the claim the store grants is the one each reservation says it is ready for, so a contended reservation never starts")]
+    public async Task TheClaimTheStoreGrantsIsTheOneEachReservationIsReadyFor()
+    {
+        IReadOnlyList<Reservation> matrix = await LaidAsync();
+
+        Assert.Contains(matrix, reservation => reservation.State is ReservationState.Conflict && !reservation.IsPinned);
+
+        foreach (Reservation reservation in matrix)
+        {
+            await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+
+            Assert.Equal(
+                reservation.IsReadyToBeClaimed,
+                await Contract(scope).ClaimAsync(reservation.Id, Tick, CancellationToken.None));
+        }
+    }
+
+    [Fact(DisplayName = "BR-RS-002: the claim the store gives back is the one each reservation says may be given back")]
+    public async Task TheClaimTheStoreGivesBackIsTheOneEachReservationAllows()
+    {
+        IReadOnlyList<Reservation> matrix = await LaidAsync();
+
+        foreach (Reservation reservation in matrix.Where(reservation => reservation.IsPinned))
+        {
+            DateTime wrong = reservation.StartedAt!.Value.AddSeconds(1);
+            DateTime right = reservation.StartedAt!.Value;
+
+            Assert.Equal(reservation.MayBeReleasedFrom(wrong), await ReleaseAsync(reservation.Id, wrong));
+            Assert.Equal(reservation.MayBeReleasedFrom(right), await ReleaseAsync(reservation.Id, right));
+        }
+    }
+
     private async Task<bool> Release(ReservationId id, DateTime claimedAt)
     {
-        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
 
-        return await new ReservationRecordingContract(context).ReleaseAsync(id, claimedAt, CancellationToken.None);
+        return await Contract(scope).ReleaseAsync(id, claimedAt, CancellationToken.None);
     }
 
     private async Task<bool> QueuedBehindTheHolder()
     {
         for (int attempt = 0; attempt < 100; attempt++)
         {
-            await using NpgsqlConnection watcher = await database.OpenAsync();
+            await using NpgsqlConnection watcher = await OpenAsync();
             await using var waiting = new NpgsqlCommand(
                 "SELECT count(*) FROM pg_stat_activity "
                 + "WHERE wait_event_type = 'Lock' AND query LIKE '%UPDATE reservation SET started_at%'",
@@ -456,9 +559,9 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
 
     private async Task<IReadOnlyList<RecordingTick>> Ticks(DateTime at, TimeSpan? ahead = null)
     {
-        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
 
-        return await new ReservationRecordingContract(context).DueAtAsync(
+        return await Contract(scope).DueAtAsync(
             at,
             ahead ?? TimeSpan.Zero,
             CancellationToken.None);
@@ -469,9 +572,9 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
 
     private async Task<bool> Claim(ReservationId id, DateTime at)
     {
-        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
 
-        return await new ReservationRecordingContract(context).ClaimAsync(id, at, CancellationToken.None);
+        return await Contract(scope).ClaimAsync(id, at, CancellationToken.None);
     }
 
     private async Task<ReservationId> Plan(
@@ -516,14 +619,14 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
 
     private async Task Execute(string sql)
     {
-        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await OpenAsync();
         await using var command = new NpgsqlCommand(sql, connection);
         await command.ExecuteNonQueryAsync();
     }
 
     private async Task<object?> Read(ReservationId id, string column)
     {
-        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await OpenAsync();
         await using var command = new NpgsqlCommand(
             $"SELECT {column} FROM reservation WHERE id = '{id.Value}'",
             connection);
@@ -531,4 +634,109 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
 
         return read is DBNull ? null : read;
     }
+
+    private async Task<NpgsqlConnection> OpenAsync()
+    {
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+        var connection = new NpgsqlConnection(Context(scope).Database.GetConnectionString());
+        await connection.OpenAsync();
+
+        return connection;
+    }
+
+    private static CarinaDbContext Context(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+
+    private static IReservationRecordingContract Contract(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IReservationRecordingContract>();
+
+    /// <summary>
+    /// Every instant a window of the matrix opens, looked at from as far ahead as the recorder prepares, and every
+    /// instant one closes, each with the second before it.
+    /// </summary>
+    private static IReadOnlyList<(DateTime At, TimeSpan Ahead)> Edges(IReadOnlyList<Reservation> matrix)
+    {
+        IEnumerable<(DateTime At, TimeSpan Ahead)> opening =
+            from reservation in matrix
+            from ahead in Ahead
+            from at in new[] { reservation.EffectiveStartAt - ahead, reservation.EffectiveStartAt - ahead - TimeSpan.FromSeconds(1) }
+            select (at, ahead);
+        IEnumerable<(DateTime At, TimeSpan Ahead)> closing =
+            from reservation in matrix
+            from ahead in Ahead
+            from at in new[] { reservation.EffectiveEndAt, reservation.EffectiveEndAt - TimeSpan.FromSeconds(1) }
+            select (at, ahead);
+
+        return [.. opening.Concat(closing).Distinct()];
+    }
+
+    private static IReadOnlyList<Guid> Ids(IEnumerable<Reservation> reservations)
+        => Ids(reservations.Select(reservation => reservation.Id));
+
+    private static IReadOnlyList<Guid> Ids(IEnumerable<ReservationId> ids) => [.. ids.Select(id => id.Value).Order()];
+
+    private async Task<bool> ReleaseAsync(ReservationId id, DateTime claimedAt)
+    {
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+
+        return await Contract(scope).ReleaseAsync(id, claimedAt, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Lays the whole matrix down as rows written straight into the store, then reads every row back as the
+    /// reservation it is, so both arms judge the same row.
+    /// </summary>
+    private async Task<IReadOnlyList<Reservation>> LaidAsync()
+    {
+        await ExecuteAsync("DELETE FROM reservation");
+
+        int eventId = 30000;
+
+        foreach (Row row in Matrix())
+        {
+            await LayAsync(++eventId, row.State, Tick + row.Airs, row.Claimed, row.Outcome, row.Margin);
+        }
+
+        await using AsyncServiceScope scope = migrated.CreateAsyncScope();
+
+        return await Context(scope).Set<Reservation>().AsNoTracking().ToListAsync();
+    }
+
+    private static IEnumerable<Row> Matrix()
+        => from state in States
+           from claim in Claims
+           from airs in AirsForTheMatrix
+           from margin in Margins
+           select new Row(state, claim.Claimed, claim.Outcome, airs, margin);
+
+    private Task LayAsync(int eventId, ReservationState state, DateTime starts, bool claimed, string? outcome, int margin)
+        => ExecuteAsync(
+            $"""
+            INSERT INTO reservation (
+                id, network_id, service_id, event_id, programme_start_at, rule_id, priority,
+                start_at, end_at, end_at_confirmed, margin_before, margin_after,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
+                snapshot_audio, snapshot_sounds, captured_at,
+                epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
+                broadcast_group_key, broadcast_group_role, state, cancelled_because,
+                started_at, recording_outcome, created_at)
+            VALUES (
+                '{Guid.NewGuid()}', 32736, 1024, {eventId}, '{Sql(starts)}', NULL, 10,
+                '{Sql(starts)}', '{Sql(starts.AddMinutes(30))}', true, {margin}, {margin},
+                'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, '{Sql(Made)}',
+                false, '[]'::jsonb, false, NULL,
+                NULL, 'Standalone', '{state}',
+                {(state is ReservationState.Cancelled ? "'ByHand'" : "NULL")},
+                {(claimed ? $"'{Sql(starts)}'" : "NULL")},
+                {(outcome is null ? "NULL" : $"'{outcome}'")}, '{Sql(Made)}')
+            """);
+
+    private async Task ExecuteAsync(string sql)
+    {
+        await using NpgsqlConnection connection = await OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private readonly record struct Row(ReservationState State, bool Claimed, string? Outcome, TimeSpan Airs, int Margin);
 }
