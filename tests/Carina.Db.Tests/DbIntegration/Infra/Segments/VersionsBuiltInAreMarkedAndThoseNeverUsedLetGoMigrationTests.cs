@@ -9,11 +9,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Segments;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class VersionsBuiltInMigrationTests
+public sealed class VersionsBuiltInAreMarkedAndThoseNeverUsedLetGoMigrationTests
 {
     private const string ScratchDatabase = "carina_versions_built_in_test";
 

@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Segments;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class AnswersByHandMigrationTests
+public sealed class SegmentsAreNotAnsweredByHandMigrationTests
 {
     private const string ScratchDatabase = "carina_answers_by_hand_test";
 

@@ -7,11 +7,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Segments;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class CatalogWeightsMigrationTests
+public sealed class VersionsWeighNothingTheCatalogHearsMigrationTests
 {
     private const string ScratchDatabase = "carina_catalog_weights_test";
 

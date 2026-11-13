@@ -7,11 +7,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Segments;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class LearningIsAlwaysOnMigrationTests
+public sealed class LearningIsAlwaysOnAndEncodesLearnNoWatermarksMigrationTests
 {
     private const string ScratchDatabase = "carina_learning_always_on_test";
 

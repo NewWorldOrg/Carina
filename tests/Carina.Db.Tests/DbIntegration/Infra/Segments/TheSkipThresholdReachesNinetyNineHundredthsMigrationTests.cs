@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Segments;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class SkipThresholdReachesNinetyNineHundredthsMigrationTests
+public sealed class TheSkipThresholdReachesNinetyNineHundredthsMigrationTests
 {
     private const string ScratchDatabase = "carina_skip_threshold_reaches_test";
 

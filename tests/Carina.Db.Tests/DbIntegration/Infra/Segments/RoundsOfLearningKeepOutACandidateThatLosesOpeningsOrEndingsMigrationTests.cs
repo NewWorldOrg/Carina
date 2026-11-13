@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Segments;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class LosesOpeningsOrEndingsMigrationTests
+public sealed class RoundsOfLearningKeepOutACandidateThatLosesOpeningsOrEndingsMigrationTests
 {
     private const string ScratchDatabase = "carina_loses_openings_or_endings_test";
 

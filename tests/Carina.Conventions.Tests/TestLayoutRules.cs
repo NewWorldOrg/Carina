@@ -80,6 +80,15 @@ public static class TestLayoutRules
         new("Notifications", "src/Carina.Db/Migrations/20261110182416_AProgrammeCanBeWatchedWithoutBeingRecorded.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261112182442_ANoticeCanBeSentToABrowser.cs"),
         new("Reservations", "src/Carina.Db/Migrations/20260928091011_AReservationStandsAsideForTheSameBroadcast.cs"),
+        new("Segments", "src/Carina.Db/Migrations/20261018181106_SkipButtonsAreOfferedFromAThresholdTheSettingsKeep.cs"),
+        new("Segments", "src/Carina.Db/Migrations/20261018215453_CatalogEntriesSayWhichVersionOfTheKindEstimationTheyWereEstimatedWith.cs"),
+        new("Segments", "src/Carina.Db/Migrations/20261019102212_SegmentsAreNotAnsweredByHand.cs"),
+        new("Segments", "src/Carina.Db/Migrations/20261019121457_VersionsWeighNothingTheCatalogHears.cs"),
+        new("Segments", "src/Carina.Db/Migrations/20261020091115_CatalogEntriesCarryOnOpeningsAndCopiesOfProgrammesEndWhereTheirRecordingsWerePromised.cs"),
+        new("Segments", "src/Carina.Db/Migrations/20261022152742_LearningIsAlwaysOnAndEncodesLearnNoWatermarks.cs"),
+        new("Segments", "src/Carina.Db/Migrations/20261023075840_VersionsBuiltInAreMarkedAndThoseNeverUsedLetGo.cs"),
+        new("Segments", "src/Carina.Db/Migrations/20261026110822_RoundsOfLearningKeepOutACandidateThatLosesOpeningsOrEndings.cs"),
+        new("Segments", "src/Carina.Db/Migrations/20261107141136_TheSkipThresholdReachesNinetyNineHundredths.cs"),
     ];
 
     /// <summary>
@@ -91,6 +100,13 @@ public static class TestLayoutRules
         new("Channels", "ServiceReachSchema"),
         new("Channels", "StationLogoSchema"),
         new("Reservations", "ReservationOutcomeSchema"),
+        new("Segments", "CatalogSchema"),
+        new("Segments", "LearningDataSchema"),
+        new("Segments", "SeekEventSchema"),
+        new("Segments", "SegmentDetectionSchema"),
+        new("Segments", "SegmentLearningRoundSchema"),
+        new("Segments", "SegmentSettingsSchema"),
+        new("Segments", "SkipEventSchema"),
     ];
 
     private const string ApiTests = "Carina.Api.Tests";
