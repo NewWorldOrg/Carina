@@ -27,8 +27,6 @@ public static class TestLayoutRules
         "DependencyInjection",
         "Driver",
         "DriverStatus",
-        "Encoding",
-        "Encodings",
         "Epg",
         "Events",
         "Health",
