@@ -5,11 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Encodings;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class SegmentChaptersRollbackTests
+public sealed class TheChaptersOfAnArtefactSayWhichDetectionTheyCameFromMigrationTests
 {
     private const string ScratchDatabase = "carina_segment_chapters_rollback_test";
 

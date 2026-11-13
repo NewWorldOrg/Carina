@@ -3,11 +3,11 @@ using Carina.Infrastructure.Persistence.Configurations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Encodings;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClassFixture<MigratedScratchDatabase>
+public sealed class EncodingsSchemaTests(MigratedScratchDatabase database) : IClassFixture<MigratedScratchDatabase>
 {
     private const string Queued = "timestamptz '2026-09-05 03:00:00+00'";
 
