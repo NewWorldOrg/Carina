@@ -1,26 +1,44 @@
 using Carina.Domain.Base;
+using Carina.Domain.Events;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Tests.Fixtures.Reservations;
+using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
-namespace Carina.Infrastructure.Tests.Reservations;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Reservations;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase database)
+public sealed class ReservationOutcomeServiceTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly TimeSpan Grace = TimeSpan.FromMinutes(5);
 
     private static readonly DateTime LongBefore = ReservationFixtures.Now.AddYears(-1);
+
+    private readonly List<ServiceProvider> standingIn = [];
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        await container.DisposeAsync();
+
+        foreach (ServiceProvider standing in standingIn)
+        {
+            await standing.DisposeAsync();
+        }
+    }
 
     [Fact]
     public async Task WhatLostTheContestLandsWithTheNameOfWhatWasRecordedInstead()
@@ -189,9 +207,9 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
             claimedAt: opens);
         Recording recording = await EndedWholeAsync(descrambled, opens, RecordingFault.ScramblingUnresolved);
 
-        await using (CarinaDbContext context = database.Open())
+        await using (AsyncServiceScope scope = container.CreateAsyncScope())
         {
-            var recordings = new RecordingRepository(context);
+            IRecordingRepository recordings = Recordings(scope);
             Recording found = (await recordings.FindAsync(recording.Id, Cancel))!;
             found.Descrambled(opens.AddHours(1).AddMinutes(30));
             await recordings.SaveAsync(found, Cancel);
@@ -216,13 +234,13 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
         await RecordingAsync(opens.AddHours(2));
         ReservationOutcome line = Assert.Single(await ForAsync(scrambled.Id));
 
-        await using (CarinaDbContext context = database.Open())
+        await using (AsyncServiceScope scope = container.CreateAsyncScope())
         {
-            ReservationOutcome held = await context.Set<ReservationOutcome>().SingleAsync(
+            ReservationOutcome held = await Context(scope).Set<ReservationOutcome>().SingleAsync(
                 outcome => outcome.Id == line.Id,
                 Cancel);
             held.Descrambled(opens.AddDays(1));
-            await context.SaveChangesAsync(Cancel);
+            await Context(scope).SaveChangesAsync(Cancel);
         }
 
         ReservationOutcome again = Assert.Single(await ForAsync(scrambled.Id));
@@ -269,9 +287,9 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
             (await RecordingAsync(opens.AddHours(3))).Recorded);
         Assert.Single(await ForAsync(broke.Id));
 
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
         IReadOnlyList<ReservationAwaitingOutcome> offered =
-            await new ReservationRepository(context).ListAwaitingOutcomeAsync(opens.AddHours(3), Cancel);
+            await Reservations(scope).ListAwaitingOutcomeAsync(opens.AddHours(3), Cancel);
 
         Assert.DoesNotContain(broke.Id.Value, offered.Select(one => one.Reservation.Id.Value));
     }
@@ -318,8 +336,8 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
             opens.AddHours(11),
             claimedAt: opens.AddHours(10));
 
-        await using CarinaDbContext context = database.Open();
-        IReadOnlyList<Reservation> over = await new ReservationRepository(context).ListClaimedOverAsync(
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        IReadOnlyList<Reservation> over = await Reservations(scope).ListClaimedOverAsync(
             new ReservationWindow(opens.AddMinutes(-1), opens.AddMinutes(1)),
             Cancel);
         List<Guid> found = [.. over.Select(reservation => reservation.Id.Value)];
@@ -337,10 +355,10 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
 
         await AddAsync(followed, ReservationOutcomeKind.ProgrammeMoved, opens.AddMinutes(-30));
 
-        await using (CarinaDbContext context = database.Open())
+        await using (AsyncServiceScope scope = container.CreateAsyncScope())
         {
             IReadOnlyList<ReservationAwaitingOutcome> offered =
-                await new ReservationRepository(context).ListAwaitingOutcomeAsync(opens.AddHours(2), Cancel);
+                await Reservations(scope).ListAwaitingOutcomeAsync(opens.AddHours(2), Cancel);
 
             Assert.Contains(followed.Id.Value, offered.Select(one => one.Reservation.Id.Value));
         }
@@ -363,24 +381,24 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
         Reservation after = await LaidDownAsync(ReservationState.Scheduled, opens.AddHours(1), opens.AddHours(2));
         DateTime at = opens.AddHours(3);
 
-        await using CarinaDbContext pass = database.Open();
-        MeddlingOutcomes meddling = new(
-            new ReservationOutcomeRepository(pass),
-            changed.Id,
-            async () =>
-            {
-                await using CarinaDbContext elsewhere = database.Open();
-                ReservationRepository repository = new(elsewhere);
-                Reservation found = (await repository.FindAsync(changed.Id, Cancel))!;
-                found.Reprioritise(new Priority(55));
-                await repository.SaveAllAsync([found], Cancel);
-            });
+        await using AsyncServiceScope pass = StandingIn(
+            at,
+            outcomes => new MeddlingOutcomes(
+                outcomes,
+                changed.Id,
+                async () =>
+                {
+                    await using AsyncServiceScope elsewhere = container.CreateAsyncScope();
+                    IReservationRepository repository = Reservations(elsewhere);
+                    Reservation found = (await repository.FindAsync(changed.Id, Cancel))!;
+                    found.Reprioritise(new Priority(55));
+                    await repository.SaveAllAsync([found], Cancel);
+                }));
 
         await Assert.ThrowsAsync<ReservationMovedMeanwhileException>(
-            () => RecordingOver(pass, meddling, at).RecordAsync(Cancel));
+            () => OutcomeService(pass).RecordAsync(Cancel));
 
-        ReservationOutcomeRun next = await RecordingOver(pass, new ReservationOutcomeRepository(pass), at)
-            .RecordAsync(Cancel);
+        ReservationOutcomeRun next = await OutcomeService(pass).RecordAsync(Cancel);
 
         Assert.Contains(new ReservationOutcomeRecord(changed.Id, ReservationOutcomeKind.Missed), next.Recorded);
         Assert.Contains(new ReservationOutcomeRecord(after.Id, ReservationOutcomeKind.Missed), next.Recorded);
@@ -388,74 +406,85 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
         Assert.Equal(ReservationState.Missed, await StateOfAsync(after.Id));
     }
 
-    private static ReservationOutcomeService RecordingOver(
-        CarinaDbContext context,
-        IReservationOutcomeRepository outcomes,
-        DateTime at)
-        => new(
-            new ReservationRepository(context),
-            outcomes,
-            new ReservationRecordingContract(context),
-            new ReservationOutcomeDomainService(outcomes, new RecordingRepository(context)),
-            new DatabaseAtomicWrite(context),
-            new ReservationOutcomeSettings { Grace = Grace },
-            new Carina.TestSupport.SilentEvents(),
-            new FixedClock(at));
+    /// <summary>
+    /// The container over the scratch database with the clock at <paramref name="at"/>, the grace this class
+    /// works to, and, when <paramref name="outcomes"/> is given, the outcomes wrapped by it.
+    /// </summary>
+    private AsyncServiceScope StandingIn(
+        DateTime at,
+        Func<IReservationOutcomeRepository, IReservationOutcomeRepository>? outcomes = null)
+    {
+        ServiceProvider standing = database.Infrastructure(replace =>
+        {
+            replace.AddSingleton(new ReservationOutcomeSettings { Grace = Grace });
+            replace.AddSingleton<IAppEventPublisher>(new SilentEvents());
+            replace.AddSingleton<TimeProvider>(new FixedClock(at));
+
+            if (outcomes is not null)
+            {
+                ServiceDescriptor held = replace.Last(descriptor => descriptor.ServiceType == typeof(IReservationOutcomeRepository));
+                Type implementation = held.ImplementationType
+                    ?? throw new InvalidOperationException("The outcomes are not registered by their class, so they cannot be wrapped.");
+                replace.Add(ServiceDescriptor.Describe(
+                    typeof(IReservationOutcomeRepository),
+                    provider => outcomes((IReservationOutcomeRepository)ActivatorUtilities.CreateInstance(provider, implementation)),
+                    held.Lifetime));
+            }
+        });
+        standingIn.Add(standing);
+
+        return standing.CreateAsyncScope();
+    }
+
+    private static ReservationOutcomeService OutcomeService(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ReservationOutcomeService>();
 
     private async Task<ReservationOutcomeRun> RecordingAsync(DateTime at)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = StandingIn(at);
 
-        return await new ReservationOutcomeService(
-                new ReservationRepository(context),
-                new ReservationOutcomeRepository(context),
-                new ReservationRecordingContract(context),
-                new ReservationOutcomeDomainService(new ReservationOutcomeRepository(context), new RecordingRepository(context)),
-                new DatabaseAtomicWrite(context),
-                new ReservationOutcomeSettings { Grace = Grace },
-                new Carina.TestSupport.SilentEvents(),
-                new FixedClock(at))
+        return await OutcomeService(scope)
             .RecordAsync(Cancel)
             .WaitAsync(TimeSpan.FromSeconds(60), Cancel);
     }
 
     private async Task AddAsync(Reservation reservation, ReservationOutcomeKind kind, DateTime at)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        await new ReservationOutcomeRepository(context).AddAsync(
+        await Outcomes(scope).AddAsync(
             ReservationOutcome.Record(ReservationOutcomeId.New(), reservation, kind, null, null, [], [], at),
             Cancel);
     }
 
     private async Task<IReadOnlyList<ReservationOutcome>> ForAsync(ReservationId id)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new ReservationOutcomeRepository(context).ListForReservationAsync(id, Cancel);
+        return await Outcomes(scope).ListForReservationAsync(id, Cancel);
     }
 
     private async Task<ReservationState> StateOfAsync(ReservationId id)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return (await new ReservationRepository(context).FindAsync(id, Cancel))!.State;
+        return (await Reservations(scope).FindAsync(id, Cancel))!.State;
     }
 
     private async Task<ReservationStanding> StandingOfAsync(ReservationId id)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return (await new ReservationRepository(context).FindAsync(id, Cancel))!.Standing;
+        return (await Reservations(scope).FindAsync(id, Cancel))!.Standing;
     }
 
     private async Task WritingAsync(Reservation reservation, DateTime from)
     {
         var id = RecordingId.New();
 
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        await new RecordingRepository(context).AddAsync(
+        await Recordings(scope).AddAsync(
             Recording.Begin(
                 id,
                 reservation.Id,
@@ -486,9 +515,9 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
     {
         await WritingAsync(reservation, from);
 
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        var recordings = new RecordingRepository(context);
+        IRecordingRepository recordings = Recordings(scope);
         Recording recording = Assert.Single(await recordings.ListForReservationAsync(reservation.Id, Cancel));
 
         foreach (RecordingFault fault in faults)
@@ -516,9 +545,9 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
             startAt: startAt,
             endAt: endAt);
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            await new ReservationRepository(writing).AddAsync(held, Cancel);
+            await Reservations(writing).AddAsync(held, Cancel);
         }
 
         if (claimedAt is { } moment)
@@ -539,13 +568,25 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
 
     private async Task RunAsync(string sql)
     {
-        await using CarinaDbContext context = database.Open();
-        await using var connection = new NpgsqlConnection(context.Database.GetConnectionString());
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        await using var connection = new NpgsqlConnection(Context(scope).Database.GetConnectionString());
         await connection.OpenAsync(Cancel);
 
         await using var running = new NpgsqlCommand(sql, connection);
         await running.ExecuteNonQueryAsync(Cancel);
     }
+
+    private static CarinaDbContext Context(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+
+    private static IRecordingRepository Recordings(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingRepository>();
+
+    private static IReservationOutcomeRepository Outcomes(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IReservationOutcomeRepository>();
+
+    private static IReservationRepository Reservations(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IReservationRepository>();
 
     private sealed class MeddlingOutcomes(
         IReservationOutcomeRepository outcomes,
