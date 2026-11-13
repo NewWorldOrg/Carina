@@ -17,6 +17,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
 {
     private const int TheSurfacesThisRepositoryHadWhenTheSweepWasWritten = 50;
 
+    private const string MigrationRoot = "/api/migration";
+
     [Fact]
     public void EveryRoutedSurfaceSaysWhetherItDestroys()
     {
@@ -422,6 +424,51 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public void TheMigrationSurfaceIsTheOneTheRecordIsReadThrough()
+        => Assert.Equal(
+            ["GET /api/migration/record"],
+            MigrationSurfaces().Select(surface => surface.ToString()).Order(StringComparer.Ordinal).ToArray());
+
+    [Fact]
+    public void NothingAnywhereElseOffersAMigrationOfItsOwn()
+        => Assert.Equal(
+            ["/api/migration/record"],
+            Inventory()
+                .Select(surface => surface.Pattern)
+                .Where(pattern => pattern.Contains("migration", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+
+    [Fact]
+    public void NothingUnderTheMigrationSurfaceIsAskedForOnAMethodThatWrites()
+        => Assert.All(MigrationSurfaces(), surface => Assert.True(
+            HttpMethods.IsGet(surface.Method),
+            $"{surface} reaches the record on a method that is not a read"));
+
+    [Fact]
+    public void NothingUnderTheMigrationSurfaceChangesAnythingOrSaysItDestroys()
+        => Assert.All(MigrationSurfaces(), surface => Assert.Equal(EndpointEffect.Reading, surface.Effect));
+
+    [Fact]
+    public void NothingUnderTheMigrationSurfaceDeletes()
+        => Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), MigrationRoot));
+
+    [Fact]
+    public void TheRootIsReadAsAWholeSegmentAndNotAsLeadingLetters()
+    {
+        RoutedSurface[] inventory =
+        [
+            new("POST", "/api/migrations-of-a-kind/run", EndpointEffect.Changing),
+            new("POST", "/api/migration/run", EndpointEffect.Changing),
+        ];
+
+        Assert.Equal(
+            ["POST /api/migration/run"],
+            inventory.Where(UnderTheMigrationRoot).Select(surface => surface.ToString()).ToArray());
+    }
+
+    [Fact]
     public void TheInventoryHoldsTheSurfacesTheDocumentCannotDescribe()
     {
         string[] patterns = [.. Inventory().Select(surface => surface.Pattern)];
@@ -510,6 +557,12 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    private static bool UnderTheMigrationRoot(RoutedSurface surface)
+        => string.Equals(surface.Pattern, MigrationRoot, StringComparison.Ordinal)
+           || surface.Pattern.StartsWith(MigrationRoot + "/", StringComparison.Ordinal);
+
+    private IEnumerable<RoutedSurface> MigrationSurfaces() => Inventory().Where(UnderTheMigrationRoot);
 
     private IReadOnlyList<RoutedSurface> Inventory() => RouteInventory.Of(factory);
 }
