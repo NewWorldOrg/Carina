@@ -1,16 +1,15 @@
 using Carina.Infrastructure.Persistence;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.DataBroadcast;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class DataBroadcastStateMigrationTests
+public sealed class ADataBroadcastStateForEveryRecordingMigrationTests
 {
     private const string ScratchDatabase = "carina_data_broadcast_state_test";
 
