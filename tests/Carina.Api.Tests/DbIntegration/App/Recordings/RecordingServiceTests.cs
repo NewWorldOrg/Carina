@@ -11,27 +11,36 @@ using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
+using Carina.TestSupport;
 
-namespace Carina.Db.Tests;
+using Microsoft.Extensions.DependencyInjection;
 
-[Collection(ConnectionEnvironmentCollection.Name)]
+namespace Carina.Api.Tests.DbIntegration.App.Recordings;
+
+[Collection(AppDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class RecordingLandingTests(MigratedScratchDatabase database)
-    : IClassFixture<MigratedScratchDatabase>
+public sealed class RecordingServiceTests(AppDatabase database) : IAsyncLifetime
 {
     private const int Network = 39_101;
 
+    private const string Screens = "https://screens.example";
+
     private static readonly DateTime Noon = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly RaisedApplication application = database.Application(new HandTurnedClock(new DateTimeOffset(Noon)), Screens);
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await application.DisposeAsync();
 
     [Fact]
     public async Task EveryClassTheLedgerHoldsIsStillToldApartOnTheWire()
     {
         Recording written = await WrittenAsync(1);
 
-        await using CarinaDbContext context = Context();
-        Recording read = await Read(context, written.Id);
-        JsonElement wire = Wire(RecordingDetailResponder.Of(await SeenAsync(context, read)));
+        JsonElement wire = Wire(RecordingDetailResponder.Of(await DetailAsync(written.Id)));
         JsonElement recording = wire.GetProperty("recording");
         JsonElement reasons = recording.GetProperty("outcomeDetail");
 
@@ -83,14 +92,7 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
     {
         Recording written = await WrittenAsync(2);
 
-        await using CarinaDbContext context = Context();
-        PaginatedList<Recording> found = (await new RecordingDirectory(context).ListAsync(
-            OnlyThisOne(written),
-            AsShipped,
-            CancellationToken.None)).Found;
-
-        JsonElement wire = Wire(RecordingListResponder.Of(
-            new RecordingPage(found, await StandingsAsync(context, found.Items), AsShipped)));
+        JsonElement wire = Wire(RecordingListResponder.Of(await ListAsync(OnlyThisOne(written))));
         JsonElement items = wire.GetProperty("items");
 
         Assert.Equal(1, wire.GetProperty("total").GetInt32());
@@ -123,8 +125,7 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
 
         await AddAsync(recording);
 
-        await using CarinaDbContext context = Context();
-        JsonElement wire = Wire(RecordingDetailResponder.Of(await SeenAsync(context, await Read(context, id))));
+        JsonElement wire = Wire(RecordingDetailResponder.Of(await DetailAsync(id)));
         JsonElement drops = wire.GetProperty("recording").GetProperty("drops");
 
         Assert.True(drops.GetProperty("ccMeasured").GetBoolean());
@@ -148,9 +149,8 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
 
         await EncodedAsync(encoded);
 
-        await using CarinaDbContext context = Context();
-        JsonElement made = Wire(RecordingDetailResponder.Of(await SeenAsync(context, await Read(context, encoded.Id))));
-        JsonElement none = Wire(RecordingDetailResponder.Of(await SeenAsync(context, await Read(context, untouched.Id))));
+        JsonElement made = Wire(RecordingDetailResponder.Of(await DetailAsync(encoded.Id)));
+        JsonElement none = Wire(RecordingDetailResponder.Of(await DetailAsync(untouched.Id)));
 
         Assert.Equal("completed", Standing(made));
         Assert.Equal("notEncoded", Standing(none));
@@ -188,7 +188,8 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
         job.Name(EncodeFileName.Artefact(recording.Id, profile.Id));
         job.Complete(Noon.AddHours(2));
 
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope scope = application.Services.CreateAsyncScope();
+        CarinaDbContext context = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
         context.Add(profile);
         context.Add(destination);
         context.Add(job);
@@ -230,31 +231,10 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
             Noon,
             new TunerDeviceId("pt3-0"));
 
-    private static QualityBands AsShipped => QualityThresholdStanding.Bands(QualityThresholdStanding.Over([], Noon));
-
-    private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
-
-    private static async Task<RecordingSeen> SeenAsync(CarinaDbContext context, Recording recording)
-    {
-        EncodeStandingBoard standings = await StandingsAsync(context, [recording]);
-
-        return new RecordingSeen(recording, standings.For(recording.Id), AsShipped);
-    }
-
-    private static async Task<EncodeStandingBoard> StandingsAsync(
-        CarinaDbContext context,
-        IReadOnlyList<Recording> found)
-        => await new EncodeStandingReader(context).ReadAsync(
-            [.. found.Select(recording => recording.Id)],
-            CancellationToken.None);
-
-    private static async Task<Recording> Read(CarinaDbContext context, RecordingId id)
-        => await new RecordingDirectory(context).FindAsync(id, CancellationToken.None)
-           ?? throw new InvalidOperationException("The recording this test wrote is not in the ledger.");
-
     private async Task AddAsync(Recording recording)
     {
-        await using CarinaDbContext context = Context();
+        await using AsyncServiceScope scope = application.Services.CreateAsyncScope();
+        CarinaDbContext context = scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
         context.Add(recording);
         await context.SaveChangesAsync();
     }
@@ -284,5 +264,23 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
         await AddAsync(recording);
 
         return recording;
+    }
+
+    private async Task<RecordingSeen> DetailAsync(RecordingId id)
+    {
+        await using AsyncServiceScope scope = application.Services.CreateAsyncScope();
+        ServiceResult<RecordingSeen, RecordingFailure> seen = await scope.ServiceProvider.GetRequiredService<RecordingService>()
+            .DetailAsync(id, null, Cancel);
+
+        return seen.Data ?? throw new InvalidOperationException("The recording this test wrote is not in the ledger.");
+    }
+
+    private async Task<RecordingPage> ListAsync(RecordingQuery query)
+    {
+        await using AsyncServiceScope scope = application.Services.CreateAsyncScope();
+        ServiceResult<RecordingPage> page = await scope.ServiceProvider.GetRequiredService<RecordingService>()
+            .ListAsync(query, null, Cancel);
+
+        return page.Data ?? throw new InvalidOperationException("The list this test asked for was refused.");
     }
 }
