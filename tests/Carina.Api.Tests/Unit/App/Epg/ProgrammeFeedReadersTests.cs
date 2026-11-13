@@ -1,8 +1,9 @@
 using Carina.Api.Events;
 using Carina.Domain.Programmes;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Epg;
 
+[Trait("Category", "Unit")]
 public sealed class ProgrammeFeedReadersTests
 {
     [Fact]

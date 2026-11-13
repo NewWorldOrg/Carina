@@ -3,18 +3,19 @@ using System.Net;
 using System.Net.Http.Headers;
 
 using Carina.Api.Logos;
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Channels;
 using Carina.TestSupport;
 
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Logos;
 
+[Trait("Category", "Feature")]
 public sealed class LogoDeliveryTests
 {
     private const int SomeNetworkId = 32741;

@@ -1,5 +1,3 @@
-using System.Text;
-
 using Carina.Api.Events;
 using Carina.Api.Services;
 using Carina.Domain.Base;
@@ -9,8 +7,9 @@ using Carina.TestSupport;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Net.Http.Headers;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Epg;
 
+[Trait("Category", "Unit")]
 public sealed class ProgrammeFeedStreamTests
 {
     private static readonly ProgrammeFeedSettings OneAtATime = new()
@@ -125,7 +124,7 @@ public sealed class ProgrammeFeedStreamTests
     {
         context.Response.Body.Position = 0;
 
-        using var reading = new StreamReader(context.Response.Body, Encoding.UTF8, leaveOpen: true);
+        using var reading = new StreamReader(context.Response.Body, System.Text.Encoding.UTF8, leaveOpen: true);
 
         return reading.ReadToEnd();
     }

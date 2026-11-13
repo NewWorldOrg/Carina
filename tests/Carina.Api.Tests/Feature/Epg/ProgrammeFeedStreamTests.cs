@@ -6,9 +6,10 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Epg;
 
-public sealed class ProgrammeFeedEndpointTests
+[Trait("Category", "Feature")]
+public sealed class ProgrammeFeedStreamTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);
 
@@ -183,6 +184,25 @@ public sealed class ProgrammeFeedEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(TimeSpan.FromSeconds(7), counted.Patience);
+    }
+
+    [Fact]
+    public async Task ARebuildDiscardsTheGuideAndAFreshCollectionRestoresIt()
+    {
+        await using EpgFeature feature = await CollectedGuide.CollectedOnceAsync();
+
+        Assert.Equal(HttpStatusCode.OK, await CollectedGuide.RebuildAsync(feature));
+
+        await CollectedGuide.CollectAsync(feature);
+
+        using HttpResponseMessage stale = await feature.Client.GetAsync(
+            new Uri("/api/programs/bulk?cursor=1:0", UriKind.Relative));
+
+        Assert.Equal("{\"op\":\"reset\"}", (await stale.Content.ReadAsStringAsync()).Trim());
+        Assert.StartsWith(
+            "2:",
+            stale.Headers.GetValues(ProgrammeFeedStream.CursorHeader).First(),
+            StringComparison.Ordinal);
     }
 
     private static string? Cursor(HttpResponseMessage response)

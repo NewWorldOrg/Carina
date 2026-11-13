@@ -4,9 +4,10 @@ using System.Text.Json;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Epg;
 
-public sealed class ForgetArchivedServiceEndpointTests
+[Trait("Category", "Feature")]
+public sealed class ForgetArchivedServiceActionTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);
 

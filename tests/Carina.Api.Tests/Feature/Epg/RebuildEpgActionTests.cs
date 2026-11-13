@@ -1,11 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Epg;
 
-public sealed class RebuildEpgEndpointTests
+[Trait("Category", "Feature")]
+public sealed class RebuildEpgActionTests
 {
     [Fact]
     public async Task DiscardingTheWholeGuideNeedsTheWordThatMeansIt()
@@ -63,7 +63,7 @@ public sealed class RebuildEpgEndpointTests
     public async Task AFormPostCannotDiscardTheGuide()
     {
         await using var feature = new EpgFeature();
-        using var form = new StringContent("confirm=discard-everything", Encoding.UTF8);
+        using var form = new StringContent("confirm=discard-everything", System.Text.Encoding.UTF8);
 
         form.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
 
@@ -73,5 +73,17 @@ public sealed class RebuildEpgEndpointTests
 
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
         Assert.Equal(0, feature.Programmes.Wiped);
+    }
+
+    [Fact]
+    public async Task ARebuildDiscardsTheGuideAndAFreshCollectionRestoresIt()
+    {
+        await using EpgFeature feature = await CollectedGuide.CollectedOnceAsync();
+
+        HttpStatusCode rebuilt = await CollectedGuide.RebuildAsync(feature);
+
+        Assert.Equal(HttpStatusCode.OK, rebuilt);
+        Assert.Equal(1, feature.Programmes.Wiped);
+        Assert.Empty(feature.Programmes.Programmes);
     }
 }

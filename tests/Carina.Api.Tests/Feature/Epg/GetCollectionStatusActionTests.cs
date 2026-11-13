@@ -4,16 +4,26 @@ using System.Text.Json;
 using Carina.Api.Tests.Unit;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.TestSupport;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Epg;
 
-public sealed class CollectionStatusEndpointTests
+[Trait("Category", "Feature")]
+public sealed class GetCollectionStatusActionTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 6, 0, 0, DateTimeKind.Utc);
 
     private static readonly DateTime ScheduleStarts = new(2026, 8, 17, 15, 0, 0, DateTimeKind.Utc);
 
     private static readonly DateTime ScheduleEnds = ScheduleStarts.AddDays(8);
+
+    private static readonly CollectionSettings Wanting = new() { WantedCoverage = TimeSpan.FromDays(3) };
+
+    private static readonly CollectionSettings Aiming = new()
+    {
+        WantedCoverage = TimeSpan.FromDays(8),
+        RevisitsBelow = TimeSpan.FromDays(3),
+    };
 
     [Fact]
     public async Task AStreamNeverVisitedIsListedWithNothingRecordedAgainstIt()
@@ -302,6 +312,76 @@ public sealed class CollectionStatusEndpointTests
         Assert.Equal([true, false], met);
     }
 
+    [Fact]
+    public async Task AGuideOfEightDaysStaysEnoughPastMidnightAndFallsShortOnceVisitsStop()
+    {
+        var driver = new ScriptedDriverClient();
+        var clock = new WoundClock(CollectedGuide.Airs);
+        CollectionSettings settings = new();
+
+        driver.Script(CollectedGuide.Channel, ChannelScript.Carrying(CollectedGuide.OverEightDays(CollectedGuide.ScheduleStarts).ToBytes()));
+
+        await using var feature = new EpgFeature([CollectedGuide.OnlyTheOneService()], driver, clock: clock);
+
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.Television, ServiceCategory.Television));
+
+        await CollectedGuide.CollectAsync(feature);
+
+        clock.Wind(CollectedGuide.ScheduleStarts.AddDays(1).AddMinutes(30) - CollectedGuide.Airs);
+
+        Assert.True(CollectedGuide.OnlyCoverage(await CollectedGuide.CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
+
+        clock.Wind(CollectedGuide.Airs + settings.BetweenVisits + settings.BetweenVisits - clock.GetUtcNow());
+
+        Assert.True(CollectedGuide.OnlyCoverage(await CollectedGuide.CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
+
+        clock.Wind(TimeSpan.FromSeconds(1));
+
+        Assert.False(CollectedGuide.OnlyCoverage(await CollectedGuide.CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AGuideStoppingADayShortOfTheScheduleFallsShort()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(CollectedGuide.Channel, ChannelScript.Carrying(CollectedGuide.OverEightDays(CollectedGuide.ScheduleStarts, days: 7).ToBytes()));
+
+        await using var feature = new EpgFeature([CollectedGuide.OnlyTheOneService()], driver, clock: new WoundClock(CollectedGuide.Airs));
+
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.Television, ServiceCategory.Television));
+
+        await CollectedGuide.CollectAsync(feature);
+
+        Assert.False(CollectedGuide.OnlyCoverage(await CollectedGuide.CollectionStatusAsync(feature)).GetProperty("meetsWantedCoverage").GetBoolean());
+    }
+
+    [Fact]
+    public async Task ACollectedGuideServesItsColumnsAndKeepsEveryServiceInTheStore()
+    {
+        await using EpgFeature feature = await CollectedGuide.CollectedWithCorruptSectionsAsync();
+
+        (_, JsonElement ledger) = await feature.GetAsync("/api/epg/collection-status");
+        JsonElement visited = Assert.Single(ledger.GetProperty("data").GetProperty("streams").EnumerateArray());
+
+        Assert.Equal("complete", visited.GetProperty("outcome").GetString());
+        Assert.NotEqual(JsonValueKind.Null, visited.GetProperty("lastCompletedAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task AGuideGatheredOverEightDaysIsStillReadableOnItsEighthDay()
+    {
+        await using EpgFeature feature = await CollectedGuide.CollectedOverEightDaysAsync();
+
+        JsonElement reported = await CollectedGuide.CollectionStatusAsync(feature);
+
+        Assert.Equal(192, reported.GetProperty("wantedCoverageHours").GetInt32());
+        Assert.True(CollectedGuide.OnlyCoverage(reported).GetProperty("meetsWantedCoverage").GetBoolean());
+        Assert.Equal(
+            CollectedGuide.ScheduleStarts.AddDays(8).UtcDateTime,
+            CollectedGuide.OnlyCoverage(reported).GetProperty("coveredUntil").GetDateTimeOffset().UtcDateTime);
+    }
+
     private static async Task<IReadOnlyList<bool>> SubChannelMeetsTheGoalAsync(bool sharesTheRest)
     {
         await using var feature = new EpgFeature(
@@ -381,14 +461,6 @@ public sealed class CollectionStatusEndpointTests
 
         return coverage.GetProperty("meetsWantedCoverage").GetBoolean();
     }
-
-    private static readonly CollectionSettings Wanting = new() { WantedCoverage = TimeSpan.FromDays(3) };
-
-    private static readonly CollectionSettings Aiming = new()
-    {
-        WantedCoverage = TimeSpan.FromDays(8),
-        RevisitsBelow = TimeSpan.FromDays(3),
-    };
 
     private static Programme ProgrammeStartingAt(int network, int service, DateTime startsAt)
         => Programme.Rehydrate(

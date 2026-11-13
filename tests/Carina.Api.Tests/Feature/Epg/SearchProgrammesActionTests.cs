@@ -1,15 +1,18 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Infrastructure.Programmes;
 using Carina.TestSupport;
 
-using Puppis.Contracts;
+namespace Carina.Api.Tests.Feature.Epg;
 
-namespace Carina.Api.Tests.FeatureTest;
-
-public sealed class ProgrammeSearchEndpointTests
+[Trait("Category", "Feature")]
+public sealed class SearchProgrammesActionTests(TestingWebApplicationFactory factory)
+    : IClassFixture<TestingWebApplicationFactory>
 {
     private static readonly DateTime At = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);
 
@@ -509,6 +512,231 @@ public sealed class ProgrammeSearchEndpointTests
         (HttpStatusCode status, _) = await feature.GetAsync($"/api/programs/search?keyword=news&{asking}");
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
+    }
+
+    [Theory]
+    [InlineData("sort=", HttpStatusCode.OK)]
+    [InlineData("descending=", HttpStatusCode.OK)]
+    [InlineData("type=", HttpStatusCode.OK)]
+    [InlineData("page=", HttpStatusCode.OK)]
+    [InlineData("perPage=", HttpStatusCode.OK)]
+    [InlineData("from=", HttpStatusCode.OK)]
+    [InlineData("to=", HttpStatusCode.OK)]
+    [InlineData("exclude=", HttpStatusCode.OK)]
+    [InlineData("fields=", HttpStatusCode.BadRequest)]
+    [InlineData("genre=", HttpStatusCode.BadRequest)]
+    [InlineData("channel=", HttpStatusCode.BadRequest)]
+    public async Task AWordGivenWithNoValueAtAllIsReadAsAWordNobodyGave(string word, HttpStatusCode expected)
+    {
+        await using var feature = new EpgFeature(null, clock: new WoundClock(At));
+
+        (HttpStatusCode status, _) = await feature.GetAsync($"/api/programs/search?keyword=news&{word}");
+
+        Assert.Equal(expected, status);
+    }
+
+    [Fact]
+    public async Task AWordGivenTwiceWhereOnlyOneIsAllowedIsReadFromTheFirstOfThem()
+    {
+        await using var feature = new EpgFeature(null, clock: new WoundClock(At));
+
+        feature.Programmes.Programmes.Add(Programme(1, "first news"));
+        feature.Programmes.Programmes.Add(Programme(2, "other news"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?keyword=first&keyword=other");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, body.GetProperty("data").GetProperty("total").GetInt32());
+        Assert.Equal(
+            "first news",
+            body.GetProperty("data").GetProperty("items")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task TheDocumentNamesEveryWordOfTheSearchVocabularyAndNothingBeside()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonArray declared = document["paths"]!["/api/programs/search"]!["get"]!["parameters"]!.AsArray();
+
+        Assert.NotEmpty(ProgrammeSearchQuery.Vocabulary);
+        Assert.Equal(
+            [.. ProgrammeSearchQuery.Vocabulary.Select(term => term.Name).Order(StringComparer.Ordinal)],
+            [.. declared.Select(parameter => parameter!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal)]);
+        Assert.All(declared, parameter => Assert.Equal("query", parameter!["in"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task ASearchFindsTheReplacementAndNotTheScheduleItReplaced()
+    {
+        await using EpgFeature feature = ReplacedGuide.Replaced();
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/programs/search?keyword=番組&{ReplacedGuide.TheDay}");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(3, data.GetProperty("total").GetInt32());
+        Assert.Equal(
+            ["前の番組", "差し替えの番組", "次の番組"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("name").GetString() ?? string.Empty));
+    }
+
+    [Fact]
+    public async Task AHistorySearchFindsTheKeptReplacementAndNotTheScheduleItReplaced()
+    {
+        await using EpgFeature feature = ReplacedGuide.Replaced();
+        feature.Archived.Programmes.AddRange(feature.Programmes.Programmes.Select(ReplacedGuide.Kept));
+        feature.Programmes.Programmes.Clear();
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/programs/search?keyword=番組&{ReplacedGuide.TheDay}");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(3, data.GetProperty("total").GetInt32());
+        Assert.Equal(
+            ["前の番組", "差し替えの番組", "次の番組"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("name").GetString() ?? string.Empty));
+    }
+
+    [Fact]
+    public async Task ASearchWithCombinedConditionsFindsExactlyWhatMatches()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(CollectedGuide.Channel, ChannelScript.Carrying(CollectedGuide.Guide().ToBytes()));
+
+        await using var feature = new EpgFeature([CollectedGuide.OnAir()], driver, clock: new WoundClock(CollectedGuide.Airs));
+
+        await CollectedGuide.CollectAsync(feature);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?keyword=Bulletin&from=2026-08-31T00:00:00Z&to=2026-09-02T00:00:00Z&perPage=10");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, data.GetProperty("total").GetInt32());
+        Assert.Equal($"{CollectedGuide.Network}-{CollectedGuide.Television}-1", data.GetProperty("items")[0].GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public async Task APortableSimulcastIsNotAmongTheMatchesOfASearchNarrowedToItsType()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(CollectedGuide.Channel, ChannelScript.Carrying(CollectedGuide.GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([CollectedGuide.EverythingTheStreamCarries()], driver, clock: new WoundClock(CollectedGuide.Airs));
+
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.SecondTelevision, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.OneSegSimulcast, ServiceCategory.OneSeg));
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.DataService, ServiceCategory.Data));
+
+        await CollectedGuide.CollectAsync(feature);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/programs/search?type=isdbT&keyword=Evening%20Bulletin&{CollectedGuide.TheDay}");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{CollectedGuide.Network}-{CollectedGuide.Television}-1"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
+    }
+
+    [Fact]
+    public async Task NeitherAPortableSimulcastNorACarouselIsAmongTheMatchesOfASearchThatNamesNoType()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(CollectedGuide.Channel, ChannelScript.Carrying(CollectedGuide.GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([CollectedGuide.EverythingTheStreamCarries()], driver, clock: new WoundClock(CollectedGuide.Airs));
+
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.SecondTelevision, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.OneSegSimulcast, ServiceCategory.OneSeg));
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.DataService, ServiceCategory.Data));
+
+        await CollectedGuide.CollectAsync(feature);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/programs/search?keyword=Evening&{CollectedGuide.TheDay}");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{CollectedGuide.Network}-{CollectedGuide.Television}-1"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
+    }
+
+    [Fact]
+    public async Task AServiceTheCatalogueHasNoOpinionOnIsStillAmongTheMatches()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(CollectedGuide.Channel, ChannelScript.Carrying(CollectedGuide.GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([CollectedGuide.EverythingTheStreamCarries()], driver, clock: new WoundClock(CollectedGuide.Airs));
+
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.SecondTelevision, ServiceCategory.Television));
+
+        await CollectedGuide.CollectAsync(feature);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/programs/search?keyword=Evening&{CollectedGuide.TheDay}");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{CollectedGuide.Network}-{CollectedGuide.Television}-1", $"{CollectedGuide.Network}-{CollectedGuide.OneSegSimulcast}-3", $"{CollectedGuide.Network}-{CollectedGuide.DataService}-5"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
+    }
+
+    [Fact]
+    public async Task AnArchivedProgrammeOnAWithheldServiceIsNotAmongTheMatches()
+    {
+        await using var feature = new EpgFeature(
+            [CollectedGuide.EverythingTheStreamCarries()],
+            new ScriptedDriverClient(),
+            clock: new WoundClock(CollectedGuide.Airs));
+
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.OneSegSimulcast, ServiceCategory.OneSeg));
+        feature.Archived.Programmes.Add(CollectedGuide.Archived(CollectedGuide.Television, 21, "Archived Bulletin"));
+        feature.Archived.Programmes.Add(CollectedGuide.Archived(CollectedGuide.OneSegSimulcast, 23, "Archived Bulletin"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/programs/search?keyword=Archived%20Bulletin&{CollectedGuide.TheDay}");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{CollectedGuide.Network}-{CollectedGuide.Television}-21"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
+    }
+
+    [Fact]
+    public async Task AnArchivedProgrammeOnAServiceTheCatalogueHasForgottenIsStillAmongTheMatches()
+    {
+        await using var feature = new EpgFeature(
+            [CollectedGuide.EverythingTheStreamCarries()],
+            new ScriptedDriverClient(),
+            clock: new WoundClock(CollectedGuide.Airs));
+
+        feature.Catalogue.Services.Add(CollectedGuide.Catalogued(CollectedGuide.Television, ServiceCategory.Television));
+        feature.Archived.Programmes.Add(CollectedGuide.Archived(CollectedGuide.Television, 21, "Archived Bulletin"));
+        feature.Archived.Programmes.Add(CollectedGuide.Archived(CollectedGuide.WithdrawnService, 25, "Archived Bulletin"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/programs/search?keyword=Archived%20Bulletin&{CollectedGuide.TheDay}");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{CollectedGuide.Network}-{CollectedGuide.Television}-21", $"{CollectedGuide.Network}-{CollectedGuide.WithdrawnService}-25"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
     }
 
     private static EpgFeature Feature(IReadOnlyList<BroadcastStream>? streams = null)
