@@ -81,6 +81,7 @@ public static class TestLayoutRules
         new("Notifications", "src/Carina.Api/Services/NotificationRuleService.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261110182416_AProgrammeCanBeWatchedWithoutBeingRecorded.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261112182442_ANoticeCanBeSentToABrowser.cs"),
+        new("Reservations", "src/Carina.Db/Migrations/20260928091011_AReservationStandsAsideForTheSameBroadcast.cs"),
     ];
 
     /// <summary>
@@ -91,6 +92,7 @@ public static class TestLayoutRules
         new("Channels", "LogoVisitSchema"),
         new("Channels", "ServiceReachSchema"),
         new("Channels", "StationLogoSchema"),
+        new("Reservations", "ReservationOutcomeSchema"),
     ];
 
     private const string ApiTests = "Carina.Api.Tests";

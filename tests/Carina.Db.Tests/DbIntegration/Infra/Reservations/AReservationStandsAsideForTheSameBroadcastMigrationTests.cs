@@ -10,11 +10,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Reservations;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class SameBroadcastCancellationRollbackTests
+public sealed class AReservationStandsAsideForTheSameBroadcastMigrationTests
 {
     private const string ScratchDatabase = "carina_same_broadcast_rollback_test";
 

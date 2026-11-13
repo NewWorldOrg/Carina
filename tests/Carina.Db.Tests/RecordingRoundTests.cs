@@ -15,7 +15,7 @@ namespace Carina.Db.Tests;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class RecordingTickTests(MigratedScratchDatabase database)
+public sealed class RecordingRoundTests(MigratedScratchDatabase database)
     : IClassFixture<MigratedScratchDatabase>
 {
     private static readonly DateTime Airs = new(2026, 8, 26, 20, 0, 0, DateTimeKind.Utc);

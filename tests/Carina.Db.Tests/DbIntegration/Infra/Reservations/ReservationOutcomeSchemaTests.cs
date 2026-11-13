@@ -3,7 +3,7 @@ using Carina.Domain.Reservations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Reservations;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]

@@ -1,10 +1,16 @@
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
+using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
+
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Reservations;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
+public sealed class ReservationsSchemaTests(MigratedScratchDatabase database)
     : IClassFixture<MigratedScratchDatabase>
 {
     private const string Airs = "timestamptz '2026-08-24 20:00:00+00'";
@@ -14,6 +20,10 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
     private const string Ends = "timestamptz '2026-08-24 21:00:00+00'";
 
     private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
+
+    private const string Claimed = "timestamptz '2026-08-24 19:59:00+00'";
+
+    private static readonly DateTime NowForEveryCombination = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
     public async Task TheDatabaseRefusesASecondReservationForTheSameProgramme()
@@ -337,6 +347,73 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
         Assert.Equal(2, await Count(connection, "reservation WHERE network_id = 70013"));
     }
 
+    [Fact]
+    public async Task TheStoredCompositeAndTheEntityGiveTheSameAnswerForEveryCombinationTheTableHolds()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        var disagreed = new List<string>();
+        int eventId = 5000;
+
+        foreach ((ReservationState state, DateTime? startedAt, RecordingOutcome? outcome) in Combinations())
+        {
+            await ReserveForEveryCombination(connection, eventId, state, startedAt, outcome);
+
+            string stored = await CompositeForEveryCombination(connection, eventId);
+            string entity = Rehydrated(state, startedAt, outcome).Standing.ToString();
+
+            if (!string.Equals(stored, entity, StringComparison.Ordinal))
+            {
+                disagreed.Add(
+                    $"state={state}, claimed={startedAt is not null}, outcome={outcome?.ToString() ?? "none"}: "
+                    + $"the column says {stored} and the entity says {entity}");
+            }
+
+            eventId++;
+        }
+
+        Assert.Empty(disagreed);
+        Assert.Equal(20, eventId - 5000);
+    }
+
+    [Fact(DisplayName = "what a reservation asks about encoding reaches the recorder, because the recording copies it as it begins")]
+    public async Task WhatAReservationAsksReachesTheRecorder()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            1L,
+            await Scalar(
+                connection,
+                """
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_name = 'reservation_recording_tick' AND column_name = 'encode_when_recorded'
+                """));
+    }
+
+    [Fact(DisplayName = "a row written without saying anything about encoding asks for one, which is what every row did before one could say otherwise")]
+    public async Task ARowThatSaysNothingAsksForAnEncode()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "true",
+            await Scalar(
+                connection,
+                """
+                SELECT column_default FROM information_schema.columns
+                WHERE table_name = 'reservation' AND column_name = 'encode_when_recorded'
+                """));
+
+        Assert.Equal(
+            "NO",
+            await Scalar(
+                connection,
+                """
+                SELECT is_nullable FROM information_schema.columns
+                WHERE table_name = 'reservation' AND column_name = 'encode_when_recorded'
+                """));
+    }
+
     private static string Because(string state, string? cancelledBecause)
         => cancelledBecause ?? (state is "Cancelled" ? "'ByHand'" : "NULL");
 
@@ -452,5 +529,96 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
         object? read = await command.ExecuteScalarAsync();
 
         return read is DBNull ? null : read;
+    }
+
+    private static IEnumerable<(ReservationState, DateTime?, RecordingOutcome?)> Combinations()
+    {
+        foreach (ReservationState state in Enum.GetValues<ReservationState>())
+        {
+            yield return (state, null, null);
+            yield return (state, NowForEveryCombination, null);
+
+            foreach (RecordingOutcome outcome in Enum.GetValues<RecordingOutcome>())
+            {
+                yield return (state, NowForEveryCombination, outcome);
+            }
+        }
+    }
+
+    private static Reservation Rehydrated(
+        ReservationState state,
+        DateTime? startedAt,
+        RecordingOutcome? outcome)
+        => Reservation.Rehydrate(
+            ReservationId.New(),
+            new ProgrammeRef(new NetworkId(60100), new ServiceId(1024), new EventId(4001), NowForEveryCombination.AddHours(8)),
+            null,
+            new Priority(10),
+            NowForEveryCombination.AddHours(8),
+            NowForEveryCombination.AddHours(9),
+            true,
+            Margin.OfSeconds(10),
+            Margin.OfSeconds(30),
+            new ProgrammeSnapshot(
+                "A programme",
+                "What it is about",
+                string.Empty,
+                [],
+                NowForEveryCombination,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
+            null,
+            BroadcastGroupRole.Standalone,
+            state,
+            startedAt,
+            outcome,
+            false,
+            [],
+            false,
+            null,
+            false,
+            null,
+            NowForEveryCombination,
+            state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null);
+
+    private static async Task ReserveForEveryCombination(
+        NpgsqlConnection connection,
+        int eventId,
+        ReservationState state,
+        DateTime? startedAt,
+        RecordingOutcome? outcome)
+    {
+        await using NpgsqlCommand command = connection.CreateCommand();
+        command.CommandText = $"""
+            INSERT INTO reservation (
+                id, network_id, service_id, event_id, programme_start_at, rule_id, priority,
+                start_at, end_at, end_at_confirmed, margin_before, margin_after,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
+                snapshot_audio, snapshot_sounds, captured_at,
+                epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
+                reception_unavailable, reception_unavailable_since,
+                broadcast_group_key, broadcast_group_role, state, cancelled_because,
+                started_at, recording_outcome, created_at)
+            VALUES (
+                '{Guid.NewGuid()}', 60100, 1024, {eventId}, {Airs}, NULL, 10,
+                {Airs}, {Ends}, true, 10, 30,
+                'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, {Airs},
+                false, '[]'::jsonb, false, NULL, false, NULL,
+                NULL, 'Standalone', '{state}',
+                {(state is ReservationState.Cancelled ? "'ByHand'" : "NULL")},
+                {(startedAt is null ? "NULL" : Claimed)},
+                {(outcome is null ? "NULL" : $"'{outcome}'")}, {Airs})
+            """;
+
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<string> CompositeForEveryCombination(NpgsqlConnection connection, int eventId)
+    {
+        await using NpgsqlCommand command = connection.CreateCommand();
+        command.CommandText =
+            $"SELECT composite_state FROM reservation WHERE network_id = 60100 AND event_id = {eventId}";
+
+        return (string)(await command.ExecuteScalarAsync())!;
     }
 }
