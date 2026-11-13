@@ -1,5 +1,7 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Driver;
+using Carina.Domain.DriverStatus;
 using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
@@ -20,15 +22,27 @@ using Puppis.Contracts;
 
 using static Carina.Infrastructure.Tests.Fixtures.Recordings.RecordingStreamFixture;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Recordings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
+public sealed class RecordingStreamSupervisorTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly DateTime Ended = Airs.AddMinutes(31);
+
+    private readonly List<ServiceProvider> containers = [];
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        foreach (ServiceProvider container in containers)
+        {
+            await container.DisposeAsync();
+        }
+    }
 
     [Fact]
     public async Task TheReasonsTheJudgementNamedComeBackOutOfTheLedgerAndReachTheReservation()
@@ -233,28 +247,22 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
         RecordingId watched,
         Func<Task>? collide)
     {
-        var services = new ServiceCollection();
         var once = new OnceOnly();
+        ServiceProvider container = database.Infrastructure(replace =>
+        {
+            replace.AddSingleton<IDriverClient>(driver);
+            replace.AddSingleton<IDriverStatusReader>(new HeldStatus(Connected()));
+            replace.AddSingleton<IRecordingFileWeigher>(files);
+            replace.AddSingleton(Settings);
+            replace.AddSingleton(clock);
+            replace.AddSingleton<IServiceTuningDirectory>(new ResolvedTuning(Terrestrial));
+            RegisteredServices.Wrap<IRecordingRepository>(
+                replace,
+                inner => new OneRecordingLedger(inner, watched, once, collide));
+        });
+        containers.Add(container);
 
-        services.AddScoped(_ => database.Open());
-        services.AddScoped<IRecordingRepository>(provider => new OneRecordingLedger(
-            new RecordingRepository(provider.GetRequiredService<CarinaDbContext>()),
-            watched,
-            once,
-            collide));
-        services.AddScoped<IServiceTuningDirectory>(_ => new ResolvedTuning(Terrestrial));
-        services.AddScoped<RecordingSettlementDomainService>();
-        services.AddScoped<IQualityThresholdRepository>(provider =>
-            new QualityThresholdRepository(provider.GetRequiredService<CarinaDbContext>()));
-
-        return new RecordingStreamSupervisor(
-            services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
-            driver,
-            new HeldStatus(Connected()),
-            files,
-            Settings,
-            clock,
-            NullLogger<RecordingStreamSupervisor>.Instance);
+        return container.GetRequiredService<RecordingStreamSupervisor>();
     }
 
     private static Reservation Plan(int eventId)
