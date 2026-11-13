@@ -5,24 +5,34 @@ using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Quality;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Quality;
 
-[Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class QualityLedgerReaderTests(RepositoryDatabase database)
+public sealed class QualityLedgerReaderTests : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
     private static readonly DateTime Airs = new(2026, 9, 7, 3, 0, 0, DateTimeKind.Utc);
 
     private static readonly DateTime Now = new(2026, 9, 7, 12, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly HeldStreams streams = new([]);
+
+    private readonly ServiceProvider container;
+
+    public QualityLedgerReaderTests(MigratedRepositoryDatabase database)
+        => container = database.Infrastructure(services => services.AddSingleton<IBroadcastStreamDirectory>(streams));
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact]
     public async Task OnlyTheRecordingsInsideThePeriodComeBack()
@@ -99,10 +109,9 @@ public sealed class QualityLedgerReaderTests(RepositoryDatabase database)
         await WrittenAsync(6031, Airs, service: 1_024);
         await WrittenAsync(6032, Airs, service: 1_032);
 
-        IReadOnlyList<QualityLedgerRow> read = await ReadAsync(
-            Now.AddDays(-1),
-            Now,
-            new HeldStreams([Carried(1_024)]));
+        streams.Carried.Add(Carried(1_024));
+
+        IReadOnlyList<QualityLedgerRow> read = await ReadAsync(Now.AddDays(-1), Now);
 
         Assert.Equal(TuneSystem.IsdbT, read.Single(row => row.Service.Value is 1_024).Kind);
         Assert.Null(read.Single(row => row.Service.Value is 1_032).Kind);
@@ -124,21 +133,19 @@ public sealed class QualityLedgerReaderTests(RepositoryDatabase database)
             TuningParameters.Terrestrial(27),
             [new ServiceId(service)]);
 
-    private async Task<IReadOnlyList<QualityLedgerRow>> ReadAsync(
-        DateTime from,
-        DateTime until,
-        IBroadcastStreamDirectory? streams = null)
+    private async Task<IReadOnlyList<QualityLedgerRow>> ReadAsync(DateTime from, DateTime until)
     {
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
 
-        return await new QualityLedgerReader(reading, streams ?? new HeldStreams([]))
+        return await reading.ServiceProvider
+            .GetRequiredService<IQualityLedgerReader>()
             .ReadAsync(QualityPeriod.Of(from, until, Now)!, Cancel);
     }
 
     private async Task ClearAsync()
     {
-        await using CarinaDbContext clearing = database.Open();
-        await clearing.Set<Recording>().ExecuteDeleteAsync(Cancel);
+        await using AsyncServiceScope clearing = container.CreateAsyncScope();
+        await clearing.ServiceProvider.GetRequiredService<CarinaDbContext>().Set<Recording>().ExecuteDeleteAsync(Cancel);
     }
 
     private async Task<Recording> WrittenAsync(
@@ -179,8 +186,8 @@ public sealed class QualityLedgerReaderTests(RepositoryDatabase database)
             begun.Missed(gap);
         }
 
-        await using CarinaDbContext writing = database.Open();
-        var repository = new RecordingRepository(writing);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        IRecordingRepository repository = writing.ServiceProvider.GetRequiredService<IRecordingRepository>();
         await repository.AddAsync(begun, Cancel);
 
         if (dropped is { } lost && total is { } carried)

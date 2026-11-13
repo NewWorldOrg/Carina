@@ -5,15 +5,15 @@ using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Quality;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Quality;
 
-[Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
+public sealed class QualitySupplyReaderTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
     private static readonly DateTime Airs = new(2026, 9, 7, 3, 0, 0, DateTimeKind.Utc);
 
@@ -22,6 +22,12 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
     private static readonly TimeSpan FiveMinutes = TimeSpan.FromMinutes(5);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact(DisplayName = "a recording in flight is read as two supplies, not one")]
     public async Task ARecordingInFlightIsReadAsTwoSuppliesNotOne()
@@ -198,23 +204,26 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
 
     private async Task<IReadOnlyList<SupplyReading>> ReadAsync(CollectionSettings? settings = null)
     {
-        await using CarinaDbContext reading = database.Open();
+        await using ServiceProvider settled = database.Infrastructure(
+            services => services.AddSingleton(settings ?? new CollectionSettings()));
+        await using AsyncServiceScope reading = settled.CreateAsyncScope();
 
-        return await new QualitySupplyReader(reading, settings ?? new CollectionSettings()).ReadAsync(Cancel);
+        return await reading.ServiceProvider.GetRequiredService<IQualitySupplyReader>().ReadAsync(Cancel);
     }
 
     private async Task ClearAsync()
     {
-        await using CarinaDbContext clearing = database.Open();
-        await clearing.Set<Recording>().ExecuteDeleteAsync(Cancel);
-        await clearing.Set<StreamVisit>().ExecuteDeleteAsync(Cancel);
+        await using AsyncServiceScope clearing = container.CreateAsyncScope();
+        CarinaDbContext context = clearing.ServiceProvider.GetRequiredService<CarinaDbContext>();
+        await context.Set<Recording>().ExecuteDeleteAsync(Cancel);
+        await context.Set<StreamVisit>().ExecuteDeleteAsync(Cancel);
     }
 
     private async Task VisitedAsync(VisitOutcome outcome, DateTime at, int stream)
     {
-        await using CarinaDbContext writing = database.Open();
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
 
-        await new StreamVisitRepository(writing).SaveAsync(
+        await writing.ServiceProvider.GetRequiredService<IStreamVisitRepository>().SaveAsync(
             StreamVisit.Record(
                 new NetworkId(32_736),
                 new TransportStreamId(stream),
@@ -264,8 +273,8 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
 
         ending?.Invoke(begun);
 
-        await using CarinaDbContext holding = database.Open();
-        await new RecordingRepository(holding).AddAsync(begun, Cancel);
+        await using AsyncServiceScope holding = container.CreateAsyncScope();
+        await holding.ServiceProvider.GetRequiredService<IRecordingRepository>().AddAsync(begun, Cancel);
 
         return begun;
     }

@@ -17,11 +17,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Quality;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Quality;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class QualityMeasurementsOutliveTheAppTests(RepositoryDatabase database)
+public sealed class SupplyWatchRoundTests(RepositoryDatabase database)
 {
     private const int Service = 1_024;
 
