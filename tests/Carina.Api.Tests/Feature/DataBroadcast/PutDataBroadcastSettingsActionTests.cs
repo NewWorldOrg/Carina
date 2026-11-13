@@ -1,102 +1,13 @@
 using System.Net;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 
-using Carina.Domain.Base;
-using Carina.Domain.DataBroadcast;
-using Carina.TestSupport;
+using Carina.Api.Tests.FeatureTest;
 
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
+namespace Carina.Api.Tests.Feature.DataBroadcast;
 
-namespace Carina.Api.Tests.FeatureTest;
-
-internal sealed class DataBroadcastSettingsFeature : IAsyncDisposable
+[Trait("Category", "Feature")]
+public sealed class PutDataBroadcastSettingsActionTests
 {
-    public const string Path = "/api/data-broadcast/settings";
-
-    public static readonly DateTime Noon = new(2026, 10, 23, 12, 0, 0, DateTimeKind.Utc);
-
-    private readonly TestingWebApplicationFactory factory = new();
-
-    public DataBroadcastSettingsFeature()
-    {
-        Built = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-        {
-            services.RemoveAll<IHostedService>();
-            services.AddSingleton<TimeProvider>(Clock);
-            services.AddSingleton<IDataBroadcastSettingsRepository>(Settings);
-            services.AddSingleton<IAtomicWrite, UnguardedWrites>();
-        }));
-
-        Client = Built.WithTestScheme().CreateClient();
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
-    }
-
-    public WebApplicationFactory<Program> Built { get; }
-
-    public HttpClient Client { get; }
-
-    public MovingClock Clock { get; } = new(Noon);
-
-    public HeldDataBroadcastSettings Settings { get; } = new();
-
-    public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync()
-    {
-        using HttpResponseMessage response = await Client.GetAsync(new Uri(Path, UriKind.Relative));
-
-        return await ReadAsync(response);
-    }
-
-    public async Task<(HttpStatusCode Status, JsonElement Body)> PutAsync(string json)
-    {
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using HttpResponseMessage response = await Client.PutAsync(new Uri(Path, UriKind.Relative), content);
-
-        return await ReadAsync(response);
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        Client.Dispose();
-        await factory.DisposeAsync();
-    }
-
-    private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(HttpResponseMessage response)
-    {
-        string body = await response.Content.ReadAsStringAsync();
-
-        if (!body.StartsWith('{'))
-        {
-            return (response.StatusCode, default);
-        }
-
-        using var document = JsonDocument.Parse(body);
-
-        return (response.StatusCode, document.RootElement.Clone());
-    }
-}
-
-public sealed class DataBroadcastSettingsEndpointTests
-{
-    [Fact(DisplayName = "BR-BD-016: with no row held neither the postal code nor the prefecture is registered, and nobody has changed them")]
-    public async Task WithNoRowHeldNothingIsRegistered()
-    {
-        await using var feature = new DataBroadcastSettingsFeature();
-
-        (HttpStatusCode status, JsonElement body) = await feature.GetAsync();
-        JsonElement data = body.GetProperty("data");
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(["postalCode", "prefecture", "changedAt"], data.EnumerateObject().Select(field => field.Name).ToArray());
-        Assert.All(data.EnumerateObject(), field => Assert.Equal(JsonValueKind.Null, field.Value.ValueKind));
-        Assert.Equal(0, feature.Settings.Saves);
-    }
-
     [Fact(DisplayName = "BR-BD-016: registering the postal code and the prefecture answers when they changed, and is read back")]
     public async Task RegisteringIsReadBack()
     {
@@ -198,17 +109,16 @@ public sealed class DataBroadcastSettingsEndpointTests
         Assert.Equal(0, feature.Settings.Saves);
     }
 
-    [Fact(DisplayName = "BR-BA-001: the settings are neither read nor changed without a session")]
-    public async Task TheSettingsAreNeitherReadNorChangedWithoutASession()
+    [Fact(DisplayName = "BR-BA-001: the settings are not changed without a session")]
+    public async Task TheSettingsAreNotChangedWithoutASession()
     {
-        await using var feature = new DataBroadcastSettingsFeature();
+        await using DataBroadcastSettingsFeature feature = new();
         using HttpClient anonymous = feature.Built.WithTestScheme().CreateClient();
-        using var content = new StringContent("""{"postalCode":"0000000","prefecture":13}""", Encoding.UTF8, "application/json");
+        using StringContent content = new("""{"postalCode":"0000000","prefecture":13}""", System.Text.Encoding.UTF8, "application/json");
 
-        using HttpResponseMessage read = await anonymous.GetAsync(new Uri(DataBroadcastSettingsFeature.Path, UriKind.Relative));
         using HttpResponseMessage changed = await anonymous.PutAsync(new Uri(DataBroadcastSettingsFeature.Path, UriKind.Relative), content);
 
-        Assert.Equal((HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized), (read.StatusCode, changed.StatusCode));
+        Assert.Equal(HttpStatusCode.Unauthorized, changed.StatusCode);
         Assert.Equal(0, feature.Settings.Saves);
     }
 }
