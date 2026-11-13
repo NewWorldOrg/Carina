@@ -1,114 +1,13 @@
 using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 
-using Carina.Domain.Base;
-using Carina.Domain.Segments;
-using Carina.TestSupport;
-
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Net.Http.Headers;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Segments;
 
-internal sealed class SegmentSettingsFeature : IAsyncDisposable
+[Trait("Category", "Feature")]
+public sealed class PatchSegmentSettingsActionTests
 {
-    public const string Path = "/api/segments/settings";
-
-    public static readonly DateTime Noon = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
-
-    private readonly TestingWebApplicationFactory factory = new();
-
-    public SegmentSettingsFeature()
-    {
-        Built = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-        {
-            services.RemoveAll<IHostedService>();
-            services.AddSingleton<TimeProvider>(Clock);
-            services.AddSingleton<ISegmentSettingsRepository>(Settings);
-            services.AddSingleton<IAtomicWrite, UnguardedWrites>();
-        }));
-
-        Client = Built.WithTestScheme().CreateClient();
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
-    }
-
-    public WebApplicationFactory<Program> Built { get; }
-
-    public HttpClient Client { get; }
-
-    public MovingClock Clock { get; } = new(Noon);
-
-    public HeldSegmentSettings Settings { get; } = new();
-
-    public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
-
-    public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync()
-    {
-        using HttpResponseMessage response = await Client.GetAsync(new Uri(Path, UriKind.Relative));
-
-        return await ReadAsync(response);
-    }
-
-    public async Task<(HttpStatusCode Status, JsonElement Body)> PatchAsync(object body)
-    {
-        using HttpResponseMessage response = await Client.PatchAsJsonAsync(new Uri(Path, UriKind.Relative), body);
-
-        return await ReadAsync(response);
-    }
-
-    public async Task<(HttpStatusCode Status, JsonElement Body)> PatchAsync(string json)
-    {
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using HttpResponseMessage response = await Client.PatchAsync(new Uri(Path, UriKind.Relative), content);
-
-        return await ReadAsync(response);
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        Client.Dispose();
-        await factory.DisposeAsync();
-    }
-
-    private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(HttpResponseMessage response)
-    {
-        string body = await response.Content.ReadAsStringAsync();
-
-        if (!body.StartsWith('{'))
-        {
-            return (response.StatusCode, default);
-        }
-
-        using var document = JsonDocument.Parse(body);
-
-        return (response.StatusCode, document.RootElement.Clone());
-    }
-}
-
-public sealed class SegmentSettingsEndpointTests
-{
-    [Fact(DisplayName = "with no row held the threshold reads at 0.70, and nobody has changed it")]
-    public async Task WithNoRowHeldTheThresholdReadsAtItsDefault()
-    {
-        await using var feature = new SegmentSettingsFeature();
-
-        (HttpStatusCode status, JsonElement body) = await feature.GetAsync();
-        JsonElement data = body.GetProperty("data");
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(["skipThreshold", "skipThresholdChangedAt"], data.EnumerateObject().Select(field => field.Name).ToArray());
-        Assert.Equal(0.70, data.GetProperty("skipThreshold").GetDouble());
-        Assert.Equal(JsonValueKind.Null, data.GetProperty("skipThresholdChangedAt").ValueKind);
-        Assert.Equal(0, feature.Settings.Saves);
-    }
-
     [Fact(DisplayName = "BR-CV-002: changing the threshold on no row answers when it changed, and is read back")]
     public async Task ChangingTheThresholdOnNoRowIsReadBack()
     {
@@ -245,7 +144,7 @@ public sealed class SegmentSettingsEndpointTests
     public async Task AChangeSentAsAFormIsRefused()
     {
         await using var feature = new SegmentSettingsFeature();
-        using var form = new StringContent("skipThreshold=0.8", Encoding.UTF8, "application/x-www-form-urlencoded");
+        using var form = new StringContent("skipThreshold=0.8", System.Text.Encoding.UTF8, "application/x-www-form-urlencoded");
 
         using HttpResponseMessage response = await feature.Client.PatchAsync(
             new Uri(SegmentSettingsFeature.Path, UriKind.Relative),
@@ -255,18 +154,16 @@ public sealed class SegmentSettingsEndpointTests
         Assert.Equal(0, feature.Settings.Saves);
     }
 
-    [Fact(DisplayName = "a caller who has not signed in can neither read nor change the settings")]
-    public async Task ACallerWhoHasNotSignedInCanNeitherReadNorChange()
+    [Fact(DisplayName = "a caller who has not signed in cannot change the settings")]
+    public async Task ACallerWhoHasNotSignedInCannotChange()
     {
         await using var feature = new SegmentSettingsFeature();
         using HttpClient anonymous = feature.Anonymous();
 
-        using HttpResponseMessage read = await anonymous.GetAsync(new Uri(SegmentSettingsFeature.Path, UriKind.Relative));
         using HttpResponseMessage changed = await anonymous.PatchAsJsonAsync(
             new Uri(SegmentSettingsFeature.Path, UriKind.Relative),
             new { skipThreshold = 0.8 });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, read.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, changed.StatusCode);
         Assert.Equal(0, feature.Settings.Reads);
         Assert.Equal(0, feature.Settings.Saves);

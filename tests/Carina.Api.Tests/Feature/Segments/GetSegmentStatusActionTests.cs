@@ -1,91 +1,19 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
+using Carina.Infrastructure.Segments;
 using Carina.TestSupport;
 
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Segments;
 
-internal sealed class SegmentStatusFeature : IAsyncDisposable
-{
-    public const string Path = "/api/segments/status";
-
-    public static readonly DateTime Now = new(2026, 11, 8, 12, 0, 0, DateTimeKind.Utc);
-
-    private readonly TestingWebApplicationFactory factory = new();
-
-    public SegmentStatusFeature()
-    {
-        Built = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-        {
-            services.RemoveAll<IHostedService>();
-            services.AddSingleton<ILearningDataAmountReader>(LearningData);
-            services.AddSingleton<ICatalogCountsReader>(Catalog);
-            services.AddSingleton<ISegmentModelVersionRepository>(Versions);
-            services.AddSingleton<ISegmentSettingsRepository>(Settings);
-            services.AddSingleton<ISkipEventRepository>(Skips);
-            services.AddSingleton<ICatalogEvidenceReader>(Evidence);
-            services.AddSingleton<ISegmentLearningRoundRepository>(Rounds);
-            services.AddSingleton<TimeProvider>(new MovingClock(Now));
-        }));
-
-        Client = Built.WithTestScheme().CreateClient();
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthenticationHandler.SchemeName, "anything");
-    }
-
-    public WebApplicationFactory<Program> Built { get; }
-
-    public HttpClient Client { get; }
-
-    public HeldLearningDataAmount LearningData { get; } = new();
-
-    public HeldCatalogCounts Catalog { get; } = new();
-
-    public HeldSegmentModelVersions Versions { get; } = new();
-
-    public HeldSegmentSettings Settings { get; } = new();
-
-    public HeldSkipEvents Skips { get; } = new();
-
-    public HeldCatalogEvidence Evidence { get; } = new();
-
-    public HeldSegmentLearningRounds Rounds { get; } = new();
-
-    public HttpClient Anonymous() => Built.WithTestScheme().CreateClient();
-
-    public async Task<(HttpStatusCode Status, JsonElement LearningData)> GetAsync()
-    {
-        (HttpStatusCode status, JsonElement data) = await DataAsync();
-
-        return (status, data.GetProperty("learningData"));
-    }
-
-    public async Task<(HttpStatusCode Status, JsonElement Data)> DataAsync()
-    {
-        using HttpResponseMessage response = await Client.GetAsync(new Uri(Path, UriKind.Relative));
-        string body = await response.Content.ReadAsStringAsync();
-        using var document = JsonDocument.Parse(body);
-
-        return (response.StatusCode, document.RootElement.GetProperty("data").Clone());
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        Client.Dispose();
-        await factory.DisposeAsync();
-    }
-}
-
-public sealed class SegmentStatusEndpointTests
+[Trait("Category", "Feature")]
+public sealed class GetSegmentStatusActionTests
 {
     [Fact(DisplayName = "with no learning data kept every figure of it is zero, and only the figures are answered")]
     public async Task WithNoLearningDataKeptEveryFigureIsZero()
@@ -482,6 +410,57 @@ public sealed class SegmentStatusEndpointTests
         Assert.Equal(0, feature.LearningData.Reads);
         Assert.Equal(0, feature.Catalog.Reads);
         Assert.Equal(0, feature.Versions.Reads);
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a candidate the day's round puts in use is answered as the version in use, first among the versions, with its figures and the evidence it stands on")]
+    public async Task ACandidatePutInUseIsAnsweredWithItsFigures()
+    {
+        await using var feature = new SegmentTrainingFeature();
+        feature.Trainer.Candidate = SegmentTrainingFeature.CannedTrainer.Evaluation(0.93, 0.9, 12);
+
+        SegmentTrainingLook look = await feature.RoundAsync();
+        (HttpStatusCode status, JsonElement data) = await feature.StatusAsync();
+
+        Assert.Equal(SegmentTrainingOutcome.Adopted, look.Round?.Outcome);
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal((2, "active"), (data.GetProperty("version").GetProperty("number").GetInt32(), data.GetProperty("version").GetProperty("state").GetString()));
+        JsonElement[] versions = [.. data.GetProperty("versions").EnumerateArray()];
+        Assert.Equal([(2, "active"), (1, "retired")], versions.Select(version => (version.GetProperty("number").GetInt32(), version.GetProperty("state").GetString())));
+        Assert.Equal(0.93, versions[0].GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
+        Assert.Equal(JsonValueKind.Null, versions[1].GetProperty("metrics").ValueKind);
+        JsonElement metrics = data.GetProperty("metrics");
+        Assert.Equal((0.93, 0.8, 0.9), (metrics.GetProperty("boundaryRecallWithin2s").GetDouble(), metrics.GetProperty("boundaryRecallWithin1s").GetDouble(), metrics.GetProperty("kinds")[0].GetProperty("recall").GetDouble()));
+        Assert.Equal(0.93, Assert.Single(data.GetProperty("stations").EnumerateArray()).GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
+        Assert.Equal((12, true), (data.GetProperty("evidence").GetProperty("recordings").GetInt32(), data.GetProperty("evidence").GetProperty("enough").GetBoolean()));
+        JsonElement round = data.GetProperty("lastRound");
+        Assert.Equal(("adopted", 2, "adopted"), (round.GetProperty("outcome").GetString(), round.GetProperty("candidate").GetInt32(), round.GetProperty("verdict").GetString()));
+        Assert.Equal((0.85, 0.93, 0.9), (round.GetProperty("inUse").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("metrics").GetProperty("breakRecall").GetDouble()));
+        Assert.Equal((12, true), (round.GetProperty("evidence").GetProperty("recordings").GetInt32(), round.GetProperty("evidence").GetProperty("enough").GetBoolean()));
+        Assert.Equal("2026-11-08T18:00:00Z", data.GetProperty("nextRoundNotBefore").GetString());
+    }
+
+    [Fact(DisplayName = "BR-CD-008: a candidate the day's round keeps only is answered among the versions with its figures, while the version in use stays and is answered with the figures the round measured it by")]
+    public async Task ACandidateKeptOnlyIsAnsweredAmongTheVersions()
+    {
+        await using var feature = new SegmentTrainingFeature();
+        feature.Trainer.Candidate = SegmentTrainingFeature.CannedTrainer.Evaluation(0.80, 0.9, 12);
+
+        SegmentTrainingLook look = await feature.RoundAsync();
+        (_, JsonElement data) = await feature.StatusAsync();
+
+        Assert.Equal((SegmentTrainingOutcome.Kept, (AdoptionVerdict?)AdoptionVerdict.NoBetterAtBoundaries), (look.Round?.Outcome, look.Round?.Verdict));
+        Assert.Equal(1, data.GetProperty("version").GetProperty("number").GetInt32());
+        JsonElement[] versions = [.. data.GetProperty("versions").EnumerateArray()];
+        Assert.Equal([(2, "candidate"), (1, "active")], versions.Select(version => (version.GetProperty("number").GetInt32(), version.GetProperty("state").GetString())));
+        Assert.Equal(0.80, versions[0].GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
+        Assert.Equal(JsonValueKind.Null, versions[0].GetProperty("adoptedAt").ValueKind);
+        Assert.Equal(0.85, versions[1].GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
+        Assert.Equal(0.85, data.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble());
+        Assert.Equal(12, data.GetProperty("evidence").GetProperty("recordings").GetInt32());
+        JsonElement round = data.GetProperty("lastRound");
+        Assert.Equal(("kept", 2, "noBetterAtBoundaries"), (round.GetProperty("outcome").GetString(), round.GetProperty("candidate").GetInt32(), round.GetProperty("verdict").GetString()));
+        Assert.Equal((0.85, 0.80), (round.GetProperty("inUse").GetProperty("boundaryRecallWithin2s").GetDouble(), round.GetProperty("metrics").GetProperty("boundaryRecallWithin2s").GetDouble()));
+        Assert.Single(feature.Rounds.Taken);
     }
 
     private static string[] Names(JsonElement shape) => [.. shape.EnumerateObject().Select(field => field.Name)];

@@ -80,6 +80,8 @@ public static class TestLayoutRules
         new("Notifications", "src/Carina.Db/Migrations/20261110182416_AProgrammeCanBeWatchedWithoutBeingRecorded.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261112182442_ANoticeCanBeSentToABrowser.cs"),
         new("Reservations", "src/Carina.Db/Migrations/20260928091011_AReservationStandsAsideForTheSameBroadcast.cs"),
+        new("Segments", "src/Carina.Api/Responder/Segments/SegmentStatusResponder.cs"),
+        new("Segments", "src/Carina.Api/Services/SegmentStatusService.cs"),
         new("Segments", "src/Carina.Db/Migrations/20261018181106_SkipButtonsAreOfferedFromAThresholdTheSettingsKeep.cs"),
         new("Segments", "src/Carina.Db/Migrations/20261018215453_CatalogEntriesSayWhichVersionOfTheKindEstimationTheyWereEstimatedWith.cs"),
         new("Segments", "src/Carina.Db/Migrations/20261019102212_SegmentsAreNotAnsweredByHand.cs"),

@@ -1,11 +1,10 @@
 using Carina.Api.Responder.Playback;
-using Carina.Api.Responder.Segments;
 using Carina.Domain.Encodings;
 using Carina.Domain.Segments;
 
 namespace Carina.Api.Tests.Unit;
 
-public sealed class SegmentKindsHandedOverTests
+public sealed class PlaybackChapterResponderTests
 {
     [Fact(DisplayName = "BR-CD-009: an opening and an ending detected are handed to playback by their own kinds, each skippable as it was")]
     public void AnOpeningAndAnEndingArePlayedByTheirOwnKinds()
@@ -34,33 +33,6 @@ public sealed class SegmentKindsHandedOverTests
                 (1790.0, 1800.0, ChapterKind.Programme, false),
             ],
             handed.Select(chapter => (chapter.StartsAtSec, chapter.EndsAtSec, chapter.Kind, chapter.Skippable)));
-    }
-
-    [Fact(DisplayName = "BR-CD-008: the figures of the version in use answer the seconds of breaks, openings and endings found, each kind in a row of its own")]
-    public void TheStatusAnswersEveryKindMeasured()
-    {
-        SegmentMetrics metrics = new(
-            0.9,
-            0.8,
-            [new KindMetrics(SegmentKind.Break, 0.95), new KindMetrics(SegmentKind.Opening, 0.5), new KindMetrics(SegmentKind.Ending, null)],
-            null,
-            0);
-
-        Assert.Equal(
-            [
-                new SegmentKindMetricsResponder(SegmentKind.Break, 0.95),
-                new SegmentKindMetricsResponder(SegmentKind.Opening, 0.5),
-                new SegmentKindMetricsResponder(SegmentKind.Ending, null),
-            ],
-            SegmentMetricsResponder.Of(metrics).Kinds);
-    }
-
-    [Fact(DisplayName = "BR-CD-008: a version evaluated before openings and endings were measured answers the row for breaks alone")]
-    public void AVersionEvaluatedBeforeOpeningsAndEndingsWereMeasuredAnswersBreaksAlone()
-    {
-        SegmentMetrics metrics = new(0.9, 0.8, [new KindMetrics(SegmentKind.Break, 0.95)], null, 0);
-
-        Assert.Equal([new SegmentKindMetricsResponder(SegmentKind.Break, 0.95)], SegmentMetricsResponder.Of(metrics).Kinds);
     }
 
     private static SegmentSpan Span(double from, double to, SegmentKind kind) => new(TimeSpan.FromSeconds(from), TimeSpan.FromSeconds(to), kind, 0.9);

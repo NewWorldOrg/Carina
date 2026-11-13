@@ -5,8 +5,9 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class SegmentStatusServiceTests
 {
     private static readonly DateTime Now = new(2026, 11, 8, 12, 0, 0, DateTimeKind.Utc);
