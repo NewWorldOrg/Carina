@@ -4,7 +4,7 @@ using System.Text;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.DataBroadcast;
 
-namespace Carina.Infrastructure.Tests.DataBroadcast;
+namespace Carina.Infrastructure.Tests.Fixtures.DataBroadcast;
 
 /// <summary>
 /// Reads the frames of the data broadcast side channel back the way a player would, with a CBOR reader of its

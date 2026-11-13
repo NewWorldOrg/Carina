@@ -4,13 +4,13 @@ using Carina.Domain.DataBroadcast;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
-using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Integrity;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.DataBroadcast;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.DataBroadcast;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -156,11 +156,12 @@ public sealed class DataBroadcastWorklistTests(RepositoryDatabase database)
 
     private static OutputRoot Alone() => new("databroadcast" + Guid.NewGuid().ToString("N")[..12]);
 
-    private async Task<T> AskAsync<T>(Func<DataBroadcastWorklist, Task<T>> ask)
+    private async Task<T> AskAsync<T>(Func<IDataBroadcastWorklist, Task<T>> ask)
     {
-        await using CarinaDbContext context = database.Open();
+        await using ServiceProvider container = database.Infrastructure(replace => replace.AddSingleton<TimeProvider>(new StoppedClock(Now.AddHours(3))));
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await ask(new DataBroadcastWorklist(context, new StoppedClock(Now.AddHours(3))));
+        return await ask(scope.ServiceProvider.GetRequiredService<IDataBroadcastWorklist>());
     }
 
     private async Task<IReadOnlyList<DataBroadcastSubject>> AwaitingAsync(OutputRoot within, int atMost = 64)

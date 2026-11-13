@@ -2,7 +2,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Notifications;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Notifications;
-using Carina.Infrastructure.Tests.DataBroadcast;
+using Carina.Infrastructure.Tests.Fixtures.DataBroadcast;
 using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.Infrastructure.Tests.Notifications;
 using Carina.TestSupport;

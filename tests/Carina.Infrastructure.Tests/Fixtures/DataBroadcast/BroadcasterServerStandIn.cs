@@ -10,7 +10,7 @@ using Carina.Infrastructure.DataBroadcast;
 
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Infrastructure.Tests.DataBroadcast;
+namespace Carina.Infrastructure.Tests.Fixtures.DataBroadcast;
 
 internal sealed record HeardRequest(string Method, string Target, IReadOnlyDictionary<string, string> Headers, byte[] Body);
 
