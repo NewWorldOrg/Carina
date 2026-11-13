@@ -2,7 +2,7 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Encodings;
-using Carina.Infrastructure.Tests.Thumbnails;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 
 namespace Carina.Infrastructure.Tests.Fixtures.Encodings;
 

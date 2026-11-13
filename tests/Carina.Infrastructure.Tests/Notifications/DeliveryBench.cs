@@ -1,7 +1,7 @@
 using Carina.Domain.Notifications;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Tests.DataBroadcast;
-using Carina.Infrastructure.Tests.Thumbnails;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.DataProtection;

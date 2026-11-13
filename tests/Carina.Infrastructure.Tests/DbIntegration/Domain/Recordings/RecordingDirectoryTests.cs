@@ -1,0 +1,1015 @@
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
+using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
+using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
+using Carina.TestSupport;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+using Npgsql;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Recordings;
+
+[Trait("Category", "DbIntegration")]
+public sealed class RecordingDirectoryTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
+{
+    private static readonly DateTime Noon = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly IComparer<RecordingId> ById =
+        Comparer<RecordingId>.Create((left, right) => ByTheOrderTheDatabaseReadsThem.Comparer.Compare(left.Value, right.Value));
+
+    private static readonly DateTime Airs = new(2026, 8, 27, 20, 0, 0, DateTimeKind.Utc);
+
+    private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private static int networks;
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    private static QualityBands AsShipped => QualityThresholdStanding.Bands(QualityThresholdStanding.Over([], Noon));
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
+
+    [Fact]
+    public async Task ThePageIsBoundedByWhatWasAskedForWhileTheTotalCountsThemAll()
+    {
+        int network = await StockedAsync(5);
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, perPage: 2));
+
+        Assert.Equal(5, found.Total);
+        Assert.Equal(2, found.Items.Count);
+        Assert.Equal(3, found.LastPage);
+    }
+
+    [Fact]
+    public async Task ThePagesAfterTheFirstCarryOnWhereTheOneBeforeStopped()
+    {
+        int network = await StockedAsync(5);
+
+        PaginatedList<Recording> first = await ListAsync(Query(network, perPage: 2));
+        PaginatedList<Recording> second = await ListAsync(Query(network, perPage: 2, page: 2));
+
+        Assert.Empty(first.Items.Select(recording => recording.Id).Intersect(
+            second.Items.Select(recording => recording.Id)));
+        Assert.Equal(2, second.Items.Count);
+    }
+
+    [Fact]
+    public async Task ARecordingStillBeingWrittenIsToldApartFromOneThatHasEnded()
+    {
+        int network = await StockedAsync(0);
+        Recording writing = await AddAsync(network, 1);
+        Recording ended = await AddAsync(network, 2, outcome: RecordingOutcome.Truncated);
+
+        PaginatedList<Recording> inFlight = await ListAsync(
+            Query(network, standing: RecordingStanding.InFlight));
+        PaginatedList<Recording> settled = await ListAsync(Query(network, standing: RecordingStanding.Ended));
+
+        Assert.Equal(writing.Id, Assert.Single(inFlight.Items).Id);
+        Assert.Equal(ended.Id, Assert.Single(settled.Items).Id);
+    }
+
+    [Fact]
+    public async Task AnOutcomeFilterAnswersOnlyTheRecordingsThatEndedThatWay()
+    {
+        int network = await StockedAsync(0);
+        await AddAsync(network, 1, outcome: RecordingOutcome.Complete);
+        Recording truncated = await AddAsync(network, 2, outcome: RecordingOutcome.Truncated);
+        Recording failed = await AddAsync(network, 3, outcome: RecordingOutcome.Failed);
+        await AddAsync(network, 4);
+
+        PaginatedList<Recording> found = await ListAsync(
+            Query(network, outcomes: [RecordingOutcome.Truncated, RecordingOutcome.Failed]));
+
+        Assert.Equal(2, found.Total);
+        Assert.Contains(truncated.Id, found.Items.Select(recording => recording.Id));
+        Assert.Contains(failed.Id, found.Items.Select(recording => recording.Id));
+    }
+
+    [Fact]
+    public async Task NothingCountedIsNeverAnsweredAsCountedAndClean()
+    {
+        int network = await StockedAsync(0);
+        Recording lost = await AddAsync(network, 1, counters: DropCounters.Counted(3, 1000));
+        Recording clean = await AddAsync(network, 2, counters: DropCounters.Counted(0, 1000), scrambled: 0);
+        Recording uncounted = await AddAsync(network, 3);
+
+        PaginatedList<Recording> dropped = await ListAsync(Query(network, drops: DropReading.Dropped));
+        PaginatedList<Recording> spotless = await ListAsync(Query(network, drops: DropReading.Clean));
+        PaginatedList<Recording> unmeasured = await ListAsync(Query(network, drops: DropReading.Unmeasured));
+
+        Assert.Equal(lost.Id, Assert.Single(dropped.Items).Id);
+        Assert.Equal(clean.Id, Assert.Single(spotless.Items).Id);
+        Assert.Equal(uncounted.Id, Assert.Single(unmeasured.Items).Id);
+    }
+
+    [Fact]
+    public async Task ARecordingThatLostNothingButWasLeftScrambledIsNotAnsweredAsClean()
+    {
+        int network = await StockedAsync(0);
+        Recording unlocked = await AddAsync(network, 1, counters: DropCounters.Counted(0, 750_000), scrambled: 30);
+        await AddAsync(network, 2, counters: DropCounters.Counted(0, 1000), scrambled: 900);
+        await AddAsync(network, 3, counters: DropCounters.Counted(0, 1000));
+        await AddAsync(network, 4, counters: DropCounters.Counted(0, 0), scrambled: 0);
+
+        PaginatedList<Recording> spotless = await ListAsync(Query(network, drops: DropReading.Clean));
+
+        Assert.Equal(unlocked.Id, Assert.Single(spotless.Items).Id);
+    }
+
+    [Fact(DisplayName = "BR-KD-031: a recording descrambled since is answered as clean, and one still left scrambled is not")]
+    public async Task ARecordingDescrambledSinceIsAnsweredAsClean()
+    {
+        int network = await StockedAsync(0);
+        Recording descrambled = await AddAsync(
+            network,
+            1,
+            counters: DropCounters.Counted(0, 1000),
+            scrambled: 900,
+            endedScrambled: true,
+            descrambled: true);
+        await AddAsync(network, 2, counters: DropCounters.Counted(0, 1000), scrambled: 900, endedScrambled: true);
+        await AddAsync(
+            network,
+            3,
+            counters: DropCounters.Counted(1, 1000),
+            scrambled: 900,
+            endedScrambled: true,
+            descrambled: true);
+
+        PaginatedList<Recording> spotless = await ListAsync(Query(network, drops: DropReading.Clean));
+
+        Recording found = Assert.Single(spotless.Items);
+
+        Assert.Equal(descrambled.Id, found.Id);
+        Assert.Equal(900, found.ScrambledPackets);
+        Assert.NotNull(found.DescrambledAt);
+    }
+
+    [Fact]
+    public async Task AChannelFilterAnswersOnlyTheRecordingsOfTheChannelsItNames()
+    {
+        int network = await StockedAsync(0);
+        Recording first = await AddAsync(network, 1, serviceId: 1024);
+        Recording second = await AddAsync(network, 2, serviceId: 1025);
+        await AddAsync(network, 3, serviceId: 1026);
+
+        PaginatedList<Recording> found = await ListAsync(Query(
+            network,
+            channels: [new ProgrammeService(network, 1024), new ProgrammeService(network, 1025)]));
+
+        Assert.Equal(2, found.Total);
+        Assert.Contains(first.Id, found.Items.Select(recording => recording.Id));
+        Assert.Contains(second.Id, found.Items.Select(recording => recording.Id));
+    }
+
+    [Fact]
+    public async Task ASpanTakesInWhereItStartsAndStopsShortOfWhereItEnds()
+    {
+        int network = await StockedAsync(0);
+        Recording before = await AddAsync(network, 1, startedAt: Noon.AddMinutes(-1));
+        Recording atTheStart = await AddAsync(network, 2, startedAt: Noon);
+        Recording atTheEnd = await AddAsync(network, 3, startedAt: Noon.AddHours(1));
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, from: Noon, to: Noon.AddHours(1)));
+
+        Assert.Equal(atTheStart.Id, Assert.Single(found.Items).Id);
+        Assert.DoesNotContain(before.Id, found.Items.Select(recording => recording.Id));
+        Assert.DoesNotContain(atTheEnd.Id, found.Items.Select(recording => recording.Id));
+    }
+
+    [Fact]
+    public async Task ASortIsAnsweredInTheDirectionItWasAskedFor()
+    {
+        int network = await StockedAsync(0);
+        Recording first = await AddAsync(network, 1, startedAt: Noon);
+        Recording second = await AddAsync(network, 2, startedAt: Noon.AddMinutes(10));
+
+        PaginatedList<Recording> up = await ListAsync(Query(network));
+        PaginatedList<Recording> down = await ListAsync(Query(network, descending: true));
+
+        Assert.Equal([first.Id, second.Id], up.Items.Select(recording => recording.Id).ToArray());
+        Assert.Equal([second.Id, first.Id], down.Items.Select(recording => recording.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task TheProgrammeSortIsNotTheSameOrderAsTheOneTheRecordingWasWrittenIn()
+    {
+        int network = await StockedAsync(0);
+        Recording late = await AddAsync(network, 1, startedAt: Noon, programmeStartsAt: Noon.AddHours(2));
+        Recording early = await AddAsync(
+            network,
+            2,
+            startedAt: Noon.AddMinutes(10),
+            programmeStartsAt: Noon.AddHours(1));
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, sort: RecordingSort.ProgrammeStartsAt));
+
+        Assert.Equal([early.Id, late.Id], found.Items.Select(recording => recording.Id).ToArray());
+    }
+
+    [Fact(DisplayName = "D-11: walking by the next position reaches every recording once, newest first and the same start by id")]
+    public async Task WalkingByTheNextPositionReachesEveryRecordingOnceNewestFirst()
+    {
+        int network = await StockedAsync(0);
+        List<Recording> stocked = [];
+
+        foreach (int eventId in Enumerable.Range(1, 4))
+        {
+            stocked.Add(await AddAsync(network, eventId, startedAt: Noon));
+        }
+
+        stocked.Add(await AddAsync(network, 5, startedAt: Noon.AddMinutes(-10)));
+        stocked.Add(await AddAsync(network, 6, startedAt: Noon.AddMinutes(10)));
+
+        IReadOnlyList<RecordingId> walked = await WalkAsync(Query(network, descending: true, perPage: 2));
+
+        Assert.Equal(
+            stocked
+                .OrderByDescending(recording => recording.StartedAtActual)
+                .ThenByDescending(recording => recording.Id.Value, ByTheOrderTheDatabaseReadsThem.Comparer)
+                .Select(recording => recording.Id),
+            walked);
+    }
+
+    [Theory(DisplayName = "D-11: walking oldest first, or by when the programme starts, reaches every recording once too")]
+    [InlineData(RecordingSort.StartedAt, false)]
+    [InlineData(RecordingSort.ProgrammeStartsAt, false)]
+    [InlineData(RecordingSort.ProgrammeStartsAt, true)]
+    public async Task WalkingInTheOtherOrdersReachesEveryRecordingOnceToo(RecordingSort sort, bool descending)
+    {
+        int network = await StockedAsync(0);
+        List<Recording> stocked = [];
+
+        foreach (int eventId in Enumerable.Range(1, 5))
+        {
+            stocked.Add(await AddAsync(
+                network,
+                eventId,
+                startedAt: Noon.AddMinutes(eventId % 2),
+                programmeStartsAt: Noon.AddHours(eventId % 3)));
+        }
+
+        IReadOnlyList<RecordingId> walked = await WalkAsync(Query(network, sort: sort, descending: descending, perPage: 2));
+
+        Assert.Equal(5, walked.Count);
+        Assert.Equal(stocked.Select(recording => recording.Id).Order(ById).ToArray(), walked.Order(ById).ToArray());
+    }
+
+    [Fact(DisplayName = "D-11: a recording thrown away while the list is walked neither skips nor repeats another")]
+    public async Task ARecordingThrownAwayWhileTheListIsWalkedNeitherSkipsNorRepeatsAnother()
+    {
+        int network = await StockedAsync(0);
+
+        foreach (int eventId in Enumerable.Range(1, 6))
+        {
+            await AddAsync(network, eventId, outcome: RecordingOutcome.Complete);
+        }
+
+        RecordingListing first = await ListingAsync(Query(network, descending: true, perPage: 2));
+        RecordingId thrownAway = first.Found.Items[0].Id;
+
+        await using (AsyncServiceScope context = container.CreateAsyncScope())
+        {
+            Assert.Equal(RecordingDiscard.Discarded, await Directory(context).DiscardAsync(thrownAway, CancellationToken.None));
+        }
+
+        IReadOnlyList<RecordingId> rest = await WalkAsync(Query(
+            network,
+            descending: true,
+            perPage: 2,
+            after: first.Next));
+
+        Assert.Equal(4, rest.Count);
+        Assert.DoesNotContain(first.Found.Items[1].Id, rest);
+        Assert.Equal(6, first.Found.Items.Count + rest.Count);
+    }
+
+    [Fact(DisplayName = "D-11: a page reached by a position is numbered as the page its first recording falls on, and the last names no next")]
+    public async Task APageReachedByAPositionIsNumberedAsThePageItsFirstRecordingFallsOn()
+    {
+        int network = await StockedAsync(5);
+
+        RecordingListing first = await ListingAsync(Query(network, descending: true, perPage: 2));
+        RecordingListing second = await ListingAsync(Query(network, descending: true, perPage: 2, after: first.Next));
+        RecordingListing third = await ListingAsync(Query(network, descending: true, perPage: 2, after: second.Next));
+
+        Assert.Equal([1, 2, 3], new[] { first, second, third }.Select(listing => listing.Found.CurrentPage));
+        Assert.All(new[] { first, second, third }, listing => Assert.Equal(5, listing.Found.Total));
+        Assert.All(new[] { first, second, third }, listing => Assert.Equal(3, listing.Found.LastPage));
+        Assert.Single(third.Found.Items);
+        Assert.Null(third.Next);
+    }
+
+    [Fact(DisplayName = "D-11: a page asked for by its number names the position after its last recording too")]
+    public async Task APageAskedForByItsNumberNamesThePositionAfterItsLastRecordingToo()
+    {
+        int network = await StockedAsync(5);
+
+        RecordingListing numbered = await ListingAsync(Query(network, descending: true, perPage: 2, page: 2));
+        RecordingListing walked = await ListingAsync(Query(network, descending: true, perPage: 2, after: numbered.Next));
+
+        Assert.NotNull(numbered.Next);
+        Assert.Equal(3, walked.Found.CurrentPage);
+        Assert.Single(walked.Found.Items);
+    }
+
+    [Fact]
+    public async Task ARecordingIsFoundByTheNameTheLedgerHolds()
+    {
+        int network = await StockedAsync(0);
+        Recording recording = await AddAsync(network, 1);
+
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        Recording? found = await Directory(context).FindAsync(recording.Id, CancellationToken.None);
+
+        Assert.NotNull(found);
+        Assert.Equal(recording.Id, found.Id);
+        Assert.Null(await Directory(context).FindAsync(RecordingId.New(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AStopByHandLeavesTheReasonOnTheRowAndSaysThisSideAskedForIt()
+    {
+        int network = await StockedAsync(0);
+        Recording recording = await AddAsync(network, 1);
+
+        RecordingHalt halt;
+
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
+        {
+            halt = await Directory(writing).HaltAsync(
+                recording.Id,
+                new RecordingStopReason("the wrong programme"),
+                Noon.AddMinutes(30),
+                CancellationToken.None);
+        }
+
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording read = await Store(reading).Set<Recording>().SingleAsync(held => held.Id == recording.Id);
+        OutcomeDetail kept = Assert.Single(read.OutcomeDetail);
+
+        Assert.Equal(RecordingHalt.Written, halt);
+        Assert.Equal(RecordingFault.StoppedByHand, kept.Fault);
+        Assert.Equal("the wrong programme", kept.Note);
+        Assert.Equal(Noon.AddMinutes(30), read.AbortedAt);
+        Assert.Null(read.Outcome);
+    }
+
+    [Fact]
+    public async Task AStopIsRefusedForARecordingThatHasEndedAndForOneNobodyHas()
+    {
+        int network = await StockedAsync(0);
+        Recording ended = await AddAsync(network, 1, outcome: RecordingOutcome.Complete);
+
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        IRecordingDirectory directory = Directory(context);
+        var reason = new RecordingStopReason("too late");
+
+        Assert.Equal(
+            RecordingHalt.AlreadyEnded,
+            await directory.HaltAsync(ended.Id, reason, Noon.AddHours(2), CancellationToken.None));
+        Assert.Equal(
+            RecordingHalt.NoSuchRecording,
+            await directory.HaltAsync(RecordingId.New(), reason, Noon, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ADeletionThatLeftFilesBehindStaysOnTheRowAndIsReadBackByTheListAndTheDetail()
+    {
+        int network = await StockedAsync(0);
+        Recording ended = await AddAsync(network, 1, outcome: RecordingOutcome.Complete);
+
+        RecordingErasureNote noted;
+
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
+        {
+            noted = await Directory(writing).NoteErasureAsync(
+                ended.Id,
+                RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 2),
+                Noon.AddHours(3),
+                CancellationToken.None);
+        }
+
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording? found = await Directory(reading).FindAsync(ended.Id, CancellationToken.None);
+        Recording listed = Assert.Single((await ListAsync(Query(network))).Items);
+
+        Assert.Equal(RecordingErasureNote.Noted, noted);
+        Assert.NotNull(found);
+        Assert.Equal(Noon.AddHours(3), found.LeftBehindAt);
+        Assert.Equal(2, found.FilesLeftBehind);
+        Assert.Equal(Noon.AddHours(3), listed.LeftBehindAt);
+        Assert.Equal(2, listed.FilesLeftBehind);
+        Assert.Equal(RecordingOutcome.Complete, found.Outcome);
+    }
+
+    [Fact]
+    public async Task ALaterDeletionThatTookEverythingClearsTheMarkOnTheRow()
+    {
+        int network = await StockedAsync(0);
+        Recording ended = await AddAsync(network, 1, outcome: RecordingOutcome.Truncated);
+
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
+        {
+            await Directory(writing).NoteErasureAsync(
+                ended.Id,
+                RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1),
+                Noon.AddHours(3),
+                CancellationToken.None);
+        }
+
+        await using (AsyncServiceScope clearing = container.CreateAsyncScope())
+        {
+            await Directory(clearing).NoteErasureAsync(
+                ended.Id,
+                RecordingErasure.Erased(1),
+                Noon.AddHours(4),
+                CancellationToken.None);
+        }
+
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording read = await Store(reading).Set<Recording>().SingleAsync(held => held.Id == ended.Id);
+
+        Assert.Null(read.LeftBehindAt);
+        Assert.Null(read.FilesLeftBehind);
+    }
+
+    [Fact]
+    public async Task NoDeletionIsNotedOnARecordingStillBeingWrittenOrOnOneNobodyHas()
+    {
+        int network = await StockedAsync(0);
+        Recording writing = await AddAsync(network, 1);
+        RecordingErasure leftBehind = RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1);
+
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        IRecordingDirectory directory = Directory(context);
+
+        Assert.Equal(
+            RecordingErasureNote.StillRecording,
+            await directory.NoteErasureAsync(writing.Id, leftBehind, Noon.AddHours(3), CancellationToken.None));
+        Assert.Equal(
+            RecordingErasureNote.NoSuchRecording,
+            await directory.NoteErasureAsync(RecordingId.New(), leftBehind, Noon.AddHours(3), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task TheTableRefusesACountOfFilesLeftBehindThatSaysNothingOfWhen()
+    {
+        int network = await StockedAsync(0);
+        Recording ended = await AddAsync(network, 1, outcome: RecordingOutcome.Complete);
+
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "UPDATE recording SET files_left_behind = 1 WHERE id = @id",
+            connection);
+        command.Parameters.AddWithValue("id", ended.Id.Value);
+
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+
+        Assert.Equal("ck_recording_left_behind", refused.ConstraintName);
+    }
+
+    [Fact]
+    public async Task AskingForMoreThanAPageEverHoldsIsAnsweredWithAsMuchAsItHoldsAndSaysSo()
+    {
+        int network = await StockedAsync(0);
+        await FloodAsync(network, RecordingQuery.MostPerPage + 1);
+
+        PaginatedList<Recording> found = await ListAsync(
+            Query(network, perPage: RecordingQuery.MostPerPage + 1));
+
+        Assert.Equal(RecordingQuery.MostPerPage + 1, found.Total);
+        Assert.Equal(RecordingQuery.MostPerPage, found.Items.Count);
+        Assert.Equal(RecordingQuery.MostPerPage, found.PerPage);
+        Assert.Equal(2, found.LastPage);
+    }
+
+    [Fact]
+    public async Task ThePageSizeAnsweredIsTheNumberOfRowsThePageWasCutTo()
+    {
+        int network = await StockedAsync(7);
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, perPage: 3));
+
+        Assert.Equal(found.Items.Count, found.PerPage);
+        Assert.Equal(3, found.PerPage);
+    }
+
+    [Fact]
+    public async Task EveryRowIsHandedOverExactlyOnceAcrossThePagesThatHoldThem()
+    {
+        int network = await StockedAsync(0);
+        await LevelAsync(network, 9);
+
+        var seen = new List<Guid>();
+
+        foreach (int page in Enumerable.Range(1, 5))
+        {
+            PaginatedList<Recording> held = await ListAsync(Query(network, perPage: 2, page: page));
+
+            seen.AddRange(held.Items.Select(recording => recording.Id.Value));
+        }
+
+        Assert.Equal(9, seen.Count);
+        Assert.Equal(9, seen.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task AWordInTheTitleBringsBackTheRecordingThatCarriesItAndLeavesTheRest()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "Zephyr diary");
+        await AddAsync(network, 2, name: "Harbour lights");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "zephyr"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+        Assert.Equal(1, found.Total);
+    }
+
+    [Fact]
+    public async Task APerformerNamedOnlyInTheDetailIsFoundBecauseTheDetailIsSearchedToo()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "Zephyr diary", extended: "◇出演者 みかん博士");
+        await AddAsync(network, 2, name: "Harbour lights");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "みかん博士"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task EveryWordHasToBeSomewhereInTheRecordedTextAndAnyOfTheThreeMayCarryIt()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(
+            network,
+            1,
+            name: "Zephyr diary",
+            summary: "A walk along the water",
+            extended: "◇出演者 みかん博士");
+        await AddAsync(network, 2, name: "Zephyr diary", summary: "A walk up the hill");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "zephyr みかん博士"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task AnUnderscoreInATitleIsAskedForLiterallyRatherThanAsAnyLetterAtAll()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "a_b");
+        await AddAsync(network, 2, name: "axb");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "a_b"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task APerCentSignInATitleIsAskedForLiterallyToo()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "100% cotton");
+        await AddAsync(network, 2, name: "100 cotton");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "100%"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task ATitleCopiedOutOfTheGuideInFullWidthFindsTheRecordingOfIt()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "ZEPHYR diary");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "Ｚｅｐｈｙｒ"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task ATitleWrittenInHalfWidthKanaIsFoundByTheWideFormAndTheOtherWayRound()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "ｶﾞｰﾃﾞﾝ特集");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "ガーデン"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task AKeywordThatMatchesNothingLeavesAnEmptyPageRatherThanTheWholeShelf()
+    {
+        int network = await StockedAsync(3);
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "zephyr"));
+
+        Assert.Empty(found.Items);
+        Assert.Equal(0, found.Total);
+    }
+
+    [Fact]
+    public async Task NamingNoKeywordLeavesEveryRowWhereItWas()
+    {
+        int network = await StockedAsync(3);
+
+        PaginatedList<Recording> everything = await ListAsync(Query(network));
+        PaginatedList<Recording> spaces = await ListAsync(Query(network, keyword: "　"));
+
+        Assert.Equal(3, everything.Total);
+        Assert.Equal(
+            everything.Items.Select(recording => recording.Id.Value),
+            spaces.Items.Select(recording => recording.Id.Value));
+    }
+
+    [Fact]
+    public async Task RowsThatStartedAtTheSameMomentAreReadInAnOrderThatDoesNotMove()
+    {
+        int network = await StockedAsync(0);
+        await LevelAsync(network, 9);
+
+        PaginatedList<Recording> first = await ListAsync(Query(network, perPage: 9));
+        PaginatedList<Recording> again = await ListAsync(Query(network, perPage: 9));
+
+        Assert.Equal(
+            first.Items.Select(recording => recording.Id.Value).ToArray(),
+            again.Items.Select(recording => recording.Id.Value).ToArray());
+    }
+
+    private static RecordingQuery Query(
+        int network,
+        string? keyword = null,
+        RecordingStanding? standing = null,
+        IReadOnlyList<RecordingOutcome>? outcomes = null,
+        DropReading? drops = null,
+        IReadOnlyList<ProgrammeService>? channels = null,
+        DateTime? from = null,
+        DateTime? to = null,
+        RecordingSort sort = RecordingSort.StartedAt,
+        bool descending = false,
+        int? page = null,
+        int? perPage = null,
+        RecordingCursor? after = null)
+    {
+        RecordingQuery? query = RecordingQuery.For(
+            from,
+            to,
+            sort,
+            descending,
+            page,
+            perPage,
+            new RecordingConditions
+            {
+                Keyword = keyword,
+                Standing = standing,
+                Outcomes = outcomes,
+                Drops = drops,
+                Channels = channels ?? [.. Enumerable.Range(1024, 8).Select(service =>
+                    new ProgrammeService(network, service))],
+            },
+            after);
+
+        return query ?? throw new InvalidOperationException("The query this test asks for is one the guard takes.");
+    }
+
+    private static IRecordingDirectory Directory(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingDirectory>();
+
+    private static CarinaDbContext Store(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+
+    private async Task<PaginatedList<Recording>> ListAsync(RecordingQuery query)
+        => (await ListingAsync(query)).Found;
+
+    private async Task<RecordingListing> ListingAsync(RecordingQuery query)
+    {
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+
+        return await Directory(context).ListAsync(query, AsShipped, CancellationToken.None);
+    }
+
+    private async Task<IReadOnlyList<RecordingId>> WalkAsync(RecordingQuery query)
+    {
+        List<RecordingId> walked = [];
+        RecordingQuery asked = query;
+
+        while (true)
+        {
+            RecordingListing listing = await ListingAsync(asked);
+            walked.AddRange(listing.Found.Items.Select(recording => recording.Id));
+
+            if (listing.Next is not { } next)
+            {
+                return walked;
+            }
+
+            asked = RecordingQuery.For(
+                query.From,
+                query.To,
+                query.Sort,
+                query.Descending,
+                null,
+                query.PerPage,
+                new RecordingConditions { Channels = query.Channels },
+                next) ?? throw new InvalidOperationException("The position a page named is one the guard takes.");
+        }
+    }
+
+    private async Task FloodAsync(int network, int rows)
+    {
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+
+        foreach (int eventId in Enumerable.Range(1, rows))
+        {
+            RecordingId id = RecordingId.New();
+            DateTime started = Noon.AddSeconds(eventId);
+
+            Store(context).Add(Recording.Begin(
+                id,
+                null,
+                new ProgrammeRef(new NetworkId(network), new ServiceId(1024), new EventId(eventId), started),
+                new OutputRoot("bulk"),
+                RecordingFileName.For(id, ".m2ts"),
+                started,
+                started.AddHours(1),
+                new ProgrammeSnapshot(
+                    "A programme",
+                    string.Empty,
+                    string.Empty,
+                    [],
+                    started,
+                    AudioMode.Undetermined,
+                    ProgrammeSnapshot.SoundsUnannounced),
+                null,
+                BroadcastGroupRole.Standalone,
+                started,
+                new TunerDeviceId("pt3-0")));
+        }
+
+        await Store(context).SaveChangesAsync();
+    }
+
+    private async Task LevelAsync(int network, int rows)
+    {
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+
+        foreach (int eventId in Enumerable.Range(1, rows))
+        {
+            RecordingId id = RecordingId.New();
+
+            Store(context).Add(Recording.Begin(
+                id,
+                null,
+                new ProgrammeRef(new NetworkId(network), new ServiceId(1024), new EventId(eventId), Noon),
+                new OutputRoot("bulk"),
+                RecordingFileName.For(id, ".m2ts"),
+                Noon,
+                Noon.AddHours(1),
+                new ProgrammeSnapshot(
+                    "A programme",
+                    string.Empty,
+                    string.Empty,
+                    [],
+                    Noon,
+                    AudioMode.Undetermined,
+                    ProgrammeSnapshot.SoundsUnannounced),
+                null,
+                BroadcastGroupRole.Standalone,
+                Noon,
+                new TunerDeviceId("pt3-0")));
+        }
+
+        await Store(context).SaveChangesAsync();
+    }
+
+    private async Task<int> StockedAsync(int recordings)
+    {
+        int network = Interlocked.Increment(ref networks) + 40_000;
+
+        foreach (int eventId in Enumerable.Range(1, recordings))
+        {
+            await AddAsync(network, eventId);
+        }
+
+        return network;
+    }
+
+    private async Task<Recording> AddAsync(
+        int network,
+        int eventId,
+        int serviceId = 1024,
+        DateTime? startedAt = null,
+        DateTime? programmeStartsAt = null,
+        RecordingOutcome? outcome = null,
+        DropCounters? counters = null,
+        long? scrambled = null,
+        string name = "A programme",
+        string summary = "",
+        string extended = "",
+        bool endedScrambled = false,
+        bool descrambled = false)
+    {
+        RecordingId id = RecordingId.New();
+        DateTime started = startedAt ?? Noon.AddMinutes(eventId);
+
+        Recording recording = Recording.Begin(
+            id,
+            null,
+            new ProgrammeRef(
+                new NetworkId(network),
+                new ServiceId(serviceId),
+                new EventId(eventId),
+                programmeStartsAt ?? started),
+            new OutputRoot("bulk"),
+            RecordingFileName.For(id, ".m2ts"),
+            started,
+            started.AddHours(1),
+            new ProgrammeSnapshot(
+                name,
+                summary,
+                extended,
+                [],
+                started,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
+            null,
+            BroadcastGroupRole.Standalone,
+            started,
+            new TunerDeviceId("pt3-0"));
+
+        if (counters is { } counted)
+        {
+            recording.Measure(counted, DropTimeline.Unlocated, scrambled, 0, started.AddMinutes(1));
+        }
+
+        if (outcome is { } settled)
+        {
+            recording.Wrote(TimeSpan.FromHours(1));
+
+            if (settled is not RecordingOutcome.Complete)
+            {
+                recording.Note(new OutcomeDetail(RecordingFault.DriverLost, null, string.Empty, started));
+            }
+
+            recording.Abort(started.AddHours(1));
+            recording.Settle(settled, settled is RecordingOutcome.Failed ? 0 : 1_000, started.AddHours(1));
+        }
+
+        if (endedScrambled)
+        {
+            recording.Wrote(TimeSpan.FromHours(1));
+            recording.Note(new OutcomeDetail(RecordingFault.ScramblingUnresolved, null, string.Empty, started));
+            recording.Abort(started.AddHours(1));
+            recording.Settle(RecordingOutcome.Complete, 1_000, started.AddHours(1));
+        }
+
+        if (descrambled)
+        {
+            recording.Descrambled(started.AddDays(1));
+        }
+
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        Store(context).Add(recording);
+        await Store(context).SaveChangesAsync();
+
+        return recording;
+    }
+
+    [Fact]
+    public async Task ARecordingThatHasEndedLeavesTheTableAltogether()
+    {
+        Recording ended = await WrittenAsync(5001, settled: true);
+        Recording beside = await WrittenAsync(5002, settled: true);
+
+        await using (AsyncServiceScope discarding = container.CreateAsyncScope())
+        {
+            Assert.Equal(
+                RecordingDiscard.Discarded,
+                await Directory(discarding).DiscardAsync(ended.Id, Cancel));
+        }
+
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+
+        Assert.Null(await Directory(reading).FindAsync(ended.Id, Cancel));
+        Assert.NotNull(await Directory(reading).FindAsync(beside.Id, Cancel));
+        Assert.Equal(0, await Rows(ended.Id));
+        Assert.Equal(1, await Rows(beside.Id));
+    }
+
+    [Fact]
+    public async Task ARecordingStillBeingWrittenKeepsItsRow()
+    {
+        Recording writing = await WrittenAsync(5011, settled: false);
+
+        await using (AsyncServiceScope discarding = container.CreateAsyncScope())
+        {
+            Assert.Equal(
+                RecordingDiscard.StillRecording,
+                await Directory(discarding).DiscardAsync(writing.Id, Cancel));
+        }
+
+        Assert.Equal(1, await Rows(writing.Id));
+    }
+
+    [Fact]
+    public async Task ARecordingNothingEverWroteDownIsSaidToBeMissingRatherThanDiscarded()
+    {
+        await using AsyncServiceScope discarding = container.CreateAsyncScope();
+
+        Assert.Equal(
+            RecordingDiscard.NoSuchRecording,
+            await Directory(discarding).DiscardAsync(RecordingId.New(), Cancel));
+    }
+
+    [Fact]
+    public async Task DiscardingTheSameRecordingTwiceSaysItIsGoneTheSecondTime()
+    {
+        Recording ended = await WrittenAsync(5021, settled: true);
+
+        await using AsyncServiceScope discarding = container.CreateAsyncScope();
+        IRecordingDirectory directory = Directory(discarding);
+
+        Assert.Equal(RecordingDiscard.Discarded, await directory.DiscardAsync(ended.Id, Cancel));
+        Assert.Equal(RecordingDiscard.NoSuchRecording, await directory.DiscardAsync(ended.Id, Cancel));
+    }
+
+    [Fact(DisplayName = "BR-LS-001: the store throws away a recording's row only when the recording says it is no longer being written")]
+    public async Task TheStoreThrowsAwayOnlyARecordingThatIsNoLongerWritten()
+    {
+        IReadOnlyList<Recording> matrix = await RecordingMatrix.LaidAsync(container);
+
+        Assert.Contains(matrix, recording => recording.IsInFlight);
+
+        foreach (Recording recording in matrix)
+        {
+            await using AsyncServiceScope context = container.CreateAsyncScope();
+
+            Assert.Equal(
+                recording.IsInFlight ? RecordingDiscard.StillRecording : RecordingDiscard.Discarded,
+                await Directory(context).DiscardAsync(recording.Id, CancellationToken.None));
+        }
+    }
+
+    private async Task<int> Rows(RecordingId id)
+    {
+        await using AsyncServiceScope counting = container.CreateAsyncScope();
+
+        return await Store(counting).Set<Recording>().CountAsync(recording => recording.Id == id, Cancel);
+    }
+
+    private async Task<Recording> WrittenAsync(int eventId, bool settled)
+    {
+        RecordingId id = RecordingId.New();
+        Recording begun = Recording.Begin(
+            id,
+            ReservationId.New(),
+            new ProgrammeRef(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), Airs),
+            new OutputRoot("primary"),
+            RecordingFileName.For(id, ".ts"),
+            Airs,
+            Airs.AddMinutes(30),
+            new ProgrammeSnapshot(
+                "A programme",
+                string.Empty,
+                string.Empty,
+                [],
+                Airs.AddHours(-6),
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
+            null,
+            BroadcastGroupRole.Standalone,
+            Airs,
+            new TunerDeviceId("adapter0"));
+
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        IRecordingRepository repository = Recordings(writing);
+        await repository.AddAsync(begun, Cancel);
+
+        if (settled)
+        {
+            begun.Abort(Airs.AddMinutes(30));
+            begun.Settle(RecordingOutcome.Complete, 1_000_000, Airs.AddMinutes(30));
+            await repository.SaveAsync(begun, Cancel);
+        }
+
+        return begun;
+    }
+
+    private static IRecordingRepository Recordings(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingRepository>();
+}

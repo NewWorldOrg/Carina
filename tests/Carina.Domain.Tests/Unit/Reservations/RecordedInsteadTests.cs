@@ -1,6 +1,6 @@
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
-using Carina.Domain.Tests.Recordings;
+using Carina.Domain.Tests.Unit.Recordings;
 
 using static Carina.Domain.Tests.Unit.Reservations.ReservationFactory;
 

@@ -1,0 +1,427 @@
+using Carina.Domain.Captions;
+using Carina.Domain.Driver;
+using Carina.Domain.Recordings;
+using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.DataBroadcast;
+using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
+using Carina.Infrastructure.Tests.Integrity;
+using Carina.Infrastructure.Thumbnails;
+using Carina.TestSupport;
+
+using Microsoft.Extensions.Logging.Abstractions;
+
+using Puppis.Contracts;
+
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
+
+[Trait("Category", "Unit")]
+public sealed class DriverRecordingFileEraserTests : IDisposable
+{
+    private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private static readonly OutputRoot Primary = new("primary");
+
+    private readonly ErasingDriverClient driver = new();
+
+    private readonly HeldSurvey survey = new HeldSurvey().Declaring(Primary, ("beside.ts", 188L));
+
+    private readonly string gallery = Directory.CreateTempSubdirectory("carina-erase-pictures-").FullName;
+
+    private readonly string shelf = Directory.CreateTempSubdirectory("carina-erase-captions-").FullName;
+
+    public void Dispose()
+    {
+        Directory.Delete(gallery, recursive: true);
+        Directory.Delete(shelf, recursive: true);
+    }
+
+    [Fact]
+    public async Task BrLs001TheCaptionsTakenFromTheRecordingGoWithItAndAreCounted()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        string captions = Captioned(id);
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(3, erased.FilesRemoved);
+        Assert.False(File.Exists(drawn));
+        Assert.False(File.Exists(captions));
+    }
+
+    [Fact(DisplayName = "BR-BS-001: the record of the data broadcast taken from a recording thrown away goes with it, as its captions do, and is counted")]
+    public async Task TheRecordOfTheDataBroadcastGoesWithTheRecordingThrownAway()
+    {
+        RecordingId id = RecordingId.New();
+        string captions = Captioned(id);
+        string record = Recorded(id);
+        string neighbour = Recorded(RecordingId.New());
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(3, erased.FilesRemoved);
+        Assert.False(File.Exists(captions));
+        Assert.False(File.Exists(record));
+        Assert.True(File.Exists(neighbour));
+    }
+
+    [Fact]
+    public async Task ARecordOfTheDataBroadcastThatWillNotComeOffTheDiskIsReportedAsLeftBehind()
+    {
+        RecordingId id = RecordingId.New();
+        Directory.CreateDirectory(Path.Combine(shelf, id.Wire + DataBroadcastShelf.Extension, "held"));
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal((ErasureFault.FileLeftBehind, (int?)1), (erased.Fault, erased.FilesLeft));
+    }
+
+    [Fact]
+    public async Task TheCaptionsOfAnotherRecordingAreLeftWhereTheyAre()
+    {
+        RecordingId asked = RecordingId.New();
+        string neighbour = Captioned(RecordingId.New());
+        Captioned(asked);
+
+        await Eraser().EraseAsync(asked, Primary, Cancel);
+
+        Assert.True(File.Exists(neighbour));
+    }
+
+    [Fact]
+    public async Task WhereNoDirectoryIsConfiguredForCaptionsTheRecordingAndItsPictureStillGo()
+    {
+        RecordingId id = RecordingId.New();
+        Drawn(id);
+
+        RecordingErasure erased = await Built(gallery, null).EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(2, erased.FilesRemoved);
+    }
+
+    [Fact]
+    public async Task CaptionsThatWillNotComeOffTheDiskAreReportedAsLeftBehind()
+    {
+        RecordingId id = RecordingId.New();
+        Directory.CreateDirectory(Path.Combine(shelf, id.Wire + CaptionSettings.Extension, "held"));
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.False(erased.EverythingIsGone);
+        Assert.Equal(ErasureFault.FileLeftBehind, erased.Fault);
+        Assert.Equal(1, erased.FilesLeft);
+    }
+
+    [Fact]
+    public async Task AFileTheOwningProcessCouldNotRemoveCountsTheCaptionsLeftBesideIt()
+    {
+        RecordingId id = RecordingId.New();
+        Drawn(id);
+        Captioned(id);
+        driver.Answer = DriverCall<RecordingErasedDto>.Refused(new DriverProblem(SessionRefusalTitles.FileLeftBehind, []));
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.FileLeftBehind, erased.Fault);
+        Assert.Equal(3, erased.FilesLeft);
+    }
+
+    [Fact]
+    public async Task TheAppNeverRemovesTheRecordingItselfAndAsksTheProcessThatOwnsTheRootInstead()
+    {
+        RecordingId id = RecordingId.New();
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal([(id.Wire, "primary")], driver.Asked);
+    }
+
+    [Fact]
+    public async Task TheRecordingAndItsPictureAreBothCountedWhenBothWereThere()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(2, erased.FilesRemoved);
+        Assert.False(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task ARecordingWithNoPictureDrawnYetIsStillThrownAway()
+    {
+        RecordingErasure erased = await Eraser().EraseAsync(RecordingId.New(), Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(1, erased.FilesRemoved);
+    }
+
+    [Fact]
+    public async Task AFileTheOwningProcessSaysWasAlreadyGoneIsNotCounted()
+    {
+        driver.Answer = DriverCall<RecordingErasedDto>.Reached(
+            new RecordingErasedDto { FileRemoved = false });
+
+        RecordingErasure erased = await Eraser().EraseAsync(RecordingId.New(), Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(0, erased.FilesRemoved);
+    }
+
+    [Fact]
+    public async Task NothingBesideTheRecordingAskedForIsTouched()
+    {
+        RecordingId asked = RecordingId.New();
+        RecordingId beside = RecordingId.New();
+        string neighbour = Drawn(beside);
+        Drawn(asked);
+
+        await Eraser().EraseAsync(asked, Primary, Cancel);
+
+        Assert.True(File.Exists(neighbour));
+    }
+
+    [Fact]
+    public async Task WhereNoDirectoryIsConfiguredForPicturesTheRecordingStillGoes()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+
+        RecordingErasure erased = await EraserWithNowhereForPictures().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(1, erased.FilesRemoved);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task APictureThatWillNotComeOffTheDiskIsReportedEvenThoughTheRecordingWent()
+    {
+        RecordingId id = RecordingId.New();
+        Directory.CreateDirectory(Path.Combine(gallery, id.Wire + ThumbnailJob.Extension));
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.FileLeftBehind, refused.Fault);
+        Assert.Equal(0, refused.FilesRemoved);
+        Assert.Equal(1, refused.FilesLeft);
+    }
+
+    [Fact]
+    public async Task ADriverThatCannotBeReachedLeavesThePictureWhereItIs()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        driver.Answer = DriverCall<RecordingErasedDto>.Unreachable("the socket was not there");
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.DriverUnreachable, refused.Fault);
+        Assert.Equal("the socket was not there", refused.Note);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task ADriverTooOldToThrowARecordingAwayLeavesThePictureWhereItIs()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        driver.Answer = DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.CapabilityMissing, ["it declares no such thing"]));
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.DriverRefused, refused.Fault);
+        Assert.Contains("it declares no such thing", refused.Note!, StringComparison.Ordinal);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task ARootTheOwningProcessCannotReachIsStillARootOutOfReachHere()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        driver.Answer = DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.OutputUnavailable, ["the mount has gone"]));
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.RootOutOfReach, refused.Fault);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task AFileTheOwningProcessCouldNotRemoveIsStillAFileLeftBehindHere()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        driver.Answer = DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.FileLeftBehind, ["permission denied"]));
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.FileLeftBehind, refused.Fault);
+        Assert.Equal(2, refused.FilesLeft);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task AFileTheOwningProcessCouldNotRemoveWithNoPictureBesideItIsTheOneFileLeft()
+    {
+        driver.Answer = DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.FileLeftBehind, ["permission denied"]));
+
+        RecordingErasure refused = await Eraser().EraseAsync(RecordingId.New(), Primary, Cancel);
+
+        Assert.Equal(ErasureFault.FileLeftBehind, refused.Fault);
+        Assert.Equal(1, refused.FilesLeft);
+    }
+
+    [Fact]
+    public async Task AnErasureThatLeftNothingBehindCountsNothingLeft()
+    {
+        driver.Answer = DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.OutputUnavailable, ["the mount has gone"]));
+
+        RecordingErasure refused = await Eraser().EraseAsync(RecordingId.New(), Primary, Cancel);
+
+        Assert.Null(refused.FilesLeft);
+
+        driver.Answer = DriverCall<RecordingErasedDto>.Reached(new RecordingErasedDto { FileRemoved = true });
+
+        Assert.Null((await Eraser().EraseAsync(RecordingId.New(), Primary, Cancel)).FilesLeft);
+    }
+
+    [Fact]
+    public async Task ARootTheOwningProcessNoLongerDeclaresIsRefusedBeforeAnythingIsAsked()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        driver.Declaring = DriverCall<IReadOnlyList<StorageRootDto>>.Reached(
+            [new StorageRootDto { Name = "elsewhere", Writable = true }]);
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.RootOutOfReach, refused.Fault);
+        Assert.Empty(driver.Asked);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task ARootThisProcessCannotReadIsRefusedBeforeAnythingIsAsked()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        survey.DeclaringOutOfReach(Primary);
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.RootOutOfReach, refused.Fault);
+        Assert.Empty(driver.Asked);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task ARootHoldingNothingAtAllIsRefusedBeforeAnythingIsAsked()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        survey.Declaring(Primary);
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.RootOutOfReach, refused.Fault);
+        Assert.Empty(driver.Asked);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task TheLastRecordingLeftInARootIsStillAskedFor()
+    {
+        RecordingId id = RecordingId.New();
+        survey.Declaring(Primary, (RecordingFile.Of(id.Wire), 188L));
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal([(id.Wire, "primary")], driver.Asked);
+    }
+
+    [Fact]
+    public async Task ADeclarationThatCouldNotBeReadIsNotARootThatIsMissing()
+    {
+        RecordingId id = RecordingId.New();
+        driver.Declaring = DriverCall<IReadOnlyList<StorageRootDto>>.Unreachable("the socket was not there");
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.DriverUnreachable, refused.Fault);
+        Assert.Empty(driver.Asked);
+    }
+
+    [Fact]
+    public async Task ARootThatReallyHoldsAnotherRecordingIsWalkedBeforeTheOwningProcessIsAsked()
+    {
+        RecordingId id = RecordingId.New();
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(["primary"], survey.Asked);
+    }
+
+    [Fact]
+    public void TheNameTheLedgerHoldsIsTheNameTheOwningProcessDerivesForItself()
+    {
+        RecordingId id = RecordingId.New();
+
+        Assert.Equal(".ts", RecordingFile.Extension);
+        Assert.Equal($"{id.Wire}.ts", RecordingFile.Of(id.Wire));
+        Assert.Equal(
+            RecordingFile.Of(id.Wire),
+            RecordingFileName.For(id, RecordingSettings.FileExtension).Value);
+    }
+
+    private string Drawn(RecordingId id)
+    {
+        string path = Path.Combine(gallery, id.Wire + ThumbnailJob.Extension);
+        File.WriteAllBytes(path, new byte[16]);
+
+        return path;
+    }
+
+    private string Captioned(RecordingId id)
+    {
+        string path = Path.Combine(shelf, id.Wire + CaptionSettings.Extension);
+        File.WriteAllBytes(path, new byte[16]);
+
+        return path;
+    }
+
+    private string Recorded(RecordingId id)
+    {
+        string path = Path.Combine(shelf, id.Wire + DataBroadcastShelf.Extension);
+        File.WriteAllBytes(path, new byte[16]);
+
+        return path;
+    }
+
+    private DriverRecordingFileEraser Eraser() => Built(gallery, shelf);
+
+    private DriverRecordingFileEraser EraserWithNowhereForPictures() => Built(null, null);
+
+    private DriverRecordingFileEraser Built(string? pictures, string? captions)
+        => new(
+            driver,
+            survey,
+            new ThumbnailSettings { WrittenTo = pictures },
+            new CaptionSettings { WrittenTo = captions },
+            NullLogger<DriverRecordingFileEraser>.Instance);
+}

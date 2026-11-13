@@ -1,6 +1,8 @@
 using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
+using Carina.Domain.Tests.Unit.Recordings;
 
 namespace Carina.Domain.Tests.Unit.Reservations;
 
@@ -61,5 +63,47 @@ public sealed class ProgrammeSnapshotTests
 
         Assert.Equal(AudioMode.Surround, snapshot.Audio);
         Assert.Equal(3, snapshot.Sounds);
+    }
+
+    [Fact(DisplayName = "a recording keeps the sound the guide announces when it begins, and what the reservation kept where the guide is still silent")]
+    public void ARecordingKeepsTheSoundTheGuideAnnounces()
+    {
+        ProgrammeSnapshot kept = RecordingFactory.Snapshot(AudioMode.Stereo, 1);
+
+        ProgrammeSnapshot both = kept.HeardFrom(Announced(AudioMode.DualMono, 2));
+        ProgrammeSnapshot silent = kept.HeardFrom(Announced(AudioMode.Undetermined, ProgrammeSnapshot.SoundsUnannounced));
+        ProgrammeSnapshot audioOnly = kept.HeardFrom(Announced(AudioMode.Surround, ProgrammeSnapshot.SoundsUnannounced));
+
+        Assert.Equal((AudioMode.DualMono, 2), (both.Audio, both.Sounds));
+        Assert.Same(kept, silent);
+        Assert.Equal((AudioMode.Surround, 1), (audioOnly.Audio, audioOnly.Sounds));
+        Assert.Equal(
+            (kept.Name, kept.Summary, kept.Extended, kept.Genres, kept.CapturedAt),
+            (both.Name, both.Summary, both.Extended, both.Genres, both.CapturedAt));
+    }
+
+    [Fact(DisplayName = "a guide that announces the sound the reservation already kept leaves the snapshot as it was")]
+    public void AGuideThatSaysTheSameLeavesTheSnapshotAsItWas()
+    {
+        ProgrammeSnapshot kept = RecordingFactory.Snapshot(AudioMode.Stereo, 1);
+
+        Assert.Same(kept, kept.HeardFrom(Announced(AudioMode.Stereo, 1)));
+    }
+
+    private static Programme Announced(AudioMode audio, int sounds)
+    {
+        ProgrammeRef programme = RecordingFactory.Programme();
+
+        return Programme.Rehydrate(
+            programme.Id,
+            new TransportStreamId(32736),
+            programme.StartsAt,
+            Now.AddMinutes(30),
+            "A programme",
+            string.Empty,
+            false,
+            Now,
+            audio: audio,
+            sounds: sounds);
     }
 }

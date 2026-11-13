@@ -1,0 +1,224 @@
+using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
+using Carina.Infrastructure.Configuration;
+using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Thumbnails;
+
+using Microsoft.Extensions.Configuration;
+
+namespace Carina.Infrastructure.Tests.Unit.Infra.Recordings;
+
+[Trait("Category", "Unit")]
+public sealed class RecordingSettingsTests
+{
+    [Fact]
+    public void TheRecorderComesWithATickItCanActuallyMeet()
+    {
+        RecordingSettings unset = RecordingSettings.Default;
+
+        Assert.Equal(TimeSpan.FromSeconds(10), unset.BeforeFirstTick);
+        Assert.Equal(TimeSpan.FromSeconds(5), unset.BetweenTicks);
+        Assert.Equal(TimeSpan.FromSeconds(25), unset.TuningLead);
+        Assert.Equal("primary", unset.OutputRoot.Value);
+        Assert.Equal(TimeSpan.FromMinutes(20), unset.UndecidedEndAhead);
+        Assert.Equal(".ts", RecordingSettings.FileExtension);
+    }
+
+    [Fact]
+    public void TheHeadIsEveryWaitBetweenBecomingDueAndTheFirstByteLanding()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(5), RecordingSettings.NoticingItIsDue);
+        Assert.Equal(TimeSpan.FromSeconds(10), RecordingSettings.WaitingForASeat);
+        Assert.Equal(TimeSpan.FromSeconds(5), RecordingSettings.WaitingForALock);
+        Assert.Equal(TimeSpan.FromSeconds(5), RecordingSettings.WaitingForTheFirstByte);
+
+        Assert.Equal(
+            RecordingSettings.NoticingItIsDue
+                + RecordingSettings.WaitingForASeat
+                + RecordingSettings.WaitingForALock
+                + RecordingSettings.WaitingForTheFirstByte,
+            RecordingSettings.LongestWayToTheFirstByte);
+        Assert.Equal(RecordingSettings.LongestWayToTheFirstByte, RecordingSettings.Default.TuningLead);
+        Assert.Equal(RecordingSettings.NoticingItIsDue, RecordingSettings.Default.BetweenTicks);
+    }
+
+    [Fact]
+    public void AHeadNoLongerThanTheGapBetweenTicksIsRefused()
+    {
+        ArgumentOutOfRangeException refused = Assert.Throws<ArgumentOutOfRangeException>(
+            () => Built(lead: TimeSpan.FromSeconds(5)));
+
+        Assert.Equal("tuningLead", refused.ParamName);
+        Assert.Throws<ArgumentOutOfRangeException>(() => Built(lead: TimeSpan.FromSeconds(5) - TimeSpan.FromTicks(1)));
+        Assert.Equal(
+            TimeSpan.FromSeconds(5) + TimeSpan.FromTicks(1),
+            Built(lead: TimeSpan.FromSeconds(5) + TimeSpan.FromTicks(1)).TuningLead);
+    }
+
+    [Fact]
+    public void ARecordingIsPreparedOneTickAndItsSettingUpAheadOfItsStart()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(5), RecordingSettings.SettingUp);
+        Assert.Equal(TimeSpan.FromSeconds(10), RecordingSettings.Default.StartingAhead);
+        Assert.Equal(
+            TimeSpan.FromSeconds(2) + RecordingSettings.SettingUp,
+            Built(between: TimeSpan.FromSeconds(2)).StartingAhead);
+    }
+
+    [Fact]
+    public void PreparingNoFurtherAheadThanOneTickIsRefused()
+    {
+        ArgumentOutOfRangeException refused = Assert.Throws<ArgumentOutOfRangeException>(
+            () => Built(startingAhead: TimeSpan.FromSeconds(5)));
+
+        Assert.Equal("startingAhead", refused.ParamName);
+        Assert.Equal(
+            TimeSpan.FromSeconds(5) + TimeSpan.FromTicks(1),
+            Built(startingAhead: TimeSpan.FromSeconds(5) + TimeSpan.FromTicks(1)).StartingAhead);
+    }
+
+    [Fact]
+    public void ATickWithNoGapBetweenItsTurnsIsRefused()
+    {
+        Assert.Equal(
+            "betweenTicks",
+            Assert.Throws<ArgumentOutOfRangeException>(() => Built(between: TimeSpan.Zero)).ParamName);
+        Assert.Equal(
+            "beforeFirstTick",
+            Assert.Throws<ArgumentOutOfRangeException>(() => Built(before: TimeSpan.Zero)).ParamName);
+        Assert.Equal(
+            "outputRoot",
+            Assert.Throws<ArgumentNullException>(
+                () => new RecordingSettings(
+                    TimeSpan.FromSeconds(10),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(15),
+                    null!,
+                    RecordingSettings.HoldingAnUnannouncedEnd)).ParamName);
+    }
+
+    [Fact]
+    public void ConfigurationThatSaysNothingLeavesTheRecorderAsItComes()
+    {
+        RecordingSettings read = Read(new Dictionary<string, string?>());
+
+        Assert.Equal(RecordingSettings.Default.BetweenTicks, read.BetweenTicks);
+        Assert.Equal(RecordingSettings.Default.TuningLead, read.TuningLead);
+        Assert.Equal(RecordingSettings.Default.OutputRoot, read.OutputRoot);
+        Assert.Equal(RecordingSettings.Default.UndecidedEndAhead, read.UndecidedEndAhead);
+        Assert.Equal(RecordingSettings.Default.StartingAhead, read.StartingAhead);
+    }
+
+    [Fact]
+    public void ARecordingWithNoAnnouncedEndIsHeldForLessThanTheSeatTheAllocationRolls()
+        => Assert.True(
+            RecordingSettings.HoldingAnUnannouncedEnd < RollingHorizon.Provisional,
+            "A window held further ahead than the tuner seat under it is a promise the allocation never made.");
+
+    [Fact]
+    public void AWindowHeldAsFarAheadAsTheSeatUnderItIsRefused()
+    {
+        ArgumentOutOfRangeException refused = Assert.Throws<ArgumentOutOfRangeException>(
+            () => Built(ahead: RollingHorizon.Provisional));
+
+        Assert.Equal("undecidedEndAhead", refused.ParamName);
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => Built(ahead: RollingHorizon.Provisional + TimeSpan.FromTicks(1)));
+        Assert.Equal(
+            RollingHorizon.Provisional - TimeSpan.FromTicks(1),
+            Built(ahead: RollingHorizon.Provisional - TimeSpan.FromTicks(1)).UndecidedEndAhead);
+    }
+
+    [Fact]
+    public void EverySettingTheSectionCarriesIsRead()
+    {
+        RecordingSettings read = Read(new Dictionary<string, string?>
+        {
+            ["Recording:BeforeFirstTick"] = "00:00:20",
+            ["Recording:BetweenTicks"] = "00:00:02",
+            ["Recording:TuningLead"] = "00:00:30",
+            ["Recording:OutputRoot"] = "archive",
+            ["Recording:UndecidedEndAhead"] = "00:25:00",
+            ["Recording:StartingAhead"] = "00:00:15",
+        });
+
+        Assert.Equal(TimeSpan.FromSeconds(20), read.BeforeFirstTick);
+        Assert.Equal(TimeSpan.FromSeconds(2), read.BetweenTicks);
+        Assert.Equal(TimeSpan.FromSeconds(30), read.TuningLead);
+        Assert.Equal("archive", read.OutputRoot.Value);
+        Assert.Equal(TimeSpan.FromMinutes(25), read.UndecidedEndAhead);
+        Assert.Equal(TimeSpan.FromSeconds(15), read.StartingAhead);
+    }
+
+    [Fact]
+    public void ASettingTheRecorderCouldNotRunOnIsNamedAtStartup()
+    {
+        Assert.Equal(
+            "tuningLead",
+            Assert.Throws<ArgumentException>(
+                () => Read(new Dictionary<string, string?> { ["Recording:TuningLead"] = "00:00:01" })).ParamName);
+
+        Assert.Equal(
+            "BetweenTicks",
+            Assert.Throws<ArgumentException>(
+                () => Read(new Dictionary<string, string?> { ["Recording:BetweenTicks"] = "every minute" })).ParamName);
+
+        Assert.Equal(
+            "OutputRoot",
+            Assert.Throws<ArgumentException>(
+                () => Read(new Dictionary<string, string?> { ["Recording:OutputRoot"] = "/srv/recordings" })).ParamName);
+
+        Assert.Equal(
+            "undecidedEndAhead",
+            Assert.Throws<ArgumentException>(
+                () => Read(new Dictionary<string, string?> { ["Recording:UndecidedEndAhead"] = "00:00:04" }))
+                .ParamName);
+
+        Assert.Equal(
+            "UndecidedEndAhead",
+            Assert.Throws<ArgumentException>(
+                () => Read(new Dictionary<string, string?> { ["Recording:UndecidedEndAhead"] = "a while" }))
+                .ParamName);
+
+        Assert.Equal(
+            "startingAhead",
+            Assert.Throws<ArgumentException>(
+                () => Read(new Dictionary<string, string?> { ["Recording:StartingAhead"] = "00:00:03" }))
+                .ParamName);
+    }
+
+    [Fact]
+    public void TheValidationSaysWhichSettingItRefused()
+    {
+        var options = new RecordingOptions();
+        options.ReadFrom(Configuration(new Dictionary<string, string?> { ["Recording:OutputRoot"] = "/srv" }));
+
+        Assert.False(new RecordingValidation().Validate(null, options).Succeeded);
+        Assert.True(new RecordingValidation().Validate(null, new RecordingOptions()).Succeeded);
+    }
+
+    private static RecordingSettings Built(
+        TimeSpan? before = null,
+        TimeSpan? between = null,
+        TimeSpan? lead = null,
+        TimeSpan? ahead = null,
+        TimeSpan? startingAhead = null)
+        => new(
+            before ?? TimeSpan.FromSeconds(10),
+            between ?? TimeSpan.FromSeconds(5),
+            lead ?? TimeSpan.FromSeconds(15),
+            new OutputRoot("primary"),
+            ahead ?? RecordingSettings.HoldingAnUnannouncedEnd,
+            startingAhead);
+
+    private static RecordingSettings Read(IDictionary<string, string?> settings)
+    {
+        var options = new RecordingOptions();
+        options.ReadFrom(Configuration(settings));
+
+        return options.Read();
+    }
+
+    private static IConfiguration Configuration(IDictionary<string, string?> settings)
+        => new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+}

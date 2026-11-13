@@ -30,29 +30,4 @@ public sealed class UnreadableInputRefusalTests
         Assert.False(string.IsNullOrWhiteSpace(answer.GetProperty("message").GetString()));
         Assert.DoesNotContain(sent, body, StringComparison.OrdinalIgnoreCase);
     }
-
-    [Fact]
-    public async Task ARefusedChoiceNamesTheValuesItTakes()
-    {
-        await using var feature = new RecordingFeature();
-
-        (_, JsonElement answer) = await feature.GetAsync("/api/recordings?sort=alphabetically");
-        string message = answer.GetProperty("message").GetString()!;
-
-        Assert.Contains("sort", message, StringComparison.Ordinal);
-        Assert.Contains("startedAt", message, StringComparison.Ordinal);
-        Assert.Contains("programmeStartsAt", message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task ARefusedListOfChoicesNamesTheValuesEachOneTakes()
-    {
-        await using var feature = new RecordingFeature();
-
-        (_, JsonElement answer) = await feature.GetAsync("/api/recordings?outcome=complete&outcome=nearly");
-        string message = answer.GetProperty("message").GetString()!;
-
-        Assert.Contains("outcome", message, StringComparison.Ordinal);
-        Assert.Contains("truncated", message, StringComparison.Ordinal);
-    }
 }

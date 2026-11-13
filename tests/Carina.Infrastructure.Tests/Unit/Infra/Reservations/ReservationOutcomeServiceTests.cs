@@ -2,8 +2,8 @@ using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
 using Carina.Infrastructure.Tests.Fixtures.Reservations;
-using Carina.Infrastructure.Tests.Recordings;
 
 using Puppis.Contracts;
 
