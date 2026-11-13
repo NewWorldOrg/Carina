@@ -139,7 +139,23 @@ public static class TestLayoutRules
 
     private const string Filters = "Filters";
 
-    private static readonly string[] RequestCalls = ["GetAsync", "PostAsync", "PutAsync", "PatchAsync", "DeleteAsync", "SendAsync"];
+    private static readonly string[] RequestCalls =
+    [
+        "GetAsync",
+        "PostAsync",
+        "PutAsync",
+        "PatchAsync",
+        "DeleteAsync",
+        "SendAsync",
+        "GetStringAsync",
+        "GetStreamAsync",
+        "GetByteArrayAsync",
+        "GetFromJsonAsync",
+        "PostAsJsonAsync",
+        "PutAsJsonAsync",
+        "PatchAsJsonAsync",
+        "DeleteFromJsonAsync",
+    ];
 
     private static readonly Layer ApiLayer = new(ApiSource, Controllers);
 

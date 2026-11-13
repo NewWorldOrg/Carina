@@ -1087,6 +1087,53 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void ReadsTheRequestsAnOldTestSendsWithTheJsonAndStringHelpersOfTheClient()
+    {
+        using SourceTree tree = new();
+        DeclareAuthAndRecordings(tree);
+        tree.Write(
+            $"{ApiTests}/FeatureTest/SessionByJsonTests.cs",
+            """
+            namespace Carina.Api.Tests.FeatureTest;
+
+            [Trait("Category", "Feature")]
+            public sealed class SessionByJsonTests
+            {
+                [Fact]
+                public async Task SignsIn() => await client.PostAsJsonAsync("/api/auth/login", new { });
+
+                [Fact]
+                public async Task EndsTheSession() => await client.DeleteFromJsonAsync<Ended>($"/api/auth/sessions/{id}");
+
+                [Fact]
+                public async Task ReadsARecording() => await client.GetFromJsonAsync<Read>($"/api/recordings/{id}");
+            }
+            """);
+        tree.Write(
+            $"{ApiTests}/FeatureTest/SessionAsTextTests.cs",
+            """
+            namespace Carina.Api.Tests.FeatureTest;
+
+            [Trait("Category", "Feature")]
+            public sealed class SessionAsTextTests
+            {
+                [Fact]
+                public async Task ReadsTheSession() => await client.GetStringAsync($"/api/auth/sessions/{id}");
+
+                [Fact]
+                public async Task ReadsARecording() => await client.GetByteArrayAsync($"/api/recordings/{id}");
+            }
+            """);
+
+        Assert.Equal(
+            [
+                "/tests/Carina.Api.Tests/FeatureTest/SessionAsTextTests.cs:4 SessionAsTextTests has a test that speaks only to routes of areas that have moved",
+                "/tests/Carina.Api.Tests/FeatureTest/SessionByJsonTests.cs:4 SessionByJsonTests has a test that speaks only to routes of areas that have moved",
+            ],
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
+    }
+
+    [Fact]
     public void DetectsAnOldTestThatImportsTheTestsOfAnAreaThatHasMoved()
     {
         using SourceTree tree = new();
