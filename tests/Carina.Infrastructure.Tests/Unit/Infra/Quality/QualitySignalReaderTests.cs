@@ -6,9 +6,10 @@ using Carina.TestSupport;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Quality;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Quality;
 
-public sealed class QualitySignalWindowReadTests
+[Trait("Category", "Unit")]
+public sealed class QualitySignalReaderTests
 {
     private static readonly DateTime Noon = new(2026, 9, 8, 12, 0, 0, DateTimeKind.Utc);
 

@@ -2,7 +2,7 @@ using Carina.Domain.Driver;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Quality;
+namespace Carina.Infrastructure.Tests.Fixtures.Quality;
 
 internal sealed class SamplingDriverStandIn : IDriverClient
 {

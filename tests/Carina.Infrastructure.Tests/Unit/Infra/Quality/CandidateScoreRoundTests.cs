@@ -4,8 +4,9 @@ using Carina.Domain.Recordings;
 using Carina.Infrastructure.Quality;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Quality;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Quality;
 
+[Trait("Category", "Unit")]
 public sealed class CandidateScoreRoundTests
 {
     private static readonly DateTime At = new(2026, 9, 15, 12, 0, 0, DateTimeKind.Utc);

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Quality;
+namespace Carina.Infrastructure.Tests.Fixtures.Quality;
 
 internal sealed class WatchedSupply : IQualitySupplyReader
 {

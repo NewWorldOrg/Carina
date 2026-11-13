@@ -1,11 +1,10 @@
 using Carina.Domain.Quality;
 using Carina.Infrastructure.Configuration;
 
-using Microsoft.Extensions.Options;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Quality;
 
-namespace Carina.Infrastructure.Tests.Configuration;
-
-public sealed class QualitySignalRetentionOptionsTests
+[Trait("Category", "Unit")]
+public sealed class QualitySignalOptionsTests
 {
     [Fact(DisplayName = "raw samples are kept for a week unless the settings say otherwise")]
     public void RawSamplesAreKeptForAWeekUnlessTheSettingsSayOtherwise()
@@ -76,14 +75,23 @@ public sealed class QualitySignalRetentionOptionsTests
     public void ARetentionThatIsNotADurationIsRefused()
         => Assert.Throws<ArgumentException>(() => new QualitySignalOptions { KeepSamplesFor = "a week" }.Read());
 
-    [Fact(DisplayName = "a retention the settings could not hold is named at startup")]
-    public void ARetentionTheSettingsCouldNotHoldIsNamedAtStartup()
-    {
-        ValidateOptionsResult refused = new QualitySignalValidation().Validate(
-            null,
-            new QualitySignalOptions { KeepMinuteWindowsFor = "1.00:00:00" });
+    [Fact]
+    public void CandidatesAreEvaluatedOverAWeekUnlessToldOtherwise()
+        => Assert.Equal(TimeSpan.FromDays(7), new QualitySignalOptions().Read().EvaluateCandidatesOver);
 
-        Assert.True(refused.Failed);
-        Assert.Contains(nameof(QualitySignalOptions.KeepMinuteWindowsFor), refused.FailureMessage, StringComparison.Ordinal);
-    }
+    [Fact]
+    public void HowFarBackCandidatesAreEvaluatedIsReadAsADuration()
+        => Assert.Equal(
+            TimeSpan.FromDays(3),
+            new QualitySignalOptions { EvaluateCandidatesOver = "3.00:00:00" }.Read().EvaluateCandidatesOver);
+
+    [Fact]
+    public void ReachingFurtherBackThanAQualityPeriodMaySpanIsRefused()
+        => Assert.Throws<ArgumentException>(
+            () => new QualitySignalOptions { EvaluateCandidatesOver = "400.00:00:00" }.Read());
+
+    [Fact]
+    public void EvaluatingOverNothingIsRefused()
+        => Assert.Throws<ArgumentException>(
+            () => new QualitySignalOptions { EvaluateCandidatesOver = "00:00:00" }.Read());
 }

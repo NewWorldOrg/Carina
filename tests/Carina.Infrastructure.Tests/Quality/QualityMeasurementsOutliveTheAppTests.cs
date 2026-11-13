@@ -8,6 +8,7 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Quality;
+using Carina.Infrastructure.Tests.Fixtures.Quality;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;

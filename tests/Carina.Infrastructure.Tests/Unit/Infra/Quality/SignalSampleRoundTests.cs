@@ -2,14 +2,16 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Quality;
 using Carina.Infrastructure.Quality;
+using Carina.Infrastructure.Tests.Fixtures.Quality;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Quality;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Quality;
 
+[Trait("Category", "Unit")]
 public sealed class SignalSampleRoundTests
 {
     private static readonly DateTime Noon = new(2026, 9, 8, 12, 0, 0, DateTimeKind.Utc);

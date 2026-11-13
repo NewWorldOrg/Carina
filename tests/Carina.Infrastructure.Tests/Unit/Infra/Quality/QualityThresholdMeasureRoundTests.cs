@@ -1,5 +1,4 @@
 using Carina.Domain.Channels;
-using Carina.Domain.Events;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Quality;
@@ -9,8 +8,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Quality;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Quality;
 
+[Trait("Category", "Unit")]
 public sealed class QualityThresholdMeasureRoundTests
 {
     private static readonly DateTime Now = new(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc);
