@@ -6,11 +6,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Programmes;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ArchivedSupersessionMigrationTests
+public sealed class TheArchiveKeepsWhichProgrammesWereSupersededMigrationTests
 {
     private const string ScratchDatabase = "carina_archived_supersession_test";
 

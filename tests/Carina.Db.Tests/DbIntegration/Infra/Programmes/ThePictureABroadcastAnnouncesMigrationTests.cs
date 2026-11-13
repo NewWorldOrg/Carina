@@ -1,10 +1,10 @@
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Programmes;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ProgrammeAnnouncedPictureTests(MigratedScratchDatabase database)
+public sealed class ThePictureABroadcastAnnouncesMigrationTests(MigratedScratchDatabase database)
     : IClassFixture<MigratedScratchDatabase>
 {
     private const string Airs = "timestamptz '2026-09-13 20:00:00+00'";

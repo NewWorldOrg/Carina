@@ -7,11 +7,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.DbIntegration.Infra.Programmes;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ProgrammeMarksColumnTests
+public sealed class AProgrammeCarriesTheMarksOfItsNameAndSummaryMigrationTests
 {
     private const string ScratchDatabase = "carina_programme_marks_test";
 
