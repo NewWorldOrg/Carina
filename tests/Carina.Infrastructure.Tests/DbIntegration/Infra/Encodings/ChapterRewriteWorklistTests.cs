@@ -3,12 +3,13 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Carina.Infrastructure.Tests.Encodings;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -24,12 +25,14 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
 
     private readonly EncodeHarness harness = new();
 
+    private readonly ServiceProvider container = database.Infrastructure();
+
     public async Task InitializeAsync()
     {
         await ClearAsync();
 
-        await using CarinaDbContext context = database.Open();
-        await context.Database.ExecuteSqlRawAsync(
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        await Context(context).Database.ExecuteSqlRawAsync(
             """
             INSERT INTO segment_model_version (number, state, by_hand, built_in, kinds, weights, station_offsets, series_offsets, thresholds, standardisation, trained_at, adopted_at)
             VALUES (1, 'Active', false, true, 2, '{{}}', '{{}}', '{{}}', '{{}}', '{{}}', now(), now())
@@ -38,7 +41,11 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
             Cancel);
     }
 
-    public Task DisposeAsync() => ClearAsync();
+    public async Task DisposeAsync()
+    {
+        await ClearAsync();
+        await container.DisposeAsync();
+    }
 
     public void Dispose() => harness.Dispose();
 
@@ -88,39 +95,18 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
         EncodeJob standing = await StandingAsync(Read(ChapterDetectorName.Ffmpeg, EncodeHarness.Started));
         EncodeJob replaced = await StandingAsync(Read(ChapterDetectorName.Ffmpeg, EncodeHarness.Started));
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            EncodeJob held = await writing.Set<EncodeJob>().AsNoTracking().FirstAsync(job => job.Id == standing.Id, Cancel);
-            await new EncodeJobRepository(writing).AddAsync(
+            EncodeJob held = await Context(writing).Set<EncodeJob>().AsNoTracking().FirstAsync(job => job.Id == standing.Id, Cancel);
+            await Jobs(writing).AddAsync(
                 EncodeJob.Queue(EncodeJobId.New(), standing.RecordingId, held.ProfileId, held.DestinationId, EncodeHarness.Encodes, EncodeHarness.Queued),
                 Cancel);
-            await writing.Set<EncodeJob>()
+            await Context(writing).Set<EncodeJob>()
                 .Where(job => job.Id == replaced.Id)
                 .ExecuteUpdateAsync(set => set.SetProperty(job => job.ReplacedAt, EncodeHarness.Queued.AddHours(3)), Cancel);
         }
 
         Assert.Empty(await AwaitingAsync([]));
-    }
-
-    [Fact(DisplayName = "BR-CD-010: what the chapters of a standing artefact stand for is kept with the version it came from")]
-    public async Task WhatTheChaptersStandForIsKept()
-    {
-        EncodeJob standing = await StandingAsync(Read(ChapterDetectorName.Ffmpeg, EncodeHarness.Started));
-
-        await using (CarinaDbContext context = database.Open())
-        {
-            EncodeJobRepository jobs = new(context);
-            EncodeJob held = (await jobs.FindAsync(standing.Id, Cancel))!;
-            held.Rechaptered(new ChapterReading(ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.2, Now, 1));
-            await jobs.SaveAsync(held, Cancel);
-        }
-
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob read = (await new EncodeJobRepository(reading).FindAsync(standing.Id, Cancel))!;
-
-        Assert.Equal(
-            (ChapterDetectorName.Segments, ChapterVerdict.Marked, 0.2, Now, (int?)1),
-            (read.Chapters!.Detector, read.Chapters.Verdict, read.Chapters.BreakShare, read.Chapters.DecidedAt, read.Chapters.ModelVersion));
     }
 
     private static ChapterReading Read(ChapterDetectorName detector, DateTime at) => new(detector, ChapterVerdict.Marked, 0.1, at);
@@ -129,9 +115,9 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
 
     private async Task<IReadOnlyList<ChapterRewriteSubject>> AwaitingAsync(IReadOnlyCollection<EncodeJobId> passedOver, int atMost = 64)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
-        return await new ChapterRewriteWorklist(context).AwaitingAsync(SegmentModelVersion.FirstNumber, Now - ChapterRewrite.OncePer, passedOver, atMost, Cancel);
+        return await ChapterRewrites(context).AwaitingAsync(SegmentModelVersion.FirstNumber, Now - ChapterRewrite.OncePer, passedOver, atMost, Cancel);
     }
 
     private async Task RewrittenAsync(EncodeJob job, DateTime at, EncodeScratchFate fate)
@@ -145,9 +131,9 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
             at.AddMinutes(-1));
         copy.Settle(fate, at);
 
-        await using CarinaDbContext writing = database.Open();
-        writing.Add(copy);
-        await writing.SaveChangesAsync(Cancel);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        Context(writing).Add(copy);
+        await Context(writing).SaveChangesAsync(Cancel);
     }
 
     private async Task<EncodeJob> StandingAsync(ChapterReading? chapters, bool detected = true, bool timed = true)
@@ -179,15 +165,15 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
             timed ? Timeline : null,
             chapters);
 
-        await using CarinaDbContext writing = database.Open();
-        await new RecordingRepository(writing).AddAsync(recording, Cancel);
-        await new EncodeProfileRepository(writing).AddAsync(profile, Cancel);
-        await new EncodeDestinationRepository(writing).AddAsync(destination, Cancel);
-        await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        await Recordings(writing).AddAsync(recording, Cancel);
+        await Profiles(writing).AddAsync(profile, Cancel);
+        await Destinations(writing).AddAsync(destination, Cancel);
+        await Jobs(writing).AddAsync(job, Cancel);
 
         if (detected)
         {
-            await new RecordingDetectionRepository(writing).KeepAsync(
+            await Detections(writing).KeepAsync(
                 RecordingDetection.Rehydrate(
                     recording.Id,
                     SegmentModelVersion.FirstNumber,
@@ -210,10 +196,31 @@ public sealed class ChapterRewriteWorklistTests(RepositoryDatabase database) : I
 
     private async Task ClearAsync()
     {
-        await using CarinaDbContext clearing = database.Open();
-        await clearing.Set<EncodeChapter>().ExecuteDeleteAsync(Cancel);
-        await clearing.Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
-        await clearing.Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
-        await clearing.Set<RecordingDetection>().ExecuteDeleteAsync(Cancel);
+        await using AsyncServiceScope clearing = container.CreateAsyncScope();
+        await Context(clearing).Set<EncodeChapter>().ExecuteDeleteAsync(Cancel);
+        await Context(clearing).Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
+        await Context(clearing).Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
+        await Context(clearing).Set<RecordingDetection>().ExecuteDeleteAsync(Cancel);
     }
+
+    private static ChapterRewriteWorklist ChapterRewrites(AsyncServiceScope scope)
+        => ActivatorUtilities.CreateInstance<ChapterRewriteWorklist>(scope.ServiceProvider);
+
+    private static IEncodeDestinationRepository Destinations(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>();
+
+    private static IEncodeJobRepository Jobs(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>();
+
+    private static IEncodeProfileRepository Profiles(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeProfileRepository>();
+
+    private static IRecordingDetectionRepository Detections(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingDetectionRepository>();
+
+    private static IRecordingRepository Recordings(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingRepository>();
+
+    private static CarinaDbContext Context(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
 }

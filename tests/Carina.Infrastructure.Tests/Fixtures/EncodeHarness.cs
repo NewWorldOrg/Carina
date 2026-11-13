@@ -15,6 +15,8 @@ using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Tests.Thumbnails;
 using Carina.TestSupport;
 
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 internal sealed class EncodeHarness : IDisposable
@@ -359,6 +361,24 @@ internal sealed class EncodeHarness : IDisposable
         Programmes = new MachineSettings { Programme = path };
 
         return path;
+    }
+
+    /// <summary>
+    /// Registers, over what the infrastructure registered, the stand-ins this harness holds for what lies outside the
+    /// database: the places on disk, ffmpeg and the machine it reads, the measured source, the captions kept on disk,
+    /// the rename probe and the clock.
+    /// </summary>
+    public void StandIn(IServiceCollection services)
+    {
+        services.AddSingleton(Places);
+        services.AddSingleton(Settings);
+        services.AddSingleton(Programmes);
+        services.AddSingleton(MachineReader);
+        services.AddSingleton(LengthReader);
+        services.AddSingleton(HeadReader);
+        services.AddSingleton<ICaptionRecords>(CaptionShelf);
+        services.AddSingleton(Probe);
+        services.AddSingleton(Clock);
     }
 
     public void Dispose()

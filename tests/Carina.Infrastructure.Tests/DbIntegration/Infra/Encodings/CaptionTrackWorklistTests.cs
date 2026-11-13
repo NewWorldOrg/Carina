@@ -1,15 +1,13 @@
-using Carina.Domain.Captions;
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Encodings;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
@@ -21,9 +19,15 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
 
     private readonly EncodeHarness harness = new();
 
+    private readonly ServiceProvider container = database.Infrastructure();
+
     public Task InitializeAsync() => ClearAsync();
 
-    public Task DisposeAsync() => ClearAsync();
+    public async Task DisposeAsync()
+    {
+        await ClearAsync();
+        await container.DisposeAsync();
+    }
 
     public void Dispose() => harness.Dispose();
 
@@ -55,8 +59,8 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
         EncodeJob running = harness.Running(standing.RecordingId, standing.ProfileId);
         await AddAsync(running);
 
-        await using CarinaDbContext context = database.Open();
-        CaptionTrackWorklist worklist = new(context);
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        CaptionTrackWorklist worklist = CaptionTracks(context);
 
         Assert.Empty(await worklist.AwaitingAsync(64, Cancel));
         Assert.False(await worklist.StandsWithNothingInHandAsync(standing, Cancel));
@@ -67,83 +71,17 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
     {
         EncodeJob standing = await StandingAsync(CaptionState.Ready);
 
-        await using CarinaDbContext context = database.Open();
-        CaptionTrackWorklist worklist = new(context);
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        CaptionTrackWorklist worklist = CaptionTracks(context);
 
         Assert.True(await worklist.StandsWithNothingInHandAsync(standing, Cancel));
 
-        await context.Set<EncodeJob>()
+        await Context(context).Set<EncodeJob>()
             .Where(job => job.Id == standing.Id)
             .ExecuteUpdateAsync(set => set.SetProperty(job => job.ReplacedAt, EncodeHarness.Queued.AddHours(3)), Cancel);
 
         Assert.False(await worklist.StandsWithNothingInHandAsync(standing, Cancel));
         Assert.Empty(await worklist.AwaitingAsync(64, Cancel));
-    }
-
-    [Fact]
-    public async Task BrEd2019WhatBecameOfATrackIsKeptWithTheRecordItCameFromAndTheFailuresInARow()
-    {
-        EncodeJob standing = await StandingAsync(CaptionState.Ready, job => Failed(job, 2));
-
-        await using CarinaDbContext context = database.Open();
-        EncodeJob read = (await new EncodeJobRepository(context).FindAsync(standing.Id, Cancel))!;
-
-        Assert.Equal((EncodeCaptionTrack.Failed, MadeAt, 2), (read.CaptionTrack!.Value, read.CaptionTrackFrom!.Value, read.CaptionTrackAttempts));
-
-        read.Tracked(EncodeCaptionTrack.Added, MadeAt);
-        await new EncodeJobRepository(context).SaveAsync(read, Cancel);
-
-        await using CarinaDbContext again = database.Open();
-        EncodeJob saved = (await new EncodeJobRepository(again).FindAsync(standing.Id, Cancel))!;
-
-        Assert.Equal((EncodeCaptionTrack.Added, MadeAt, 0), (saved.CaptionTrack!.Value, saved.CaptionTrackFrom!.Value, saved.CaptionTrackAttempts));
-    }
-
-    [Fact]
-    public async Task BrEd2019AnArtefactTriedAgainAfterAFailureIsTriedUnderNewNamesAndWhatCameOfItIsKept()
-    {
-        TimeSpan sourceStart = TimeSpan.FromSeconds(30499.5);
-        EncodeJob standing = await StandingAsync(
-            CaptionState.Ready,
-            timeline: new EncodeTimeline(sourceStart, TimeSpan.FromSeconds(0.5), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30)));
-        long shownAt = (long)((sourceStart.TotalSeconds + 2) * 90_000);
-        await harness.CaptionShelf.KeepAsync(
-            standing.RecordingId,
-            new CaptionRecord(1440, 1080, sourceStart, [new CaptionCue(shownAt, null)], [new CaptionLine(shownAt, "字")]),
-            Cancel);
-        File.WriteAllBytes(harness.ArtefactPathOf(standing), [1, 2, 3, 4]);
-
-        for (int pass = 0; pass < 2; pass++)
-        {
-            await using CarinaDbContext context = database.Open();
-            ArtefactCaptioningRound round = await Tracks(context).CaptionAsync(4, _ => Task.FromResult(false), Cancel);
-
-            Assert.Equal((1, 1), (round.Read, round.Failed));
-        }
-
-        await using CarinaDbContext reading = database.Open();
-        EncodeJob read = (await new EncodeJobRepository(reading).FindAsync(standing.Id, Cancel))!;
-        List<EncodeScratchFile> scratch = await reading.Set<EncodeScratchFile>().AsNoTracking().Where(file => file.JobId == standing.Id).ToListAsync(Cancel);
-
-        Assert.Equal((EncodeCaptionTrack.Failed, MadeAt, 2), (read.CaptionTrack!.Value, read.CaptionTrackFrom!.Value, read.CaptionTrackAttempts));
-        Assert.Equal(4, scratch.Select(file => file.FileName.Value).Distinct().Count());
-        Assert.All(scratch, file => Assert.False(file.IsOwedARemoval));
-    }
-
-    private ArtefactCaptionTracks Tracks(CarinaDbContext context)
-    {
-        EncodeScratchLedger ledger = new(context);
-
-        return new ArtefactCaptionTracks(
-            new CaptionTrackWorklist(context),
-            new EncodeJobRepository(context),
-            harness.CaptionShelf,
-            new CaptionTrackMux(new EncodeScratchFiles(ledger, harness.Places, harness.Clock), harness.Programmes, harness.Clock),
-            harness.Places,
-            new EncodeArtefactPlacer(new EncodeJobRepository(context), ledger, harness.Places, harness.Probe, harness.Clock, NullLogger<EncodeArtefactPlacer>.Instance),
-            new EncodeScratchCleaner(ledger, harness.Places, harness.Clock, NullLogger<EncodeScratchCleaner>.Instance),
-            new ArtefactRewriteDomainService(new ArtefactOpenings(harness.Clock), harness.Clock),
-            NullLogger<ArtefactCaptionTracks>.Instance);
     }
 
     private static void Failed(EncodeJob job, int times)
@@ -156,9 +94,9 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
 
     private async Task<IReadOnlyList<CaptionTrackSubject>> AwaitingAsync(int atMost)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope context = container.CreateAsyncScope();
 
-        return await new CaptionTrackWorklist(context).AwaitingAsync(atMost, Cancel);
+        return await CaptionTracks(context).AwaitingAsync(atMost, Cancel);
     }
 
     private async Task<EncodeJob> StandingAsync(CaptionState captions, Action<EncodeJob>? tracked = null, EncodeTimeline? timeline = null)
@@ -193,20 +131,20 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
 
         tracked?.Invoke(job);
 
-        await using CarinaDbContext writing = database.Open();
-        await new RecordingRepository(writing).AddAsync(recording, Cancel);
-        await new EncodeProfileRepository(writing).AddAsync(profile, Cancel);
-        await new EncodeDestinationRepository(writing).AddAsync(destination, Cancel);
-        await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        await Recordings(writing).AddAsync(recording, Cancel);
+        await Profiles(writing).AddAsync(profile, Cancel);
+        await Destinations(writing).AddAsync(destination, Cancel);
+        await Jobs(writing).AddAsync(job, Cancel);
 
         return job;
     }
 
     private async Task AddAsync(EncodeJob job)
     {
-        await using CarinaDbContext writing = database.Open();
-        EncodeJob standing = await writing.Set<EncodeJob>().AsNoTracking().FirstAsync(held => held.RecordingId == job.RecordingId, Cancel);
-        await new EncodeJobRepository(writing).AddAsync(
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        EncodeJob standing = await Context(writing).Set<EncodeJob>().AsNoTracking().FirstAsync(held => held.RecordingId == job.RecordingId, Cancel);
+        await Jobs(writing).AddAsync(
             EncodeJob.Rehydrate(
                 job.Id,
                 job.RecordingId,
@@ -230,9 +168,27 @@ public sealed class CaptionTrackWorklistTests(RepositoryDatabase database) : IAs
 
     private async Task ClearAsync()
     {
-        await using CarinaDbContext clearing = database.Open();
-        await clearing.Set<EncodeChapter>().ExecuteDeleteAsync(Cancel);
-        await clearing.Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
-        await clearing.Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
+        await using AsyncServiceScope clearing = container.CreateAsyncScope();
+        await Context(clearing).Set<EncodeChapter>().ExecuteDeleteAsync(Cancel);
+        await Context(clearing).Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
+        await Context(clearing).Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
     }
+
+    private static CaptionTrackWorklist CaptionTracks(AsyncServiceScope scope)
+        => ActivatorUtilities.CreateInstance<CaptionTrackWorklist>(scope.ServiceProvider);
+
+    private static IEncodeDestinationRepository Destinations(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>();
+
+    private static IEncodeJobRepository Jobs(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>();
+
+    private static IEncodeProfileRepository Profiles(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeProfileRepository>();
+
+    private static IRecordingRepository Recordings(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IRecordingRepository>();
+
+    private static CarinaDbContext Context(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
 }

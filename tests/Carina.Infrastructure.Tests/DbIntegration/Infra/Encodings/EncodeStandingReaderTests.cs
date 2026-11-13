@@ -1,18 +1,22 @@
 using Carina.Domain.Encodings;
-using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace Carina.Infrastructure.Tests.Encodings;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
+public sealed class EncodeStandingReaderTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private const int APageOfTheLibrary = 50;
+
+    private ServiceProvider Watching(RecordedCommands watched)
+        => database.Infrastructure(replace => replace.ConfigureDbContext<CarinaDbContext>(options => options.AddInterceptors(watched)));
 
     private static readonly DateTime Defined = new(2026, 9, 6, 2, 0, 0, DateTimeKind.Utc);
 
@@ -26,6 +30,12 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
+
     [Fact(DisplayName = "a whole page of the library is answered by one look at the ledger")]
     public async Task AWholePageOfTheLibraryIsAnsweredByOneLookAtTheLedger()
     {
@@ -33,9 +43,9 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
         (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
         RecordingId[] page = [.. Enumerable.Range(0, APageOfTheLibrary).Select(_ => RecordingId.New())];
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var ledger = new EncodeJobRepository(writing);
+            IEncodeJobRepository ledger = Jobs(writing);
 
             foreach (RecordingId recording in page)
             {
@@ -45,8 +55,9 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
 
         var watched = new RecordedCommands();
 
-        await using CarinaDbContext reading = database.Open(watched);
-        EncodeStandingBoard board = await new EncodeStandingReader(reading).ReadAsync(page, Cancel);
+        await using ServiceProvider watching = Watching(watched);
+        await using AsyncServiceScope reading = watching.CreateAsyncScope();
+        EncodeStandingBoard board = await Standing(reading).ReadAsync(page, Cancel);
 
         Assert.Single(watched.Seen);
         Assert.All(page, recording => Assert.Equal(EncodeStanding.Completed, board.For(recording)));
@@ -58,8 +69,8 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
         await ClearAsync();
         var untouched = RecordingId.New();
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeStandingBoard board = await new EncodeStandingReader(reading).ReadAsync([untouched], Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeStandingBoard board = await Standing(reading).ReadAsync([untouched], Cancel);
 
         Assert.Equal(EncodeStanding.NotEncoded, board.For(untouched));
     }
@@ -70,8 +81,9 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
         await ClearAsync();
         var watched = new RecordedCommands();
 
-        await using CarinaDbContext reading = database.Open(watched);
-        EncodeStandingBoard board = await new EncodeStandingReader(reading).ReadAsync([], Cancel);
+        await using ServiceProvider watching = Watching(watched);
+        await using AsyncServiceScope reading = watching.CreateAsyncScope();
+        EncodeStandingBoard board = await Standing(reading).ReadAsync([], Cancel);
 
         Assert.Empty(watched.Seen);
         Assert.Equal(EncodeStanding.NotEncoded, board.For(RecordingId.New()));
@@ -86,17 +98,17 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
         var watched = RecordingId.New();
         var beside = RecordingId.New();
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var ledger = new EncodeJobRepository(writing);
+            IEncodeJobRepository ledger = Jobs(writing);
             await ledger.AddAsync(Finished(watched, profile, destination), Cancel);
             await ledger.AddAsync(Finished(watched, compatible, destination), Cancel);
             await ledger.AddAsync(Running(watched, profile, destination), Cancel);
             await ledger.AddAsync(Finished(beside, profile, destination), Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeStandingBoard board = await new EncodeStandingReader(reading).ReadAsync([watched], Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeStandingBoard board = await Standing(reading).ReadAsync([watched], Cancel);
 
         Assert.Equal(EncodeStanding.Completed, board.For(watched));
         Assert.Equal(EncodeStanding.NotEncoded, board.For(beside));
@@ -110,16 +122,16 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
         var abandoned = RecordingId.New();
         var retried = RecordingId.New();
 
-        await using (CarinaDbContext writing = database.Open())
+        await using (AsyncServiceScope writing = container.CreateAsyncScope())
         {
-            var ledger = new EncodeJobRepository(writing);
+            IEncodeJobRepository ledger = Jobs(writing);
             await ledger.AddAsync(CalledOff(abandoned, profile, destination), Cancel);
             await ledger.AddAsync(Broken(retried, profile, destination), Cancel);
             await ledger.AddAsync(Job(retried, profile, destination), Cancel);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        EncodeStandingBoard board = await new EncodeStandingReader(reading).ReadAsync([abandoned, retried], Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        EncodeStandingBoard board = await Standing(reading).ReadAsync([abandoned, retried], Cancel);
 
         Assert.Equal(EncodeStanding.NotEncoded, board.For(abandoned));
         Assert.Equal(EncodeStanding.Queued, board.For(retried));
@@ -127,9 +139,9 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
 
     private async Task ClearAsync()
     {
-        await using CarinaDbContext clearing = database.Open();
-        await clearing.Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
-        await clearing.Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
+        await using AsyncServiceScope clearing = container.CreateAsyncScope();
+        await Context(clearing).Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
+        await Context(clearing).Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
     }
 
     private async Task<EncodeProfile> ProfileAsync(string label)
@@ -144,8 +156,8 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
             new ConstantQuantiser(25),
             Defined);
 
-        await using CarinaDbContext writing = database.Open();
-        await new EncodeProfileRepository(writing).AddAsync(profile, Cancel);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        await Profiles(writing).AddAsync(profile, Cancel);
 
         return profile;
     }
@@ -160,8 +172,8 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
             profile.Id,
             Defined);
 
-        await using CarinaDbContext writing = database.Open();
-        await new EncodeDestinationRepository(writing).AddAsync(destination, Cancel);
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        await Destinations(writing).AddAsync(destination, Cancel);
 
         return (profile, destination);
     }
@@ -201,4 +213,19 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
 
         return job;
     }
+
+    private static IEncodeDestinationRepository Destinations(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>();
+
+    private static IEncodeJobRepository Jobs(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>();
+
+    private static IEncodeProfileRepository Profiles(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeProfileRepository>();
+
+    private static EncodeStandingReader Standing(AsyncServiceScope scope)
+        => ActivatorUtilities.CreateInstance<EncodeStandingReader>(scope.ServiceProvider);
+
+    private static CarinaDbContext Context(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
 }

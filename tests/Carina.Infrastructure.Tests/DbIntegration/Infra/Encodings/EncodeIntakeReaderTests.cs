@@ -7,17 +7,25 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
-namespace Carina.Infrastructure.Tests.Encodings;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Encodings;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class EncodeIntakeReaderTests(RepositoryDatabase database)
+public sealed class EncodeIntakeReaderTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private const int All = 10_000;
 
     private static readonly DateTime Began = new(2026, 9, 6, 3, 0, 0, DateTimeKind.Utc);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact(DisplayName = "the recordings that ended with a file, asked to be encoded and hold no job are the ones answered, oldest start first")]
     public async Task TheRecordingsThatEndedWithAFileAskedToBeEncodedAndHoldNoJobAreAnsweredOldestStartFirst()
@@ -32,8 +40,8 @@ public sealed class EncodeIntakeReaderTests(RepositoryDatabase database)
         Recording halfGone = await EndedAsync(Began.AddMinutes(5), RecordingOutcome.Complete);
         await LeftBehindAsync(halfGone.Id);
 
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<RecordingId> waiting = await new EncodeIntakeReader(reading).NeverQueuedAsync(All, Cancel);
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        IReadOnlyList<RecordingId> waiting = await Intake(reading).NeverQueuedAsync(All, Cancel);
 
         RecordingId[] ours = [.. waiting.Where(id => new[] { later, earlier, failed, stillWriting, unasked, queued, halfGone }.Any(recording => recording.Id.Equals(id)))];
         Assert.Equal([earlier.Id, later.Id], ours);
@@ -45,9 +53,9 @@ public sealed class EncodeIntakeReaderTests(RepositoryDatabase database)
         await EndedAsync(Began.AddHours(1), RecordingOutcome.Complete);
         await EndedAsync(Began.AddHours(2), RecordingOutcome.Complete);
 
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
 
-        Assert.Single(await new EncodeIntakeReader(reading).NeverQueuedAsync(1, Cancel));
+        Assert.Single(await Intake(reading).NeverQueuedAsync(1, Cancel));
     }
 
     private async Task QueuedAsync(RecordingId recording)
@@ -68,30 +76,30 @@ public sealed class EncodeIntakeReaderTests(RepositoryDatabase database)
             profile.Id,
             Began);
 
-        await using CarinaDbContext writing = database.Open();
-        await new EncodeProfileRepository(writing).AddAsync(profile, Cancel);
-        await new EncodeDestinationRepository(writing).AddAsync(destination, Cancel);
-        await new EncodeJobRepository(writing).AddAsync(
+        await using AsyncServiceScope writing = container.CreateAsyncScope();
+        await Profiles(writing).AddAsync(profile, Cancel);
+        await Destinations(writing).AddAsync(destination, Cancel);
+        await Jobs(writing).AddAsync(
             EncodeJob.Queue(EncodeJobId.New(), recording, profile.Id, destination.Id, destination.OutputRoot, Began),
             Cancel);
     }
 
     private async Task LeftBehindAsync(RecordingId id)
     {
-        await using CarinaDbContext context = database.Open();
-        Recording loaded = await context.FindAsync<Recording>([id], Cancel)
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        Recording loaded = await Context(context).FindAsync<Recording>([id], Cancel)
             ?? throw new InvalidOperationException("The recording that was just written is not there.");
 
         loaded.Erased(RecordingErasure.Refused(ErasureFault.FileLeftBehind, "the file could not be removed", 1), Began.AddHours(1));
-        await context.SaveChangesAsync(Cancel);
+        await Context(context).SaveChangesAsync(Cancel);
     }
 
     private async Task<Recording> EndedAsync(DateTime began, RecordingOutcome outcome, bool encode = true)
     {
         Recording recording = await BegunAsync(began, encode);
 
-        await using CarinaDbContext context = database.Open();
-        Recording loaded = await context.FindAsync<Recording>([recording.Id], Cancel)
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        Recording loaded = await Context(context).FindAsync<Recording>([recording.Id], Cancel)
             ?? throw new InvalidOperationException("The recording that was just written is not there.");
 
         loaded.Abort(began.AddMinutes(30));
@@ -102,7 +110,7 @@ public sealed class EncodeIntakeReaderTests(RepositoryDatabase database)
         }
 
         loaded.Settle(outcome, outcome is RecordingOutcome.Failed ? 0 : 1_200_000, began.AddMinutes(30));
-        await context.SaveChangesAsync(Cancel);
+        await Context(context).SaveChangesAsync(Cancel);
 
         return loaded;
     }
@@ -132,10 +140,25 @@ public sealed class EncodeIntakeReaderTests(RepositoryDatabase database)
             null,
             encode);
 
-        await using CarinaDbContext context = database.Open();
-        context.Add(recording);
-        await context.SaveChangesAsync(Cancel);
+        await using AsyncServiceScope context = container.CreateAsyncScope();
+        Context(context).Add(recording);
+        await Context(context).SaveChangesAsync(Cancel);
 
         return recording;
     }
+
+    private static IEncodeDestinationRepository Destinations(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeDestinationRepository>();
+
+    private static EncodeIntakeReader Intake(AsyncServiceScope scope)
+        => ActivatorUtilities.CreateInstance<EncodeIntakeReader>(scope.ServiceProvider);
+
+    private static IEncodeJobRepository Jobs(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>();
+
+    private static IEncodeProfileRepository Profiles(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IEncodeProfileRepository>();
+
+    private static CarinaDbContext Context(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
 }
