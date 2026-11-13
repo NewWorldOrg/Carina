@@ -1,27 +1,23 @@
 extern alias driver;
 
 using System.Net;
-using System.Net.Http.Json;
 using System.Runtime.Versioning;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Channels;
 
 using driver::Puppis.Driver.Configuration;
 
-using Puppis.Contracts;
+using static Carina.Api.Tests.Feature.Tuners.SyntheticTunerLedger;
+using static Carina.Api.Tests.Feature.Tuners.TunerLedgerFeature;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Tuners;
 
 [SupportedOSPlatform("linux")]
-public sealed class LnbPowerReachesTheDriverTests
+[Trait("Category", "Feature")]
+public sealed class PutTunerLnbPowerActionTests
 {
-    private const string Ground = "synthetic-terrestrial";
-
-    private const string Sky = "synthetic-satellite";
-
-    private static readonly Uri Tuners = new("/api/tuners", UriKind.Relative);
-
     [Fact]
     public async Task PowerSwitchedForASatelliteTunerIsWrittenToTheDriversLedgerAndIsOnOnceTheDriverStartsFromIt()
     {
@@ -154,15 +150,6 @@ public sealed class LnbPowerReachesTheDriverTests
         await feature.App.UntilConnectedAsync();
     }
 
-    private static IReadOnlyList<DeviceSettings> Written(SyntheticDriverHost driver)
-    {
-        DriverConfiguration? written = DriverConfigurationReader.Parse(File.ReadAllText(driver.LedgerPath));
-
-        Assert.NotNull(written);
-
-        return written.Devices ?? [];
-    }
-
     private static async Task<HttpStatusCode> SwitchAsync(AppSwapFeature feature, string deviceId, bool on)
     {
         using HttpResponseMessage response = await feature.App.Client.PutAsJsonAsync(
@@ -174,7 +161,7 @@ public sealed class LnbPowerReachesTheDriverTests
 
     private static async Task<JsonElement> LedgerAsync(AppSwapFeature feature)
     {
-        using HttpResponseMessage response = await feature.App.Client.GetAsync(Tuners);
+        using HttpResponseMessage response = await feature.App.Client.GetAsync(TunersPath);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
