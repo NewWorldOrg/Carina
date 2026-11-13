@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 
 using Carina.Api.Live;
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Auth;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
@@ -9,9 +10,10 @@ using Carina.Domain.Viewing;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Playback;
 
-public sealed partial class RecordingHlsTests
+[Trait("Category", "Feature")]
+public sealed partial class RecordingHlsDeliveryTests
 {
     private const uint OneFrame = 1001;
 

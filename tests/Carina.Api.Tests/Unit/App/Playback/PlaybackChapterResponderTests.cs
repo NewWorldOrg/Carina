@@ -2,8 +2,9 @@ using Carina.Api.Responder.Playback;
 using Carina.Domain.Encodings;
 using Carina.Domain.Segments;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Playback;
 
+[Trait("Category", "Unit")]
 public sealed class PlaybackChapterResponderTests
 {
     [Fact(DisplayName = "BR-CD-009: an opening and an ending detected are handed to playback by their own kinds, each skippable as it was")]

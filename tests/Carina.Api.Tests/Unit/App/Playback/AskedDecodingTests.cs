@@ -3,8 +3,9 @@ using Carina.Domain.Playback;
 
 using Microsoft.Extensions.Primitives;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Playback;
 
+[Trait("Category", "Unit")]
 public sealed class AskedDecodingTests
 {
     [Fact(DisplayName = "a browser naming no decoding is one that said nothing")]

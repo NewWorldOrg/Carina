@@ -1,8 +1,9 @@
 using Carina.Api.Playback;
 using Carina.Domain.Recordings;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Playback;
 
+[Trait("Category", "Unit")]
 public sealed class ByteRangeTests
 {
     private const long Size = 4_000;

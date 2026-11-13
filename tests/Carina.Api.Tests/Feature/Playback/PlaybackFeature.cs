@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
@@ -12,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Playback;
 
 internal sealed class PlaybackFeature : IAsyncDisposable
 {
@@ -143,16 +144,7 @@ internal sealed class PlaybackFeature : IAsyncDisposable
         Client.Dispose();
         Stranger.Dispose();
         await factory.DisposeAsync();
-
-        if (Directory.Exists(mounted.FullName))
-        {
-            mounted.Delete(recursive: true);
-        }
-
-        if (Directory.Exists(shelved.FullName))
-        {
-            shelved.Delete(recursive: true);
-        }
+        TemporaryDirectories.RemoveAll(mounted, shelved);
     }
 
     private async Task<HttpResponseMessage> SendAsync(

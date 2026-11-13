@@ -1,8 +1,9 @@
 using Carina.Api.Playback;
 using Carina.Domain.Streaming;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Playback;
 
+[Trait("Category", "Unit")]
 public sealed class AskedFormatTests
 {
     [Theory(DisplayName = "a recording played without naming a format is transcoded in H.264, as it always was")]
