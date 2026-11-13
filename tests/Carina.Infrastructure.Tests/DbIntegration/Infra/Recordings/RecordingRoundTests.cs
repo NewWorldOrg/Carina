@@ -1,22 +1,22 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Driver;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
-namespace Carina.Db.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Recordings;
 
-[Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class RecordingRoundTests(MigratedScratchDatabase database)
-    : IClassFixture<MigratedScratchDatabase>
+public sealed class RecordingRoundTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>
 {
     private static readonly DateTime Airs = new(2026, 8, 26, 20, 0, 0, DateTimeKind.Utc);
 
@@ -36,12 +36,13 @@ public sealed class RecordingRoundTests(MigratedScratchDatabase database)
         ReservationId airing = await Plan(51001, ReservationState.Scheduled);
         var driver = new RecordingDriver();
 
-        await using CarinaDbContext one = CarinaDbContextFactory.Create(database.ConnectionString);
-        await using CarinaDbContext other = CarinaDbContextFactory.Create(database.ConnectionString);
+        await using ServiceProvider container = Container(driver);
+        await using AsyncServiceScope one = container.CreateAsyncScope();
+        await using AsyncServiceScope other = container.CreateAsyncScope();
 
         RecordingRun[] runs = await Task.WhenAll(
-            Round(one, driver).RunAsync(CancellationToken.None),
-            Round(other, driver).RunAsync(CancellationToken.None));
+            Round(one).RunAsync(CancellationToken.None),
+            Round(other).RunAsync(CancellationToken.None));
 
         Assert.Equal(1, runs.Sum(run => run.Started.Count));
         Assert.Single(driver.Started);
@@ -62,16 +63,15 @@ public sealed class RecordingRoundTests(MigratedScratchDatabase database)
         ReservationId airing = await Plan(51501, ReservationState.Scheduled);
         var driver = new RecordingDriver();
 
-        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
-        await using CarinaDbContext other = CarinaDbContextFactory.Create(database.ConnectionString);
-
-        RecordingRun run = await Round(
-            context,
+        await using ServiceProvider elsewhere = database.Infrastructure();
+        await using ServiceProvider container = Container(
             driver,
-            new ClaimedByAnother(
-                new ReservationRecordingContract(context),
-                () => new ReservationRecordingContract(other)
-                    .ClaimAsync(airing, Airs, CancellationToken.None))).RunAsync(CancellationToken.None);
+            services => RegisteredServices.Wrap<IReservationRecordingContract>(
+                services,
+                inner => new ClaimedByAnother(inner, () => ClaimElsewhereAsync(elsewhere, airing))));
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+
+        RecordingRun run = await Round(scope).RunAsync(CancellationToken.None);
 
         Assert.Empty(run.Started);
         Assert.Empty(driver.Started);
@@ -87,8 +87,9 @@ public sealed class RecordingRoundTests(MigratedScratchDatabase database)
         ReservationId contested = await Plan(51101, ReservationState.Conflict);
         var driver = new RecordingDriver();
 
-        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
-        RecordingRun run = await Round(context, driver).RunAsync(CancellationToken.None);
+        await using ServiceProvider container = Container(driver);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        RecordingRun run = await Round(scope).RunAsync(CancellationToken.None);
 
         Assert.Empty(run.Started);
         Assert.Empty(driver.Started);
@@ -104,13 +105,15 @@ public sealed class RecordingRoundTests(MigratedScratchDatabase database)
         ReservationId airing = await Plan(51201, ReservationState.Scheduled);
         var driver = new RecordingDriver();
 
-        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        await using ServiceProvider container = Container(driver);
+
+        await using (AsyncServiceScope scope = container.CreateAsyncScope())
         {
-            await Round(context, driver).RunAsync(CancellationToken.None);
+            await Round(scope).RunAsync(CancellationToken.None);
         }
 
-        await using CarinaDbContext reading = CarinaDbContextFactory.Create(database.ConnectionString);
-        Recording written = await reading.Set<Recording>().SingleAsync();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording written = await Store(reading).Set<Recording>().SingleAsync();
 
         Assert.Equal(airing, written.ReservationId);
         Assert.Equal(new DateTime(2026, 8, 26, 20, 0, 15, DateTimeKind.Utc), written.ExpectedWindowStart);
@@ -130,13 +133,15 @@ public sealed class RecordingRoundTests(MigratedScratchDatabase database)
         await Plan(51401, ReservationState.Scheduled);
         var driver = new RecordingDriver { FreeBytes = 0 };
 
-        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        await using ServiceProvider container = Container(driver);
+
+        await using (AsyncServiceScope scope = container.CreateAsyncScope())
         {
-            Assert.Single((await Round(context, driver).RunAsync(CancellationToken.None)).Started);
+            Assert.Single((await Round(scope).RunAsync(CancellationToken.None)).Started);
         }
 
-        await using CarinaDbContext reading = CarinaDbContextFactory.Create(database.ConnectionString);
-        Recording written = await reading.Set<Recording>().SingleAsync();
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        Recording written = await Store(reading).Set<Recording>().SingleAsync();
         OutcomeDetail reason = Assert.Single(written.OutcomeDetail);
 
         Assert.Equal(RecordingFault.RefusedByDiskPrecheck, reason.Fault);
@@ -156,8 +161,9 @@ public sealed class RecordingRoundTests(MigratedScratchDatabase database)
                 new Puppis.Contracts.DriverProblem("noDeviceFree", [])),
         };
 
-        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
-        RecordingRun run = await Round(context, driver).RunAsync(CancellationToken.None);
+        await using ServiceProvider container = Container(driver);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        RecordingRun run = await Round(scope).RunAsync(CancellationToken.None);
 
         Assert.Empty(run.Started);
         Assert.Equal(0L, await Count("SELECT count(*) FROM recording"));
@@ -178,10 +184,11 @@ public sealed class RecordingRoundTests(MigratedScratchDatabase database)
                 new Puppis.Contracts.DriverProblem("noLock", [])),
         };
 
-        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+        await using ServiceProvider container = Container(driver);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        await Round(context, driver).RunAsync(CancellationToken.None);
-        await Round(context, driver).RunAsync(CancellationToken.None);
+        await Round(scope).RunAsync(CancellationToken.None);
+        await Round(scope).RunAsync(CancellationToken.None);
 
         Assert.Equal(1L, await Count("SELECT count(*) FROM reservation_outcome"));
         Assert.Equal("TuneFailure", await Outcome(airing, "kind"));
@@ -189,47 +196,32 @@ public sealed class RecordingRoundTests(MigratedScratchDatabase database)
         Assert.Equal("[\"TuneFailed\"]", await Outcome(airing, "faults"));
     }
 
-    private RecordingRound Round(
-        CarinaDbContext context,
-        RecordingDriver driver,
-        IReservationRecordingContract? reservations = null)
-    {
-        var clock = new HeldTick(Airs);
-        var disks = new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default));
-
-        return new RecordingRound(
-            reservations ?? new ReservationRecordingContract(context),
-            new RecordingRepository(context),
-            new ProgrammeRepository(context),
-            new ResolvedTuning(TuningResolution.Tunable(
+    private ServiceProvider Container(RecordingDriver driver, Action<IServiceCollection>? also = null)
+        => database.Infrastructure(replace =>
+        {
+            replace.AddSingleton<IDriverClient>(driver);
+            replace.AddSingleton<TimeProvider>(new HeldTick(Airs));
+            replace.AddSingleton(Settings);
+            replace.AddSingleton<IServiceTuningDirectory>(new ResolvedTuning(TuningResolution.Tunable(
                 new CandidateChannelId(Guid.NewGuid()),
                 TuningParameters.Terrestrial(27),
-                impaired: false)),
-            disks,
-            driver,
-            new ProgramExtensionFollower(
-                new RecordingRepository(context),
-                new ProgrammeRepository(context),
-                driver,
-                new EndsAlreadyAsked(),
-                Settings,
-                NullLogger<ProgramExtensionFollower>.Instance),
-            new RecordingRefusalReporter(
-                new ReservationRepository(context),
-                new ReservationOutcomeDomainService(new ReservationOutcomeRepository(context), new RecordingRepository(context)),
-                new RememberedTuneReports(),
-                NullLogger<RecordingRefusalReporter>.Instance),
-            new RecordingRetries(
-                new ReservationRepository(context),
-                new ReservationOutcomeRepository(context),
-                new CandidateChannelRepository(context),
-                new ProgrammeRepository(context),
-                disks,
-                Settings,
-                RetryPolicy.Default,
-                NullLogger<RecordingRetries>.Instance),
-            Settings,
-            clock);
+                impaired: false)));
+            replace.AddSingleton<ITuneFailureReporter>(new RememberedTuneReports());
+            also?.Invoke(replace);
+        });
+
+    private static RecordingRound Round(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<RecordingRound>();
+
+    private static CarinaDbContext Store(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+
+    private static async Task<bool> ClaimElsewhereAsync(ServiceProvider elsewhere, ReservationId airing)
+    {
+        await using AsyncServiceScope scope = elsewhere.CreateAsyncScope();
+
+        return await scope.ServiceProvider.GetRequiredService<IReservationRecordingContract>()
+            .ClaimAsync(airing, Airs, CancellationToken.None);
     }
 
     private async Task<ReservationId> Plan(int eventId, ReservationState state)

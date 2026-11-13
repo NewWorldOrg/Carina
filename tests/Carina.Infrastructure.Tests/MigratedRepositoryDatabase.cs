@@ -39,7 +39,14 @@ public sealed class MigratedRepositoryDatabase : IAsyncLifetime
         await context.Database.EnsureDeletedAsync();
     }
 
-    public ServiceProvider Infrastructure() => RepositoryDatabase.Container(connectionString, SealingKeys.Fresh(), _ => { });
+    public ServiceProvider Infrastructure() => Infrastructure(_ => { });
+
+    /// <summary>
+    /// The container the infrastructure builds over this database, with what <paramref name="replace"/> registers last
+    /// standing in for what the infrastructure registered.
+    /// </summary>
+    public ServiceProvider Infrastructure(Action<IServiceCollection> replace)
+        => RepositoryDatabase.Container(connectionString, SealingKeys.Fresh(), replace);
 
     public async Task<NpgsqlConnection> OpenAsync()
     {
