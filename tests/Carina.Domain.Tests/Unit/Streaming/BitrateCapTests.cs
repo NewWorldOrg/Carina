@@ -1,0 +1,92 @@
+using System.Reflection;
+
+using Carina.Domain.Streaming;
+
+namespace Carina.Domain.Tests.Unit.Streaming;
+
+[Trait("Category", "Unit")]
+public sealed class BitrateCapTests
+{
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-3000)]
+    public void ACapOfNothingASecondIsRefused(int kilobitsPerSecond)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BitrateCap(kilobitsPerSecond));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3000)]
+    public void ACapIsTheRateItNames(int kilobitsPerSecond)
+    {
+        Assert.Equal(kilobitsPerSecond, new BitrateCap(kilobitsPerSecond).KilobitsPerSecond);
+    }
+
+    [Fact]
+    public void TwoCapsOfTheSameRateAreTheSameCap()
+    {
+        Assert.Equal(new BitrateCap(3000), new BitrateCap(3000));
+        Assert.NotEqual(new BitrateCap(3000), new BitrateCap(4500));
+    }
+
+    [Fact]
+    public void NothingInTheDomainNamedForVaapiHoldsABitrate()
+    {
+        Assert.Empty(MembersPairingVaapiWithABitrate(typeof(BitrateCap).Assembly));
+    }
+
+    [Fact]
+    public void TheRuleCatchesAMemberNamedForVaapiTypedAsABitrate()
+    {
+        Assert.Contains(
+            $"{typeof(VaapiRateControlFixtures).FullName}.{nameof(VaapiRateControlFixtures.VaapiRateControl)}",
+            MembersPairingVaapiWithABitrate(typeof(VaapiRateControlFixtures).Assembly),
+            StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void TheRuleDoesNotSeeARateWrittenOutAsAPlainNumber()
+    {
+        Assert.DoesNotContain(
+            $"{typeof(VaapiRateControlFixtures).FullName}.{nameof(VaapiRateControlFixtures.VaapiKilobitsPerSecond)}",
+            MembersPairingVaapiWithABitrate(typeof(VaapiRateControlFixtures).Assembly),
+            StringComparer.Ordinal);
+    }
+
+    private static IReadOnlyList<string> MembersPairingVaapiWithABitrate(Assembly assembly)
+        =>
+        [
+            .. from type in assembly.GetTypes()
+               where type.IsPublic
+               from member in Named(type)
+               where member.Name.Contains("vaapi", StringComparison.OrdinalIgnoreCase)
+                     && member.Type == typeof(BitrateCap)
+               select $"{type.FullName}.{member.Name}",
+        ];
+
+    private static IEnumerable<(string Name, Type Type)> Named(Type type)
+    {
+        foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+        {
+            yield return (property.Name, property.PropertyType);
+        }
+
+        foreach (MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+        {
+            foreach (ParameterInfo parameter in method.GetParameters())
+            {
+                yield return ($"{method.Name}.{parameter.Name}", parameter.ParameterType);
+            }
+        }
+
+        foreach (ConstructorInfo constructor in type.GetConstructors())
+        {
+            foreach (ParameterInfo parameter in constructor.GetParameters())
+            {
+                yield return ($"{type.Name}.{parameter.Name}", parameter.ParameterType);
+            }
+        }
+    }
+}

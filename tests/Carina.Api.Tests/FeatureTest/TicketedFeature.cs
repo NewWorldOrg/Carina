@@ -185,7 +185,6 @@ internal sealed class TicketedFeature : IAsyncDisposable
         Client.Dispose();
         Player.Dispose();
         await factory.DisposeAsync();
-        mounted.Delete(recursive: true);
-        shelved.Delete(recursive: true);
+        TemporaryDirectories.RemoveAll(mounted, shelved);
     }
 }

@@ -1,0 +1,171 @@
+using System.Net.Http.Headers;
+
+using Carina.Api.Tests.FeatureTest;
+using Carina.Domain.Encodings;
+using Carina.Domain.Integrity;
+using Carina.Domain.Playback;
+using Carina.Domain.Recordings;
+using Carina.TestSupport;
+
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+
+namespace Carina.Api.Tests.Feature.Playback;
+
+internal sealed class PlaybackFeature : IAsyncDisposable
+{
+    public static readonly OutputRoot Root = new("bulk");
+
+    private readonly TestingWebApplicationFactory factory = new();
+
+    private readonly DirectoryInfo mounted = Directory.CreateTempSubdirectory("carina-playback-");
+
+    private readonly DirectoryInfo shelved = Directory.CreateTempSubdirectory("carina-playback-shelf-");
+
+    public PlaybackFeature(IPlaybackFileStore? files = null)
+    {
+        WebApplicationFactory<Program> configured = factory
+            .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostedService>();
+                services.AddSingleton<IRecordingDirectory>(Recordings);
+                services.AddSingleton(new IntegritySettings
+                {
+                    OutputRoots = [new StorageRootPath(Root, mounted.FullName)],
+                });
+                services.AddSingleton(new EncodeSettings
+                {
+                    OutputRoots = [new StorageRootPath(EncodedArtefact.Shelf, shelved.FullName)],
+                });
+                services.AddSingleton<IEncodeJobRepository>(Jobs);
+                services.AddSingleton<IEncodeProfileRepository>(Profiles);
+                services.RemoveAll<IArtefactCodecReader>();
+                services.AddSingleton<IArtefactCodecReader>(new HeldArtefactCodecs());
+
+                if (files is not null)
+                {
+                    services.RemoveAll<IPlaybackFileStore>();
+                    services.AddSingleton(files);
+                }
+            }));
+
+        Client = configured.WithTestScheme().CreateClient();
+        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            TestAuthenticationHandler.SchemeName,
+            "anything");
+        Stranger = configured.WithTestScheme().CreateClient();
+    }
+
+    public string MountedAt => mounted.FullName;
+
+    public HttpClient Client { get; }
+
+    public HttpClient Stranger { get; }
+
+    public HeldRecordings Recordings { get; } = new();
+
+    public HeldEncodeJobs Jobs { get; } = new();
+
+    public HeldEncodeProfiles Profiles { get; } = new();
+
+    public Recording Ended(RecordingOutcome outcome, byte[] bytes, bool onDisk = true)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+
+        Recording recording = RecordingFeature.Begin(RecordingId.New());
+        recording.Wrote(TimeSpan.FromMinutes(30));
+
+        if (outcome is RecordingOutcome.Complete)
+        {
+            recording.Abort(RecordingFeature.Noon.AddMinutes(30));
+        }
+        else
+        {
+            recording.Note(new OutcomeDetail(
+                RecordingFault.DriverLost,
+                null,
+                string.Empty,
+                RecordingFeature.Noon.AddMinutes(20)));
+        }
+
+        recording.Settle(outcome, bytes.Length, RecordingFeature.Noon.AddMinutes(30));
+        Recordings.Recordings.Add(recording);
+
+        if (onDisk)
+        {
+            File.WriteAllBytes(Path.Combine(mounted.FullName, recording.FileName.Value), bytes);
+        }
+
+        return recording;
+    }
+
+    public Recording StillWriting()
+    {
+        Recording recording = RecordingFeature.Begin(RecordingId.New());
+        Recordings.Recordings.Add(recording);
+        File.WriteAllBytes(Path.Combine(mounted.FullName, recording.FileName.Value), Bytes(1_000));
+
+        return recording;
+    }
+
+    public static byte[] Bytes(int count) => [.. Enumerable.Range(0, count).Select(index => (byte)(index % 251))];
+
+    public byte[] Encoded(Recording recording, int bytes = 900)
+    {
+        EncodeProfile profile = EncodedArtefact.Profile(EncodeCodec.H264, RecordingFeature.Noon.AddHours(-1));
+        Profiles.Profiles.Add(profile);
+
+        EncodeJob job = EncodedArtefact.Made(recording, profile, RecordingFeature.Noon.AddHours(1));
+        Jobs.Jobs.Add(job);
+
+        byte[] made = Bytes(bytes);
+        File.WriteAllBytes(Path.Combine(shelved.FullName, job.ArtefactName!.Value), made);
+
+        return made;
+    }
+
+    public Task<HttpResponseMessage> GetAsync(Recording recording, string? range = null)
+        => SendAsync(HttpMethod.Get, recording, range, null);
+
+    public Task<HttpResponseMessage> HeadAsync(Recording recording, string? range = null)
+        => SendAsync(HttpMethod.Head, recording, range, null);
+
+    public Task<HttpResponseMessage> GetFromAsync(Recording recording, string source, string? range = null)
+        => SendAsync(HttpMethod.Get, recording, range, source);
+
+    public Task<HttpResponseMessage> HeadFromAsync(Recording recording, string source)
+        => SendAsync(HttpMethod.Head, recording, null, source);
+
+    public async ValueTask DisposeAsync()
+    {
+        Client.Dispose();
+        Stranger.Dispose();
+        await factory.DisposeAsync();
+        TemporaryDirectories.RemoveAll(mounted, shelved);
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpMethod method,
+        Recording recording,
+        string? range,
+        string? source)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+
+        string asked = source is null ? string.Empty : $"?source={Uri.EscapeDataString(source)}";
+
+        using var asking = new HttpRequestMessage(
+            method,
+            new Uri($"/api/videos/{recording.Id.Wire}{asked}", UriKind.Relative));
+
+        if (range is not null)
+        {
+            asking.Headers.TryAddWithoutValidation("Range", range);
+        }
+
+        return await Client.SendAsync(asking);
+    }
+}

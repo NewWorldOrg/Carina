@@ -20,7 +20,6 @@ public static class TestLayoutRules
     public static readonly IReadOnlyList<string> AreasNotYetMoved =
     [
         "Base",
-        "Captions",
         "Collection",
         "Configuration",
         "DataBroadcast",
@@ -34,12 +33,9 @@ public static class TestLayoutRules
         "Machines",
         "Net",
         "Persistence",
-        "Playback",
         "Services",
-        "Streaming",
         "Tuners",
         "Version",
-        "Viewing",
     ];
 
     /// <summary>
@@ -56,6 +52,7 @@ public static class TestLayoutRules
         new("Auth", "src/Carina.Db/Migrations/20260929160610_TheClientSecretIsSealed.cs"),
         new("Auth", "src/Carina.Infrastructure/Configuration/AuthOptions.cs"),
         new("Auth", "src/Carina.Infrastructure/Persistence/Repositories/OidcSettingsRepository.cs"),
+        new("Captions", "src/Carina.Api/Playback/CaptionDelivery.cs"),
         new("Encoding", "src/Carina.Api/Services/EncodeRerun.cs"),
         new("Encodings", "src/Carina.Db/Migrations/20260914061902_WhereTheBreaksWereJudgedToBe.cs"),
         new("Encodings", "src/Carina.Db/Migrations/20260927053702_ReplacedArtefactsAreRemoved.cs"),
@@ -73,6 +70,13 @@ public static class TestLayoutRules
         new("Notifications", "src/Carina.Api/Services/NotificationRuleService.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261110182416_AProgrammeCanBeWatchedWithoutBeingRecorded.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261112182442_ANoticeCanBeSentToABrowser.cs"),
+        new("Playback", "src/Carina.Api/Playback/AskedDecoding.cs"),
+        new("Playback", "src/Carina.Api/Playback/AskedFormat.cs"),
+        new("Playback", "src/Carina.Api/Playback/ByteRange.cs"),
+        new("Playback", "src/Carina.Api/Playback/PlayDelivery.cs"),
+        new("Playback", "src/Carina.Api/Playback/RecordingHlsDelivery.cs"),
+        new("Playback", "src/Carina.Api/Playback/VideoDelivery.cs"),
+        new("Playback", "src/Carina.Api/Responder/Playback/PlaybackPlanResponder.cs"),
         new("Programmes", "src/Carina.Db/Migrations/20260821083911_ProgrammeSearchNormalisation.cs"),
         new("Programmes", "src/Carina.Db/Migrations/20260821090203_ArchivedProgrammeSearchColumns.cs"),
         new("Programmes", "src/Carina.Db/Migrations/20260913150647_ThePictureABroadcastAnnounces.cs"),
@@ -100,6 +104,13 @@ public static class TestLayoutRules
         new("Segments", "src/Carina.Db/Migrations/20261026110822_RoundsOfLearningKeepOutACandidateThatLosesOpeningsOrEndings.cs"),
         new("Segments", "src/Carina.Db/Migrations/20261107141136_TheSkipThresholdReachesNinetyNineHundredths.cs"),
         new("Segments", "src/Carina.Infrastructure/Configuration/LearningOptions.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveHlsDelivery.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveHlsPlaylists.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveRefusalClosures.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveStreamDelivery.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveWire.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveWireRequest.cs"),
+        new("Streaming", "src/Carina.Api/Live/LiveWireSocket.cs"),
         new("Thumbnails", "src/Carina.Api/Playback/ScrubDelivery.cs"),
         new("Thumbnails", "src/Carina.Api/Playback/ThumbnailDelivery.cs"),
     ];
@@ -129,6 +140,7 @@ public static class TestLayoutRules
         new("Segments", "SegmentLearningRoundSchema"),
         new("Segments", "SegmentSettingsSchema"),
         new("Segments", "SkipEventSchema"),
+        new("Viewing", "PlaybackPositionSchema"),
     ];
 
     private const string ApiTests = "Carina.Api.Tests";

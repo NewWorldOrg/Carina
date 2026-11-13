@@ -7,7 +7,6 @@ using Carina.Api.Tests.Unit;
 using Carina.Domain.Auth;
 
 using Microsoft.AspNetCore.Http;
-
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Carina.Api.Tests.FeatureTest;
@@ -18,6 +17,24 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     private const int TheSurfacesThisRepositoryHadWhenTheSweepWasWritten = 50;
 
     private const string MigrationRoot = "/api/migration";
+
+    public static readonly IReadOnlyList<string> StreamingRoots = ["/api/live", "/api/videos"];
+
+    private static readonly string[] SurfacesTheFeatureHadWhenTheseRulesWereWritten =
+    [
+        "GET /api/live/channels",
+        "GET /api/live/profiles",
+        "GET /api/live/sessions",
+        "GET /api/live/ws",
+        "POST /api/live/ticket",
+        "GET /api/videos/{id}",
+        "HEAD /api/videos/{id}",
+        "GET /api/videos/{id}/play",
+        "PUT /api/videos/{id}/position",
+        "GET /api/videos/{id}/scrub",
+        "GET /api/videos/{id}/thumbnail",
+        "POST /api/videos/{id}/ticket",
+    ];
 
     [Fact]
     public void EveryRoutedSurfaceSaysWhetherItDestroys()
@@ -558,6 +575,76 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact]
+    public void TheStreamingSurfacesAreInTheInventoryTheEffectRuleReads()
+    {
+        string[] streaming = [.. Streaming().Select(surface => surface.ToString())];
+
+        Assert.All(
+            SurfacesTheFeatureHadWhenTheseRulesWereWritten,
+            surface => Assert.Contains(surface, streaming, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void NothingUnderTheStreamingSurfaceDeletes()
+    {
+        Assert.All(StreamingRoots, root => Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), root)));
+    }
+
+    [Fact]
+    public void NothingUnderTheStreamingSurfaceSaysItDestroys()
+    {
+        Assert.Empty(
+            Streaming()
+                .Where(surface => surface.Effect is EndpointEffect.Destructive)
+                .Select(surface => surface.ToString()));
+    }
+
+    [Fact]
+    public void TheOnlyThingsThatChangeStateUnderTheStreamingSurfaceAreATicketAndAPositionBeingKept()
+    {
+        RoutedSurface[] changing =
+        [
+            .. Streaming().Where(surface => surface.Effect is EndpointEffect.Changing),
+        ];
+
+        Assert.NotEmpty(changing);
+        Assert.All(
+            changing,
+            surface =>
+            {
+                if (surface.Pattern.EndsWith("/position", StringComparison.Ordinal))
+                {
+                    Assert.True(
+                        HttpMethods.IsPut(surface.Method),
+                        $"{surface} keeps where the watching got to on {surface.Method}");
+
+                    return;
+                }
+
+                Assert.True(HttpMethods.IsPost(surface.Method), $"{surface} changes state on {surface.Method}");
+                Assert.EndsWith("/ticket", surface.Pattern, StringComparison.Ordinal);
+            });
+    }
+
+    [Fact]
+    public void TheRootsAreReadAsWholeSegmentsAndNotAsLeadingLetters()
+    {
+        RoutedSurface[] inventory =
+        [
+            new("DELETE", "/api/videos-archive/{id}", EndpointEffect.Destructive),
+            new("DELETE", "/api/livestock/{id}", EndpointEffect.Destructive),
+            new("DELETE", "/api/live/sessions/{id}", EndpointEffect.Destructive),
+        ];
+
+        Assert.Equal(
+            ["DELETE /api/live/sessions/{id}"],
+            StreamingRoots.SelectMany(root => EndpointRules.SurfacesThatDeleteUnder(inventory, root)).ToArray());
+        Assert.Equal(
+            ["DELETE /api/live/sessions/{id}"],
+            inventory.Where(UnderARoot).Select(surface => surface.ToString()).ToArray());
+    }
+
     private static bool UnderTheMigrationRoot(RoutedSurface surface)
         => string.Equals(surface.Pattern, MigrationRoot, StringComparison.Ordinal)
            || surface.Pattern.StartsWith(MigrationRoot + "/", StringComparison.Ordinal);
@@ -565,4 +652,10 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     private IEnumerable<RoutedSurface> MigrationSurfaces() => Inventory().Where(UnderTheMigrationRoot);
 
     private IReadOnlyList<RoutedSurface> Inventory() => RouteInventory.Of(factory);
+
+    private static bool UnderARoot(RoutedSurface surface)
+        => StreamingRoots.Any(root => string.Equals(surface.Pattern, root, StringComparison.Ordinal)
+                                      || surface.Pattern.StartsWith(root + "/", StringComparison.Ordinal));
+
+    private IEnumerable<RoutedSurface> Streaming() => Inventory().Where(UnderARoot);
 }

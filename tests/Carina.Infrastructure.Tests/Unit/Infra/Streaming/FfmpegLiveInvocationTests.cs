@@ -1,0 +1,1236 @@
+using System.Globalization;
+using System.Reflection;
+
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+using Carina.Domain.Machines;
+using Carina.Domain.Streaming;
+using Carina.Infrastructure.Streaming;
+
+namespace Carina.Infrastructure.Tests.Unit.Infra.Streaming;
+
+[Trait("Category", "Unit")]
+public sealed class FfmpegLiveInvocationTests
+{
+    private const string RenderNode = "/dev/dri/renderD129";
+
+    private static readonly ServiceId Service = new(1040);
+
+    private static readonly MachineSettings Machine = new() { RenderNode = RenderNode };
+
+    private static readonly ServiceId AnotherService = new(1048);
+
+    private static readonly StreamAttributes Interlaced = new(
+        new VideoSize(1440, 1080),
+        ScanType.Interlaced,
+        FrameRate.BroadcastFrames,
+        AudioMode.Stereo);
+
+    private static readonly StreamAttributes Progressive = new(
+        new VideoSize(1920, 1080),
+        ScanType.Progressive,
+        FrameRate.BroadcastFrames,
+        AudioMode.Stereo);
+
+    public static TheoryData<LiveProfile, LiveEncoder> EveryProfileOnEveryEncoder
+    {
+        get
+        {
+            var pairs = new TheoryData<LiveProfile, LiveEncoder>();
+
+            foreach (LiveProfile profile in LiveProfile.All)
+            {
+                pairs.Add(profile, LiveEncoder.Software);
+                pairs.Add(profile, LiveEncoder.Vaapi);
+                pairs.Add(profile, LiveEncoder.Nvenc);
+            }
+
+            return pairs;
+        }
+    }
+
+    public static TheoryData<LiveProfile> EveryProfile => [.. LiveProfile.All];
+
+    public static TheoryData<LiveProfile, VideoCodec> EveryProfileInEveryFormatOnTheCard
+    {
+        get
+        {
+            TheoryData<LiveProfile, VideoCodec> pairs = [];
+
+            foreach (LiveProfile profile in LiveProfile.All)
+            {
+                foreach (VideoCodec format in VideoCodecs.InOrder)
+                {
+                    pairs.Add(profile, format);
+                }
+            }
+
+            return pairs;
+        }
+    }
+
+    public static TheoryData<StreamAttributes> EveryKindOfPicture
+        =>
+        [
+            Interlaced,
+            Progressive,
+            StreamAttributes.SafeSide,
+            new StreamAttributes(new VideoSize(720, 480), ScanType.Interlaced, FrameRate.BroadcastFrames, AudioMode.DualMono),
+            new StreamAttributes(new VideoSize(1920, 1080), ScanType.Undetermined, FrameRate.BroadcastFrames, AudioMode.Surround),
+        ];
+
+    [Fact]
+    public void TheSoftwareArgumentsAreExactlyThese()
+    {
+        Assert.Equal(
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-nostats",
+                "-loglevel",
+                "level+info",
+                "-probesize",
+                "500000",
+                "-analyzeduration",
+                "250000",
+                "-copyts",
+                "-i",
+                "pipe:0",
+                "-map",
+                "p:1040:v:0",
+                "-map",
+                "p:1040:a:0",
+                "-vf",
+                "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1",
+                "-r",
+                "30000/1001",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-tune",
+                "zerolatency",
+                "-g",
+                "60",
+                "-sc_threshold",
+                "0",
+                "-b:v",
+                "3000k",
+                "-maxrate",
+                "3000k",
+                "-bufsize",
+                "6000k",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+            ],
+            FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None));
+    }
+
+    [Fact]
+    public void TheVaapiArgumentsAreExactlyThese()
+    {
+        Assert.Equal(
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-nostats",
+                "-loglevel",
+                "level+info",
+                "-probesize",
+                "500000",
+                "-analyzeduration",
+                "250000",
+                "-copyts",
+                "-vaapi_device",
+                RenderNode,
+                "-i",
+                "pipe:0",
+                "-map",
+                "p:1040:v:0",
+                "-map",
+                "p:1040:a:0",
+                "-vf",
+                "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload",
+                "-r",
+                "60000/1001",
+                "-c:v",
+                "h264_vaapi",
+                "-g",
+                "120",
+                "-rc_mode",
+                "CQP",
+                "-qp",
+                "24",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+            ],
+            FfmpegLiveInvocation.Arguments(Service, LiveProfile.FullHd60, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None));
+    }
+
+    [Fact]
+    public void TheNvencArgumentsAreExactlyThese()
+    {
+        Assert.Equal(
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-nostats",
+                "-loglevel",
+                "level+info",
+                "-probesize",
+                "500000",
+                "-analyzeduration",
+                "250000",
+                "-copyts",
+                "-init_hw_device",
+                "cuda=cu",
+                "-filter_hw_device",
+                "cu",
+                "-i",
+                "pipe:0",
+                "-map",
+                "p:1040:v:0",
+                "-map",
+                "p:1040:a:0",
+                "-vf",
+                "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload_cuda",
+                "-r",
+                "60000/1001",
+                "-c:v",
+                "h264_nvenc",
+                "-g",
+                "120",
+                "-rc",
+                "constqp",
+                "-qp",
+                "24",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+            ],
+            FfmpegLiveInvocation.Arguments(Service, LiveProfile.FullHd60, Interlaced, LiveEncoder.Nvenc, Machine, CaptionOutlet.None));
+    }
+
+    [Theory(DisplayName = "an NVIDIA card encodes each format by its own encoder, at the same quantiser or index the VAAPI card is handed, H.265 tagged hvc1")]
+    [InlineData(VideoCodec.H264, "h264_nvenc", "24", false)]
+    [InlineData(VideoCodec.H265, "hevc_nvenc", "24", true)]
+    [InlineData(VideoCodec.Av1, "av1_nvenc", "80", false)]
+    public void AnNvidiaCardEncodesEachFormatByItsOwnEncoder(VideoCodec format, string encoder, string quality, bool tagged)
+    {
+        string[] tag = tagged ? ["-tag:v", "hvc1"] : [];
+
+        Assert.Equal(
+            ["-c:v", encoder, "-g", "120", "-rc", "constqp", "-qp", quality, .. tag],
+            Encoder(FfmpegLiveInvocation.Arguments(
+                Service,
+                LiveProfile.FullHd60,
+                Interlaced,
+                LiveEncoder.Nvenc,
+                Machine,
+                CaptionOutlet.None,
+                format: format)));
+    }
+
+    [Theory(DisplayName = "on an NVIDIA card a format changes nothing but the encoder and what it is handed")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void OnAnNvidiaCardAFormatChangesNothingButTheEncoderAndWhatItIsHanded(LiveProfile profile, VideoCodec format)
+    {
+        string[] h264 = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Nvenc, Machine, CaptionOutlet.Drawn)];
+        string[] asked = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Nvenc, Machine, CaptionOutlet.Drawn, format: format)];
+        int handed = format switch
+        {
+            VideoCodec.H265 => profile.VaapiRateControl.H265.Quantiser,
+            VideoCodec.Av1 => profile.VaapiRateControl.Av1.Index,
+            _ => profile.VaapiRateControl.H264.Quantiser,
+        };
+
+        Assert.Equal(AllButTheEncoder(h264), AllButTheEncoder(asked));
+        Assert.Equal(handed.ToString(CultureInfo.InvariantCulture), asked[asked.IndexOf("-qp") + 1]);
+        Assert.Single(asked, argument => argument is "-qp");
+        Assert.DoesNotContain("-global_quality", asked);
+        Assert.DoesNotContain("-rc_mode", asked);
+    }
+
+    [Fact(DisplayName = "the H.265 arguments are exactly these, tagged hvc1 so that Safari plays them")]
+    public void TheH265ArgumentsAreExactlyThese()
+    {
+        Assert.Equal(
+            [
+                "-c:v",
+                "hevc_vaapi",
+                "-g",
+                "120",
+                "-rc_mode",
+                "CQP",
+                "-qp",
+                "24",
+                "-tag:v",
+                "hvc1",
+            ],
+            Encoder(FfmpegLiveInvocation.Arguments(
+                Service,
+                LiveProfile.FullHd60,
+                Interlaced,
+                LiveEncoder.Vaapi,
+                Machine,
+                CaptionOutlet.None,
+                format: VideoCodec.H265)));
+    }
+
+    [Fact(DisplayName = "the AV1 arguments are exactly these, the quality given as the index AV1 quantises by")]
+    public void TheAv1ArgumentsAreExactlyThese()
+    {
+        Assert.Equal(
+            [
+                "-c:v",
+                "av1_vaapi",
+                "-g",
+                "120",
+                "-rc_mode",
+                "CQP",
+                "-global_quality",
+                "80",
+            ],
+            Encoder(FfmpegLiveInvocation.Arguments(
+                Service,
+                LiveProfile.FullHd60,
+                Interlaced,
+                LiveEncoder.Vaapi,
+                Machine,
+                CaptionOutlet.None,
+                format: VideoCodec.Av1)));
+    }
+
+    [Theory(DisplayName = "a format changes nothing but the encoder and what it is handed")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void AFormatChangesNothingButTheEncoderAndWhatItIsHanded(LiveProfile profile, VideoCodec format)
+    {
+        string[] h264 = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.Drawn)];
+        string[] asked = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.Drawn, format: format)];
+
+        Assert.Equal(AllButTheEncoder(h264), AllButTheEncoder(asked));
+        Assert.Equal(h264[h264.IndexOf("-g") + 1], asked[asked.IndexOf("-g") + 1]);
+    }
+
+    [Theory(DisplayName = "what the card is handed for a format is what the profile sets for that format")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void WhatTheCardIsHandedForAFormatIsWhatTheProfileSetsForThatFormat(LiveProfile profile, VideoCodec format)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, format: format)];
+        (string Option, int Value) handed = format switch
+        {
+            VideoCodec.H265 => ("-qp", profile.VaapiRateControl.H265.Quantiser),
+            VideoCodec.Av1 => ("-global_quality", profile.VaapiRateControl.Av1.Index),
+            _ => ("-qp", profile.VaapiRateControl.H264.Quantiser),
+        };
+
+        Assert.Equal(
+            handed.Value.ToString(CultureInfo.InvariantCulture),
+            arguments[arguments.IndexOf(handed.Option) + 1]);
+        Assert.Single(arguments, argument => argument is "-qp" or "-global_quality");
+    }
+
+    [Theory(DisplayName = "only H.265 is tagged, and it is tagged hvc1 rather than hev1")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void OnlyH265IsTaggedAndItIsTaggedHvc1(LiveProfile profile, VideoCodec format)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, format: format)];
+
+        if (format is VideoCodec.H265)
+        {
+            Assert.Equal("hvc1", arguments[arguments.IndexOf("-tag:v") + 1]);
+
+            return;
+        }
+
+        Assert.DoesNotContain("-tag:v", arguments);
+    }
+
+    [Theory(DisplayName = "the processor encodes H.264 alone, so another format asked of it is refused")]
+    [InlineData(VideoCodec.H265)]
+    [InlineData(VideoCodec.Av1)]
+    public void TheProcessorEncodesH264Alone(VideoCodec format)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None, format: format));
+    }
+
+    [Fact]
+    public void AFormatNobodyNamedIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None, format: (VideoCodec)9));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheInputIsReadForAQuarterOfASecondOfTheBroadcastAndNoMoreThanHalfAMegabyteBeforeAnythingIsDecoded(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+        int input = arguments.IndexOf("-i");
+
+        Assert.Equal("250000", arguments[arguments.IndexOf("-analyzeduration") + 1]);
+        Assert.Equal("500000", arguments[arguments.IndexOf("-probesize") + 1]);
+        Assert.InRange(arguments.IndexOf("-analyzeduration"), 0, input);
+        Assert.InRange(arguments.IndexOf("-probesize"), 0, input);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheTranscoderSaysWhenItHasReadItsInputAndMarksHowSeriousEachLineIsButNeverHowFarItHasGot(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.Drawn)];
+
+        Assert.Equal("level+info", arguments[arguments.IndexOf("-loglevel") + 1]);
+        Assert.Contains("-nostats", arguments);
+        Assert.DoesNotContain("-stats", arguments);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void WhatTheProbeReadIsDecodedRatherThanThrownAwaySoAPictureStartingInsideItIsNotWaitedForAgain(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.Drawn)];
+
+        Assert.DoesNotContain("nobuffer", arguments);
+        Assert.DoesNotContain("-fflags", arguments);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryKindOfPicture))]
+    public void TheProbeIsTheSameWhateverTheStreamIsSaidToCarryBecauseTheServicesOwnMapSaysWhatItCarries(
+        StreamAttributes attributes)
+    {
+        foreach (LiveEncoder encoder in Enum.GetValues<LiveEncoder>())
+        {
+            string[] said = [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, attributes, encoder, Machine, CaptionOutlet.None)];
+            string[] safe = [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, StreamAttributes.SafeSide, encoder, Machine, CaptionOutlet.None)];
+
+            Assert.Equal(safe.Take(safe.IndexOf("-i") + 2), said.Take(said.IndexOf("-i") + 2));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void ThePictureIsWrittenAtTheProfilesOwnRateWhateverRateTheShortProbeGuessed(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.Single(arguments, argument => string.Equals(argument, "-r", StringComparison.Ordinal));
+        Assert.Equal(profile.Rate.ToString(), arguments[arguments.IndexOf("-r") + 1]);
+        Assert.True(arguments.IndexOf("-r") > arguments.IndexOf("-i"));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheSameProfileAsksForTheSameThingEveryTime(LiveProfile profile, LiveEncoder encoder)
+    {
+        Assert.NotEmpty(FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None));
+        Assert.Equal(
+            FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None),
+            FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void EveryProfileAsksForSomethingOfItsOwn(LiveProfile profile, LiveEncoder encoder)
+    {
+        IReadOnlyList<LiveProfile> others = [.. LiveProfile.All.Where(other => !ReferenceEquals(other, profile))];
+
+        Assert.NotEmpty(others);
+        Assert.All(
+            others,
+            other => Assert.NotEqual(
+                FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None),
+                FfmpegLiveInvocation.Arguments(Service, other, Interlaced, encoder, Machine, CaptionOutlet.None)));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void NothingHandedToTheEncoderIsMoreThanOneArgument(LiveProfile profile, LiveEncoder encoder)
+    {
+        Assert.All(
+            FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None),
+            argument =>
+            {
+                Assert.NotEqual(string.Empty, argument);
+                Assert.DoesNotContain(argument, letter => char.IsWhiteSpace(letter) || char.IsControl(letter));
+            });
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void BrPd008TheSoundIsBuiltAgainSoAGapInTheFeedIsHeardAsABreakRatherThanEndingThePlayback(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.Equal("aac", arguments[arguments.IndexOf("-c:a") + 1]);
+        Assert.Equal("192k", arguments[arguments.IndexOf("-b:a") + 1]);
+        Assert.DoesNotContain("copy", arguments);
+        Assert.Single(arguments, argument => string.Equals(argument, "-c:a", StringComparison.Ordinal));
+        Assert.DoesNotContain(arguments, argument => argument.StartsWith("-c:a:", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheFilterThatDressedAdtsFramesAsAnAscIsGoneBecauseNothingIsCarriedOverAnyMore(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.DoesNotContain("-bsf:a", arguments);
+        Assert.DoesNotContain("aac_adtstoasc", arguments);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void NothingReshapesASoundTakenWholeSoEveryChannelTheBroadcastSentIsStillThere(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.DoesNotContain("-ac", arguments);
+        Assert.DoesNotContain("-ar", arguments);
+        Assert.DoesNotContain("-af", arguments);
+        Assert.DoesNotContain("-filter:a", arguments);
+        Assert.DoesNotContain("-filter_complex", arguments);
+        Assert.DoesNotContain("-channel_layout", arguments);
+        Assert.DoesNotContain("-dual_mono_mode", arguments);
+    }
+
+    [Fact]
+    public void TheSoundIsGivenAsMuchRoomAsTheBroadcastGaveIt()
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None)];
+
+        Assert.Equal(192, FfmpegLiveInvocation.SoundKilobitsPerSecond);
+        Assert.Equal(
+            FormattableString.Invariant($"{FfmpegLiveInvocation.SoundKilobitsPerSecond}k"),
+            arguments[arguments.IndexOf("-b:a") + 1]);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheServicesOwnPictureAndItsMainSoundAreTaken(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(arguments));
+        Assert.True(arguments.IndexOf("-map") > arguments.IndexOf("-i"));
+        Assert.True(arguments.LastIndexOf("-map") < arguments.IndexOf("-vf"));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void AViewerWhoNamesNoSoundIsGivenTheOneTheyAlwaysWere(LiveProfile profile, LiveEncoder encoder)
+    {
+        Assert.Equal(
+            FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None),
+            FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None, SoundPlacement.WholeStream(0)));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheSecondSoundOfTheServiceIsTakenWhenItIsAskedFor(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                Machine,
+                CaptionOutlet.None,
+                SoundPlacement.WholeStream(1)),
+        ];
+
+        Assert.Equal(["p:1040:v:0", "p:1040:a:1"], Mapped(arguments));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void OnlyTheSoundMapChangesWhenTheSecondSoundIsAskedFor(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] main = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+        string[] second =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                Machine,
+                CaptionOutlet.None,
+                SoundPlacement.WholeStream(1)),
+        ];
+
+        Assert.Equal(main.Length, second.Length);
+        Assert.Equal(
+            main.Where(argument => !string.Equals(argument, "p:1040:a:0", StringComparison.Ordinal)),
+            second.Where(argument => !string.Equals(argument, "p:1040:a:1", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void StillOnlyOneSoundIsBuiltWhenTheSecondOneIsAskedFor(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                Machine,
+                CaptionOutlet.None,
+                SoundPlacement.WholeStream(1)),
+        ];
+
+        Assert.Single(arguments, argument => string.Equals(argument, "-c:a", StringComparison.Ordinal));
+        Assert.DoesNotContain(arguments, argument => argument.StartsWith("-c:a:", StringComparison.Ordinal));
+        Assert.Single(Mapped(arguments), map => map.StartsWith("p:1040:a", StringComparison.Ordinal));
+    }
+
+    [Theory(DisplayName = "BR-PD-008: a sound carried on one channel of its stream is taken from that stream and that channel is put in both ears, the same way a recording is played")]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void BrPd008ASoundCarriedOnOneChannelOfItsStreamIsPutInBothEars(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] left =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                Machine,
+                CaptionOutlet.None,
+                SoundPlacement.OneChannelOf(0, SoundChannel.Left)),
+        ];
+        string[] right =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                Machine,
+                CaptionOutlet.None,
+                SoundPlacement.OneChannelOf(0, SoundChannel.Right)),
+        ];
+
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(left));
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(right));
+        Assert.Equal(FfmpegPlaybackInvocation.TheLeftChannelInBothEars, left[left.IndexOf("-af") + 1]);
+        Assert.Equal(FfmpegPlaybackInvocation.TheRightChannelInBothEars, right[right.IndexOf("-af") + 1]);
+        Assert.Single(left, argument => string.Equals(argument, "-af", StringComparison.Ordinal));
+        Assert.True(left.IndexOf("-af") > left.IndexOf("-c:a"));
+    }
+
+    [Theory(DisplayName = "BR-PD-008: only the choice of ear is added when a sound is taken from one channel")]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void OnlyTheChoiceOfEarIsAddedWhenASoundIsTakenFromOneChannel(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] whole = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+        string[] left =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                Machine,
+                CaptionOutlet.None,
+                SoundPlacement.OneChannelOf(0, SoundChannel.Left)),
+        ];
+
+        Assert.Equal([.. whole, "-af", FfmpegPlaybackInvocation.TheLeftChannelInBothEars], left);
+        Assert.DoesNotContain("-ac", left);
+        Assert.DoesNotContain("-dual_mono_mode", left);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void OneSoundIsNamedBecauseAMediaSourceWillNotTakeASecond(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] mapped = Mapped([.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)]);
+        string[] sounds = [.. mapped.Where(map => map.StartsWith("p:1040:a", StringComparison.Ordinal))];
+
+        Assert.Equal(["p:1040:a:0"], sounds);
+        Assert.DoesNotContain("p:1040:a", mapped);
+    }
+
+    [Fact]
+    public void NothingIsTakenFromTheMultiplexAtLargeRatherThanFromTheService()
+    {
+        string[] mapped = Mapped([.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None)]);
+
+        Assert.NotEmpty(mapped);
+        Assert.All(mapped, map => Assert.StartsWith("p:1040:", map, StringComparison.Ordinal));
+        Assert.DoesNotContain(mapped, map => map.StartsWith("0:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnotherServiceIsAnotherProgrammeInTheMultiplex()
+    {
+        Assert.Equal(
+            ["p:1048:v:0", "p:1048:a:0"],
+            Mapped([.. FfmpegLiveInvocation.Arguments(AnotherService, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None)]));
+    }
+
+    [Fact]
+    public void TheHeaderIsHeldBackUntilTheSoundHasSaidHowItIsCoded()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.Contains("delay_moov", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void OnlyOneEncoderIsNamed(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.Equal(
+            encoder switch
+            {
+                LiveEncoder.Vaapi => "h264_vaapi",
+                LiveEncoder.Nvenc => "h264_nvenc",
+                _ => "libx264",
+            },
+            arguments[arguments.IndexOf("-c:v") + 1]);
+        Assert.Single(arguments, argument => string.Equals(argument, "-c:v", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheRateControlGoesToTheEncoderThatHasIt(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        if (encoder is not LiveEncoder.Software)
+        {
+            Assert.Equal(
+                encoder is LiveEncoder.Vaapi ? "CQP" : "constqp",
+                arguments[arguments.IndexOf(encoder is LiveEncoder.Vaapi ? "-rc_mode" : "-rc") + 1]);
+            Assert.Equal(
+                profile.VaapiRateControl.H264.Quantiser.ToString(CultureInfo.InvariantCulture),
+                arguments[arguments.IndexOf("-qp") + 1]);
+            Assert.DoesNotContain("-b:v", arguments);
+            Assert.DoesNotContain("-maxrate", arguments);
+            Assert.DoesNotContain("-bufsize", arguments);
+
+            return;
+        }
+
+        Assert.Equal(profile.SoftwareRateControl.ToString(), arguments[arguments.IndexOf("-b:v") + 1]);
+        Assert.Equal(profile.SoftwareRateControl.ToString(), arguments[arguments.IndexOf("-maxrate") + 1]);
+        Assert.DoesNotContain("-rc_mode", arguments);
+        Assert.DoesNotContain("-rc", arguments);
+        Assert.DoesNotContain("-qp", arguments);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void ThePictureIsScaledToTheProfileAndGivenSquarePixels(LiveProfile profile, LiveEncoder encoder)
+    {
+        string filter = FilterOf(profile, Interlaced, encoder);
+
+        Assert.Contains(
+            $"scale={profile.Size.Width}:{profile.Size.Height}:flags=bicubic",
+            filter,
+            StringComparison.Ordinal);
+        Assert.Contains("setsar=1", filter, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void OnlyTheHardwareEncoderIsHandedFramesAndADevice(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+        string filter = FilterOf(profile, Interlaced, encoder);
+
+        if (encoder is LiveEncoder.Vaapi)
+        {
+            Assert.Equal(RenderNode, arguments[arguments.IndexOf("-vaapi_device") + 1]);
+            Assert.True(arguments.IndexOf("-vaapi_device") < arguments.IndexOf("-i"));
+            Assert.EndsWith("format=nv12,hwupload", filter, StringComparison.Ordinal);
+            Assert.DoesNotContain("-init_hw_device", arguments);
+
+            return;
+        }
+
+        if (encoder is LiveEncoder.Nvenc)
+        {
+            Assert.Equal("cuda=cu", arguments[arguments.IndexOf("-init_hw_device") + 1]);
+            Assert.Equal("cu", arguments[arguments.IndexOf("-filter_hw_device") + 1]);
+            Assert.True(arguments.IndexOf("-init_hw_device") < arguments.IndexOf("-i"));
+            Assert.EndsWith("format=nv12,hwupload_cuda", filter, StringComparison.Ordinal);
+            Assert.DoesNotContain("-vaapi_device", arguments);
+            Assert.DoesNotContain(arguments, argument => argument.Contains("/dev/", StringComparison.Ordinal));
+
+            return;
+        }
+
+        Assert.DoesNotContain("-vaapi_device", arguments);
+        Assert.DoesNotContain("-init_hw_device", arguments);
+        Assert.DoesNotContain("hwupload", filter, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void NoDecoderIsAskedForAtAll(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.DoesNotContain("-hwaccel", arguments);
+        Assert.DoesNotContain("-hwaccel_output_format", arguments);
+        Assert.DoesNotContain("-c:v:0", arguments);
+        Assert.DoesNotContain("mpeg2_vaapi", arguments);
+        Assert.DoesNotContain(arguments, argument => argument.Contains("cuvid", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheDecoderIsNotHurriedPastTheOrderTheBroadcastCodedItsPicturesIn(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.DoesNotContain("low_delay", arguments);
+    }
+
+    [Theory]
+    [InlineData("1080p60", "send_field")]
+    [InlineData("1080p30", "send_frame")]
+    [InlineData("720p60", "send_field")]
+    [InlineData("720p30", "send_frame")]
+    public void AProfileWantingEveryFieldSeparatesThem(string name, string mode)
+    {
+        Assert.StartsWith(
+            $"bwdif=mode={mode},",
+            FilterOf(LiveProfile.Find(name)!, Interlaced, LiveEncoder.Software),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStreamThatSaysItIsProgressiveIsNotDeinterlaced()
+    {
+        Assert.DoesNotContain(
+            "bwdif",
+            FilterOf(LiveProfile.Hd30, Progressive, LiveEncoder.Software),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStreamThatSaysNothingAboutItsScanIsDeinterlacedAnyway()
+    {
+        var unsaid = new StreamAttributes(
+            new VideoSize(1440, 1080),
+            ScanType.Undetermined,
+            FrameRate.BroadcastFrames,
+            AudioMode.Stereo);
+
+        Assert.Contains(
+            "bwdif",
+            FilterOf(LiveProfile.Hd30, unsaid, LiveEncoder.Software),
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void AKeyframeArrivesEveryTwoSecondsOfTheProfilesOwnFrames(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.Equal(
+            Math.Round(profile.Rate.PerSecond * 2).ToString(CultureInfo.InvariantCulture),
+            arguments[arguments.IndexOf("-g") + 1]);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void NoSizeIsPutOnACanvasNobodyHasMeasured(LiveProfile profile, LiveEncoder encoder)
+    {
+        Assert.DoesNotContain("-canvas_size", FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void NothingIsSaidAboutWhereTheAnswerGoes(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, Machine, CaptionOutlet.None)];
+
+        Assert.DoesNotContain("-f", arguments);
+        Assert.DoesNotContain("-movflags", arguments);
+        Assert.DoesNotContain("-frag_duration", arguments);
+        Assert.DoesNotContain("pipe:1", arguments);
+    }
+
+    [Fact]
+    public void TheOnePlaceThatSaysWhereTheAnswerGoesSaysExactlyThis()
+    {
+        Assert.Equal(
+            [
+                "-f",
+                "mp4",
+                "-movflags",
+                "empty_moov+default_base_moof+delay_moov+frag_discont",
+                "-frag_duration",
+                "50000",
+                "pipe:1",
+            ],
+            FfmpegLiveInvocation.Delivery());
+    }
+
+    [Fact(DisplayName = "BR-PD-006, BR-PD-022: the fragments are cut by time alone, a keyframe cutting none, so that no fragment carries the picture without the sound")]
+    public void TheFragmentsAreCutByTimeAlone()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.DoesNotContain("frag_keyframe", delivery[delivery.IndexOf("-movflags") + 1].Split('+'));
+        Assert.Equal("50000", delivery[delivery.IndexOf("-frag_duration") + 1]);
+    }
+
+    [Theory(DisplayName = "BR-PD-022: the processor puts a keyframe every two seconds and nowhere else, so that the segments cut at them last two seconds")]
+    [MemberData(nameof(EveryProfile))]
+    public void TheProcessorPutsAKeyframeEveryTwoSecondsAndNowhereElse(LiveProfile profile)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None)];
+
+        Assert.Equal(
+            Math.Round(profile.Rate.PerSecond * 2).ToString(CultureInfo.InvariantCulture),
+            arguments[arguments.IndexOf("-g") + 1]);
+        Assert.Equal("0", arguments[arguments.IndexOf("-sc_threshold") + 1]);
+    }
+
+    [Theory(DisplayName = "BR-PD-022: the card puts a keyframe every two seconds in every format")]
+    [MemberData(nameof(EveryProfileInEveryFormatOnTheCard))]
+    public void TheCardPutsAKeyframeEveryTwoSeconds(LiveProfile profile, VideoCodec format)
+    {
+        foreach (LiveEncoder card in new[] { LiveEncoder.Vaapi, LiveEncoder.Nvenc })
+        {
+            string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, card, Machine, CaptionOutlet.None, null, format)];
+
+            Assert.Equal(
+                Math.Round(profile.Rate.PerSecond * 2).ToString(CultureInfo.InvariantCulture),
+                arguments[arguments.IndexOf("-g") + 1]);
+        }
+    }
+
+    [Fact]
+    public void BrPd007AskedForCaptionsTheDecoderIsToldToDrawThemAsBitmapsOnTheMeasuredCanvasInTheImagesFaceBeforeTheInputIsNamed()
+    {
+        IReadOnlyList<string> arguments = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.Drawn);
+        int input = arguments.ToList().IndexOf("-i");
+
+        Assert.Equal(
+            ["-sub_type", "bitmap", "-canvas_size", "1440x1080", "-font", "Denpa Font,Noto Sans CJK JP"],
+            arguments.Skip(input - 6).Take(6));
+        Assert.Equal(
+            FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Vaapi, Machine, CaptionOutlet.None),
+            arguments.Where((_, at) => at < input - 6 || at >= input));
+
+        IReadOnlyList<string> fullHd = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Progressive, LiveEncoder.Software, Machine, CaptionOutlet.Drawn);
+
+        Assert.Equal("1920x1080", fullHd[fullHd.ToList().IndexOf("-canvas_size") + 1]);
+    }
+
+    [Fact]
+    public void WithoutCaptionsNothingAboutSubtitlesIsSaid()
+    {
+        IReadOnlyList<string> arguments = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None);
+
+        Assert.DoesNotContain("-sub_type", arguments);
+        Assert.DoesNotContain("-canvas_size", arguments);
+        Assert.DoesNotContain("-font", arguments);
+    }
+
+    [Fact]
+    public void BrPd007TheCaptionOutletIsTheServicesFirstCaptionStreamDrawnAsPngFramesStampedInANutStreamOnTheNamedPipe()
+    {
+        Assert.Equal(
+            [
+                "-filter_complex",
+                "[0:p:1040:s:0]null[c]",
+                "-map",
+                "[c]",
+                "-fps_mode",
+                "passthrough",
+                "-c:v",
+                "png",
+                "-pix_fmt",
+                "rgba",
+                "-compression_level",
+                "1",
+                "-threads",
+                "1",
+                "-flush_packets",
+                "1",
+                "-f",
+                "nut",
+                "pipe:35",
+            ],
+            FfmpegLiveInvocation.CaptionDelivery(Service, 35));
+        Assert.NotEqual(FfmpegLiveInvocation.CaptionDelivery(Service, 35), FfmpegLiveInvocation.CaptionDelivery(AnotherService, 35));
+    }
+
+    [Fact]
+    public void TheCaptionEncoderRunsOnOneThreadBecauseAFrameThreadedEncoderHoldsBackAsManyFramesAsItHasThreads()
+    {
+        IReadOnlyList<string> delivery = FfmpegLiveInvocation.CaptionDelivery(Service, 3);
+        int threads = delivery.ToList().IndexOf("-threads");
+
+        Assert.True(threads > delivery.ToList().IndexOf("-c:v"));
+        Assert.Equal("1", delivery[threads + 1]);
+    }
+
+    [Fact]
+    public void TheCaptionOutletNeedsAPipeOfItsOwnBeyondTheThreeEveryProcessHas()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegLiveInvocation.CaptionDelivery(Service, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegLiveInvocation.CaptionDelivery(Service, 2));
+        Assert.Throws<ArgumentNullException>(() => FfmpegLiveInvocation.CaptionDelivery(null!, 3));
+    }
+
+    [Fact]
+    public void AnOutletNobodyDefinedIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, (CaptionOutlet)7));
+    }
+
+    [Fact]
+    public void TheComplaintForAServiceWithoutACaptionStreamIsRecognisedAndOthersAreNot()
+    {
+        Assert.True(FfmpegComplaints.RefusedForWantOfACaptionStream(
+            "Stream specifier ':p:1040:s:0' in filtergraph description [0:p:1040:s:0]null[c] matches no streams.\nError initializing complex filters: Invalid argument"));
+        Assert.False(FfmpegComplaints.RefusedForWantOfACaptionStream("Invalid data found when processing input"));
+        Assert.False(FfmpegComplaints.RefusedForWantOfACaptionStream(string.Empty));
+    }
+
+    [Fact]
+    public void TheFragmentsSitOnTheBroadcastsOwnClockSoTheCaptionsDrawnByAnotherProcessMeetThem()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.Contains("-copyts", FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None));
+        Assert.Contains("frag_discont", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARecordingPlayedFromSomewhereInItStartsItsClockThereInstead()
+    {
+        string[] live = [.. FfmpegLiveInvocation.Delivery()];
+        string[] delivery = [.. FfmpegLiveInvocation.DeliveryFromTheStart()];
+
+        Assert.DoesNotContain("frag_discont", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+        Assert.Equal(Options(live), Options(delivery));
+        Assert.Equal(live[live.IndexOf("-f") + 1], delivery[delivery.IndexOf("-f") + 1]);
+        Assert.Equal(live[^1], delivery[^1]);
+    }
+
+    [Fact]
+    public void TheAnswerIsAContainerThatCanBeWrittenToSomethingThatCannotBeWoundBack()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.Equal("mp4", delivery[delivery.IndexOf("-f") + 1]);
+        Assert.Contains("empty_moov", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+        Assert.Contains("default_base_moof", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+        Assert.Equal(FfmpegLiveInvocation.Output, delivery[^1]);
+    }
+
+    [Fact]
+    public void TheLiveAnswerIsCutEveryTwentiethOfASecondAndARecordedOneEveryFifth()
+    {
+        string[] live = [.. FfmpegLiveInvocation.Delivery()];
+        string[] recorded = [.. FfmpegLiveInvocation.DeliveryFromTheStart()];
+
+        Assert.Equal("50000", live[live.IndexOf("-frag_duration") + 1]);
+        Assert.Equal("200000", recorded[recorded.IndexOf("-frag_duration") + 1]);
+    }
+
+    [Fact]
+    public void TheAnswerIsNotCutAtEveryFrame()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.DoesNotContain("-frag_every_frame", delivery);
+        Assert.DoesNotContain("frag_every_frame", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEncoderThatIsNotOneOfThoseNamedIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, (LiveEncoder)7, Machine, CaptionOutlet.None));
+    }
+
+    [Theory]
+    [InlineData(LiveEncoder.Software)]
+    [InlineData(LiveEncoder.Vaapi)]
+    [InlineData(LiveEncoder.Nvenc)]
+    public void TheCardIsOpenedThroughTheRenderNodeItIsHandedAndOnlyWhenItEncodes(LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, encoder, new MachineSettings { RenderNode = "/dev/dri/renderD130" }, CaptionOutlet.None)];
+        string[] expected = encoder is LiveEncoder.Vaapi ? ["-vaapi_device", "/dev/dri/renderD130"] : [];
+
+        Assert.Equal(expected, arguments.Where((argument, at) => argument == "-vaapi_device" || (at > 0 && arguments[at - 1] == "-vaapi_device")));
+    }
+
+    [Theory]
+    [InlineData(LiveEncoder.Software)]
+    [InlineData(LiveEncoder.Vaapi)]
+    [InlineData(LiveEncoder.Nvenc)]
+    public void NoCommandIsBuiltWithoutARenderNodeToOpenTheCardThrough(LiveEncoder encoder)
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, encoder, null!, CaptionOutlet.None));
+        Assert.Throws<ArgumentException>(
+            () => FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, encoder, Machine with { RenderNode = string.Empty }, CaptionOutlet.None));
+    }
+
+    [Fact]
+    public void NoCommandIsBuiltWithoutSayingWhichServiceItIsFor()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => FfmpegLiveInvocation.Arguments(null!, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Machine, CaptionOutlet.None));
+    }
+
+    [Fact]
+    public void ThereAreTheProcessorAndTheTwoKindsOfCard()
+    {
+        Assert.Equal([LiveEncoder.Software, LiveEncoder.Vaapi, LiveEncoder.Nvenc], Enum.GetValues<LiveEncoder>());
+    }
+
+    [Fact]
+    public void NoWayInTakesText()
+    {
+        Assert.Empty(TextTakenBy(typeof(FfmpegLiveInvocation)));
+    }
+
+    [Fact]
+    public void TheCheckOnTheWayInReadsConstructorsAndNotStaticFactories()
+    {
+        Assert.Contains(
+            "TextTakingFixture(String)",
+            TextTakenBy(typeof(TextTakingFixture)),
+            StringComparer.Ordinal);
+
+        Assert.NotNull(typeof(FrameRate).GetMethod(nameof(FrameRate.Read), [typeof(string)]));
+        Assert.Null(FrameRate.Read("thirty"));
+    }
+
+    [Fact]
+    public void TheCaptionsAreDrawnWithDenpaFontAndWhatItLacksFallsToNoto()
+    {
+        Assert.Equal(["Denpa Font", "Noto Sans CJK JP"], FfmpegLiveInvocation.Font.Split(','));
+    }
+
+    private static IReadOnlyList<string> TextTakenBy(Type builder)
+    {
+        List<string> taking = [];
+        HashSet<Type> seen = [];
+
+        foreach (MethodInfo method in builder.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+        {
+            foreach (ParameterInfo parameter in method.GetParameters())
+            {
+                Reach(parameter.ParameterType, $"{builder.Name}.{method.Name}({parameter.Name})", taking, seen);
+            }
+        }
+
+        foreach (ConstructorInfo constructor in builder.GetConstructors())
+        {
+            foreach (ParameterInfo parameter in constructor.GetParameters())
+            {
+                Reach(parameter.ParameterType, $"{builder.Name}({parameter.ParameterType.Name})", taking, seen);
+            }
+        }
+
+        return taking;
+    }
+
+    private static void Reach(Type type, string named, List<string> taking, HashSet<Type> seen)
+    {
+        if (type == typeof(string))
+        {
+            taking.Add(named);
+
+            return;
+        }
+
+        if (type.IsEnum || type.IsPrimitive || !seen.Add(type))
+        {
+            return;
+        }
+
+        foreach (ConstructorInfo constructor in type.GetConstructors())
+        {
+            foreach (ParameterInfo parameter in constructor.GetParameters())
+            {
+                Reach(parameter.ParameterType, $"{type.Name}({parameter.ParameterType.Name})", taking, seen);
+            }
+        }
+    }
+
+    private static string FilterOf(LiveProfile profile, StreamAttributes attributes, LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, attributes, encoder, Machine, CaptionOutlet.None)];
+
+        return arguments[arguments.IndexOf("-vf") + 1];
+    }
+
+    private static string[] Encoder(IReadOnlyList<string> arguments)
+    {
+        int from = arguments.ToList().IndexOf("-c:v");
+        int to = arguments.ToList().IndexOf("-c:a");
+
+        return [.. arguments.Skip(from).Take(to - from)];
+    }
+
+    private static string[] AllButTheEncoder(IReadOnlyList<string> arguments)
+    {
+        int from = arguments.ToList().IndexOf("-c:v");
+        int to = arguments.ToList().IndexOf("-c:a");
+
+        return [.. arguments.Take(from), .. arguments.Skip(to)];
+    }
+
+    private static IEnumerable<string> Options(IEnumerable<string> arguments)
+        => arguments.Where(argument => argument.StartsWith('-'));
+
+    private static string[] Mapped(string[] arguments)
+        =>
+        [
+            .. arguments
+                .Select((argument, at) => (argument, at))
+                .Where(pair => string.Equals(pair.argument, "-map", StringComparison.Ordinal))
+                .Select(pair => arguments[pair.at + 1]),
+        ];
+}
+
+public sealed class TextTakingFixture
+{
+    public TextTakingFixture(string filter) => Filter = filter;
+
+    public string Filter { get; }
+}
