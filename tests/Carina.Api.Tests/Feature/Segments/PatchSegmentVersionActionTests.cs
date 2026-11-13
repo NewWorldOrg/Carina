@@ -5,7 +5,6 @@ using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.Feature.Segments;

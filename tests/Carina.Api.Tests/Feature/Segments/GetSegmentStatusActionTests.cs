@@ -7,9 +7,6 @@ using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 using Carina.TestSupport;
 
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-
 namespace Carina.Api.Tests.Feature.Segments;
 
 [Trait("Category", "Feature")]
