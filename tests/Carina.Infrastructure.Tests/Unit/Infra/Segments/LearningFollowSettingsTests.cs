@@ -1,7 +1,8 @@
 using Carina.Infrastructure.Segments;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class LearningFollowSettingsTests
 {
     [Fact(DisplayName = "a follow that has caught up with a file still being written waits five seconds before reading on, so it is woken less often")]

@@ -5,8 +5,9 @@ using Carina.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class BuiltInSegmentVersionTests : IDisposable
 {
     private static readonly DateTime Started = new(2026, 11, 2, 9, 0, 0, DateTimeKind.Utc);

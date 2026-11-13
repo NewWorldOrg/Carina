@@ -3,10 +3,11 @@ using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 using Carina.TestSupport;
 
-using static Carina.Infrastructure.Tests.Segments.SegmentDetectionHarness;
+using static Carina.Infrastructure.Tests.Unit.Infra.Segments.SegmentDetectionHarness;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class SegmentDetectionJobTests
 {
     private static readonly double[] ABreak = [100, 130, 160];

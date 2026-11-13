@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 /// <summary>
 /// Writes the elements of a Matroska stream byte by byte, for the reader to be handed shapes

@@ -5,6 +5,7 @@ using Carina.Domain.Segments;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Segments;
+using Carina.Infrastructure.Tests.Unit.Infra.Segments;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;

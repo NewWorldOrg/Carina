@@ -18,9 +18,9 @@ using Carina.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using static Carina.Infrastructure.Tests.Segments.LearningFollowHarness;
+using static Carina.Infrastructure.Tests.Unit.Infra.Segments.LearningFollowHarness;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 /// <summary>
 /// Makes a reduced copy of a broadcast synthesised with the ffmpeg the application runs, in the shape the
@@ -32,7 +32,7 @@ namespace Carina.Infrastructure.Tests.Segments;
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
-public sealed class ReducedCopyImportMaterialTests : IDisposable
+public sealed class FfmpegReducedCopyImporterMaterialTests : IDisposable
 {
     private const double Tolerance = 0.05;
 

@@ -8,7 +8,7 @@ using Carina.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 /// <summary>
 /// The records and learning data held in memory, read for detection with the filters and order the store reads

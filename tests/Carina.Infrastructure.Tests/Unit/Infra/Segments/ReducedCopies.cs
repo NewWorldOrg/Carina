@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Segments;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 /// <summary>
 /// What a synthetic reduced copy describes of itself: the shape its manifest names, the recording it is a

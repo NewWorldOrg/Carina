@@ -5,8 +5,9 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class FfmpegLearningInvocationTests
 {
     private static readonly TimeSpan HoursIntoTheDay = TimeSpan.FromTicks(512_345_678_910);

@@ -16,7 +16,7 @@ using Carina.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 /// <summary>
 /// The recordings being written, as following them for their learning data reads them, held in memory.

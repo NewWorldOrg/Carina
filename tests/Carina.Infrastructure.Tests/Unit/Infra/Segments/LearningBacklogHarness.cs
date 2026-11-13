@@ -15,9 +15,9 @@ using Carina.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using static Carina.Infrastructure.Tests.Segments.LearningFollowHarness;
+using static Carina.Infrastructure.Tests.Unit.Infra.Segments.LearningFollowHarness;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 /// <summary>
 /// The recordings that have ended and their records, read the way the store reads them, held in memory.

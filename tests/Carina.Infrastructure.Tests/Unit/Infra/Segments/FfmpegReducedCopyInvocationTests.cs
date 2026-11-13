@@ -7,8 +7,9 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class FfmpegReducedCopyInvocationTests
 {
     private const string Shelf = "/srv/copies/one:two";

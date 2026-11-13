@@ -4,8 +4,9 @@ using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class SegmentTrainingJobTests : IDisposable
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

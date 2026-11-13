@@ -1,9 +1,10 @@
 using Carina.Infrastructure.Segments;
 
-using static Carina.Infrastructure.Tests.Segments.MatroskaBytes;
+using static Carina.Infrastructure.Tests.Unit.Infra.Segments.MatroskaBytes;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class MatroskaReaderTests
 {
     private const long BroadcastFrame = 33_366_666;

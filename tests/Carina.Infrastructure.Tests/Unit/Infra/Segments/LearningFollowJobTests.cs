@@ -5,10 +5,11 @@ using Carina.TestSupport;
 
 using Puppis.Contracts;
 
-using static Carina.Infrastructure.Tests.Segments.LearningFollowHarness;
+using static Carina.Infrastructure.Tests.Unit.Infra.Segments.LearningFollowHarness;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class LearningFollowJobTests : IDisposable
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

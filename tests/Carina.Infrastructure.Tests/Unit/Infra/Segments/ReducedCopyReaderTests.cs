@@ -6,8 +6,9 @@ using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Tests.Integrity;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class ReducedCopyReaderTests : IDisposable
 {
     private static readonly DateTime Starts = CopyDescription.Starts;

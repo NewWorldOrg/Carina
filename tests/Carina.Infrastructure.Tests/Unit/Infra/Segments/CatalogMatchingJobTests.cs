@@ -3,10 +3,11 @@ using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 using Carina.TestSupport;
 
-using static Carina.Infrastructure.Tests.Segments.CatalogMatchingHarness;
+using static Carina.Infrastructure.Tests.Unit.Infra.Segments.CatalogMatchingHarness;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class CatalogMatchingJobTests
 {
     private const int Advert = 938;

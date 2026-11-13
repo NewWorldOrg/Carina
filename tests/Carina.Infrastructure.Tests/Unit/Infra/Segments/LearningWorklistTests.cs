@@ -8,10 +8,11 @@ using Carina.Infrastructure.Segments;
 using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.TestSupport;
 
-using static Carina.Infrastructure.Tests.Segments.LearningFollowHarness;
+using static Carina.Infrastructure.Tests.Unit.Infra.Segments.LearningFollowHarness;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class LearningWorklistTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

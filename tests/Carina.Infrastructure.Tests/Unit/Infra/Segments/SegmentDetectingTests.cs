@@ -5,10 +5,11 @@ using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
 using Carina.TestSupport;
 
-using static Carina.Infrastructure.Tests.Segments.SegmentDetectionHarness;
+using static Carina.Infrastructure.Tests.Unit.Infra.Segments.SegmentDetectionHarness;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class SegmentDetectingTests
 {
     private static readonly uint[] Fifteen = [.. Enumerable.Range(1, 938).Select(frame => (uint)frame * 2_654_435_761u)];

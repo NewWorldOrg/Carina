@@ -15,9 +15,9 @@ using Carina.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using static Carina.Infrastructure.Tests.Segments.LearningFollowHarness;
+using static Carina.Infrastructure.Tests.Unit.Infra.Segments.LearningFollowHarness;
 
-namespace Carina.Infrastructure.Tests.Segments;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
 /// <summary>
 /// Follows broadcasts synthesised with the ffmpeg the application runs and reads back what was kept:
@@ -29,7 +29,7 @@ namespace Carina.Infrastructure.Tests.Segments;
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
-public sealed class LearningFollowMaterialTests : IDisposable
+public sealed class FfmpegLearningFollowerMaterialTests : IDisposable
 {
     private const double Tolerance = 0.05;
 
