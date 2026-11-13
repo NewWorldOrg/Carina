@@ -3,8 +3,8 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Notifications;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.Infrastructure.Tests.Notifications;
-using Carina.Infrastructure.Tests.Reservations;
 using Carina.Infrastructure.Tests.Thumbnails;
 using Carina.TestSupport;
 
@@ -386,13 +386,7 @@ public sealed class ProgrammeWatchRoundTests(RepositoryDatabase database)
 
             if (notices is not null)
             {
-                ServiceDescriptor held = replace.Last(descriptor => descriptor.ServiceType == typeof(INoticeRepository));
-                Type implementation = held.ImplementationType
-                    ?? throw new InvalidOperationException("The notices are not registered by their class, so they cannot be wrapped.");
-                replace.Add(ServiceDescriptor.Describe(
-                    typeof(INoticeRepository),
-                    provider => notices((INoticeRepository)ActivatorUtilities.CreateInstance(provider, implementation)),
-                    held.Lifetime));
+                RegisteredServices.Wrap(replace, notices);
             }
         });
         await using AsyncServiceScope scope = services.CreateAsyncScope();

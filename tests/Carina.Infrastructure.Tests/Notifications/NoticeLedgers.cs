@@ -7,7 +7,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
-using Carina.Infrastructure.Tests.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 
 using Microsoft.EntityFrameworkCore;
 

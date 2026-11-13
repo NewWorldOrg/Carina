@@ -2,7 +2,6 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Domain.Recordings;
-using Carina.Domain.Reservations;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -60,44 +59,6 @@ public sealed class LeftScrambledEndpointTests
         Assert.Equal(JsonValueKind.Null, detail.GetProperty("descrambledAt").ValueKind);
     }
 
-    [Fact]
-    public async Task TheLedgerLineOfARecordingLeftScrambledSaysSoUntilItIsDescrambled()
-    {
-        await using var feature = new ReservationFeature();
-        ReservationOutcome line = feature.Recorded(
-            feature.Booked(4001),
-            ReservationOutcomeKind.RecordingFailure,
-            recordingOutcome: RecordingOutcome.Complete,
-            faults: [RecordingFault.ScramblingUnresolved]);
-
-        JsonElement before = Only(await feature.GetAsync("/api/reservations/outcomes"));
-        line.Descrambled(ReservationFeature.Noon.AddDays(1));
-        JsonElement after = Only(await feature.GetAsync("/api/reservations/outcomes"));
-
-        Assert.Equal("recordingFailure", before.GetProperty("kind").GetString());
-        Assert.Equal("complete", before.GetProperty("recordingOutcome").GetString());
-        Assert.Equal(["scramblingUnresolved"], Faults(before));
-        Assert.True(before.GetProperty("leftScrambled").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, before.GetProperty("descrambledAt").ValueKind);
-        Assert.False(after.GetProperty("leftScrambled").GetBoolean());
-        Assert.Equal(
-            ReservationFeature.Noon.AddDays(1),
-            after.GetProperty("descrambledAt").GetDateTime().ToUniversalTime());
-        Assert.Equal(["scramblingUnresolved"], Faults(after));
-    }
-
-    [Fact]
-    public async Task ALedgerLineThatNamesNoScramblingIsNotLeftScrambled()
-    {
-        await using var feature = new ReservationFeature();
-        feature.Recorded(feature.Booked(4001), ReservationOutcomeKind.Missed);
-
-        JsonElement line = Only(await feature.GetAsync("/api/reservations/outcomes"));
-
-        Assert.False(line.GetProperty("leftScrambled").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, line.GetProperty("descrambledAt").ValueKind);
-    }
-
     private static Recording Scrambled(RecordingFeature feature)
     {
         Recording recording = feature.Held();
@@ -112,14 +73,4 @@ public sealed class LeftScrambledEndpointTests
 
         return recording;
     }
-
-    private static JsonElement Only((HttpStatusCode Status, JsonElement Body) answered)
-    {
-        Assert.Equal(HttpStatusCode.OK, answered.Status);
-
-        return Assert.Single(answered.Body.GetProperty("data").GetProperty("items").EnumerateArray());
-    }
-
-    private static string[] Faults(JsonElement line)
-        => [.. line.GetProperty("faults").EnumerateArray().Select(fault => fault.GetString()!)];
 }

@@ -4,7 +4,7 @@ using Carina.Domain.Scans;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Tests.Fixtures.Clocks;
-using Carina.Infrastructure.Tests.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;

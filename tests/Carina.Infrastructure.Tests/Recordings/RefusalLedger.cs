@@ -2,7 +2,7 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Recordings;
-using Carina.Infrastructure.Tests.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;

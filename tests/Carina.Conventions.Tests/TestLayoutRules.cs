@@ -42,8 +42,6 @@ public static class TestLayoutRules
         "Programmes",
         "Quality",
         "Recordings",
-        "Reservations",
-        "Rules",
         "Segments",
         "Services",
         "Storage",
@@ -81,6 +79,7 @@ public static class TestLayoutRules
         new("Notifications", "src/Carina.Api/Services/NotificationRuleService.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261110182416_AProgrammeCanBeWatchedWithoutBeingRecorded.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261112182442_ANoticeCanBeSentToABrowser.cs"),
+        new("Reservations", "src/Carina.Db/Migrations/20260928091011_AReservationStandsAsideForTheSameBroadcast.cs"),
     ];
 
     /// <summary>
@@ -91,6 +90,7 @@ public static class TestLayoutRules
         new("Channels", "LogoVisitSchema"),
         new("Channels", "ServiceReachSchema"),
         new("Channels", "StationLogoSchema"),
+        new("Reservations", "ReservationOutcomeSchema"),
     ];
 
     private const string ApiTests = "Carina.Api.Tests";
@@ -138,6 +138,24 @@ public static class TestLayoutRules
     private const string EndpointFilterCall = "AddEndpointFilter";
 
     private const string Filters = "Filters";
+
+    private static readonly string[] RequestCalls =
+    [
+        "GetAsync",
+        "PostAsync",
+        "PutAsync",
+        "PatchAsync",
+        "DeleteAsync",
+        "SendAsync",
+        "GetStringAsync",
+        "GetStreamAsync",
+        "GetByteArrayAsync",
+        "GetFromJsonAsync",
+        "PostAsJsonAsync",
+        "PutAsJsonAsync",
+        "PatchAsJsonAsync",
+        "DeleteFromJsonAsync",
+    ];
 
     private static readonly Layer ApiLayer = new(ApiSource, Controllers);
 
@@ -554,6 +572,11 @@ public static class TestLayoutRules
             yield return $"builds {built} with CreateInstance although the container gives it as {string.Join(", ", reading.DomainPorts[built].Order(StringComparer.Ordinal))}";
         }
 
+        if (file.BuildsAnUnnamedType)
+        {
+            yield return "builds a type it does not name with CreateInstance, which only the helper that wraps a registered service may do";
+        }
+
         if (!string.Equals(taken, subject, StringComparison.Ordinal) && file.Identifiers.Contains(subject))
         {
             yield return $"names the class {subject} behind {taken}";
@@ -593,6 +616,7 @@ public static class TestLayoutRules
                 .Order(StringComparer.Ordinal)
                 .Select(area => $"imports the tests of {area}, which has moved"))
             .Concat(SpeaksOnlyToMovedAreas(reading, file, notYetMoved) ? ["speaks only to routes of areas that have moved"] : [])
+            .Concat(HasATestSpeakingOnlyToMovedAreas(reading, file, notYetMoved) ? ["has a test that speaks only to routes of areas that have moved"] : [])
             .Concat(HasANamesakeInTheLayout(reading, file, type) ? ["has a namesake in the layout"] : []);
     }
 
@@ -640,6 +664,54 @@ public static class TestLayoutRules
         => IsAnOldFeatureTest(file)
            && file.ApiPaths.Count > 0
            && file.ApiPaths.All(path => reading.Routes.Any(route => !notYetMoved.Contains(route.Area) && Reaches(path, route.Template)));
+
+    private static bool HasATestSpeakingOnlyToMovedAreas(Reading reading, TestFile file, IReadOnlyCollection<string> notYetMoved)
+        => IsAnOldFeatureTest(file)
+           && file.PathsOfEachTest.Any(paths => paths.Count > 0
+                                                && paths.All(path => RequestedAreas(reading, path) is { Count: > 0 } areas
+                                                                     && areas.All(area => !notYetMoved.Contains(area))));
+
+    /// <summary>
+    /// The areas whose routes a path a test requests is mapped to: of the templates that take the path, those that
+    /// name the most of its segments word for word. A segment the test only partly fills in, such as a name with a
+    /// query run onto it, stands for itself rather than for anything.
+    /// </summary>
+    private static IReadOnlyList<string> RequestedAreas(Reading reading, string path)
+    {
+        string[] spoken = path.Split('?')[0].Trim('/').Split('/');
+        (string Area, int Named)[] taking = reading.Routes
+            .Select(route => (route.Area, Named: Named(spoken, Segments(route.Template))))
+            .Where(taken => taken.Named >= 0)
+            .ToArray();
+
+        return taking.Length == 0
+            ? []
+            : taking.Where(taken => taken.Named == taking.Max(other => other.Named)).Select(taken => taken.Area).Distinct().ToArray();
+    }
+
+    private static int Named(string[] spoken, string[] mapped)
+    {
+        if (spoken.Length != mapped.Length)
+        {
+            return -1;
+        }
+
+        int named = 0;
+
+        foreach ((string asked, string template) in spoken.Zip(mapped))
+        {
+            if (string.Equals(asked, template, StringComparison.OrdinalIgnoreCase))
+            {
+                named++;
+            }
+            else if (asked != "{}" && template != Hole)
+            {
+                return -1;
+            }
+        }
+
+        return named;
+    }
 
     private static bool IsAnOldFeatureTest(TestFile file)
         => string.Equals(file.Project, ApiTests, StringComparison.Ordinal)
@@ -739,9 +811,39 @@ public static class TestLayoutRules
                 .ToHashSet(StringComparer.Ordinal),
             Generic(file.Root, "CreateInstance"),
             Generic(file.Root, "IsType"),
+            file.Root.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(IsAnUnnamedCreateInstance),
             file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().Select(Created).ToHashSet(StringComparer.Ordinal),
-            file.Root.DescendantNodes().Select(Spoken).Where(path => path.StartsWith("/api/", StringComparison.Ordinal)).ToArray());
+            ApiPaths(file.Root),
+            file.Root.DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .Where(method => Attributes(method.AttributeLists).Any(attribute => Simple(attribute.Name) is "Fact" or "Theory"))
+                .Select(method => (IReadOnlyList<string>)RequestedPaths(method))
+                .ToArray());
     }
+
+    /// <summary>
+    /// The paths a test hands to a request of its own: an argument of a call that sends one, or of a <c>Uri</c> it
+    /// builds, so that a path read out of a served document or a table of routes is not taken for a request.
+    /// </summary>
+    private static string[] RequestedPaths(SyntaxNode method)
+        => method.DescendantNodes()
+            .OfType<ArgumentSyntax>()
+            .Where(argument => argument.Parent?.Parent switch
+            {
+                InvocationExpressionSyntax call => RequestCalls.Contains(Simple(call.Expression is MemberAccessExpressionSyntax access ? access.Name : call.Expression)),
+                ObjectCreationExpressionSyntax created => Simple(created.Type) == "Uri",
+                _ => false,
+            })
+            .Select(argument => Spoken(argument.Expression))
+            .Where(path => path.StartsWith("/api/", StringComparison.Ordinal))
+            .ToArray();
+
+    private static string[] ApiPaths(SyntaxNode node)
+        => node.DescendantNodes().Select(Spoken).Where(path => path.StartsWith("/api/", StringComparison.Ordinal)).ToArray();
+
+    private static bool IsAnUnnamedCreateInstance(InvocationExpressionSyntax call)
+        => (call.Expression is MemberAccessExpressionSyntax access ? access.Name : call.Expression)
+            is IdentifierNameSyntax { Identifier.ValueText: "CreateInstance" };
 
     private static HashSet<string> Generic(SyntaxNode root, string method)
         => root.DescendantNodes().OfType<GenericNameSyntax>()
@@ -995,8 +1097,10 @@ public static class TestLayoutRules
         IReadOnlySet<string> Composed,
         IReadOnlySet<string> Instantiated,
         IReadOnlySet<string> Narrowed,
+        bool BuildsAnUnnamedType,
         IReadOnlySet<string> Created,
-        IReadOnlyList<string> ApiPaths);
+        IReadOnlyList<string> ApiPaths,
+        IReadOnlyList<IReadOnlyList<string>> PathsOfEachTest);
 
     internal sealed record TestClass(string Name, int Line, IReadOnlyList<string> Categories);
 

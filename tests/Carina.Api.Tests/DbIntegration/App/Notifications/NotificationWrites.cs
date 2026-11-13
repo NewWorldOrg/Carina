@@ -62,12 +62,12 @@ internal sealed class NotificationWrites(AppDatabase database) : IAsyncDisposabl
             {
                 if (!rulesCanBeAdded)
                 {
-                    Wrap<INotificationRuleRepository>(services, held => new RulesNobodyCanAdd(held));
+                    RegisteredServices.Wrap<INotificationRuleRepository>(services, held => new RulesNobodyCanAdd(held));
                 }
 
                 if (!watchesCanBeSaved)
                 {
-                    Wrap<IProgrammeWatchRepository>(services, held => new WatchesNobodyCanSave(held));
+                    RegisteredServices.Wrap<IProgrammeWatchRepository>(services, held => new WatchesNobodyCanSave(held));
                 }
             });
             raised[(rulesCanBeAdded, watchesCanBeSaved)] = application;
@@ -193,20 +193,6 @@ internal sealed class NotificationWrites(AppDatabase database) : IAsyncDisposabl
         }
 
         raised.Clear();
-    }
-
-    private static void Wrap<T>(IServiceCollection services, Func<T, T> wrap)
-        where T : class
-    {
-        ServiceDescriptor held = services.Last(descriptor => descriptor.ServiceType == typeof(T));
-        Type implementation = held.ImplementationType
-            ?? throw new InvalidOperationException($"{typeof(T).Name} is not registered by its class, so it cannot be wrapped.");
-
-        services.Remove(held);
-        services.Add(ServiceDescriptor.Describe(
-            typeof(T),
-            provider => wrap((T)ActivatorUtilities.CreateInstance(provider, implementation)),
-            held.Lifetime));
     }
 
     private sealed class RulesNobodyCanAdd(INotificationRuleRepository held) : INotificationRuleRepository

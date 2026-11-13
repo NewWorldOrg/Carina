@@ -1,5 +1,5 @@
 using Carina.Infrastructure.Collection;
-using Carina.Infrastructure.Tests.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 
 namespace Carina.Infrastructure.Tests.Collection;
 

@@ -486,9 +486,13 @@ test named after anything else is refused under that area.
   asked for as that interface and its class is not named at all; a domain service
   is asked for as itself, and so is an application service under
   `DbIntegration/App`. A type that implements an interface declared under
-  `src/Carina.Domain` is always asked for through that interface, never built with
-  `ActivatorUtilities.CreateInstance`; where a test needs a member only the class
-  has, it narrows what the container gives with `Assert.IsType`.
+  `src/Carina.Domain` is always asked for through that interface; where a test
+  needs a member only the class has, it narrows what the container gives with
+  `Assert.IsType`. The only place a test builds such a type is
+  `RegisteredServices`, the helper of each test project that puts a stand-in
+  around the implementation the product registers, keeping its lifetime; a test
+  over a real database calls `ActivatorUtilities.CreateInstance` neither for such
+  a type nor for a type it does not name.
 - A feature class is named after one action, or one class the start-up code puts
   in the request pipeline or maps an endpoint to, and every action of an area that
   has feature classes has its class. No two feature classes share a name.
@@ -509,10 +513,11 @@ reviewer: the middle column of the table, that a test is of the kind its folder
 says, which tables a `SchemaTests` class reads, and that test methods are named as
 sentences. For an area off the list it refuses a test left behind: one under the
 area's old folder, one named after a type, a migration or a schema of the area,
-an old feature test that speaks only to routes of areas that have moved, or one
-with a namesake in the layout. A class at the root of a project is tied to its
-area by those marks alone, so what they miss is caught when the list is empty;
-from then on every test class outside the layout is refused.
+an old feature test that speaks only to routes of areas that have moved or holds a
+test whose requests all go to such routes, or one with a namesake in the layout. A
+class at the root of a project is tied to its area by those marks alone, so what
+they miss is caught when the list is empty; from then on every test class outside
+the layout is refused.
 
 Five filters divide the suite, and CI runs one job per filter:
 

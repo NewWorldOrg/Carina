@@ -1,0 +1,209 @@
+using System.Diagnostics;
+
+using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
+using Carina.Domain.Reservations;
+using Carina.Domain.Rules;
+using Carina.Infrastructure.Reservations;
+using Carina.Infrastructure.Rules;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Rules;
+using Carina.TestSupport;
+
+using Puppis.Contracts;
+
+namespace Carina.Infrastructure.Tests.Unit.Infra.Rules;
+
+[Trait("Category", "Scale")]
+public sealed class RuleApplicationServiceScaleTests
+{
+    private static readonly DateTime Now = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly CancellationToken Cancel = CancellationToken.None;
+
+    private const int Network = 4;
+
+    private const int Carried = 32_736;
+
+    private const int Rules = 318;
+
+    private const int Programmes = 25_608;
+
+    private const int Services = 20;
+
+    [Fact]
+    public async Task ASweepAtTheSizeTheGuideActuallyReachesReadsTheChannelsAWholeRunAtATime()
+    {
+        var streams = new CountedStreams([Terrestrial()]);
+        var catalogue = new CountedServices();
+        var rules = new HeldRules();
+        var programmes = new HeldProgrammes();
+        var visits = new HeldStreamVisits();
+        var write = new WatchedWrite();
+        var reservations = new HeldReservations(write);
+
+        for (int identifier = 1; identifier <= Rules; identifier++)
+        {
+            rules.Rules.Add(Written(identifier));
+        }
+
+        for (int carried = 1; carried <= Programmes; carried++)
+        {
+            programmes.Programmes.Add(Broadcast(carried));
+        }
+
+        var applying = new RuleApplicationService(
+            rules,
+            programmes,
+            reservations,
+            new ReservationOutcomeDomainService(new HeldOutcomes(), new NoRecordings()),
+            new RuleWithdrawalDomainService(reservations, streams, visits, new HeldEpochs(), new FixedClock(Now)),
+            new RuleTakingDomainService(reservations),
+            new ReservationSchedulingService(
+                reservations,
+                new NoRecordings(),
+                new HeldSeating(OneSeat()),
+                new TuningByService { Otherwise = Tunable() },
+                write,
+                RollingHorizon.Default,
+                new SilentEvents(),
+                new FixedClock(Now)),
+            new RuleMatcher(new ProgrammeSearchScopeDomainService(streams, catalogue), new FixedClock(Now)),
+            new RuleApplicationSettings { Rows = 5_000 },
+            write,
+            new SilentEvents(),
+            new FixedClock(Now));
+
+        Stopwatch watch = Stopwatch.StartNew();
+        RuleApplicationRun run = await applying.EverythingAsync(Cancel);
+        watch.Stop();
+
+        Console.WriteLine(
+            $"MEASURED rules={Rules} programmes={Programmes} read={run.Read} made={run.Made.Count} "
+            + $"streamReads={streams.Reads} catalogueReads={catalogue.Reads} ms={watch.ElapsedMilliseconds}");
+
+        Assert.Equal(Programmes, run.Read);
+        Assert.Equal(1, catalogue.Reads);
+        Assert.Equal(2, streams.Reads);
+    }
+
+    [Fact]
+    public async Task ARehearsalAtTheSizeTheGuideActuallyReachesReadsTheChannelsAWholeRunAtATime()
+    {
+        var streams = new CountedStreams([Terrestrial()]);
+        var catalogue = new CountedServices();
+        var rules = new HeldRules();
+        var programmes = new HeldProgrammes();
+        var write = new WatchedWrite();
+        var reservations = new HeldReservations(write);
+
+        for (int identifier = 1; identifier <= Rules; identifier++)
+        {
+            rules.Rules.Add(Written(identifier, $"keyword=river&genre={identifier % 16}"));
+        }
+
+        for (int carried = 1; carried <= Programmes; carried++)
+        {
+            programmes.Programmes.Add(Broadcast(carried));
+        }
+
+        var rehearsing = new RuleApplicationService(
+            rules,
+            programmes,
+            reservations,
+            new ReservationOutcomeDomainService(new HeldOutcomes(), new NoRecordings()),
+            new RuleWithdrawalDomainService(reservations, streams, new HeldStreamVisits(), new HeldEpochs(), new FixedClock(Now)),
+            new RuleTakingDomainService(reservations),
+            new ReservationSchedulingService(
+                reservations,
+                new NoRecordings(),
+                new HeldSeating(EightSeats()),
+                new TuningByService { Otherwise = Tunable() },
+                write,
+                RollingHorizon.Default,
+                new SilentEvents(),
+                new FixedClock(Now)),
+            new RuleMatcher(new ProgrammeSearchScopeDomainService(streams, catalogue), new FixedClock(Now)),
+            new RuleApplicationSettings { Rows = 5_000 },
+            write,
+            new SilentEvents(),
+            new FixedClock(Now));
+
+        Stopwatch watch = Stopwatch.StartNew();
+        RuleRehearsal? rehearsed = await rehearsing.RehearsedAsync(Written(0xffff, "keyword=hill"), Cancel);
+        watch.Stop();
+
+        Assert.NotNull(rehearsed);
+
+        Console.WriteLine(
+            $"MEASURED rules={Rules} programmes={Programmes} taking={rehearsed.Taking.Count} "
+            + $"streamReads={streams.Reads} catalogueReads={catalogue.Reads} "
+            + $"committed={write.Committed} ms={watch.ElapsedMilliseconds}");
+
+        Assert.Equal(3, streams.Reads);
+        Assert.Equal(2, catalogue.Reads);
+        Assert.Equal(0, write.Committed);
+        Assert.NotEmpty(rehearsed.Taking);
+    }
+
+    private static Rule Written(int identifier)
+        => Rule.Draft(
+            new RuleId(new Guid($"{identifier:x8}-0000-0000-0000-000000000000")),
+            $"rule {identifier}",
+            new RuleQuery(identifier % 2 is 0 ? "keyword=hill" : "keyword=hill&type=IsdbT"),
+            new Priority(identifier % 90 + 1),
+            true,
+            Margin.None,
+            Margin.None,
+            Now.AddDays(-30));
+
+    private static Programme Broadcast(int carried)
+        => Programme.Rehydrate(
+            new ProgrammeId(
+                new NetworkId(Network),
+                new ServiceId(1024 + (carried % Services)),
+                new EventId(carried)),
+            new TransportStreamId(Carried),
+            Now.AddHours(2).AddMinutes(carried),
+            Now.AddHours(3).AddMinutes(carried),
+            carried % 2560 is 0 ? "a hill walk" : "a river trip",
+            "a summary",
+            false,
+            Now,
+            revision: carried);
+
+    private static TunerCapacity OneSeat()
+        => new([new TunerSeat("first", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)], []);
+
+    private static TuningResolution Tunable()
+        => TuningResolution.Tunable(
+            new CandidateChannelId(Guid.NewGuid()),
+            TuningParameters.Terrestrial(27),
+            impaired: false);
+
+    private static BroadcastStream Terrestrial()
+        => new(
+            new NetworkId(Network),
+            new TransportStreamId(Carried),
+            TuningParameters.Terrestrial(27),
+            [.. Enumerable.Range(0, Services).Select(service => new ServiceId(1024 + service))]);
+
+    private static Rule Written(int identifier, string query)
+        => Rule.Draft(
+            new RuleId(new Guid($"{identifier:x8}-0000-0000-0000-000000000000")),
+            $"rule {identifier}",
+            new RuleQuery(query),
+            new Priority(identifier % 90 + 1),
+            true,
+            Margin.None,
+            Margin.None,
+            Now.AddDays(-30));
+
+    private static TunerCapacity EightSeats()
+        => new(
+            [
+                .. Enumerable.Range(0, 8).Select(index =>
+                    new TunerSeat($"seat{index}", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)),
+            ],
+            []);
+}

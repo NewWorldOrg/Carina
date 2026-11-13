@@ -8,8 +8,8 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Segments;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.Infrastructure.Tests.Integrity;
-using Carina.Infrastructure.Tests.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
