@@ -5,8 +5,9 @@ using Carina.Domain.Channels;
 using Carina.Infrastructure.Logos;
 using Carina.TestSupport;
 
-namespace Carina.Infrastructure.Tests.Logos;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Logos;
 
+[Trait("Category", "Unit")]
 public sealed class LogoVisitorTests
 {
     private const int SomeNetworkId = 32736;

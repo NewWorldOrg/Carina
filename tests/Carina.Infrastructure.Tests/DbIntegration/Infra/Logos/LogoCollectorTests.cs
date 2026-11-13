@@ -4,8 +4,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Logos;
-using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -14,11 +12,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests.Logos;
+namespace Carina.Infrastructure.Tests.DbIntegration.Infra.Logos;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class LogoCollectorTests(RepositoryDatabase database)
+public sealed class LogoCollectorTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private const int SomeServiceId = 1024;
     private const int SilentServiceId = 1025;
@@ -32,6 +30,12 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
     private static readonly DateTime At = new(2026, 9, 5, 0, 0, 0, DateTimeKind.Utc);
 
     private static readonly int[] PhysicalChannels = [27, 28, 29];
+
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
 
     [Fact]
     public async Task ALogoOnTheAirEndsUpKeptAndNamedByTheServiceThatUsesIt()
@@ -257,8 +261,8 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
 
     private async Task SeedAsync(int network, params int[] services)
     {
-        await using CarinaDbContext context = database.Open();
-        var repository = new BroadcastServiceRepository(context);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        IBroadcastServiceRepository repository = scope.ServiceProvider.GetRequiredService<IBroadcastServiceRepository>();
 
         foreach (int service in services)
         {
@@ -275,9 +279,9 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
 
     private async Task CollectedAsync(int network, int transportStreamId, DateTime at)
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        await new LogoVisitRepository(context).RecordAsync(
+        await scope.ServiceProvider.GetRequiredService<ILogoVisitRepository>().RecordAsync(
             new NetworkId(network),
             new TransportStreamId(transportStreamId),
             LogoVisitOutcome.Collected,
@@ -287,24 +291,24 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
 
     private async Task<StationLogo?> LogoAsync(int network)
     {
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new StationLogoRepository(reading)
+        return await scope.ServiceProvider.GetRequiredService<IStationLogoRepository>()
             .FindAsync(new NetworkId(network), new LogoId(SomeLogoId), Cancel);
     }
 
     private async Task<BroadcastService?> ServiceAsync(int network, int service)
     {
-        await using CarinaDbContext reading = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        return await new BroadcastServiceRepository(reading)
+        return await scope.ServiceProvider.GetRequiredService<IBroadcastServiceRepository>()
             .FindAsync(new NetworkId(network), new ServiceId(service), Cancel);
     }
 
     private async Task<IReadOnlyList<LogoVisit>> VisitsAsync(int network)
     {
-        await using CarinaDbContext reading = database.Open();
-        IReadOnlyList<LogoVisit> visits = await new LogoVisitRepository(reading).ListAsync(Cancel);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        IReadOnlyList<LogoVisit> visits = await scope.ServiceProvider.GetRequiredService<ILogoVisitRepository>().ListAsync(Cancel);
 
         return [.. visits.Where(visit => visit.NetworkId.Value == network)];
     }
@@ -317,35 +321,16 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
         TimeProvider? clock = null,
         IDriverSignals? signals = null)
     {
-        var services = new ServiceCollection();
         var offered = new OfferedTransports(Streams(network, transports));
 
-        services.AddLogging();
-        services.AddScoped(_ => database.Open());
-        services.AddScoped<IStationLogoRepository>(scope =>
-            new StationLogoRepository(scope.GetRequiredService<CarinaDbContext>()));
-        services.AddScoped<IBroadcastServiceRepository>(scope =>
-            new BroadcastServiceRepository(scope.GetRequiredService<CarinaDbContext>()));
-        services.AddScoped<ILogoVisitRepository>(scope =>
-            new LogoVisitRepository(scope.GetRequiredService<CarinaDbContext>()));
-        services.AddScoped<IBroadcastStreamDirectory>(_ => offered);
-        services.AddScoped(scope => new LogoVisitor(
-            driver,
-            scope.GetRequiredService<LogoSweepSettings>(),
-            TimeProvider.System));
-        services.AddScoped(scope => new LogoWriter(
-            scope.GetRequiredService<IStationLogoRepository>(),
-            scope.GetRequiredService<IBroadcastServiceRepository>(),
-            new StationLogoDomainService(scope.GetRequiredService<IBroadcastServiceRepository>()),
-            TimeProvider.System));
-        services.AddScoped<LogoRound>();
-        services.AddSingleton<IDriverClient>(driver);
-        services.AddSingleton(signals ?? new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance));
-        services.AddSingleton(settings ?? new LogoSweepSettings());
-        services.AddSingleton(clock ?? TimeProvider.System);
-        services.AddHostedService<LogoCollector>();
-
-        return services.BuildServiceProvider();
+        return database.Infrastructure(replace =>
+        {
+            replace.AddSingleton<IBroadcastStreamDirectory>(offered);
+            replace.AddSingleton<IDriverClient>(driver);
+            replace.AddSingleton(signals ?? new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance));
+            replace.AddSingleton(settings ?? new LogoSweepSettings());
+            replace.AddSingleton(clock ?? TimeProvider.System);
+        });
     }
 
     private static IReadOnlyList<BroadcastStream> Streams(int network, int transports)

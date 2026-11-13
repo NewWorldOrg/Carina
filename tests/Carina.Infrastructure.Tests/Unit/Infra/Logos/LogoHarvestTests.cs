@@ -3,8 +3,9 @@ using Carina.BroadcastTestSupport;
 using Carina.Domain.Channels;
 using Carina.Infrastructure.Logos;
 
-namespace Carina.Infrastructure.Tests.Logos;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Logos;
 
+[Trait("Category", "Unit")]
 public sealed class LogoHarvestTests
 {
     private const int SomeNetworkId = 32736;
