@@ -8,7 +8,6 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Driver;
 using Carina.TestSupport;
 
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -81,6 +80,13 @@ internal sealed class DriverFeature : IAsyncDisposable
 
     public static string ConnectionOf(JsonElement data)
         => data.GetProperty("connection").GetString()!;
+
+    public static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(HttpResponseMessage response)
+    {
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        return (response.StatusCode, document.RootElement.Clone());
+    }
 
     public async Task StartDriverAsync(DriverHello hello, Action<FakeDriver>? arrange = null)
     {

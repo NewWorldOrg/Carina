@@ -6,7 +6,7 @@ using Carina.Domain.Streaming;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Streaming;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
-using Carina.Infrastructure.Tests.Integrity;
+using Carina.Infrastructure.Tests.Fixtures.Integrity;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;

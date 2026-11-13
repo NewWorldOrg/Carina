@@ -20,19 +20,13 @@ public static class TestLayoutRules
     public static readonly IReadOnlyList<string> AreasNotYetMoved =
     [
         "Base",
-        "Collection",
         "Configuration",
         "DependencyInjection",
-        "Driver",
-        "DriverStatus",
         "Events",
         "Health",
-        "Integrity",
-        "Machines",
         "Net",
         "Persistence",
         "Services",
-        "Tuners",
         "Version",
     ];
 
@@ -53,6 +47,7 @@ public static class TestLayoutRules
         new("Captions", "src/Carina.Api/Playback/CaptionDelivery.cs"),
         new("DataBroadcast", "src/Carina.Api/Playback/DataBroadcastDelivery.cs"),
         new("DataBroadcast", "src/Carina.Db/Migrations/20261010124242_ADataBroadcastStateForEveryRecording.cs"),
+        new("DriverStatus", "src/Carina.Api/Services/DriverStatusService.cs"),
         new("Encoding", "src/Carina.Api/Services/EncodeRerun.cs"),
         new("Encodings", "src/Carina.Db/Migrations/20260914061902_WhereTheBreaksWereJudgedToBe.cs"),
         new("Encodings", "src/Carina.Db/Migrations/20260927053702_ReplacedArtefactsAreRemoved.cs"),
@@ -61,6 +56,9 @@ public static class TestLayoutRules
         new("Encodings", "src/Carina.Infrastructure/Configuration/EncodingOptions.cs"),
         new("Epg", "src/Carina.Api/Events/ProgrammeFeedReaders.cs"),
         new("Epg", "src/Carina.Api/Events/ProgrammeFeedStream.cs"),
+        new("Integrity", "src/Carina.Api/Services/IntegrityService.cs"),
+        new("Integrity", "src/Carina.Db/Migrations/20260914005111_AFindingNamedForTheFactItIsAbout.cs"),
+        new("Integrity", "src/Carina.Infrastructure/Configuration/IntegrityOptions.cs"),
         new("Live", "src/Carina.Api/Live/HybridcastAppDelivery.cs"),
         new("Live", "src/Carina.Api/Live/HybridcastSocketDelivery.cs"),
         new("Logos", "src/Carina.Api/Logos/LogoDelivery.cs"),

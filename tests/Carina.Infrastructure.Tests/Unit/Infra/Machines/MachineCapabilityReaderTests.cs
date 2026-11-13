@@ -1,0 +1,403 @@
+using System.Runtime.Versioning;
+
+using Carina.Domain.Machines;
+using Carina.Infrastructure.Machines;
+
+namespace Carina.Infrastructure.Tests.Unit.Infra.Machines;
+
+[Trait("Category", "Unit")]
+[SupportedOSPlatform("linux")]
+public sealed class MachineCapabilityReaderTests : IDisposable
+{
+    private const string Listing = """
+        printf 'Encoders:\n V..... = Video\n ------\n V....D libx264   x264\n V....D h264_vaapi  vaapi\n V....D hevc_vaapi  vaapi\n V....D av1_vaapi  vaapi\n'
+        """;
+
+    private const string NvencListing = """
+        printf 'Encoders:\n V..... = Video\n ------\n V....D libx264   x264\n V....D h264_nvenc  nvenc\n V....D hevc_nvenc  nvenc\n V....D av1_nvenc  nvenc\n'
+        """;
+
+    private const string CaptionListing = """
+        printf 'Decoders:\n ------\n S..... libaribcaption   arib\n'
+        """;
+
+    private readonly StandIns standIns = new();
+
+    public void Dispose() => standIns.Dispose();
+
+    [Fact(DisplayName = "what this machine can do is asked for once and the answer is kept")]
+    public async Task WhatThisMachineCanDoIsAskedForOnceAndTheAnswerIsKept()
+    {
+        string counted = standIns.Named("counted");
+
+        var reader = new MachineCapabilityReader(
+            new MachineSettings
+            {
+                Programme = standIns.Script($"echo . >> {counted}; {Answering}"),
+                RenderNode = standIns.Node(),
+            },
+            TimeProvider.System);
+
+        MachineCapabilities[] answers = await Task.WhenAll(
+            Enumerable.Range(0, 8).Select(_ => reader.ReadAsync(CancellationToken.None)));
+
+        Assert.All(answers, answer => Assert.True(answer.CardIsUsable));
+        Assert.Equal(5, File.ReadAllLines(counted).Length);
+    }
+
+    [Fact(DisplayName = "a card that encodes an H.264 frame and refuses an H.265 one is a usable card with H.264 on it alone")]
+    public async Task ACardThatRefusesAnH265FrameIsAUsableCardWithH264Alone()
+    {
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                case "$*" in
+                  *-encoders*) {Listing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *hevc_vaapi*) printf 'No usable encoding entrypoint found for profile VAProfileHEVCMain (17).\n' >&2; exit 218 ;;
+                  *) exit 0 ;;
+                esac
+                """),
+            standIns.Node());
+
+        Assert.Equal(CardStanding.Usable, can.Card);
+        Assert.Equal(string.Empty, can.Note);
+        Assert.Equal(
+            [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard, Faculty.DecodeAribCaptions, Faculty.EncodeAv1OnTheCard],
+            can.Faculties);
+    }
+
+    [Fact(DisplayName = "a card that encodes H.264 and H.265 frames and refuses an AV1 one has no AV1 on it")]
+    public async Task ACardThatRefusesAnAv1FrameHasNoAv1OnIt()
+    {
+        string asked = standIns.Named("asked");
+
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                echo "$*" >> {asked}
+                case "$*" in
+                  *-encoders*) {Listing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *av1_vaapi*) printf 'No usable encoding entrypoint found for profile VAProfileAV1Profile0 (32).\n' >&2; exit 218 ;;
+                  *) exit 0 ;;
+                esac
+                """),
+            standIns.Node());
+
+        Assert.Equal(CardStanding.Usable, can.Card);
+        Assert.Equal(string.Empty, can.Note);
+        Assert.Equal(
+            [
+                Faculty.EncodeH264OnTheProcessor,
+                Faculty.EncodeH264OnTheCard,
+                Faculty.EncodeH265OnTheCard,
+                Faculty.DecodeAribCaptions,
+            ],
+            can.Faculties);
+        Assert.Contains(File.ReadAllLines(asked), line => line.Contains("av1_vaapi", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "a card that refuses H.264 is not asked about H.265 or AV1 at all")]
+    public async Task ACardThatRefusesH264IsNotAskedAboutH265()
+    {
+        string asked = standIns.Named("asked");
+
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                echo "$*" >> {asked}
+                case "$*" in
+                  *-encoders*) {Listing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *) exit 218 ;;
+                esac
+                """),
+            standIns.Node());
+
+        Assert.Equal(CardStanding.DriverUnusable, can.Card);
+        Assert.Equal(3, File.ReadAllLines(asked).Length);
+        Assert.DoesNotContain(File.ReadAllLines(asked), line => line.Contains("hevc_vaapi", StringComparison.Ordinal));
+        Assert.DoesNotContain(File.ReadAllLines(asked), line => line.Contains("av1_vaapi", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "a machine with a card that works says it can encode on it")]
+    public async Task AMachineWithACardThatWorksSaysItCanEncodeOnIt()
+    {
+        MachineCapabilities can = await Reading(standIns.Script(Answering), standIns.Node());
+
+        Assert.Equal(CardStanding.Usable, can.Card);
+        Assert.Equal(
+            [
+                Faculty.EncodeH264OnTheProcessor,
+                Faculty.EncodeH264OnTheCard,
+                Faculty.EncodeH265OnTheCard,
+                Faculty.DecodeAribCaptions,
+                Faculty.EncodeAv1OnTheCard,
+            ],
+            can.Faculties);
+    }
+
+    [Fact(DisplayName = "no render node is not an error, it is a machine that encodes on its processor")]
+    public async Task NoRenderNodeIsNotAnErrorItIsAMachineThatEncodesOnItsProcessor()
+    {
+        MachineCapabilities can = await Reading(standIns.Script(Answering), standIns.Named("no-such-node"));
+
+        Assert.Equal(CardStanding.NodeMissing, can.Card);
+        Assert.Equal([Faculty.EncodeH264OnTheProcessor, Faculty.DecodeAribCaptions], can.Faculties);
+        Assert.NotEmpty(can.Note);
+    }
+
+    [Fact]
+    public async Task ANodeThatCannotBeOpenedIsNotANodeThatCanBeUsed()
+    {
+        MachineCapabilities can = await Reading(standIns.Script(Answering), standIns.Room);
+
+        Assert.Equal(CardStanding.NodeUnreadable, can.Card);
+        Assert.False(can.Has(Faculty.EncodeH264OnTheCard));
+    }
+
+    [Fact]
+    public async Task ANodeThatIsThereWithNoDriverBehindItIsNotANodeThatCanBeUsed()
+    {
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                case "$*" in
+                  *-encoders*) {Listing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *) printf 'No VA display found for device /dev/dri/renderD128.\n' >&2; exit 234 ;;
+                esac
+                """),
+            standIns.Node());
+
+        Assert.Equal(CardStanding.DriverUnusable, can.Card);
+        Assert.Contains("No VA display found", can.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain('/', can.Note);
+        Assert.False(can.Has(Faculty.EncodeH264OnTheCard));
+        Assert.True(can.Has(Faculty.EncodeH264OnTheProcessor));
+    }
+
+    [Fact]
+    public async Task AProgrammeThatIsNotOnThisMachineLeavesItAbleToDoNothing()
+    {
+        MachineCapabilities can = await Reading(standIns.Named("no-such-programme"), standIns.Node());
+
+        Assert.Equal(CardStanding.ProbeProgrammeMissing, can.Card);
+        Assert.Empty(can.Faculties);
+        Assert.NotEmpty(can.Note);
+        Assert.DoesNotContain('/', can.Note);
+    }
+
+    [Fact]
+    public async Task AskingTheCardIsGivenUpOnAndNothingIsLeftRunning()
+    {
+        string pids = standIns.Named("pids");
+
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                case "$*" in
+                  *-encoders*) {Listing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *) echo $$ > {pids}; sleep 60 & echo $! >> {pids}; wait ;;
+                esac
+                """),
+            standIns.Node(),
+            TimeSpan.FromMilliseconds(250));
+
+        Assert.Equal(CardStanding.ProbeTimedOut, can.Card);
+        Assert.True(await standIns.NothingIsLeftOf(StandIns.Pids(pids)));
+    }
+
+    [Fact]
+    public async Task AnAnswerThatTimedOutIsAskedForAgainOnceThePauseHasPassed()
+    {
+        MachineCapabilityReader reader = SlowTheFirstTime(TimeSpan.Zero, standIns.Named("asked-once"));
+
+        MachineCapabilities first = await reader.ReadAsync(CancellationToken.None);
+        MachineCapabilities second = await reader.ReadAsync(CancellationToken.None);
+
+        Assert.Equal(CardStanding.ProbeTimedOut, first.Card);
+        Assert.Equal(CardStanding.Usable, second.Card);
+        Assert.True(second.Has(Faculty.EncodeH264OnTheCard));
+    }
+
+    [Fact]
+    public async Task AnAnswerThatTimedOutIsKeptUntilThePauseHasPassed()
+    {
+        MachineCapabilityReader reader = SlowTheFirstTime(TimeSpan.FromHours(1), standIns.Named("asked-once"));
+
+        MachineCapabilities first = await reader.ReadAsync(CancellationToken.None);
+        MachineCapabilities second = await reader.ReadAsync(CancellationToken.None);
+
+        Assert.Equal(CardStanding.ProbeTimedOut, first.Card);
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public async Task ACallerThatStopsWaitingDoesNotStopTheAsking()
+    {
+        var reader = new MachineCapabilityReader(
+            new MachineSettings
+            {
+                Programme = standIns.Script($"sleep 0.3; {Answering}"),
+                RenderNode = standIns.Node(),
+            },
+            TimeProvider.System);
+
+        using var calledOff = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reader.ReadAsync(calledOff.Token));
+
+        Assert.True((await reader.ReadAsync(CancellationToken.None)).CardIsUsable);
+    }
+
+    [Fact(DisplayName = "an NVIDIA card is asked through the CUDA device, and the render node is neither opened nor named")]
+    public async Task AnNvidiaCardIsAskedThroughTheCudaDeviceAndNotTheRenderNode()
+    {
+        string asked = standIns.Named("asked");
+
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                echo "$*" >> {asked}
+                case "$*" in
+                  *-encoders*) {NvencListing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *) exit 0 ;;
+                esac
+                """),
+            standIns.Named("no-such-node"),
+            card: CardKind.Nvenc);
+
+        Assert.Equal(CardStanding.Usable, can.Card);
+        Assert.Equal(string.Empty, can.Note);
+        Assert.Equal(
+            [
+                Faculty.EncodeH264OnTheProcessor,
+                Faculty.EncodeH264OnTheCard,
+                Faculty.EncodeH265OnTheCard,
+                Faculty.DecodeAribCaptions,
+                Faculty.EncodeAv1OnTheCard,
+            ],
+            can.Faculties);
+        Assert.Equal(5, File.ReadAllLines(asked).Length);
+        Assert.Equal(3, File.ReadAllLines(asked).Count(line => line.Contains("-init_hw_device cuda=cu", StringComparison.Ordinal)));
+        Assert.DoesNotContain(File.ReadAllLines(asked), line => line.Contains("vaapi", StringComparison.Ordinal));
+        Assert.DoesNotContain(File.ReadAllLines(asked), line => line.Contains("no-such-node", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "an NVIDIA card that encodes H.264 and H.265 frames and refuses an AV1 one has no AV1 on it")]
+    public async Task AnNvidiaCardThatRefusesAnAv1FrameHasNoAv1OnIt()
+    {
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                case "$*" in
+                  *-encoders*) {NvencListing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *av1_nvenc*) printf 'No capable devices found\n' >&2; exit 1 ;;
+                  *) exit 0 ;;
+                esac
+                """),
+            standIns.Node(),
+            card: CardKind.Nvenc);
+
+        Assert.Equal(CardStanding.Usable, can.Card);
+        Assert.Equal(
+            [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard, Faculty.EncodeH265OnTheCard, Faculty.DecodeAribCaptions],
+            can.Faculties);
+    }
+
+    [Fact(DisplayName = "a host without the NVIDIA runtime fails the H.264 probe, and that is a card that cannot be used and nothing more is asked")]
+    public async Task AHostWithoutTheNvidiaRuntimeIsACardThatCannotBeUsed()
+    {
+        string asked = standIns.Named("asked");
+
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                echo "$*" >> {asked}
+                case "$*" in
+                  *-encoders*) {NvencListing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *) printf 'Cannot load libcuda.so.1\nDevice creation failed: -1.\n' >&2; exit 1 ;;
+                esac
+                """),
+            standIns.Node(),
+            card: CardKind.Nvenc);
+
+        Assert.Equal(CardStanding.DriverUnusable, can.Card);
+        Assert.Contains("libcuda", can.Note, StringComparison.Ordinal);
+        Assert.Equal([Faculty.EncodeH264OnTheProcessor, Faculty.DecodeAribCaptions], can.Faculties);
+        Assert.Equal(3, File.ReadAllLines(asked).Length);
+        Assert.DoesNotContain(File.ReadAllLines(asked), line => line.Contains("hevc_nvenc", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "an NVIDIA probe that runs out of time is asked again once the pause has passed")]
+    public async Task AnNvidiaProbeThatRanOutOfTimeIsAskedAgain()
+    {
+        string marker = standIns.Named("asked-once");
+        var reader = new MachineCapabilityReader(
+            new MachineSettings
+            {
+                Programme = standIns.Script($"""
+                    case "$*" in
+                      *-encoders*) {NvencListing} ;;
+                      *-decoders*) {CaptionListing} ;;
+                      *) if [ -f {marker} ]; then exit 0; fi; touch {marker}; sleep 60 & wait ;;
+                    esac
+                    """),
+                RenderNode = standIns.Named("no-such-node"),
+                Card = CardKind.Nvenc,
+                LongestProbe = TimeSpan.FromMilliseconds(250),
+                AskAgainAfterATimeOut = TimeSpan.Zero,
+            },
+            TimeProvider.System);
+
+        MachineCapabilities first = await reader.ReadAsync(CancellationToken.None);
+        MachineCapabilities second = await reader.ReadAsync(CancellationToken.None);
+
+        Assert.Equal(CardStanding.ProbeTimedOut, first.Card);
+        Assert.Equal(CardStanding.Usable, second.Card);
+        Assert.True(second.Has(Faculty.EncodeH265OnTheCard));
+    }
+
+    [Fact]
+    public void TheNodeThatIsOpenedIsTheNodeTheCommandNames()
+        => Assert.Contains(MachineSettings.TheRenderNode, VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode));
+
+    private static string Answering => $"""
+        case "$*" in
+          *-encoders*) {Listing} ;;
+          *-decoders*) {CaptionListing} ;;
+          *) exit 0 ;;
+        esac
+        """;
+
+    private MachineCapabilityReader SlowTheFirstTime(TimeSpan pause, string marker)
+        => new(
+            new MachineSettings
+            {
+                Programme = standIns.Script($"""
+                    case "$*" in
+                      *-encoders*) {Listing} ;;
+                      *-decoders*) {CaptionListing} ;;
+                      *) if [ -f {marker} ]; then exit 0; fi; touch {marker}; sleep 60 & wait ;;
+                    esac
+                    """),
+                RenderNode = standIns.Node(),
+                LongestProbe = TimeSpan.FromMilliseconds(250),
+                AskAgainAfterATimeOut = pause,
+            },
+            TimeProvider.System);
+
+    private static Task<MachineCapabilities> Reading(
+        string programme,
+        string renderNode,
+        TimeSpan? longest = null,
+        CardKind card = CardKind.Vaapi)
+        => new MachineCapabilityReader(
+                new MachineSettings
+                {
+                    Programme = programme,
+                    RenderNode = renderNode,
+                    Card = card,
+                    LongestProbe = longest ?? TimeSpan.FromSeconds(30),
+                },
+                TimeProvider.System)
+            .ReadAsync(CancellationToken.None);
+}

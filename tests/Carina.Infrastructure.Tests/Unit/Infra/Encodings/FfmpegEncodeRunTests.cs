@@ -3,7 +3,7 @@ using System.Diagnostics;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Infrastructure.Encodings;
-using Carina.Infrastructure.Tests.Integrity;
+using Carina.Infrastructure.Tests.Fixtures.Integrity;
 using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Encodings;
