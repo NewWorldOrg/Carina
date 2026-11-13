@@ -1,12 +1,13 @@
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Configurations;
+using Carina.Infrastructure.Tests.Auth;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Programmes;
 
 public sealed class ProgrammeSearchScale : IAsyncLifetime
 {
@@ -70,18 +71,20 @@ public sealed class ProgrammeSearchScale : IAsyncLifetime
 
     public string ConnectionString => connectionString;
 
-    public CarinaDbContext Open(IInterceptor? interceptor = null)
+    public CarinaDbContext Open()
     {
         var builder = new DbContextOptionsBuilder<CarinaDbContext>();
         builder.UseCarinaDatabase(connectionString);
 
-        if (interceptor is not null)
-        {
-            builder.AddInterceptors(interceptor);
-        }
-
         return new CarinaDbContext(builder.Options);
     }
+
+    /// <summary>
+    /// The container the infrastructure builds over this database, with what <paramref name="replace"/> registers last
+    /// standing in for what the infrastructure registered.
+    /// </summary>
+    public ServiceProvider Infrastructure(Action<IServiceCollection> replace)
+        => RepositoryDatabase.Container(connectionString, SealingKeys.Fresh(), replace);
 
     public static DateTime ArchiveStartOfSlot(int slot)
         => Anchor.AddDays(-366).AddMinutes(slot * SlotMinutes);

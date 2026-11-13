@@ -4,16 +4,18 @@ using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Configurations;
-using Carina.Infrastructure.Persistence.Repositories;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 using Npgsql;
 
 using Xunit.Abstractions;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Programmes;
 
 [Trait("Category", "Scale")]
-public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestOutputHelper output)
+public sealed class ProgrammeSearchRepositoryScaleTests(ProgrammeSearchScale scale, ITestOutputHelper output)
     : IClassFixture<ProgrammeSearchScale>
 {
     private static readonly TimeSpan BudgetOnAWarmCache = TimeSpan.FromSeconds(1);
@@ -117,8 +119,10 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
     private async Task<Measured> MeasuredAsync(ProgrammeSearch looking, string shape)
     {
         var recorded = new RecordedCommands();
-        await using CarinaDbContext context = scale.Open(recorded);
-        var searches = new ProgrammeSearchRepository(context);
+        await using ServiceProvider services = scale.Infrastructure(replace =>
+            replace.ConfigureDbContext<CarinaDbContext>(options => options.AddInterceptors(recorded)));
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        IProgrammeSearchRepository searches = scope.ServiceProvider.GetRequiredService<IProgrammeSearchRepository>();
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             looking,

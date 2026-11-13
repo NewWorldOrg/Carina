@@ -1,21 +1,21 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests.Collection;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Programmes;
 
 /// <summary>
 /// The queries that pick what leaves the guide and what the archive lets go of, held to the stand-ins the domain
 /// tests use for the same rows. Each row ends a moment before, exactly on, or a moment after the line the domain
 /// draws, and a programme whose end was never told ends where the next one of its service begins.
 /// </summary>
-[Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class ProgrammeArchivingArmsTests(RepositoryDatabase database)
+public sealed class ProgrammeArchivingDomainServiceTests(MigratedRepositoryDatabase database)
+    : IClassFixture<MigratedRepositoryDatabase>, IAsyncLifetime
 {
     private static readonly DateTime Now = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);
 
@@ -29,32 +29,37 @@ public sealed class ProgrammeArchivingArmsTests(RepositoryDatabase database)
         ArchiveRetention = TimeSpan.FromDays(30),
     };
 
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
+
     [Fact(DisplayName = "BR-ED-009: on either side of the line and exactly on it, the store and the stand-in send the same programmes to the archive")]
     public async Task TheStoreAndTheStandInSendTheSameProgrammesToTheArchive()
     {
         DateTime line = Now - Settings.KeepEndedProgrammes;
         var held = new HeldProgrammes();
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        await EmptyAsync(context);
+        await EmptyAsync(scope);
 
         int network = BroadcastIds.NextNetwork();
 
         held.Programmes.AddRange(Laid(network, line));
-        await context.AddRangeAsync(Laid(network, line), Cancel);
-        await context.SaveChangesAsync(Cancel);
+        await ContextIn(scope).AddRangeAsync(Laid(network, line), Cancel);
+        await ContextIn(scope).SaveChangesAsync(Cancel);
 
-        IReadOnlyList<EndedProgramme> fromTheStore = await new ProgrammeArchivingDomainService(
-                new ProgrammeRepository(context),
-                new ArchivedProgrammeRepository(context))
-            .ListLeavingAsync(Settings, Now, Cancel);
-        IReadOnlyList<EndedProgramme> fromTheStandIn = await new ProgrammeArchivingDomainService(held, new HeldArchive(held))
-            .ListLeavingAsync(Settings, Now, Cancel);
+        IReadOnlyList<EndedProgramme> fromTheStore = await ArchivingIn(scope).ListLeavingAsync(Settings, Now, Cancel);
+        IReadOnlyList<EndedProgramme> fromTheStandIn = await OverStandInsAsync(
+            held,
+            new HeldArchive(held),
+            archiving => archiving.ListLeavingAsync(Settings, Now, Cancel));
 
         Assert.Equal([1, 4], Leaving(fromTheStandIn).Select(leaving => leaving.Event));
         Assert.Equal(Leaving(fromTheStandIn), Leaving(fromTheStore));
 
-        await EmptyAsync(context);
+        await EmptyAsync(scope);
     }
 
     [Fact(DisplayName = "BR-ED-009: on either side of the retention and exactly on it, the store and the stand-in let go of the same archived programmes")]
@@ -63,9 +68,9 @@ public sealed class ProgrammeArchivingArmsTests(RepositoryDatabase database)
         DateTime line = Now - Settings.ArchiveRetention!.Value;
         int network = BroadcastIds.NextNetwork();
         var held = new HeldArchive();
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
-        await EmptyAsync(context);
+        await EmptyAsync(scope);
 
         TimeSpan[] offsets = [-Moment, TimeSpan.Zero, Moment];
 
@@ -74,19 +79,18 @@ public sealed class ProgrammeArchivingArmsTests(RepositoryDatabase database)
             held.Programmes.Add(Archived(network, carried, line + offsets[carried - 1]));
         }
 
-        await new ArchivedProgrammeRepository(context).KeepAsync(
+        await scope.ServiceProvider.GetRequiredService<IArchivedProgrammeRepository>().KeepAsync(
             [.. offsets.Select((offset, index) => Archived(network, index + 1, line + offset))],
             Cancel);
 
-        int forgottenByTheStore = await new ProgrammeArchivingDomainService(
-                new ProgrammeRepository(context),
-                new ArchivedProgrammeRepository(context))
-            .ForgetExpiredAsync(Settings, Now, Cancel);
-        int forgottenByTheStandIn = await new ProgrammeArchivingDomainService(new HeldProgrammes(), held)
-            .ForgetExpiredAsync(Settings, Now, Cancel);
+        int forgottenByTheStore = await ArchivingIn(scope).ForgetExpiredAsync(Settings, Now, Cancel);
+        int forgottenByTheStandIn = await OverStandInsAsync(
+            new HeldProgrammes(),
+            held,
+            archiving => archiving.ForgetExpiredAsync(Settings, Now, Cancel));
 
-        await using CarinaDbContext reading = database.Open();
-        int[] standing = [.. (await reading.Set<ArchivedProgramme>().ToListAsync(Cancel)).Select(kept => kept.EventId.Value).Order()];
+        await using AsyncServiceScope reading = container.CreateAsyncScope();
+        int[] standing = [.. (await ContextIn(reading).Set<ArchivedProgramme>().ToListAsync(Cancel)).Select(kept => kept.EventId.Value).Order()];
 
         Assert.Equal(1, forgottenByTheStandIn);
         Assert.Equal(forgottenByTheStandIn, forgottenByTheStore);
@@ -133,9 +137,30 @@ public sealed class ProgrammeArchivingArmsTests(RepositoryDatabase database)
                 .OrderBy(ended => ended.Event),
         ];
 
-    private static async Task EmptyAsync(CarinaDbContext context)
+    private static async Task EmptyAsync(AsyncServiceScope scope)
     {
-        await context.Set<Programme>().ExecuteDeleteAsync(Cancel);
-        await context.Set<ArchivedProgramme>().ExecuteDeleteAsync(Cancel);
+        await ContextIn(scope).Set<Programme>().ExecuteDeleteAsync(Cancel);
+        await ContextIn(scope).Set<ArchivedProgramme>().ExecuteDeleteAsync(Cancel);
     }
+
+    private async Task<T> OverStandInsAsync<T>(
+        IProgrammeRepository programmes,
+        IArchivedProgrammeRepository archive,
+        Func<ProgrammeArchivingDomainService, Task<T>> asked)
+    {
+        await using ServiceProvider standIns = database.Infrastructure(replace =>
+        {
+            replace.AddSingleton(programmes);
+            replace.AddSingleton(archive);
+        });
+        await using AsyncServiceScope scope = standIns.CreateAsyncScope();
+
+        return await asked(ArchivingIn(scope));
+    }
+
+    private static ProgrammeArchivingDomainService ArchivingIn(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<ProgrammeArchivingDomainService>();
+
+    private static CarinaDbContext ContextIn(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
 }
