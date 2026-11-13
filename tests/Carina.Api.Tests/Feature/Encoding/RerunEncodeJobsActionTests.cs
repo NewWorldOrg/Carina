@@ -4,9 +4,10 @@ using System.Text.Json;
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Encoding;
 
-public sealed class RerunEncodeJobsEndpointTests
+[Trait("Category", "Feature")]
+public sealed class RerunEncodeJobsActionTests
 {
     private const string Path = "/api/encoding/jobs/retry";
 
