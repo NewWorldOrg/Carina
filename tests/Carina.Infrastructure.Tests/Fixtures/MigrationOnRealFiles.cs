@@ -32,6 +32,34 @@ internal static class MigrationOnRealFiles
         Write(directory, NothingLandedIn, 0);
     }
 
+    public static void RemoveAll(params string[] directories)
+    {
+        ArgumentNullException.ThrowIfNull(directories);
+
+        List<Exception> refused = [];
+
+        foreach (string directory in directories)
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException removing)
+            {
+                refused.Add(removing);
+            }
+            catch (UnauthorizedAccessException removing)
+            {
+                refused.Add(removing);
+            }
+        }
+
+        if (refused.Count > 0)
+        {
+            throw new AggregateException(refused);
+        }
+    }
+
     private static void Write(string directory, string name, long size)
     {
         byte[] filling = new byte[size];
@@ -225,9 +253,5 @@ internal sealed class ARunOverRealFiles : IDisposable
             Lease,
             Clock).RunAsync(pass, Rescanned(), CancellationToken.None);
 
-    public void Dispose()
-    {
-        Directory.Delete(From, recursive: true);
-        Directory.Delete(Into, recursive: true);
-    }
+    public void Dispose() => MigrationOnRealFiles.RemoveAll(From, Into);
 }

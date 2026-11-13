@@ -51,9 +51,14 @@ public sealed class MigrationPassageTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(from, recursive: true);
-        Directory.Delete(into, recursive: true);
-        run.Dispose();
+        try
+        {
+            run.Dispose();
+        }
+        finally
+        {
+            MigrationOnRealFiles.RemoveAll(from, into);
+        }
     }
 
     [Fact]
@@ -208,12 +213,6 @@ public sealed class MigrationPassageTests : IDisposable
         Assert.Single(Directory.GetFiles(into));
     }
 
-    private static IReadOnlyList<string> Walked(string directory)
-        => [.. Directory
-            .GetFiles(directory)
-            .Order(StringComparer.Ordinal)
-            .Select(file => $"{Path.GetFileName(file)} {new FileInfo(file).Length} {File.GetLastWriteTimeUtc(file):O}")];
-
     [Fact]
     public async Task ANewRootThatWentAwayAfterItWasLookedAtIsWrittenDownRatherThanThrownOver()
     {
@@ -242,9 +241,6 @@ public sealed class MigrationPassageTests : IDisposable
             MigrationFinding.TheCarryWouldBeAHardLink,
             Found(records.Saved.Single(), MigrationStandingSubject.CarryingIntoTheNewRoot));
     }
-
-    private static MigrationFinding Found(MigrationReport written, MigrationStandingSubject subject)
-        => written.Standings.Single(standing => standing.Subject == subject).Finding;
 
     [Fact]
     public async Task ARunThatDiesBeforeItLinksAnythingLeavesNoRowAndNoFileBehind()
@@ -375,6 +371,15 @@ public sealed class MigrationPassageTests : IDisposable
         Assert.Equal(WhatTheFilesystemSays.Identities(before), WhatTheFilesystemSays.Identities(after));
         Assert.Equal(before.Select(file => file.Links), after.Select(file => file.Links));
     }
+
+    private static IReadOnlyList<string> Walked(string directory)
+        => [.. Directory
+            .GetFiles(directory)
+            .Order(StringComparer.Ordinal)
+            .Select(file => $"{Path.GetFileName(file)} {new FileInfo(file).Length} {File.GetLastWriteTimeUtc(file):O}")];
+
+    private static MigrationFinding Found(MigrationReport written, MigrationStandingSubject subject)
+        => written.Standings.Single(standing => standing.Subject == subject).Finding;
 
     private MigrationPassage Passage()
         => new(
