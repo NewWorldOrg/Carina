@@ -3,8 +3,9 @@ using Carina.Infrastructure.Segments;
 
 using Microsoft.Extensions.Configuration;
 
-namespace Carina.Infrastructure.Tests.Configuration;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 
+[Trait("Category", "Unit")]
 public sealed class LearningOptionsTests
 {
     [Fact(DisplayName = "nothing configured means no reduced copy is imported")]

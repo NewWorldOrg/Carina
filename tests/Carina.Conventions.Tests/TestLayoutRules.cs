@@ -91,6 +91,7 @@ public static class TestLayoutRules
         new("Segments", "src/Carina.Db/Migrations/20261023075840_VersionsBuiltInAreMarkedAndThoseNeverUsedLetGo.cs"),
         new("Segments", "src/Carina.Db/Migrations/20261026110822_RoundsOfLearningKeepOutACandidateThatLosesOpeningsOrEndings.cs"),
         new("Segments", "src/Carina.Db/Migrations/20261107141136_TheSkipThresholdReachesNinetyNineHundredths.cs"),
+        new("Segments", "src/Carina.Infrastructure/Configuration/LearningOptions.cs"),
     ];
 
     /// <summary>
