@@ -69,7 +69,6 @@ internal static class SupersededProgrammes
                 Unheard(Moved(On(network, 2, Start.AddMinutes(30), Start.AddHours(2), null))),
             ]);
 
-
     public static Programme[] Varied(int network)
         =>
         [
