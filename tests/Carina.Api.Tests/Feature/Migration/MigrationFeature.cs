@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
@@ -12,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Migration;
 
 internal sealed class HeldMigrationRecord : IMigrationRecordRepository
 {
