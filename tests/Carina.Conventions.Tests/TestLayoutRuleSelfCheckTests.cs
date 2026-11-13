@@ -860,6 +860,24 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsATypeBuiltWithTheCreateInstanceThatDoesNotNameItOverADatabase()
+    {
+        using SourceTree tree = new();
+        DeclareBehindTheDomain(tree);
+        tree.Test(
+            $"{InfrastructureTests}/DbIntegration/Infra/Auth/ClientSecretSealTests.cs",
+            TestLayoutRules.DbIntegration,
+            "ClientSecretSeal seal = ActivatorUtilities.CreateInstance<ClientSecretSeal>(scope.ServiceProvider); object settings = ActivatorUtilities.CreateInstance(scope.ServiceProvider, implementation);");
+        tree.Write(
+            $"{InfrastructureTests}/RegisteredServices.cs",
+            "namespace Carina.Infrastructure.Tests;\n\ninternal static class RegisteredServices\n{\n    public static object Wrap(IServiceProvider provider, Type implementation) => ActivatorUtilities.CreateInstance(provider, implementation);\n}\n");
+
+        Assert.Equal(
+            ["/tests/Carina.Infrastructure.Tests/DbIntegration/Infra/Auth/ClientSecretSealTests.cs:4 ClientSecretSealTests builds a type it does not name with CreateInstance, which only the helper that wraps a registered service may do"],
+            TestLayoutRules.SubjectsBuiltByHand(TestLayoutRules.Read(tree.Root)));
+    }
+
+    [Fact]
     public void LetsOffATypeBehindADomainInterfaceTakenThroughItAndATypeBehindNoneBuiltWithCreateInstance()
     {
         using SourceTree tree = new();

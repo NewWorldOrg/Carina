@@ -422,13 +422,7 @@ public sealed class ReservationOutcomeServiceTests(RepositoryDatabase database) 
 
             if (outcomes is not null)
             {
-                ServiceDescriptor held = replace.Last(descriptor => descriptor.ServiceType == typeof(IReservationOutcomeRepository));
-                Type implementation = held.ImplementationType
-                    ?? throw new InvalidOperationException("The outcomes are not registered by their class, so they cannot be wrapped.");
-                replace.Add(ServiceDescriptor.Describe(
-                    typeof(IReservationOutcomeRepository),
-                    provider => outcomes((IReservationOutcomeRepository)ActivatorUtilities.CreateInstance(provider, implementation)),
-                    held.Lifetime));
+                RegisteredServices.Wrap(replace, outcomes);
             }
         });
         standingIn.Add(standing);

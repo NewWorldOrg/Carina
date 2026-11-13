@@ -572,6 +572,11 @@ public static class TestLayoutRules
             yield return $"builds {built} with CreateInstance although the container gives it as {string.Join(", ", reading.DomainPorts[built].Order(StringComparer.Ordinal))}";
         }
 
+        if (file.BuildsAnUnnamedType)
+        {
+            yield return "builds a type it does not name with CreateInstance, which only the helper that wraps a registered service may do";
+        }
+
         if (!string.Equals(taken, subject, StringComparison.Ordinal) && file.Identifiers.Contains(subject))
         {
             yield return $"names the class {subject} behind {taken}";
@@ -806,6 +811,7 @@ public static class TestLayoutRules
                 .ToHashSet(StringComparer.Ordinal),
             Generic(file.Root, "CreateInstance"),
             Generic(file.Root, "IsType"),
+            file.Root.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(IsAnUnnamedCreateInstance),
             file.Root.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().Select(Created).ToHashSet(StringComparer.Ordinal),
             ApiPaths(file.Root),
             file.Root.DescendantNodes()
@@ -834,6 +840,10 @@ public static class TestLayoutRules
 
     private static string[] ApiPaths(SyntaxNode node)
         => node.DescendantNodes().Select(Spoken).Where(path => path.StartsWith("/api/", StringComparison.Ordinal)).ToArray();
+
+    private static bool IsAnUnnamedCreateInstance(InvocationExpressionSyntax call)
+        => (call.Expression is MemberAccessExpressionSyntax access ? access.Name : call.Expression)
+            is IdentifierNameSyntax { Identifier.ValueText: "CreateInstance" };
 
     private static HashSet<string> Generic(SyntaxNode root, string method)
         => root.DescendantNodes().OfType<GenericNameSyntax>()
@@ -1087,6 +1097,7 @@ public static class TestLayoutRules
         IReadOnlySet<string> Composed,
         IReadOnlySet<string> Instantiated,
         IReadOnlySet<string> Narrowed,
+        bool BuildsAnUnnamedType,
         IReadOnlySet<string> Created,
         IReadOnlyList<string> ApiPaths,
         IReadOnlyList<IReadOnlyList<string>> PathsOfEachTest);

@@ -486,9 +486,13 @@ test named after anything else is refused under that area.
   asked for as that interface and its class is not named at all; a domain service
   is asked for as itself, and so is an application service under
   `DbIntegration/App`. A type that implements an interface declared under
-  `src/Carina.Domain` is always asked for through that interface, never built with
-  `ActivatorUtilities.CreateInstance`; where a test needs a member only the class
-  has, it narrows what the container gives with `Assert.IsType`.
+  `src/Carina.Domain` is always asked for through that interface; where a test
+  needs a member only the class has, it narrows what the container gives with
+  `Assert.IsType`. The only place a test builds such a type is
+  `RegisteredServices`, the helper of each test project that puts a stand-in
+  around the implementation the product registers, keeping its lifetime; a test
+  over a real database calls `ActivatorUtilities.CreateInstance` neither for such
+  a type nor for a type it does not name.
 - A feature class is named after one action, or one class the start-up code puts
   in the request pipeline or maps an endpoint to, and every action of an area that
   has feature classes has its class. No two feature classes share a name.
