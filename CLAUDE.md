@@ -509,10 +509,11 @@ reviewer: the middle column of the table, that a test is of the kind its folder
 says, which tables a `SchemaTests` class reads, and that test methods are named as
 sentences. For an area off the list it refuses a test left behind: one under the
 area's old folder, one named after a type, a migration or a schema of the area,
-an old feature test that speaks only to routes of areas that have moved, or one
-with a namesake in the layout. A class at the root of a project is tied to its
-area by those marks alone, so what they miss is caught when the list is empty;
-from then on every test class outside the layout is refused.
+an old feature test that speaks only to routes of areas that have moved or holds a
+test whose requests all go to such routes, or one with a namesake in the layout. A
+class at the root of a project is tied to its area by those marks alone, so what
+they miss is caught when the list is empty; from then on every test class outside
+the layout is refused.
 
 Five filters divide the suite, and CI runs one job per filter:
 

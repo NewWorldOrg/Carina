@@ -1046,6 +1046,47 @@ public sealed class TestLayoutRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAnOldTestOfTheHttpSurfaceWhoseClassAlsoSpeaksToAnAreaYetToMove()
+    {
+        using SourceTree tree = new();
+        DeclareAuthAndRecordings(tree);
+        tree.Write(
+            $"{ApiTests}/FeatureTest/SessionAndRecordingTests.cs",
+            """
+            namespace Carina.Api.Tests.FeatureTest;
+
+            [Trait("Category", "Feature")]
+            public sealed class SessionAndRecordingTests
+            {
+                [Fact]
+                public async Task SignsIn() => await client.PostAsync("/api/auth/login", null);
+
+                [Fact]
+                public async Task ReadsARecording() => await client.GetAsync($"/api/recordings/{id}");
+            }
+            """);
+        tree.Write(
+            $"{ApiTests}/FeatureTest/ServedDocumentTests.cs",
+            """
+            namespace Carina.Api.Tests.FeatureTest;
+
+            [Trait("Category", "Feature")]
+            public sealed class ServedDocumentTests
+            {
+                [Fact]
+                public async Task DescribesTheSignIn() => Assert.NotNull(document["paths"]!["/api/auth/login"]);
+
+                [Fact]
+                public async Task ReadsARecording() => await client.GetAsync(new Uri($"/api/recordings/{id}", UriKind.Relative));
+            }
+            """);
+
+        Assert.Equal(
+            ["/tests/Carina.Api.Tests/FeatureTest/SessionAndRecordingTests.cs:4 SessionAndRecordingTests has a test that speaks only to routes of areas that have moved"],
+            TestLayoutRules.ClassesLeftInTheOldPlace(TestLayoutRules.Read(tree.Root), ["Persistence", "Recordings"], Elsewhere, Schemas));
+    }
+
+    [Fact]
     public void DetectsAnOldTestThatImportsTheTestsOfAnAreaThatHasMoved()
     {
         using SourceTree tree = new();
