@@ -3,8 +3,9 @@ using Carina.Api.Services;
 
 using Microsoft.AspNetCore.Http;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Recordings;
 
+[Trait("Category", "Unit")]
 public sealed class RecordingStatusTests
 {
     [Theory]

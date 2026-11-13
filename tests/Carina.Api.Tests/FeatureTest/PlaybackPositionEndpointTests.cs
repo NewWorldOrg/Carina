@@ -2,9 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-using Carina.Api.Common;
 using Carina.Api.Playback;
-using Carina.Api.Services;
 using Carina.Domain.Auth;
 using Carina.Domain.Recordings;
 using Carina.Domain.Viewing;
@@ -111,49 +109,6 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal(612.5, plan.GetProperty("resumeAtSec").GetDouble());
     }
 
-    [Fact(DisplayName = "a player sending where it has got to over and over leaves one place, the last one")]
-    public async Task APlayerSendingWhereItHasGotToOverAndOverLeavesOnePlace()
-    {
-        await using var feature = new PlayFeature();
-        Recording recording = feature.Ended(RecordingOutcome.Complete);
-
-        foreach (double second in new[] { 10d, 20d, 30d })
-        {
-            (HttpStatusCode kept, _) = await KeepAsync(
-                feature.Client,
-                recording.Id.Wire,
-                new { positionSec = second });
-
-            Assert.Equal(HttpStatusCode.OK, kept);
-        }
-
-        PlaybackPosition only = Assert.Single(feature.Positions.Positions);
-
-        Assert.Equal(TimeSpan.FromSeconds(30), only.Position);
-        Assert.Equal(recording.Id, only.RecordingId);
-    }
-
-    [Fact(DisplayName = "the answer says what was kept and when it was kept")]
-    public async Task TheAnswerSaysWhatWasKeptAndWhenItWasKept()
-    {
-        await using var feature = new PlayFeature();
-        Recording recording = feature.Ended(RecordingOutcome.Complete);
-
-        (HttpStatusCode status, JsonElement body) = await KeepAsync(
-            feature.Client,
-            recording.Id.Wire,
-            new { positionSec = 61.5 });
-
-        PlaybackPosition only = Assert.Single(feature.Positions.Positions);
-        JsonElement data = body.GetProperty("data");
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.True(body.GetProperty("status").GetBoolean());
-        Assert.Equal(recording.Id.Wire, data.GetProperty("recordingId").GetString());
-        Assert.Equal(61.5, data.GetProperty("positionSec").GetDouble());
-        Assert.Equal(only.UpdatedAt, data.GetProperty("updatedAt").GetDateTime());
-    }
-
     [Fact(DisplayName = "the screen is given both numbers it needs: how long a recording is, and where the watching got to")]
     public async Task TheScreenIsGivenBothNumbersItNeeds()
     {
@@ -176,117 +131,6 @@ public sealed class PlaybackPositionEndpointTests
             (long)TimeSpan.FromMinutes(30).TotalMilliseconds,
             detail.GetProperty("data").GetProperty("recording").GetProperty("writtenDurationMs").GetInt64());
         Assert.Equal(600, plan.GetProperty("resumeAtSec").GetDouble());
-    }
-
-    [Fact(DisplayName = "a recording the ledger does not hold is nowhere to keep a place in")]
-    public async Task ARecordingTheLedgerDoesNotHoldIsNowhereToKeepAPlaceIn()
-    {
-        await using var feature = new PlayFeature();
-
-        (HttpStatusCode status, JsonElement body) = await KeepAsync(
-            feature.Client,
-            RecordingId.New().Wire,
-            new { positionSec = 10 });
-
-        Assert.Equal(HttpStatusCode.NotFound, status);
-        Assert.False(body.GetProperty("status").GetBoolean());
-        Assert.Empty(feature.Positions.Positions);
-    }
-
-    [Fact(DisplayName = "something that is not a recording id is refused before anything is written")]
-    public async Task SomethingThatIsNotARecordingIdIsRefused()
-    {
-        await using var feature = new PlayFeature();
-
-        (HttpStatusCode status, JsonElement body) = await KeepAsync(
-            feature.Client,
-            "not-a-recording",
-            new { positionSec = 10 });
-
-        Assert.Equal(HttpStatusCode.BadRequest, status);
-        Assert.Equal(RecordingIdText.Description, body.GetProperty("message").GetString());
-        Assert.Empty(feature.Positions.Positions);
-    }
-
-    [Theory]
-    [InlineData(-1d)]
-    [InlineData(null)]
-    public async Task APlaceThatIsNotASecondIntoTheRecordingIsRefused(double? second)
-    {
-        await using var feature = new PlayFeature();
-        Recording recording = feature.Ended(RecordingOutcome.Complete);
-
-        (HttpStatusCode status, JsonElement body) = await KeepAsync(
-            feature.Client,
-            recording.Id.Wire,
-            new { positionSec = second });
-
-        Assert.Equal(HttpStatusCode.BadRequest, status);
-        Assert.Equal(PlaybackPositionService.ThePositionsThereAre, body.GetProperty("message").GetString());
-        Assert.Empty(feature.Positions.Positions);
-    }
-
-    [Fact(DisplayName = "a recording still being written has no watching of it to remember")]
-    public async Task ARecordingStillBeingWrittenHasNoWatchingOfItToRemember()
-    {
-        await using var feature = new PlayFeature();
-        Recording writing = feature.StillWriting();
-
-        (HttpStatusCode status, _) = await KeepAsync(
-            feature.Client,
-            writing.Id.Wire,
-            new { positionSec = 10 });
-
-        Assert.Equal(HttpStatusCode.Conflict, status);
-        Assert.Empty(feature.Positions.Positions);
-    }
-
-    [Fact(DisplayName = "a client carrying no credentials keeps nothing and is refused")]
-    public async Task AClientCarryingNoCredentialsKeepsNothing()
-    {
-        await using var feature = new PlayFeature();
-        Recording recording = feature.Ended(RecordingOutcome.Complete);
-
-        (HttpStatusCode status, _) = await KeepAsync(
-            feature.Stranger,
-            recording.Id.Wire,
-            new { positionSec = 10 });
-
-        Assert.Equal(HttpStatusCode.Unauthorized, status);
-        Assert.Empty(feature.Positions.Positions);
-    }
-
-    [Fact(DisplayName = "throwing a recording away leaves nobody's place in it")]
-    public async Task ThrowingARecordingAwayLeavesNobodysPlaceInIt()
-    {
-        await using var feature = new RecordingFeature();
-        Recording thrown = Settled(feature, 4_101);
-        Recording left = Settled(feature, 4_102);
-
-        feature.Positions.Positions.Add(PlaybackPosition.Reached(
-            thrown.Id,
-            new Subject("someone"),
-            TimeSpan.FromSeconds(60),
-            Noon));
-        feature.Positions.Positions.Add(PlaybackPosition.Reached(
-            thrown.Id,
-            new Subject("someone else"),
-            TimeSpan.FromSeconds(90),
-            Noon));
-        feature.Positions.Positions.Add(PlaybackPosition.Reached(
-            left.Id,
-            new Subject("someone"),
-            TimeSpan.FromSeconds(30),
-            Noon));
-        feature.Eraser.Answer = RecordingErasure.Erased(1);
-
-        (HttpStatusCode status, _) = await feature.DeleteAsync($"/api/recordings/{thrown.Id.Wire}");
-
-        Assert.Equal(HttpStatusCode.OK, status);
-
-        PlaybackPosition only = Assert.Single(feature.Positions.Positions);
-
-        Assert.Equal(left.Id, only.RecordingId);
     }
 
     [Fact(DisplayName = "where the watching got to is kept once for a recording, whichever of the two it is watched from")]

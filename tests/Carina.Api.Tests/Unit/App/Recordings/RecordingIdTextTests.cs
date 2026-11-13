@@ -1,8 +1,9 @@
 using Carina.Api.Common;
 using Carina.Domain.Recordings;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Recordings;
 
+[Trait("Category", "Unit")]
 public sealed class RecordingIdTextTests
 {
     [Fact]

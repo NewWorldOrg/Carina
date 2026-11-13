@@ -3,77 +3,10 @@ using System.Net.Http.Headers;
 
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
-using Carina.TestSupport;
 
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
+namespace Carina.Api.Tests.Feature.Thumbnails;
 
-namespace Carina.Api.Tests.FeatureTest;
-
-internal sealed class HeldFrames : IScrubFrames
-{
-    private readonly ScrubFrame answer;
-
-    public HeldFrames(ScrubFrame answer) => this.answer = answer;
-
-    public List<TimeSpan> AskedAt { get; } = [];
-
-    public List<RecordingId> AskedAbout { get; } = [];
-
-    public Task<ScrubFrame> AtAsync(RecordingId id, TimeSpan at, CancellationToken cancellationToken)
-    {
-        AskedAbout.Add(id);
-        AskedAt.Add(at);
-
-        return Task.FromResult(answer);
-    }
-}
-
-internal sealed class ScrubFeature : IAsyncDisposable
-{
-    private readonly TestingWebApplicationFactory factory = new();
-
-    public ScrubFeature(ScrubFrame answer)
-    {
-        Frames = new HeldFrames(answer);
-
-        WebApplicationFactory<Program> configured = factory
-            .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IHostedService>();
-                services.RemoveAll<IScrubFrames>();
-                services.AddSingleton<IScrubFrames>(Frames);
-            }));
-
-        Client = configured.WithTestScheme().CreateClient();
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            TestAuthenticationHandler.SchemeName,
-            "anything");
-        Stranger = configured.WithTestScheme().CreateClient();
-    }
-
-    public HeldFrames Frames { get; }
-
-    public HttpClient Client { get; }
-
-    public HttpClient Stranger { get; }
-
-    public static Uri For(RecordingId id, string? at = null)
-        => new(
-            at is null ? $"/api/videos/{id.Wire}/scrub" : $"/api/videos/{id.Wire}/scrub?at={at}",
-            UriKind.Relative);
-
-    public async ValueTask DisposeAsync()
-    {
-        Client.Dispose();
-        Stranger.Dispose();
-        await factory.DisposeAsync();
-    }
-}
-
+[Trait("Category", "Feature")]
 public sealed class ScrubDeliveryTests
 {
     private static readonly byte[] Picture = [0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43];

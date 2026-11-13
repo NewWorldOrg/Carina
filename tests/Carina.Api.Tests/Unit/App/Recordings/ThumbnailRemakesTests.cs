@@ -1,8 +1,9 @@
 using Carina.Api.Services;
 using Carina.Domain.Recordings;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Recordings;
 
+[Trait("Category", "Unit")]
 public sealed class ThumbnailRemakesTests
 {
     [Fact(DisplayName = "BR-KD-012: one request queues the pictures of at most a hundred recordings")]

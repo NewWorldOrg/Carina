@@ -1,12 +1,14 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Recordings;
 
-public sealed class SkipEventEndpointTests
+[Trait("Category", "Feature")]
+public sealed class AddSkipEventActionTests
 {
     private const string Skipped = """{"event":"skipped","kind":"break","fromSec":915.004,"toSec":1002.3,"modelVersion":1}""";
 

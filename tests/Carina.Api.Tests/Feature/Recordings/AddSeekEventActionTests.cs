@@ -4,9 +4,10 @@ using System.Text.Json;
 using Carina.Domain.Recordings;
 using Carina.Domain.Segments;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Recordings;
 
-public sealed class SeekEventEndpointTests
+[Trait("Category", "Feature")]
+public sealed class AddSeekEventActionTests
 {
     private const string Forward = """{"event":"forward","means":"step","fromSec":600.004,"toSec":702.3}""";
 

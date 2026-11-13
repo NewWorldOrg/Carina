@@ -2,12 +2,14 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Api.Tests.FeatureTest;
+using Carina.Domain.Auth;
 using Carina.Domain.Captions;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
+using Carina.Domain.Viewing;
 using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Thumbnails;
@@ -25,6 +27,8 @@ public sealed class DeleteRecordingActionTests
 {
     private const string RecordingIdTextDescription =
         "A recording is named by the thirty-two hexadecimal digits the ledger holds, without separators.";
+
+    private static readonly DateTime Noon = new(2026, 9, 16, 12, 0, 0, DateTimeKind.Utc);
 
     [Theory]
     [InlineData("DELETE", "/api/recordings")]
@@ -680,5 +684,49 @@ public sealed class DeleteRecordingActionTests
         await feature.DeleteAsync($"/api/recordings/{writing.Id.Wire}");
 
         Assert.Empty(feature.Events.Signalled);
+    }
+
+    [Fact(DisplayName = "throwing a recording away leaves nobody's place in it")]
+    public async Task ThrowingARecordingAwayLeavesNobodysPlaceInIt()
+    {
+        await using var feature = new RecordingFeature();
+        Recording thrown = Settled(feature, 4_101);
+        Recording left = Settled(feature, 4_102);
+
+        feature.Positions.Positions.Add(PlaybackPosition.Reached(
+            thrown.Id,
+            new Subject("someone"),
+            TimeSpan.FromSeconds(60),
+            Noon));
+        feature.Positions.Positions.Add(PlaybackPosition.Reached(
+            thrown.Id,
+            new Subject("someone else"),
+            TimeSpan.FromSeconds(90),
+            Noon));
+        feature.Positions.Positions.Add(PlaybackPosition.Reached(
+            left.Id,
+            new Subject("someone"),
+            TimeSpan.FromSeconds(30),
+            Noon));
+        feature.Eraser.Answer = RecordingErasure.Erased(1);
+
+        (HttpStatusCode status, _) = await feature.DeleteAsync($"/api/recordings/{thrown.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        PlaybackPosition only = Assert.Single(feature.Positions.Positions);
+
+        Assert.Equal(left.Id, only.RecordingId);
+    }
+
+    private static Recording Settled(RecordingFeature feature, int eventId = 4_001)
+    {
+        Recording held = feature.Held(eventId: eventId);
+
+        held.Wrote(TimeSpan.FromMinutes(30));
+        held.Abort(RecordingFeature.Noon.AddMinutes(30));
+        held.Settle(RecordingOutcome.Complete, 4_000, RecordingFeature.Noon.AddMinutes(30));
+
+        return held;
     }
 }

@@ -1,13 +1,14 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Thumbnails;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Recordings;
 
-public sealed class RemakeThumbnailsEndpointTests
+[Trait("Category", "Feature")]
+public sealed class RemakeThumbnailsActionTests
 {
     private const string Path = "/api/recordings/thumbnails/remake";
 
@@ -137,7 +138,7 @@ public sealed class RemakeThumbnailsEndpointTests
     public async Task AnIdThatIsNotARecordingIdIsRefusedAsUnreadable()
     {
         await using RecordingFeature feature = new();
-        using StringContent content = new("""{"ids":["not-an-id"]}""", Encoding.UTF8, "application/json");
+        using StringContent content = new("""{"ids":["not-an-id"]}""", System.Text.Encoding.UTF8, "application/json");
 
         using HttpResponseMessage response = await feature.Client.PostAsync(new Uri(Path, UriKind.Relative), content);
         string body = await response.Content.ReadAsStringAsync();

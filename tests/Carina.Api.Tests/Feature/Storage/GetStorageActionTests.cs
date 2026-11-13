@@ -1,15 +1,17 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Storage;
 
-public sealed class StorageEndpointTests
+[Trait("Category", "Feature")]
+public sealed class GetStorageActionTests
 {
     [Fact]
     public async Task EachRootTheDriverDeclaresIsAnsweredWithTheRoomItHas()

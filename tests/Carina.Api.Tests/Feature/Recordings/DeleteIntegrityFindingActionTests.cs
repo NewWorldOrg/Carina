@@ -1,22 +1,47 @@
 using System.Net;
-using System.Net.Http.Json;
+using System.Net.Http.Headers;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Driver;
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
+using Carina.Infrastructure.Integrity;
+
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Recordings;
 
-public sealed class DeleteIntegrityFindingEndpointTests
+[SupportedOSPlatform("linux")]
+[Trait("Category", "Feature")]
+public sealed class DeleteIntegrityFindingActionTests
 {
     private const string IdDescription =
         "A finding is named by the identifier the most recent check gave it, written as a GUID.";
 
     private static readonly RecordingId Recording = new(new Guid("7a3e5c1b-0000-0000-0000-00000000000c"));
+
+    private static readonly RecordingId Kept = new(new Guid("7a3e5c1b-0000-0000-0000-0000000000a1"));
+
+    private static readonly RecordingId Gone = new(new Guid("7a3e5c1b-0000-0000-0000-0000000000a2"));
+
+    private static readonly OutputRoot Encodes = new("encodes");
+
+    private static readonly string KeptFile = Kept.Wire + ".ts";
+
+    private static readonly string KeptArtefact = Kept.Wire + ".0000000a000000000000000000000001.mp4";
+
+    private static readonly string GoneArtefact = Gone.Wire + ".0000000a000000000000000000000001.mp4";
 
     [Fact]
     public async Task AFileNoRecordingOwnsIsThrownAwayByTheDriverAndItsFindingLeavesTheList()
@@ -377,4 +402,321 @@ public sealed class DeleteIntegrityFindingEndpointTests
 
     private static Task<(HttpStatusCode Status, JsonElement Body)> DeleteAsync(IntegrityFeature feature, string named)
         => feature.PostAsync($"/api/recordings/integrity/findings/{named}/delete");
+
+    [Fact]
+    public async Task AFileNoRecordingOwnsIsReallyTakenOffTheDiskByTheDriverAndNothingBesideItIsTouched()
+    {
+        await using SyntheticDriverHost driver = await SyntheticDriverHost.StartAsync();
+        string leftover = Holding(driver, "nested/leftover.tmp", 1_000);
+        string kept = Holding(driver, "kept.bin", 10);
+        await using var app = new AppAgainstTheDriver(driver);
+        Guid finding = await app.FoundAsync("nested/leftover.tmp");
+
+        (HttpStatusCode status, JsonElement body) = await app.PostAsync(
+            $"/api/recordings/integrity/findings/{finding}/delete");
+        (_, JsonElement page) = await app.GetAsync("/api/recordings/integrity");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.True(body.GetProperty("data").GetProperty("fileRemoved").GetBoolean());
+        Assert.False(File.Exists(leftover));
+        Assert.True(File.Exists(kept));
+        Assert.DoesNotContain(
+            "nested/leftover.tmp",
+            page.GetProperty("data").GetProperty("items").EnumerateArray()
+                .Select(item => item.GetProperty("path").GetString()));
+    }
+
+    [Fact]
+    public async Task AFileThatChangedAfterTheCheckIsRefusedWithAConflictAndKeepsItsNewBytes()
+    {
+        await using SyntheticDriverHost driver = await SyntheticDriverHost.StartAsync();
+        string leftover = Holding(driver, "leftover.tmp", 1_000);
+        await using var app = new AppAgainstTheDriver(driver);
+        Guid finding = await app.FoundAsync("leftover.tmp");
+        await File.AppendAllTextAsync(leftover, "written after the check");
+
+        (HttpStatusCode status, JsonElement body) = await app.PostAsync(
+            $"/api/recordings/integrity/findings/{finding}/delete");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("fileChanged", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.True(File.Exists(leftover));
+        Assert.Equal(1_023, new FileInfo(leftover).Length);
+    }
+
+    [Fact]
+    public async Task NoPathCanBeSlippedInBecauseTheOnlyThingTheRouteTakesIsTheFindingId()
+    {
+        await using SyntheticDriverHost driver = await SyntheticDriverHost.StartAsync();
+        string leftover = Holding(driver, "leftover.tmp", 1_000);
+        string precious = Holding(driver, "precious.bin", 10);
+        string outside = Path.GetFullPath(Path.Combine(driver.RecordingsDirectory, "..", "outside.bin"));
+        await File.WriteAllBytesAsync(outside, new byte[10]);
+        await using var app = new AppAgainstTheDriver(driver);
+        Guid finding = await app.FoundAsync("leftover.tmp");
+
+        (HttpStatusCode traversal, _) = await app.PostAsync(
+            "/api/recordings/integrity/findings/..%2F..%2Foutside.bin/delete");
+
+        using HttpResponseMessage carrying = await app.Client.PostAsJsonAsync(
+            new Uri($"/api/recordings/integrity/findings/{finding}/delete", UriKind.Relative),
+            new { path = "../outside.bin", outputRoot = SyntheticDriverHost.RootName, sizeBytes = 10 });
+
+        Assert.Equal(HttpStatusCode.BadRequest, traversal);
+        Assert.Equal(HttpStatusCode.OK, carrying.StatusCode);
+        Assert.False(File.Exists(leftover));
+        Assert.True(File.Exists(precious));
+        Assert.True(File.Exists(outside));
+    }
+
+    private static string Holding(SyntheticDriverHost driver, string path, int size)
+    {
+        string full = Path.Combine(driver.RecordingsDirectory, path);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllBytes(full, new byte[size]);
+
+        return full;
+    }
+
+    private sealed class AppAgainstTheDriver : IAsyncDisposable
+    {
+        private readonly TestingWebApplicationFactory factory;
+
+        private readonly WebApplicationFactory<Program> configured;
+
+        public AppAgainstTheDriver(SyntheticDriverHost driver)
+        {
+            var settings = new IntegritySettings
+            {
+                OutputRoots =
+                [
+                    new StorageRootPath(new OutputRoot(SyntheticDriverHost.RootName), driver.RecordingsDirectory),
+                ],
+            };
+
+            factory = new TestingWebApplicationFactory { DriverSocketPath = driver.SocketPath };
+            configured = factory
+                .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+                {
+                    services.RemoveAll<IHostedService>();
+                    services.AddSingleton(settings);
+                    services.AddSingleton<IRecordingFileSurvey>(
+                        new LocalRecordingFileSurvey(settings, NullLogger<LocalRecordingFileSurvey>.Instance));
+                    services.AddSingleton<IRecordingRepository>(new HeldInFlightRecordings());
+                    services.AddScoped<IRecordingLedger>(_ => Ledger);
+                    services.AddScoped<IEncodeWorkLedger>(_ => Working);
+                    services.AddScoped<IIntegrityCheckRepository>(_ => Checks);
+                }))
+                .WithTestScheme();
+
+            Client = configured.CreateClient();
+            Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                TestAuthenticationHandler.SchemeName,
+                "anything");
+        }
+
+        public HttpClient Client { get; }
+
+        public HeldLedgerFiles Ledger { get; } = new();
+
+        public HeldEncodeWorkFiles Working { get; } = new();
+
+        public HeldIntegrityChecks Checks { get; } = new();
+
+        public async Task<Guid> FoundAsync(string path)
+        {
+            (HttpStatusCode ran, _) = await PostAsync("/api/recordings/integrity/run");
+            (_, JsonElement page) = await GetAsync("/api/recordings/integrity");
+
+            Assert.Equal(HttpStatusCode.OK, ran);
+
+            return page.GetProperty("data").GetProperty("items").EnumerateArray()
+                .Single(item => item.GetProperty("path").GetString() == path)
+                .GetProperty("id")
+                .GetGuid();
+        }
+
+        public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
+        {
+            using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
+
+            return await ReadAsync(response);
+        }
+
+        public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path)
+        {
+            using HttpResponseMessage response = await Client.PostAsJsonAsync(new Uri(path, UriKind.Relative), new { });
+
+            return await ReadAsync(response);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            Client.Dispose();
+            await configured.DisposeAsync();
+            await factory.DisposeAsync();
+        }
+
+        private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(HttpResponseMessage response)
+        {
+            string body = await response.Content.ReadAsStringAsync();
+
+            if (!body.StartsWith('{'))
+            {
+                return (response.StatusCode, default);
+            }
+
+            using var document = JsonDocument.Parse(body);
+
+            return (response.StatusCode, document.RootElement.Clone());
+        }
+    }
+
+    [Fact]
+    public async Task BrKd025CaptionsNoRecordingClaimsAreListedAsOrphansAndAreThrownAwayByThisProcess()
+    {
+        using var recordings = new RecordingStore();
+        using var encodes = new RecordingStore();
+        using var pictures = new RecordingStore();
+        using var captions = new RecordingStore();
+        recordings.Holding(KeptFile, 400);
+        captions.Holding(Kept.Wire + ".captions", 30).Holding(Gone.Wire + ".captions", 20).Holding(Gone.Wire + ".captions.part", 5);
+        await using IntegrityFeature feature = Walking(recordings, encodes, pictures, captions);
+
+        (HttpStatusCode ran, _) = await feature.PostAsync("/api/recordings/integrity/run");
+        (_, JsonElement page) = await feature.GetAsync("/api/recordings/integrity");
+
+        Assert.Equal(HttpStatusCode.OK, ran);
+        Assert.Equal(
+            [
+                $"captions/{Gone.Wire}.captions noLedgerRow",
+                $"captions/{Gone.Wire}.captions.part noLedgerRow",
+            ],
+            Listed(page));
+
+        IntegrityFinding finding = feature.Checks.Saved[^1].Findings.Single(found => found.Path == Gone.Wire + ".captions");
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/integrity/findings/{finding.Id.Value}/delete");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("captions", body.GetProperty("data").GetProperty("outputRoot").GetString());
+        Assert.False(File.Exists(Path.Combine(captions.Root, Gone.Wire + ".captions")));
+        Assert.True(File.Exists(Path.Combine(captions.Root, Kept.Wire + ".captions")));
+        Assert.Empty(feature.Driver.AskedAboutStrays);
+    }
+
+    [Fact]
+    public async Task APictureNothingClaimsIsThrownAwayByThisProcessAndNothingBesideItIsTouched()
+    {
+        using var recordings = new RecordingStore();
+        using var encodes = new RecordingStore();
+        using var pictures = new RecordingStore();
+        recordings.Holding(KeptFile, 400);
+        pictures.Holding(Kept.Wire + ".jpg", 30).Holding(Gone.Wire + ".jpg", 20);
+        await using IntegrityFeature feature = Walking(recordings, encodes, pictures);
+        IReadOnlyList<string> recordingsBefore = recordings.Fingerprint();
+        IntegrityFinding finding = await CheckedAsync(feature, Gone.Wire + ".jpg");
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/integrity/findings/{finding.Id.Value}/delete");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.True(body.GetProperty("data").GetProperty("fileRemoved").GetBoolean());
+        Assert.Equal("thumbnails", body.GetProperty("data").GetProperty("outputRoot").GetString());
+        Assert.False(File.Exists(Path.Combine(pictures.Root, Gone.Wire + ".jpg")));
+        Assert.True(File.Exists(Path.Combine(pictures.Root, Kept.Wire + ".jpg")));
+        Assert.Equal(recordingsBefore, recordings.Fingerprint());
+        Assert.Empty(feature.Driver.AskedAboutStrays);
+    }
+
+    [Fact]
+    public async Task AnArtefactThatChangedSinceTheCheckIsRefusedAndLeftAsItNowIs()
+    {
+        using var recordings = new RecordingStore();
+        using var encodes = new RecordingStore();
+        using var pictures = new RecordingStore();
+        recordings.Holding(KeptFile, 400);
+        encodes.Holding(GoneArtefact, 80);
+        await using IntegrityFeature feature = Walking(recordings, encodes, pictures);
+        IntegrityFinding finding = await CheckedAsync(feature, GoneArtefact);
+        await File.AppendAllTextAsync(Path.Combine(encodes.Root, GoneArtefact), "more");
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/integrity/findings/{finding.Id.Value}/delete");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("fileChanged", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Equal(84, new FileInfo(Path.Combine(encodes.Root, GoneArtefact)).Length);
+    }
+
+    [Fact]
+    public async Task APictureWhoseRecordingIsWrittenDownSinceTheCheckIsRefusedAndKept()
+    {
+        using var recordings = new RecordingStore();
+        using var encodes = new RecordingStore();
+        using var pictures = new RecordingStore();
+        recordings.Holding(KeptFile, 400);
+        pictures.Holding(Gone.Wire + ".jpg", 20);
+        await using IntegrityFeature feature = Walking(recordings, encodes, pictures);
+        IntegrityFinding finding = await CheckedAsync(feature, Gone.Wire + ".jpg");
+        feature.Ledger.Rows.Add(
+            LedgerFile.StillWriting(Gone, IntegrityFeature.Primary, new RecordingFileName(Gone.Wire + ".ts")));
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/integrity/findings/{finding.Id.Value}/delete");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("fileChanged", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.True(File.Exists(Path.Combine(pictures.Root, Gone.Wire + ".jpg")));
+    }
+
+    [Fact]
+    public async Task APictureInTheEncodeRootWhoseRecordingIsWrittenDownSinceTheCheckCannotBeThrownAway()
+    {
+        using var recordings = new RecordingStore();
+        using var shared = new RecordingStore();
+        recordings.Holding(KeptFile, 400);
+        shared.Holding(Gone.Wire + ".jpg", 20);
+        await using IntegrityFeature feature = Walking(recordings, shared, shared);
+        IntegrityFinding finding = await CheckedAsync(feature, Gone.Wire + ".jpg");
+        feature.Ledger.Rows.Add(
+            LedgerFile.StillWriting(Gone, IntegrityFeature.Primary, new RecordingFileName(Gone.Wire + ".ts")));
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/integrity/findings/{finding.Id.Value}/delete");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("fileChanged", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.True(File.Exists(Path.Combine(shared.Root, Gone.Wire + ".jpg")));
+    }
+
+    private static IntegrityFeature Walking(
+        RecordingStore recordings,
+        RecordingStore encodes,
+        RecordingStore pictures,
+        RecordingStore? captions = null)
+    {
+        var feature = new IntegrityFeature(
+            walking: recordings.Root,
+            encoding: new EncodeSettings { OutputRoots = [new StorageRootPath(Encodes, encodes.Root)] },
+            drawing: pictures.Root,
+            captioning: captions?.Root);
+
+        feature.Ledger.Rows.Add(LedgerFile.Ended(
+            Kept,
+            IntegrityFeature.Primary,
+            new RecordingFileName(KeptFile),
+            LedgerClaim.EverythingLanded,
+            400));
+        feature.Working.Files.Add(new DeclaredFile(Encodes, KeptArtefact));
+
+        return feature;
+    }
+
+    private static string[] Listed(JsonElement page)
+        => [.. page.GetProperty("data").GetProperty("items").EnumerateArray()
+            .Select(item => $"{item.GetProperty("outputRoot").GetString()}/{item.GetProperty("path").GetString()} "
+                            + item.GetProperty("fault").GetString())
+            .Order(StringComparer.Ordinal)];
 }

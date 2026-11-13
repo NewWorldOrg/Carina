@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Recordings;
+using Carina.Domain.Viewing;
 
 using Puppis.Contracts;
 
@@ -337,4 +338,30 @@ public sealed class StopRecordingActionTests
 
         return items[0];
     }
+
+    [Fact(DisplayName = "the answer to a stop says how far this viewer watched the recording, as the detail does")]
+    public async Task TheAnswerToAStopSaysHowFarThisViewerWatchedTheRecording()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+        feature.Driver.Writing(Puppis.Contracts.SessionId.Parse("session-a"), recording.Id.Wire);
+        feature.Positions.Positions.Add(Reached(recording, TestAuthenticationHandler.Tester, 42));
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/{recording.Id.Wire}/stop",
+            new { reason = "the wrong programme" });
+
+        Assert.Equal(HttpStatusCode.Accepted, status);
+        Assert.Equal(
+            42,
+            body.GetProperty("data").GetProperty("recording").GetProperty("recording")
+                .GetProperty("watchedPositionSec").GetDouble());
+    }
+
+    private static PlaybackPosition Reached(Recording recording, string viewer, double seconds)
+        => PlaybackPosition.Reached(
+            recording.Id,
+            new Carina.Domain.Auth.Subject(viewer),
+            TimeSpan.FromSeconds(seconds),
+            RecordingFeature.Noon.AddHours(2));
 }

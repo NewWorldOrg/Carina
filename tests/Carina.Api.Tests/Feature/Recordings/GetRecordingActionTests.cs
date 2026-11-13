@@ -3,12 +3,14 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Api.Tests.FeatureTest;
+using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Domain.Viewing;
 
 namespace Carina.Api.Tests.Feature.Recordings;
 
@@ -706,5 +708,53 @@ public sealed class GetRecordingActionTests
         }
 
         feature.Jobs.Jobs.Add(job);
+    }
+
+    [Fact(DisplayName = "one recording's detail says how far this viewer watched it, in one lookup")]
+    public async Task OneRecordingsDetailSaysHowFarThisViewerWatchedIt()
+    {
+        await using var feature = new RecordingFeature();
+        Recording watched = EndedAfterAnHour(feature, eventId: 30);
+        Recording unwatched = EndedAfterAnHour(feature, eventId: 31);
+        Recording sharedWithSomeoneElse = EndedAfterAnHour(feature, eventId: 32);
+
+        feature.Positions.Positions.Add(Reached(watched, TestAuthenticationHandler.Tester, 612.5));
+        feature.Positions.Positions.Add(Reached(sharedWithSomeoneElse, "someone else", 900));
+
+        JsonElement seen = await DetailOfAsync(feature, watched);
+
+        Assert.Equal(612.5, seen.GetProperty("watchedPositionSec").GetDouble());
+        Assert.Equal(1, feature.Positions.ReadsOfOne);
+        Assert.Equal(0, feature.Positions.ReadsOfMany);
+        Assert.Equal(JsonValueKind.Null, (await DetailOfAsync(feature, unwatched)).GetProperty("watchedPositionSec").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            (await DetailOfAsync(feature, sharedWithSomeoneElse)).GetProperty("watchedPositionSec").ValueKind);
+    }
+
+    private static async Task<JsonElement> DetailOfAsync(RecordingFeature feature, Recording recording)
+    {
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        return body.GetProperty("data").GetProperty("recording");
+    }
+
+    private static PlaybackPosition Reached(Recording recording, string viewer, double seconds)
+        => PlaybackPosition.Reached(
+            recording.Id,
+            new Subject(viewer),
+            TimeSpan.FromSeconds(seconds),
+            RecordingFeature.Noon.AddHours(2));
+
+    private static Recording EndedAfterAnHour(RecordingFeature feature, int eventId)
+    {
+        Recording recording = feature.Held(eventId: eventId);
+        recording.Wrote(TimeSpan.FromHours(1));
+        recording.Abort(RecordingFeature.Noon.AddHours(1));
+        recording.Settle(RecordingOutcome.Complete, 1_000_000, RecordingFeature.Noon.AddHours(1));
+
+        return recording;
     }
 }
