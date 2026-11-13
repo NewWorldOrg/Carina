@@ -199,9 +199,7 @@ internal sealed class DataBroadcastFeature : IAsyncDisposable
         Client.Dispose();
         Stranger.Dispose();
         await factory.DisposeAsync();
-        mounted.Delete(recursive: true);
-        encoded.Delete(recursive: true);
-        shelved.Delete(recursive: true);
+        TemporaryDirectories.RemoveAll(mounted, encoded, shelved);
     }
 
     private static ModuleVersion Version(int tag, int moduleId, int version, double first, double last, string path, string mediaType, ResourceForm form, byte[] body)

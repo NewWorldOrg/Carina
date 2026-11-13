@@ -1,5 +1,4 @@
 using System.Runtime.Versioning;
-using System.Text;
 
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Captions;
@@ -23,23 +22,11 @@ namespace Carina.Infrastructure.Tests.Unit.Infra.DataBroadcast;
 [Trait("Category", "Material")]
 public sealed class TransportStreamDataBroadcastTakerMaterialTests : IDisposable
 {
-    private const int CarouselEvery = 40;
-
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
 
     private static readonly MachineSettings Machine = new();
-
-    private static readonly CarouselModule Startup = new(
-        0x0000,
-        1,
-        CarouselBroadcast.Resource("startup.bml", EntityWriter.BmlType, Encoding.ASCII.GetBytes("<bml><body><p>CARINA</p></body></bml>")));
-
-    private static readonly CarouselModule Logo = new(
-        0x0001,
-        1,
-        CarouselBroadcast.Resource("logo.png", EntityWriter.PngType, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
 
     private readonly string room = Directory.CreateTempSubdirectory("carina-recorded-data-broadcast").FullName;
 
@@ -110,51 +97,12 @@ public sealed class TransportStreamDataBroadcastTakerMaterialTests : IDisposable
 
     private async Task<string> CarryingACarouselAsync(TimeSpan startsAt)
     {
-        string written = await (SyntheticBroadcast.AsMeasured() with
-        {
-            Length = TimeSpan.FromSeconds(4),
-            StartsAt = startsAt,
-            WithCaptions = false,
-            WithSuperimpose = false,
-        }).WriteAsync(Path.Combine(room, "broadcast.m2ts"));
-
-        byte[][] carousel =
-        [
-            new DiiWriter
-            {
-                Modules =
-                [
-                    DiiModule.Of(Startup.Id, Startup.Body.Length, Startup.Version),
-                    DiiModule.Of(Logo.Id, Logo.Body.Length, Logo.Version),
-                ],
-            }.ToSection().ToBytes(),
-            .. DsmCcWriter.Blocks(1, Startup.Id, Startup.Version, Startup.Body, DsmCcWriter.LargestBlock).Select(block => block.ToBytes()),
-            .. DsmCcWriter.Blocks(1, Logo.Id, Logo.Version, Logo.Body, DsmCcWriter.LargestBlock).Select(block => block.ToBytes()),
-        ];
-
         string recorded = Path.Combine(room, "recording.m2ts");
 
-        await File.WriteAllBytesAsync(
-            recorded,
-            CarouselSplice.Into(
-                await File.ReadAllBytesAsync(written, Cancel),
-                SyntheticBroadcast.SomeProgramNumber,
-                SyntheticBroadcast.PmtPid,
-                round => [.. carousel, Fired(round)],
-                CarouselEvery),
-            Cancel);
+        await File.WriteAllBytesAsync(recorded, await SplicedCarousel.CarryingACarouselAsync(room, startsAt), Cancel);
 
         return recorded;
     }
-
-    private static byte[] Fired(int round)
-        => new StreamDescriptorWriter
-        {
-            DataEventId = CarouselBroadcast.DataEventId,
-            EventMessageGroupId = 1,
-            VersionNumber = round % 32,
-            Descriptors = StreamDescriptorWriter.GeneralEvent(1, StreamDescriptorWriter.Immediate, 0, 1, round & 0xFFFF),
-        }.ToSection().ToBytes();
 
     private sealed class Bytes : IComparer<byte[]>
     {
