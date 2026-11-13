@@ -7,7 +7,7 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
-using Carina.Infrastructure.Tests.Collection;
+using Carina.Infrastructure.Tests.Fixtures.Collection;
 using Carina.Infrastructure.Tests.Fixtures.Reservations;
 using Carina.Infrastructure.Tests.Fixtures.Rules;
 using Carina.TestSupport;

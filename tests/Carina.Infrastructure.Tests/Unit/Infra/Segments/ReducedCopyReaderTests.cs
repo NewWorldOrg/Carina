@@ -3,7 +3,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Segments;
-using Carina.Infrastructure.Tests.Integrity;
+using Carina.Infrastructure.Tests.Fixtures.Integrity;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Segments;
 

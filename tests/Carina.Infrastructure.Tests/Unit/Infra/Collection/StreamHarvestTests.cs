@@ -1,0 +1,243 @@
+using Carina.Broadcast.Tables;
+using Carina.BroadcastTestSupport;
+using Carina.Domain.Programmes;
+using Carina.Infrastructure.Collection;
+
+namespace Carina.Infrastructure.Tests.Unit.Infra.Collection;
+
+[Trait("Category", "Unit")]
+public sealed class StreamHarvestTests
+{
+    private const int SomeService = 1024;
+
+    private const int SomeStream = 0x7FE3;
+
+    private const int FirstBasic = EventInformationTable.FirstScheduleActualTableId;
+
+    private const int LastBasic = FirstBasic + 1;
+
+    private const int FirstExtended = FirstBasic + 8;
+
+    private const int LastExtended = FirstExtended + 1;
+
+    [Fact]
+    public void AVisitTheDriverCutShortIsNamedAsSuchWhateverItGathered()
+    {
+        var harvest = new StreamHarvest(Midnight());
+
+        Gather(harvest, FirstBasic, LastBasic);
+        Gather(harvest, LastBasic, LastBasic);
+
+        Assert.Equal(VisitOutcome.Interrupted, harvest.Conclude(interrupted: true, anyBytes: true).Outcome);
+    }
+
+    [Fact]
+    public void AVisitThatSawNoBytesAtAllIsNamedAsSuch()
+        => Assert.Equal(
+            VisitOutcome.NoBytes,
+            new StreamHarvest(Midnight()).Conclude(interrupted: false, anyBytes: false).Outcome);
+
+    [Fact]
+    public void AVisitThatGatheredTheBasicTablesMaySayGoodbyeToTheTuner()
+    {
+        var harvest = new StreamHarvest(Midnight());
+
+        Assert.False(harvest.CanLetGo);
+
+        Gather(harvest, FirstBasic, LastBasic);
+
+        Assert.False(harvest.CanLetGo);
+
+        Gather(harvest, LastBasic, LastBasic);
+
+        Assert.True(harvest.CanLetGo);
+        Assert.Equal(VisitOutcome.BasicOnly, harvest.Conclude(interrupted: false, anyBytes: true).Outcome);
+    }
+
+    [Fact]
+    public void AVisitThatGatheredTheDetailedTablesTooHasNothingLeftToWaitFor()
+    {
+        var harvest = new StreamHarvest(Midnight());
+
+        Gather(harvest, FirstBasic, LastBasic);
+        Gather(harvest, LastBasic, LastBasic);
+        Gather(harvest, FirstExtended, LastExtended);
+        Gather(harvest, LastExtended, LastExtended);
+
+        Assert.Equal(VisitOutcome.Complete, harvest.Conclude(interrupted: false, anyBytes: true).Outcome);
+    }
+
+    [Fact]
+    public void AVisitThatSawBytesButNeverEnoughIsNamedIncomplete()
+    {
+        var harvest = new StreamHarvest(Midnight());
+
+        Gather(harvest, FirstBasic, LastBasic, segments: 2);
+
+        Assert.False(harvest.CanLetGo);
+        Assert.Equal(VisitOutcome.Incomplete, harvest.Conclude(interrupted: false, anyBytes: true).Outcome);
+    }
+
+    [Fact]
+    public void EveryTableItReadIsKeptForWhoeverWritesThemDown()
+    {
+        var harvest = new StreamHarvest(Midnight());
+
+        Gather(harvest, FirstBasic, LastBasic, segments: 3);
+
+        Assert.Equal(3, harvest.Conclude(interrupted: false, anyBytes: true).Tables.Count);
+    }
+
+    [Fact]
+    public void PacketsSplitAcrossReadsAreStillRead()
+    {
+        var harvest = new StreamHarvest(Midnight());
+        byte[] packets = Packets(FirstBasic, FirstBasic, 0, 0);
+
+        harvest.Push(packets.AsSpan(0, 100));
+        harvest.Push(packets.AsSpan(100));
+
+        Assert.Equal(0, harvest.UnreadablePackets);
+        Assert.Single(harvest.Conclude(interrupted: false, anyBytes: true).Tables);
+    }
+
+    [Fact]
+    public void BytesThatAreNotEvenPacketsAreCountedRatherThanThrown()
+    {
+        var harvest = new StreamHarvest(Midnight());
+
+        harvest.Push(new byte[188]);
+
+        Assert.Equal(1, harvest.UnreadablePackets);
+        Assert.Empty(harvest.Conclude(interrupted: false, anyBytes: true).Tables);
+    }
+
+    [Fact]
+    public void WhatIsTakenNamesAServiceHeardWholeOnlyWhenItCarriesTheWholeSchedule()
+    {
+        StreamHarvest harvest = new(Midnight());
+        ScheduledService service = new(0x7FE3, 0x7FE3, SomeService);
+
+        Gather(harvest, FirstBasic, LastBasic);
+
+        Gathered first = harvest.TakeWhatIsGathered();
+
+        Gather(harvest, LastBasic, LastBasic);
+
+        Gathered second = harvest.TakeWhatIsGathered();
+
+        Gather(harvest, FirstBasic, LastBasic);
+        Gather(harvest, LastBasic, LastBasic);
+
+        Gathered third = harvest.TakeWhatIsGathered();
+
+        Assert.Empty(first.HeardWhole);
+        Assert.Equal([service], harvest.Progress.HeardWhole());
+        Assert.Empty(second.HeardWhole);
+        Assert.Equal(4, second.Tables.Count);
+        Assert.Equal([service], third.HeardWhole);
+    }
+
+    [Fact]
+    public void NothingGatheredSinceTheLastTakeHandsOverNothing()
+    {
+        StreamHarvest harvest = new(Midnight());
+
+        Gather(harvest, FirstBasic, FirstBasic);
+        harvest.TakeWhatIsGathered();
+
+        Gathered again = harvest.TakeWhatIsGathered();
+
+        Assert.Empty(again.Tables);
+        Assert.Empty(again.HeardWhole);
+    }
+
+    [Fact]
+    public void AServiceDescriptionHeardOverAndOverIsKeptOnce()
+    {
+        var harvest = new StreamHarvest(Midnight());
+        var writer = new TransportStreamWriter(ServiceDescriptionTable.Pid);
+
+        for (int heard = 0; heard < 40; heard++)
+        {
+            writer.Sections(Described(ServiceDescriptionTable.ActualStreamTableId, SomeStream, SomeService));
+        }
+
+        harvest.Push(writer.Bytes);
+
+        ServiceDescriptionTable kept = Assert.Single(harvest.Conclude(interrupted: false, anyBytes: true).Descriptions);
+
+        Assert.Equal(SomeStream, kept.TransportStreamId);
+    }
+
+    [Fact]
+    public void TheNewestOfOneServiceDescriptionIsTheOneKept()
+    {
+        var harvest = new StreamHarvest(Midnight());
+        var writer = new TransportStreamWriter(ServiceDescriptionTable.Pid);
+
+        writer.Sections(Described(ServiceDescriptionTable.ActualStreamTableId, SomeStream, SomeService));
+        writer.Sections(Described(ServiceDescriptionTable.ActualStreamTableId, SomeStream, SomeService + 1, version: 1));
+        harvest.Push(writer.Bytes);
+
+        ServiceDescriptionTable kept = Assert.Single(harvest.Conclude(interrupted: false, anyBytes: true).Descriptions);
+
+        Assert.Equal(SomeService + 1, Assert.Single(kept.Services).ServiceId);
+    }
+
+    [Fact]
+    public void ServiceDescriptionsOfDifferentStreamsAreEachKept()
+    {
+        var harvest = new StreamHarvest(Midnight());
+        var writer = new TransportStreamWriter(ServiceDescriptionTable.Pid);
+
+        writer.Sections(Described(ServiceDescriptionTable.ActualStreamTableId, SomeStream, SomeService));
+        writer.Sections(Described(ServiceDescriptionTable.OtherStreamTableId, SomeStream + 1, SomeService + 1));
+        harvest.Push(writer.Bytes);
+
+        Assert.Equal(2, harvest.Conclude(interrupted: false, anyBytes: true).Descriptions.Count);
+    }
+
+    private static HeldClock Midnight() => HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0);
+
+    private static void Gather(StreamHarvest harvest, int tableId, int lastTableId, int segments = 4)
+    {
+        for (int segment = 0; segment < segments; segment++)
+        {
+            int section = segment * ScheduleProgress.SectionsPerSegment;
+
+            harvest.Push(Packets(tableId, lastTableId, section, section));
+        }
+    }
+
+    private static byte[] Described(int tableId, int stream, int service, int version = 0)
+        => new SectionWriter
+        {
+            TableId = tableId,
+            TableIdExtension = stream,
+            VersionNumber = version,
+            Body = new SdtWriter
+            {
+                OriginalNetworkId = 0x7FE3,
+                Services = [SdtWriter.Service(service, [])],
+            }.ToBody(),
+        }.ToBytes();
+
+    private static byte[] Packets(int tableId, int lastTableId, int section, int segmentLast)
+        => [.. new TransportStreamWriter(EventInformationTable.Pid)
+            .Sections(new SectionWriter
+            {
+                TableId = tableId,
+                TableIdExtension = SomeService,
+                SectionNumber = section,
+                LastSectionNumber = 31,
+                Body =
+                [
+                    0x7F, 0xE3, 0x7F, 0xE3,
+                    (byte)segmentLast,
+                    (byte)lastTableId,
+                ],
+            }.ToBytes())
+            .Packets
+            .SelectMany(packet => packet.ToArray())];
+}
