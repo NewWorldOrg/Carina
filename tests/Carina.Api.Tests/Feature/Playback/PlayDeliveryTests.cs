@@ -2025,7 +2025,7 @@ public sealed class PlayDeliveryTests
     [Fact]
     public async Task BrPd017ThePlanOfAnArtefactWhoseCaptionShiftWasMeasuredSaysItsCaptionsAreReady()
     {
-        await using var feature = new CaptionFeature();
+        await using CaptionFeature feature = new();
         Recording recording = await feature.CaptionedAsync();
         feature.Encoded(recording, new EncodeTimeline(CaptionFeature.FileBegins, TimeSpan.FromSeconds(0.5), TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(600)));
 
@@ -2035,7 +2035,7 @@ public sealed class PlayDeliveryTests
     [Fact]
     public async Task BrPd017TheTwoClocksDisagreeingByAMillisecondPlansNoCaptionsOverTheArtefactAndStillPlansThemOverTheRecording()
     {
-        await using var feature = new CaptionFeature();
+        await using CaptionFeature feature = new();
         Recording recording = await feature.CaptionedAsync();
         feature.Encoded(recording, new EncodeTimeline(CaptionFeature.FileBegins + TimeSpan.FromMilliseconds(1), TimeSpan.FromSeconds(0.5), null, null));
 
@@ -2046,7 +2046,7 @@ public sealed class PlayDeliveryTests
     [Fact]
     public async Task AnArtefactWhoseJobNeverMeasuredItsTimelineHasNoCaptionsOverIt()
     {
-        await using var feature = new CaptionFeature();
+        await using CaptionFeature feature = new();
         Recording recording = await feature.CaptionedAsync();
         feature.Encoded(recording, null);
 
@@ -2056,7 +2056,7 @@ public sealed class PlayDeliveryTests
     [Fact]
     public async Task BrPd017ThePlanSaysCaptionsStillBeingTakenAreComing()
     {
-        await using var feature = new CaptionFeature();
+        await using CaptionFeature feature = new();
         Recording recording = feature.Ended();
 
         Assert.Equal("coming", await feature.PlannedAsync(recording));
@@ -2065,7 +2065,7 @@ public sealed class PlayDeliveryTests
     [Fact]
     public async Task BrPd017ThePlanOfARecordingWithNoCaptionsSaysThereAreNone()
     {
-        await using var feature = new CaptionFeature();
+        await using CaptionFeature feature = new();
         Recording recording = feature.Ended();
         recording.Caption(CaptionState.Absent, null, RecordingFeature.Noon.AddHours(1));
 
@@ -2075,7 +2075,7 @@ public sealed class PlayDeliveryTests
     [Fact]
     public async Task BrPd016CaptionsTheRowSaysAreReadyWithNoRecordOnTheShelfAreComingAndNothingIsWritten()
     {
-        await using var feature = new CaptionFeature();
+        await using CaptionFeature feature = new();
         Recording recording = await feature.CaptionedAsync(onTheShelf: false);
 
         Assert.Equal("coming", await feature.PlannedAsync(recording, "?source=recording"));
@@ -2085,7 +2085,7 @@ public sealed class PlayDeliveryTests
     [Fact]
     public async Task WithNowhereToKeepCaptionsThereAreNone()
     {
-        await using var feature = new CaptionFeature(anywhereToKeepThem: false);
+        await using CaptionFeature feature = new(anywhereToKeepThem: false);
         Recording recording = feature.Ended();
 
         Assert.Equal("none", await feature.PlannedAsync(recording));

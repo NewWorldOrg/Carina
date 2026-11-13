@@ -54,8 +54,6 @@ public sealed class LiveSessionManagerTests
 
     private static readonly LiveChannelKey Watched = new(new NetworkId(32736), new ServiceId(1024));
 
-    private static readonly TimeSpan SoonerThanASeatIsCutLooseFor = TimeSpan.FromSeconds(5);
-
     private static readonly LiveSessionSettings Settings = new();
 
     private readonly HandTurnedClock clock = new();
@@ -2089,7 +2087,7 @@ public sealed class LiveSessionManagerTests
             }
         });
 
-        await SoonerThanASeat(
+        await Sooner(
             () => transcoders.Raised[0].TakenIn >= poured,
             "the transcoding seat is fed everything while the reader takes nothing");
         await pouring.WaitAsync(Eventually.Patience);
@@ -2394,23 +2392,6 @@ public sealed class LiveSessionManagerTests
     }
 
     private static byte[] AMouthful() => [.. Enumerable.Range(0, 4_000).Select(at => (byte)(at % 251))];
-
-    private static async Task SoonerThanASeat(Func<bool> condition, string what)
-    {
-        long start = Environment.TickCount64;
-
-        while (Environment.TickCount64 - start < SoonerThanASeatIsCutLooseFor.TotalMilliseconds)
-        {
-            if (condition())
-            {
-                return;
-            }
-
-            await Task.Delay(TimeSpan.FromMilliseconds(10));
-        }
-
-        throw new TimeoutException($"Did not happen within {SoonerThanASeatIsCutLooseFor.TotalSeconds}s: {what}.");
-    }
 
     private static async Task<byte[]> ReadAsync(Stream reading, int many)
     {

@@ -13,6 +13,10 @@ namespace Carina.Api.Tests.Unit.App.Streaming;
 [Trait("Category", "Unit")]
 public sealed class LiveWireSocketTests
 {
+    private const string NeverCarried = "The wire never carried what was expected of it.";
+
+    private const string NeverSaid = "The wire never said what was expected of it.";
+
     private static readonly LiveWireSettings Impatient = new(
         betweenPings: TimeSpan.FromMilliseconds(30),
         writePatience: TimeSpan.FromMilliseconds(200));
@@ -171,7 +175,7 @@ public sealed class LiveWireSocketTests
 
         Task<LiveDeparture> carrying = Carry(socket, frames, stop.Token);
 
-        await Until(() => socket.Sent.Count >= 2);
+        await Until(() => socket.Sent.Count >= 2, NeverCarried);
         await stop.CancelAsync();
         await carrying;
 
@@ -460,7 +464,7 @@ public sealed class LiveWireSocketTests
 
         Task<LiveDeparture> carrying = Carry(socket, frames, new HeldStartup(Starting), stop.Token);
 
-        await UntilSaid(() => socket.Sent.Count >= 1);
+        await Until(() => socket.Sent.Count >= 1, NeverSaid);
         await stop.CancelAsync();
         await carrying;
 
@@ -485,7 +489,7 @@ public sealed class LiveWireSocketTests
 
         Task<LiveDeparture> carrying = Carry(socket, frames, new HeldStartup(Starting), stop.Token);
 
-        await UntilSaid(() => socket.Sent.Count >= 1);
+        await Until(() => socket.Sent.Count >= 1, NeverSaid);
         await stop.CancelAsync();
         await carrying;
 
@@ -507,7 +511,7 @@ public sealed class LiveWireSocketTests
 
         Task<LiveDeparture> carrying = Carry(socket, frames, new HeldStartup(done), stop.Token);
 
-        await UntilSaid(() => socket.Sent.Count >= 2);
+        await Until(() => socket.Sent.Count >= 2, NeverSaid);
         await stop.CancelAsync();
         await carrying;
 
@@ -525,7 +529,7 @@ public sealed class LiveWireSocketTests
 
         Task<LiveDeparture> carrying = Carry(socket, frames, new HeldStartup(null), stop.Token);
 
-        await UntilSaid(() => socket.Sent.Count >= 2);
+        await Until(() => socket.Sent.Count >= 2, NeverSaid);
         await stop.CancelAsync();
         await carrying;
 
@@ -545,7 +549,7 @@ public sealed class LiveWireSocketTests
         Task<LiveDeparture> carrying = new LiveWireSocket(socket, Patient, startup)
             .CarryAsync(frames.Reader, CancellationToken.None, stop.Token);
 
-        await UntilSaid(() => socket.Sent.Count >= 1);
+        await Until(() => socket.Sent.Count >= 1, NeverSaid);
 
         int reached = 0;
 
@@ -556,7 +560,7 @@ public sealed class LiveWireSocketTests
 
             int expected = reached + 1;
 
-            await UntilSaid(() => socket.Sent.Count >= expected);
+            await Until(() => socket.Sent.Count >= expected, NeverSaid);
         }
 
         await Task.Delay(150);
@@ -586,14 +590,14 @@ public sealed class LiveWireSocketTests
         Task<LiveDeparture> carrying = new LiveWireSocket(socket, Patient, startup)
             .CarryAsync(frames.Reader, CancellationToken.None, stop.Token);
 
-        await UntilSaid(() => socket.Sent.Count >= 1);
+        await Until(() => socket.Sent.Count >= 1, NeverSaid);
         await Task.Delay(150);
 
         Assert.Single(socket.Sent);
 
         startup.Reach(LiveStartupSegment.ChannelLocked, TimeSpan.FromMilliseconds(700));
 
-        await UntilSaid(() => socket.Sent.Count >= 2);
+        await Until(() => socket.Sent.Count >= 2, NeverSaid);
         await Task.Delay(150);
         await stop.CancelAsync();
         await carrying;
@@ -614,14 +618,14 @@ public sealed class LiveWireSocketTests
         Task<LiveDeparture> carrying = new LiveWireSocket(socket, Impatient, startup)
             .CarryAsync(frames.Reader, CancellationToken.None, stop.Token);
 
-        await UntilSaid(() => socket.Sent.Count >= 1);
+        await Until(() => socket.Sent.Count >= 1, NeverSaid);
 
         foreach (LiveStartupSegment segment in AsTheyHappen)
         {
             startup.Reach(segment, TimeSpan.FromMilliseconds(100));
         }
 
-        await UntilSaid(() => socket.Sent.Any(message => message.SequenceEqual(LiveControls.Frame(LiveControl.Ping).ToArray())));
+        await Until(() => socket.Sent.Any(message => message.SequenceEqual(LiveControls.Frame(LiveControl.Ping).ToArray())), NeverSaid);
         await stop.CancelAsync();
         await carrying;
 
@@ -964,31 +968,11 @@ public sealed class LiveWireSocketTests
         => new LiveWireSocket(socket, Impatient)
             .CarryAsync(frames.Reader, CancellationToken.None, cancellationToken);
 
-    private static async Task Until(Func<bool> settled)
-    {
-        for (int tries = 0; tries < 200; tries++)
-        {
-            if (settled())
-            {
-                return;
-            }
-
-            await Task.Delay(25);
-        }
-
-        Assert.Fail("The wire never carried what was expected of it.");
-    }
-
     private static Task<LiveDeparture> Carry(ScriptedWebSocket socket, Channel<LiveFrame> frames, ILiveEnding ending)
         => new LiveWireSocket(socket, new LiveWireSettings(), null, ending).CarryAsync(
             frames.Reader,
             CancellationToken.None,
             CancellationToken.None);
-
-    private sealed class HeldEnding(LiveSupplyEnding? current) : ILiveEnding
-    {
-        public LiveSupplyEnding? Current => current;
-    }
 
     private static Task<LiveDeparture> Carry(
         ScriptedWebSocket socket,
@@ -998,7 +982,29 @@ public sealed class LiveWireSocketTests
         => new LiveWireSocket(socket, Impatient, startup)
             .CarryAsync(frames.Reader, CancellationToken.None, cancellationToken);
 
-    private static async Task UntilSaid(Func<bool> settled)
+    private static Task<LiveDeparture> Carry(ScriptedWebSocket socket, ILiveViewing viewing)
+        => new LiveWireSocket(socket, ImpatientToWrite)
+            .CarryAsync(viewing.Frames, CancellationToken.None, CancellationToken.None);
+
+    private static Task<LiveDeparture> Carrying(
+        ScriptedWebSocket socket,
+        Channel<LiveFrame> frames,
+        TimeProvider clock)
+        => new LiveWireSocket(socket, Gateway, null, null, clock).CarryAsync(
+            frames.Reader,
+            CancellationToken.None,
+            CancellationToken.None);
+
+    private static Task<LiveDeparture> Carrying(
+        ScriptedWebSocket socket,
+        ILiveViewing viewing,
+        TimeProvider clock)
+        => new LiveWireSocket(socket, Gateway, viewing.Startup, viewing.Ending, clock).CarryAsync(
+            viewing.Frames,
+            CancellationToken.None,
+            CancellationToken.None);
+
+    private static async Task Until(Func<bool> settled, string never)
     {
         for (int tries = 0; tries < 200; tries++)
         {
@@ -1010,7 +1016,7 @@ public sealed class LiveWireSocketTests
             await Task.Delay(25);
         }
 
-        Assert.Fail("The wire never said what was expected of it.");
+        Assert.Fail(never);
     }
 
     private static LiveStartup Reported(byte[] message)
@@ -1033,6 +1039,42 @@ public sealed class LiveWireSocketTests
         report = LiveStartup.ReadProgress(frame.Payload.Span).Startup;
 
         return report is not null;
+    }
+
+    private static void Started(LiveStartupRecord startup)
+    {
+        foreach (LiveStartupSegment segment in LiveStartupSegments.InOrder)
+        {
+            startup.Reach(segment);
+        }
+    }
+
+    private static async Task<ILiveViewing> Joined(LiveFanout fanout)
+    {
+        ILiveViewing? viewing = await fanout.JoinAsync(CancellationToken.None);
+
+        Assert.NotNull(viewing);
+
+        return viewing;
+    }
+
+    private static async Task WaitOutTheCeiling(HandTurnedClock clock)
+    {
+        for (int quiet = 0; quiet <= Gateway.QuietsBeforeTheCeiling; quiet++)
+        {
+            await WaitingOutTheQuiet(clock);
+            clock.Turn(Gateway.BetweenPings);
+        }
+    }
+
+    private static Task WaitingOutTheQuiet(HandTurnedClock clock)
+        => Eventually.Happens(
+            () => clock.Waiting.SequenceEqual([Gateway.BetweenPings]),
+            "the wire is waiting out the quiet");
+
+    private sealed class HeldEnding(LiveSupplyEnding? current) : ILiveEnding
+    {
+        public LiveSupplyEnding? Current => current;
     }
 
     private sealed class HeldStartup(LiveStartup? current) : ILiveStartup
@@ -1134,57 +1176,4 @@ public sealed class LiveWireSocketTests
         public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
-
-    private static void Started(LiveStartupRecord startup)
-    {
-        foreach (LiveStartupSegment segment in LiveStartupSegments.InOrder)
-        {
-            startup.Reach(segment);
-        }
-    }
-
-    private static async Task<ILiveViewing> Joined(LiveFanout fanout)
-    {
-        ILiveViewing? viewing = await fanout.JoinAsync(CancellationToken.None);
-
-        Assert.NotNull(viewing);
-
-        return viewing;
-    }
-
-    private static Task<LiveDeparture> Carrying(
-        ScriptedWebSocket socket,
-        Channel<LiveFrame> frames,
-        TimeProvider clock)
-        => new LiveWireSocket(socket, Gateway, null, null, clock).CarryAsync(
-            frames.Reader,
-            CancellationToken.None,
-            CancellationToken.None);
-
-    private static Task<LiveDeparture> Carrying(
-        ScriptedWebSocket socket,
-        ILiveViewing viewing,
-        TimeProvider clock)
-        => new LiveWireSocket(socket, Gateway, viewing.Startup, viewing.Ending, clock).CarryAsync(
-            viewing.Frames,
-            CancellationToken.None,
-            CancellationToken.None);
-
-    private static async Task WaitOutTheCeiling(HandTurnedClock clock)
-    {
-        for (int quiet = 0; quiet <= Gateway.QuietsBeforeTheCeiling; quiet++)
-        {
-            await WaitingOutTheQuiet(clock);
-            clock.Turn(Gateway.BetweenPings);
-        }
-    }
-
-    private static Task WaitingOutTheQuiet(HandTurnedClock clock)
-        => Eventually.Happens(
-            () => clock.Waiting.SequenceEqual([Gateway.BetweenPings]),
-            "the wire is waiting out the quiet");
-
-    private static Task<LiveDeparture> Carry(ScriptedWebSocket socket, ILiveViewing viewing)
-        => new LiveWireSocket(socket, ImpatientToWrite)
-            .CarryAsync(viewing.Frames, CancellationToken.None, CancellationToken.None);
 }
