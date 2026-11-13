@@ -508,7 +508,15 @@ public static class TestLayoutRules
     private static bool IsBehindTheDomain(Reading reading, string subject)
         => subject.EndsWith(Repository, StringComparison.Ordinal)
            || subject.EndsWith(DomainServiceRules.Suffix, StringComparison.Ordinal)
-           || reading.DomainPorts[subject].Contains(PortOf(subject), StringComparer.Ordinal);
+           || reading.DomainPorts[subject].Contains(PortOf(subject), StringComparer.Ordinal)
+           || ImplementersInTheInfrastructure(reading, PortOf(subject)).Any();
+
+    /// <summary>The classes the infrastructure declares that implement the domain interface <paramref name="port"/>.</summary>
+    private static IEnumerable<string> ImplementersInTheInfrastructure(Reading reading, string port)
+        => reading.DomainPorts
+            .Where(implemented => implemented.Contains(port, StringComparer.Ordinal)
+                                  && reading.Types[implemented.Key].Any(relative => relative.StartsWith(InfrastructureSource, StringComparison.Ordinal)))
+            .Select(implemented => implemented.Key);
 
     private static bool ServesRequests(Reading reading, string subject, string area, IReadOnlyList<AreaSource> elsewhere)
         => reading.ServingRequests.Contains(subject) && IsDeclaredFor(reading, subject, area, ApiLayer, elsewhere);
@@ -577,9 +585,12 @@ public static class TestLayoutRules
             yield return "builds a type it does not name with CreateInstance, which only the helper that wraps a registered service may do";
         }
 
-        if (!string.Equals(taken, subject, StringComparison.Ordinal) && file.Identifiers.Contains(subject))
+        if (!string.Equals(taken, subject, StringComparison.Ordinal))
         {
-            yield return $"names the class {subject} behind {taken}";
+            foreach (string named in ImplementersInTheInfrastructure(reading, taken).Prepend(subject).Distinct(StringComparer.Ordinal).Where(file.Identifiers.Contains).Order(StringComparer.Ordinal))
+            {
+                yield return $"names the class {named} behind {taken}";
+            }
         }
 
         if (file.Created.Contains(subject))
