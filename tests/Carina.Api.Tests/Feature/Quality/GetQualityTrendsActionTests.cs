@@ -5,9 +5,10 @@ using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Quality;
 
-public sealed class QualityTrendEndpointTests
+[Trait("Category", "Feature")]
+public sealed class GetQualityTrendsActionTests
 {
     [Fact(DisplayName = "packets lost come back a point a day, the day holding an unmeasured recording counting it beside the share")]
     public async Task PacketsLostComeBackAPointADay()

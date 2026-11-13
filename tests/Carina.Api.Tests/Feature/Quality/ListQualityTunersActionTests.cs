@@ -5,9 +5,10 @@ using Carina.Domain.Channels;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Quality;
 
-public sealed class TunersThatNeverLockTests
+[Trait("Category", "Feature")]
+public sealed class ListQualityTunersActionTests
 {
     private const string FirstSatellite = "adapter0.frontend0";
 
@@ -16,6 +17,68 @@ public sealed class TunersThatNeverLockTests
     private const string Terrestrial = "adapter3.frontend0";
 
     private const long FifteenHoursOfSamples = 5_400;
+
+    [Fact]
+    public async Task TheTunersCarryTheirOwnMeasuresAndASignalNothingHasSampled()
+    {
+        await using var feature = new QualityFeature();
+        feature.Recorded(tuner: "adapter3.frontend0", dropped: 2_000, total: 1_000_000);
+        feature.Recorded(tuner: "adapter3.frontend1", dropped: 0, total: 1_000_000);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/quality/tuners");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        JsonElement items = body.GetProperty("data").GetProperty("items");
+
+        Assert.Equal(
+            ["adapter3.frontend0", "adapter3.frontend1"],
+            items.EnumerateArray().Select(item => item.GetProperty("deviceId").GetString()));
+        Assert.All(items.EnumerateArray(), item =>
+        {
+            Assert.Equal(3, item.GetProperty("signal").GetArrayLength());
+            Assert.All(
+                item.GetProperty("signal").EnumerateArray(),
+                facet => Assert.Equal("unmeasured", facet.GetProperty("reading").GetProperty("state").GetString()));
+        });
+    }
+
+    [Fact]
+    public async Task ARecordingTheLedgerNamesNoTunerForIsStillCounted()
+    {
+        await using var feature = new QualityFeature();
+        feature.Recorded(tuner: null, dropped: null, total: null, scrambled: null);
+
+        JsonElement items = (await feature.GetAsync("/api/quality/tuners")).Body.GetProperty("data").GetProperty("items");
+
+        Assert.Equal(1, items.GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, items[0].GetProperty("deviceId").ValueKind);
+    }
+
+    [Fact]
+    public async Task ATunerTheLedgerHasNoRecordingForStillShowsWhatItsSamplesSaid()
+    {
+        await using var feature = new QualityFeature();
+        feature.Recorded(tuner: "adapter3.frontend0");
+        feature.Sampled(tuner: "adapter3.frontend1");
+
+        JsonElement items = (await feature.GetAsync("/api/quality/tuners")).Body
+            .GetProperty("data")
+            .GetProperty("items");
+
+        JsonElement onlySampled = items
+            .EnumerateArray()
+            .Single(item => item.GetProperty("deviceId").GetString() == "adapter3.frontend1");
+
+        Assert.Equal(3, onlySampled.GetProperty("signal").GetArrayLength());
+        Assert.All(
+            onlySampled.GetProperty("signal").EnumerateArray(),
+            facet => Assert.Equal("good", facet.GetProperty("reading").GetProperty("state").GetString()));
+        Assert.Equal(3, onlySampled.GetProperty("measures").GetArrayLength());
+        Assert.All(
+            onlySampled.GetProperty("measures").EnumerateArray(),
+            measure => Assert.Equal("nothingToMeasure", measure.GetProperty("reading").GetProperty("state").GetString()));
+    }
 
     [Fact(DisplayName = "a tuner that answered for fifteen hours without once locking reads as beyond the level beside one that locked")]
     public async Task ATunerThatAnsweredForFifteenHoursWithoutOnceLockingReadsAsBeyondTheLevel()
@@ -52,27 +115,6 @@ public sealed class TunersThatNeverLockTests
         Assert.Equal("unmeasured", State(never));
         Assert.Equal(0, never.GetProperty("reading").GetProperty("measured").GetInt32());
         Assert.Equal("good", State(Signal(Tuner(items, Terrestrial), "carrierToNoiseFloor")));
-    }
-
-    [Fact(DisplayName = "two tuners that never locked leave the summary beyond the level while the one that locked is still counted")]
-    public async Task TwoTunersThatNeverLockedLeaveTheSummaryBeyondTheLevel()
-    {
-        await using QualityFeature feature = new();
-        NeverLocked(feature, FirstSatellite);
-        NeverLocked(feature, SecondSatellite);
-        feature.Sampled(tuner: Terrestrial, samples: FifteenHoursOfSamples, locked: FifteenHoursOfSamples);
-
-        JsonElement lockRate = (await feature.GetAsync("/api/quality/summary")).Body
-            .GetProperty("data")
-            .GetProperty("signal")
-            .EnumerateArray()
-            .Single(facet => facet.GetProperty("metric").GetString() == "lockRate")
-            .GetProperty("reading");
-
-        Assert.Equal("atOrAboveWarning", lockRate.GetProperty("state").GetString());
-        Assert.Equal(3, lockRate.GetProperty("subjects").GetInt32());
-        Assert.Equal(3, lockRate.GetProperty("measured").GetInt32());
-        Assert.Equal(2, lockRate.GetProperty("beyondThreshold").GetInt32());
     }
 
     [Fact(DisplayName = "BR-QD-017: an enabled tuner with no samples and no recordings still has a row, and it reads as unmeasured")]
@@ -160,20 +202,6 @@ public sealed class TunersThatNeverLockTests
         Assert.Equal(JsonValueKind.Null, Tuner(items, Terrestrial).GetProperty("trouble").ValueKind);
     }
 
-    [Fact(DisplayName = "BR-QD-018: the incidents list restates a tuner that is failing to tune under that classification")]
-    public async Task TheIncidentsListRestatesATunerThatIsFailingToTune()
-    {
-        await using QualityFeature feature = new();
-        feature.Troubled(FirstSatellite, TunerTroubleKind.TuneFailing);
-
-        JsonElement item = Assert.Single(
-            (await feature.GetAsync("/api/quality/incidents")).Body.GetProperty("data").GetProperty("items").EnumerateArray());
-
-        Assert.Equal("TuneFailing", item.GetProperty("classification").GetString());
-        Assert.True(item.GetProperty("restated").GetBoolean());
-        Assert.Equal(FirstSatellite, item.GetProperty("subjectKey").GetString());
-    }
-
     [Fact(DisplayName = "BR-QD-017: a bit error rate beyond its level puts the row beyond the level while nothing was recorded")]
     public async Task ABitErrorRateBeyondItsLevelPutsTheRowBeyondTheLevelWhileNothingWasRecorded()
     {
@@ -214,6 +242,19 @@ public sealed class TunersThatNeverLockTests
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal([FirstSatellite, Terrestrial], DeviceIds(body.GetProperty("data").GetProperty("items")));
+    }
+
+    [Fact(DisplayName = "a carried shelf reads unmeasured on the tuners")]
+    public async Task ACarriedShelfReadsUnmeasuredOnTheTuners()
+    {
+        await using var feature = new QualityFeature();
+        string period = CarriedShelf.Shelved(feature);
+
+        JsonElement tuners = await CarriedShelf.DataAsync(feature, $"/api/quality/tuners?{period}");
+
+        JsonElement tuner = Assert.Single(tuners.GetProperty("items").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, tuner.GetProperty("deviceId").ValueKind);
+        CarriedShelf.ReadsUnmeasuredThroughout(tuner.GetProperty("measures"), CarriedShelf.Shelf);
     }
 
     private static async Task<JsonElement> TunersAsync(QualityFeature feature)

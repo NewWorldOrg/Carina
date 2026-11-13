@@ -3,8 +3,9 @@ using Carina.Domain.Base;
 using Carina.Domain.Quality;
 using Carina.TestSupport;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Quality;
 
+[Trait("Category", "Unit")]
 public sealed class QualityThresholdServiceTests
 {
     private static readonly DateTime Now = new(2026, 9, 7, 12, 0, 0, DateTimeKind.Utc);

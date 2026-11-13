@@ -3,9 +3,10 @@ using System.Text.Json;
 
 using Carina.Domain.Channels;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Quality;
 
-public sealed class QualityCandidateScoreEndpointTests
+[Trait("Category", "Feature")]
+public sealed class ListQualityCandidateScoresActionTests
 {
     private static readonly DateTime Noon = QualityFeature.Noon;
 
