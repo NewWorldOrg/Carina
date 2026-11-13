@@ -9,6 +9,7 @@ using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Playback;
+using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.Extensions.Logging.Abstractions;
 

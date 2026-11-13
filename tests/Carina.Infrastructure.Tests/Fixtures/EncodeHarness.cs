@@ -1,0 +1,469 @@
+using System.Collections.Concurrent;
+
+using Carina.Domain.Base;
+using Carina.Domain.Captions;
+using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
+using Carina.Domain.Integrity;
+using Carina.Domain.Machines;
+using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
+using Carina.Domain.Segments;
+using Carina.Infrastructure.Captions;
+using Carina.Infrastructure.Encodings;
+using Carina.Infrastructure.Tests.Integrity;
+using Carina.Infrastructure.Tests.Thumbnails;
+using Carina.TestSupport;
+
+namespace Carina.Infrastructure.Tests.Fixtures.Encodings;
+
+internal sealed class EncodeHarness : IDisposable
+{
+    public static readonly OutputRoot Primary = new("primary");
+
+    public static readonly OutputRoot Encodes = new("encodes");
+
+    public static readonly DateTime Queued = new(2026, 9, 5, 3, 0, 0, DateTimeKind.Utc);
+
+    public static readonly DateTime Started = new(2026, 9, 5, 3, 0, 5, DateTimeKind.Utc);
+
+    public static readonly TimeSpan Whole = TimeSpan.FromSeconds(10);
+
+    public const string Broadcast = "the broadcast";
+
+    public EncodeHarness(bool workingBeside = true)
+    {
+        Room = new TempTree();
+        Shelf = new TempTree();
+        CaptionShelfRoom = new TempTree();
+        Workshop = workingBeside ? null : new TempTree();
+        Settings = new EncodeSettings
+        {
+            OutputRoots = [new StorageRootPath(Encodes, Shelf.Root)],
+            WorkedIn = Workshop?.Root,
+            StalledAfter = TimeSpan.FromSeconds(20),
+        };
+        Mounts = new IntegritySettings { OutputRoots = [new StorageRootPath(Primary, Room.Root)] };
+        Clock = new HandTurnedClock(new DateTimeOffset(2026, 9, 5, 4, 0, 0, TimeSpan.Zero));
+        MachineReader = Machine;
+        LengthReader = Lengths;
+        HeadReader = Heads;
+    }
+
+    public TempTree Room { get; }
+
+    public TempTree Shelf { get; }
+
+    public TempTree CaptionShelfRoom { get; }
+
+    public CaptionShelf CaptionShelf => new(new CaptionSettings { WrittenTo = CaptionShelfRoom.Root });
+
+    public CaptionTrackMux CaptionTracks => new(ScratchFiles, Programmes, Clock);
+
+    public TempTree? Workshop { get; }
+
+    public EncodeSettings Settings { get; set; }
+
+    public IntegritySettings Mounts { get; }
+
+    public EncodePlaces Places => new(Mounts, Settings);
+
+    public TimeProvider Clock { get; set; }
+
+    public HeldEncodeJobs Jobs { get; } = new();
+
+    public HeldEncodeScratch Scratch { get; } = new();
+
+    public HeldEncodeProfiles Profiles { get; } = new();
+
+    public HeldRecordingRows Recordings { get; } = new();
+
+    public AskedMachine Machine { get; } = new();
+
+    public MeasuredLengths Lengths { get; } = new();
+
+    public MeasuredHeads Heads { get; } = new();
+
+    public IMachineCapabilityReader MachineReader { get; set; }
+
+    public ISourceLengthReader LengthReader { get; set; }
+
+    public ISourceHeadReader HeadReader { get; set; }
+
+    public HeldEncodeChapters Chapters { get; } = new();
+
+    public HeldSegmentModelVersions Versions { get; } = new();
+
+    public HeldRecordingDetections Detections { get; } = new();
+
+    public EncodeChapterChoices ChapterChoices => new(Versions, Detections);
+
+    public MachineSettings Programmes { get; set; } = new();
+
+    public StandingEncodeAutoRun AutoRun { get; } = new();
+
+    public IRenameProbe Probe { get; set; } = new DirectoryRenameProbe();
+
+    public HeardOf<EncodeArtefactPlacer> PlacerLog { get; } = new();
+
+    public HeardOf<EncodeScratchCleaner> CleanerLog { get; } = new();
+
+    public HeardOf<EncodeJobRunner> RunnerLog { get; } = new();
+
+    public HeardOf<EncodeArtefactSuccession> SuccessionLog { get; } = new();
+
+    public string WorkDirectory => (Workshop ?? Shelf).Root;
+
+    public EncodeArtefactPlacer Placer => new(Jobs, Scratch, Places, Probe, Clock, PlacerLog);
+
+    public EncodeScratchCleaner Cleaner => new(Scratch, Places, Clock, CleanerLog);
+
+    public EncodeArtefactSuccession Succession => new(Jobs, Scratch, new UnguardedWrites(), Cleaner, Clock, SuccessionLog);
+
+    public EncodeScratchFiles ScratchFiles => new(Scratch, Places, Clock);
+
+    public EncodeJobRunner Runner => new(
+        Jobs,
+        Profiles,
+        Recordings,
+        Places,
+        ScratchFiles,
+        Placer,
+        Succession,
+        Cleaner,
+        MachineReader,
+        LengthReader,
+        HeadReader,
+        ChapterChoices,
+        Chapters,
+        new EncodeCaptionTrackDomainService(Recordings, CaptionShelf),
+        CaptionTracks,
+        Programmes,
+        Settings,
+        AutoRun,
+        Clock,
+        RunnerLog);
+
+    /// <summary>
+    /// Keeps a detection of the recording by the version in use, standing as it is told, its stretches given
+    /// in the recording's own time.
+    /// </summary>
+    public RecordingDetection Detected(Recording recording, SegmentDetectionState state, params SegmentSpan[] stretches)
+    {
+        double breaks = stretches.Where(stretch => stretch.Kind is SegmentKind.Break).Sum(stretch => stretch.Length.Ticks);
+        RecordingDetection detection = RecordingDetection.Rehydrate(
+            recording.Id,
+            Versions.Active.Number,
+            state,
+            stretches,
+            breaks / stretches[^1].Ends.Ticks,
+            [],
+            2,
+            Queued,
+            Queued);
+        Detections.KeepAsync(detection, CancellationToken.None).GetAwaiter().GetResult();
+
+        return detection;
+    }
+
+    public EncodeProfile Defined(EncodeCodec codec = EncodeCodec.H264)
+    {
+        EncodeProfile profile = EncodeProfile.Define(
+            EncodeProfileId.New(),
+            new EncodeLabel("Viewing"),
+            codec,
+            EncodeResolution.AsSource,
+            Deinterlace.EveryFrame,
+            new ConstantRateFactor(22),
+            new ConstantQuantiser(24),
+            Queued);
+        Profiles.Profiles.Add(profile);
+
+        return profile;
+    }
+
+    public Recording Recorded(
+        string content = Broadcast,
+        OutputRoot? root = null,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
+    {
+        Recording recording = Ended(root ?? Primary, 1064, content.Length, audio, sounds);
+
+        if (root is null)
+        {
+            File.WriteAllText(SourcePathOf(recording), content);
+        }
+
+        return recording;
+    }
+
+    public Recording RecordedFrom(
+        string written,
+        int serviceId,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
+    {
+        Recording recording = Ended(Primary, serviceId, new FileInfo(written).Length, audio, sounds);
+        File.Copy(written, SourcePathOf(recording));
+
+        return recording;
+    }
+
+    private Recording Ended(OutputRoot root, int serviceId, long size, AudioMode audio, int sounds)
+    {
+        var id = RecordingId.New();
+        Recording recording = Recording.Begin(
+            id,
+            null,
+            new ProgrammeRef(new NetworkId(32741), new ServiceId(serviceId), new Carina.Domain.Programmes.EventId(8981), Queued),
+            root,
+            RecordingFileName.For(id, ".ts"),
+            Queued,
+            Queued + Whole,
+            new ProgrammeSnapshot(
+                "A programme",
+                string.Empty,
+                string.Empty,
+                [],
+                Queued,
+                audio,
+                sounds),
+            null,
+            BroadcastGroupRole.Standalone,
+            Queued,
+            new TunerDeviceId("synthetic-0"));
+        recording.Wrote(Whole);
+        recording.Abort(Queued + Whole);
+        recording.Settle(RecordingOutcome.Complete, size, Queued + Whole);
+        Recordings.Rows.Add(recording);
+
+        return recording;
+    }
+
+    public string SourcePathOf(Recording recording) => Path.Combine(Room.Root, recording.FileName.Value);
+
+    public EncodeJob Running(RecordingId? recording = null, EncodeProfileId? profile = null)
+    {
+        EncodeJob job = EncodeJob.Queue(
+            EncodeJobId.New(),
+            recording ?? RecordingId.New(),
+            profile ?? EncodeProfileId.New(),
+            EncodeDestinationId.New(),
+            Encodes,
+            Queued);
+        job.Start(Started);
+        Jobs.Jobs.Add(job);
+
+        return job;
+    }
+
+    public EncodeJob RunningAgainWithItsName(RecordingId recording, EncodeProfileId profile, bool madeAgain = false)
+    {
+        EncodeJob job = EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            recording,
+            profile,
+            EncodeDestinationId.New(),
+            Encodes,
+            EncodeJobStatus.Running,
+            2,
+            Queued,
+            Started,
+            null,
+            null,
+            EncodeFileName.Artefact(recording, profile),
+            null,
+            null,
+            null,
+            null,
+            null,
+            madeAgain);
+        Jobs.Jobs.Add(job);
+
+        return job;
+    }
+
+    public EncodeJob RunningAgain(RecordingId recording, EncodeProfileId profile)
+    {
+        EncodeJob job = EncodeJob.QueueAgain(
+            EncodeJobId.New(),
+            recording,
+            profile,
+            EncodeDestinationId.New(),
+            Encodes,
+            Queued);
+        job.Start(Started);
+        Jobs.Jobs.Add(job);
+
+        return job;
+    }
+
+    public EncodeJob Made(RecordingId recording, EncodeProfileId profile)
+    {
+        EncodeJob job = EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            recording,
+            profile,
+            EncodeDestinationId.New(),
+            Encodes,
+            EncodeJobStatus.Completed,
+            EncodeJob.FirstAttempt,
+            Queued,
+            Started,
+            Started.AddMinutes(10),
+            null,
+            EncodeFileName.Artefact(recording, profile),
+            null,
+            null,
+            null,
+            null,
+            null);
+        Jobs.Jobs.Add(job);
+
+        return job;
+    }
+
+    public string WorkFileOf(EncodeJob job, string content)
+    {
+        string path = Path.Combine(WorkDirectory, job.WorkFileName.Value);
+        File.WriteAllText(path, content);
+        Scratch.Files.Add(EncodeScratchFile.Record(
+            EncodeScratchFileId.New(),
+            job.Id,
+            EncodeScratchKind.WorkFile,
+            Encodes,
+            job.WorkFileName,
+            Queued));
+
+        return path;
+    }
+
+    public string WorkPathOf(EncodeJob job) => Path.Combine(WorkDirectory, job.WorkFileName.Value);
+
+    public string ChaptersPathOf(EncodeJob job) => Path.Combine(WorkDirectory, job.ChaptersFileName.Value);
+
+    public string ArtefactPathOf(EncodeJob job)
+        => Path.Combine(Shelf.Root, EncodeFileName.Artefact(job.RecordingId, job.ProfileId).Value);
+
+    /// <summary>
+    /// A programme standing in for ffmpeg: a shell script that is handed ffmpeg's arguments, the
+    /// destination last, and writes what it is told to on standard output and standard error.
+    /// </summary>
+    public string Standing(string script)
+    {
+        string path = StandInProgramme.Written(
+            Room.Under($"programme-{Guid.NewGuid():N}.sh"),
+            "for argument in \"$@\"; do destination=$argument; done\n" + script);
+
+        Programmes = new MachineSettings { Programme = path };
+
+        return path;
+    }
+
+    public void Dispose()
+    {
+        Room.Dispose();
+        Shelf.Dispose();
+        CaptionShelfRoom.Dispose();
+        Workshop?.Dispose();
+    }
+}
+
+internal sealed class ScriptedProbe(RenameVerdict verdict) : IRenameProbe
+{
+    public ConcurrentQueue<(string From, string To)> Asked { get; } = new();
+
+    public RenameVerdict Probe(string from, string to)
+    {
+        Asked.Enqueue((from, to));
+
+        return verdict;
+    }
+}
+
+internal sealed class HeldRecordingRows : IRecordingRepository
+{
+    public List<Recording> Rows { get; } = [];
+
+    public Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
+        => Task.FromResult(Rows.FirstOrDefault(row => row.Id.Equals(id)));
+
+    public Task<IReadOnlyList<Recording>> ListInFlightAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Recording>>([.. Rows.Where(row => row.IsInFlight)]);
+
+    public Task<IReadOnlyList<Recording>> ListForReservationAsync(ReservationId reservationId, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Recording>>([.. Rows.Where(row => reservationId.Equals(row.ReservationId))]);
+
+    public Task AddAsync(Recording recording, CancellationToken cancellationToken)
+    {
+        Rows.Add(recording);
+
+        return Task.CompletedTask;
+    }
+
+    public Task SaveAsync(Recording recording, CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+internal sealed class AskedMachine : IMachineCapabilityReader
+{
+    public MachineCapabilities Can { get; set; } = MachineCapabilities.Of(
+        CardStanding.NodeMissing,
+        [Faculty.EncodeH264OnTheProcessor, Faculty.DecodeAribCaptions],
+        "no render node was handed to this container");
+
+    public int Times { get; private set; }
+
+    public Task<MachineCapabilities> ReadAsync(CancellationToken cancellationToken)
+    {
+        Times++;
+
+        return Task.FromResult(Can);
+    }
+}
+
+internal sealed class MeasuredLengths : ISourceLengthReader
+{
+    public SourceLengthReading Reading { get; set; } = SourceLengthReading.Read(EncodeHarness.Whole);
+
+    public Func<string, SourceLengthReading?>? ByPath { get; set; }
+
+    public List<string> Asked { get; } = [];
+
+    public Task<SourceLengthReading> ReadAsync(string source, CancellationToken cancellationToken)
+    {
+        Asked.Add(source);
+
+        return Task.FromResult(ByPath?.Invoke(source) ?? Reading);
+    }
+}
+
+internal sealed class MeasuredHeads : ISourceHeadReader
+{
+    public static readonly TimeSpan Start = TimeSpan.FromSeconds(30499.474078);
+
+    public SourceHeadReading Reading { get; set; } = SourceHeadReading.Read(Start, Start);
+
+    public List<(string Source, ServiceId Service)> Asked { get; } = [];
+
+    public Task<SourceHeadReading> ReadAsync(string source, ServiceId service, CancellationToken cancellationToken)
+    {
+        Asked.Add((source, service));
+
+        return Task.FromResult(Reading);
+    }
+}
+
+internal sealed class ScriptedStrays : IStrayProgrammes
+{
+    public List<RunningProgramme> Asked { get; } = [];
+
+    public StrayFate Answer { get; set; } = StrayFate.Stopped;
+
+    public StrayFate Stop(RunningProgramme written)
+    {
+        Asked.Add(written);
+
+        return Answer;
+    }
+}

@@ -4,6 +4,7 @@ using Carina.Domain.Segments;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.EntityFrameworkCore;
 

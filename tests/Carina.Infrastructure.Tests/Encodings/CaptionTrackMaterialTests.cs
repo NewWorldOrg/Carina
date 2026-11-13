@@ -12,6 +12,7 @@ using Carina.Domain.Streaming;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Streaming;
+using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.Extensions.Logging.Abstractions;
 

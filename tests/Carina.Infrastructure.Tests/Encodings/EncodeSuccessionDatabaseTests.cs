@@ -1,9 +1,9 @@
 using Carina.Domain.Encodings;
-using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
