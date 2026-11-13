@@ -5,11 +5,9 @@ using Carina.Domain.DataBroadcast;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
-using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Captions;
 using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Thumbnails;
 
 using Microsoft.EntityFrameworkCore;

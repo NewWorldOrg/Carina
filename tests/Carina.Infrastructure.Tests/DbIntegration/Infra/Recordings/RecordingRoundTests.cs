@@ -1,6 +1,5 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
-using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;

@@ -3,6 +3,7 @@ using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Encodings;

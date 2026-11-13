@@ -4,7 +4,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
-using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Captions;
 using Carina.Infrastructure.Persistence;
 

@@ -5,6 +5,7 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
 
 using Microsoft.EntityFrameworkCore;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Encodings;

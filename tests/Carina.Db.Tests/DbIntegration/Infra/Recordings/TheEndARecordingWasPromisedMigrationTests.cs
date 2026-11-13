@@ -1,6 +1,5 @@
 using Carina.Infrastructure.Persistence;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
