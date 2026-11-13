@@ -2,8 +2,9 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
-namespace Carina.Domain.Tests.Programmes;
+namespace Carina.Domain.Tests.Unit.Programmes;
 
+[Trait("Category", "Unit")]
 public sealed class GuideReadingTests
 {
     private static readonly DateTime Heard = new(2026, 8, 26, 19, 0, 0, DateTimeKind.Utc);

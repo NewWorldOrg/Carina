@@ -1,7 +1,8 @@
 using Carina.Domain.Programmes;
 
-namespace Carina.Domain.Tests.Programmes;
+namespace Carina.Domain.Tests.Unit.Programmes;
 
+[Trait("Category", "Unit")]
 public sealed class BoostGuardTests
 {
     private static readonly DateTime Now = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);

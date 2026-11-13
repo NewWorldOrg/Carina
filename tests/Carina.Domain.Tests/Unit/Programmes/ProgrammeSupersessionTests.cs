@@ -3,8 +3,9 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 
-namespace Carina.Domain.Tests.Programmes;
+namespace Carina.Domain.Tests.Unit.Programmes;
 
+[Trait("Category", "Unit")]
 public sealed class ProgrammeSupersessionTests
 {
     private static readonly DateTime Start = new(2026, 8, 18, 4, 0, 0, DateTimeKind.Utc);

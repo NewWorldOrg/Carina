@@ -2,9 +2,10 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
-namespace Carina.Domain.Tests.Programmes;
+namespace Carina.Domain.Tests.Unit.Programmes;
 
-public sealed class ProgrammeMarkMatchingTests
+[Trait("Category", "Unit")]
+public sealed class ProgrammeSearchMatchingTests
 {
     private static readonly DateTime Now = new(2026, 10, 6, 12, 0, 0, DateTimeKind.Utc);
 

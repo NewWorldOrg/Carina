@@ -3,8 +3,9 @@ using Carina.Domain.Programmes;
 
 using Puppis.Contracts;
 
-namespace Carina.Domain.Tests.Programmes;
+namespace Carina.Domain.Tests.Unit.Programmes;
 
+[Trait("Category", "Unit")]
 public sealed class WalkOpeningTests
 {
     private static readonly DateTime At = new(2026, 10, 3, 3, 0, 0, DateTimeKind.Utc);

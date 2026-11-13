@@ -1,8 +1,9 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
-namespace Carina.Domain.Tests.Programmes;
+namespace Carina.Domain.Tests.Unit.Programmes;
 
+[Trait("Category", "Unit")]
 public sealed class GuideCoverageTests
 {
     private static readonly TimeSpan EightDays = TimeSpan.FromDays(8);
