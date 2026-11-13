@@ -71,6 +71,7 @@ public static class TestLayoutRules
         new("Auth", "src/Carina.Db/Migrations/20260929160610_TheClientSecretIsSealed.cs"),
         new("Auth", "src/Carina.Infrastructure/Configuration/AuthOptions.cs"),
         new("Auth", "src/Carina.Infrastructure/Persistence/Repositories/OidcSettingsRepository.cs"),
+        new("Encoding", "src/Carina.Api/Services/EncodeRerun.cs"),
         new("Encodings", "src/Carina.Db/Migrations/20260914061902_WhereTheBreaksWereJudgedToBe.cs"),
         new("Encodings", "src/Carina.Db/Migrations/20260927053702_ReplacedArtefactsAreRemoved.cs"),
         new("Encodings", "src/Carina.Db/Migrations/20261018102824_TheChaptersOfAnArtefactSayWhichDetectionTheyCameFrom.cs"),

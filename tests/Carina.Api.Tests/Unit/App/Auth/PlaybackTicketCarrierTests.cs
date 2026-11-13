@@ -1,4 +1,3 @@
-using System.Text;
 
 using Carina.Api.Authentication;
 using Carina.Domain.Auth;
@@ -97,7 +96,7 @@ public sealed class PlaybackTicketCarrierTests
     [Fact]
     public void BasicCredentialsWithoutASeparatorOfferNothing()
     {
-        string carried = Convert.ToBase64String(Encoding.UTF8.GetBytes(Unguessable.Issue()));
+        string carried = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(Unguessable.Issue()));
 
         Assert.Null(PlaybackTicketCarrier.OfferedBy(Asking($"Basic {carried}")));
     }
@@ -166,7 +165,7 @@ public sealed class PlaybackTicketCarrierTests
     }
 
     private static string Basic(string user, string password)
-        => $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}"))}";
+        => $"Basic {Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{user}:{password}"))}";
 
     private static HttpRequest Asking(string authorization)
     {

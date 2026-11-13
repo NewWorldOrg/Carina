@@ -1,7 +1,6 @@
 using System.Buffers.Text;
 using System.Net;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 using Carina.Api.Tests.FeatureTest;
@@ -79,8 +78,8 @@ public sealed class CreatePushSubscriptionActionTests
         NotificationDestination held = Assert.Single(feature.HeldDestinations.Destinations);
         Assert.Equal(WebhookTarget.Push, held.Target);
         Assert.Equal(fingerprint, held.EndpointHash);
-        Assert.DoesNotContain("made-up-registration", Encoding.UTF8.GetString(held.SealedUrl), StringComparison.Ordinal);
-        Assert.DoesNotContain(browser.SecretAsWritten, Encoding.UTF8.GetString(held.SealedUrl), StringComparison.Ordinal);
+        Assert.DoesNotContain("made-up-registration", System.Text.Encoding.UTF8.GetString(held.SealedUrl), StringComparison.Ordinal);
+        Assert.DoesNotContain(browser.SecretAsWritten, System.Text.Encoding.UTF8.GetString(held.SealedUrl), StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "BR-NT-008: A browser of each push service this server knows is registered, and anything else a browser sends beside the subscription is left unread")]
@@ -373,7 +372,7 @@ public sealed class CreatePushSubscriptionActionTests
     private static PushSubscription Opened(NotificationFeature feature, NotificationDestination held)
         => feature.Built.Services.GetRequiredService<PushSubscriptionSeal>().Open(held.SealedUrl)!;
 
-    private static string HashOf(string endpoint) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(endpoint)));
+    private static string HashOf(string endpoint) => Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(endpoint)));
 
     private static NotificationDestination Held(NotificationFeature feature, PushReceiver browser, string endpoint)
     {

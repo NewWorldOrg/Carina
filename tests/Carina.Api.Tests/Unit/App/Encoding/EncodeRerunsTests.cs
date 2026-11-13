@@ -1,10 +1,10 @@
 using Carina.Api.Services;
-using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Encoding;
 
+[Trait("Category", "Unit")]
 public sealed class EncodeRerunsTests
 {
     private static readonly DateTime Noon = new(2026, 9, 5, 12, 0, 0, DateTimeKind.Utc);

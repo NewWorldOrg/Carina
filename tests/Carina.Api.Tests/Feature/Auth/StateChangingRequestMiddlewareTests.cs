@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
@@ -141,7 +140,7 @@ public sealed class StateChangingRequestMiddlewareTests(TestingWebApplicationFac
     public async Task AFormPostIsRefusedEvenWhereTheEndpointReadsNoBody()
     {
         using HttpClient client = factory.CreateAuthenticatedClient();
-        using var form = new StringContent("anything=1", Encoding.UTF8, "application/x-www-form-urlencoded");
+        using var form = new StringContent("anything=1", System.Text.Encoding.UTF8, "application/x-www-form-urlencoded");
 
         using HttpResponseMessage response = await client.PostAsync(Restart, form);
 
@@ -165,7 +164,7 @@ public sealed class StateChangingRequestMiddlewareTests(TestingWebApplicationFac
     public async Task ABodyAnotherSiteCanPostWithoutBeingLetThroughFirstIsRefused(string type)
     {
         using HttpClient client = factory.CreateAuthenticatedClient();
-        using var content = new StringContent("anything=1", Encoding.UTF8, type);
+        using var content = new StringContent("anything=1", System.Text.Encoding.UTF8, type);
 
         using HttpResponseMessage response = await client.PostAsync(Restart, content);
 
@@ -193,7 +192,7 @@ public sealed class StateChangingRequestMiddlewareTests(TestingWebApplicationFac
     public async Task ADestructiveRequestCarryingAFormIsRefusedWhateverItsMethod(string method, string path)
     {
         using HttpClient client = factory.CreateAuthenticatedClient();
-        using var form = new StringContent("anything=1", Encoding.UTF8, "application/x-www-form-urlencoded");
+        using var form = new StringContent("anything=1", System.Text.Encoding.UTF8, "application/x-www-form-urlencoded");
 
         using HttpResponseMessage response = await SendingAsync(client, method, path, form);
 
@@ -279,9 +278,9 @@ public sealed class StateChangingRequestMiddlewareTests(TestingWebApplicationFac
     private static HttpContent? BodyOrdinarilySentTo(RoutedSurface surface)
         => HttpMethods.IsDelete(surface.Method) ? null : Json();
 
-    private static StringContent Json() => new("{}", Encoding.UTF8, "application/json");
+    private static StringContent Json() => new("{}", System.Text.Encoding.UTF8, "application/json");
 
-    private static StringContent Form() => new("anything=1", Encoding.UTF8, "application/x-www-form-urlencoded");
+    private static StringContent Form() => new("anything=1", System.Text.Encoding.UTF8, "application/x-www-form-urlencoded");
 
     private IReadOnlyList<RoutedSurface> Inventory() => RouteInventory.Of(factory);
 
