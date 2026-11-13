@@ -20,19 +20,13 @@ public static class TestLayoutRules
     public static readonly IReadOnlyList<string> AreasNotYetMoved =
     [
         "Base",
-        "Collection",
         "Configuration",
         "DependencyInjection",
-        "Driver",
-        "DriverStatus",
         "Events",
         "Health",
-        "Integrity",
-        "Machines",
         "Net",
         "Persistence",
         "Services",
-        "Tuners",
         "Version",
     ];
 
