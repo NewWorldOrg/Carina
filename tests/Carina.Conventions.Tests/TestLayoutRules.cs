@@ -20,7 +20,6 @@ public static class TestLayoutRules
     public static readonly IReadOnlyList<string> AreasNotYetMoved =
     [
         "Health",
-        "Services",
     ];
 
     /// <summary>
