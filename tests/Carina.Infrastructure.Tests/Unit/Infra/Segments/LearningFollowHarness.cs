@@ -9,8 +9,8 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Segments;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Segments;
+using Carina.Infrastructure.Tests.Fixtures.Integrity;
 using Carina.Infrastructure.Tests.Fixtures.Reservations;
-using Carina.Infrastructure.Tests.Integrity;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;

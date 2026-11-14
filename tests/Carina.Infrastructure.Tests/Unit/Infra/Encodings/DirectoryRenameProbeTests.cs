@@ -1,5 +1,5 @@
 using Carina.Infrastructure.Encodings;
-using Carina.Infrastructure.Tests.Integrity;
+using Carina.Infrastructure.Tests.Fixtures.Integrity;
 
 namespace Carina.Infrastructure.Tests.Unit.Infra.Encodings;
 

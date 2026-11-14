@@ -2,7 +2,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Tests.Fixtures.Clocks;
-using Carina.Infrastructure.Tests.Integrity;
+using Carina.Infrastructure.Tests.Fixtures.Integrity;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
 

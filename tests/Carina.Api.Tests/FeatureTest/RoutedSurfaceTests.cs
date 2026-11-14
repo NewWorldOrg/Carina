@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 
@@ -48,6 +49,12 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     ];
 
     private static readonly DateTime At = new(2026, 9, 3, 0, 0, 0, DateTimeKind.Utc);
+
+    public static readonly IReadOnlyList<string> NotAskedBecauseTheAnswerNeverEnds =
+    [
+        "/api/events",
+        "/api/programs/bulk",
+    ];
 
     private readonly PipedSupply supply = new();
 
@@ -822,6 +829,80 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.DoesNotContain(sent, body, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task NoSurfaceOfThisApplicationNamesWhereTheDriverSocketIs()
+    {
+        string wherever = SomewhereTheRuntimeWillTalkAbout();
+        await using var host = new TestingWebApplicationFactory { DriverSocketPath = wherever };
+        WebApplicationFactory<Program> guarded = host.WithTestScheme();
+        using HttpClient client = Authenticated(guarded);
+
+        IReadOnlyList<AnsweredSurface> answered = await EverySurfaceAsync(guarded, client);
+
+        Assert.Empty(DriverSocketPathLeak.In(answered, wherever));
+    }
+
+    [Fact]
+    public async Task TheSweepGoesAsFarAsTheDriverOnSurfacesTheOperatingSystemRefuses()
+    {
+        string absent = Path.Combine(
+            Directory.CreateTempSubdirectory("carina-socket-of-this-host-").FullName,
+            "driver.sock");
+        SocketError said = await WhatTheSocketSaysAsync(absent);
+
+        await using var host = new TestingWebApplicationFactory { DriverSocketPath = absent };
+        WebApplicationFactory<Program> guarded = host.WithTestScheme();
+        using HttpClient client = Authenticated(guarded);
+
+        IReadOnlyList<AnsweredSurface> answered = await EverySurfaceAsync(guarded, client);
+        AnsweredSurface[] wentAsFarAsTheSocket =
+        [
+            .. answered.Where(answer => answer.Body.Contains(said.ToString(), StringComparison.Ordinal)),
+        ];
+
+        Assert.True(
+            wentAsFarAsTheSocket.Length >= 4,
+            $"only {wentAsFarAsTheSocket.Length} surface(s) reached the socket, so the sweep proves little: "
+            + string.Join(" | ", answered.Select(answer => $"{answer.Surface} {answer.Status}")));
+        Assert.All(
+            wentAsFarAsTheSocket,
+            answer => Assert.Equal(StatusCodes.Status503ServiceUnavailable, answer.Status));
+        Assert.Empty(DriverSocketPathLeak.In(answered, absent));
+        Assert.True(
+            answered.Count > NotAskedBecauseTheAnswerNeverEnds.Count,
+            "the sweep asked fewer surfaces than it skipped");
+    }
+
+    [Fact]
+    public async Task ASweepThatRanOutOfTimeSaysSoRatherThanReadingAsASurfaceNamingTheSocket()
+    {
+        await using var host = new TestingWebApplicationFactory();
+        WebApplicationFactory<Program> guarded = host.WithTestScheme();
+        using HttpClient client = Authenticated(guarded);
+        client.Timeout = TimeSpan.FromTicks(1);
+
+        SweepDidNotFinish gaveUp = await Assert.ThrowsAsync<SweepDidNotFinish>(
+            () => EverySurfaceAsync(guarded, client));
+
+        Assert.Contains("did not answer within", gaveUp.Message, StringComparison.Ordinal);
+        Assert.Contains("not a surface naming the socket", gaveUp.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheSurfacesTheSweepSkipsAreTheOnesWhoseAnswerNeverEnds()
+    {
+        await using var host = new TestingWebApplicationFactory();
+
+        string[] routed = [.. RouteInventory.Of(host).Select(surface => surface.Pattern)];
+
+        Assert.Equal(
+            ["/api/events", "/api/programs/bulk"],
+            NotAskedBecauseTheAnswerNeverEnds.Order(StringComparer.Ordinal).ToArray());
+        Assert.All(
+            NotAskedBecauseTheAnswerNeverEnds,
+            skipped => Assert.Contains(skipped, routed, StringComparer.Ordinal));
+    }
+
     private static bool UnderTheMigrationRoot(RoutedSurface surface)
         => string.Equals(surface.Pattern, MigrationRoot, StringComparison.Ordinal)
            || surface.Pattern.StartsWith(MigrationRoot + "/", StringComparison.Ordinal);
@@ -899,4 +980,91 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             wired.AddSingleton<ILiveSupply>(supply);
         });
     }
+
+    private static async Task<SocketError> WhatTheSocketSaysAsync(string socketPath)
+    {
+        try
+        {
+            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath));
+        }
+        catch (SocketException refused)
+        {
+            return refused.SocketErrorCode;
+        }
+
+        throw new InvalidOperationException($"Something is listening at {socketPath}, so nothing was refused.");
+    }
+
+    private static string SomewhereTheRuntimeWillTalkAbout()
+        => Path.Combine(
+            Directory.CreateTempSubdirectory("carina-socket-of-this-host-").FullName,
+            new string('x', 200) + ".sock");
+
+    private static HttpClient Authenticated(WebApplicationFactory<Program> guarded)
+    {
+        HttpClient client = guarded.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            TestAuthenticationHandler.SchemeName,
+            "anything");
+        client.Timeout = TimeSpan.FromSeconds(20);
+
+        return client;
+    }
+
+    private static async Task<IReadOnlyList<AnsweredSurface>> EverySurfaceAsync(
+        WebApplicationFactory<Program> guarded,
+        HttpClient client)
+    {
+        var answered = new List<AnsweredSurface>();
+
+        foreach (RoutedSurface surface in RouteInventory.Of(guarded))
+        {
+            string path = RouteInventory.SamplePath(surface.Pattern);
+
+            if (NotAskedBecauseTheAnswerNeverEnds.Contains(surface.Pattern, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            using var asking = new HttpRequestMessage(
+                new HttpMethod(surface.Method),
+                new Uri(path, UriKind.Relative));
+
+            if (!HttpMethods.IsGet(surface.Method) && !HttpMethods.IsHead(surface.Method))
+            {
+                asking.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+            }
+
+            answered.Add(await AnsweredAsync(client, surface, asking));
+        }
+
+        return answered;
+    }
+
+    private static async Task<AnsweredSurface> AnsweredAsync(
+        HttpClient client,
+        RoutedSurface surface,
+        HttpRequestMessage asking)
+    {
+        try
+        {
+            using HttpResponseMessage response = await client.SendAsync(asking);
+
+            return new AnsweredSurface(
+                surface.ToString(),
+                (int)response.StatusCode,
+                await response.Content.ReadAsStringAsync());
+        }
+        catch (Exception cut) when (cut is OperationCanceledException or HttpRequestException)
+        {
+            throw new SweepDidNotFinish(
+                $"{surface} did not answer within {client.Timeout}, so the sweep never reached the rule. "
+                + "This is the sweep giving up, not a surface naming the socket: read it as a machine too "
+                + "slow to answer every surface in time, and look at what else on the run was slow.",
+                cut);
+        }
+    }
+
+    private sealed class SweepDidNotFinish(string said, Exception cut) : Exception(said, cut);
 }

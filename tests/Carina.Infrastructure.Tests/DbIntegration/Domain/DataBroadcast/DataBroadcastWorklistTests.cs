@@ -5,7 +5,7 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
-using Carina.Infrastructure.Tests.Integrity;
+using Carina.Infrastructure.Tests.Fixtures.Integrity;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

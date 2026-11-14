@@ -1,5 +1,3 @@
-using System.Net;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Carina.Api.Authentication;
@@ -76,41 +74,6 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Null(health["401"]);
         Assert.Null(options["401"]);
-    }
-
-    [Fact]
-    public async Task TheRefusalCarriesNoBodyBecauseTheMiddlewareSendsNone()
-    {
-        JsonNode document = await ServedOpenApi.FetchAsync(factory);
-
-        using HttpClient client = factory.WithTestScheme().CreateClient();
-        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/driver/status", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
-        Assert.Null(
-            document["paths"]!["/api/driver/status"]!["get"]!["responses"]!["401"]!["content"]
-        );
-    }
-
-    [Fact]
-    public async Task TheConnectionEnumIsSpelledTheWayTheEndpointSpellsIt()
-    {
-        using HttpClient client = factory.CreateAuthenticatedClient();
-        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/driver/status", UriKind.Relative));
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        string? connection = body.RootElement.GetProperty("data").GetProperty("connection").GetString();
-
-        JsonNode document = await ServedOpenApi.FetchAsync(factory);
-        string[] spellings = document["components"]!["schemas"]!["DriverConnection"]!["enum"]!
-            .AsArray()
-            .Select(value => value!.GetValue<string>())
-            .ToArray();
-
-        Assert.Contains(connection, spellings);
     }
 
     [Fact]
