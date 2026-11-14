@@ -1,5 +1,3 @@
-using System.Text;
-
 using Carina.Api.Events;
 using Carina.Infrastructure.Events;
 
@@ -7,7 +5,7 @@ using Microsoft.AspNetCore.Http;
 
 using Puppis.Contracts;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Events;
 
 internal sealed class Sink : Stream
 {
@@ -53,16 +51,23 @@ internal sealed class Sink : Stream
     {
         lock (gate)
         {
-            return Encoding.UTF8.GetString([.. written]);
+            return System.Text.Encoding.UTF8.GetString([.. written]);
         }
     }
 }
 
-public sealed class AppEventStreamKeepaliveTests
+[Trait("Category", "Unit")]
+public sealed class AppEventStreamTests
 {
     private static readonly TimeSpan Quickly = TimeSpan.FromMilliseconds(20);
 
     private static readonly TimeSpan LongEnough = TimeSpan.FromSeconds(5);
+
+    [Fact]
+    public void ASignalFrameCarriesABareDataLineSoAnEventSourceDispatchesItWithoutAPayload()
+    {
+        Assert.Equal("event: tuners\ndata\n\n", AppEventStream.Frame(AppEvents.Tuners));
+    }
 
     [Fact]
     public void TheKeepaliveIsACommentSoAnEventSourceDispatchesNothingForIt()

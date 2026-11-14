@@ -19,7 +19,6 @@ public static class TestLayoutRules
 
     public static readonly IReadOnlyList<string> AreasNotYetMoved =
     [
-        "Events",
         "Health",
         "Services",
         "Version",
@@ -51,6 +50,7 @@ public static class TestLayoutRules
         new("Encodings", "src/Carina.Infrastructure/Configuration/EncodingOptions.cs"),
         new("Epg", "src/Carina.Api/Events/ProgrammeFeedReaders.cs"),
         new("Epg", "src/Carina.Api/Events/ProgrammeFeedStream.cs"),
+        new("Events", "src/Carina.Api/Events/AppEventStream.cs"),
         new("Integrity", "src/Carina.Api/Services/IntegrityService.cs"),
         new("Integrity", "src/Carina.Db/Migrations/20260914005111_AFindingNamedForTheFactItIsAbout.cs"),
         new("Integrity", "src/Carina.Infrastructure/Configuration/IntegrityOptions.cs"),

@@ -1,6 +1,8 @@
 using System.Net;
 
 using Carina.Api.Events;
+using Carina.Api.Tests.FeatureTest;
+using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
@@ -12,6 +14,8 @@ namespace Carina.Api.Tests.Feature.Epg;
 public sealed class ProgrammeFeedStreamTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly Uri Bulk = new(ProgrammeFeedStream.Path, UriKind.Relative);
 
     [Fact]
     public async Task TheFeedHandsBackOneProgrammePerLineAndSaysHowFarItGot()
@@ -203,6 +207,48 @@ public sealed class ProgrammeFeedStreamTests
             "2:",
             stale.Headers.GetValues(ProgrammeFeedStream.CursorHeader).First(),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheFeedIsHandedToACallerCarryingASessionCookie()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        await probe.SignedInAsync();
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(
+            Bulk,
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(ProgrammeFeedStream.ContentType, response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task TheFeedIsRefusedToACallerCarryingNoCookie()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(
+            Bulk,
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task TheNextFeedAfterThatSessionEndedIsRefused()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        AuthSession session = await probe.SignedInAsync();
+
+        session.Revoke(DateTime.UtcNow);
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(
+            Bulk,
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     private static string? Cursor(HttpResponseMessage response)

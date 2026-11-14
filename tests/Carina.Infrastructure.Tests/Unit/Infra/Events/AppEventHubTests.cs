@@ -2,19 +2,13 @@ using Carina.Infrastructure.Events;
 
 using Puppis.Contracts;
 
-namespace Carina.Infrastructure.Tests;
+using static Carina.Infrastructure.Tests.Unit.Infra.Events.AppEventListening;
 
+namespace Carina.Infrastructure.Tests.Unit.Infra.Events;
+
+[Trait("Category", "Unit")]
 public sealed class AppEventHubTests
 {
-    private static readonly TimeSpan Soon = TimeSpan.FromSeconds(10);
-
-    private static async Task<IReadOnlyList<AppEventName>> Next(AppEventListener listener)
-    {
-        using var deadline = new CancellationTokenSource(Soon);
-
-        return await listener.TakeAsync(deadline.Token);
-    }
-
     [Fact]
     public async Task ASignalReachesEveryListener()
     {
@@ -112,21 +106,6 @@ public sealed class AppEventHubTests
 
         Assert.True(hub.IsClosed);
         Assert.False(hub.TryListen(out _));
-    }
-
-    [Fact]
-    public async Task StoppingTheAppClosesTheHubSoNoListenerIsLeftHanging()
-    {
-        var hub = new AppEventHub();
-        var lifetime = new AppEventHubLifetime(hub);
-
-        Assert.True(hub.TryListen(out AppEventListener? listener));
-
-        Task<IReadOnlyList<AppEventName>> waiting = Next(listener);
-        await lifetime.StopAsync(CancellationToken.None);
-
-        Assert.True(hub.IsClosed);
-        await Assert.ThrowsAnyAsync<Exception>(() => waiting);
     }
 
     [Fact]
