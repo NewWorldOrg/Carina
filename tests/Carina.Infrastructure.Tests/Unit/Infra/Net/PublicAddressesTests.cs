@@ -3,8 +3,9 @@ using System.Net;
 using Carina.Infrastructure.DataBroadcast;
 using Carina.Infrastructure.Net;
 
-namespace Carina.Infrastructure.Tests.Net;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Net;
 
+[Trait("Category", "Unit")]
 public sealed class PublicAddressesTests
 {
     [Theory(DisplayName = "BR-BD-011: an address on this machine, on the networks around it or kept for something else is not public")]

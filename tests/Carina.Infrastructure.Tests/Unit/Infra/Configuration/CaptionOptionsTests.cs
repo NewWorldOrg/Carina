@@ -3,8 +3,9 @@ using Carina.Infrastructure.Configuration;
 
 using Microsoft.Extensions.Configuration;
 
-namespace Carina.Infrastructure.Tests.Configuration;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Configuration;
 
+[Trait("Category", "Unit")]
 public sealed class CaptionOptionsTests
 {
     [Fact]

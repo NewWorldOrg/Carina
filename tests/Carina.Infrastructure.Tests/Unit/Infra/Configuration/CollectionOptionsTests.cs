@@ -8,8 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-namespace Carina.Infrastructure.Tests.Configuration;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Configuration;
 
+[Trait("Category", "Unit")]
 public sealed class CollectionOptionsTests
 {
     [Fact]

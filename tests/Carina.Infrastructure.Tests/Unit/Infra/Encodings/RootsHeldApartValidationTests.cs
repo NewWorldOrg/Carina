@@ -3,8 +3,9 @@ using Carina.Infrastructure.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
-namespace Carina.Infrastructure.Tests.Configuration;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Encodings;
 
+[Trait("Category", "Unit")]
 public sealed class RootsHeldApartValidationTests
 {
     [Fact]

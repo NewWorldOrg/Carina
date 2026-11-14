@@ -47,8 +47,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Unit.Infra.DependencyInjection;
 
+[Trait("Category", "Unit")]
 public sealed class ServiceCollectionExtensionsTests
 {
     private const string ConnectionString = "Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder";
