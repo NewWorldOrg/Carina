@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
 
-using Carina.Api.Tests.FeatureTest;
 using Carina.Domain.Channels;
 
 using Puppis.Contracts;
