@@ -7,22 +7,30 @@ using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.DbIntegration.Domain.Base;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
+public sealed class BoundedReadTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly DateTime At = new(2026, 9, 14, 0, 0, 0, DateTimeKind.Utc);
 
+    private readonly ServiceProvider container = database.Infrastructure();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await container.DisposeAsync();
+
     [Fact]
     public async Task TheConnectionCarriesTheTimeTheStatementWasGivenWhileTheReadRuns()
     {
-        await using CarinaDbContext context = database.Open();
-        var bounded = new DatabaseBoundedRead(context);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        CarinaDbContext context = Context(scope);
+        IBoundedRead bounded = Bounded(scope);
 
         string shown = await bounded.NoLongerThanAsync(
             TimeSpan.FromSeconds(30),
@@ -35,8 +43,9 @@ public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
     [Fact]
     public async Task TheTimeItWasGivenIsGoneAgainOnceTheReadIsOver()
     {
-        await using CarinaDbContext context = database.Open();
-        var bounded = new DatabaseBoundedRead(context);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        CarinaDbContext context = Context(scope);
+        IBoundedRead bounded = Bounded(scope);
 
         await bounded.NoLongerThanAsync(
             TimeSpan.FromSeconds(30),
@@ -49,8 +58,9 @@ public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
     [Fact]
     public async Task AReadThatRunsPastTheTimeItWasGivenIsStopped()
     {
-        await using CarinaDbContext context = database.Open();
-        var bounded = new DatabaseBoundedRead(context);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        CarinaDbContext context = Context(scope);
+        IBoundedRead bounded = Bounded(scope);
 
         ReadTookTooLongException stopped = await Assert.ThrowsAsync<ReadTookTooLongException>(
             () => bounded.NoLongerThanAsync(
@@ -64,8 +74,9 @@ public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
     [Fact]
     public async Task TheConnectionIsUsableAgainAfterAReadWasStopped()
     {
-        await using CarinaDbContext context = database.Open();
-        var bounded = new DatabaseBoundedRead(context);
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        CarinaDbContext context = Context(scope);
+        IBoundedRead bounded = Bounded(scope);
 
         await Assert.ThrowsAsync<ReadTookTooLongException>(
             () => bounded.NoLongerThanAsync(
@@ -84,11 +95,11 @@ public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
     [Fact]
     public async Task WhatTheReadFoundIsWhatComesBack()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
         Assert.Equal(
             7,
-            await new DatabaseBoundedRead(context).NoLongerThanAsync(
+            await Bounded(scope).NoLongerThanAsync(
                 TimeSpan.FromSeconds(30),
                 _ => Task.FromResult(7),
                 Cancel));
@@ -97,10 +108,10 @@ public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
     [Fact]
     public async Task AReadGivenNoTimeAtAllIsRefusedBeforeTheStoreIsTouched()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => new DatabaseBoundedRead(context).NoLongerThanAsync(
+            () => Bounded(scope).NoLongerThanAsync(
                 TimeSpan.Zero,
                 _ => Task.FromResult(0),
                 Cancel));
@@ -109,10 +120,13 @@ public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
     [Fact]
     public async Task AWriteInsideTheReadThatRanOutOfTimeIsStoppedTheSameWay()
     {
-        await using CarinaDbContext context = database.Open(new SlowedInserts());
+        await using ServiceProvider slowed = database.Infrastructure(services => services.ConfigureDbContext<CarinaDbContext>(
+            options => options.AddInterceptors(new SlowedInserts())));
+        await using AsyncServiceScope scope = slowed.CreateAsyncScope();
+        CarinaDbContext context = Context(scope);
 
         ReadTookTooLongException stopped = await Assert.ThrowsAsync<ReadTookTooLongException>(
-            () => new DatabaseBoundedRead(context).NoLongerThanAsync(
+            () => Bounded(scope).NoLongerThanAsync(
                 TimeSpan.FromMilliseconds(200),
                 cancellationToken => Begun(context, cancellationToken),
                 Cancel));
@@ -124,11 +138,12 @@ public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
     [Fact]
     public async Task AReaderWhoWentAwayIsNotReadAsAStoreThatTookTooLong()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        CarinaDbContext context = Context(scope);
         using var goingAway = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => new DatabaseBoundedRead(context).NoLongerThanAsync(
+            () => Bounded(scope).NoLongerThanAsync(
                 TimeSpan.FromSeconds(30),
                 cancellationToken => context.Database.ExecuteSqlRawAsync("SELECT pg_sleep(5)", cancellationToken),
                 goingAway.Token));
@@ -137,15 +152,22 @@ public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
     [Fact]
     public async Task AReadStartedWhileTheStoreIsAlreadyInATransactionIsRefused()
     {
-        await using CarinaDbContext context = database.Open();
+        await using AsyncServiceScope scope = container.CreateAsyncScope();
+        CarinaDbContext context = Context(scope);
         await using IDbContextTransaction already = await context.Database.BeginTransactionAsync(Cancel);
 
         await Assert.ThrowsAsync<NestedReadRefusedException>(
-            () => new DatabaseBoundedRead(context).NoLongerThanAsync(
+            () => Bounded(scope).NoLongerThanAsync(
                 TimeSpan.FromSeconds(30),
                 _ => Task.FromResult(0),
                 Cancel));
     }
+
+    private static CarinaDbContext Context(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<CarinaDbContext>();
+
+    private static IBoundedRead Bounded(AsyncServiceScope scope)
+        => scope.ServiceProvider.GetRequiredService<IBoundedRead>();
 
     private static async Task<int> Begun(CarinaDbContext context, CancellationToken cancellationToken)
     {

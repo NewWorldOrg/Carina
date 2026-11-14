@@ -1,7 +1,8 @@
 using Carina.Domain.Base;
 
-namespace Carina.Domain.Tests;
+namespace Carina.Domain.Tests.Unit.Base;
 
+[Trait("Category", "Unit")]
 public sealed class BroadcastDayTests
 {
     [Fact]
