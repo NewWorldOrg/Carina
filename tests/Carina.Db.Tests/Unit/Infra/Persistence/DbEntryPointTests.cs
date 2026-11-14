@@ -1,11 +1,14 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 
 using Carina.Infrastructure.Migration;
+using Carina.TestSupport;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.Unit.Infra.Persistence;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
+[Trait("Category", "Unit")]
 public sealed class DbEntryPointTests
 {
     [Theory]
@@ -97,8 +100,7 @@ public sealed class DbEntryPointTests
         }
         finally
         {
-            Directory.Delete(from, recursive: true);
-            Directory.Delete(into, recursive: true);
+            TemporaryDirectories.RemoveAll(new DirectoryInfo(from), new DirectoryInfo(into));
         }
     }
 
@@ -133,8 +135,7 @@ public sealed class DbEntryPointTests
         }
         finally
         {
-            Directory.Delete(from, recursive: true);
-            Directory.Delete(into, recursive: true);
+            TemporaryDirectories.RemoveAll(new DirectoryInfo(from), new DirectoryInfo(into));
         }
     }
 
@@ -168,8 +169,132 @@ public sealed class DbEntryPointTests
         }
         finally
         {
-            Directory.Delete(from, recursive: true);
-            Directory.Delete(into, recursive: true);
+            TemporaryDirectories.RemoveAll(new DirectoryInfo(from), new DirectoryInfo(into));
+        }
+    }
+
+    [Fact]
+    public async Task ADirectoryThisInstallationDeclaresARootForIsNotRefusedForWantOfADeclaration()
+    {
+        using var unreachable = new EnvironmentVariableScope(MigrationSourceSettings.ConnectionVariable, null);
+        string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
+        string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
+        using EnvironmentVariableScope declared = Declaring(into);
+        var error = new StringWriter();
+
+        try
+        {
+            int exitCode = await DbEntryPoint.RunAsync(["--carry", "--from", from, "--into", into], error);
+
+            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
+            Assert.DoesNotContain(
+                MigrationRootSettings.DeclarationVariable,
+                error.ToString(),
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            TemporaryDirectories.RemoveAll(new DirectoryInfo(from), new DirectoryInfo(into));
+        }
+    }
+
+    [Fact]
+    public async Task RefusesToCarryWhenNothingSaysHowToReachTheSourceSystem()
+    {
+        using var scope = new EnvironmentVariableScope(MigrationSourceSettings.ConnectionVariable, null);
+        string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
+        string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
+        using EnvironmentVariableScope declared = Declaring(into);
+        var error = new StringWriter();
+
+        try
+        {
+            int exitCode = await DbEntryPoint.RunAsync(["--carry", "--from", from, "--into", into], error);
+
+            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
+            Assert.Contains(
+                MigrationSourceSettings.ConnectionVariable,
+                error.ToString(),
+                StringComparison.Ordinal);
+            Assert.Empty(Directory.GetFiles(into));
+        }
+        finally
+        {
+            TemporaryDirectories.RemoveAll(new DirectoryInfo(from), new DirectoryInfo(into));
+        }
+    }
+
+    [Fact]
+    public async Task RefusesToCarryWhenWhatSaysHowToReachTheSourceSystemNamesNoDatabase()
+    {
+        using var scope = new EnvironmentVariableScope(
+            MigrationSourceSettings.ConnectionVariable,
+            "Server=somewhere.invalid;Uid=reader;Pwd=notreal");
+        string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
+        string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
+        using EnvironmentVariableScope declared = Declaring(into);
+        var error = new StringWriter();
+
+        try
+        {
+            int exitCode = await DbEntryPoint.RunAsync(["--carry", "--from", from, "--into", into], error);
+
+            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
+            Assert.Contains("names no database", error.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            TemporaryDirectories.RemoveAll(new DirectoryInfo(from), new DirectoryInfo(into));
+        }
+    }
+
+    [Fact]
+    public async Task FailsLoudlyWhenTheConnectionStringVariableIsMissing()
+    {
+        using var scope = new EnvironmentVariableScope(CarinaDbContextFactory.ConnectionStringVariable, null);
+        var error = new StringWriter();
+
+        int exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
+
+        Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
+        Assert.Contains(CarinaDbContextFactory.ConnectionStringVariable, error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FailsLoudlyOnAMalformedConnectionString()
+    {
+        using var scope = new EnvironmentVariableScope(
+            CarinaDbContextFactory.ConnectionStringVariable,
+            "this is not a connection string");
+        var error = new StringWriter();
+
+        int exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
+
+        Assert.Equal(DbEntryPoint.MigrationFailedExitCode, exitCode);
+        Assert.Contains("Carina.Db --migrate failed", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheEntryPointDecidesItsOwnCultureRatherThanTakingOneFromTheEnvironment()
+    {
+        CultureInfo? held = CultureInfo.DefaultThreadCurrentCulture;
+        CultureInfo? spoken = CultureInfo.DefaultThreadCurrentUICulture;
+
+        try
+        {
+            CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("tr-TR");
+            CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("tr-TR");
+
+            Assert.Equal(
+                DbEntryPoint.UsageExitCode,
+                await DbEntryPoint.RunAsync(["--not-a-thing-it-does"], new StringWriter()));
+            Assert.Same(CultureInfo.InvariantCulture, CultureInfo.DefaultThreadCurrentCulture);
+            Assert.Same(CultureInfo.InvariantCulture, CultureInfo.DefaultThreadCurrentUICulture);
+        }
+        finally
+        {
+            CultureInfo.DefaultThreadCurrentCulture = held;
+            CultureInfo.DefaultThreadCurrentUICulture = spoken;
         }
     }
 
@@ -201,110 +326,6 @@ public sealed class DbEntryPointTests
                 CarinaDbContextFactory.ConnectionStringVariable,
             },
             named => said.Contains(named, StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task ADirectoryThisInstallationDeclaresARootForIsNotRefusedForWantOfADeclaration()
-    {
-        using var unreachable = new EnvironmentVariableScope(MigrationSourceSettings.ConnectionVariable, null);
-        string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
-        string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
-        using EnvironmentVariableScope declared = Declaring(into);
-        var error = new StringWriter();
-
-        try
-        {
-            int exitCode = await DbEntryPoint.RunAsync(["--carry", "--from", from, "--into", into], error);
-
-            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
-            Assert.DoesNotContain(
-                MigrationRootSettings.DeclarationVariable,
-                error.ToString(),
-                StringComparison.Ordinal);
-        }
-        finally
-        {
-            Directory.Delete(from, recursive: true);
-            Directory.Delete(into, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task RefusesToCarryWhenNothingSaysHowToReachTheSourceSystem()
-    {
-        using var scope = new EnvironmentVariableScope(MigrationSourceSettings.ConnectionVariable, null);
-        string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
-        string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
-        using EnvironmentVariableScope declared = Declaring(into);
-        var error = new StringWriter();
-
-        try
-        {
-            int exitCode = await DbEntryPoint.RunAsync(["--carry", "--from", from, "--into", into], error);
-
-            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
-            Assert.Contains(
-                MigrationSourceSettings.ConnectionVariable,
-                error.ToString(),
-                StringComparison.Ordinal);
-            Assert.Empty(Directory.GetFiles(into));
-        }
-        finally
-        {
-            Directory.Delete(from, recursive: true);
-            Directory.Delete(into, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task RefusesToCarryWhenWhatSaysHowToReachTheSourceSystemNamesNoDatabase()
-    {
-        using var scope = new EnvironmentVariableScope(
-            MigrationSourceSettings.ConnectionVariable,
-            "Server=somewhere.invalid;Uid=reader;Pwd=notreal");
-        string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
-        string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
-        using EnvironmentVariableScope declared = Declaring(into);
-        var error = new StringWriter();
-
-        try
-        {
-            int exitCode = await DbEntryPoint.RunAsync(["--carry", "--from", from, "--into", into], error);
-
-            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
-            Assert.Contains("names no database", error.ToString(), StringComparison.Ordinal);
-        }
-        finally
-        {
-            Directory.Delete(from, recursive: true);
-            Directory.Delete(into, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task FailsLoudlyWhenTheConnectionStringVariableIsMissing()
-    {
-        using var scope = new EnvironmentVariableScope(CarinaDbContextFactory.ConnectionStringVariable, null);
-        var error = new StringWriter();
-
-        int exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
-
-        Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
-        Assert.Contains(CarinaDbContextFactory.ConnectionStringVariable, error.ToString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task FailsLoudlyOnAMalformedConnectionString()
-    {
-        using var scope = new EnvironmentVariableScope(
-            CarinaDbContextFactory.ConnectionStringVariable,
-            "this is not a connection string");
-        var error = new StringWriter();
-
-        int exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
-
-        Assert.Equal(DbEntryPoint.MigrationFailedExitCode, exitCode);
-        Assert.Contains("Carina.Db --migrate failed", error.ToString(), StringComparison.Ordinal);
     }
 
     private static EnvironmentVariableScope Declaring(string into)

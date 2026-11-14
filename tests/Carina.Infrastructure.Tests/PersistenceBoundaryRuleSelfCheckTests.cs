@@ -4,6 +4,7 @@ using Carina.Infrastructure.Tests.Fixtures.Encodings;
 using Carina.Infrastructure.Tests.Fixtures.Library;
 using Carina.Infrastructure.Tests.Fixtures.Migration;
 using Carina.Infrastructure.Tests.Fixtures.Notifications;
+using Carina.Infrastructure.Tests.Fixtures.Persistence;
 using Carina.Infrastructure.Tests.Fixtures.Programmes;
 using Carina.Infrastructure.Tests.Fixtures.Quality;
 using Carina.Infrastructure.Tests.Fixtures.Recordings;
@@ -56,13 +57,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
         }
     }
 
-    private static ViolatingDbContext Violating()
-    {
-        var builder = new DbContextOptionsBuilder<CarinaDbContext>();
-        builder.UseCarinaDatabase("Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder");
-
-        return new ViolatingDbContext(builder.Options);
-    }
+    private static ViolatingDbContext Violating() => new(CarinaModel.Options());
 
     [Fact]
     public void DetectsAReservationThatHoldsAForeignKeyToAChannelDefinition()

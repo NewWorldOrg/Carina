@@ -1,9 +1,9 @@
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.TestSupport;
 
 /// <summary>
-/// Removes the directories a feature made for itself, every one of them even when removing another fails.
+/// Removes the directories a test made for itself, every one of them even when removing another fails.
 /// </summary>
-internal static class TemporaryDirectories
+public static class TemporaryDirectories
 {
     public static void RemoveAll(params DirectoryInfo[] directories)
     {

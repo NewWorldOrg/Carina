@@ -21,7 +21,6 @@ public static class TestLayoutRules
     [
         "Events",
         "Health",
-        "Persistence",
         "Services",
         "Version",
     ];
@@ -66,6 +65,9 @@ public static class TestLayoutRules
         new("Notifications", "src/Carina.Api/Services/NotificationRuleService.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261110182416_AProgrammeCanBeWatchedWithoutBeingRecorded.cs"),
         new("Notifications", "src/Carina.Db/Migrations/20261112182442_ANoticeCanBeSentToABrowser.cs"),
+        new("Persistence", "src/Carina.Db/CarinaDbContextFactory.cs"),
+        new("Persistence", "src/Carina.Db/DbEntryPoint.cs"),
+        new("Persistence", "src/Carina.Db/MigrationLock.cs"),
         new("Playback", "src/Carina.Api/Playback/AskedDecoding.cs"),
         new("Playback", "src/Carina.Api/Playback/AskedFormat.cs"),
         new("Playback", "src/Carina.Api/Playback/ByteRange.cs"),

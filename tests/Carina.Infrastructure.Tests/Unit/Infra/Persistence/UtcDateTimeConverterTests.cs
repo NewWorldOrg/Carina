@@ -1,7 +1,8 @@
 using Carina.Infrastructure.Persistence;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.Infrastructure.Tests.Unit.Infra.Persistence;
 
+[Trait("Category", "Unit")]
 public sealed class UtcDateTimeConverterTests
 {
     private static readonly UtcDateTimeConverter Converter = new();

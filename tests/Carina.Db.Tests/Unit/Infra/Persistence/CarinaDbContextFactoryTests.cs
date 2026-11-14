@@ -1,10 +1,10 @@
 using Carina.Infrastructure.Persistence;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 
-namespace Carina.Db.Tests;
+namespace Carina.Db.Tests.Unit.Infra.Persistence;
 
+[Trait("Category", "Unit")]
 public sealed class CarinaDbContextFactoryTests
 {
     private const string ConnectionString = "Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder";
