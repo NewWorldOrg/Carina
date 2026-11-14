@@ -21,7 +21,6 @@ public static class TestLayoutRules
     [
         "Health",
         "Services",
-        "Version",
     ];
 
     /// <summary>
@@ -111,6 +110,7 @@ public static class TestLayoutRules
         new("Streaming", "src/Carina.Api/Live/LiveWireSocket.cs"),
         new("Thumbnails", "src/Carina.Api/Playback/ScrubDelivery.cs"),
         new("Thumbnails", "src/Carina.Api/Playback/ThumbnailDelivery.cs"),
+        new("Version", "src/Carina.Api/Common/DeclaredVersion.cs"),
     ];
 
     /// <summary>

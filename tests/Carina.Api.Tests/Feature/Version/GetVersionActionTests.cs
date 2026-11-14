@@ -2,10 +2,12 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Api.Common;
+using Carina.Api.Tests.FeatureTest;
 
-namespace Carina.Api.Tests.FeatureTest;
+namespace Carina.Api.Tests.Feature.Version;
 
-public sealed class VersionEndpointTests(TestingWebApplicationFactory factory)
+[Trait("Category", "Feature")]
+public sealed class GetVersionActionTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
     private static readonly Uri TheSurface = new("/api/version", UriKind.Relative);

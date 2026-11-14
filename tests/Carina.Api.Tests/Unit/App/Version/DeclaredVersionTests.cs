@@ -3,8 +3,9 @@ using System.Xml.Linq;
 
 using Carina.Api.Common;
 
-namespace Carina.Api.Tests.Unit;
+namespace Carina.Api.Tests.Unit.App.Version;
 
+[Trait("Category", "Unit")]
 public sealed class DeclaredVersionTests
 {
     [Fact]
